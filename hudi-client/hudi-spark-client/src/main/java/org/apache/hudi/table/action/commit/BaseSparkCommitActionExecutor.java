@@ -115,6 +115,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   }
 
   private JavaRDD<HoodieRecord<T>> clusteringHandleUpdate(JavaRDD<HoodieRecord<T>> inputRecordsRDD) {
+    context.setJobStatus(this.getClass().getSimpleName(), "Handling updates which are under clustering");
     Set<HoodieFileGroupId> fileGroupsInPendingClustering =
         table.getFileSystemView().getFileGroupsInPendingClustering().map(entry -> entry.getKey()).collect(Collectors.toSet());
     UpdateStrategy updateStrategy = (UpdateStrategy) ReflectionUtils
@@ -166,6 +167,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
 
     // partition using the insert partitioner
     final Partitioner partitioner = getPartitioner(profile);
+    context.setJobStatus(this.getClass().getSimpleName(), "Doing partition and writing data");
     JavaRDD<HoodieRecord<T>> partitionedRecords = partition(inputRecordsRDDWithClusteringUpdate, partitioner);
     JavaRDD<WriteStatus> writeStatusRDD = partitionedRecords.mapPartitionsWithIndex((partition, recordItr) -> {
       if (WriteOperationType.isChangingRecords(operationType)) {
@@ -276,7 +278,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
 
   protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<JavaRDD<WriteStatus>> result, List<HoodieWriteStat> writeStats) {
     String actionType = getCommitActionType();
-    LOG.info("Committing " + instantTime + ", action Type " + actionType);
+    LOG.info("Committing " + instantTime + ", action Type " + actionType + ", operation Type " + operationType);
     result.setCommitted(true);
     result.setWriteStats(writeStats);
     // Finalize write

@@ -29,71 +29,49 @@ The first thing you need to do to start using this connector is building it. In 
 - Install [kcat](https://github.com/edenhill/kcat)
 = Install jq. `brew install jq`
 
-After installing these dependencies, execute the following commands. This will install all the Hudi dependency jars,
-including the fat packaged jar that contains all the dependencies required for a functional Hudi Kafka Connect Sink.
-
-
-```bash
-mvn package -DskipTests -pl packaging/hudi-kafka-connect-bundle -am
-```
-
-Next, we need to make sure that the hudi sink connector bundle jar is in Kafka Connect classpath. Note that the connect
-classpath should be same as the one configured in the connector configuration file.
-
-```bash
-cp $HUDI_DIR/packaging/hudi-kafka-connect-bundle/target/hudi-kafka-connect-bundle-0.10.0-SNAPSHOT.jar /usr/local/share/java/hudi-kafka-connect/
-```
-
+  
 ## Trying the connector
 
-After building the package, we need to install the Apache Kafka
+After installing these dependencies, follow steps based on your requirement.
 
 ### 1 - Starting the environment
 
 For runtime dependencies, we encourage using the confluent HDFS connector jars. We have tested our setup with version `10.1.0`.
-After downloading the connector, copy the jars from the lib folder to the Kafka Connect classpath.
+Either use confluent-hub to install the connector or download it from [here](https://tinyurl.com/yb472f79).
+
+Copy the entire folder to the classpath that will be used by the Hudi Kafka Connector.
 
 ```bash
 confluent-hub install confluentinc/kafka-connect-hdfs:10.1.0
+cp confluentinc-kafka-connect-hdfs-10.1.0/* /usr/local/share/kafka/plugins/
 ```
-Add `confluentinc-kafka-connect-hdfs-10.1.0/lib` to the plugin.path (comma separated) in $HUDI_DIR/hudi-kafka-connect/demo/connect-distributed.properties
 
-### 2 - Set up the docker containers
-
-To run the connect locally, we need kafka, zookeeper, hdfs, hive etc. To make the setup easier, we use the docker 
-containers from the hudi docker demo. Refer to [this link for the setup](https://hudi.apache.org/docs/docker_demo)
-
-Essentially, follow the steps listed here:
-
-/etc/hosts : The demo references many services running in container by the hostname. Add the following settings to /etc/hosts
+Now, build the packaged jar that contains all the hudi classes, including the Hudi Kafka Connector. And copy it 
+to the plugin path that contains all the other jars (`/usr/local/share/kafka/plugins/lib`)
 ```bash
-127.0.0.1 adhoc-1
-127.0.0.1 adhoc-2
-127.0.0.1 namenode
-127.0.0.1 datanode1
-127.0.0.1 hiveserver
-127.0.0.1 hivemetastore
-127.0.0.1 kafkabroker
-127.0.0.1 sparkmaster
-127.0.0.1 zookeeper
+cd ${HUDI_DIR}
+mvn package -DskipTests -pl packaging/hudi-kafka-connect-bundle -am
+cp $HUDI_DIR/packaging/hudi-kafka-connect-bundle/target/hudi-kafka-connect-bundle-0.10.0-SNAPSHOT.jar /usr/local/share/kafka/plugins/lib
 ```
 
-Bring up the docker containers
+Set up a Kafka broker locally. Download the latest apache kafka from [here](https://kafka.apache.org/downloads). 
+Once downloaded and built, run the Zookeeper server and Kafka server using the command line tools.
 ```bash
-cd $HUDI_DIR/docker
-./setup_demo.sh
+export KAFKA_HOME=/path/to/kafka_install_dir
+cd $KAFKA_HOME
+./bin/zookeeper-server-start.sh ./config/zookeeper.properties
+./bin/kafka-server-start.sh ./config/server.properties
 ```
+Wait until the kafka cluster is up and running.
 
-The schema registry and kafka connector can be run from host system directly (mac/ linux).
-
-### 3 - Set up the schema registry
+### 2 - Set up the schema registry
 
 Hudi leverages schema registry to obtain the latest schema when writing records. While it supports most popular schema
 registries, we use Confluent schema registry. Download the
 latest [confluent platform](https://docs.confluent.io/platform/current/installation/index.html) and run the schema
 registry service.
 
-NOTE: You might need to change the port from `8081` to `8082`.
+NOTE: You must change the port from `8081` (default) to `8082` to avoid conflict.
 
 ```bash
 cd $CONFLUENT_DIR
@@ -101,7 +79,7 @@ cd $CONFLUENT_DIR
 ./bin/schema-registry-start etc/schema-registry/schema-registry.properties
 ```
 
-### 4 - Create the Hudi Control Topic for Coordination of the transactions
+### 3 - Create the Hudi Control Topic for Coordination of the transactions
 
 The control topic should only have `1` partition, since its used to coordinate the Hudi write transactions across the multiple Connect tasks.
 
@@ -111,7 +89,7 @@ cd $KAFKA_HOME
 ./bin/kafka-topics.sh --create --topic hudi-control-topic --partitions 1 --replication-factor 1 --bootstrap-server localhost:9092
 ```
 
-### 5 - Create the Hudi Topic for the Sink and insert data into the topic
+### 4 - Create the Hudi Topic for the Sink and insert data into the topic
 
 Open a terminal to execute the following command:
 
@@ -127,7 +105,7 @@ to generate, with each batch containing a number of messages and idle time betwe
 bash setupKafka.sh -n <num_kafka_messages_per_batch> -b <num_batches>
 ```
 
-### 6 - Run the Sink connector worker (multiple workers can be run)
+### 5 - Run the Sink connector worker (multiple workers can be run)
 
 The Kafka connect is a distributed platform, with the ability to run one or more workers (each running multiple tasks) 
 that parallely process the records from the Kafka partitions for the same topic. We provide a properties file with 
@@ -137,11 +115,11 @@ Note that if multiple workers need to be run, the webserver needs to be reconfig
 successful running of the workers.
 
 ```bash
-cd $KAFKA_HOME
-./bin/connect-distributed.sh $HUDI_DIR/hudi-kafka-connect/demo/connect-distributed.properties
+cd ${KAFKA_HOME}
+./bin/connect-distributed.sh ${HUDI_DIR}/hudi-kafka-connect/demo/connect-distributed.properties
 ```
 
-### 7 - To add the Hudi Sink to the Connector (delete it if you want to re-configure)
+### 6 - To add the Hudi Sink to the Connector (delete it if you want to re-configure)
 
 Once the Connector has started, it will not run the Sink, until the Hudi sink is added using the web api. The following 
 curl APIs can be used to delete and add a new Hudi Sink. Again, a default configuration is provided for the Hudi Sink, 
@@ -155,6 +133,7 @@ curl -X POST -H "Content-Type:application/json" -d @$HUDI_DIR/hudi-kafka-connect
 Now, you should see that the connector is created and tasks are running.
 
 ```bash
+mkdir /tmp/hoodie/
 curl -X GET -H "Content-Type:application/json"  http://localhost:8083/connectors
 ["hudi-sink"]
 curl -X GET -H "Content-Type:application/json"  http://localhost:8083/connectors/hudi-sink/status | jq
@@ -191,52 +170,7 @@ total 5168
 -rw-r--r--  1 user  wheel  440214 Sep 13 21:43 E200FA75DCD1CED60BE86BCE6BF5D23A-0_0-0-0_20210913214114.parquet
 ```
 
-### 8- Querying via Hive
-
-```bash
-docker exec -it adhoc-2 /bin/bash
-beeline -u jdbc:hive2://hiveserver:10000 \
-  --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat \
-  --hiveconf hive.stats.autogather=false
-
-
-# List Tables
-0: jdbc:hive2://hiveserver:10000> show tables;
-+---------------------+--+
-|      tab_name       |
-+---------------------+--+
-| huditesttopic_ro  |
-| huditesttopic_rt  |
-+---------------------+--+
-3 rows selected (1.199 seconds)
-0: jdbc:hive2://hiveserver:10000>
-
-
-# Look at partitions that were added
-0: jdbc:hive2://hiveserver:10000> show partitions huditesttopic_rt;
-+-------------------+--+
-|     partition     |
-+-------------------+--+
-| date=partition_0  |
-| date=partition_1  |
-| date=partition_2  |
-| date=partition_3  |
-| date=partition_4  |
-+-------------------+--+
-1 row selected (0.24 seconds)
-
-
-0: jdbc:hive2://hiveserver:10000> select `_hoodie_commit_time`, symbol, ts, volume, open, close  from huditesttopic_rt;
-+----------------------+---------+----------------------+---------+------------+-----------+--+
-| _hoodie_commit_time  | symbol  |          ts          | volume  |    open    |   close   |
-+----------------------+---------+----------------------+---------+------------+-----------+--+
-| 20180924222155       | GOOG    | 2018-08-31 09:59:00  | 6330    | 1230.5     | 1230.02   |
-| 20180924222155       | GOOG    | 2018-08-31 10:29:00  | 3391    | 1230.1899  | 1230.085  |
-+----------------------+---------+----------------------+---------+------------+-----------+--+
-```
-
-
-### 9 - Run async compaction and clustering if scheduled
+### 7 - Run async compaction and clustering if scheduled
 
 When using Merge-On-Read (MOR) as the table type, async compaction and clustering can be scheduled when the Sink is
 running. Inline compaction and clustering are disabled by default due to performance reason. By default, async
@@ -365,3 +299,93 @@ hoodie.write.concurrency.mode=single_writer
 
 Note that you don't have to provide the instant time through `--instant-time`. In that case, the earliest scheduled
 clustering is going to be executed.
+
+### 8- Querying via Hive
+
+In this section we explain how one can test syncing of the Hudi table with Hive server/ Hive Metastore, 
+that enable querying via Hive, Presto etc. 
+
+To ease the deployment of HDFS, Hive Server, Hive Metastore etc. for testing hive sync, we use the docker
+containers from the hudi docker demo. Refer to [this link for the setup](https://hudi.apache.org/docs/docker_demo).
+Additionally, the docker deploys kafka and zookeeper too, so you do not need to run them explicitly in this setup.
+
+Essentially, follow the steps listed here:
+
+/etc/hosts : The demo references many services running in container by the hostname. Add the following settings to /etc/hosts
+```bash
+127.0.0.1 adhoc-1
+127.0.0.1 adhoc-2
+127.0.0.1 namenode
+127.0.0.1 datanode1
+127.0.0.1 hiveserver
+127.0.0.1 hivemetastore
+127.0.0.1 kafkabroker
+127.0.0.1 sparkmaster
+127.0.0.1 zookeeper
+```
+
+Bring up the docker containers
+```bash
+cd ${HUDI_DIR}/docker
+./setup_demo.sh
+```
+
+Firstly, (re)-install a different connector that is configured to write the Hudi table to Hdfs instead of local filesystem.
+
+```bash
+curl -X DELETE http://localhost:8083/connectors/hudi-sink
+curl -X POST -H "Content-Type:application/json" -d @$HUDI_DIR/hudi-kafka-connect/demo/config-sink-hive.json http://localhost:8083/connectors
+```
+
+After running the connector, you can query the hive server using the following steps:
+
+```bash
+docker exec -it adhoc-2 /bin/bash
+beeline -u jdbc:hive2://hiveserver:10000 \
+  --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat \
+  --hiveconf hive.stats.autogather=false
+
+
+# List Tables
+0: jdbc:hive2://hiveserver:10000> show tables;
++---------------------+--+
+|      tab_name       |
++---------------------+--+
+| huditesttopic_ro  |
+| huditesttopic_rt  |
++---------------------+--+
+3 rows selected (1.199 seconds)
+0: jdbc:hive2://hiveserver:10000>
+
+
+# Look at partitions that were added
+0: jdbc:hive2://hiveserver:10000> show partitions huditesttopic_ro;
++-------------------+--+
+|     partition     |
++-------------------+--+
+| date=partition_0  |
+| date=partition_1  |
+| date=partition_2  |
+| date=partition_3  |
+| date=partition_4  |
++-------------------+--+
+1 row selected (0.24 seconds)
+
+
+0: jdbc:hive2://hiveserver:10000> select `_hoodie_commit_time`, symbol, ts, volume, open, close  from huditesttopic_ro;
++----------------------+---------+----------------------+---------+------------+-----------+--+
+| _hoodie_commit_time  | symbol  |          ts          | volume  |    open    |   close   |
++----------------------+---------+----------------------+---------+------------+-----------+--+
+| 20180924222155       | GOOG    | 2018-08-31 09:59:00  | 6330    | 1230.5     | 1230.02   |
+| 20180924222155       | GOOG    | 2018-08-31 10:29:00  | 3391    | 1230.1899  | 1230.085  |
++----------------------+---------+----------------------+---------+------------+-----------+--+
+```
+
+`Current Limitation:` The Hudi Kafka Connect sink uses `Merge-On-Read` by default, and inserts/ appends the kafka records 
+directly to the log file(s). Asynchronously, compaction service can be executed to merge the log files into base file (Parquet format).
+Generally, we support both Read-Optimized that reads only parquet base files and Snapshot queries that read and merge 
+records across base and log files. However, currently there is a limitation where we are not able to read records from 
+only log files. Hence, the queries for Hudi Kafka Connect will only work after compaction merges the records into base files. Alternatively,
+users have the option to reconfigure the table type to `COPY_ON_WRITE` in config-sink.json.
+
+

@@ -29,34 +29,38 @@ import java.io.IOException;
 import java.util.Properties;
 import javax.annotation.concurrent.Immutable;
 
-import static org.apache.hudi.config.AWSLockConfiguration.DYNAMODB_LOCK_BILLING_MODE;
-import static org.apache.hudi.config.AWSLockConfiguration.DYNAMODB_LOCK_PARTITION_KEY;
-import static org.apache.hudi.config.AWSLockConfiguration.DYNAMODB_LOCK_READ_CAPACITY;
-import static org.apache.hudi.config.AWSLockConfiguration.DYNAMODB_LOCK_REGION;
-import static org.apache.hudi.config.AWSLockConfiguration.DYNAMODB_LOCK_TABLE_NAME;
-import static org.apache.hudi.config.AWSLockConfiguration.DYNAMODB_LOCK_WRITE_CAPACITY;
+import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_BILLING_MODE;
+import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_PARTITION_KEY;
+import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_READ_CAPACITY;
+import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_REGION;
+import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME;
+import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_WRITE_CAPACITY;
 
 /**
  * Configurations used by the AWS credentials and AWS DynamoDB based lock.
  */
 @Immutable
-@ConfigClassProperty(name = "AWS credential Configs",
-        groupName = ConfigGroups.Names.AWS_DYNAMO_DB,
-        description = "Configurations used for AWS credentials to get AWS resources.")
+@ConfigClassProperty(name = "Amazon Web Services Configs",
+        groupName = ConfigGroups.Names.AWS,
+        description = "Amazon Web Services configurations to access resources like Amazon DynamoDB (for locks),"
+            + " Amazon CloudWatch (metrics).")
 public class HoodieAWSConfig extends HoodieConfig {
   public static final ConfigProperty<String> AWS_ACCESS_KEY = ConfigProperty
         .key("hoodie.aws.access.key")
         .noDefaultValue()
+        .sinceVersion("0.10.0")
         .withDocumentation("AWS access key id");
 
   public static final ConfigProperty<String> AWS_SECRET_KEY = ConfigProperty
         .key("hoodie.aws.secret.key")
         .noDefaultValue()
+        .sinceVersion("0.10.0")
         .withDocumentation("AWS secret key");
 
   public static final ConfigProperty<String> AWS_SESSION_TOKEN = ConfigProperty
         .key("hoodie.aws.session.token")
         .noDefaultValue()
+        .sinceVersion("0.10.0")
         .withDocumentation("AWS session token");
 
   private HoodieAWSConfig() {

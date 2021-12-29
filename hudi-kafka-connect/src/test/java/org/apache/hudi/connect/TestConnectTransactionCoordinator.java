@@ -50,7 +50,7 @@ import static org.mockito.Mockito.mock;
 public class TestConnectTransactionCoordinator {
 
   private static final String TOPIC_NAME = "kafka-connect-test-topic";
-  private static final int NUM_PARTITIONS = 4;
+  private static final int TOTAL_KAFKA_PARTITIONS = 4;
   private static final int MAX_COMMIT_ROUNDS = 5;
   private static final int TEST_TIMEOUT_SECS = 60;
 
@@ -63,10 +63,6 @@ public class TestConnectTransactionCoordinator {
   @BeforeEach
   public void setUp() throws Exception {
     transactionServices = new MockConnectTransactionServices();
-    configs = KafkaConnectConfigs.newBuilder()
-        .withCommitIntervalSecs(1L)
-        .withCoordinatorWriteTimeoutSecs(1L)
-        .build();
     latch = new CountDownLatch(1);
   }
 
@@ -77,13 +73,22 @@ public class TestConnectTransactionCoordinator {
     participant = new MockParticipant(kafkaControlAgent, latch, scenario, MAX_COMMIT_ROUNDS);
     participant.start();
 
+    KafkaConnectConfigs.Builder configBuilder = KafkaConnectConfigs.newBuilder()
+        .withCommitIntervalSecs(1L)
+        .withCoordinatorWriteTimeoutSecs(1L);
+
+    if (scenario.equals(MockParticipant.TestScenarios.SUBSET_WRITE_STATUS_FAILED)) {
+      configBuilder.withAllowCommitOnErrors(false);
+    }
+    configs = configBuilder.build();
+
     // Test the coordinator using the mock participant
     TransactionCoordinator coordinator = new ConnectTransactionCoordinator(
         configs,
         new TopicPartition(TOPIC_NAME, 0),
         kafkaControlAgent,
         transactionServices,
-        (bootstrapServers, topicName) -> NUM_PARTITIONS);
+        (bootstrapServers, topicName) -> TOTAL_KAFKA_PARTITIONS);
     coordinator.start();
 
     latch.await(TEST_TIMEOUT_SECS, TimeUnit.SECONDS);
@@ -119,7 +124,7 @@ public class TestConnectTransactionCoordinator {
       this.latch = latch;
       this.testScenario = testScenario;
       this.maxNumberCommitRounds = maxNumberCommitRounds;
-      this.partition = new TopicPartition(TOPIC_NAME, (NUM_PARTITIONS - 1));
+      this.partition = new TopicPartition(TOPIC_NAME, (TOTAL_KAFKA_PARTITIONS - 1));
       this.kafkaOffsetsCommitted = new HashMap<>();
       expectedMsgType = ControlMessage.EventType.START_COMMIT;
       numberCommitRounds = 0;
@@ -162,39 +167,40 @@ public class TestConnectTransactionCoordinator {
 
     private void testScenarios(ControlMessage message) {
       assertEquals(expectedMsgType, message.getType());
-
       switch (message.getType()) {
         case START_COMMIT:
           expectedMsgType = ControlMessage.EventType.END_COMMIT;
           break;
         case END_COMMIT:
           assertEquals(kafkaOffsetsCommitted, message.getCoordinatorInfo().getGlobalKafkaCommitOffsets());
-          int numSuccessPartitions;
+          int numPartitionsThatReportWriteStatus;
           Map<Integer, Long> kafkaOffsets = new HashMap<>();
           List<ControlMessage> controlEvents = new ArrayList<>();
-          // Prepare the WriteStatuses for all partitions
-          for (int i = 1; i <= NUM_PARTITIONS; i++) {
-            try {
-              long kafkaOffset = (long) (Math.random() * 10000);
-              kafkaOffsets.put(i, kafkaOffset);
-              ControlMessage event = successWriteStatus(
-                  message.getCommitTime(),
-                  new TopicPartition(TOPIC_NAME, i),
-                  kafkaOffset);
-              controlEvents.add(event);
-            } catch (Exception exception) {
-              throw new HoodieException("Fatal error sending control event to Coordinator");
-            }
-          }
-
           switch (testScenario) {
             case ALL_CONNECT_TASKS_SUCCESS:
-              numSuccessPartitions = NUM_PARTITIONS;
+              composeControlEvent(message.getCommitTime(), false, kafkaOffsets, controlEvents);
+              numPartitionsThatReportWriteStatus = TOTAL_KAFKA_PARTITIONS;
+              // This commit round should succeed, and the kafka offsets getting committed
               kafkaOffsetsCommitted.putAll(kafkaOffsets);
               expectedMsgType = ControlMessage.EventType.ACK_COMMIT;
               break;
+            case SUBSET_WRITE_STATUS_FAILED_BUT_IGNORED:
+              composeControlEvent(message.getCommitTime(), true, kafkaOffsets, controlEvents);
+              numPartitionsThatReportWriteStatus = TOTAL_KAFKA_PARTITIONS;
+              // Despite error records, this commit round should succeed, and the kafka offsets getting committed
+              kafkaOffsetsCommitted.putAll(kafkaOffsets);
+              expectedMsgType = ControlMessage.EventType.ACK_COMMIT;
+              break;
+            case SUBSET_WRITE_STATUS_FAILED:
+              composeControlEvent(message.getCommitTime(), true, kafkaOffsets, controlEvents);
+              numPartitionsThatReportWriteStatus = TOTAL_KAFKA_PARTITIONS;
+              // This commit round should fail, and a new commit round should start without kafka offsets getting committed
+              expectedMsgType = ControlMessage.EventType.START_COMMIT;
+              break;
             case SUBSET_CONNECT_TASKS_FAILED:
-              numSuccessPartitions = NUM_PARTITIONS / 2;
+              composeControlEvent(message.getCommitTime(), false, kafkaOffsets, controlEvents);
+              numPartitionsThatReportWriteStatus = TOTAL_KAFKA_PARTITIONS / 2;
+              // This commit round should fail, and a new commit round should start without kafka offsets getting committed
               expectedMsgType = ControlMessage.EventType.START_COMMIT;
               break;
             default:
@@ -202,7 +208,7 @@ public class TestConnectTransactionCoordinator {
           }
 
           // Send events based on test scenario
-          for (int i = 0; i < numSuccessPartitions; i++) {
+          for (int i = 0; i < numPartitionsThatReportWriteStatus; i++) {
             kafkaControlAgent.publishMessage(controlEvents.get(i));
           }
           break;
@@ -227,18 +233,36 @@ public class TestConnectTransactionCoordinator {
 
     public enum TestScenarios {
       SUBSET_CONNECT_TASKS_FAILED,
+      SUBSET_WRITE_STATUS_FAILED,
+      SUBSET_WRITE_STATUS_FAILED_BUT_IGNORED,
       ALL_CONNECT_TASKS_SUCCESS
     }
 
-    private static ControlMessage successWriteStatus(String commitTime,
-                                                     TopicPartition partition,
-                                                     long kafkaOffset) throws Exception {
-      // send WS
-      WriteStatus writeStatus = new WriteStatus();
-      WriteStatus status = new WriteStatus(false, 1.0);
-      for (int i = 0; i < 1000; i++) {
-        status.markSuccess(mock(HoodieRecord.class), Option.empty());
+    private static void composeControlEvent(String commitTime, boolean shouldIncludeFailedRecords, Map<Integer, Long> kafkaOffsets, List<ControlMessage> controlEvents) {
+      // Prepare the WriteStatuses for all partitions
+      for (int i = 1; i <= TOTAL_KAFKA_PARTITIONS; i++) {
+        try {
+          long kafkaOffset = (long) (Math.random() * 10000);
+          kafkaOffsets.put(i, kafkaOffset);
+          ControlMessage event = composeWriteStatusResponse(
+              commitTime,
+              new TopicPartition(TOPIC_NAME, i),
+              kafkaOffset,
+              shouldIncludeFailedRecords);
+          controlEvents.add(event);
+        } catch (Exception exception) {
+          throw new HoodieException("Fatal error sending control event to Coordinator");
+        }
       }
+    }
+
+    private static ControlMessage composeWriteStatusResponse(String commitTime,
+                                                             TopicPartition partition,
+                                                             long kafkaOffset,
+                                                             boolean includeFailedRecords) throws Exception {
+      // send WS
+      WriteStatus writeStatus = includeFailedRecords ? getSubsetFailedRecordsWriteStatus() : getAllSuccessfulRecordsWriteStatus();
+
       return ControlMessage.newBuilder()
           .setType(ControlMessage.EventType.WRITE_STATUS)
           .setTopicName(partition.topic())
@@ -254,5 +278,28 @@ public class TestConnectTransactionCoordinator {
                   .build()
           ).build();
     }
+  }
+
+  private static WriteStatus getAllSuccessfulRecordsWriteStatus() {
+    // send WS
+    WriteStatus status = new WriteStatus(false, 0.0);
+    for (int i = 0; i < 1000; i++) {
+      status.markSuccess(mock(HoodieRecord.class), Option.empty());
+    }
+    return status;
+  }
+
+  private static WriteStatus getSubsetFailedRecordsWriteStatus() {
+    // send WS
+    WriteStatus status = new WriteStatus(false, 0.0);
+    for (int i = 0; i < 1000; i++) {
+      if (i % 10 == 0) {
+        status.markFailure(mock(HoodieRecord.class), new Throwable("Error writing record on disk"), Option.empty());
+      } else {
+        status.markSuccess(mock(HoodieRecord.class), Option.empty());
+      }
+    }
+    status.setGlobalError(new Throwable("More than one records failed to be written to storage"));
+    return status;
   }
 }

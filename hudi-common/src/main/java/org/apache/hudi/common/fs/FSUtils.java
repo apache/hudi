@@ -462,10 +462,19 @@ public class FSUtils {
         .map(HoodieFileFormat::getFileExtension).collect(Collectors.toCollection(HashSet::new));
     final String logFileExtension = HoodieFileFormat.HOODIE_LOG.getFileExtension();
 
-    return Arrays.stream(fs.listStatus(partitionPath, path -> {
-      String extension = FSUtils.getFileExtension(path.getName());
-      return validFileExtensions.contains(extension) || path.getName().contains(logFileExtension);
-    })).filter(FileStatus::isFile).toArray(FileStatus[]::new);
+    try {
+      return Arrays.stream(fs.listStatus(partitionPath, path -> {
+        String extension = FSUtils.getFileExtension(path.getName());
+        return validFileExtensions.contains(extension) || path.getName().contains(logFileExtension);
+      })).filter(FileStatus::isFile).toArray(FileStatus[]::new);
+    } catch (IOException e) {
+      // return empty FileStatus if partition does not exist already
+      if (!fs.exists(partitionPath)) {
+        return new FileStatus[0];
+      } else {
+        throw e;
+      }
+    }
   }
 
   /**

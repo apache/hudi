@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -94,6 +95,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
   public void init(HoodieTableType tableType) throws Exception {
     initPath();
     initSparkContexts();
+    initTimelineService();
     initMetaClient();
     hadoopConf = context.getHadoopConf().get();
     metaClient.getFs().mkdirs(new Path(basePath));
@@ -126,6 +128,8 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(minArchivalCommits, maxArchivalCommits).build())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata)
             .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommitsMetadataTable).build())
         .forTable("test-trip-table").build();
@@ -210,6 +214,8 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable("test-trip-table")
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .build();
 
@@ -235,6 +241,25 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
         "Archived commits should always be safe");
     assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "103")),
         "Archived commits should always be safe");
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testPendingClusteringWillBlockArchival(boolean enableMetadata) throws Exception {
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 2, 5, 2);
+    HoodieTestDataGenerator.createPendingReplaceFile(basePath, "00000000", wrapperFs.getConf());
+    for (int i = 1; i < 8; i++) {
+      testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, Arrays.asList("p1", "p2"), Arrays.asList("p1", "p2"), 2);
+      // archival
+      Pair<List<HoodieInstant>, List<HoodieInstant>> commitsList = archiveAndGetCommitsList(writeConfig);
+      List<HoodieInstant> originalCommits = commitsList.getKey();
+      List<HoodieInstant> commitsAfterArchival = commitsList.getValue();
+      assertEquals(originalCommits, commitsAfterArchival);
+    }
+
+    HoodieTimeline timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
+    assertEquals(7, timeline.countInstants(),
+        "Since we have a pending clustering instant at 00000000, we should never archive any commit after 00000000");
   }
 
   @ParameterizedTest
@@ -328,6 +353,8 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
         HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
             .withParallelism(2, 2).forTable("test-trip-table")
             .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
+            .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+                .withRemoteServerPort(timelineServicePort).build())
             .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
             .build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -484,6 +511,8 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
         HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
             .withParallelism(2, 2).forTable("test-trip-table")
             .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(minInstantsToKeep, maxInstantsToKeep).build())
+            .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+                .withRemoteServerPort(timelineServicePort).build())
             .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
             .build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -519,6 +548,8 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
         HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
             .withParallelism(2, 2).forTable("test-trip-table")
             .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
+            .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+                .withRemoteServerPort(timelineServicePort).build())
             .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
             .build();
     metaClient = HoodieTableMetaClient.reload(metaClient);

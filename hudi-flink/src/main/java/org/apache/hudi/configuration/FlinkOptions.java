@@ -417,7 +417,7 @@ public class FlinkOptions extends HoodieConfig {
           + "For DFS, this needs to be aligned with the underlying filesystem block size for optimal performance.");
 
   public static final ConfigOption<Integer> WRITE_PARQUET_PAGE_SIZE = ConfigOptions
-      .key("hoodie.parquet.page.size")
+      .key("write.parquet.page.size")
       .intType()
       .defaultValue(1)
       .withDescription("Parquet page size. Page is the unit of read within a parquet file. "

@@ -36,7 +36,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.text.ParseException;
-import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
@@ -76,13 +75,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    */
   public static Date parseDateFromInstantTime(String timestamp) throws ParseException {
     return HoodieInstantTimeGenerator.parseDateFromInstantTime(timestamp);
-  }
-
-  /**
-   * Format the java.time.Instant to a String representing the timestamp of a Hoodie Instant.
-   */
-  public static String formatInstantTime(Instant timestamp) {
-    return HoodieInstantTimeGenerator.formatInstantTime(timestamp);
   }
 
   /**
@@ -198,35 +190,10 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     }
   }
 
-  public void deletePendingIfExists(HoodieInstant.State state, String action, String instantStr) {
-    HoodieInstant instant = new HoodieInstant(state, action, instantStr);
-    ValidationUtils.checkArgument(!instant.isCompleted());
-    deleteInstantFileIfExists(instant);
-  }
-
   public void deleteCompactionRequested(HoodieInstant instant) {
     ValidationUtils.checkArgument(instant.isRequested());
     ValidationUtils.checkArgument(Objects.equals(instant.getAction(), HoodieTimeline.COMPACTION_ACTION));
     deleteInstantFile(instant);
-  }
-
-  private void deleteInstantFileIfExists(HoodieInstant instant) {
-    LOG.info("Deleting instant " + instant);
-    Path inFlightCommitFilePath = new Path(metaClient.getMetaPath(), instant.getFileName());
-    try {
-      if (metaClient.getFs().exists(inFlightCommitFilePath)) {
-        boolean result = metaClient.getFs().delete(inFlightCommitFilePath, false);
-        if (result) {
-          LOG.info("Removed instant " + instant);
-        } else {
-          throw new HoodieIOException("Could not delete instant " + instant);
-        }
-      } else {
-        LOG.warn("The commit " + inFlightCommitFilePath + " to remove does not exist");
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Could not remove inflight commit " + inFlightCommitFilePath, e);
-    }
   }
 
   private void deleteInstantFile(HoodieInstant instant) {
@@ -390,14 +357,13 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * Transition Rollback State from requested to inflight.
    *
    * @param requestedInstant requested instant
-   * @param data Optional data to be stored
    * @return commit instant
    */
-  public HoodieInstant transitionRollbackRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data) {
+  public HoodieInstant transitionRollbackRequestedToInflight(HoodieInstant requestedInstant) {
     ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION));
     ValidationUtils.checkArgument(requestedInstant.isRequested());
     HoodieInstant inflight = new HoodieInstant(State.INFLIGHT, ROLLBACK_ACTION, requestedInstant.getTimestamp());
-    transitionState(requestedInstant, inflight, data);
+    transitionState(requestedInstant, inflight, Option.empty());
     return inflight;
   }
 

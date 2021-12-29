@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -56,6 +57,7 @@ import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadStat;
+import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -69,6 +71,7 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
+import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -102,9 +105,12 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
 
   private static final Logger LOG = LogManager.getLogger(HoodieClientTestHarness.class);
 
+  protected static int timelineServicePort =
+      FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue();
   private String testMethodName;
   protected transient JavaSparkContext jsc = null;
   protected transient HoodieSparkEngineContext context = null;
+  protected transient SparkSession sparkSession = null;
   protected transient Configuration hadoopConf = null;
   protected transient SQLContext sqlContext;
   protected transient FileSystem fs;
@@ -113,6 +119,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected transient SparkRDDWriteClient writeClient;
   protected transient HoodieReadClient readClient;
   protected transient HoodieTableFileSystemView tableView;
+  protected transient TimelineService timelineService;
 
   protected final SparkTaskContextSupplier supplier = new SparkTaskContextSupplier();
 
@@ -145,12 +152,14 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     initTestDataGenerator();
     initFileSystem();
     initMetaClient();
+    initTimelineService();
   }
 
   /**
    * Cleanups resource group for the subclasses of {@link HoodieClientTestBase}.
    */
   public void cleanupResources() throws IOException {
+    cleanupTimelineService();
     cleanupClients();
     cleanupSparkContexts();
     cleanupTestDataGenerator();
@@ -175,6 +184,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     sqlContext = new SQLContext(jsc);
     context = new HoodieSparkEngineContext(jsc);
     hadoopConf = context.getHadoopConf().get();
+    sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
   }
 
   /**
@@ -245,6 +255,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
    *
    * @throws IOException
    */
+  @Override
   protected void initMetaClient() throws IOException {
     initMetaClient(getTableType());
   }
@@ -270,6 +281,28 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
       properties.put(HoodieTableConfig.NAME.key(), tableName);
     }
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, tableType, properties);
+  }
+
+  /**
+   * Initializes timeline service based on the write config.
+   */
+  protected void initTimelineService() {
+    timelineService = HoodieClientTestUtils.initTimelineService(
+        context, basePath, incrementTimelineServicePortToUse());
+    timelineServicePort = timelineService.getServerPort();
+  }
+
+  protected void cleanupTimelineService() {
+    if (timelineService != null) {
+      timelineService.close();
+    }
+  }
+
+  protected int incrementTimelineServicePortToUse() {
+    // Increment the timeline service port for each individual test
+    // to avoid port reuse causing failures
+    timelineServicePort = (timelineServicePort + 1 - 1024) % (65536 - 1024) + 1024;
+    return timelineServicePort;
   }
 
   protected Properties getPropertiesForKeyGen() {
@@ -502,6 +535,9 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     List<java.nio.file.Path> fsPartitionPaths = testTable.getAllPartitionPaths();
     List<String> fsPartitions = new ArrayList<>();
     fsPartitionPaths.forEach(entry -> fsPartitions.add(entry.getFileName().toString()));
+    if (fsPartitions.isEmpty()) {
+      fsPartitions.add("");
+    }
     List<String> metadataPartitions = tableMetadata.getAllPartitionPaths();
 
     Collections.sort(fsPartitions);
@@ -588,7 +624,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
         }
       }
     }
-    assertEquals(fsStatuses.length, partitionToFilesMap.get(basePath + "/" + partition).length);
+    assertEquals(fsStatuses.length, partitionToFilesMap.get(partitionPath.toString()).length);
 
     // Block sizes should be valid
     Arrays.stream(metaStatuses).forEach(s -> assertTrue(s.getBlockSize() > 0));

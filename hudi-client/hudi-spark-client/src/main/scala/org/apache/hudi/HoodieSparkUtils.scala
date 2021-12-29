@@ -47,7 +47,13 @@ import scala.collection.JavaConverters.asScalaBufferConverter
 
 object HoodieSparkUtils extends SparkAdapterSupport {
 
+  def isSpark2: Boolean = SPARK_VERSION.startsWith("2.")
+
   def isSpark3: Boolean = SPARK_VERSION.startsWith("3.")
+
+  def isSpark3_0: Boolean = SPARK_VERSION.startsWith("3.0")
+
+  def isSpark3_2: Boolean = SPARK_VERSION.startsWith("3.2")
 
   def getMetaSchema: StructType = {
     StructType(HoodieRecord.HOODIE_META_COLUMNS.asScala.map(col => {
@@ -286,44 +292,5 @@ object HoodieSparkUtils extends SparkAdapterSupport {
     assert(field.isDefined, s"Cannot find column: $columnName, Table Columns are: " +
       s"${tableSchema.fieldNames.mkString(",")}")
     AttributeReference(columnName, field.get.dataType, field.get.nullable)()
-  }
-
-  /**
-    * Create merge sql to merge leftTable and right table.
-    *
-    * @param leftTable table name.
-    * @param rightTable table name.
-    * @param cols merged cols.
-    * @return merge sql.
-    */
-  def createMergeSql(leftTable: String, rightTable: String, cols: Seq[String]): String = {
-    var selectsql = ""
-    for (i <- cols.indices) {
-      selectsql = selectsql + s" if (${leftTable}.${cols(i)} is null, ${rightTable}.${cols(i)}, ${leftTable}.${cols(i)}) as ${cols(i)} ,"
-    }
-    "select " + selectsql.dropRight(1) + s" from ${leftTable} full join ${rightTable} on ${leftTable}.${cols(0)} = ${rightTable}.${cols(0)}"
-  }
-
-  /**
-    * Collect min/max statistics for candidate cols.
-    * support all col types.
-    *
-    * @param df dataFrame holds read files.
-    * @param cols candidate cols to collect statistics.
-    * @return
-    */
-  def getMinMaxValueSpark(df: DataFrame, cols: Seq[String]): DataFrame = {
-    val sqlContext = df.sparkSession.sqlContext
-    import sqlContext.implicits._
-
-    val values = cols.flatMap(c => Seq( min(col(c)).as(c + "_minValue"), max(col(c)).as(c + "_maxValue"), count(c).as(c + "_noNullCount")))
-    val valueCounts = count("*").as("totalNum")
-    val projectValues = Seq(col("file")) ++ cols.flatMap(c =>
-      Seq(col(c + "_minValue"), col(c + "_maxValue"), expr(s"totalNum - ${c + "_noNullCount"}").as(c + "_num_nulls")))
-
-    val result = df.select(input_file_name() as "file", col("*"))
-      .groupBy($"file")
-      .agg(valueCounts,  values: _*).select(projectValues:_*)
-    result
   }
 }

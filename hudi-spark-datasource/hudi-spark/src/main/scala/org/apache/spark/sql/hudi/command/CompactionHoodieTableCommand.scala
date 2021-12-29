@@ -21,13 +21,13 @@ import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import org.apache.spark.sql.catalyst.plans.logical.CompactionOperation.{CompactionOperation, RUN, SCHEDULE}
-import org.apache.spark.sql.execution.command.RunnableCommand
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.hudi.HoodieSqlUtils.getTableLocation
 import org.apache.spark.sql.types.StringType
 
 case class CompactionHoodieTableCommand(table: CatalogTable,
   operation: CompactionOperation, instantTimestamp: Option[Long])
-  extends RunnableCommand {
+  extends HoodieLeafRunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val basePath = getTableLocation(table, sparkSession)

@@ -20,7 +20,7 @@ package org.apache.spark.sql.adapter
 import org.apache.hudi.Spark3RowSerDe
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.spark3.internal.ReflectUtil
-import org.apache.spark.SPARK_VERSION
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
@@ -79,7 +79,7 @@ class Spark3Adapter extends SparkAdapter {
 
   override def createInsertInto(table: LogicalPlan, partition: Map[String, Option[String]],
      query: LogicalPlan, overwrite: Boolean, ifPartitionNotExists: Boolean): LogicalPlan = {
-    ReflectUtil.createInsertInto(SPARK_VERSION.startsWith("3.0"), table, partition, Seq.empty[String], query, overwrite, ifPartitionNotExists)
+    ReflectUtil.createInsertInto(table, partition, Seq.empty[String], query, overwrite, ifPartitionNotExists)
   }
 
   override def createSparkParsePartitionUtil(conf: SQLConf): SparkParsePartitionUtil = {

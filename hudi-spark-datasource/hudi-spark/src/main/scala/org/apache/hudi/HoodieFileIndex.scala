@@ -18,7 +18,6 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, Path}
-
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -27,24 +26,27 @@ import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ
 import org.apache.hudi.common.table.view.{FileSystemViewStorageConfig, HoodieTableFileSystemView}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, BoundReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.util.{CaseInsensitiveMap, DateTimeUtils}
 import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
-import org.apache.spark.sql.hudi.{DataSkippingUtils, HoodieSqlUtils}
+import org.apache.spark.sql.hudi.DataSkippingUtils.createColumnStatsIndexFilterExpr
+import org.apache.spark.sql.hudi.HoodieSqlUtils
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.sql.{AnalysisException, Column, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.util.Properties
 
-import scala.collection.JavaConverters._
 import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import scala.collection.mutable
+import scala.util.{Failure, Success, Try}
 
 /**
  * A file index which support partition prune for hoodie snapshot and read-optimized query.
@@ -107,18 +109,43 @@ case class HoodieFileIndex(
   private lazy val _partitionSchemaFromProperties: StructType = {
     val tableConfig = metaClient.getTableConfig
     val partitionColumns = tableConfig.getPartitionFields
-    val nameFieldMap = schema.fields.map(filed => filed.name -> filed).toMap
+    val nameFieldMap = generateNameFieldMap(Right(schema))
 
     if (partitionColumns.isPresent) {
-      val partitionFields = partitionColumns.get().map(column =>
-        nameFieldMap.getOrElse(column, throw new IllegalArgumentException(s"Cannot find column: '" +
+      if (tableConfig.getKeyGeneratorClassName.equalsIgnoreCase(classOf[TimestampBasedKeyGenerator].getName)
+          || tableConfig.getKeyGeneratorClassName.equalsIgnoreCase(classOf[TimestampBasedAvroKeyGenerator].getName)) {
+        val partitionFields = partitionColumns.get().map(column => StructField(column, StringType))
+        StructType(partitionFields)
+      } else {
+        val partitionFields = partitionColumns.get().map(column =>
+          nameFieldMap.getOrElse(column, throw new IllegalArgumentException(s"Cannot find column: '" +
           s"$column' in the schema[${schema.fields.mkString(",")}]")))
-      new StructType(partitionFields)
+        StructType(partitionFields)
+      }
     } else { // If the partition columns have not stored in hoodie.properties(the table that was
       // created earlier), we trait it as a non-partitioned table.
       logWarning("No partition columns available from hoodie.properties." +
         " Partition pruning will not work")
       new StructType()
+    }
+  }
+
+  /**
+   * This method traverses StructType recursively to build map of columnName -> StructField
+   * Note : If there is nesting of columns like ["a.b.c.d", "a.b.c.e"]  -> final map will have keys corresponding
+   * only to ["a.b.c.d", "a.b.c.e"] and not for subsets like ["a.b.c", "a.b"]
+   * @param structField
+   * @return map of ( columns names -> StructField )
+   */
+  private def generateNameFieldMap(structField: Either[StructField, StructType]) : Map[String, StructField] = {
+    structField match {
+      case Right(field) => field.fields.map(f => generateNameFieldMap(Left(f))).flatten.toMap
+      case Left(field) => field.dataType match {
+        case struct: StructType => generateNameFieldMap(Right(struct)).map {
+          case (key: String, sf: StructField)  => (field.name + "." + key, sf)
+        }
+        case _ => Map(field.name -> field)
+      }
     }
   }
 
@@ -162,23 +189,23 @@ case class HoodieFileIndex(
 
   /**
    * Computes pruned list of candidate base-files' names based on provided list of {@link dataFilters}
-   * conditions, by leveraging custom Z-order index (Z-index) bearing "min", "max", "num_nulls" statistic
-   * for all clustered columns
+   * conditions, by leveraging custom Column Statistics index (col-stats-index) bearing "min", "max",
+   * "num_nulls" statistics for all clustered columns.
    *
    * NOTE: This method has to return complete set of candidate files, since only provided candidates will
    *       ultimately be scanned as part of query execution. Hence, this method has to maintain the
    *       invariant of conservatively including every base-file's name, that is NOT referenced in its index.
    *
-   * @param dataFilters list of original data filters passed down from querying engine
+   * @param queryFilters list of original data filters passed down from querying engine
    * @return list of pruned (data-skipped) candidate base-files' names
    */
-  private def lookupCandidateFilesNamesInZIndex(dataFilters: Seq[Expression]): Option[Set[String]] = {
-    val indexPath = metaClient.getZindexPath
+  private def lookupCandidateFilesInColStatsIndex(queryFilters: Seq[Expression]): Try[Option[Set[String]]] = Try {
+    val indexPath = metaClient.getColumnStatsIndexPath
     val fs = metaClient.getFs
 
-    if (!enableDataSkipping() || !fs.exists(new Path(indexPath)) || dataFilters.isEmpty) {
+    if (!enableDataSkipping() || !fs.exists(new Path(indexPath)) || queryFilters.isEmpty) {
       // scalastyle:off return
-      return Option.empty
+      return Success(Option.empty)
       // scalastyle:on return
     }
 
@@ -192,7 +219,7 @@ case class HoodieFileIndex(
 
     if (candidateIndexTables.isEmpty) {
       // scalastyle:off return
-      return Option.empty
+      return Success(Option.empty)
       // scalastyle:on return
     }
 
@@ -200,14 +227,14 @@ case class HoodieFileIndex(
       Some(spark.read.load(new Path(indexPath, candidateIndexTables.last).toString))
     } catch {
       case t: Throwable =>
-        logError("Failed to read Z-index; skipping", t)
+        logError("Failed to read col-stats index; skipping", t)
         None
     }
 
     dataFrameOpt.map(df => {
       val indexSchema = df.schema
       val indexFilter =
-        dataFilters.map(DataSkippingUtils.createZIndexLookupFilter(_, indexSchema))
+        queryFilters.map(createColumnStatsIndexFilterExpr(_, indexSchema))
           .reduce(And)
 
       logInfo(s"Index filter condition: $indexFilter")
@@ -221,7 +248,7 @@ case class HoodieFileIndex(
           .toSet
 
       val prunedCandidateFileNames =
-        df.filter(new Column(indexFilter))
+        df.where(new Column(indexFilter))
           .select("file")
           .collect()
           .map(_.getString(0))
@@ -229,13 +256,13 @@ case class HoodieFileIndex(
 
       df.unpersist()
 
-      // NOTE: Z-index isn't guaranteed to have complete set of statistics for every
+      // NOTE: Col-Stats Index isn't guaranteed to have complete set of statistics for every
       //       base-file: since it's bound to clustering, which could occur asynchronously
-      //       at arbitrary point in time, and is not likely to touching all of the base files.
+      //       at arbitrary point in time, and is not likely to be touching all of the base files.
       //
-      //       To close that gap, we manually compute the difference b/w all indexed (Z-index)
+      //       To close that gap, we manually compute the difference b/w all indexed (by col-stats-index)
       //       files and all outstanding base-files, and make sure that all base files not
-      //       represented w/in Z-index are included in the output of this method
+      //       represented w/in the index are included in the output of this method
       val notIndexedFileNames =
         lookupFileNamesMissingFromIndex(allIndexedFileNames)
 
@@ -257,25 +284,37 @@ case class HoodieFileIndex(
    */
   override def listFiles(partitionFilters: Seq[Expression],
                          dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
-    // Look up candidate files names in the Z-index, if all of the following conditions are true
+    // Look up candidate files names in the col-stats index, if all of the following conditions are true
     //    - Data-skipping is enabled
-    //    - Z-index is present
+    //    - Col-Stats Index is present
     //    - List of predicates (filters) is present
-    val candidateFilesNamesOpt: Option[Set[String]] = lookupCandidateFilesNamesInZIndex(dataFilters)
+    val candidateFilesNamesOpt: Option[Set[String]] =
+      lookupCandidateFilesInColStatsIndex(dataFilters) match {
+        case Success(opt) => opt
+        case Failure(e) =>
+          if (e.isInstanceOf[AnalysisException]) {
+            logDebug("Failed to relay provided data filters to Z-index lookup", e)
+          } else {
+            logError("Failed to lookup candidate files in Z-index", e)
+          }
+          Option.empty
+      }
 
     logDebug(s"Overlapping candidate files (from Z-index): ${candidateFilesNamesOpt.getOrElse(Set.empty)}")
 
-    if (queryAsNonePartitionedTable) { // Read as Non-Partitioned table.
-      // Filter in candidate files based on the Z-index lookup
+    if (queryAsNonePartitionedTable) {
+      // Read as Non-Partitioned table
+      // Filter in candidate files based on the col-stats index lookup
       val candidateFiles =
         allFiles.filter(fileStatus =>
           // NOTE: This predicate is true when {@code Option} is empty
           candidateFilesNamesOpt.forall(_.contains(fileStatus.getPath.getName))
         )
 
-      logInfo(s"Total files : ${allFiles.size}," +
-        s" candidate files after data skipping: ${candidateFiles.size} " +
-        s" skipping percent ${if (allFiles.length != 0) (allFiles.size - candidateFiles.size) / allFiles.size.toDouble else 0}")
+      logInfo(s"Total files : ${allFiles.size}; " +
+        s"candidate files after data skipping: ${candidateFiles.size}; " +
+        s"skipping percent ${if (allFiles.nonEmpty) (allFiles.size - candidateFiles.size) / allFiles.size.toDouble else 0}")
+
       Seq(PartitionDirectory(InternalRow.empty, candidateFiles))
     } else {
       // Prune the partition path by the partition filters
@@ -284,27 +323,27 @@ case class HoodieFileIndex(
       var candidateFileSize = 0
 
       val result = prunedPartitions.map { partition =>
-        val baseFileStatuses = cachedAllInputFileSlices(partition).map(fileSlice => {
-          if (fileSlice.getBaseFile.isPresent) {
-            fileSlice.getBaseFile.get().getFileStatus
-          } else {
-            null
-          }
-        }).filterNot(_ == null)
+        val baseFileStatuses: Seq[FileStatus] =
+          cachedAllInputFileSlices(partition)
+            .map(fs => fs.getBaseFile.orElse(null))
+            .filter(_ != null)
+            .map(_.getFileStatus)
 
-        // Filter in candidate files based on the Z-index lookup
+        // Filter in candidate files based on the col-stats index lookup
         val candidateFiles =
-          baseFileStatuses.filter(fileStatus =>
+          baseFileStatuses.filter(fs =>
             // NOTE: This predicate is true when {@code Option} is empty
-            candidateFilesNamesOpt.forall(_.contains(fileStatus.getPath.getName)))
+            candidateFilesNamesOpt.forall(_.contains(fs.getPath.getName)))
 
         totalFileSize += baseFileStatuses.size
         candidateFileSize += candidateFiles.size
         PartitionDirectory(partition.values, candidateFiles)
       }
-      logInfo(s"Total files: ${totalFileSize}," +
-        s" Candidate files after data skipping : ${candidateFileSize} " +
-        s"skipping percent ${if (allFiles.length != 0) (totalFileSize - candidateFileSize) / totalFileSize.toDouble else 0}")
+
+      logInfo(s"Total base files: ${totalFileSize}; " +
+        s"candidate files after data skipping : ${candidateFileSize}; " +
+        s"skipping percent ${if (allFiles.nonEmpty) (totalFileSize - candidateFileSize) / totalFileSize.toDouble else 0}")
+
       result
     }
   }
@@ -539,14 +578,10 @@ case class HoodieFileIndex(
           }.mkString("/")
           val pathWithPartitionName = new Path(basePath, partitionWithName)
           val partitionDataTypes = partitionSchema.fields.map(f => f.name -> f.dataType).toMap
-          val partitionValues = sparkParsePartitionUtil.parsePartition(pathWithPartitionName,
+
+          sparkParsePartitionUtil.parsePartition(pathWithPartitionName,
             typeInference = false, Set(new Path(basePath)), partitionDataTypes,
             DateTimeUtils.getTimeZone(timeZoneId))
-
-          // Convert partitionValues to InternalRow
-          partitionValues.map(_.literals.map(_.value))
-            .map(InternalRow.fromSeq)
-            .getOrElse(InternalRow.empty)
         }
       }
       PartitionRowPath(partitionRow, partitionPath)

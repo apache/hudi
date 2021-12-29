@@ -227,6 +227,25 @@ public class HMSDDLExecutor implements DDLExecutor {
   }
 
   @Override
+  public void dropPartitionsToTable(String tableName, List<String> partitionsToDrop) {
+    if (partitionsToDrop.isEmpty()) {
+      LOG.info("No partitions to drop for " + tableName);
+      return;
+    }
+
+    LOG.info("Drop partitions " + partitionsToDrop.size() + " on " + tableName);
+    try {
+      for (String dropPartition : partitionsToDrop) {
+        client.dropPartition(syncConfig.databaseName, tableName, dropPartition, false);
+        LOG.info("Drop partition " + dropPartition + " on " + tableName);
+      }
+    } catch (TException e) {
+      LOG.error(syncConfig.databaseName + "." + tableName + " drop partition failed", e);
+      throw new HoodieHiveSyncException(syncConfig.databaseName + "." + tableName + " drop partition failed", e);
+    }
+  }
+
+  @Override
   public void close() {
     if (client != null) {
       Hive.closeCurrent();

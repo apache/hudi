@@ -466,7 +466,7 @@ public class HoodieInputFormatUtils {
         HoodieTableFileSystemView fsView = fsViewCache.computeIfAbsent(metaClient, tableMetaClient ->
             FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext, tableMetaClient, buildMetadataConfig(job), timeline));
         List<HoodieBaseFile> filteredBaseFiles = new ArrayList<>();
-        Map<FileStatus, List<String>> filteredLogs = new HashMap<>();
+        Map<FileStatus, List<HoodieLogFile>> filteredLogs = new HashMap<>();
         for (Path p : entry.getValue()) {
           String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), p);
           List<HoodieBaseFile> matched = fsView.getLatestBaseFiles(relativePartitionPath).collect(Collectors.toList());
@@ -476,9 +476,8 @@ public class HoodieInputFormatUtils {
                 .filter(f -> !f.getBaseFile().isPresent() && f.getLatestLogFile().isPresent())
                 .collect(Collectors.toList());
             logMatched.forEach(f -> {
-              List<String> logPaths = f.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
-                  .map(log -> log.getPath().toString()).collect(Collectors.toList());
-              filteredLogs.put(f.getLatestLogFile().get().getFileStatus(), logPaths);
+              List<HoodieLogFile> logPathSizePairs = f.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
+              filteredLogs.put(f.getLatestLogFile().get().getFileStatus(), logPathSizePairs);
             });
           }
         }
@@ -492,9 +491,9 @@ public class HoodieInputFormatUtils {
           returns.add(getFileStatus(filteredFile));
         }
 
-        for (Map.Entry<FileStatus, List<String>> filterLogEntry : filteredLogs.entrySet()) {
+        for (Map.Entry<FileStatus, List<HoodieLogFile>> filterLogEntry : filteredLogs.entrySet()) {
           RealtimeFileStatus rs = new RealtimeFileStatus(filterLogEntry.getKey());
-          rs.setDeltaLogPaths(filterLogEntry.getValue());
+          rs.setDeltaLogFiles(filterLogEntry.getValue());
           returns.add(rs);
         }
       }

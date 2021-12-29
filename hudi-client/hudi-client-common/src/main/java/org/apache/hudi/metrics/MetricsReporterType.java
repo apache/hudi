@@ -22,5 +22,5 @@ package org.apache.hudi.metrics;
  * Types of the reporter supported, hudi also supports user defined reporter.
  */
 public enum MetricsReporterType {
-  GRAPHITE, INMEMORY, JMX, DATADOG, CONSOLE, PROMETHEUS_PUSHGATEWAY, PROMETHEUS
+  GRAPHITE, INMEMORY, JMX, DATADOG, CONSOLE, PROMETHEUS_PUSHGATEWAY, PROMETHEUS, CLOUDWATCH
 }

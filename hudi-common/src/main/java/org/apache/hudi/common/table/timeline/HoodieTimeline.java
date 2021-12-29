@@ -132,6 +132,14 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterCompletedAndCompactionInstants();
 
   /**
+   * Filter this timeline to include the completed and exclude operation type is delete partition instants.
+   *
+   * @return New instance of HoodieTimeline with include the completed and
+   * exclude operation type is delete partition instants
+   */
+  HoodieTimeline filterCompletedInstantsWithCommitMetadata();
+
+  /**
    * Timeline to just include commits (commit/deltacommit), compaction and replace actions.
    * 
    * @return
@@ -156,6 +164,11 @@ public interface HoodieTimeline extends Serializable {
    * Filter this timeline to just include requested and inflight replacecommit instants.
    */
   HoodieTimeline filterPendingReplaceTimeline();
+
+  /**
+   * Filter this timeline to include pending rollbacks.
+   */
+  HoodieTimeline filterPendingRollbackTimeline();
 
   /**
    * Create a new Timeline with all the instants after startTs.
@@ -277,6 +290,11 @@ public interface HoodieTimeline extends Serializable {
   Option<byte[]> getInstantDetails(HoodieInstant instant);
 
   /**
+   * Check WriteOperationType is DeletePartition.
+   */
+  boolean isDeletePartitionType(HoodieInstant instant);
+
+  /**
    * Helper methods to compare instants.
    **/
   BiPredicate<String, String> EQUALS = (commit1, commit2) -> commit1.compareTo(commit2) == 0;
@@ -327,6 +345,10 @@ public interface HoodieTimeline extends Serializable {
 
   static HoodieInstant getReplaceCommitInflightInstant(final String timestamp) {
     return new HoodieInstant(State.INFLIGHT, REPLACE_COMMIT_ACTION, timestamp);
+  }
+
+  static HoodieInstant getRollbackRequestedInstant(HoodieInstant instant) {
+    return instant.isRequested() ? instant : HoodieTimeline.getRequestedInstant(instant);
   }
 
   /**

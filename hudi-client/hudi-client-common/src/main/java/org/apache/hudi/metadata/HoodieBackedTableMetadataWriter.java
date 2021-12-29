@@ -82,6 +82,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 
 /**
@@ -203,7 +204,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             .archiveCommitsWith(minCommitsToKeep, maxCommitsToKeep)
             // we will trigger compaction manually, to control the instant times
             .withInlineCompaction(false)
-            .withMaxNumDeltaCommitsBeforeCompaction(writeConfig.getMetadataCompactDeltaCommitMax()).build())
+            .withMaxNumDeltaCommitsBeforeCompaction(writeConfig.getMetadataCompactDeltaCommitMax())
+            // we will trigger archive manually, to ensure only regular writer invokes it
+            .withAutoArchive(false).build())
         .withParallelism(parallelism, parallelism)
         .withDeleteParallelism(parallelism)
         .withRollbackParallelism(parallelism)
@@ -241,6 +244,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         case PROMETHEUS_PUSHGATEWAY:
         case CONSOLE:
         case INMEMORY:
+        case CLOUDWATCH:
           break;
         default:
           throw new HoodieMetadataException("Unsupported Metrics Reporter type " + writeConfig.getMetricsReporterType());
@@ -460,6 +464,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     // List all partitions in the basePath of the containing dataset
     LOG.info("Initializing metadata table by using file listings in " + dataWriteConfig.getBasePath());
+    engineContext.setJobStatus(this.getClass().getSimpleName(), "Bootstrap: initializing metadata table by listing files and partitions");
     List<DirectoryInfo> dirInfoList = listAllPartitions(dataMetaClient);
 
     // During bootstrap, the list of files to be committed can be huge. So creating a HoodieCommitMetadata out of these
@@ -678,7 +683,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    *      deltacommit.
    */
   protected void compactIfNecessary(AbstractHoodieWriteClient writeClient, String instantTime) {
-    String latestDeltacommitTime = metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant()
+    // finish off any pending compactions if any from previous attempt.
+    writeClient.runAnyPendingCompactions();
+
+    String latestDeltacommitTime = metadataMetaClient.reloadActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant()
         .get().getTimestamp();
     List<HoodieInstant> pendingInstants = dataMetaClient.reloadActiveTimeline().filterInflightsAndRequested()
         .findInstantsBefore(latestDeltacommitTime).getInstants().collect(Collectors.toList());
@@ -698,7 +706,20 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }
   }
 
-  protected void doClean(AbstractHoodieWriteClient writeClient, String instantTime) {
+  protected void cleanIfNecessary(AbstractHoodieWriteClient writeClient, String instantTime) {
+    Option<HoodieInstant> lastCompletedCompactionInstant = metadataMetaClient.reloadActiveTimeline()
+        .getCommitTimeline().filterCompletedInstants().lastInstant();
+    if (lastCompletedCompactionInstant.isPresent()
+        && metadataMetaClient.getActiveTimeline().filterCompletedInstants()
+            .findInstantsAfter(lastCompletedCompactionInstant.get().getTimestamp()).countInstants() < 3) {
+      // do not clean the log files immediately after compaction to give some buffer time for metadata table reader,
+      // because there is case that the reader has prepared for the log file readers already before the compaction completes
+      // while before/during the reading of the log files, the cleaning triggers and delete the reading files,
+      // then a FileNotFoundException(for LogFormatReader) or NPE(for HFileReader) would throw.
+
+      // 3 is a value that I think is enough for metadata table reader.
+      return;
+    }
     // Trigger cleaning with suffixes based on the same instant time. This ensures that any future
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.
@@ -711,7 +732,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    *
    */
   protected void bootstrapCommit(List<DirectoryInfo> partitionInfoList, String createInstantTime) {
-    List<String> partitions = partitionInfoList.stream().map(p -> p.getRelativePath()).collect(Collectors.toList());
+    List<String> partitions = partitionInfoList.stream().map(p ->
+        p.getRelativePath().isEmpty() ? NON_PARTITIONED_NAME : p.getRelativePath()).collect(Collectors.toList());
     final int totalFiles = partitionInfoList.stream().mapToInt(p -> p.getTotalFiles()).sum();
 
     // Record which saves the list of all partitions
@@ -726,7 +748,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       HoodieData<HoodieRecord> fileListRecords = engineContext.parallelize(partitionInfoList, partitionInfoList.size()).map(partitionInfo -> {
         // Record which saves files within a partition
         return HoodieMetadataPayload.createPartitionFilesRecord(
-            partitionInfo.getRelativePath(), Option.of(partitionInfo.getFileNameToSizeMap()), Option.empty());
+            partitionInfo.getRelativePath().isEmpty() ? NON_PARTITIONED_NAME : partitionInfo.getRelativePath(), Option.of(partitionInfo.getFileNameToSizeMap()), Option.empty());
       });
       partitionRecords = partitionRecords.union(fileListRecords);
     }

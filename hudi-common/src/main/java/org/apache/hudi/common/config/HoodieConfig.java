@@ -44,14 +44,14 @@ public class HoodieConfig implements Serializable {
     return config;
   }
 
-  protected Properties props;
+  protected TypedProperties props;
 
   public HoodieConfig() {
-    this.props = new Properties();
+    this.props = new TypedProperties();
   }
 
   public HoodieConfig(Properties props) {
-    this.props = props;
+    this.props = new TypedProperties(props);
   }
 
   public <T> void setValue(ConfigProperty<T> cfg, String val) {
@@ -147,7 +147,7 @@ public class HoodieConfig implements Serializable {
   public <T> boolean getBooleanOrDefault(ConfigProperty<T> configProperty) {
     Option<Object> rawValue = getRawValue(configProperty);
     return rawValue.map(v -> Boolean.parseBoolean(v.toString()))
-            .orElse(Boolean.parseBoolean(configProperty.defaultValue().toString()));
+            .orElseGet(() -> Boolean.parseBoolean(configProperty.defaultValue().toString()));
   }
 
   public <T> Long getLong(ConfigProperty<T> configProperty) {
@@ -174,13 +174,13 @@ public class HoodieConfig implements Serializable {
     return rawValue.map(Object::toString).orElse(defaultVal);
   }
 
-  public Properties getProps() {
+  public TypedProperties getProps() {
     return getProps(false);
   }
 
-  public Properties getProps(boolean includeGlobalProps) {
+  public TypedProperties getProps(boolean includeGlobalProps) {
     if (includeGlobalProps) {
-      Properties mergedProps = DFSPropertiesConfiguration.getGlobalProps();
+      TypedProperties mergedProps = DFSPropertiesConfiguration.getGlobalProps();
       mergedProps.putAll(props);
       return mergedProps;
     } else {

@@ -25,12 +25,11 @@ import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.plans.logical.DeleteFromTable
-import org.apache.spark.sql.execution.command.RunnableCommand
+import org.apache.spark.sql.catalyst.plans.logical.{DeleteFromTable, LogicalPlan}
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
 import org.apache.spark.sql.types.StructType
 
-case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends RunnableCommand
+case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends HoodieLeafRunnableCommand
   with SparkAdapterSupport {
 
   private val table = deleteTable.table
@@ -72,7 +71,7 @@ case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends Runnab
         "path" -> path,
         TBL_NAME.key -> tableConfig.getTableName,
         HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
-        URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitoning,
+        URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
         KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
         SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME -> tableConfig.getKeyGeneratorClassName,
         OPERATION.key -> DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,

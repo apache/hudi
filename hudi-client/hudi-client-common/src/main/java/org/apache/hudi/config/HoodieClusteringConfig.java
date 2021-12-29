@@ -22,14 +22,17 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.util.TypeUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
+import javax.annotation.Nonnull;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
 
 /**
@@ -334,9 +337,22 @@ public class HoodieClusteringConfig extends HoodieConfig {
   /** @deprecated Use {@link #ASYNC_CLUSTERING_ENABLE} and its methods instead */
   @Deprecated
   public static final String DEFAULT_ASYNC_CLUSTERING_ENABLE_OPT_VAL = ASYNC_CLUSTERING_ENABLE.defaultValue();
-  
+
+  // NOTE: This ctor is required for appropriate deserialization
   public HoodieClusteringConfig() {
     super();
+  }
+
+  public boolean isAsyncClusteringEnabled() {
+    return getBooleanOrDefault(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE);
+  }
+
+  public boolean isInlineClusteringEnabled() {
+    return getBooleanOrDefault(HoodieClusteringConfig.INLINE_CLUSTERING);
+  }
+
+  public static HoodieClusteringConfig from(TypedProperties props) {
+    return  HoodieClusteringConfig.newBuilder().fromProperties(props).build();
   }
 
   public static Builder newBuilder() {
@@ -421,6 +437,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
     }
 
     public Builder fromProperties(Properties props) {
+      // TODO this should cherry-pick only clustering properties
       this.clusteringConfig.getProps().putAll(props);
       return this;
     }
@@ -505,11 +522,15 @@ public class HoodieClusteringConfig extends HoodieConfig {
   }
 
   /**
-   * strategy types for build z-ordering/space-filling curves.
+   * Type of a strategy for building Z-order/Hilbert space-filling curves.
    */
   public enum BuildCurveStrategyType {
     DIRECT("direct"),
     SAMPLE("sample");
+
+    private static final Map<String, BuildCurveStrategyType> VALUE_TO_ENUM_MAP =
+        TypeUtils.getValueToEnumMap(BuildCurveStrategyType.class, e -> e.value);
+
     private final String value;
 
     BuildCurveStrategyType(String value) {
@@ -517,14 +538,39 @@ public class HoodieClusteringConfig extends HoodieConfig {
     }
 
     public static BuildCurveStrategyType fromValue(String value) {
-      switch (value.toLowerCase(Locale.ROOT)) {
-        case "direct":
-          return DIRECT;
-        case "sample":
-          return SAMPLE;
-        default:
-          throw new HoodieException("Invalid value of Type.");
+      BuildCurveStrategyType enumValue = VALUE_TO_ENUM_MAP.get(value);
+      if (enumValue == null) {
+        throw new HoodieException(String.format("Invalid value (%s)", value));
       }
+
+      return enumValue;
+    }
+  }
+
+  /**
+   * Layout optimization strategies such as Z-order/Hilbert space-curves, etc
+   */
+  public enum LayoutOptimizationStrategy {
+    ZORDER("z-order"),
+    HILBERT("hilbert");
+
+    private static final Map<String, LayoutOptimizationStrategy> VALUE_TO_ENUM_MAP =
+        TypeUtils.getValueToEnumMap(LayoutOptimizationStrategy.class, e -> e.value);
+
+    private final String value;
+
+    LayoutOptimizationStrategy(String value) {
+      this.value = value;
+    }
+
+    @Nonnull
+    public static LayoutOptimizationStrategy fromValue(String value) {
+      LayoutOptimizationStrategy enumValue = VALUE_TO_ENUM_MAP.get(value);
+      if (enumValue == null) {
+        throw new HoodieException(String.format("Invalid value (%s)", value));
+      }
+
+      return enumValue;
     }
   }
 }

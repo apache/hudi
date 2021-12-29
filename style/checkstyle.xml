@@ -275,7 +275,9 @@
         <module name="EmptyStatement" />
 
         <!-- Checks for Java Docs. -->
-        <module name="JavadocStyle"/>
+        <module name="JavadocStyle">
+            <property name="checkFirstSentence" value="false"/>
+        </module>
 
         <module name="JavadocType">
             <property name="severity" value="info"/>

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.common.model.HoodieLogFile;
+
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 
@@ -35,7 +37,7 @@ public class RealtimeFileStatus extends FileStatus {
   // a flag to mark this split is produced by incremental query or not.
   private boolean belongToIncrementalFileStatus = false;
   // the log files belong this fileStatus.
-  private List<String> deltaLogPaths = new ArrayList<>();
+  private List<HoodieLogFile> deltaLogFiles = new ArrayList<>();
   // max commit time of current fileStatus.
   private String maxCommitTime = "";
   // the basePath of current hoodie table.
@@ -55,7 +57,7 @@ public class RealtimeFileStatus extends FileStatus {
     Path path = super.getPath();
     PathWithLogFilePath pathWithLogFilePath = new PathWithLogFilePath(path.getParent(), path.getName());
     pathWithLogFilePath.setBelongToIncrementalPath(belongToIncrementalFileStatus);
-    pathWithLogFilePath.setDeltaLogPaths(deltaLogPaths);
+    pathWithLogFilePath.setDeltaLogFiles(deltaLogFiles);
     pathWithLogFilePath.setMaxCommitTime(maxCommitTime);
     pathWithLogFilePath.setBasePath(basePath);
     pathWithLogFilePath.setBaseFilePath(baseFilePath);
@@ -69,12 +71,12 @@ public class RealtimeFileStatus extends FileStatus {
     this.belongToIncrementalFileStatus = belongToIncrementalFileStatus;
   }
 
-  public List<String> getDeltaLogPaths() {
-    return deltaLogPaths;
+  public List<HoodieLogFile> getDeltaLogFiles() {
+    return deltaLogFiles;
   }
 
-  public void setDeltaLogPaths(List<String> deltaLogPaths) {
-    this.deltaLogPaths = deltaLogPaths;
+  public void setDeltaLogFiles(List<HoodieLogFile> deltaLogFiles) {
+    this.deltaLogFiles = deltaLogFiles;
   }
 
   public String getMaxCommitTime() {

@@ -19,20 +19,17 @@
 package org.apache.hudi
 
 import org.apache.avro.generic.GenericRecord
-
-import java.io.File
-import java.nio.file.Paths
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.testutils.DataSourceTestUtils
-import org.apache.spark.sql.avro.IncompatibleSchemaException
-import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Row, SparkSession}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull, assertTrue, fail}
+import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 
-import java.util
+import java.io.File
+import java.nio.file.Paths
 import scala.collection.JavaConverters
 
 class TestHoodieSparkUtils {
@@ -235,6 +232,6 @@ class TestHoodieSparkUtils {
     spark.stop()
   }
 
-  def convertRowListToSeq(inputList: util.List[Row]): Seq[Row] =
+  def convertRowListToSeq(inputList: java.util.List[Row]): Seq[Row] =
     JavaConverters.asScalaIteratorConverter(inputList.iterator).asScala.toSeq
 }

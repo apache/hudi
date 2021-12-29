@@ -243,24 +243,38 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         + replacedFileGroups.size() + " replaced file groups");
   }
 
+  @Override
+  public void close() {
+    try {
+      writeLock.lock();
+      clear();
+    } finally {
+      writeLock.unlock();
+    }
+  }
+
   /**
    * Clears the partition Map and reset view states.
    */
   @Override
-  public final void reset() {
+  public void reset() {
     try {
       writeLock.lock();
-
-      addedPartitions.clear();
-      resetViewState();
-
-      bootstrapIndex = null;
-
+      clear();
       // Initialize with new Hoodie timeline.
       init(metaClient, getTimeline());
     } finally {
       writeLock.unlock();
     }
+  }
+
+  /**
+   * Clear the resource.
+   */
+  private void clear() {
+    addedPartitions.clear();
+    resetViewState();
+    bootstrapIndex = null;
   }
 
   /**
@@ -322,9 +336,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       if (!metaClient.getFs().exists(partitionPath)) {
         metaClient.getFs().mkdirs(partitionPath);
         return new FileStatus[0];
+      } else {
+        // in case the partition path was created by another caller
+        return metaClient.getFs().listStatus(partitionPath);
       }
     }
-    throw new HoodieIOException(String.format("Failed to list partition path: %s", partitionPath));
   }
 
   /**
@@ -1119,8 +1135,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   protected void runSync(HoodieTimeline oldTimeline, HoodieTimeline newTimeline) {
     refreshTimeline(newTimeline);
-    addedPartitions.clear();
-    resetViewState();
+    clear();
     // Initialize with new Hoodie timeline.
     init(metaClient, newTimeline);
   }

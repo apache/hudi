@@ -95,7 +95,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       client.startCommitWithTime(newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
-      Stream<HoodieBaseFile> dataFiles = insertRecords(metaClient, records, client, cfg, newCommitTime);
+      Stream<HoodieBaseFile> dataFiles = insertRecordsToMORTable(metaClient, records, client, cfg, newCommitTime);
       assertTrue(dataFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
 
       /*
@@ -104,7 +104,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       newCommitTime = "004";
       client.startCommitWithTime(newCommitTime);
       records = dataGen.generateUpdates(newCommitTime, 100);
-      updateRecords(metaClient, records, client, cfg, newCommitTime);
+      updateRecordsInMORTable(metaClient, records, client, cfg, newCommitTime);
 
       String compactionCommitTime = client.scheduleCompaction(Option.empty()).get().toString();
       client.compact(compactionCommitTime);

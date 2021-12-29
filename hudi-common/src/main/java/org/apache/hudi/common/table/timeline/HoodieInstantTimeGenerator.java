@@ -18,10 +18,12 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import java.text.ParseException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
@@ -56,6 +58,8 @@ public class HoodieInstantTimeGenerator {
   // when performing comparisons such as LESS_THAN_OR_EQUAL_TO
   private static final String DEFAULT_MILLIS_EXT = "999";
 
+  private static HoodieTimelineTimeZone commitTimeZone = HoodieTimelineTimeZone.LOCAL;
+
   /**
    * Returns next instant time that adds N milliseconds to the current time.
    * Ensures each instant time is atleast 1 second apart since we create instant times at second granularity
@@ -66,8 +70,13 @@ public class HoodieInstantTimeGenerator {
     return lastInstantTime.updateAndGet((oldVal) -> {
       String newCommitTime;
       do {
-        Date d = new Date(System.currentTimeMillis() + milliseconds);
-        newCommitTime = MILLIS_INSTANT_TIME_FORMATTER.format(convertDateToTemporalAccessor(d));
+        if (commitTimeZone.equals(HoodieTimelineTimeZone.UTC.toString())) {
+          LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+          newCommitTime = now.format(MILLIS_INSTANT_TIME_FORMATTER);
+        } else {
+          Date d = new Date(System.currentTimeMillis() + milliseconds);
+          newCommitTime = MILLIS_INSTANT_TIME_FORMATTER.format(convertDateToTemporalAccessor(d));
+        }
       } while (HoodieTimeline.compareTimestamps(newCommitTime, HoodieActiveTimeline.LESSER_THAN_OR_EQUALS, oldVal));
       return newCommitTime;
     });
@@ -130,5 +139,9 @@ public class HoodieInstantTimeGenerator {
 
   private static TemporalAccessor convertDateToTemporalAccessor(Date d) {
     return d.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+  }
+
+  public static void setCommitTimeZone(HoodieTimelineTimeZone commitTimeZone) {
+    HoodieInstantTimeGenerator.commitTimeZone = commitTimeZone;
   }
 }

@@ -326,9 +326,11 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance())
         .run(toVersion, null);
 
-    // assert marker files
-    assertMarkerFilesForDowngrade(table, commitInstant, toVersion == HoodieTableVersion.ONE);
-
+    if (fromVersion == HoodieTableVersion.TWO) {
+      // assert marker files
+      assertMarkerFilesForDowngrade(table, commitInstant, toVersion == HoodieTableVersion.ONE);
+    }
+    
     // verify hoodie.table.version got downgraded
     metaClient = HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(cfg.getBasePath())
         .setLayoutVersion(Option.of(new TimelineLayoutVersion(cfg.getTimelineLayoutVersion()))).build();

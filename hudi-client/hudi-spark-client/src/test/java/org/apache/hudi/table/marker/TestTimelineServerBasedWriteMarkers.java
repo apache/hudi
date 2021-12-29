@@ -93,18 +93,20 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
   }
 
   @Override
-  void verifyMarkersInFileSystem() throws IOException {
+  void verifyMarkersInFileSystem(boolean isTablePartitioned) throws IOException {
     // Verifies the markers
     List<String> allMarkers = MarkerUtils.readTimelineServerBasedMarkersFromFileSystem(
-        markerFolderPath.toString(), fs, context, 1)
+            markerFolderPath.toString(), fs, context, 1)
         .values().stream().flatMap(Collection::stream).sorted()
         .collect(Collectors.toList());
     assertEquals(3, allMarkers.size());
-    assertIterableEquals(CollectionUtils.createImmutableList(
-        "2020/06/01/file1.marker.MERGE",
-        "2020/06/02/file2.marker.APPEND",
-        "2020/06/03/file3.marker.CREATE"),
-        allMarkers);
+    List<String> expectedMarkers = isTablePartitioned
+        ? CollectionUtils.createImmutableList(
+        "2020/06/01/file1.marker.MERGE", "2020/06/02/file2.marker.APPEND",
+        "2020/06/03/file3.marker.CREATE")
+        : CollectionUtils.createImmutableList(
+        "file1.marker.MERGE", "file2.marker.APPEND", "file3.marker.CREATE");
+    assertIterableEquals(expectedMarkers, allMarkers);
     // Verifies the marker type file
     Path markerTypeFilePath = new Path(markerFolderPath, MarkerUtils.MARKER_TYPE_FILENAME);
     assertTrue(MarkerUtils.doesMarkerTypeFileExist(fs, markerFolderPath.toString()));

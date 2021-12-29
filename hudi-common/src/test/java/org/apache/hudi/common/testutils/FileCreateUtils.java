@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -63,6 +64,7 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serial
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRequestedReplaceMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRestoreMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackMetadata;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackPlan;
 
 public class FileCreateUtils {
 
@@ -225,6 +227,10 @@ public class FileCreateUtils {
     createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_CLEAN_EXTENSION, serializeCleanerPlan(cleanerPlan).get());
   }
 
+  public static void createRequestedRollbackFile(String basePath, String instantTime, HoodieRollbackPlan plan) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_ROLLBACK_EXTENSION, serializeRollbackPlan(plan).get());
+  }
+
   public static void createInflightRollbackFile(String basePath, String instantTime) throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_ROLLBACK_EXTENSION);
   }
@@ -340,6 +346,20 @@ public class FileCreateUtils {
     removeMetaFile(basePath, instantTime, HoodieTimeline.REPLACE_COMMIT_EXTENSION);
   }
 
+  public static void deleteRollbackCommit(String basePath, String instantTime) throws IOException {
+    removeMetaFile(basePath, instantTime, HoodieTimeline.ROLLBACK_EXTENSION);
+  }
+
+  public static java.nio.file.Path renameFileToTemp(java.nio.file.Path sourcePath, String instantTime) throws IOException {
+    java.nio.file.Path dummyFilePath = sourcePath.getParent().resolve(instantTime + ".temp");
+    Files.move(sourcePath, dummyFilePath);
+    return dummyFilePath;
+  }
+
+  public static void renameTempToMetaFile(java.nio.file.Path tempFilePath, java.nio.file.Path destPath) throws IOException {
+    Files.move(tempFilePath, destPath);
+  }
+
   public static long getTotalMarkerFileCount(String basePath, String partitionPath, String instantTime, IOType ioType) throws IOException {
     Path parentPath = Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime, partitionPath);
     if (Files.notExists(parentPath)) {
@@ -353,7 +373,9 @@ public class FileCreateUtils {
     if (Files.notExists(basePath)) {
       return Collections.emptyList();
     }
-    return Files.list(basePath).filter(entry -> !entry.getFileName().toString().equals(HoodieTableMetaClient.METAFOLDER_NAME)).collect(Collectors.toList());
+    return Files.list(basePath).filter(entry -> (!entry.getFileName().toString().equals(HoodieTableMetaClient.METAFOLDER_NAME)
+        && !entry.getFileName().toString().contains("parquet") && !entry.getFileName().toString().contains("log"))
+        && !entry.getFileName().toString().endsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE)).collect(Collectors.toList());
   }
 
   /**

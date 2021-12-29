@@ -23,6 +23,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroup;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -189,7 +190,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
           fileStatus.setBelongToIncrementalFileStatus(true);
           fileStatus.setBasePath(basePath);
           fileStatus.setBaseFilePath(baseFilePath);
-          fileStatus.setDeltaLogPaths(f.getLatestFileSlice().get().getLogFiles().map(l -> l.getPath().toString()).collect(Collectors.toList()));
+          fileStatus.setDeltaLogFiles(f.getLatestFileSlice().get().getLogFiles().collect(Collectors.toList()));
           // try to set bootstrapfileStatus
           if (baseFileStatus instanceof LocatedFileStatusWithBootstrapBaseFile || baseFileStatus instanceof FileStatusWithBootstrapBaseFile) {
             fileStatus.setBootStrapFileStatus(baseFileStatus);
@@ -202,7 +203,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
           if (logFileStatus.size() > 0) {
             RealtimeFileStatus fileStatus = new RealtimeFileStatus(logFileStatus.get(0));
             fileStatus.setBelongToIncrementalFileStatus(true);
-            fileStatus.setDeltaLogPaths(logFileStatus.stream().map(l -> l.getPath().toString()).collect(Collectors.toList()));
+            fileStatus.setDeltaLogFiles(logFileStatus.stream().map(l -> new HoodieLogFile(l.getPath(), l.getLen())).collect(Collectors.toList()));
             fileStatus.setMaxCommitTime(maxCommitTime);
             fileStatus.setBasePath(basePath);
             result.add(fileStatus);
@@ -256,7 +257,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
               ? super.makeSplit(path.getPathWithBootstrapFileStatus(), start, length, hosts)
               : super.makeSplit(path.getPathWithBootstrapFileStatus(), start, length, hosts, inMemoryHosts);
       return HoodieRealtimeInputFormatUtils
-          .createRealtimeBoostrapBaseFileSplit((BootstrapBaseFileSplit) bf, path.getBasePath(), path.getDeltaLogPaths(), path.getMaxCommitTime());
+          .createRealtimeBoostrapBaseFileSplit((BootstrapBaseFileSplit) bf, path.getBasePath(), path.getDeltaLogFiles(), path.getMaxCommitTime());
     }
   }
 

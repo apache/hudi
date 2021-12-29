@@ -31,7 +31,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator}
-import org.apache.spark.SPARK_VERSION
+
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
@@ -282,8 +282,6 @@ object HoodieSqlUtils extends SparkAdapterSupport {
         .filterKeys(_.startsWith("hoodie."))
   }
 
-  def isSpark3: Boolean = SPARK_VERSION.startsWith("3.")
-
   def isEnableHive(sparkSession: SparkSession): Boolean =
     "hive" == sparkSession.sessionState.conf.getConf(StaticSQLConf.CATALOG_IMPLEMENTATION)
 
@@ -299,7 +297,7 @@ object HoodieSqlUtils extends SparkAdapterSupport {
     val instantLength = queryInstant.length
     if (instantLength == 19 || instantLength == 23) { // for yyyy-MM-dd HH:mm:ss[.SSS]
       HoodieInstantTimeGenerator.getInstantForDateString(queryInstant)
-    } else if (instantLength == HoodieInstantTimeGenerator.SECS_INSTANT_TIMESTAMP_FORMAT
+    } else if (instantLength == HoodieInstantTimeGenerator.SECS_INSTANT_ID_LENGTH
       || instantLength  == HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH) { // for yyyyMMddHHmmss[SSS]
       HoodieActiveTimeline.parseDateFromInstantTime(queryInstant) // validate the format
       queryInstant
@@ -307,7 +305,7 @@ object HoodieSqlUtils extends SparkAdapterSupport {
       HoodieActiveTimeline.formatDate(defaultDateFormat.get().parse(queryInstant))
     } else {
       throw new IllegalArgumentException(s"Unsupported query instant time format: $queryInstant,"
-        + s"Supported time format are: 'yyyy-MM-dd: HH:mm:ss' or 'yyyy-MM-dd' or 'yyyyMMddHHmmss'")
+        + s"Supported time format are: 'yyyy-MM-dd: HH:mm:ss.SSS' or 'yyyy-MM-dd' or 'yyyyMMddHHmmssSSS'")
     }
   }
 

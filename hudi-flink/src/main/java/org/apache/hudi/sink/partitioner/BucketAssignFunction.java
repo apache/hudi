@@ -121,16 +121,16 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
         getRuntimeContext().getIndexOfThisSubtask(),
         getRuntimeContext().getMaxNumberOfParallelSubtasks(),
         getRuntimeContext().getNumberOfParallelSubtasks(),
-        ignoreSmallFiles(writeConfig),
+        ignoreSmallFiles(),
         HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE)),
         context,
         writeConfig);
     this.payloadCreation = PayloadCreation.instance(this.conf);
   }
 
-  private boolean ignoreSmallFiles(HoodieWriteConfig writeConfig) {
+  private boolean ignoreSmallFiles() {
     WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
-    return WriteOperationType.isOverwrite(operationType) || writeConfig.allowDuplicateInserts();
+    return WriteOperationType.isOverwrite(operationType);
   }
 
   @Override

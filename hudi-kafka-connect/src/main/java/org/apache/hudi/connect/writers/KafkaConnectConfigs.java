@@ -88,6 +88,11 @@ public class KafkaConnectConfigs extends HoodieConfig {
       .defaultValue(HiveSyncTool.class.getName())
       .withDocumentation("Meta sync client tool, using comma to separate multi tools");
 
+  public static final ConfigProperty<Boolean> ALLOW_COMMIT_ON_ERRORS = ConfigProperty
+      .key("hoodie.kafka.allow.commit.on.errors")
+      .defaultValue(true)
+      .withDocumentation("Commit even when some records failed to be written");
+
   protected KafkaConnectConfigs() {
     super();
   }
@@ -136,6 +141,10 @@ public class KafkaConnectConfigs extends HoodieConfig {
     return getString(META_SYNC_CLASSES);
   }
 
+  public Boolean allowCommitOnErrors() {
+    return getBoolean(ALLOW_COMMIT_ON_ERRORS);
+  }
+
   public static class Builder {
 
     protected final KafkaConnectConfigs connectConfigs = new KafkaConnectConfigs();
@@ -157,6 +166,11 @@ public class KafkaConnectConfigs extends HoodieConfig {
 
     public Builder withCoordinatorWriteTimeoutSecs(Long coordinatorWriteTimeoutSecs) {
       connectConfigs.setValue(COORDINATOR_WRITE_TIMEOUT_SECS, String.valueOf(coordinatorWriteTimeoutSecs));
+      return this;
+    }
+
+    public Builder withAllowCommitOnErrors(Boolean allowCommitOnErrors) {
+      connectConfigs.setValue(ALLOW_COMMIT_ON_ERRORS, String.valueOf(allowCommitOnErrors));
       return this;
     }
 

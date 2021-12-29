@@ -28,6 +28,7 @@ import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointPartitionMetadata;
 import org.apache.hudi.common.HoodieCleanStat;
@@ -104,6 +105,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCo
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCompaction;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedDeltaCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedReplaceCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedRollbackFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRestoreFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRollbackFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
@@ -307,6 +309,12 @@ public class HoodieTestTable {
           entry.getKey(), entry.getValue(), entry.getValue(), Collections.emptyList(), commitTime));
     }
     return Pair.of(cleanerPlan, convertCleanMetadata(commitTime, Option.of(0L), cleanStats));
+  }
+
+  public HoodieTestTable addRequestedRollback(String instantTime, HoodieRollbackPlan plan) throws IOException {
+    createRequestedRollbackFile(basePath, instantTime, plan);
+    currentInstantTime = instantTime;
+    return this;
   }
 
   public HoodieTestTable addInflightRollback(String instantTime) throws IOException {
@@ -602,7 +610,7 @@ public class HoodieTestTable {
   }
 
   public List<java.nio.file.Path> getAllPartitionPaths() throws IOException {
-    java.nio.file.Path basePathPath = Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME).getParent().getParent();
+    java.nio.file.Path basePathPath = Paths.get(basePath);
     return FileCreateUtils.getPartitionPaths(basePathPath);
   }
 
@@ -660,8 +668,10 @@ public class HoodieTestTable {
     return FileSystemTestUtils.listRecursive(fs, new Path(Paths.get(basePath, partitionPath).toString())).stream()
         .filter(entry -> {
           boolean toReturn = true;
+          String filePath = entry.getPath().toString();
           String fileName = entry.getPath().getName();
-          if (fileName.equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE)) {
+          if (fileName.equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE) || (!fileName.contains("log") && !fileName.contains("parquet"))
+              || filePath.contains("metadata")) {
             toReturn = false;
           } else {
             for (String inflight : inflightCommits) {
