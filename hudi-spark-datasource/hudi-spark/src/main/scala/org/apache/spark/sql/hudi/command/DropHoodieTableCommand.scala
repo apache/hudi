@@ -38,8 +38,8 @@ case class DropHoodieTableCommand(
     purge: Boolean)
 extends HoodieLeafRunnableCommand {
 
-  val SUFFIX_SNAPSHOT_TABLE = "_rt"
-  val SUFFIX_READ_OPTIMIZED_TABLE = "_ro"
+  val MOR_SNAPSHOT_TABLE_SUFFIX = "_rt"
+  val MOR_READ_OPTIMIZED_TABLE_SUFFIX = "_ro"
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val fullTableName = s"${tableIdentifier.database}.${tableIdentifier.table}"
@@ -103,10 +103,11 @@ extends HoodieLeafRunnableCommand {
     }
 
     if (HoodieTableType.MERGE_ON_READ == hoodieCatalogTable.tableType && purge) {
-      val snapshotTableName = hoodieCatalogTable.tableName + SUFFIX_SNAPSHOT_TABLE
-      val roTableName = hoodieCatalogTable.tableName + SUFFIX_READ_OPTIMIZED_TABLE
+      val originTableName = hoodieCatalogTable.tableName
+      val snapshotTableName = originTableName + MOR_SNAPSHOT_TABLE_SUFFIX
+      val roTableName = originTableName + MOR_READ_OPTIMIZED_TABLE_SUFFIX
 
-      dropHiveTable(sparkSession, dbName, hoodieCatalogTable.tableName)
+      dropHiveTable(sparkSession, dbName, originTableName)
       dropHiveTable(sparkSession, dbName, snapshotTableName)
       dropHiveTable(sparkSession, dbName, roTableName, purge)
     } else {
