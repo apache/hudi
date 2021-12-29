@@ -113,6 +113,11 @@ public class HoodieJavaRDD<T> extends HoodieData<T> {
   }
 
   @Override
+  public <O> HoodieData<O> mapPartitions(SerializableFunction<Iterator<T>, Iterator<O>> func) {
+    return HoodieJavaRDD.of(rddData.mapPartitions(func::apply));
+  }
+
+  @Override
   public <O> HoodieData<O> flatMap(SerializableFunction<T, Iterator<O>> func) {
     return HoodieJavaRDD.of(rddData.flatMap(e -> func.apply(e)));
   }

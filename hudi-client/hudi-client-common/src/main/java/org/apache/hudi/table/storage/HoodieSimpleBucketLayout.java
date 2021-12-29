@@ -29,7 +29,7 @@ import java.util.Set;
 /**
  * Storage layout when using bucket index. Data distribution and files organization are in a specific way.
  */
-public class HoodieBucketLayout extends HoodieStorageLayout {
+public class HoodieSimpleBucketLayout extends HoodieStorageLayout {
 
   public static final Set<WriteOperationType> SUPPORTED_OPERATIONS = new HashSet<WriteOperationType>() {{
       add(WriteOperationType.INSERT);
@@ -43,7 +43,7 @@ public class HoodieBucketLayout extends HoodieStorageLayout {
     }
   };
 
-  public HoodieBucketLayout(HoodieWriteConfig config) {
+  public HoodieSimpleBucketLayout(HoodieWriteConfig config) {
     super(config);
   }
 
@@ -55,6 +55,7 @@ public class HoodieBucketLayout extends HoodieStorageLayout {
     return true;
   }
 
+  @Override
   public Option<String> layoutPartitionerClass() {
     return config.contains(HoodieLayoutConfig.LAYOUT_PARTITIONER_CLASS_NAME)
         ? Option.of(config.getString(HoodieLayoutConfig.LAYOUT_PARTITIONER_CLASS_NAME.key()))

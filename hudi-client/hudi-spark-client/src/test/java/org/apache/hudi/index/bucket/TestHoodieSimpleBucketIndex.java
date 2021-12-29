@@ -52,10 +52,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestHoodieBucketIndex extends HoodieClientTestHarness {
+public class TestHoodieSimpleBucketIndex extends HoodieClientTestHarness {
 
-  private static final Logger LOG = LogManager.getLogger(TestHoodieBucketIndex.class);
-  private static final Schema SCHEMA = getSchemaFromResource(TestHoodieBucketIndex.class, "/exampleSchema.avsc", true);
+  private static final Logger LOG = LogManager.getLogger(TestHoodieSimpleBucketIndex.class);
+  private static final Schema SCHEMA = getSchemaFromResource(TestHoodieSimpleBucketIndex.class, "/exampleSchema.avsc", true);
   private static final int NUM_BUCKET = 8;
 
   @BeforeEach
@@ -78,11 +78,15 @@ public class TestHoodieBucketIndex extends HoodieClientTestHarness {
     props.setProperty(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key(), "_row_key");
     assertThrows(HoodieIndexException.class, () -> {
       HoodieIndexConfig.newBuilder().fromProperties(props)
-          .withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("8").build();
+          .withIndexType(HoodieIndex.IndexType.BUCKET)
+          .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.SIMPLE)
+          .withBucketNum("8").build();
     });
     props.setProperty(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key(), "uuid");
     HoodieIndexConfig.newBuilder().fromProperties(props)
-        .withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("8").build();
+        .withIndexType(HoodieIndex.IndexType.BUCKET)
+        .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.SIMPLE)
+        .withBucketNum("8").build();
   }
 
   @Test
@@ -110,7 +114,7 @@ public class TestHoodieBucketIndex extends HoodieClientTestHarness {
 
     HoodieWriteConfig config = makeConfig();
     HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
-    HoodieBucketIndex bucketIndex = new HoodieBucketIndex(config);
+    HoodieSimpleBucketIndex bucketIndex = new HoodieSimpleBucketIndex(config);
     HoodieData<HoodieRecord<HoodieAvroRecord>> taggedRecordRDD = bucketIndex.tagLocation(HoodieJavaRDD.of(recordRDD), context, table);
     assertFalse(taggedRecordRDD.collectAsList().stream().anyMatch(r -> r.isCurrentLocationKnown()));
 
@@ -133,6 +137,7 @@ public class TestHoodieBucketIndex extends HoodieClientTestHarness {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(SCHEMA.toString())
         .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props)
             .withIndexType(HoodieIndex.IndexType.BUCKET)
+            .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.SIMPLE)
             .withIndexKeyField("_row_key")
             .withBucketNum(String.valueOf(NUM_BUCKET)).build()).build();
   }

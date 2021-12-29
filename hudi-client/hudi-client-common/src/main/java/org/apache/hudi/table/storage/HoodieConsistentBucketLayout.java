@@ -22,20 +22,42 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-/**
- * Default storage layout with non-constraints.
- */
-public class HoodieDefaultLayout extends HoodieStorageLayout {
+import java.util.HashSet;
+import java.util.Set;
 
-  public HoodieDefaultLayout(HoodieWriteConfig config) {
+/**
+ * Storage layout when using consistent hashing bucket index.
+ */
+public class HoodieConsistentBucketLayout extends HoodieStorageLayout {
+  public static final Set<WriteOperationType> SUPPORTED_OPERATIONS = new HashSet<WriteOperationType>() {
+    {
+      add(WriteOperationType.INSERT);
+      add(WriteOperationType.INSERT_PREPPED);
+      add(WriteOperationType.UPSERT);
+      add(WriteOperationType.UPSERT_PREPPED);
+      add(WriteOperationType.INSERT_OVERWRITE);
+      add(WriteOperationType.DELETE);
+      add(WriteOperationType.COMPACT);
+      add(WriteOperationType.DELETE_PARTITION);
+    }
+  };
+
+  public HoodieConsistentBucketLayout(HoodieWriteConfig config) {
     super(config);
   }
 
+  /**
+   * Bucketing controls the number of file groups directly.
+   */
   @Override
   public boolean determinesNumFileGroups() {
-    return false;
+    return true;
   }
 
+  /**
+   * Consistent hashing will tag all incoming records, so we could go ahead reusing an existing Partitioner
+   * @return
+   */
   @Override
   public Option<String> layoutPartitionerClass() {
     return Option.empty();
@@ -43,6 +65,7 @@ public class HoodieDefaultLayout extends HoodieStorageLayout {
 
   @Override
   public boolean doesNotSupport(WriteOperationType operationType) {
-    return false;
+    return !SUPPORTED_OPERATIONS.contains(operationType);
   }
+
 }

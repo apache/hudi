@@ -22,6 +22,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -29,7 +30,7 @@ import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-public class BucketIdentifier {
+public class BucketIdentifier implements Serializable {
   // compatible with the spark bucket name
   private static final Pattern BUCKET_NAME = Pattern.compile(".*_(\\d+)(?:\\..*)?$");
 
@@ -38,22 +39,22 @@ public class BucketIdentifier {
   }
 
   public static int getBucketId(HoodieKey hoodieKey, String indexKeyFields, int numBuckets) {
-    return getBucketId(hoodieKey.getRecordKey(), indexKeyFields, numBuckets);
+    return (getHashKeys(hoodieKey.getRecordKey(), indexKeyFields).hashCode() & Integer.MAX_VALUE) % numBuckets;
   }
 
-  public static int getBucketId(String recordKey, String indexKeyFields, int numBuckets) {
-    List<String> hashKeyFields;
+  protected static List<String> getHashKeys(String recordKey, String indexKeyFields) {
+    List<String> hashKeys;
     if (!recordKey.contains(":")) {
       hashKeyFields = Collections.singletonList(recordKey);
     } else {
       Map<String, String> recordKeyPairs = Arrays.stream(recordKey.split(","))
           .map(p -> p.split(":"))
           .collect(Collectors.toMap(p -> p[0], p -> p[1]));
-      hashKeyFields = Arrays.stream(indexKeyFields.split(","))
+      hashKeys = Arrays.stream(indexKeyFields.split(","))
           .map(f -> recordKeyPairs.get(f))
           .collect(Collectors.toList());
     }
-    return (hashKeyFields.hashCode() & Integer.MAX_VALUE) % numBuckets;
+    return hashKeys;
   }
 
   // only for test
