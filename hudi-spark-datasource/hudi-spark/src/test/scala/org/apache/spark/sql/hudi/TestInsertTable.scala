@@ -373,7 +373,7 @@ class TestInsertTable extends TestHoodieSqlBase {
            |""".stripMargin
       )
 
-      spark.sql(s"insert into $tableName values (1, 'a1', 10, cast('2021-05-07 00:00:00' as timestamp));")
+      spark.sql(s"insert into $tableName values (1, 'a1', 10, cast('2021-05-07 00:00:00' as timestamp))")
       checkAnswer(s"select id, name, price, cast(dt as string) from $tableName")(
         Seq(1, "a1", 10, "2021-05-07 00:00:00")
       )

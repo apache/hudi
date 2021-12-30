@@ -344,7 +344,7 @@ class TestCreateTable extends TestHoodieSqlBase {
            |partitioned by(dt)
            |options(type = 'cow', primaryKey = 'id')
            |as
-           |select 1 as id, 'a1' as name, 10 as price, cast('2021-05-07 00:00:00' as timestamp) as dt;
+           |select 1 as id, 'a1' as name, 10 as price, cast('2021-05-07 00:00:00' as timestamp) as dt
            |""".stripMargin
       )
 
