@@ -30,7 +30,10 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -43,6 +46,7 @@ import java.util.List;
  * @see StreamWriteOperatorCoordinator
  */
 public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
+  private static final Logger LOG = LoggerFactory.getLogger(AppendWriteFunction.class);
 
   private static final long serialVersionUID = 1L;
 
@@ -113,14 +117,19 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   }
 
   private void flushData(boolean endInput) {
-    if (this.writerHelper == null) {
-      // does not process any inputs, returns early.
-      return;
+    final List<WriteStatus> writeStatus;
+    final String instant;
+    if (this.writerHelper != null) {
+      writeStatus = this.writerHelper.getWriteStatuses(this.taskID);
+      instant = this.writerHelper.getInstantTime();
+    } else {
+      LOG.info("No data to write in subtask [{}] for instant [{}]", taskID, currentInstant);
+      writeStatus = Collections.emptyList();
+      instant = instantToWrite(false);
     }
-    final List<WriteStatus> writeStatus = this.writerHelper.getWriteStatuses(this.taskID);
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
         .taskID(taskID)
-        .instantTime(this.writerHelper.getInstantTime())
+        .instantTime(instant)
         .writeStatus(writeStatus)
         .lastBatch(true)
         .endInput(endInput)
