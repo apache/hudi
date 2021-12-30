@@ -146,11 +146,15 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     if (config.incrementalCleanerModeEnabled()) {
       Option<HoodieInstant> lastClean = hoodieTable.getCleanTimeline().filterCompletedInstants().lastInstant();
       if (lastClean.isPresent()) {
-        HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils
-            .deserializeHoodieCleanMetadata(hoodieTable.getActiveTimeline().getInstantDetails(lastClean.get()).get());
-        if ((cleanMetadata.getEarliestCommitToRetain() != null)
-            && (cleanMetadata.getEarliestCommitToRetain().length() > 0)) {
-          return getPartitionPathsForIncrementalCleaning(cleanMetadata, instantToRetain);
+        if (hoodieTable.getActiveTimeline().isEmpty(lastClean.get())) {
+          hoodieTable.getActiveTimeline().deleteEmptyInstantIfExists(lastClean.get());
+        } else {
+          HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils
+                  .deserializeHoodieCleanMetadata(hoodieTable.getActiveTimeline().getInstantDetails(lastClean.get()).get());
+          if ((cleanMetadata.getEarliestCommitToRetain() != null)
+                  && (cleanMetadata.getEarliestCommitToRetain().length() > 0)) {
+            return getPartitionPathsForIncrementalCleaning(cleanMetadata, instantToRetain);
+          }
         }
       }
     }

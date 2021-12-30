@@ -190,10 +190,34 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     }
   }
 
+  public void deleteEmptyInstantIfExists(HoodieInstant instant) {
+    ValidationUtils.checkArgument(isEmpty(instant));
+    deleteInstantFileIfExists(instant);
+  }
+
   public void deleteCompactionRequested(HoodieInstant instant) {
     ValidationUtils.checkArgument(instant.isRequested());
     ValidationUtils.checkArgument(Objects.equals(instant.getAction(), HoodieTimeline.COMPACTION_ACTION));
     deleteInstantFile(instant);
+  }
+
+  private void deleteInstantFileIfExists(HoodieInstant instant) {
+    LOG.info("Deleting instant " + instant);
+    Path inFlightCommitFilePath = new Path(metaClient.getMetaPath(), instant.getFileName());
+    try {
+      if (metaClient.getFs().exists(inFlightCommitFilePath)) {
+        boolean result = metaClient.getFs().delete(inFlightCommitFilePath, false);
+        if (result) {
+          LOG.info("Removed instant " + instant);
+        } else {
+          throw new HoodieIOException("Could not delete instant " + instant);
+        }
+      } else {
+        LOG.warn("The commit " + inFlightCommitFilePath + " to remove does not exist");
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not remove inflight commit " + inFlightCommitFilePath, e);
+    }
   }
 
   private void deleteInstantFile(HoodieInstant instant) {
