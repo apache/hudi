@@ -289,6 +289,8 @@ public interface HoodieTimeline extends Serializable {
    */
   Option<byte[]> getInstantDetails(HoodieInstant instant);
 
+  boolean isEmpty(HoodieInstant instant);
+
   /**
    * Check WriteOperationType is DeletePartition.
    */

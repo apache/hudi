@@ -279,9 +279,13 @@ public class HoodieTestTable {
   }
 
   public HoodieTestTable addClean(String instantTime, HoodieCleanerPlan cleanerPlan, HoodieCleanMetadata metadata) throws IOException {
-    createRequestedCleanFile(basePath, instantTime, cleanerPlan);
-    createInflightCleanFile(basePath, instantTime, cleanerPlan);
-    createCleanFile(basePath, instantTime, metadata);
+    return addClean(instantTime, cleanerPlan, metadata, false);
+  }
+
+  public HoodieTestTable addClean(String instantTime, HoodieCleanerPlan cleanerPlan, HoodieCleanMetadata metadata, boolean isEmpty) throws IOException {
+    createRequestedCleanFile(basePath, instantTime, cleanerPlan, isEmpty);
+    createInflightCleanFile(basePath, instantTime, cleanerPlan, isEmpty);
+    createCleanFile(basePath, instantTime, metadata, isEmpty);
     currentInstantTime = instantTime;
     return this;
   }
@@ -324,8 +328,12 @@ public class HoodieTestTable {
   }
 
   public HoodieTestTable addRollback(String instantTime, HoodieRollbackMetadata rollbackMetadata) throws IOException {
+    return addRollback(instantTime, rollbackMetadata, false);
+  }
+
+  public HoodieTestTable addRollback(String instantTime, HoodieRollbackMetadata rollbackMetadata, boolean isEmpty) throws IOException {
     createInflightRollbackFile(basePath, instantTime);
-    createRollbackFile(basePath, instantTime, rollbackMetadata);
+    createRollbackFile(basePath, instantTime, rollbackMetadata, isEmpty);
     currentInstantTime = instantTime;
     return this;
   }
@@ -1015,7 +1023,7 @@ public class HoodieTestTable {
    * @param tableType                     - Hudi table type
    * @param commitTime                    - Write commit time
    * @param partitionToFilesNameLengthMap - Map of partition names to its list of files and their lengths
-   * @return Test tabke state for the requested partitions and files
+   * @return Test table state for the requested partitions and files
    */
   private static HoodieTestTableState getTestTableStateWithPartitionFileInfo(WriteOperationType operationType,
                                                                              HoodieTableType tableType,

@@ -79,13 +79,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Format the java.time.Instant to a String representing the timestamp of a Hoodie Instant.
-   */
-  public static String formatInstantTime(Instant timestamp) {
-    return HoodieInstantTimeGenerator.formatInstantTime(timestamp);
-  }
-
-  /**
    * Format the Date to a String representing the timestamp of a Hoodie Instant.
    */
   public static String formatDate(Date timestamp) {
@@ -198,9 +191,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     }
   }
 
-  public void deletePendingIfExists(HoodieInstant.State state, String action, String instantStr) {
-    HoodieInstant instant = new HoodieInstant(state, action, instantStr);
-    ValidationUtils.checkArgument(!instant.isCompleted());
+  public void deleteEmptyInstantIfExists(HoodieInstant instant) {
+    ValidationUtils.checkArgument(isEmpty(instant));
     deleteInstantFileIfExists(instant);
   }
 
