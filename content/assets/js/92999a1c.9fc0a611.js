@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[8442],{15310:function(e){e.exports=JSON.parse('{"permalink":"/blog/page/3","page":3,"postsPerPage":15,"totalPages":3,"totalCount":32,"previousPage":"/blog/page/2","nextPage":null,"blogDescription":"Blog","blogTitle":"Blog - Apache Hudi: Blogs"}')}}]);
