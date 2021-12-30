@@ -70,6 +70,9 @@ public class HiveSyncConfig implements Serializable {
           + "org.apache.hudi input format.")
   public Boolean usePreApacheInputFormat = false;
 
+  @Parameter(names = {"--bucket-spec"}, description = "bucket spec stored in metastore", required = false)
+  public String bucketSpec;
+
   @Deprecated
   @Parameter(names = {"--use-jdbc"}, description = "Hive jdbc connect url")
   public Boolean useJdbc = true;
@@ -135,6 +138,7 @@ public class HiveSyncConfig implements Serializable {
     newConfig.partitionValueExtractorClass = cfg.partitionValueExtractorClass;
     newConfig.jdbcUrl = cfg.jdbcUrl;
     newConfig.tableName = cfg.tableName;
+    newConfig.bucketSpec = cfg.bucketSpec;
     newConfig.usePreApacheInputFormat = cfg.usePreApacheInputFormat;
     newConfig.useFileListingFromMetadata = cfg.useFileListingFromMetadata;
     newConfig.supportTimestamp = cfg.supportTimestamp;
@@ -155,6 +159,7 @@ public class HiveSyncConfig implements Serializable {
     return "HiveSyncConfig{"
       + "databaseName='" + databaseName + '\''
       + ", tableName='" + tableName + '\''
+      + ", bucketSpec='" + bucketSpec + '\''
       + ", baseFileFormat='" + baseFileFormat + '\''
       + ", hiveUser='" + hiveUser + '\''
       + ", hivePass='" + hivePass + '\''
@@ -180,5 +185,9 @@ public class HiveSyncConfig implements Serializable {
       + ", withOperationField=" + withOperationField
       + ", isConditionalSync=" + isConditionalSync
       + '}';
+  }
+
+  public static String getBucketSpec(String bucketCols, int bucketNum) {
+    return "CLUSTERED BY (" + bucketCols + " INTO " + bucketNum + " BUCKETS";
   }
 }

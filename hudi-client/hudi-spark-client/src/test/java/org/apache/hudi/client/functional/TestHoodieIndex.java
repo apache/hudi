@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieLayoutConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
@@ -44,6 +45,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
 import org.apache.hudi.testutils.Assertions;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
@@ -89,7 +91,8 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
         {IndexType.SIMPLE, true},
         {IndexType.GLOBAL_SIMPLE, true},
         {IndexType.SIMPLE, false},
-        {IndexType.GLOBAL_SIMPLE, false}
+        {IndexType.GLOBAL_SIMPLE, false},
+        {IndexType.BUCKET, false}
     };
     return Stream.of(data).map(Arguments::of);
   }
@@ -112,11 +115,16 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     initFileSystem();
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE, populateMetaFields ? new Properties()
         : getPropertiesForKeyGen());
+    HoodieIndexConfig.Builder indexBuilder = HoodieIndexConfig.newBuilder().withIndexType(indexType)
+        .fromProperties(populateMetaFields ? new Properties() : getPropertiesForKeyGen())
+        .withIndexType(indexType);
     config = getConfigBuilder()
         .withProperties(populateMetaFields ? new Properties() : getPropertiesForKeyGen())
         .withRollbackUsingMarkers(rollbackUsingMarkers)
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType)
-            .build()).withAutoCommit(false).withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata).build()).build();
+        .withIndexConfig(indexBuilder
+            .build()).withAutoCommit(false).withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata).build())
+        .withLayoutConfig(HoodieLayoutConfig.newBuilder().fromProperties(indexBuilder.build().getProps())
+            .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build()).build();
     writeClient = getHoodieWriteClient(config);
     this.index = writeClient.getIndex();
   }
@@ -239,7 +247,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     // Insert 200 records
     JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
     Assertions.assertNoWriteErrors(writeStatues.collect());
-
+    List<String> fileIds = writeStatues.map(WriteStatus::getFileId).collect();
     // commit this upsert
     writeClient.commit(newCommitTime, writeStatues);
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
@@ -249,7 +257,6 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     assert (javaRDD.filter(HoodieRecord::isCurrentLocationKnown).collect().size() == totalRecords);
 
     // check tagged records are tagged with correct fileIds
-    List<String> fileIds = writeStatues.map(WriteStatus::getFileId).collect();
     assert (javaRDD.filter(record -> record.getCurrentLocation().getFileId() == null).collect().size() == 0);
     List<String> taggedFileIds = javaRDD.map(record -> record.getCurrentLocation().getFileId()).distinct().collect();
 
@@ -474,7 +481,6 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024).parquetMaxFileSize(1024 * 1024).build())
         .forTable("test-trip-table")
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());
   }

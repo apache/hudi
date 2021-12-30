@@ -33,14 +33,19 @@ import org.apache.hudi.common.testutils.Transformations;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieLayoutConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.HoodieCreateHandle;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
@@ -58,6 +63,8 @@ import org.apache.spark.TaskContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
@@ -67,7 +74,9 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
@@ -83,6 +92,13 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
 
   private static final Logger LOG = LogManager.getLogger(TestCopyOnWriteActionExecutor.class);
   private static final Schema SCHEMA = getSchemaFromResource(TestCopyOnWriteActionExecutor.class, "/exampleSchema.avsc");
+  private static final Stream<Arguments> indexType() {
+    HoodieIndex.IndexType[] data = new HoodieIndex.IndexType[] {
+        HoodieIndex.IndexType.BLOOM,
+        HoodieIndex.IndexType.BUCKET
+    };
+    return Stream.of(data).map(Arguments::of);
+  }
 
   @Test
   public void testMakeNewPath() {
@@ -118,11 +134,29 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
             .withRemoteServerPort(timelineServicePort).build());
   }
 
+  private Properties makeIndexConfig(HoodieIndex.IndexType indexType) {
+    Properties props = new Properties();
+    HoodieIndexConfig.Builder indexConfig = HoodieIndexConfig.newBuilder()
+        .withIndexType(indexType);
+    props.putAll(indexConfig.build().getProps());
+    if (indexType.equals(HoodieIndex.IndexType.BUCKET)) {
+      props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+      indexConfig.fromProperties(props).withIndexKeyField("_row_key").withBucketNum("1");
+      props.putAll(indexConfig.build().getProps());
+      props.putAll(HoodieLayoutConfig.newBuilder().fromProperties(props)
+          .withLayoutType(HoodieStorageLayout.LayoutType.BUCKET.name())
+          .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build().getProps());
+    }
+    return props;
+  }
+
   // TODO (weiy): Add testcases for crossing file writing.
-  @Test
-  public void testUpdateRecords() throws Exception {
+  @ParameterizedTest
+  @MethodSource("indexType")
+  public void testUpdateRecords(HoodieIndex.IndexType indexType) throws Exception {
     // Prepare the AvroParquetIO
-    HoodieWriteConfig config = makeHoodieClientConfig();
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder()
+        .withProps(makeIndexConfig(indexType)).build();
     String firstCommitTime = makeNewCommitTime();
     SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
     writeClient.startCommitWithTime(firstCommitTime);
@@ -168,7 +202,6 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     GenericRecord newRecord;
     int index = 0;
     for (GenericRecord record : fileRecords) {
-      //System.out.println("Got :" + record.get("_row_key").toString() + ", Exp :" + records.get(index).getRecordKey());
       assertEquals(records.get(index).getRecordKey(), record.get("_row_key").toString());
       index++;
     }
