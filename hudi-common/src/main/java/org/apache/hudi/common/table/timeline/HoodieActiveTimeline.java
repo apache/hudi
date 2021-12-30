@@ -204,6 +204,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     deleteInstantFileIfExists(instant);
   }
 
+  public void deleteEmptyInstantIfExists(HoodieInstant instant) {
+    ValidationUtils.checkArgument(isEmpty(instant));
+    deleteInstantFileIfExists(instant);
+  }
+
   public void deleteCompactionRequested(HoodieInstant instant) {
     ValidationUtils.checkArgument(instant.isRequested());
     ValidationUtils.checkArgument(Objects.equals(instant.getAction(), HoodieTimeline.COMPACTION_ACTION));
