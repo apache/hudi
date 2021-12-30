@@ -30,7 +30,8 @@ import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator, Timestam
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.spark.sql._
-import org.apache.spark.sql.functions.{col, lit}
+import org.apache.spark.sql.catalyst.dsl.expressions.{DslExpression, StringToAttributeConversionHelper}
+import org.apache.spark.sql.functions.{col, lit, when}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
@@ -63,7 +64,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
   )
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(false))
+  @ValueSource(booleans = Array(true, false))
   def testCopyOnWriteStorage(isMetadataEnabled: Boolean): Unit = {
     for ((k, v) <- keyGenTypeToClass) {
       commonOpts += HoodieWriteConfig.KEYGENERATOR_TYPE.key() -> k
@@ -82,9 +83,9 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       val dataGen = new HoodieTestDataGenerator()
       val fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
       // Insert Operation
-      val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
-      val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-      inputDF1.write.format("org.apache.hudi")
+      val records0 = recordsToStrings(dataGen.generateInserts("000", 10)).toList
+      val inputDF0 = spark.read.json(spark.sparkContext.parallelize(records0, 2))
+      inputDF0.write.format("org.apache.hudi")
         .options(commonOpts)
         .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
         .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
@@ -98,11 +99,24 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       val snapshotDF1 = spark.read.format("org.apache.hudi")
         .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
         .load(basePath)
-      assertEquals(100, snapshotDF1.count())
+      assertEquals(10, snapshotDF1.count())
 
-      // Upsert based on the written table with Hudi metadata columns
-      val verificationRowKey = snapshotDF1.limit(1).select("_row_key").first.getString(0)
+      val records1 = recordsToStrings(dataGen.generateUpdates("001", 10)).toList
+      val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+      val verificationRowKey = inputDF1.limit(1).select("_row_key").first.getString(0)
+      // update current_ts to be same as original record so that partition path does not change with timestamp based key gen
+      val orignalRow = inputDF1.filter(col("_row_key") === verificationRowKey).collectAsList().get(0)
       val updateDf = snapshotDF1.filter(col("_row_key") === verificationRowKey).withColumn(verificationCol, lit(updatedVerificationVal))
+        .withColumn("current_ts", lit(orignalRow.getAs("current_ts")))
+
+      /*println("original record ")
+      inputDF1.collectAsList().foreach(row => println("Row " + row.getAs("current_ts") + ", key " + row.getAs("_row_key") + ", partition path "
+        + row.getAs("partition_path") + ", beginlat " + row.getAs("begin_lat")))
+
+      println("updated record ")
+      val updateRows = updateDf.collectAsList()
+      updateRows.foreach(row => println("Row " + row.getAs("current_ts") + ", key " + row.getAs("_row_key") + ", partition path "
+        + row.getAs("partition_path") + ", beginlat " + row.getAs("begin_lat")))*/
 
       updateDf.write.format("org.apache.hudi")
         .options(commonOpts)
@@ -114,15 +128,45 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       val snapshotDF2 = spark.read.format("hudi")
         .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
         .load(basePath)
-      assertEquals(100, snapshotDF2.count())
+      assertEquals(10, snapshotDF2.count())
       assertEquals(updatedVerificationVal, snapshotDF2.filter(col("_row_key") === verificationRowKey).select(verificationCol).first.getString(0))
 
       // Upsert Operation without Hudi metadata columns
-      val records2 = recordsToStrings(dataGen.generateUpdates("001", 100)).toList
+      val records2 = recordsToStrings(dataGen.generateUpdates("002", 10)).toList
       val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+
+
+      /*println("original record ")
+      inputDF0.collectAsList().foreach(row => println("Row " + row.getAs("current_ts") + ", key " + row.getAs("_row_key") + ", partition path "
+        + row.getAs("partition_path") + ", beginlat " + row.getAs("begin_lat")))
+
+      println("original updated record ")
+      inputDF2.collectAsList().foreach(row => println("Row " + row.getAs("current_ts") + ", key " + row.getAs("_row_key") + ", partition path "
+        + row.getAs("partition_path") + ", beginlat " + row.getAs("begin_lat")))*/
+
+      val inputDF3 = inputDF2.withColumn("current_ts_updated", col("current_ts"))
+        .withColumn("_row_key_updated", col("_row_key"))
+
+      val originalRowCurrentTsDf = inputDF0.select("_row_key","current_ts")
+      val temp1 = inputDF3.drop("_row_key","current_ts").join(originalRowCurrentTsDf, (inputDF3("_row_key_updated") === originalRowCurrentTsDf("_row_key")))
+
+      /*println("tep1 " + temp1.schema.toString())
+      temp1.collectAsList().foreach(row => println("Row " + row.getAs("current_ts") + ", current ts original "
+        + row.getAs("current_ts_updated")  + ", key " + row.getAs("_row_key") + ", partition path "
+        + row.getAs("partition_path") + ", beginlat " + row.getAs("begin_lat")))*/
+
+      val temp2 = temp1.withColumn("current_ts_updated", col("current_ts"))
+        .drop("current_ts", "_row_key_updated").withColumn("current_ts", col("current_ts_updated"))
+        .drop("current_ts_updated")
+
+      /*println("temp2222 " + temp2.schema.toString())
+      temp2.collectAsList().foreach(row => println("Row " + row.getAs("current_ts")
+        + ", key " + row.getAs("_row_key") + ", partition path "
+        + row.getAs("partition_path") + ", beginlat " + row.getAs("begin_lat")))*/
+
       val uniqueKeyCnt = inputDF2.select("_row_key").distinct().count()
 
-      inputDF2.write.format("org.apache.hudi")
+      temp2.write.format("org.apache.hudi")
         .options(commonOpts)
         .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
         .mode(SaveMode.Append)
@@ -135,7 +179,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       val snapshotDF3 = spark.read.format("org.apache.hudi")
         .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
         .load(basePath)
-      assertEquals(100, snapshotDF3.count()) // still 100, since we only updated
+      assertEquals(10, snapshotDF3.count()) // still 100, since we only updated
 
       // Read Incremental Query
       // we have 2 commits, try pulling the first commit (which is not the latest)
@@ -145,7 +189,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
         .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
         .option(DataSourceReadOptions.END_INSTANTTIME.key, firstCommit)
         .load(basePath)
-      assertEquals(100, hoodieIncViewDF1.count()) // 100 initial inserts must be pulled
+      assertEquals(10, hoodieIncViewDF1.count()) // 100 initial inserts must be pulled
       var countsPerCommit = hoodieIncViewDF1.groupBy("_hoodie_commit_time").count().collect()
       assertEquals(1, countsPerCommit.length)
       assertEquals(firstCommit, countsPerCommit(0).get(0))
@@ -154,12 +198,12 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       val emptyIncDF = spark.read.format("org.apache.hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
         .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
-        .option(DataSourceReadOptions.END_INSTANTTIME.key, "001")
+        .option(DataSourceReadOptions.END_INSTANTTIME.key, "002")
         .load(basePath)
       assertEquals(0, emptyIncDF.count())
 
       // Upsert an empty dataFrame
-      val emptyRecords = recordsToStrings(dataGen.generateUpdates("002", 0)).toList
+      val emptyRecords = recordsToStrings(dataGen.generateUpdates("003", 0)).toList
       val emptyDF = spark.read.json(spark.sparkContext.parallelize(emptyRecords, 1))
       emptyDF.write.format("org.apache.hudi")
         .options(commonOpts)
@@ -191,7 +235,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
         .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
         .option(DataSourceReadOptions.END_INSTANTTIME.key, firstCommit)
         .load(basePath)
-      assertEquals(100, timeTravelDF.count()) // 100 initial inserts must be pulled
+      assertEquals(10, timeTravelDF.count()) // 100 initial inserts must be pulled
     }
   }
 }
