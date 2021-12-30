@@ -39,12 +39,12 @@ import java.util.Properties;
 public class HoodieLayoutConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> LAYOUT_TYPE = ConfigProperty
-      .key("hoodie.layout.type")
+      .key("hoodie.storage.layout.type")
       .defaultValue("DEFAULT")
       .withDocumentation("Type of storage layout. Possible options are [DEFAULT | BUCKET]");
 
   public static final ConfigProperty<String> LAYOUT_PARTITIONER_CLASS_NAME = ConfigProperty
-      .key("hoodie.layout.partitioner.class")
+      .key("hoodie.storage.layout.partitioner.class")
       .noDefaultValue()
       .withDocumentation("Partitioner class, it is used to distribute data in a specific way.");
 
