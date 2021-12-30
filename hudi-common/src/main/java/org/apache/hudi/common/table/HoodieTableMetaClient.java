@@ -102,7 +102,7 @@ public class HoodieTableMetaClient implements Serializable {
 
   private HoodieTableMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,
                                 ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
-                                String payloadClassName) {
+                                String payloadClassName, Option<String> bootstrapIndexClassName) {
     LOG.info("Loading HoodieTableMetaClient from " + basePath);
     this.consistencyGuardConfig = consistencyGuardConfig;
     this.hadoopConf = new SerializableConfiguration(conf);
@@ -112,7 +112,7 @@ public class HoodieTableMetaClient implements Serializable {
     Path metaPathDir = new Path(this.metaPath);
     this.fs = getFs();
     TableNotFoundException.checkTableValidity(fs, basePathDir, metaPathDir);
-    this.tableConfig = new HoodieTableConfig(fs, metaPath, payloadClassName);
+    this.tableConfig = new HoodieTableConfig(fs, metaPath, payloadClassName, bootstrapIndexClassName);
     this.tableType = tableConfig.getTableType();
     Option<TimelineLayoutVersion> tableConfigVersion = tableConfig.getTimelineLayoutVersion();
     if (layoutVersion.isPresent() && tableConfigVersion.isPresent()) {
@@ -576,6 +576,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String basePath;
     private boolean loadActiveTimelineOnLoad = false;
     private String payloadClassName = null;
+    private String bootstrapIndexClassName = null;
     private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
     private Option<TimelineLayoutVersion> layoutVersion = Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION);
 
@@ -599,6 +600,11 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public Builder setBootstrapIndexClassName(String bootstrapIndexClassName) {
+      this.bootstrapIndexClassName = bootstrapIndexClassName;
+      return this;
+    }
+
     public Builder setConsistencyGuardConfig(ConsistencyGuardConfig consistencyGuardConfig) {
       this.consistencyGuardConfig = consistencyGuardConfig;
       return this;
@@ -612,8 +618,8 @@ public class HoodieTableMetaClient implements Serializable {
     public HoodieTableMetaClient build() {
       ValidationUtils.checkArgument(conf != null, "Configuration needs to be set to init HoodieTableMetaClient");
       ValidationUtils.checkArgument(basePath != null, "basePath needs to be set to init HoodieTableMetaClient");
-      return new HoodieTableMetaClient(conf, basePath,
-          loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, payloadClassName);
+      return new HoodieTableMetaClient(conf, basePath, loadActiveTimelineOnLoad,
+          consistencyGuardConfig, layoutVersion, payloadClassName, Option.ofNullable(bootstrapIndexClassName));
     }
   }
 

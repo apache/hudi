@@ -180,6 +180,11 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final String NO_OP_BOOTSTRAP_INDEX_CLASS = NoOpBootstrapIndex.class.getName();
 
   public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName) {
+    this(fs, metaPath, payloadClassName, Option.empty());
+  }
+
+  public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName,
+                           Option<String> bootstrapIndexClassName) {
     super();
     Path propertyPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
     LOG.info("Loading table properties from " + propertyPath);
@@ -192,6 +197,11 @@ public class HoodieTableConfig extends HoodieConfig {
         try (FSDataOutputStream outputStream = fs.create(propertyPath)) {
           props.store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
         }
+      }
+      LOG.error("BOOTSTRAP_INDEX_CLASS_NAME: " + getString(BOOTSTRAP_INDEX_CLASS_NAME));
+      if (contains(BOOTSTRAP_INDEX_CLASS_NAME) && bootstrapIndexClassName.isPresent()
+          && !getString(BOOTSTRAP_INDEX_CLASS_NAME).equals(bootstrapIndexClassName.get())) {
+        setValue(BOOTSTRAP_INDEX_CLASS_NAME, bootstrapIndexClassName.get());
       }
     } catch (IOException e) {
       throw new HoodieIOException("Could not load Hoodie properties from " + propertyPath, e);
