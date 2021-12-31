@@ -330,31 +330,28 @@ public class DeltaSync implements Serializable {
     if (commitTimelineOpt.isPresent()) {
       Option<HoodieInstant> lastCommit = commitTimelineOpt.get().lastInstant();
       if (lastCommit.isPresent()) {
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-            .fromBytes(commitTimelineOpt.get().getInstantDetails(lastCommit.get()).get(), HoodieCommitMetadata.class);
-        if (cfg.checkpoint != null && (StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))
-                || !cfg.checkpoint.equals(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY)))) {
-          resumeCheckpointStr = Option.of(cfg.checkpoint);
-        } else if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
-          //if previous checkpoint is an empty string, skip resume use Option.empty()
-          resumeCheckpointStr = Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
-        } else if (HoodieTimeline.compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
-            HoodieTimeline.LESSER_THAN, lastCommit.get().getTimestamp())) {
-          // if previous commit metadata did not have the checkpoint key, try traversing previous commits until we find one.
-          Option<String> prevCheckpoint = getPreviousCheckpoint(commitTimelineOpt.get());
-          if (prevCheckpoint.isPresent()) {
-            resumeCheckpointStr = prevCheckpoint;
-          } else {
+        // if previous commit metadata did not have the checkpoint key, try traversing previous commits until we find one.
+        Option<HoodieCommitMetadata> commitMetadataOption = getLatestCommitMetadataWithValidCheckpointInfo(commitTimelineOpt.get());
+        if (commitMetadataOption.isPresent()) {
+          HoodieCommitMetadata commitMetadata = commitMetadataOption.get();
+          if (cfg.checkpoint != null && (StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))
+              || !cfg.checkpoint.equals(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY)))) {
+            resumeCheckpointStr = Option.of(cfg.checkpoint);
+          } else if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
+            //if previous checkpoint is an empty string, skip resume use Option.empty()
+            resumeCheckpointStr = Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
+          } else if (HoodieTimeline.compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
+              HoodieTimeline.LESSER_THAN, lastCommit.get().getTimestamp())) {
             throw new HoodieDeltaStreamerException(
                 "Unable to find previous checkpoint. Please double check if this table "
                     + "was indeed built via delta streamer. Last Commit :" + lastCommit + ", Instants :"
                     + commitTimelineOpt.get().getInstants().collect(Collectors.toList()) + ", CommitMetadata="
                     + commitMetadata.toJsonString());
           }
-        }
-        // KAFKA_CHECKPOINT_TYPE will be honored only for first batch.
-        if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
-          props.remove(KafkaOffsetGen.Config.KAFKA_CHECKPOINT_TYPE.key());
+          // KAFKA_CHECKPOINT_TYPE will be honored only for first batch.
+          if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
+            props.remove(KafkaOffsetGen.Config.KAFKA_CHECKPOINT_TYPE.key());
+          }
         }
       }
     } else {
@@ -465,6 +462,22 @@ public class DeltaSync implements Serializable {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
             .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
         return Option.ofNullable(commitMetadata.getMetadata(CHECKPOINT_KEY));
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
+      }
+    }).filter(Option::isPresent).findFirst().orElse(Option.empty());
+  }
+
+  protected Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
+    return (Option<HoodieCommitMetadata>) timeline.getReverseOrderedInstants().map(instant -> {
+      try {
+        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+            .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+        if (commitMetadata.getMetadata(CHECKPOINT_KEY) != null || commitMetadata.getMetadata(CHECKPOINT_RESET_KEY) != null) {
+          return Option.of(commitMetadata);
+        } else {
+          return Option.empty();
+        }
       } catch (IOException e) {
         throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
       }

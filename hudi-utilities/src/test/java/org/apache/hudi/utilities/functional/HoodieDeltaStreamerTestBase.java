@@ -292,14 +292,23 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   }
 
   static void addCommitToTimeline(HoodieTableMetaClient metaCient, Map<String, String> extraMetadata) throws IOException {
+    addCommitToTimeline(metaCient, WriteOperationType.UPSERT, HoodieTimeline.COMMIT_ACTION, extraMetadata);
+  }
+
+  static void addReplaceCommitToTimeline(HoodieTableMetaClient metaCient, Map<String, String> extraMetadata) throws IOException {
+    addCommitToTimeline(metaCient, WriteOperationType.CLUSTER, HoodieTimeline.REPLACE_COMMIT_ACTION, extraMetadata);
+  }
+
+  static void addCommitToTimeline(HoodieTableMetaClient metaCient, WriteOperationType writeOperationType, String commitActiontype,
+                                  Map<String, String> extraMetadata) throws IOException {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
-    commitMetadata.setOperationType(WriteOperationType.UPSERT);
+    commitMetadata.setOperationType(writeOperationType);
     extraMetadata.forEach((k,v) -> commitMetadata.getExtraMetadata().put(k, v));
     String commitTime = HoodieActiveTimeline.createNewInstantTime();
-    metaCient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, commitTime));
-    metaCient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, commitTime));
+    metaCient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.REQUESTED, commitActiontype, commitTime));
+    metaCient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime));
     metaCient.getActiveTimeline().saveAsComplete(
-        new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, commitTime),
+        new HoodieInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime),
         Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
   }
 
