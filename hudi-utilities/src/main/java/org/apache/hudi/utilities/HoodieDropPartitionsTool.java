@@ -19,6 +19,7 @@ package org.apache.hudi.utilities;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -29,8 +30,10 @@ import org.apache.hudi.client.ReplaceArchivalHelper;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -45,12 +48,15 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.hive.HoodieHiveClient;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import scala.Tuple2;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -59,8 +65,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-
-import scala.Tuple2;
 
 /**
  * A tool with spark-submit to drop Hudi table partitions
@@ -79,6 +83,7 @@ import scala.Tuple2;
  * --mode dry_run \
  * --partitions partition1,partition2
  * ```
+ *
  * <p>
  * You can specify the running mode of the tool through `--mode`.
  * There are three modes of the {@link HoodieDropPartitionsTool}:
@@ -99,6 +104,7 @@ import scala.Tuple2;
  * --mode delete_partitions_lazy \
  * --partitions partition1,partition2
  * ```
+ *
  * <p>
  * - DELETE_PARTITIONS_EAGER ("delete_partitions_eager"): This tool will mask/tombstone these partitions and corresponding data files and and delete these data files immediately.
  * - Also you can set --sync-hive-meta to sync current drop partition into hive
@@ -117,6 +123,26 @@ import scala.Tuple2;
  * --mode delete_partitions_eager \
  * --partitions partition1,partition2
  * ```
+ *
+ * <p>
+ * - DELETE_PARTITIONS_QUIET ("delete_partitions_quiet"): This tool will delete all the data files without create a replace instant and
+ * - Also you can set --sync-hive-meta to sync current drop partition into hive. In quiet mode, hoodie will delete corresponding hive partitions without update the last commit time from the TBLproperties.
+ * <p>
+ * Example command:
+ * ```
+ * spark-submit \
+ * --class org.apache.hudi.utilities.HoodieDropPartitionsTool \
+ * --packages org.apache.spark:spark-avro_2.11:2.4.4 \
+ * --master local[*]
+ * --driver-memory 1g \
+ * --executor-memory 1g \
+ * $HUDI_DIR/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
+ * --base-path basePath \
+ * --table-name tableName \
+ * --mode delete_partitions_quiet \
+ * --partitions partition1,partition2
+ * ```
+ *
  * <p>
  * - DRY_RUN ("dry_run"): look and print for the table partitions and corresponding data files which will be deleted.
  * <p>
@@ -137,11 +163,11 @@ import scala.Tuple2;
  *
  * Also you can use --help to find more configs to use.
  */
-public class HoodieDropPartitionsTool {
+public class HoodieDropPartitionsTool implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieDropPartitionsTool.class);
   // Spark context
-  private final JavaSparkContext jsc;
+  private final transient JavaSparkContext jsc;
   // config
   private final Config cfg;
   // Properties with source, hoodie client, key generator etc.
@@ -179,6 +205,9 @@ public class HoodieDropPartitionsTool {
     DELETE_PARTITIONS_LAZY,
     // Mask/Tombstone these partitions and corresponding data files. And delete these data files immediately.
     DELETE_PARTITIONS_EAGER,
+    // Delete all the data files without create a replace instant, Also when set --sync-hive-meta to sync current drop partition into hive in quiet mode,
+    // hoodie will delete corresponding hive partitions without update the last commit time from the TBLproperties.
+    DELETE_PARTITIONS_QUIET,
     // Dry run by looking for the table partitions and corresponding data files which will be deleted.
     DRY_RUN
   }
@@ -199,6 +228,8 @@ public class HoodieDropPartitionsTool {
     public int parallelism = 1500;
     @Parameter(names = {"--instant-time", "-it"}, description = "instant time for delete table partitions operation.", required = false)
     public String instantTime = null;
+    @Parameter(names = {"--clean-up-empty-directory"}, description = "Delete all the empty data directory.", required = false)
+    public boolean cleanUpEmptyDirectory = false;
     @Parameter(names = {"--sync-hive-meta", "-sync"}, description = "Sync information to HMS.", required = false)
     public boolean syncToHive = false;
     @Parameter(names = {"--hive-database", "-db"}, description = "Database to sync to.", required = false)
@@ -247,6 +278,7 @@ public class HoodieDropPartitionsTool {
     sb.append("   --partitions ").append(cfg.partitions).append(", \n");
     sb.append("   --parallelism ").append(cfg.parallelism).append(", \n");
     sb.append("   --instantTime ").append(cfg.instantTime).append(", \n");
+    sb.append("   --clean-up-empty-directory ").append(cfg.cleanUpEmptyDirectory).append(", \n");
     sb.append("   --sync-hive-meta ").append(cfg.syncToHive).append(", \n");
     sb.append("   --hive-database ").append(cfg.hiveDataBase).append(", \n");
     sb.append("   --hive-table-name ").append(cfg.hiveTableName).append(", \n");
@@ -289,6 +321,11 @@ public class HoodieDropPartitionsTool {
 
   public void run() {
     try {
+      if (StringUtils.isNullOrEmpty(cfg.instantTime)) {
+        cfg.instantTime = HoodieActiveTimeline.createNewInstantTime();
+      }
+      LOG.info(getConfigDetails());
+
       Mode mode = Mode.valueOf(cfg.runningMode.toUpperCase());
       switch (mode) {
         case DELETE_PARTITIONS_LAZY:
@@ -298,6 +335,10 @@ public class HoodieDropPartitionsTool {
         case DELETE_PARTITIONS_EAGER:
           LOG.info(" ****** The Hoodie Drop Partitions Tool is in delete_partition_eager mode ******");
           doDeleteTablePartitionsEager();
+          break;
+        case DELETE_PARTITIONS_QUIET:
+          LOG.info(" ****** The Hoodie Drop Partitions Tool is in delete_partition_quiet mode ******");
+          doDeleteTablePartitionsQuiet();
           break;
         case DRY_RUN:
           LOG.info(" ****** The Hoodie Drop Partitions Tool is in dry-run mode ******");
@@ -313,19 +354,26 @@ public class HoodieDropPartitionsTool {
 
   public void doDeleteTablePartitionsLazy() {
     doDeleteTablePartitions();
-    syncToHiveIfNecessary();
+    syncToHiveIfNecessary(false);
   }
 
   public void doDeleteTablePartitionsEager() {
     doDeleteTablePartitions();
     deleteDataFiles();
-    syncToHiveIfNecessary();
+    deleteEmptyDirIfNecessary();
+    syncToHiveIfNecessary(false);
+  }
+
+  public void doDeleteTablePartitionsQuiet() {
+
+    deleteDataFiles();
+    deleteEmptyDirIfNecessary();
+    syncToHiveIfNecessary(true);
   }
 
   public void dryRun() {
     try (SparkRDDWriteClient<HoodieRecordPayload> client =  UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.empty(), props)) {
       HoodieSparkTable<HoodieRecordPayload> table = HoodieSparkTable.create(client.getConfig(), client.getEngineContext());
-      LOG.info(getConfigDetails());
       List<String> parts = Arrays.asList(cfg.partitions.split(","));
       Map<String, List<String>> partitionToReplaceFileIds = jsc.parallelize(parts, parts.size()).distinct()
           .mapToPair(partitionPath -> new Tuple2<>(partitionPath, table.getSliceView().getLatestFileSlices(partitionPath).map(fg -> fg.getFileId()).distinct().collect(Collectors.toList())))
@@ -334,20 +382,16 @@ public class HoodieDropPartitionsTool {
     }
   }
 
-  private void syncToHiveIfNecessary() {
+  private void syncToHiveIfNecessary(boolean quiet) {
     if (cfg.syncToHive) {
       HiveSyncConfig hiveSyncConfig = buildHiveSyncProps();
-      syncHive(hiveSyncConfig);
+      syncHive(hiveSyncConfig, quiet);
     }
   }
 
   public void doDeleteTablePartitions() {
     try (SparkRDDWriteClient<HoodieRecordPayload> client =  UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.empty(), props)) {
       List<String> partitionsToDelete = Arrays.asList(cfg.partitions.split(","));
-      if (StringUtils.isNullOrEmpty(cfg.instantTime)) {
-        cfg.instantTime = HoodieActiveTimeline.createNewInstantTime();
-      }
-      LOG.info(getConfigDetails());
       client.startCommitWithTime(cfg.instantTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
       HoodieWriteResult hoodieWriteResult = client.deletePartitions(partitionsToDelete, cfg.instantTime);
 
@@ -356,75 +400,70 @@ public class HoodieDropPartitionsTool {
     }
   }
 
-  private void deleteDataFiles() {
-    try (SparkRDDWriteClient<HoodieRecordPayload> client =  UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.empty(), props)) {
-      HoodieTimeline completedReplaceTimeline = metaClient.getActiveTimeline().reload().getCompletedReplaceTimeline();
-      HoodieSparkTable<HoodieRecordPayload> table = HoodieSparkTable.create(client.getConfig(), client.getEngineContext());
-      Option<HoodieInstant> instant = Option.fromJavaOptional(completedReplaceTimeline.getInstants().filter(in -> in.getTimestamp().equals(cfg.instantTime)).findFirst());
-      instant.ifPresent(hoodieInstant -> deleteReplacedFileGroups(hoodieInstant, table));
+  private void deleteEmptyDirIfNecessary() {
+    if (cfg.cleanUpEmptyDirectory) {
+      LOG.info("Starting to clean any empty dictionary.");
+      String[] parts = cfg.partitions.split(",");
+      List<String> roots = Arrays.stream(parts).map(partition -> partition.split("/")[0]).collect(Collectors.toList());
+      roots.forEach(rootDir -> {
+        try {
+          recursiveDeleteDir(new Path(metaClient.getBasePath(), rootDir));
+        } catch (IOException e) {
+          // ignore exception here
+        }
+      });
     }
   }
 
-  private boolean deleteReplacedFileGroups(HoodieInstant instant, HoodieSparkTable table) {
-    if (!instant.isCompleted() || !HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())) {
-      // only delete files for completed replace instants
-      return true;
-    }
-    TableFileSystemView fileSystemView = table.getFileSystemView();
-    List<String> replacedPartitions = getReplacedPartitions(instant);
-    int replacedFiles = getReplacedFiles(instant);
-    return deleteReplacedFileGroups(metaClient, fileSystemView, instant, replacedPartitions, Math.min(cfg.parallelism, replacedFiles));
-  }
-
-  private List<String> getReplacedPartitions(HoodieInstant instant) {
-    try {
-      HoodieReplaceCommitMetadata metadata = HoodieReplaceCommitMetadata.fromBytes(
-          metaClient.getActiveTimeline().getInstantDetails(instant).get(),
-          HoodieReplaceCommitMetadata.class);
-
-      return new ArrayList<>(metadata.getPartitionToReplaceFileIds().keySet());
-    } catch (IOException e) {
-      throw new HoodieCommitException("Cannot delete replace files", e);
-    }
-  }
-
-  private int getReplacedFiles(HoodieInstant instant) {
-    try {
-      HoodieReplaceCommitMetadata metadata = HoodieReplaceCommitMetadata.fromBytes(
-          metaClient.getActiveTimeline().getInstantDetails(instant).get(),
-          HoodieReplaceCommitMetadata.class);
-      int fileNumbers = 0;
-      for (List<String> files: metadata.getPartitionToReplaceFileIds().values()) {
-        fileNumbers += files.size();
+  /**
+   * Delete empty dir or dir only contain .hoodie_partition_metadata
+   * @param path
+   * @throws IOException
+   */
+  private void recursiveDeleteDir(Path path) throws IOException {
+    HoodieWrapperFileSystem fs = metaClient.getFs();
+    if (fs.isDirectory(path)) {
+      FileStatus[] fileStatuses = fs.listStatus(path);
+      if (fileStatuses.length >= 1) {
+        Path flag = new Path(path, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE);
+        // directory only contain .hoodie_partition_metadata
+        if (fs.exists(flag) && fileStatuses.length == 1) {
+          deletePath(flag, metaClient);
+          deletePath(path, metaClient);
+        } else {
+          for (FileStatus fileStatus : fileStatuses) {
+            recursiveDeleteDir(fileStatus.getPath());
+          }
+        }
+      } else {
+        deletePath(path, metaClient);
       }
-      return fileNumbers;
-    } catch (IOException e) {
-      throw new HoodieCommitException("Cannot delete replace files", e);
     }
   }
 
-  public boolean deleteReplacedFileGroups(HoodieTableMetaClient metaClient,
-                                                 TableFileSystemView fileSystemView,
-                                                 HoodieInstant instant, List<String> replacedPartitions, int parallelism) {
-    jsc.setJobGroup(ReplaceArchivalHelper.class.getSimpleName(), "Delete replaced file groups");
+  /**
+   * delete all the files under given partition path.
+   */
+  private void deleteDataFiles() {
+    List<String> parts = Arrays.asList(cfg.partitions.split(","));
+    JavaRDD<Path> allFiles = jsc.parallelize(parts, parts.size()).distinct().map(partitionPath -> {
+      return metaClient.getFs().listStatus(new Path(metaClient.getBasePath(), partitionPath));
+    }).flatMap(fileStatuses -> {
+      ArrayList<Path> files = new ArrayList<>();
+      for (FileStatus fileStatus : fileStatuses) {
+        files.add(new Path(fileStatus.getPath().toString()));
+      }
+      return files.iterator();
+    }).cache();
 
-    jsc.parallelize(replacedPartitions, replacedPartitions.size()).flatMap(partition -> {
-      return fileSystemView.getReplacedFileGroupsBeforeOrOn(instant.getTimestamp(), partition)
-          .flatMap(HoodieFileGroup::getAllRawFileSlices).iterator();
-    }).repartition(parallelism).foreach(fileSlice -> deleteFileSlice(fileSlice, metaClient, instant));
-    return true;
+    int fileNumbers = (int) Math.min(allFiles.count(), Integer.MAX_VALUE);
+
+    allFiles.repartition(Math.min(cfg.parallelism, fileNumbers)).foreach(path -> {
+      deletePath(path, metaClient);
+    });
   }
 
-  private static boolean deleteFileSlice(FileSlice fileSlice, HoodieTableMetaClient metaClient, HoodieInstant instant) {
-    boolean baseFileDeleteSuccess = fileSlice.getBaseFile().map(baseFile ->
-        deletePath(new Path(baseFile.getPath()), metaClient, instant)).orElse(true);
-
-    boolean logFileSuccess = fileSlice.getLogFiles().map(logFile ->
-        deletePath(logFile.getPath(), metaClient, instant)).allMatch(x -> x);
-    return baseFileDeleteSuccess & logFileSuccess;
-  }
-
-  private static boolean deletePath(Path path, HoodieTableMetaClient metaClient, HoodieInstant instant) {
+  private static boolean deletePath(Path path, HoodieTableMetaClient metaClient) {
     try {
       LOG.info("Deleting " + path);
       metaClient.getFs().delete(path);
@@ -460,7 +499,12 @@ public class HoodieDropPartitionsTool {
     ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(cfg.hiveTableName), "Hive table name couldn't be null or empty when enable sync meta, please set --hive-table-name/-tn.");
   }
 
-  private void syncHive(HiveSyncConfig hiveSyncConfig) {
+  /**
+   * Quiet to syncHive means drop partitions directly without update the last commit time from the TBLproperties
+   * @param hiveSyncConfig
+   * @param quiet
+   */
+  private void syncHive(HiveSyncConfig hiveSyncConfig, boolean quiet) {
     LOG.info("Syncing target hoodie table with hive table("
         + hiveSyncConfig.tableName
         + "). Hive metastore URL :"
@@ -474,7 +518,13 @@ public class HoodieDropPartitionsTool {
     }
     hiveConf.addResource(fs.getConf());
     LOG.info("Hive Conf => " + hiveConf.getAllProperties().toString());
-    new HiveSyncTool(hiveSyncConfig, hiveConf, fs).syncHoodieTable();
+    HiveSyncTool hiveSyncTool = new HiveSyncTool(hiveSyncConfig, hiveConf, fs);
+    if (quiet) {
+      HoodieHiveClient hiveClient = hiveSyncTool.getHoodieHiveClient();
+      hiveClient.dropPartitionsToTable(cfg.hiveTableName, Arrays.asList(cfg.partitions.split(",")));
+    } else {
+      hiveSyncTool.syncHoodieTable();
+    }
   }
 
   /**

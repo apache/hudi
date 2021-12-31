@@ -109,6 +109,10 @@ public class HiveSyncTool extends AbstractSyncTool {
     }
   }
 
+  public HoodieHiveClient getHoodieHiveClient() {
+    return this.hoodieHiveClient;
+  }
+
   @Override
   public void syncHoodieTable() {
     try {
