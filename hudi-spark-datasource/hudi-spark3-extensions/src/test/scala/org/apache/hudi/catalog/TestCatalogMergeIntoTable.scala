@@ -20,3 +20,4 @@ package org.apache.hudi.catalog
 import org.apache.spark.sql.hudi.TestMergeIntoTable
 
 class TestCatalogMergeIntoTable extends TestMergeIntoTable with TestHoodieCatalogBase
+
