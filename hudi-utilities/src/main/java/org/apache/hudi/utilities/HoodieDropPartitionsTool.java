@@ -81,7 +81,7 @@ import java.util.stream.Collectors;
  *
  * <p>
  * You can specify the running mode of the tool through `--mode`.
- * There are three modes of the {@link HoodieDropPartitionsTool}:
+ * There are four modes of the {@link HoodieDropPartitionsTool}:
  * - DELETE_PARTITIONS_LAZY ("delete_partitions_lazy"): This tool will mask/tombstone these partitions and corresponding data files and let cleaner delete these files later.
  * - Also you can set --sync-hive-meta to sync current drop partition into hive
  * <p>
