@@ -24,6 +24,7 @@ import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.PartitionValueExtractor;
+import org.apache.hudi.hive.util.HivePartitionUtil;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -236,7 +237,8 @@ public class HMSDDLExecutor implements DDLExecutor {
     LOG.info("Drop partitions " + partitionsToDrop.size() + " on " + tableName);
     try {
       for (String dropPartition : partitionsToDrop) {
-        client.dropPartition(syncConfig.databaseName, tableName, dropPartition, false);
+        String partitionClause = HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, syncConfig);
+        client.dropPartition(syncConfig.databaseName, tableName, partitionClause, false);
         LOG.info("Drop partition " + dropPartition + " on " + tableName);
       }
     } catch (TException e) {
