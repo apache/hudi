@@ -338,9 +338,26 @@ hoodie.deltastreamer.source.sql.sql.query = 'select * from source_table'
 
 ### Debezium Sources
 Debezium is an open source distributed platform for change data capture(CDC). Hudi has both a PostgresDebeziumSource and a 
-MysqlDebeziumSource to route CDC logs into Apache Hudi via deltastreamer for Postgres and MySQL respectively. 
-With this capability, we can continuously capture row-level changes that insert, update and delete records and seamlessly 
-ingest these changes to Hudi tables.
+MysqlDebeziumSource. With these sources, we can continuously capture row-level changes that insert, update and delete 
+records that were committed to a MySQL or Postgres database and seamlessly apply these changes to Hudi tables.
+
+[Debezium](https://debezium.io/documentation/reference/stable/connectors/postgresql.html) is implemented as a Kafka 
+connect source, that reads change logs from databases ([logical decoding](https://www.postgresql.org/docs/current/logicaldecoding-explanation.html)
+in PostgreSQL and `binlog` in MySQL) and ingests them into a kafka topic. Debezium uses a single kafka topic per table in the source database.
+
+![debezium](/assets/images/debezium_arch.png)
+
+The connector generates data change event records and streams them to Kafka topics. For each table, the default behavior 
+is that the connector streams all generated events to a separate Kafka topic for that table. In addition, Debezium 
+registers the schema of the change events in kafka to a schema registry, such as Confluent schema registry.
+
+#### Configuration 
+#### --@Rajesh, we need to make this more specific to the code and put some sample code 
+To run the deltastreamer, we need to configure the following:
+1.  The `source ordering field` should be set to `_source_lsn.`
+2.  Configure the schema registry server that is used by the Debezium connector.
+3.  Record Key(s) should be the primary key(s) of the database and can be obtained from the schema registry, since debezium uses the primary key(s) as the key for the kafka topic.
+4.  Configure the deltastreamer to use the DebeziumSource and DebeziumAvroPayload classes for the source and payload classes respectively.
 
 ## Flink Ingestion
 
