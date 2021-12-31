@@ -21,6 +21,7 @@ package org.apache.hudi.table.catalog;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
@@ -56,7 +57,6 @@ import org.apache.flink.table.catalog.stats.CatalogColumnStatistics;
 import org.apache.flink.table.catalog.stats.CatalogTableStatistics;
 import org.apache.flink.table.expressions.Expression;
 import org.apache.flink.util.CollectionUtil;
-import org.apache.flink.util.StringUtils;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -145,7 +145,7 @@ public class HoodieCatalog extends AbstractCatalog {
 
   @Override
   public boolean databaseExists(String databaseName) throws CatalogException {
-    checkArgument(!StringUtils.isNullOrWhitespaceOnly(databaseName));
+    checkArgument(!StringUtils.isNullOrEmpty(databaseName));
 
     return listDatabases().contains(databaseName);
   }
@@ -305,7 +305,9 @@ public class HoodieCatalog extends AbstractCatalog {
     try {
       StreamerUtil.initTableIfNotExists(conf);
       // prepare the non-table-options properties
-      options.put(TableOptionProperties.COMMENT, resolvedTable.getComment());
+      if (!StringUtils.isNullOrEmpty(resolvedTable.getComment())) {
+        options.put(TableOptionProperties.COMMENT, resolvedTable.getComment());
+      }
       TableOptionProperties.createProperties(tablePathStr, hadoopConf, options);
     } catch (IOException e) {
       throw new CatalogException(String.format("Initialize table path %s exception.", tablePathStr), e);
