@@ -53,6 +53,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 import org.apache.hudi.table.RandomFileIdPrefixProvider;
+import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
@@ -1213,6 +1214,19 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   public String getClusteringPlanStrategyClass() {
     return getString(HoodieClusteringConfig.PLAN_STRATEGY_CLASS_NAME);
+  }
+
+  public ClusteringPlanPartitionFilterMode getClusteringPlanPartitionFilterMode() {
+    String mode = getString(HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME);
+    return ClusteringPlanPartitionFilterMode.valueOf(mode);
+  }
+
+  public String getBeginPartitionForClustering() {
+    return getString(HoodieClusteringConfig.PARTITION_FILTER_BEGIN_PARTITION);
+  }
+
+  public String getEndPartitionForClustering() {
+    return getString(HoodieClusteringConfig.PARTITION_FILTER_END_PARTITION);
   }
 
   public String getClusteringExecutionStrategyClass() {

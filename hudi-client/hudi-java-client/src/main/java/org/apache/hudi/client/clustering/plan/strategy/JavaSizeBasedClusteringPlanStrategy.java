@@ -114,11 +114,6 @@ public class JavaSizeBasedClusteringPlanStrategy<T extends HoodieRecordPayload<T
   }
 
   @Override
-  protected List<String> filterPartitionPaths(List<String> partitionPaths) {
-    return partitionPaths;
-  }
-
-  @Override
   protected Stream<FileSlice> getFileSlicesEligibleForClustering(final String partition) {
     return super.getFileSlicesEligibleForClustering(partition)
         // Only files that have basefile size smaller than small file size are eligible.
