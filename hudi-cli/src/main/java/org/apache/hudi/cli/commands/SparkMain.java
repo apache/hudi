@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -79,12 +80,14 @@ public class SparkMain {
   }
 
   public static void main(String[] args) throws Exception {
-    String command = args[0];
-    LOG.info("Invoking SparkMain:" + command);
+    ValidationUtils.checkArgument(args.length >= 4);
+    final String commandString = args[0];
+    LOG.info("Invoking SparkMain: " + commandString);
+    final SparkCommand cmd = SparkCommand.valueOf(commandString);
 
-    SparkCommand cmd = SparkCommand.valueOf(command);
+    JavaSparkContext jsc = SparkUtil.initJavaSparkConf("hoodie-cli-" + commandString,
+        Option.of(args[1]), Option.of(args[2]));
 
-    JavaSparkContext jsc = SparkUtil.initJavaSparkConf("hoodie-cli-" + command, Option.of(args[1]), Option.of(args[2]));
     int returnCode = 0;
     try {
       switch (cmd) {
@@ -111,8 +114,8 @@ public class SparkMain {
           if (args.length > 13) {
             configs.addAll(Arrays.asList(args).subList(13, args.length));
           }
-          returnCode = dataLoad(jsc, command, args[3], args[4], args[5], args[6], args[7], args[8],
-                  Integer.parseInt(args[9]), args[10], Integer.parseInt(args[11]), propsFilePath, configs);
+          returnCode = dataLoad(jsc, commandString, args[3], args[4], args[5], args[6], args[7], args[8],
+              Integer.parseInt(args[9]), args[10], Integer.parseInt(args[11]), propsFilePath, configs);
           break;
         case COMPACT_RUN:
           assert (args.length >= 10);
@@ -159,33 +162,34 @@ public class SparkMain {
         case COMPACT_UNSCHEDULE_PLAN:
           assert (args.length == 9);
           doCompactUnschedule(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]),
-                  Boolean.parseBoolean(args[7]), Boolean.parseBoolean(args[8]));
+              Boolean.parseBoolean(args[7]), Boolean.parseBoolean(args[8]));
           returnCode = 0;
           break;
         case CLUSTERING_RUN:
-          assert (args.length >= 8);
+          assert (args.length >= 9);
           propsFilePath = null;
-          if (!StringUtils.isNullOrEmpty(args[7])) {
-            propsFilePath = args[7];
+          if (!StringUtils.isNullOrEmpty(args[8])) {
+            propsFilePath = args[8];
           }
           configs = new ArrayList<>();
-          if (args.length > 8) {
-            configs.addAll(Arrays.asList(args).subList(8, args.length));
+          if (args.length > 9) {
+            configs.addAll(Arrays.asList(args).subList(9, args.length));
           }
-          returnCode = cluster(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5],
-              Integer.parseInt(args[6]), false, propsFilePath, configs);
+          returnCode = cluster(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]), args[2],
+              Integer.parseInt(args[7]), false, propsFilePath, configs);
           break;
         case CLUSTERING_SCHEDULE:
-          assert (args.length >= 6);
+          assert (args.length >= 7);
           propsFilePath = null;
-          if (!StringUtils.isNullOrEmpty(args[5])) {
-            propsFilePath = args[5];
+          if (!StringUtils.isNullOrEmpty(args[6])) {
+            propsFilePath = args[6];
           }
           configs = new ArrayList<>();
-          if (args.length > 6) {
-            configs.addAll(Arrays.asList(args).subList(6, args.length));
+          if (args.length > 7) {
+            configs.addAll(Arrays.asList(args).subList(7, args.length));
           }
-          returnCode = cluster(jsc, args[1], args[2], args[3], 1, args[4], 0, true, propsFilePath, configs);
+          returnCode = cluster(jsc, args[3], args[4], args[5], 1, args[2],
+              0, true, propsFilePath, configs);
           break;
         case CLEAN:
           assert (args.length >= 5);
@@ -229,7 +233,7 @@ public class SparkMain {
           break;
       }
     } catch (Throwable throwable) {
-      LOG.error("Fail to execute command", throwable);
+      LOG.error("Fail to execute commandString", throwable);
       returnCode = -1;
     } finally {
       jsc.stop();
@@ -360,7 +364,7 @@ public class SparkMain {
       String payloadClassName, String enableHiveSync, String propsFilePath, List<String> configs) throws IOException {
 
     TypedProperties properties = propsFilePath == null ? UtilHelpers.buildProperties(configs)
-        : UtilHelpers.readConfig(FSUtils.getFs(propsFilePath, jsc.hadoopConfiguration()), new Path(propsFilePath), configs).getConfig();
+        : UtilHelpers.readConfig(jsc.hadoopConfiguration(), new Path(propsFilePath), configs).getProps(true);
 
     properties.setProperty(HoodieBootstrapConfig.BASE_PATH.key(), sourcePath);
 

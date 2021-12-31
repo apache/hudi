@@ -31,17 +31,12 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.FlinkHoodieIndexFactory;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import org.apache.hadoop.fs.Path;
-
-import java.io.IOException;
 import java.util.List;
 
 import static org.apache.hudi.common.data.HoodieList.getList;
@@ -49,9 +44,6 @@ import static org.apache.hudi.common.data.HoodieList.getList;
 public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
     extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>>
     implements ExplicitWriteHandleTable<T> {
-
-  private boolean isMetadataAvailabilityUpdated = false;
-  private boolean isMetadataTableAvailable;
 
   protected HoodieFlinkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
@@ -108,22 +100,11 @@ public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   @Override
-  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(Option<T> actionMetadata) {
-    synchronized (this) {
-      if (!isMetadataAvailabilityUpdated) {
-        // This code assumes that if metadata availability is updated once it will not change.
-        // Please revisit this logic if that's not the case. This is done to avoid repeated calls to fs.exists().
-        try {
-          isMetadataTableAvailable = config.isMetadataTableEnabled()
-              && metaClient.getFs().exists(new Path(HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())));
-        } catch (IOException e) {
-          throw new HoodieMetadataException("Checking existence of metadata table failed", e);
-        }
-        isMetadataAvailabilityUpdated = true;
-      }
-    }
-    if (isMetadataTableAvailable) {
-      return Option.of(FlinkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config, context));
+  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp,
+                                                                                            Option<T> actionMetadata) {
+    if (config.isMetadataTableEnabled()) {
+      return Option.of(FlinkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config,
+          context, actionMetadata, Option.of(triggeringInstantTimestamp)));
     } else {
       return Option.empty();
     }

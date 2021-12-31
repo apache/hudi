@@ -76,6 +76,10 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     // TODO : Remove this once we refactor and move out autoCommit method from here, since the TxnManager is held in {@link AbstractHoodieWriteClient}.
     this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
     this.lastCompletedTxn = TransactionUtils.getLastCompletedTxnInstantAndMetadata(table.getMetaClient());
+    if (table.getStorageLayout().doesNotSupport(operationType)) {
+      throw new UnsupportedOperationException("Executor " + this.getClass().getSimpleName()
+          + " is not compatible with table layout " + table.getStorageLayout().getClass().getSimpleName());
+    }
   }
 
   public abstract HoodieWriteMetadata<O> execute(I inputRecords);
@@ -147,14 +151,16 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
   }
 
   protected void autoCommit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<O> result) {
-    this.txnManager.beginTransaction(Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime)),
+    final Option<HoodieInstant> inflightInstant = Option.of(new HoodieInstant(State.INFLIGHT,
+        HoodieTimeline.COMMIT_ACTION, instantTime));
+    this.txnManager.beginTransaction(inflightInstant,
         lastCompletedTxn.isPresent() ? Option.of(lastCompletedTxn.get().getLeft()) : Option.empty());
     try {
       TransactionUtils.resolveWriteConflictIfAny(table, this.txnManager.getCurrentTransactionOwner(),
           result.getCommitMetadata(), config, this.txnManager.getLastCompletedTransactionOwner());
       commit(extraMetadata, result);
     } finally {
-      this.txnManager.endTransaction();
+      this.txnManager.endTransaction(inflightInstant);
     }
   }
 

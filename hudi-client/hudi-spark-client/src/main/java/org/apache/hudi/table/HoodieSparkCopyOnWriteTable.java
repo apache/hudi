@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -34,14 +36,18 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.HoodieUpsertException;
+import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieSortedMergeHandle;
@@ -69,15 +75,22 @@ import org.apache.hudi.table.action.restore.CopyOnWriteRestoreActionExecutor;
 import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
+
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 
+import javax.annotation.Nonnull;
+
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Implementation of a very heavily read-optimized Hoodie Table where, all data is stored in base files, with
@@ -94,6 +107,11 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
 
   public HoodieSparkCopyOnWriteTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
+  }
+
+  @Override
+  public boolean isTableServiceAction(String actionType) {
+    return !actionType.equals(HoodieTimeline.COMMIT_ACTION);
   }
 
   @Override
@@ -153,6 +171,63 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
   }
 
   @Override
+  public void updateMetadataIndexes(@Nonnull HoodieEngineContext context, @Nonnull List<HoodieWriteStat> stats, @Nonnull String instantTime) throws Exception {
+    updateColumnsStatsIndex(context, stats, instantTime);
+  }
+
+  private void updateColumnsStatsIndex(
+      @Nonnull HoodieEngineContext context,
+      @Nonnull List<HoodieWriteStat> updatedFilesStats,
+      @Nonnull String instantTime
+  ) throws Exception {
+    String sortColsList = config.getClusteringSortColumns();
+    String basePath = metaClient.getBasePath();
+    String indexPath = metaClient.getColumnStatsIndexPath();
+
+    List<String> completedCommits =
+        metaClient.getCommitsTimeline()
+            .filterCompletedInstants()
+            .getInstants()
+            .map(HoodieInstant::getTimestamp)
+            .collect(Collectors.toList());
+
+    List<String> touchedFiles =
+        updatedFilesStats.stream()
+            .map(s -> new Path(basePath, s.getPath()).toString())
+            .collect(Collectors.toList());
+
+    if (touchedFiles.isEmpty() || StringUtils.isNullOrEmpty(sortColsList) || StringUtils.isNullOrEmpty(indexPath)) {
+      return;
+    }
+
+    LOG.info(String.format("Updating column-statistics index table (%s)", indexPath));
+
+    List<String> sortCols = Arrays.stream(sortColsList.split(","))
+        .map(String::trim)
+        .collect(Collectors.toList());
+
+    HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext)context;
+
+    // Fetch table schema to appropriately construct col-stats index schema
+    Schema tableWriteSchema =
+        HoodieAvroUtils.createHoodieWriteSchema(
+            new TableSchemaResolver(metaClient).getTableAvroSchemaWithoutMetadataFields()
+        );
+
+    ColumnStatsIndexHelper.updateColumnStatsIndexFor(
+        sparkEngineContext.getSqlContext().sparkSession(),
+        AvroConversionUtils.convertAvroSchemaToStructType(tableWriteSchema),
+        touchedFiles,
+        sortCols,
+        indexPath,
+        instantTime,
+        completedCommits
+    );
+
+    LOG.info(String.format("Successfully updated column-statistics index at instant (%s)", instantTime));
+  }
+
+  @Override
   public Option<HoodieCompactionPlan> scheduleCompaction(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
     throw new HoodieNotSupportedException("Compaction is not supported on a CopyOnWrite table");
   }
@@ -194,8 +269,9 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
   @Override
   public Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context,
                                                      String instantTime,
-                                                     HoodieInstant instantToRollback, boolean skipTimelinePublish) {
-    return new BaseRollbackPlanActionExecutor<>(context, config, this, instantTime, instantToRollback, skipTimelinePublish).execute();
+                                                     HoodieInstant instantToRollback, boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers) {
+    return new BaseRollbackPlanActionExecutor<>(context, config, this, instantTime, instantToRollback, skipTimelinePublish,
+        shouldRollbackUsingMarkers).execute();
   }
 
   @Override

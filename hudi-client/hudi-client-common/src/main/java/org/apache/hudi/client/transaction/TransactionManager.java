@@ -35,49 +35,64 @@ import java.io.Serializable;
 public class TransactionManager implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(TransactionManager.class);
-
   private final LockManager lockManager;
-  private Option<HoodieInstant> currentTxnOwnerInstant;
-  private Option<HoodieInstant> lastCompletedTxnOwnerInstant;
-  private boolean supportsOptimisticConcurrency;
+  private final boolean isOptimisticConcurrencyControlEnabled;
+  private Option<HoodieInstant> currentTxnOwnerInstant = Option.empty();
+  private Option<HoodieInstant> lastCompletedTxnOwnerInstant = Option.empty();
 
   public TransactionManager(HoodieWriteConfig config, FileSystem fs) {
     this.lockManager = new LockManager(config, fs);
-    this.supportsOptimisticConcurrency = config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl();
+    this.isOptimisticConcurrencyControlEnabled = config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl();
   }
 
-  public synchronized void beginTransaction() {
-    if (supportsOptimisticConcurrency) {
+  public void beginTransaction() {
+    if (isOptimisticConcurrencyControlEnabled) {
       LOG.info("Transaction starting without a transaction owner");
       lockManager.lock();
-      LOG.info("Transaction started");
+      LOG.info("Transaction started without a transaction owner");
     }
   }
 
-  public synchronized void beginTransaction(Option<HoodieInstant> currentTxnOwnerInstant, Option<HoodieInstant> lastCompletedTxnOwnerInstant) {
-    if (supportsOptimisticConcurrency) {
-      this.lastCompletedTxnOwnerInstant = lastCompletedTxnOwnerInstant;
-      lockManager.setLatestCompletedWriteInstant(lastCompletedTxnOwnerInstant);
-      LOG.info("Latest completed transaction instant " + lastCompletedTxnOwnerInstant);
-      this.currentTxnOwnerInstant = currentTxnOwnerInstant;
-      LOG.info("Transaction starting with transaction owner " + currentTxnOwnerInstant);
+  public void beginTransaction(Option<HoodieInstant> newTxnOwnerInstant,
+                               Option<HoodieInstant> lastCompletedTxnOwnerInstant) {
+    if (isOptimisticConcurrencyControlEnabled) {
+      LOG.info("Transaction starting for " + newTxnOwnerInstant
+          + " with latest completed transaction instant " + lastCompletedTxnOwnerInstant);
       lockManager.lock();
-      LOG.info("Transaction started");
+      reset(currentTxnOwnerInstant, newTxnOwnerInstant, lastCompletedTxnOwnerInstant);
+      LOG.info("Transaction started for " + newTxnOwnerInstant
+          + " with latest completed transaction instant " + lastCompletedTxnOwnerInstant);
     }
   }
 
-  public synchronized void endTransaction() {
-    if (supportsOptimisticConcurrency) {
-      LOG.info("Transaction ending with transaction owner " + currentTxnOwnerInstant);
+  public void endTransaction() {
+    if (isOptimisticConcurrencyControlEnabled) {
+      LOG.info("Transaction ending without a transaction owner");
       lockManager.unlock();
-      LOG.info("Transaction ended");
-      this.lastCompletedTxnOwnerInstant = Option.empty();
-      lockManager.resetLatestCompletedWriteInstant();
+      LOG.info("Transaction ended without a transaction owner");
+    }
+  }
+
+  public void endTransaction(Option<HoodieInstant> currentTxnOwnerInstant) {
+    if (isOptimisticConcurrencyControlEnabled) {
+      LOG.info("Transaction ending with transaction owner " + currentTxnOwnerInstant);
+      reset(currentTxnOwnerInstant, Option.empty(), Option.empty());
+      lockManager.unlock();
+      LOG.info("Transaction ended with transaction owner " + currentTxnOwnerInstant);
+    }
+  }
+
+  private synchronized void reset(Option<HoodieInstant> callerInstant,
+                                  Option<HoodieInstant> newTxnOwnerInstant,
+                                  Option<HoodieInstant> lastCompletedTxnOwnerInstant) {
+    if (!this.currentTxnOwnerInstant.isPresent() || this.currentTxnOwnerInstant.get().equals(callerInstant.get())) {
+      this.currentTxnOwnerInstant = newTxnOwnerInstant;
+      this.lastCompletedTxnOwnerInstant = lastCompletedTxnOwnerInstant;
     }
   }
 
   public void close() {
-    if (supportsOptimisticConcurrency) {
+    if (isOptimisticConcurrencyControlEnabled) {
       lockManager.close();
       LOG.info("Transaction manager closed");
     }

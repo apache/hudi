@@ -18,6 +18,7 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -47,9 +48,35 @@ public class CompactionUtil {
   private static final Logger LOG = LoggerFactory.getLogger(CompactionUtil.class);
 
   /**
+   * Schedules a new compaction instant.
+   *
+   * @param metaClient The metadata client
+   * @param writeClient The write client
+   * @param deltaTimeCompaction Whether the compaction is trigger by elapsed delta time
+   * @param committed Whether the last instant was committed successfully
+   */
+  public static void scheduleCompaction(
+      HoodieTableMetaClient metaClient,
+      HoodieFlinkWriteClient<?> writeClient,
+      boolean deltaTimeCompaction,
+      boolean committed) {
+    if (committed) {
+      writeClient.scheduleCompaction(Option.empty());
+    } else if (deltaTimeCompaction) {
+      // if there are no new commits and the compaction trigger strategy is based on elapsed delta time,
+      // schedules the compaction anyway.
+      metaClient.reloadActiveTimeline();
+      Option<String> compactionInstantTime = CompactionUtil.getCompactionInstantTime(metaClient);
+      if (compactionInstantTime.isPresent()) {
+        writeClient.scheduleCompactionAtInstant(compactionInstantTime.get(), Option.empty());
+      }
+    }
+  }
+
+  /**
    * Gets compaction Instant time.
    */
-  public static String getCompactionInstantTime(HoodieTableMetaClient metaClient) {
+  public static Option<String> getCompactionInstantTime(HoodieTableMetaClient metaClient) {
     Option<HoodieInstant> firstPendingInstant = metaClient.getCommitsTimeline()
         .filterPendingExcludingCompaction().firstInstant();
     Option<HoodieInstant> lastCompleteInstant = metaClient.getActiveTimeline().getWriteTimeline()
@@ -59,8 +86,11 @@ public class CompactionUtil {
       String lastCompleteTimestamp = lastCompleteInstant.get().getTimestamp();
       // Committed and pending compaction instants should have strictly lower timestamps
       return StreamerUtil.medianInstantTime(firstPendingTimestamp, lastCompleteTimestamp);
+    } else if (!lastCompleteInstant.isPresent()) {
+      LOG.info("No instants to schedule the compaction plan");
+      return Option.empty();
     } else {
-      return HoodieActiveTimeline.createNewInstantTime();
+      return Option.of(HoodieActiveTimeline.createNewInstantTime());
     }
   }
 

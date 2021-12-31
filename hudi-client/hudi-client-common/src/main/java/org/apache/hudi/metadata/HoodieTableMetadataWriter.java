@@ -34,8 +34,10 @@ public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
    * Update the metadata table due to a COMMIT operation.
    * @param commitMetadata commit metadata of the operation of interest.
    * @param instantTime instant time of the commit.
+   * @param isTableServiceAction true if caller is a table service. false otherwise. Only regular write operations can trigger metadata table services and this argument
+   *                       will assist in this.
    */
-  void update(HoodieCommitMetadata commitMetadata, String instantTime);
+  void update(HoodieCommitMetadata commitMetadata, String instantTime, boolean isTableServiceAction);
 
   /**
    * Update the metadata table due to a CLEAN operation.

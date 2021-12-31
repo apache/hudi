@@ -84,29 +84,25 @@ public class ValidateAsyncOperations extends DagNode<Option<String>> {
 
           String metadataPath = executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/.hoodie";
           FileStatus[] metaFileStatuses = fs.listStatus(new Path(metadataPath));
-          boolean archFound = false;
           boolean cleanFound = false;
+          for (FileStatus fileStatus : metaFileStatuses) {
+            Matcher cleanFileMatcher = CLEAN_FILE_PATTERN.matcher(fileStatus.getPath().getName());
+            if (cleanFileMatcher.matches()) {
+              cleanFound = true;
+              break;
+            }
+          }
+
+          String archivalPath = executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/.hoodie/archived";
+          metaFileStatuses = fs.listStatus(new Path(archivalPath));
+          boolean archFound = false;
           for (FileStatus fileStatus : metaFileStatuses) {
             Matcher archFileMatcher = ARCHIVE_FILE_PATTERN.matcher(fileStatus.getPath().getName());
             if (archFileMatcher.matches()) {
               archFound = true;
-              if (config.validateArchival() && !config.validateClean()) {
-                break;
-              }
-            }
-            Matcher cleanFileMatcher = CLEAN_FILE_PATTERN.matcher(fileStatus.getPath().getName());
-            if (cleanFileMatcher.matches()) {
-              cleanFound = true;
-              if (!config.validateArchival() && config.validateClean()) {
-                break;
-              }
-            }
-            if (config.validateClean() && config.validateArchival()) {
-              if (archFound && cleanFound) {
-                break;
-              }
             }
           }
+
           if (config.validateArchival() && !archFound) {
             throw new AssertionError("Archival NotFound in " + metadataPath);
           }

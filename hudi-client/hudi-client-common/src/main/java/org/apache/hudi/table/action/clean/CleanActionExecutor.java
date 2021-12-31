@@ -205,31 +205,19 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
           Option.of(timer.endTimer()),
           cleanStats
       );
-      writeMetadata(metadata);
+      if (!skipLocking) {
+        this.txnManager.beginTransaction(Option.empty(), Option.empty());
+      }
+      writeTableMetadata(metadata);
       table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant,
           TimelineMetadataUtils.serializeCleanMetadata(metadata));
       LOG.info("Marked clean started on " + inflightInstant.getTimestamp() + " as complete");
       return metadata;
     } catch (IOException e) {
       throw new HoodieIOException("Failed to clean up after commit", e);
-    }
-  }
-
-  /**
-   * Update metadata table if available. Any update to metadata table happens within data table lock.
-   * @param cleanMetadata instance of {@link HoodieCleanMetadata} to be applied to metadata.
-   */
-  private void writeMetadata(HoodieCleanMetadata cleanMetadata) {
-    if (config.isMetadataTableEnabled()) {
-      try {
-        if (!skipLocking) {
-          this.txnManager.beginTransaction(Option.empty(), Option.empty());
-        }
-        writeTableMetadata(cleanMetadata);
-      } finally {
-        if (!skipLocking) {
-          this.txnManager.endTransaction();
-        }
+    } finally {
+      if (!skipLocking) {
+        this.txnManager.endTransaction(Option.empty());
       }
     }
   }
@@ -242,11 +230,15 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
         .filterInflightsAndRequested().getInstants().collect(Collectors.toList());
     if (pendingCleanInstants.size() > 0) {
       pendingCleanInstants.forEach(hoodieInstant -> {
-        LOG.info("Finishing previously unfinished cleaner instant=" + hoodieInstant);
-        try {
-          cleanMetadataList.add(runPendingClean(table, hoodieInstant));
-        } catch (Exception e) {
-          LOG.warn("Failed to perform previous clean operation, instant: " + hoodieInstant, e);
+        if (table.getCleanTimeline().isEmpty(hoodieInstant)) {
+          table.getActiveTimeline().deleteEmptyInstantIfExists(hoodieInstant);
+        } else {
+          LOG.info("Finishing previously unfinished cleaner instant=" + hoodieInstant);
+          try {
+            cleanMetadataList.add(runPendingClean(table, hoodieInstant));
+          } catch (Exception e) {
+            LOG.warn("Failed to perform previous clean operation, instant: " + hoodieInstant, e);
+          }
         }
       });
       table.getMetaClient().reloadActiveTimeline();

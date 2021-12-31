@@ -35,7 +35,6 @@ import org.apache.hudi.sink.utils.PayloadCreation;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.util.StreamerUtil;
 
-import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.api.common.state.StateTtlConfig;
 import org.apache.flink.api.common.state.ValueState;
@@ -69,8 +68,6 @@ import java.util.Objects;
 public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     extends KeyedProcessFunction<K, I, O>
     implements CheckpointedFunction, CheckpointListener {
-
-  private BucketAssignOperator.Context context;
 
   /**
    * Index cache(speed-up) state for the underneath file based(BloomFilter) indices.
@@ -124,16 +121,16 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
         getRuntimeContext().getIndexOfThisSubtask(),
         getRuntimeContext().getMaxNumberOfParallelSubtasks(),
         getRuntimeContext().getNumberOfParallelSubtasks(),
-        ignoreSmallFiles(writeConfig),
+        ignoreSmallFiles(),
         HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE)),
         context,
         writeConfig);
     this.payloadCreation = PayloadCreation.instance(this.conf);
   }
 
-  private boolean ignoreSmallFiles(HoodieWriteConfig writeConfig) {
+  private boolean ignoreSmallFiles() {
     WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
-    return WriteOperationType.isOverwrite(operationType) || writeConfig.allowDuplicateInserts();
+    return WriteOperationType.isOverwrite(operationType);
   }
 
   @Override
@@ -158,7 +155,6 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
   public void processElement(I value, Context ctx, Collector<O> out) throws Exception {
     if (value instanceof IndexRecord) {
       IndexRecord<?> indexRecord = (IndexRecord<?>) value;
-      this.context.setCurrentKey(indexRecord.getRecordKey());
       this.indexState.update((HoodieRecordGlobalLocation) indexRecord.getCurrentLocation());
     } else {
       processRecord((HoodieRecord<?>) value, out);
@@ -198,7 +194,6 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
       }
     } else {
       location = getNewRecordLocation(partitionPath);
-      this.context.setCurrentKey(recordKey);
     }
     // always refresh the index
     if (isChangingRecords) {
@@ -242,14 +237,5 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
   @Override
   public void close() throws Exception {
     this.bucketAssigner.close();
-  }
-
-  public void setContext(BucketAssignOperator.Context context) {
-    this.context = context;
-  }
-
-  @VisibleForTesting
-  public void clearIndexState() {
-    this.indexState.clear();
   }
 }

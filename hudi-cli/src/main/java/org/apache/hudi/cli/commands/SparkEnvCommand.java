@@ -43,6 +43,7 @@ public class SparkEnvCommand implements CommandMarker {
       throw new IllegalArgumentException("Illegal set parameter, please use like [set --conf SPARK_HOME=/usr/etc/spark]");
     }
     env.put(map[0].trim(), map[1].trim());
+    System.setProperty(map[0].trim(), map[1].trim());
   }
 
   @CliCommand(value = "show envs all", help = "Show spark launcher envs")

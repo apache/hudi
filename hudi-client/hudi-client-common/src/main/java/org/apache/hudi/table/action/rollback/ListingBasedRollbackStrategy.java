@@ -60,7 +60,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
       List<ListingBasedRollbackRequest> rollbackRequests = null;
       if (table.getMetaClient().getTableType() == HoodieTableType.COPY_ON_WRITE) {
         rollbackRequests = RollbackUtils.generateRollbackRequestsByListingCOW(context,
-            table.getMetaClient().getBasePath(), config);
+            table.getMetaClient().getBasePath());
       } else {
         rollbackRequests = RollbackUtils
             .generateRollbackRequestsUsingFileListingMOR(instantToRollback, table, context);

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -101,6 +103,12 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public HoodieTimeline filterCompletedInstantsWithCommitMetadata() {
+    return new HoodieDefaultTimeline(instants.stream().filter(HoodieInstant::isCompleted)
+            .filter(i -> !isDeletePartitionType(i)), details);
+  }
+
+  @Override
   public HoodieTimeline filterCompletedAndCompactionInstants() {
     return new HoodieDefaultTimeline(instants.stream().filter(s -> s.isCompleted()
             || s.getAction().equals(HoodieTimeline.COMPACTION_ACTION)), details);
@@ -115,13 +123,19 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public HoodieTimeline getCompletedReplaceTimeline() {
     return new HoodieDefaultTimeline(
-        instants.stream().filter(s -> s.getAction().equals(REPLACE_COMMIT_ACTION)).filter(s -> s.isCompleted()), details);
+        instants.stream().filter(s -> s.getAction().equals(REPLACE_COMMIT_ACTION)).filter(HoodieInstant::isCompleted), details);
   }
 
   @Override
   public HoodieTimeline filterPendingReplaceTimeline() {
     return new HoodieDefaultTimeline(instants.stream().filter(
         s -> s.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION) && !s.isCompleted()), details);
+  }
+
+  @Override
+  public HoodieTimeline filterPendingRollbackTimeline() {
+    return new HoodieDefaultTimeline(instants.stream().filter(
+        s -> s.getAction().equals(HoodieTimeline.ROLLBACK_ACTION) && !s.isCompleted()), details);
   }
 
   @Override
@@ -275,6 +289,12 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public Option<HoodieInstant> firstInstant(String action, State state) {
+    return Option.fromJavaOptional(instants.stream()
+        .filter(s -> action.equals(s.getAction()) && state.equals(s.getState())).findFirst());
+  }
+
+  @Override
   public Option<HoodieInstant> nthInstant(int n) {
     if (empty() || n >= countInstants()) {
       return Option.empty();
@@ -337,6 +357,26 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     return details.apply(instant);
+  }
+
+  @Override
+  public boolean isDeletePartitionType(HoodieInstant instant) {
+    Option<WriteOperationType> operationType;
+
+    try {
+      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+              .fromBytes(getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+      operationType = Option.of(commitMetadata.getOperationType());
+    } catch (Exception e) {
+      operationType = Option.empty();
+    }
+
+    return operationType.isPresent() && WriteOperationType.DELETE_PARTITION.equals(operationType.get());
+  }
+
+  @Override
+  public boolean isEmpty(HoodieInstant instant) {
+    return getInstantDetails(instant).get().length == 0;
   }
 
   @Override

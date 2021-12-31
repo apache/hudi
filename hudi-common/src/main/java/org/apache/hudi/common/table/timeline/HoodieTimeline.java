@@ -132,6 +132,14 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterCompletedAndCompactionInstants();
 
   /**
+   * Filter this timeline to include the completed and exclude operation type is delete partition instants.
+   *
+   * @return New instance of HoodieTimeline with include the completed and
+   * exclude operation type is delete partition instants
+   */
+  HoodieTimeline filterCompletedInstantsWithCommitMetadata();
+
+  /**
    * Timeline to just include commits (commit/deltacommit), compaction and replace actions.
    * 
    * @return
@@ -156,6 +164,11 @@ public interface HoodieTimeline extends Serializable {
    * Filter this timeline to just include requested and inflight replacecommit instants.
    */
   HoodieTimeline filterPendingReplaceTimeline();
+
+  /**
+   * Filter this timeline to include pending rollbacks.
+   */
+  HoodieTimeline filterPendingRollbackTimeline();
 
   /**
    * Create a new Timeline with all the instants after startTs.
@@ -208,6 +221,13 @@ public interface HoodieTimeline extends Serializable {
    * @return first completed instant if available
    */
   Option<HoodieInstant> firstInstant();
+
+  /**
+   * @param action Instant action String.
+   * @param state  Instant State.
+   * @return first instant of a specific action and state if available
+   */
+  Option<HoodieInstant> firstInstant(String action, State state);
 
   /**
    * @return nth completed instant from the first completed instant
@@ -269,6 +289,13 @@ public interface HoodieTimeline extends Serializable {
    */
   Option<byte[]> getInstantDetails(HoodieInstant instant);
 
+  boolean isEmpty(HoodieInstant instant);
+
+  /**
+   * Check WriteOperationType is DeletePartition.
+   */
+  boolean isDeletePartitionType(HoodieInstant instant);
+
   /**
    * Helper methods to compare instants.
    **/
@@ -320,6 +347,10 @@ public interface HoodieTimeline extends Serializable {
 
   static HoodieInstant getReplaceCommitInflightInstant(final String timestamp) {
     return new HoodieInstant(State.INFLIGHT, REPLACE_COMMIT_ACTION, timestamp);
+  }
+
+  static HoodieInstant getRollbackRequestedInstant(HoodieInstant instant) {
+    return instant.isRequested() ? instant : HoodieTimeline.getRequestedInstant(instant);
   }
 
   /**

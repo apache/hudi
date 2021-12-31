@@ -26,11 +26,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
 import org.apache.hudi.io.storage.HoodieHFileReader;
-
-import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
@@ -38,6 +35,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
@@ -45,6 +43,10 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.hbase.util.Pair;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
+import javax.annotation.Nonnull;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -56,8 +58,6 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-import javax.annotation.Nonnull;
-
 /**
  * HoodieHFileDataBlock contains a list of records stored inside an HFile format. It is used with the HFile
  * base file format.
@@ -68,24 +68,23 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   private static int blockSize = 1 * 1024 * 1024;
   private boolean enableInlineReading = false;
 
-  public HoodieHFileDataBlock(@Nonnull Map<HeaderMetadataType, String> logBlockHeader,
-       @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
-       @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation, @Nonnull Option<byte[]> content,
-       FSDataInputStream inputStream, boolean readBlockLazily) {
-    super(logBlockHeader, logBlockFooter, blockContentLocation, content, inputStream, readBlockLazily);
-  }
-
   public HoodieHFileDataBlock(HoodieLogFile logFile, FSDataInputStream inputStream, Option<byte[]> content,
-       boolean readBlockLazily, long position, long blockSize, long blockEndpos, Schema readerSchema,
-       Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer, boolean enableInlineReading) {
+                              boolean readBlockLazily, long position, long blockSize, long blockEndpos,
+                              Schema readerSchema, Map<HeaderMetadataType, String> header,
+                              Map<HeaderMetadataType, String> footer, boolean enableInlineReading, String keyField) {
     super(content, inputStream, readBlockLazily,
-          Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndpos)), readerSchema, header,
-          footer);
+        Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndpos)),
+        readerSchema, header, footer, keyField);
     this.enableInlineReading = enableInlineReading;
   }
 
+  public HoodieHFileDataBlock(@Nonnull List<IndexedRecord> records, @Nonnull Map<HeaderMetadataType, String> header,
+                              String keyField) {
+    super(records, header, new HashMap<>(), keyField);
+  }
+
   public HoodieHFileDataBlock(@Nonnull List<IndexedRecord> records, @Nonnull Map<HeaderMetadataType, String> header) {
-    super(records, header, new HashMap<>());
+    this(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
   @Override
@@ -103,7 +102,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     FSDataOutputStream ostream = new FSDataOutputStream(baos, null);
 
     HFile.Writer writer = HFile.getWriterFactory(conf, cacheConfig)
-        .withOutputStream(ostream).withFileContext(context).create();
+        .withOutputStream(ostream).withFileContext(context).withComparator(new HoodieHBaseKVComparator()).create();
 
     // Serialize records into bytes
     Map<String, byte[]> sortedRecordsMap = new TreeMap<>();
@@ -111,7 +110,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     boolean useIntegerKey = false;
     int key = 0;
     int keySize = 0;
-    Field keyField = records.get(0).getSchema().getField(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    Field keyField = records.get(0).getSchema().getField(this.keyField);
     if (keyField == null) {
       // Missing key metadata field so we should use an integer sequence key
       useIntegerKey = true;

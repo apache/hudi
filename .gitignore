@@ -61,7 +61,8 @@ local.properties
 # IntelliJ specific files/directories #
 #######################################
 .out
-.idea
+.idea/*
+!.idea/vcs.xml
 *.ipr
 *.iws
 *.iml

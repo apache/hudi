@@ -20,6 +20,7 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.StreamWriteOperator;
 import org.apache.hudi.sink.append.AppendWriteOperator;
@@ -35,7 +36,6 @@ import org.apache.hudi.sink.compact.CompactionCommitSink;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
-import org.apache.hudi.sink.partitioner.BucketAssignOperator;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunctions;
 import org.apache.hudi.table.format.FilePathUtils;
 
@@ -44,6 +44,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
+import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
@@ -98,25 +99,53 @@ public class Pipelines {
         .name("dummy");
   }
 
+  /**
+   * Constructs bootstrap pipeline as streaming.
+   */
+  public static DataStream<HoodieRecord> bootstrap(
+      Configuration conf,
+      RowType rowType,
+      int defaultParallelism,
+      DataStream<RowData> dataStream) {
+    return bootstrap(conf, rowType, defaultParallelism, dataStream, false, false);
+  }
+
+  /**
+   * Constructs bootstrap pipeline.
+   *
+   * @param conf The configuration
+   * @param rowType The row type
+   * @param defaultParallelism The default parallelism
+   * @param dataStream The data stream
+   * @param bounded Whether the source is bounded
+   * @param overwrite Whether it is insert overwrite
+   */
   public static DataStream<HoodieRecord> bootstrap(
       Configuration conf,
       RowType rowType,
       int defaultParallelism,
       DataStream<RowData> dataStream,
-      boolean bounded) {
-    return bounded
-        ? boundedBootstrap(conf, rowType, defaultParallelism, dataStream)
-        : streamBootstrap(conf, rowType, defaultParallelism, dataStream);
+      boolean bounded,
+      boolean overwrite) {
+    final boolean globalIndex = conf.getBoolean(FlinkOptions.INDEX_GLOBAL_ENABLED);
+    if (overwrite) {
+      return rowDataToHoodieRecord(conf, rowType, dataStream);
+    } else if (bounded && !globalIndex && OptionsResolver.isPartitionedTable(conf)) {
+      return boundedBootstrap(conf, rowType, defaultParallelism, dataStream);
+    } else {
+      return streamBootstrap(conf, rowType, defaultParallelism, dataStream, bounded);
+    }
   }
 
   private static DataStream<HoodieRecord> streamBootstrap(
       Configuration conf,
       RowType rowType,
       int defaultParallelism,
-      DataStream<RowData> dataStream) {
+      DataStream<RowData> dataStream,
+      boolean bounded) {
     DataStream<HoodieRecord> dataStream1 = rowDataToHoodieRecord(conf, rowType, dataStream);
 
-    if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
+    if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED) || bounded) {
       dataStream1 = dataStream1
           .transform(
               "index_bootstrap",
@@ -134,13 +163,10 @@ public class Pipelines {
       RowType rowType,
       int defaultParallelism,
       DataStream<RowData> dataStream) {
-    final String[] partitionFields = FilePathUtils.extractPartitionKeys(conf);
-    if (partitionFields.length > 0) {
-      RowDataKeyGen rowDataKeyGen = RowDataKeyGen.instance(conf, rowType);
-      // shuffle by partition keys
-      dataStream = dataStream
-          .keyBy(rowDataKeyGen::getPartitionPath);
-    }
+    final RowDataKeyGen rowDataKeyGen = RowDataKeyGen.instance(conf, rowType);
+    // shuffle by partition keys
+    dataStream = dataStream
+        .keyBy(rowDataKeyGen::getPartitionPath);
 
     return rowDataToHoodieRecord(conf, rowType, dataStream)
         .transform(
@@ -163,7 +189,7 @@ public class Pipelines {
         .transform(
             "bucket_assigner",
             TypeInformation.of(HoodieRecord.class),
-            new BucketAssignOperator<>(new BucketAssignFunction<>(conf)))
+            new KeyedProcessOperator<>(new BucketAssignFunction<>(conf)))
         .uid("uid_bucket_assigner_" + conf.getString(FlinkOptions.TABLE_NAME))
         .setParallelism(conf.getOptional(FlinkOptions.BUCKET_ASSIGN_TASKS).orElse(defaultParallelism))
         // shuffle by fileId(bucket id)

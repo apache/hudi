@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
@@ -38,7 +39,7 @@ public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O
                                       boolean shouldCombine,
                                       int shuffleParallelism,
                                       BaseCommitActionExecutor<T, I, K, O, R> executor,
-                                      boolean performTagging) {
+                                      WriteOperationType operationType) {
     try {
       // De-dupe/merge if needed
       I dedupedRecords =
@@ -46,8 +47,9 @@ public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O
 
       Instant lookupBegin = Instant.now();
       I taggedRecords = dedupedRecords;
-      if (performTagging) {
+      if (table.getIndex().requiresTagging(operationType)) {
         // perform index loop up to get existing location of records
+        context.setJobStatus(this.getClass().getSimpleName(), "Tagging");
         taggedRecords = tag(dedupedRecords, context, table);
       }
       Duration indexLookupDuration = Duration.between(lookupBegin, Instant.now());

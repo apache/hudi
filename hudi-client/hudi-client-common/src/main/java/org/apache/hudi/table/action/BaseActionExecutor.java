@@ -56,8 +56,9 @@ public abstract class BaseActionExecutor<T extends HoodieRecordPayload, I, K, O,
    * Writes commits metadata to table metadata.
    * @param metadata commit metadata of interest.
    */
-  protected final void writeTableMetadata(HoodieCommitMetadata metadata) {
-    table.getMetadataWriter().ifPresent(w -> w.update(metadata, instantTime));
+  protected final void writeTableMetadata(HoodieCommitMetadata metadata, String actionType) {
+    table.getMetadataWriter(instantTime).ifPresent(w -> w.update(
+        metadata, instantTime, table.isTableServiceAction(actionType)));
   }
 
   /**
@@ -65,7 +66,7 @@ public abstract class BaseActionExecutor<T extends HoodieRecordPayload, I, K, O,
    * @param metadata clean metadata of interest.
    */
   protected final void writeTableMetadata(HoodieCleanMetadata metadata) {
-    table.getMetadataWriter().ifPresent(w -> w.update(metadata, instantTime));
+    table.getMetadataWriter(instantTime).ifPresent(w -> w.update(metadata, instantTime));
   }
 
   /**
@@ -73,7 +74,7 @@ public abstract class BaseActionExecutor<T extends HoodieRecordPayload, I, K, O,
    * @param metadata rollback metadata of interest.
    */
   protected final void writeTableMetadata(HoodieRollbackMetadata metadata) {
-    table.getMetadataWriter(Option.of(metadata)).ifPresent(w -> w.update(metadata, instantTime));
+    table.getMetadataWriter(instantTime, Option.of(metadata)).ifPresent(w -> w.update(metadata, instantTime));
   }
 
   /**
@@ -81,6 +82,6 @@ public abstract class BaseActionExecutor<T extends HoodieRecordPayload, I, K, O,
    * @param metadata restore metadata of interest.
    */
   protected final void writeTableMetadata(HoodieRestoreMetadata metadata) {
-    table.getMetadataWriter().ifPresent(w -> w.update(metadata, instantTime));
+    table.getMetadataWriter(instantTime, Option.of(metadata)).ifPresent(w -> w.update(metadata, instantTime));
   }
 }

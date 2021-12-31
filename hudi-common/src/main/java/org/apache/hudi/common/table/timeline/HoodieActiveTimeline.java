@@ -35,14 +35,13 @@ import org.apache.log4j.Logger;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
-import java.text.SimpleDateFormat;
+import java.text.ParseException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 /**
@@ -59,8 +58,6 @@ import java.util.function.Function;
  */
 public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
-  public static final SimpleDateFormat COMMIT_FORMATTER = new SimpleDateFormat("yyyyMMddHHmmss");
-
   public static final Set<String> VALID_EXTENSIONS_IN_ACTIVE_TIMELINE = new HashSet<>(Arrays.asList(
       COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, REQUESTED_COMMIT_EXTENSION,
       DELTA_COMMIT_EXTENSION, INFLIGHT_DELTA_COMMIT_EXTENSION, REQUESTED_DELTA_COMMIT_EXTENSION,
@@ -72,28 +69,38 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       REQUESTED_REPLACE_COMMIT_EXTENSION, INFLIGHT_REPLACE_COMMIT_EXTENSION, REPLACE_COMMIT_EXTENSION));
   private static final Logger LOG = LogManager.getLogger(HoodieActiveTimeline.class);
   protected HoodieTableMetaClient metaClient;
-  private static AtomicReference<String> lastInstantTime = new AtomicReference<>(String.valueOf(Integer.MIN_VALUE));
 
   /**
-   * Returns next instant time in the {@link #COMMIT_FORMATTER} format.
-   * Ensures each instant time is atleast 1 second apart since we create instant times at second granularity
+   * Parse the timestamp of an Instant and return a {@code Date}.
    */
-  public static String createNewInstantTime() {
-    return createNewInstantTime(0);
+  public static Date parseDateFromInstantTime(String timestamp) throws ParseException {
+    return HoodieInstantTimeGenerator.parseDateFromInstantTime(timestamp);
   }
 
   /**
-   * Returns next instant time that adds N milliseconds in the {@link #COMMIT_FORMATTER} format.
+   * Format the Date to a String representing the timestamp of a Hoodie Instant.
+   */
+  public static String formatDate(Date timestamp) {
+    return HoodieInstantTimeGenerator.formatDate(timestamp);
+  }
+
+  /**
+   * Returns next instant time in the correct format.
    * Ensures each instant time is atleast 1 second apart since we create instant times at second granularity
    */
+  public static String createNewInstantTime() {
+    return HoodieInstantTimeGenerator.createNewInstantTime(0);
+  }
+
+
+  /**
+   * Returns next instant time that adds N milliseconds to current time.
+   * Ensures each instant time is atleast 1 second apart since we create instant times at second granularity
+   *
+   * @param milliseconds Milliseconds to add to current time while generating the new instant time
+   */
   public static String createNewInstantTime(long milliseconds) {
-    return lastInstantTime.updateAndGet((oldVal) -> {
-      String newCommitTime;
-      do {
-        newCommitTime = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date(System.currentTimeMillis() + milliseconds));
-      } while (HoodieTimeline.compareTimestamps(newCommitTime, LESSER_THAN_OR_EQUALS, oldVal));
-      return newCommitTime;
-    });
+    return HoodieInstantTimeGenerator.createNewInstantTime(milliseconds);
   }
 
   protected HoodieActiveTimeline(HoodieTableMetaClient metaClient, Set<String> includedExtensions) {
@@ -129,6 +136,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    *
    * @deprecated
    */
+  @Deprecated
   public HoodieActiveTimeline() {
   }
 
@@ -137,6 +145,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    *
    * @deprecated
    */
+  @Deprecated
   private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
     in.defaultReadObject();
   }
@@ -181,9 +190,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     }
   }
 
-  public void deletePendingIfExists(HoodieInstant.State state, String action, String instantStr) {
-    HoodieInstant instant = new HoodieInstant(state, action, instantStr);
-    ValidationUtils.checkArgument(!instant.isCompleted());
+  public void deleteEmptyInstantIfExists(HoodieInstant instant) {
+    ValidationUtils.checkArgument(isEmpty(instant));
     deleteInstantFileIfExists(instant);
   }
 
@@ -373,14 +381,13 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * Transition Rollback State from requested to inflight.
    *
    * @param requestedInstant requested instant
-   * @param data Optional data to be stored
    * @return commit instant
    */
-  public HoodieInstant transitionRollbackRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data) {
+  public HoodieInstant transitionRollbackRequestedToInflight(HoodieInstant requestedInstant) {
     ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION));
     ValidationUtils.checkArgument(requestedInstant.isRequested());
     HoodieInstant inflight = new HoodieInstant(State.INFLIGHT, ROLLBACK_ACTION, requestedInstant.getTimestamp());
-    transitionState(requestedInstant, inflight, data);
+    transitionState(requestedInstant, inflight, Option.empty());
     return inflight;
   }
 

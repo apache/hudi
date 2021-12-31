@@ -71,17 +71,12 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
   /**
    * Paths that are known to be non-hoodie tables.
    */
-  private Set<String> nonHoodiePathCache;
+  Set<String> nonHoodiePathCache;
 
   /**
    * Table Meta Client Cache.
    */
   Map<String, HoodieTableMetaClient> metaClientCache;
-
-  /**
-   * HoodieTableFileSystemView Cache.
-   */
-  private Map<String, HoodieTableFileSystemView> hoodieTableFileSystemViewCache;
 
   /**
    * Hadoop configurations for the FileSystem.
@@ -102,7 +97,6 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
     this.nonHoodiePathCache = new HashSet<>();
     this.conf = new SerializableConfiguration(conf);
     this.metaClientCache = new HashMap<>();
-    this.hoodieTableFileSystemViewCache = new HashMap<>();
   }
 
   /**
@@ -173,6 +167,13 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
       }
 
       if (baseDir != null) {
+        // Check whether baseDir in nonHoodiePathCache
+        if (nonHoodiePathCache.contains(baseDir.toString())) {
+          if (LOG.isDebugEnabled()) {
+            LOG.debug("Accepting non-hoodie path from cache: " + path);
+          }
+          return true;
+        }
         HoodieTableFileSystemView fsView = null;
         try {
           HoodieTableMetaClient metaClient = metaClientCache.get(baseDir.toString());
@@ -181,15 +182,8 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
             metaClientCache.put(baseDir.toString(), metaClient);
           }
 
-          HoodieTableMetaClient finalMetaClient = metaClient;
-          fsView = hoodieTableFileSystemViewCache.computeIfAbsent(baseDir.toString(), key ->
-                  FileSystemViewManager.createInMemoryFileSystemView(
-                          engineContext,
-                          finalMetaClient,
-                          HoodieInputFormatUtils.buildMetadataConfig(getConf())
-                  )
-          );
-
+          fsView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
+              metaClient, HoodieInputFormatUtils.buildMetadataConfig(getConf()));
           String partition = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), folder);
           List<HoodieBaseFile> latestFiles = fsView.getLatestBaseFiles(partition).collect(Collectors.toList());
           // populate the cache
@@ -211,10 +205,15 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
         } catch (TableNotFoundException e) {
           // Non-hoodie path, accept it.
           if (LOG.isDebugEnabled()) {
-            LOG.debug(String.format("(1) Caching non-hoodie path under %s \n", folder.toString()));
+            LOG.debug(String.format("(1) Caching non-hoodie path under %s with basePath %s \n", folder.toString(), baseDir.toString()));
           }
           nonHoodiePathCache.add(folder.toString());
+          nonHoodiePathCache.add(baseDir.toString());
           return true;
+        } finally {
+          if (fsView != null) {
+            fsView.close();
+          }
         }
       } else {
         // files is at < 3 level depth in FS tree, can't be hoodie dataset

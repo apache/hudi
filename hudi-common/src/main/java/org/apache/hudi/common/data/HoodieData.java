@@ -98,6 +98,13 @@ public abstract class HoodieData<T> implements Serializable {
   public abstract HoodieData<T> distinct();
 
   /**
+   * Unions this {@link HoodieData} with other {@link HoodieData}.
+   * @param other {@link HoodieData} of interest.
+   * @return the union of two as as instance of {@link HoodieData}.
+   */
+  public abstract HoodieData<T> union(HoodieData<T> other);
+
+  /**
    * @return collected results in {@link List<T>}.
    */
   public abstract List<T> collectAsList();

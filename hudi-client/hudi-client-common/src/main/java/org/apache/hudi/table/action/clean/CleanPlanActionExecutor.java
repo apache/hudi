@@ -72,6 +72,7 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
     try {
       CleanPlanner<T, I, K, O> planner = new CleanPlanner<>(context, table, config);
       Option<HoodieInstant> earliestInstant = planner.getEarliestCommitToRetain();
+      context.setJobStatus(this.getClass().getSimpleName(), "Obtaining list of partitions to be cleaned");
       List<String> partitionsToClean = planner.getPartitionPathsToClean(earliestInstant);
 
       if (partitionsToClean.isEmpty()) {
@@ -82,7 +83,7 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
       int cleanerParallelism = Math.min(partitionsToClean.size(), config.getCleanerParallelism());
       LOG.info("Using cleanerParallelism: " + cleanerParallelism);
 
-      context.setJobStatus(this.getClass().getSimpleName(), "Generates list of file slices to be cleaned");
+      context.setJobStatus(this.getClass().getSimpleName(), "Generating list of file slices to be cleaned");
 
       Map<String, List<HoodieCleanFileInfo>> cleanOps = context
           .map(partitionsToClean, partitionPathToClean -> Pair.of(partitionPathToClean, planner.getDeletePaths(partitionPathToClean)), cleanerParallelism)

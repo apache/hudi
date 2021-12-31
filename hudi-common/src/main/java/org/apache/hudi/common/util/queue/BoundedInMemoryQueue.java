@@ -172,7 +172,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   /**
    * Inserts record into queue after applying transformation.
    *
-   * @param t Item to be queueed
+   * @param t Item to be queued
    */
   public void insertRecord(I t) throws Exception {
     // If already closed, throw exception
@@ -222,7 +222,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
         throw new HoodieException(e);
       }
     }
-    // Check one more time here as it is possible producer errored out and closed immediately
+    // Check one more time here as it is possible producer erred out and closed immediately
     throwExceptionIfFailed();
 
     if (newRecord != null && newRecord.isPresent()) {
@@ -244,6 +244,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
 
   private void throwExceptionIfFailed() {
     if (this.hasFailed.get() != null) {
+      close();
       throw new HoodieException("operation has failed", this.hasFailed.get());
     }
   }

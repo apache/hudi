@@ -29,6 +29,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilter;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -56,7 +58,9 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
    * Return list of partition paths to be considered for clustering.
    */
   protected List<String> filterPartitionPaths(List<String> partitionPaths) {
-    return partitionPaths;
+    List<String> filteredPartitions = ClusteringPlanPartitionFilter.filter(partitionPaths, getWriteConfig());
+    LOG.debug("Filtered to the following partitions: " + filteredPartitions);
+    return filteredPartitions;
   }
 
   @Override
@@ -74,13 +78,17 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
       return Option.empty();
     }
 
-    List<HoodieClusteringGroup> clusteringGroups = getEngineContext().flatMap(partitionPaths,
-        partitionPath -> {
-          List<FileSlice> fileSlicesEligible = getFileSlicesEligibleForClustering(partitionPath).collect(Collectors.toList());
-          return buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible).limit(getWriteConfig().getClusteringMaxNumGroups());
-        },
-        partitionPaths.size())
-        .stream().limit(getWriteConfig().getClusteringMaxNumGroups()).collect(Collectors.toList());
+    List<HoodieClusteringGroup> clusteringGroups = getEngineContext()
+        .flatMap(
+            partitionPaths,
+            partitionPath -> {
+              List<FileSlice> fileSlicesEligible = getFileSlicesEligibleForClustering(partitionPath).collect(Collectors.toList());
+              return buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible).limit(getWriteConfig().getClusteringMaxNumGroups());
+            },
+            partitionPaths.size())
+        .stream()
+        .limit(getWriteConfig().getClusteringMaxNumGroups())
+        .collect(Collectors.toList());
 
     if (clusteringGroups.isEmpty()) {
       LOG.info("No data available to cluster");

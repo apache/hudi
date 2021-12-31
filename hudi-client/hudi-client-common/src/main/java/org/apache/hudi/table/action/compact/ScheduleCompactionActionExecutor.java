@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -68,12 +69,15 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
   public Option<HoodieCompactionPlan> execute() {
     if (!config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
         && !config.getFailedWritesCleanPolicy().isLazy()) {
-      // if there are inflight writes, their instantTime must not be less than that of compaction instant time
-      table.getActiveTimeline().getCommitsTimeline().filterPendingExcludingCompaction().firstInstant()
-          .ifPresent(earliestInflight -> ValidationUtils.checkArgument(
-              HoodieTimeline.compareTimestamps(earliestInflight.getTimestamp(), HoodieTimeline.GREATER_THAN, instantTime),
-              "Earliest write inflight instant time must be later than compaction time. Earliest :" + earliestInflight
-                  + ", Compaction scheduled at " + instantTime));
+      // TODO(yihua): this validation is removed for Java client used by kafka-connect.  Need to revisit this.
+      if (config.getEngineType() != EngineType.JAVA) {
+        // if there are inflight writes, their instantTime must not be less than that of compaction instant time
+        table.getActiveTimeline().getCommitsTimeline().filterPendingExcludingCompaction().firstInstant()
+            .ifPresent(earliestInflight -> ValidationUtils.checkArgument(
+                HoodieTimeline.compareTimestamps(earliestInflight.getTimestamp(), HoodieTimeline.GREATER_THAN, instantTime),
+                "Earliest write inflight instant time must be later than compaction time. Earliest :" + earliestInflight
+                    + ", Compaction scheduled at " + instantTime));
+      }
       // Committed and pending compaction instants should have strictly lower timestamps
       List<HoodieInstant> conflictingInstants = table.getActiveTimeline()
           .getWriteTimeline().filterCompletedAndCompactionInstants().getInstants()
@@ -114,6 +118,7 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
             .collect(Collectors.toSet());
         // exclude files in pending clustering from compaction.
         fgInPendingCompactionAndClustering.addAll(fileSystemView.getFileGroupsInPendingClustering().map(Pair::getLeft).collect(Collectors.toSet()));
+        context.setJobStatus(this.getClass().getSimpleName(), "Compaction: generating compaction plan");
         return compactor.generateCompactionPlan(context, table, config, instantTime, fgInPendingCompactionAndClustering);
       } catch (IOException e) {
         throw new HoodieCompactionException("Could not schedule compaction " + config.getBasePath(), e);
@@ -123,13 +128,13 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
     return new HoodieCompactionPlan();
   }
 
-  private Pair<Integer, String> getLatestDeltaCommitInfo(CompactionTriggerStrategy compactionTriggerStrategy) {
+  private Pair<Integer, String> getLatestDeltaCommitInfo() {
     Option<HoodieInstant> lastCompaction = table.getActiveTimeline().getCommitTimeline()
         .filterCompletedInstants().lastInstant();
     HoodieTimeline deltaCommits = table.getActiveTimeline().getDeltaCommitTimeline();
 
     String latestInstantTs;
-    int deltaCommitsSinceLastCompaction = 0;
+    final int deltaCommitsSinceLastCompaction;
     if (lastCompaction.isPresent()) {
       latestInstantTs = lastCompaction.get().getTimestamp();
       deltaCommitsSinceLastCompaction = deltaCommits.findInstantsAfter(latestInstantTs, Integer.MAX_VALUE).countInstants();
@@ -143,7 +148,7 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
   private boolean needCompact(CompactionTriggerStrategy compactionTriggerStrategy) {
     boolean compactable;
     // get deltaCommitsSinceLastCompaction and lastCompactionTs
-    Pair<Integer, String> latestDeltaCommitInfo = getLatestDeltaCommitInfo(compactionTriggerStrategy);
+    Pair<Integer, String> latestDeltaCommitInfo = getLatestDeltaCommitInfo();
     int inlineCompactDeltaCommitMax = config.getInlineCompactDeltaCommitMax();
     int inlineCompactDeltaSecondsMax = config.getInlineCompactDeltaSecondsMax();
     switch (compactionTriggerStrategy) {
@@ -184,7 +189,7 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
   private Long parsedToSeconds(String time) {
     long timestamp;
     try {
-      timestamp = HoodieActiveTimeline.COMMIT_FORMATTER.parse(time).getTime() / 1000;
+      timestamp = HoodieActiveTimeline.parseDateFromInstantTime(time).getTime() / 1000;
     } catch (ParseException e) {
       throw new HoodieCompactionException(e.getMessage(), e);
     }

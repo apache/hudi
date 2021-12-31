@@ -17,6 +17,8 @@
 
 package org.apache.hudi.functional
 
+import java.util.Properties
+
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -61,6 +63,7 @@ class TestMORDataSource extends HoodieClientTestBase {
   val updatedVerificationVal: String = "driver_update"
 
   @BeforeEach override def setUp() {
+    setTableName("hoodie_test")
     initPath()
     initSparkContexts()
     spark = sqlContext.sparkSession
@@ -703,13 +706,7 @@ class TestMORDataSource extends HoodieClientTestBase {
       .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key(), DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
       // option for clustering
-      .option("hoodie.parquet.small.file.limit", "0")
       .option("hoodie.clustering.inline", "true")
-      .option("hoodie.clustering.inline.max.commits", "1")
-      .option("hoodie.clustering.plan.strategy.target.file.max.bytes", "1073741824")
-      .option("hoodie.clustering.plan.strategy.small.file.limit", "629145600")
-      .option("hoodie.clustering.plan.strategy.max.bytes.per.group", Long.MaxValue.toString)
-      .option("hoodie.clustering.plan.strategy.target.file.max.bytes", String.valueOf(12 *1024 * 1024L))
       .option("hoodie.clustering.plan.strategy.sort.columns", "begin_lat, begin_lon")
       .mode(SaveMode.Overwrite)
       .save(basePath)
