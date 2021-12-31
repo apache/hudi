@@ -336,6 +336,12 @@ jobs: `hoodie.write.meta.key.prefixes = 'deltastreamer.checkpoint.key'`
 Spark SQL should be configured using this hoodie config:
 hoodie.deltastreamer.source.sql.sql.query = 'select * from source_table'
 
+### Debezium Sources
+Debezium is an open source distributed platform for change data capture(CDC). Hudi has both a PostgresDebeziumSource and a 
+MysqlDebeziumSource to route CDC logs into Apache Hudi via deltastreamer for Postgres and MySQL respectively. 
+With this capability, we can continuously capture row-level changes that insert, update and delete records and seamlessly 
+ingest these changes to Hudi tables.
+
 ## Flink Ingestion
 
 ### CDC Ingestion
