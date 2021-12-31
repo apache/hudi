@@ -47,12 +47,12 @@ trait SparkAdapter extends Serializable {
   /**
    * Convert a AliasIdentifier to TableIdentifier.
    */
-  def toTableIdentify(aliasId: AliasIdentifier): TableIdentifier
+  def toTableIdentifier(aliasId: AliasIdentifier): TableIdentifier
 
   /**
    * Convert a UnresolvedRelation to TableIdentifier.
    */
-  def toTableIdentify(relation: UnresolvedRelation): TableIdentifier
+  def toTableIdentifier(relation: UnresolvedRelation): TableIdentifier
 
   /**
    * Create Join logical plan.
@@ -100,7 +100,7 @@ trait SparkAdapter extends Serializable {
     tripAlias(table) match {
       case LogicalRelation(_, _, Some(tbl), _) => isHoodieTable(tbl)
       case relation: UnresolvedRelation =>
-        isHoodieTable(toTableIdentify(relation), spark)
+        isHoodieTable(toTableIdentifier(relation), spark)
       case _=> false
     }
   }

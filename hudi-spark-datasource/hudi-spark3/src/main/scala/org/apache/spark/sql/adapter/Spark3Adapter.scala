@@ -31,7 +31,7 @@ import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources.{LogicalRelation, Spark3ParsePartitionUtil, SparkParsePartitionUtil}
 import org.apache.spark.sql.hudi.SparkAdapter
-import org.apache.spark.sql.hudi.catalog.HoodieInternalTableV2
+import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.{Row, SparkSession}
 
@@ -44,7 +44,7 @@ class Spark3Adapter extends SparkAdapter {
     new Spark3RowSerDe(encoder)
   }
 
-  override def toTableIdentify(aliasId: AliasIdentifier): TableIdentifier = {
+  override def toTableIdentifier(aliasId: AliasIdentifier): TableIdentifier = {
     aliasId match {
       case AliasIdentifier(name, Seq(database)) =>
         TableIdentifier(name, Some(database))
@@ -56,7 +56,7 @@ class Spark3Adapter extends SparkAdapter {
     }
   }
 
-  override def toTableIdentify(relation: UnresolvedRelation): TableIdentifier = {
+  override def toTableIdentifier(relation: UnresolvedRelation): TableIdentifier = {
     relation.multipartIdentifier.asTableIdentifier
   }
 
@@ -99,8 +99,8 @@ class Spark3Adapter extends SparkAdapter {
     tripAlias(table) match {
       case LogicalRelation(_, _, Some(tbl), _) => isHoodieTable(tbl)
       case relation: UnresolvedRelation =>
-        isHoodieTable(toTableIdentify(relation), spark)
-      case DataSourceV2Relation(table, _, _, _, _) => table.isInstanceOf[HoodieInternalTableV2]
+        isHoodieTable(toTableIdentifier(relation), spark)
+      case DataSourceV2Relation(table, _, _, _, _) => table.isInstanceOf[HoodieInternalV2Table]
       case _=> false
     }
   }

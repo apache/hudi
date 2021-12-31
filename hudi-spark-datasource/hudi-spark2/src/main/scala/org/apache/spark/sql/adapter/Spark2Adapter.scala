@@ -41,11 +41,11 @@ class Spark2Adapter extends SparkAdapter {
     new Spark2RowSerDe(encoder)
   }
 
-  override def toTableIdentify(aliasId: AliasIdentifier): TableIdentifier = {
+  override def toTableIdentifier(aliasId: AliasIdentifier): TableIdentifier = {
     TableIdentifier(aliasId.identifier, aliasId.database)
   }
 
-  override def toTableIdentify(relation: UnresolvedRelation): TableIdentifier = {
+  override def toTableIdentifier(relation: UnresolvedRelation): TableIdentifier = {
     relation.tableIdentifier
   }
 

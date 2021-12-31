@@ -36,13 +36,13 @@ import org.apache.spark.sql.{Dataset, SaveMode, SparkSession, _}
 import java.util
 import scala.collection.JavaConverters.mapAsScalaMapConverter
 
-class HoodieCatalog extends DelegatingCatalogExtension with StagingTableCatalog with HoodieConfigBuilder {
+class HoodieCatalog extends DelegatingCatalogExtension with StagingTableCatalog with HoodieConfigHelper {
 
   val spark: SparkSession = SparkSession.active
 
   override def stageCreate(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
     if (SparkSqlUtils.isHoodieTable(properties.asScala.toMap)) {
-      StageHoodieTable(ident, this, schema, partitions, properties, TableCreationModes.StageCreate)
+      HoodieStagedTable(ident, this, schema, partitions, properties, TableCreationMode.STAGE_CREATE)
     } else {
       BaseStagedTable(
         ident,
@@ -53,7 +53,7 @@ class HoodieCatalog extends DelegatingCatalogExtension with StagingTableCatalog 
 
   override def stageReplace(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
     if (SparkSqlUtils.isHoodieTable(properties.asScala.toMap)) {
-      StageHoodieTable(ident, this, schema, partitions, properties, TableCreationModes.StageReplace)
+      HoodieStagedTable(ident, this, schema, partitions, properties, TableCreationMode.STAGE_REPLACE)
     } else {
       super.dropTable(ident)
       BaseStagedTable(
@@ -68,8 +68,8 @@ class HoodieCatalog extends DelegatingCatalogExtension with StagingTableCatalog 
                                     partitions: Array[Transform],
                                     properties: util.Map[String, String]): StagedTable = {
     if (SparkSqlUtils.isHoodieTable(properties.asScala.toMap)) {
-      StageHoodieTable(
-        ident, this, schema, partitions, properties, TableCreationModes.CreateOrReplace)
+      HoodieStagedTable(
+        ident, this, schema, partitions, properties, TableCreationMode.CREATE_OR_REPLACE)
     } else {
       try super.dropTable(ident) catch {
         case _: NoSuchTableException => // ignore the exception
@@ -85,7 +85,7 @@ class HoodieCatalog extends DelegatingCatalogExtension with StagingTableCatalog 
     try {
       super.loadTable(ident) match {
         case v1: V1Table if HoodieSqlCommonUtils.isHoodieTable(v1.catalogTable) =>
-          HoodieInternalTableV2(
+          HoodieInternalV2Table(
             spark,
             v1.catalogTable.location.toString,
             catalogTable = Some(v1.catalogTable),
@@ -102,7 +102,7 @@ class HoodieCatalog extends DelegatingCatalogExtension with StagingTableCatalog 
                            schema: StructType,
                            partitions: Array[Transform],
                            properties: util.Map[String, String]): Table = {
-    createHoodieTable(ident, schema, partitions, properties, Map.empty, Option.empty, TableCreationModes.Create)
+    createHoodieTable(ident, schema, partitions, properties, Map.empty, Option.empty, TableCreationMode.CREATE)
   }
 
   override def tableExists(ident: Identifier): Boolean = super.tableExists(ident)
@@ -113,7 +113,7 @@ class HoodieCatalog extends DelegatingCatalogExtension with StagingTableCatalog 
   @throws[TableAlreadyExistsException]
   override def renameTable(oldIdent: Identifier, newIdent: Identifier): Unit = {
     loadTable(oldIdent) match {
-      case _: HoodieInternalTableV2 =>
+      case _: HoodieInternalV2Table =>
         new AlterHoodieTableRenameCommand(oldIdent.asTableIdentifier, newIdent.asTableIdentifier, false)
       case _ => super.renameTable(oldIdent, newIdent)
     }
@@ -123,7 +123,7 @@ class HoodieCatalog extends DelegatingCatalogExtension with StagingTableCatalog 
     val tableIdent = TableIdentifier(ident.name(), ident.namespace().lastOption)
     // scalastyle:off
     val table = loadTable(ident) match {
-      case hoodieTable: HoodieInternalTableV2 => hoodieTable
+      case hoodieTable: HoodieInternalV2Table => hoodieTable
       case _ => return super.alterTable(ident, changes: _*)
     }
     // scalastyle:on
@@ -161,7 +161,7 @@ class HoodieCatalog extends DelegatingCatalogExtension with StagingTableCatalog 
                         allTableProperties: util.Map[String, String],
                         writeOptions: Map[String, String],
                         sourceQuery: Option[DataFrame],
-                        operation: TableCreationModes): Table = {
+                        operation: TableCreationMode): Table = {
 
     val (partitionColumns, maybeBucketSpec) = SparkSqlUtils.convertTransforms(partitions)
     val newSchema = schema
@@ -202,7 +202,7 @@ class HoodieCatalog extends DelegatingCatalogExtension with StagingTableCatalog 
 
     val hoodieCatalogTable = HoodieCatalogTable(spark, tableDesc)
 
-    if (operation == TableCreationModes.StageCreate) {
+    if (operation == TableCreationMode.STAGE_CREATE) {
       hoodieCatalogTable.initHoodieTable()
       saveSourceDF(sourceQuery, tableDesc.properties ++ buildHoodieInsertConfig(hoodieCatalogTable, spark, isOverwrite = false, Map.empty, Map.empty))
     } else {

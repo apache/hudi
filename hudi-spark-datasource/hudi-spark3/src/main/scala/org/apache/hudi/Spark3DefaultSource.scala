@@ -21,7 +21,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.connector.catalog.{Table, TableProvider}
 import org.apache.spark.sql.connector.expressions.Transform
-import org.apache.spark.sql.hudi.catalog.HoodieInternalTableV2
+import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
 import org.apache.spark.sql.sources.DataSourceRegister
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
@@ -41,7 +41,7 @@ class Spark3DefaultSource extends DefaultSource with DataSourceRegister with Tab
     val path = options.get("path")
     if (path == null) throw new HoodieException("path is null")
 
-    HoodieInternalTableV2(SparkSession.active, path)
+    HoodieInternalV2Table(SparkSession.active, path)
   }
 
 }

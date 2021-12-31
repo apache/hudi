@@ -28,7 +28,7 @@ import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelpe
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{castIfNeeded, tableExistsInPath}
-import org.apache.spark.sql.hudi.catalog.{HoodieCatalog, HoodieConfigBuilder, HoodieInternalTableV2}
+import org.apache.spark.sql.hudi.catalog.{HoodieCatalog, HoodieConfigHelper, HoodieInternalV2Table}
 import org.apache.spark.sql.hudi.command.{AlterHoodieTableDropPartitionCommand, ShowHoodieTablePartitionsCommand, TruncateHoodieTableCommand}
 import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, SparkSqlUtils}
 import org.apache.spark.sql.types.StructType
@@ -39,10 +39,10 @@ import org.apache.spark.sql.{AnalysisException, SQLContext, SparkSession}
  * @param sparkSession
  */
 case class HoodieSpark3Analysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
-  with SparkAdapterSupport with HoodieConfigBuilder {
+  with SparkAdapterSupport with HoodieConfigHelper {
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsDown {
-    case dsv2 @ DataSourceV2Relation(d: HoodieInternalTableV2, _, _, _, _) =>
+    case dsv2 @ DataSourceV2Relation(d: HoodieInternalV2Table, _, _, _, _) =>
       val output = dsv2.output
       val catalogTable = if (d.catalogTable.isDefined) {
         Some(d.v1Table)
@@ -97,7 +97,7 @@ case class HoodieSpark3Analysis(sparkSession: SparkSession) extends Rule[Logical
  * @param sparkSession
  */
 case class HoodieSpark3ResolveReferences(sparkSession: SparkSession) extends Rule[LogicalPlan]
-  with SparkAdapterSupport with HoodieConfigBuilder {
+  with SparkAdapterSupport with HoodieConfigHelper {
 
   def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp {
     // Fill schema for Create Table without specify schema info
@@ -128,7 +128,7 @@ case class HoodieSpark3ResolveReferences(sparkSession: SparkSession) extends Rul
         c
       }
     case AlterTableDropPartition(child, specs, _, _, _)
-      if child.resolved && child.isInstanceOf[ResolvedTable] && child.asInstanceOf[ResolvedTable].table.isInstanceOf[HoodieInternalTableV2] =>
+      if child.resolved && child.isInstanceOf[ResolvedTable] && child.asInstanceOf[ResolvedTable].table.isInstanceOf[HoodieInternalV2Table] =>
         AlterHoodieTableDropPartitionCommand(
           child.asInstanceOf[ResolvedTable].identifier.asTableIdentifier,
           specs.seq.map(f => f.asInstanceOf[UnresolvedPartitionSpec]).map(s => s.spec)
@@ -146,13 +146,13 @@ case class HoodieSpark3PostAnalysisRule(sparkSession: SparkSession) extends Rule
     plan match {
       case ShowPartitions(child, specOpt)
         if child.isInstanceOf[ResolvedTable] &&
-          child.asInstanceOf[ResolvedTable].table.isInstanceOf[HoodieInternalTableV2] =>
+          child.asInstanceOf[ResolvedTable].table.isInstanceOf[HoodieInternalV2Table] =>
         ShowHoodieTablePartitionsCommand(child.asInstanceOf[ResolvedTable].identifier.asTableIdentifier, specOpt.map(s => s.asInstanceOf[UnresolvedPartitionSpec].spec))
 
       // Rewrite TruncateTableCommand to TruncateHoodieTableCommand
       case TruncateTable(child, partitionSpec)
         if child.isInstanceOf[ResolvedTable] &&
-          child.asInstanceOf[ResolvedTable].table.isInstanceOf[HoodieInternalTableV2] =>
+          child.asInstanceOf[ResolvedTable].table.isInstanceOf[HoodieInternalV2Table] =>
         new TruncateHoodieTableCommand(child.asInstanceOf[ResolvedTable].identifier.asTableIdentifier, partitionSpec)
       case _ => plan
     }
@@ -160,11 +160,11 @@ case class HoodieSpark3PostAnalysisRule(sparkSession: SparkSession) extends Rule
 }
 
 object AppendHoodie {
-  def unapply(a: AppendData): Option[(DataSourceV2Relation, HoodieInternalTableV2)] = {
+  def unapply(a: AppendData): Option[(DataSourceV2Relation, HoodieInternalV2Table)] = {
     if (a.query.resolved) {
       a.table match {
-        case r: DataSourceV2Relation if r.table.isInstanceOf[HoodieInternalTableV2] =>
-          Some((r, r.table.asInstanceOf[HoodieInternalTableV2]))
+        case r: DataSourceV2Relation if r.table.isInstanceOf[HoodieInternalV2Table] =>
+          Some((r, r.table.asInstanceOf[HoodieInternalV2Table]))
         case _ => None
       }
     } else {

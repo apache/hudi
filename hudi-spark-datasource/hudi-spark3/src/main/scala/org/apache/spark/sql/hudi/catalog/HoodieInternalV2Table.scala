@@ -32,7 +32,7 @@ import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
 import java.util
 import scala.collection.JavaConverters.setAsJavaSetConverter
 
-case class HoodieInternalTableV2(spark: SparkSession,
+case class HoodieInternalV2Table(spark: SparkSession,
                                  path: String,
                                  catalogTable: Option[CatalogTable] = None,
                                  tableIdentifier: Option[String] = None,
@@ -80,7 +80,7 @@ case class HoodieInternalTableV2(spark: SparkSession,
 private class WriteIntoHoodieBuilder(writeOptions: CaseInsensitiveStringMap,
                                      hoodieCatalogTable: HoodieCatalogTable,
                                      spark: SparkSession)
-  extends SupportsTruncate with SupportsOverwrite with HoodieConfigBuilder {
+  extends SupportsTruncate with SupportsOverwrite with HoodieConfigHelper {
 
   private var forceOverwrite = false
 

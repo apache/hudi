@@ -37,7 +37,7 @@ import org.apache.spark.sql.types.StructField
 
 import scala.collection.JavaConverters.propertiesAsScalaMapConverter
 
-trait HoodieConfigBuilder {
+trait HoodieConfigHelper {
 
   def buildHoodieConfig(hoodieCatalogTable: HoodieCatalogTable): Map[String, String] = {
     val sparkSession: SparkSession = hoodieCatalogTable.spark

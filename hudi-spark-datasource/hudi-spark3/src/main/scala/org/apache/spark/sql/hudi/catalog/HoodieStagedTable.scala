@@ -28,12 +28,12 @@ import org.apache.spark.sql.types.StructType
 import java.util
 import scala.collection.JavaConverters.{mapAsScalaMapConverter, setAsJavaSetConverter}
 
-case class StageHoodieTable(ident: Identifier,
-                            catalog: HoodieCatalog,
-                            override val schema: StructType,
-                            partitions: Array[Transform],
-                            override val properties: util.Map[String, String],
-                            modes: TableCreationModes) extends StagedTable with SupportsWrite {
+case class HoodieStagedTable(ident: Identifier,
+                             catalog: HoodieCatalog,
+                             override val schema: StructType,
+                             partitions: Array[Transform],
+                             override val properties: util.Map[String, String],
+                             modes: TableCreationMode) extends StagedTable with SupportsWrite {
 
   private var sourceQuery: Option[DataFrame] = None
   private var writeOptions: Map[String, String] = Map.empty

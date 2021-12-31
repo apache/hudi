@@ -18,6 +18,6 @@
 
 package org.apache.spark.sql.hudi.catalog;
 
-public enum TableCreationModes {
-    Create, CreateOrReplace, Replace, StageCreate, StageReplace
+public enum TableCreationMode {
+    CREATE, CREATE_OR_REPLACE, STAGE_CREATE, STAGE_REPLACE
 }

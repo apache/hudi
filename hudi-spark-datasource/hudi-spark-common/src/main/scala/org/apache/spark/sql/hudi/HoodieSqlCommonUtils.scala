@@ -68,14 +68,14 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     tripAlias(table) match {
       case LogicalRelation(_, _, Some(tbl), _) => isHoodieTable(tbl)
       case relation: UnresolvedRelation =>
-        isHoodieTable(sparkAdapter.toTableIdentify(relation), spark)
+        isHoodieTable(sparkAdapter.toTableIdentifier(relation), spark)
       case _=> false
     }
   }
 
   def getTableIdentify(table: LogicalPlan): TableIdentifier = {
     table match {
-      case SubqueryAlias(name, _) => sparkAdapter.toTableIdentify(name)
+      case SubqueryAlias(name, _) => sparkAdapter.toTableIdentifier(name)
       case _ => throw new IllegalArgumentException(s"Illegal table: $table")
     }
   }

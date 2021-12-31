@@ -18,17 +18,14 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.avro.Schema
-
 import org.apache.hudi.AvroConversionUtils
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
-
-import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.types.{StructField, StructType}
+import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 
 import scala.util.control.NonFatal
 
@@ -39,7 +36,7 @@ case class AlterHoodieTableChangeColumnCommand(
     tableIdentifier: TableIdentifier,
     columnName: String,
     newColumn: StructField)
-  extends RunnableCommand {
+  extends HoodieLeafRunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableIdentifier)
@@ -51,12 +48,12 @@ case class AlterHoodieTableChangeColumnCommand(
     // Get the new schema
     val newTableSchema = StructType(
       hoodieCatalogTable.tableSchema.fields.map { field =>
-      if (resolver(field.name, columnName)) {
-        newColumn
-      } else {
-        field
-      }
-    })
+        if (resolver(field.name, columnName)) {
+          newColumn
+        } else {
+          field
+        }
+      })
     val newDataSchema = StructType(
       hoodieCatalogTable.dataSchema.fields.map { field =>
         if (resolver(field.name, columnName)) {
