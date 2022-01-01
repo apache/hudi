@@ -18,6 +18,32 @@
 
 package org.apache.spark.sql.connector.catalog
 
+import java.util
+import java.util.Objects
+
 object HoodieIdentifierHelper {
-  def of(namespace: Array[String], name: String) = new IdentifierImpl(namespace, name)
+  def of(namespace: Array[String], name: String): Identifier = {
+    HoodieIdentifier(namespace, name)
+  }
+}
+
+/**
+ * This class is to make scala-2.11 compilable.
+ * Using Identifier.of(namespace, name) to get a IdentifierImpl will throw
+ * compile exception( Static methods in interface require -target:jvm-1.8)
+ */
+case class HoodieIdentifier(namespace: Array[String], name: String) extends Identifier {
+
+  override def equals(o: Any): Boolean = {
+    o match {
+      case that: HoodieIdentifier => util.Arrays.equals(namespace.asInstanceOf[Array[Object]],
+        that.namespace.asInstanceOf[Array[Object]]) && name == that.name
+      case _ => false
+    }
+  }
+
+  override def hashCode: Int = {
+    val nh = namespace.toSeq.hashCode().asInstanceOf[Object]
+    Objects.hash(nh, name)
+  }
 }
