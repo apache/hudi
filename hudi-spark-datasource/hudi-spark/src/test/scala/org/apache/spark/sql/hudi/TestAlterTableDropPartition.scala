@@ -47,6 +47,9 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
 
     checkExceptionContain(s"alter table $tableName drop partition (dt='2021-10-01')")(
       s"$tableName is a non-partitioned table that is not allowed to drop partition")
+
+    // show partitions
+    checkAnswer(s"show partitions $tableName")(Seq.empty: _*)
   }
 
   test("Purge drop non-partitioned table") {
@@ -71,6 +74,9 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
 
     checkExceptionContain(s"alter table $tableName drop partition (dt='2021-10-01') purge")(
       s"$tableName is a non-partitioned table that is not allowed to drop partition")
+
+    // show partitions
+    checkAnswer(s"show partitions $tableName")(Seq.empty: _*)
   }
 
   Seq(false, true).foreach { urlencode =>
@@ -113,6 +119,13 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
         }
         checkAnswer(s"select dt from $tableName")(Seq(s"2021/10/02"))
         assertResult(true)(existsPath(s"${tmp.getCanonicalPath}/$tableName/$partitionPath"))
+
+        // show partitions
+        if (urlencode) {
+          checkAnswer(s"show partitions $tableName")(Seq(PartitionPathEncodeUtils.escapePathName("2021/10/02")))
+        } else {
+          checkAnswer(s"show partitions $tableName")(Seq("2021/10/02"))
+        }
       }
     }
   }
@@ -157,6 +170,13 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
         }
         checkAnswer(s"select dt from $tableName")(Seq(s"2021/10/02"))
         assertResult(false)(existsPath(s"${tmp.getCanonicalPath}/$tableName/$partitionPath"))
+
+        // show partitions
+        if (urlencode) {
+          checkAnswer(s"show partitions $tableName")(Seq(PartitionPathEncodeUtils.escapePathName("2021/10/02")))
+        } else {
+          checkAnswer(s"show partitions $tableName")(Seq("2021/10/02"))
+        }
       }
     }
   }
@@ -189,7 +209,10 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
     // drop 2021-10-01 partition
     spark.sql(s"alter table $tableName drop partition (dt='2021-10-01')")
 
-    checkAnswer(s"select id, name, ts, dt from $tableName") (Seq(2, "l4", "v1", "2021-10-02"))
+    checkAnswer(s"select id, name, ts, dt from $tableName")(Seq(2, "l4", "v1", "2021-10-02"))
+
+    // show partitions
+    checkAnswer(s"show partitions $tableName")(Seq("dt=2021-10-02"))
   }
 
   Seq(false, true).foreach { hiveStyle =>
@@ -232,6 +255,13 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
         checkAnswer(s"select id, name, ts, year, month, day from $tableName")(
           Seq(2, "l4", "v1", "2021", "10", "02")
         )
+
+        // show partitions
+        if (hiveStyle) {
+          checkAnswer(s"show partitions $tableName")(Seq("year=2021/month=10/day=02"))
+        } else {
+          checkAnswer(s"show partitions $tableName")(Seq("2021/10/02"))
+        }
       }
     }
   }
@@ -274,6 +304,13 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
         )
         assertResult(false)(existsPath(
           s"${tmp.getCanonicalPath}/$tableName/year=2021/month=10/day=01"))
+
+        // show partitions
+        if (hiveStyle) {
+          checkAnswer(s"show partitions $tableName")(Seq("year=2021/month=10/day=02"))
+        } else {
+          checkAnswer(s"show partitions $tableName")(Seq("2021/10/02"))
+        }
       }
     }
   }

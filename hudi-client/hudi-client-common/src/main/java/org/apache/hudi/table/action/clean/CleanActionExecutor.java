@@ -76,7 +76,8 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
     Path deletePath = new Path(deletePathStr);
     LOG.debug("Working on delete path :" + deletePath);
     try {
-      boolean deleteResult = fs.delete(deletePath, false);
+      boolean isDirectory = fs.isDirectory(deletePath);
+      boolean deleteResult = fs.delete(deletePath, isDirectory);
       if (deleteResult) {
         LOG.debug("Cleaned file at path :" + deletePath);
       }

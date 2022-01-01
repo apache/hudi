@@ -16,36 +16,20 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.model;
+package org.apache.hudi.exception;
 
-import org.apache.hudi.avro.model.HoodieCleanFileInfo;
+/**
+ * <p>
+ * Exception thrown for any higher level errors when doing delete partitions.
+ * </p>
+ */
+public class HoodieDeletePartitionException extends HoodieException {
 
-import java.io.Serializable;
-
-public class CleanFileInfo implements Serializable {
-
-  private final String filePath;
-  private final boolean isBootstrapBaseFile;
-
-  public CleanFileInfo(String filePath) {
-    this(filePath, false);
+  public HoodieDeletePartitionException(String msg, Throwable e) {
+    super(msg, e);
   }
 
-  public CleanFileInfo(String filePath, boolean isBootstrapBaseFile) {
-    this.filePath = filePath;
-    this.isBootstrapBaseFile = isBootstrapBaseFile;
-  }
-
-  public String getFilePath() {
-    return filePath;
-  }
-
-  public boolean isBootstrapBaseFile() {
-    return isBootstrapBaseFile;
-  }
-
-  public HoodieCleanFileInfo toHoodieFileCleanInfo() {
-    return new HoodieCleanFileInfo(filePath, isBootstrapBaseFile);
+  public HoodieDeletePartitionException(String msg) {
+    super(msg);
   }
 }
-

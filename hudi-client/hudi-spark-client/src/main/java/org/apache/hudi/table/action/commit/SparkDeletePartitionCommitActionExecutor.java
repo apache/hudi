@@ -18,6 +18,10 @@
 
 package org.apache.hudi.table.action.commit;
 
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -32,19 +36,15 @@ import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import java.time.Duration;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 public class SparkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends SparkInsertOverwriteCommitActionExecutor<T> {
 
-  private List<String> partitions;
+  private final List<String> partitions;
+
   public SparkDeletePartitionCommitActionExecutor(HoodieEngineContext context,
                                                   HoodieWriteConfig config, HoodieTable table,
                                                   String instantTime, List<String> partitions) {
-    super(context, config, table, instantTime,null, WriteOperationType.DELETE_PARTITION);
+    super(context, config, table, instantTime, null, WriteOperationType.DELETE_PARTITION);
     this.partitions = partitions;
   }
 
@@ -58,7 +58,8 @@ public class SparkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayl
     result.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
     result.setIndexUpdateDuration(Duration.ofMillis(timer.endTimer()));
     result.setWriteStatuses(context.emptyHoodieData());
-    this.saveWorkloadProfileMetadataToInflight(new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())), instantTime);
+    this.saveWorkloadProfileMetadataToInflight(new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())),
+        instantTime);
     this.commitOnAutoCommit(result);
     return result;
   }

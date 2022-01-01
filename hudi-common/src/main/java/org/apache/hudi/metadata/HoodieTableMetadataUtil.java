@@ -18,6 +18,11 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -33,8 +38,10 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -53,17 +60,10 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import javax.annotation.Nonnull;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -161,10 +161,13 @@ public class HoodieTableMetadataUtil {
                                                                           String instantTime) {
     List<HoodieRecord> records = new ArrayList<>(commitMetadata.getPartitionToWriteStats().size());
 
-    // Add record bearing partitions list
-    ArrayList<String> partitionsList = new ArrayList<>(commitMetadata.getPartitionToWriteStats().keySet());
+    // Add record bearing added partitions list
+    ArrayList<String> partitionsAdded = new ArrayList<>(commitMetadata.getPartitionToWriteStats().keySet());
 
-    records.add(HoodieMetadataPayload.createPartitionListRecord(partitionsList));
+    // Add record bearing deleted partitions list
+    List<String> partitionsDeleted = getPartitionsDeleted(commitMetadata);
+
+    records.add(HoodieMetadataPayload.createPartitionListRecord(partitionsAdded, partitionsDeleted));
 
     // Update files listing records for each individual partition
     List<HoodieRecord<HoodieMetadataPayload>> updatedPartitionFilesRecords =
@@ -212,6 +215,18 @@ public class HoodieTableMetadataUtil {
         + ". #partitions_updated=" + records.size());
 
     return records;
+  }
+
+  private static ArrayList<String> getPartitionsDeleted(HoodieCommitMetadata commitMetadata) {
+    if (commitMetadata instanceof HoodieReplaceCommitMetadata
+        && WriteOperationType.DELETE_PARTITION.equals(commitMetadata.getOperationType())) {
+      Map<String, List<String>> partitionToReplaceFileIds =
+          ((HoodieReplaceCommitMetadata) commitMetadata).getPartitionToReplaceFileIds();
+      if (!partitionToReplaceFileIds.isEmpty()) {
+        return new ArrayList<>(partitionToReplaceFileIds.keySet());
+      }
+    }
+    return new ArrayList<>();
   }
 
   /**

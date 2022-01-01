@@ -37,6 +37,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV1MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
@@ -45,6 +46,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieSavepointException;
+import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -60,6 +62,7 @@ import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -206,7 +209,13 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
    */
   private List<String> getPartitionPathsForFullCleaning() {
     // Go to brute force mode of scanning all partitions
-    return FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), config.getBasePath());
+    try {
+      FileSystemBackedTableMetadata fsBackedTableMetadata = new FileSystemBackedTableMetadata(context,
+          context.getHadoopConf(), config.getBasePath(), config.shouldAssumeDatePartitioning());
+      return fsBackedTableMetadata.getAllPartitionPaths();
+    } catch (IOException e) {
+      return Collections.emptyList();
+    }
   }
 
   /**
@@ -365,19 +374,35 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
   private List<CleanFileInfo> getFilesToCleanKeepingLatestHours(String partitionPath) {
     return getFilesToCleanKeepingLatestCommits(partitionPath, 0, HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS);
   }
-  
+
   private List<CleanFileInfo> getReplacedFilesEligibleToClean(List<String> savepointedFiles, String partitionPath, Option<HoodieInstant> earliestCommitToRetain) {
-    final Stream<HoodieFileGroup> replacedGroups;
-    if (earliestCommitToRetain.isPresent()) {
-      replacedGroups = fileSystemView.getReplacedFileGroupsBefore(earliestCommitToRetain.get().getTimestamp(), partitionPath);
+    final List<HoodieFileGroup> replacedGroups;
+    final boolean isDeletePartition = TimelineUtils.isDeletePartitionOperation(hoodieTable.getMetaClient(), earliestCommitToRetain);
+
+    if (earliestCommitToRetain.isPresent() && !isDeletePartition) {
+      replacedGroups = fileSystemView.getReplacedFileGroupsBefore(earliestCommitToRetain.get().getTimestamp(), partitionPath)
+          .collect(Collectors.toList());
     } else {
-      replacedGroups = fileSystemView.getAllReplacedFileGroups(partitionPath);
+      replacedGroups = fileSystemView.getAllReplacedFileGroups(partitionPath).collect(Collectors.toList());
     }
-    return replacedGroups.flatMap(HoodieFileGroup::getAllFileSlices)
-        // do not delete savepointed files  (archival will make sure corresponding replacecommit file is not deleted)
-        .filter(slice -> !slice.getBaseFile().isPresent() || !savepointedFiles.contains(slice.getBaseFile().get().getFileName()))
-        .flatMap(slice -> getCleanFileInfoForSlice(slice).stream())
-        .collect(Collectors.toList());
+
+    List<HoodieFileGroup> allFileGroups = fileSystemView.getAllFileGroups(partitionPath).collect(Collectors.toList());
+    Set<String> replacedGroupIds = replacedGroups.stream().map(HoodieFileGroup::getFileGroupId)
+        .map(HoodieFileGroupId::getFileId).collect(Collectors.toSet());
+    List<HoodieFileGroup> differentFileGroups = allFileGroups.stream()
+        .filter(p -> !(replacedGroupIds.contains(p.getFileGroupId().getFileId()))).collect(Collectors.toList());
+
+    if (differentFileGroups.isEmpty() && !replacedGroups.isEmpty()) {
+      return Stream.of(partitionPath)
+          .map(x -> FSUtils.getPartitionPath(hoodieTable.getMetaClient().getBasePath(), x).toString())
+          .map(CleanFileInfo::new).collect(Collectors.toList());
+    } else {
+      return replacedGroups.stream().flatMap(HoodieFileGroup::getAllFileSlices)
+          // do not delete savepointed files  (archival will make sure corresponding replacecommit file is not deleted)
+          .filter(slice -> !slice.getBaseFile().isPresent() || !savepointedFiles.contains(slice.getBaseFile().get().getFileName()))
+          .flatMap(slice -> getCleanFileInfoForSlice(slice).stream())
+          .collect(Collectors.toList());
+    }
   }
 
   /**
