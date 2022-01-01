@@ -131,3 +131,4 @@ You can check out [our blog pages](https://hudi.apache.org/blog.html) for conten
 34. ["https://www.xenonstack.com/insights/what-is-hudi"](https://www.xenonstack.com/insights/what-is-hudi) by Chandan Gaur. Nov 22, 2021
 35. ["https://aws.amazon.com/blogs/big-data/new-features-from-apache-hudi-0-7-0-and-0-8-0-available-on-amazon-emr/"](https://aws.amazon.com/blogs/big-data/new-features-from-apache-hudi-0-7-0-and-0-8-0-available-on-amazon-emr/) by Udit Mehotra and Gagan Brahmi. Dec 20, 2021
 36. ["Designing the Analytics patterns using a Lake House approach on AWS"](https://dev.to/aws-builders/designing-the-analytics-patterns-using-a-lake-house-approach-on-aws-2hh6) by Adit Modi. Dec 30, 2021
+37. ["The Art of Building Open Data Lakes with Apache Hudi, Kafka, Hive, and Debezium"](https://garystafford.medium.com/the-art-of-building-open-data-lakes-with-apache-hudi-kafka-hive-and-debezium-3d2f71c5981f) by Gary Stafford. Dec 31, 2021
