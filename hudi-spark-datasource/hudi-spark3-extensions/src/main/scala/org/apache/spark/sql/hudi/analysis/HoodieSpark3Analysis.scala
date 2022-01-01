@@ -26,7 +26,7 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.execution.datasources.LogicalRelation
-import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
+import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, V2SessionCatalog}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{castIfNeeded, tableExistsInPath}
 import org.apache.spark.sql.hudi.catalog.{HoodieCatalog, HoodieConfigHelper, HoodieInternalV2Table}
 import org.apache.spark.sql.hudi.command.{AlterHoodieTableDropPartitionCommand, ShowHoodieTablePartitionsCommand, TruncateHoodieTableCommand}
@@ -90,8 +90,6 @@ case class HoodieSpark3Analysis(sparkSession: SparkSession) extends Rule[Logical
     }
     Project(project, query)
   }
-
-
 }
 
 /**
@@ -105,7 +103,11 @@ case class HoodieSpark3ResolveReferences(sparkSession: SparkSession) extends Rul
     // Fill schema for Create Table without specify schema info
     case c @ CreateV2Table(tableCatalog, tableName, schema, _, properties, _)
       if SparkSqlUtils.isHoodieTable(properties) =>
-      val hoodieCatalog = tableCatalog.asInstanceOf[HoodieCatalog]
+
+      val hoodieCatalog = tableCatalog match {
+        case catalog: HoodieCatalog => catalog
+        case _ => tableCatalog.asInstanceOf[V2SessionCatalog]
+      }
       val tablePath = SparkSqlUtils.getTableLocation(properties,
         TableIdentifier(tableName.name(), tableName.namespace().lastOption), sparkSession)
 
@@ -160,20 +162,6 @@ case class HoodieSpark3PostAnalysisRule(sparkSession: SparkSession) extends Rule
           child.asInstanceOf[ResolvedTable].table.isInstanceOf[HoodieInternalV2Table] =>
         new TruncateHoodieTableCommand(child.asInstanceOf[ResolvedTable].identifier.asTableIdentifier, None)
       case _ => plan
-    }
-  }
-}
-
-object AppendHoodie {
-  def unapply(a: AppendData): Option[(DataSourceV2Relation, HoodieInternalV2Table)] = {
-    if (a.query.resolved) {
-      a.table match {
-        case r: DataSourceV2Relation if r.table.isInstanceOf[HoodieInternalV2Table] =>
-          Some((r, r.table.asInstanceOf[HoodieInternalV2Table]))
-        case _ => None
-      }
-    } else {
-      None
     }
   }
 }
