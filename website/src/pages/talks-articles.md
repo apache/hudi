@@ -126,3 +126,8 @@ You can check out [our blog pages](https://hudi.apache.org/blog.html) for conten
 30. ["Data Platform 2.0 - Part I"](https://blogs.halodoc.io/data-platform-2-0-part-1/) - By Jitendra Shah. Oct 5, 2021    
 31. ["How Amazon Transportation Service enabled near-real-time event analytics at petabyte scale using AWS Glue with Apache Hudi"](
     https://aws.amazon.com/blogs/big-data/how-amazon-transportation-service-enabled-near-real-time-event-analytics-at-petabyte-scale-using-aws-glue-with-apache-hudi/) - Madhavan Sriram, Diego Menin, Gabriele Cacciola, and Kunal Gautam. Oct 14, 2021
+32. ["Practice of Apache Hudi in building real-time data lake at station B"](https://developpaper.com/practice-of-apache-hudi-in-building-real-time-data-lake-at-station-b/) by Yu Zhaojing. Oct 21, 2021
+33. ["How GE Aviation built cloud-native data pipelines at enterprise scale using the AWS platform"](https://aws.amazon.com/blogs/big-data/how-ge-aviation-built-cloud-native-data-pipelines-at-enterprise-scale-using-the-aws-platform/) by Alcuin Weidus and Suresh Patnam. Nov 16, 2021
+34. ["https://www.xenonstack.com/insights/what-is-hudi"](https://www.xenonstack.com/insights/what-is-hudi) by Chandan Gaur. Nov 22, 2021
+35. ["https://aws.amazon.com/blogs/big-data/new-features-from-apache-hudi-0-7-0-and-0-8-0-available-on-amazon-emr/"](https://aws.amazon.com/blogs/big-data/new-features-from-apache-hudi-0-7-0-and-0-8-0-available-on-amazon-emr/) by Udit Mehotra and Gagan Brahmi. Dec 20, 2021
+36. ["Designing the Analytics patterns using a Lake House approach on AWS"](https://dev.to/aws-builders/designing-the-analytics-patterns-using-a-lake-house-approach-on-aws-2hh6) by Adit Modi. Dec 30, 2021
