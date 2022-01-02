@@ -90,6 +90,11 @@ public class HoodieWriteConfig extends HoodieConfig {
   // It is here so that both the client and deltastreamer use the same reference
   public static final String DELTASTREAMER_CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
 
+  public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
+      .key("hoodie.database.name")
+      .defaultValue("default")
+      .withDocumentation("Table name that will be used for incremental query.");
+
   public static final ConfigProperty<String> TBL_NAME = ConfigProperty
       .key("hoodie.table.name")
       .noDefaultValue()

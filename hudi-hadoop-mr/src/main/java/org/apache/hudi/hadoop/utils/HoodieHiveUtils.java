@@ -42,6 +42,7 @@ public class HoodieHiveUtils {
 
   public static final Logger LOG = LogManager.getLogger(HoodieHiveUtils.class);
 
+  public static final String HOODIE_INCREMENTAL_USE_DATABASE = "hoodie.incremental.use.database";
   public static final String HOODIE_CONSUME_MODE_PATTERN = "hoodie.%s.consume.mode";
   public static final String HOODIE_START_COMMIT_PATTERN = "hoodie.%s.consume.start.timestamp";
   public static final String HOODIE_MAX_COMMIT_PATTERN = "hoodie.%s.consume.max.commits";
@@ -71,6 +72,7 @@ public class HoodieHiveUtils {
   public static final String SNAPSHOT_SCAN_MODE = "SNAPSHOT";
   public static final String DEFAULT_SCAN_MODE = SNAPSHOT_SCAN_MODE;
   public static final int DEFAULT_MAX_COMMITS = 1;
+  public static final boolean DEFAULT_INCREMENTAL_USE_DATABASE = false;
   public static final int MAX_COMMIT_ALL = -1;
   public static final int DEFAULT_LEVELS_TO_BASEPATH = 3;
   public static final Pattern HOODIE_CONSUME_MODE_PATTERN_STRING = Pattern.compile("hoodie\\.(.*)\\.consume\\.mode");
@@ -174,5 +176,10 @@ public class HoodieHiveUtils {
       throw new HoodieIOException("Valid timestamp is required for " + HOODIE_CONSUME_COMMIT + " in snapshot mode");
     }
     return timeline.findInstantsBeforeOrEquals(maxCommit);
+  }
+
+  public static boolean isIncrementalUseDatabase(JobContext job) {
+    return job.getConfiguration().get(HOODIE_INCREMENTAL_USE_DATABASE, String.valueOf(DEFAULT_INCREMENTAL_USE_DATABASE))
+            .equalsIgnoreCase(String.valueOf(true));
   }
 }

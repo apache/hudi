@@ -306,11 +306,6 @@ object DataSourceWriteOptions {
     .withDocumentation("When set to true, will perform write operations directly using the spark native " +
       "`Row` representation, avoiding any additional conversion costs.")
 
-  val SQL_USE_DATABASE_TABLE_NAME: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.sql.use.database.table.name")
-    .defaultValue("false")
-    .withDocumentation("When set to true, the hoodie.table.name will be set 'databaseName.tableName'.")
-
   /**
    * Enable the bulk insert for sql insert statement.
    */

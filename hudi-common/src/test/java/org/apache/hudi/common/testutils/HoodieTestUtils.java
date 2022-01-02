@@ -46,6 +46,7 @@ import java.util.UUID;
  */
 public class HoodieTestUtils {
 
+  public static final String INCREMENTAL_DATABASE_NAME = "test_incremental";
   public static final String RAW_TRIPS_TEST_NAME = "raw_trips";
   public static final String DEFAULT_WRITE_TOKEN = "1-0-1";
   public static final int DEFAULT_LOG_VERSION = 1;
@@ -103,6 +104,7 @@ public class HoodieTestUtils {
                                            Properties properties)
       throws IOException {
     properties = HoodieTableMetaClient.withPropertyBuilder()
+      .setDatabaseName(INCREMENTAL_DATABASE_NAME)
       .setTableName(RAW_TRIPS_TEST_NAME)
       .setTableType(tableType)
       .setPayloadClass(HoodieAvroPayload.class)

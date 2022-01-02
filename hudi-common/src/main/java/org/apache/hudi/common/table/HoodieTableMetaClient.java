@@ -624,6 +624,7 @@ public class HoodieTableMetaClient implements Serializable {
   public static class PropertyBuilder {
 
     private HoodieTableType tableType;
+    private String databaseName = HoodieTableConfig.DATABASE_NAME.defaultValue();
     private String tableName;
     private String tableCreateSchema;
     private String recordKeyFields;
@@ -653,6 +654,11 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder setTableType(String tableType) {
       return setTableType(HoodieTableType.valueOf(tableType));
+    }
+
+    public PropertyBuilder setDatabaseName(String databaseName) {
+      this.databaseName = databaseName;
+      return this;
     }
 
     public PropertyBuilder setTableName(String tableName) {
@@ -819,6 +825,7 @@ public class HoodieTableMetaClient implements Serializable {
       ValidationUtils.checkArgument(tableName != null, "tableName is null");
 
       HoodieTableConfig tableConfig = new HoodieTableConfig();
+      tableConfig.setValue(HoodieTableConfig.DATABASE_NAME, databaseName);
       tableConfig.setValue(HoodieTableConfig.NAME, tableName);
       tableConfig.setValue(HoodieTableConfig.TYPE, tableType.name());
       tableConfig.setValue(HoodieTableConfig.VERSION,

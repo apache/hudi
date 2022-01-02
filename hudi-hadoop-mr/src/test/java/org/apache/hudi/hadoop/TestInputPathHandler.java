@@ -161,7 +161,7 @@ public class TestInputPathHandler {
   @Test
   public void testInputPathHandler() throws IOException {
     inputPathHandler = new InputPathHandler(dfs.getConf(), inputPaths.toArray(
-        new Path[0]), incrementalTables);
+        new Path[0]), incrementalTables, new JobConf());
     List<Path> actualPaths = inputPathHandler.getGroupedIncrementalPaths().values().stream()
         .flatMap(List::stream).collect(Collectors.toList());
     assertTrue(actualComparesToExpected(actualPaths, incrementalPaths));
@@ -176,7 +176,7 @@ public class TestInputPathHandler {
     JobConf jobConf = new JobConf();
     jobConf.set(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP, "1");
     inputPathHandler = new InputPathHandler(dfs.getConf(), inputPaths.toArray(
-        new Path[inputPaths.size()]), incrementalTables);
+        new Path[inputPaths.size()]), incrementalTables, jobConf);
     List<Path> actualPaths = inputPathHandler.getGroupedIncrementalPaths().values().stream()
         .flatMap(List::stream).collect(Collectors.toList());
     assertTrue(actualComparesToExpected(actualPaths, incrementalPaths));

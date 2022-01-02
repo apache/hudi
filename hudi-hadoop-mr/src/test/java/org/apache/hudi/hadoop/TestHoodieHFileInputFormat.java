@@ -235,6 +235,50 @@ public class TestHoodieHFileInputFormat {
     FileStatus[] files = inputFormat.listStatus(jobConf);
     assertEquals(0, files.length,
         "We should exclude commit 100 when returning incremental pull with start commit time as 100");
+
+    InputFormatTestUtil.setupIncremental(jobConf, "100", 1, true);
+
+    files = inputFormat.listStatus(jobConf);
+    assertEquals(10, files.length,
+            "When hoodie.incremental.use.database is true and the incremental database name is not set,"
+                    + "then the incremental query will not take effect");
+  }
+
+  @Test
+  public void testIncrementalWithDatabaseName() throws IOException {
+    // initial commit
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 10, "100");
+    createCommitFile(basePath, "100", "2016/05/01");
+
+    // Add the paths
+    FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
+
+    InputFormatTestUtil.setupIncremental(jobConf, "100", 1, HoodieTestUtils.INCREMENTAL_DATABASE_NAME, true);
+
+    FileStatus[] files = inputFormat.listStatus(jobConf);
+    assertEquals(0, files.length,
+            "We should exclude commit 100 when returning incremental pull with start commit time as 100");
+
+    InputFormatTestUtil.setupIncremental(jobConf, "100", 1, HoodieTestUtils.INCREMENTAL_DATABASE_NAME, false);
+
+    files = inputFormat.listStatus(jobConf);
+    assertEquals(10, files.length,
+            "When hoodie.incremental.use.database is false and the incremental database name is set,"
+                    + "then the incremental query will not take effect");
+
+    // The configuration with and without database name exists together
+    InputFormatTestUtil.setupIncremental(jobConf, "1", 1, true);
+
+    files = inputFormat.listStatus(jobConf);
+    assertEquals(0, files.length,
+            "When hoodie.incremental.use.database is true, "
+                    + "We should exclude commit 100 because the returning incremental pull with start commit time is 100");
+
+    InputFormatTestUtil.setupIncremental(jobConf, "1", 1, false);
+    files = inputFormat.listStatus(jobConf);
+    assertEquals(10, files.length,
+            "When hoodie.incremental.use.database is false, "
+                    + "We should include commit 100 because the returning incremental pull with start commit time is 1");
   }
 
   private void createCommitFile(java.nio.file.Path basePath, String commitNumber, String partitionPath)

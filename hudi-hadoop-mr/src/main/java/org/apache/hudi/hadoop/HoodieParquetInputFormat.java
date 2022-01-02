@@ -85,7 +85,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
   public FileStatus[] listStatus(JobConf job) throws IOException {
     // Segregate inputPaths[] to incremental, snapshot and non hoodie paths
     List<String> incrementalTables = HoodieHiveUtils.getIncrementalTableNames(Job.getInstance(job));
-    InputPathHandler inputPathHandler = new InputPathHandler(conf, getInputPaths(job), incrementalTables);
+    InputPathHandler inputPathHandler = new InputPathHandler(conf, getInputPaths(job), incrementalTables, job);
     List<FileStatus> returns = new ArrayList<>();
 
     Map<String, HoodieTableMetaClient> tableMetaClientMap = inputPathHandler.getTableMetaClientMap();
@@ -99,7 +99,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
         continue;
       }
       List<Path> inputPaths = inputPathHandler.getGroupedIncrementalPaths().get(metaClient);
-      List<FileStatus> result = listStatusForIncrementalMode(job, metaClient, inputPaths);
+      List<FileStatus> result = listStatusForIncrementalMode(job, metaClient, inputPaths, table);
       if (result != null) {
         returns.addAll(result);
       }
@@ -129,14 +129,13 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
    * partitions touched by the desired commits and then lists only those partitions.
    */
   protected List<FileStatus> listStatusForIncrementalMode(
-      JobConf job, HoodieTableMetaClient tableMetaClient, List<Path> inputPaths) throws IOException {
-    String tableName = tableMetaClient.getTableConfig().getTableName();
+      JobConf job, HoodieTableMetaClient tableMetaClient, List<Path> inputPaths, String incrementalTable) throws IOException {
     Job jobContext = Job.getInstance(job);
     Option<HoodieTimeline> timeline = HoodieInputFormatUtils.getFilteredCommitsTimeline(jobContext, tableMetaClient);
     if (!timeline.isPresent()) {
       return null;
     }
-    Option<List<HoodieInstant>> commitsToCheck = HoodieInputFormatUtils.getCommitsForIncrementalQuery(jobContext, tableName, timeline.get());
+    Option<List<HoodieInstant>> commitsToCheck = HoodieInputFormatUtils.getCommitsForIncrementalQuery(jobContext, incrementalTable, timeline.get());
     if (!commitsToCheck.isPresent()) {
       return null;
     }

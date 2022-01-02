@@ -33,6 +33,10 @@ import scala.collection.JavaConverters._
 class TestCreateTable extends TestHoodieSqlBase {
 
   test("Test Create Managed Hoodie Table") {
+    val databaseName = "test_incremental"
+    spark.sql(s"create database if not exists $databaseName")
+    spark.sql(s"use $databaseName")
+
     val tableName = generateTableName
     // Create a managed table
     spark.sql(
@@ -60,6 +64,14 @@ class TestCreateTable extends TestHoodieSqlBase {
         StructField("price", DoubleType),
         StructField("ts", LongType))
     )(table.schema.fields)
+
+    val tablePath = table.storage.properties("path")
+    val metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(tablePath)
+      .setConf(spark.sessionState.newHadoopConf())
+      .build()
+    val tableConfig = metaClient.getTableConfig
+    assertResult(databaseName)(tableConfig.getDatabaseName)
   }
 
   test("Test Create Hoodie Table With Options") {
@@ -251,66 +263,40 @@ class TestCreateTable extends TestHoodieSqlBase {
 
   test("Test Create Table As Select") {
     withTempDir { tmp =>
-      Seq(true, false).foreach { isDbTableName =>
-        spark.sql(s"set hoodie.sql.use.database.table.name = $isDbTableName")
-
-        // Create Non-Partitioned table
-        val tableName1 = generateTableName
-        val hoodieTableName1 = if (isDbTableName) "default." + tableName1 else tableName1
-        spark.sql(
-          s"""
-             | create table $tableName1 using hudi
-             | tblproperties(primaryKey = 'id')
-             | location '${tmp.getCanonicalPath}/$tableName1'
-             | AS
-             | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
+      // Create Non-Partitioned table
+      val tableName1 = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName1 using hudi
+           | tblproperties(primaryKey = 'id')
+           | location '${tmp.getCanonicalPath}/$tableName1'
+           | AS
+           | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
        """.stripMargin)
-        val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName1))
-        val tablePath = table.storage.properties("path")
-        val metaClient = HoodieTableMetaClient.builder()
-          .setBasePath(tablePath)
-          .setConf(spark.sessionState.newHadoopConf())
-          .build()
-        val tableConfig = metaClient.getTableConfig
-        assertResult(hoodieTableName1)(tableConfig.getTableName)
+      checkAnswer(s"select id, name, price, ts from $tableName1")(
+        Seq(1, "a1", 10.0, 1000)
+      )
 
-        checkAnswer(s"select id, name, price, ts from $tableName1")(
-          Seq(1, "a1", 10.0, 1000)
-        )
-
-        // Create Partitioned table
-        val tableName2 = generateTableName
-        spark.sql(
-          s"""
-             | create table $tableName2 using hudi
-             | partitioned by (dt)
-             | tblproperties(primaryKey = 'id')
-             | location '${tmp.getCanonicalPath}/$tableName2'
-             | AS
-             | select 1 as id, 'a1' as name, 10 as price, '2021-04-01' as dt
+      // Create Partitioned table
+      val tableName2 = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName2 using hudi
+           | partitioned by (dt)
+           | tblproperties(primaryKey = 'id')
+           | location '${tmp.getCanonicalPath}/$tableName2'
+           | AS
+           | select 1 as id, 'a1' as name, 10 as price, '2021-04-01' as dt
          """.stripMargin
-        )
-        checkAnswer(s"select id, name, price, dt from $tableName2")(
-          Seq(1, "a1", 10, "2021-04-01")
-        )
+      )
+      checkAnswer(s"select id, name, price, dt from $tableName2") (
+        Seq(1, "a1", 10, "2021-04-01")
+      )
 
-        // Create Partitioned table with timestamp data type
-        val tableName3 = generateTableName
-        // CTAS failed with null primaryKey
-        assertThrows[Exception] {
-          spark.sql(
-            s"""
-               | create table $tableName3 using hudi
-               | partitioned by (dt)
-               | tblproperties(primaryKey = 'id')
-               | location '${tmp.getCanonicalPath}/$tableName3'
-               | AS
-               | select null as id, 'a1' as name, 10 as price, '2021-05-07' as dt
-               |
-         """.stripMargin
-          )
-        }
-        // Create table with timestamp type partition
+      // Create Partitioned table with timestamp data type
+      val tableName3 = generateTableName
+      // CTAS failed with null primaryKey
+      assertThrows[Exception] {
         spark.sql(
           s"""
              | create table $tableName3 using hudi
@@ -318,35 +304,50 @@ class TestCreateTable extends TestHoodieSqlBase {
              | tblproperties(primaryKey = 'id')
              | location '${tmp.getCanonicalPath}/$tableName3'
              | AS
-             | select cast('2021-05-06 00:00:00' as timestamp) as dt, 1 as id, 'a1' as name, 10 as
-             | price
+             | select null as id, 'a1' as name, 10 as price, '2021-05-07' as dt
+             |
          """.stripMargin
-        )
-        checkAnswer(s"select id, name, price, cast(dt as string) from $tableName3")(
-          Seq(1, "a1", 10, "2021-05-06 00:00:00")
-        )
-        // Create table with date type partition
-        val tableName4 = generateTableName
-        spark.sql(
-          s"""
-             | create table $tableName4 using hudi
-             | partitioned by (dt)
-             | tblproperties(primaryKey = 'id')
-             | location '${tmp.getCanonicalPath}/$tableName4'
-             | AS
-             | select cast('2021-05-06' as date) as dt, 1 as id, 'a1' as name, 10 as
-             | price
+        )}
+      // Create table with timestamp type partition
+      spark.sql(
+        s"""
+           | create table $tableName3 using hudi
+           | partitioned by (dt)
+           | tblproperties(primaryKey = 'id')
+           | location '${tmp.getCanonicalPath}/$tableName3'
+           | AS
+           | select cast('2021-05-06 00:00:00' as timestamp) as dt, 1 as id, 'a1' as name, 10 as
+           | price
          """.stripMargin
-        )
-        checkAnswer(s"select id, name, price, cast(dt as string) from $tableName4")(
-          Seq(1, "a1", 10, "2021-05-06")
-        )
-      }
+      )
+      checkAnswer(s"select id, name, price, cast(dt as string) from $tableName3")(
+        Seq(1, "a1", 10, "2021-05-06 00:00:00")
+      )
+      // Create table with date type partition
+      val tableName4 = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName4 using hudi
+           | partitioned by (dt)
+           | tblproperties(primaryKey = 'id')
+           | location '${tmp.getCanonicalPath}/$tableName4'
+           | AS
+           | select cast('2021-05-06' as date) as dt, 1 as id, 'a1' as name, 10 as
+           | price
+         """.stripMargin
+      )
+      checkAnswer(s"select id, name, price, cast(dt as string) from $tableName4")(
+        Seq(1, "a1", 10, "2021-05-06")
+      )
     }
   }
 
   test("Test Create Table From Exist Hoodie Table") {
     withTempDir { tmp =>
+      val databaseName = "test_incremental"
+      spark.sql(s"create database if not exists $databaseName")
+      spark.sql(s"use $databaseName")
+
       Seq("2021-08-02", "2021/08/02").foreach { partitionValue =>
         val tableName = generateTableName
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
@@ -354,7 +355,8 @@ class TestCreateTable extends TestHoodieSqlBase {
         val df = Seq((1, "a1", 10, 1000, partitionValue)).toDF("id", "name", "value", "ts", "dt")
         // Write a table by spark dataframe.
         df.write.format("hudi")
-          .option(HoodieWriteConfig.TBL_NAME.key, "default." + tableName)
+          .option(HoodieWriteConfig.DATABASE_NAME.key, s"original_$databaseName")
+          .option(HoodieWriteConfig.TBL_NAME.key, s"original_$tableName")
           .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
           .option(RECORDKEY_FIELD.key, "id")
           .option(PRECOMBINE_FIELD.key, "ts")
@@ -388,7 +390,8 @@ class TestCreateTable extends TestHoodieSqlBase {
         assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
         assertResult("dt")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
         assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELD.key))
-        assertResult(s"default.$tableName")(metaClient.getTableConfig.getTableName)
+        assertResult(s"original_$databaseName")(metaClient.getTableConfig.getDatabaseName)
+        assertResult(s"original_$tableName")(metaClient.getTableConfig.getTableName)
 
         // Test insert into
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, '$partitionValue')")
@@ -597,73 +600,6 @@ class TestCreateTable extends TestHoodieSqlBase {
          |) using hudi
          |tblproperties(primaryKey = 'id')
          |""".stripMargin
-    )
-  }
-
-  test("Test Create Hoodie Table With databaseTableName true") {
-    spark.sql("set hoodie.sql.use.database.table.name = true")
-    val tableName = generateTableName
-    spark.sql(
-      s"""
-         | create table $tableName (
-         |  id int,
-         |  name string,
-         |  price double,
-         |  ts long,
-         |  dt string
-         | ) using hudi
-         | partitioned by (dt)
-         | options (
-         |   primaryKey = 'id',
-         |   preCombineField = 'ts'
-         | )
-       """.stripMargin)
-    val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
-    val tablePath = table.storage.properties("path")
-    val metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(tablePath)
-      .setConf(spark.sessionState.newHadoopConf())
-      .build()
-    val tableConfig = metaClient.getTableConfig
-    assertResult(s"default.$tableName")(tableConfig.getTableName)
-
-    // Test insert data
-    spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, '2021-11-24'),(2, 'a2', 10, 1000, '2021-11-25')")
-    checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-      Seq(1, "a1", 10.0, 1000, "2021-11-24"),
-      Seq(2, "a2", 10.0, 1000, "2021-11-25")
-    )
-
-    // Test merge into
-    spark.sql(
-      s"""
-         |merge into $tableName h0
-         |using (select 1 as id, 'a1' as name, 11 as value, 1001 as ts, '2021-11-24' as dt) s0
-         |on h0.id = s0.id
-         |when matched then update set *
-         |""".stripMargin)
-    checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-      Seq(1, "a1", 11.0, 1001, "2021-11-24"),
-      Seq(2, "a2", 10.0, 1000, "2021-11-25")
-    )
-
-    // Test update
-    spark.sql(s"update $tableName set price = price + 1 where id = 2")
-    checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-      Seq(1, "a1", 11.0, 1001, "2021-11-24"),
-      Seq(2, "a2", 11.0, 1000, "2021-11-25")
-    )
-
-    // Test delete
-    spark.sql(s"delete from $tableName where id = 1")
-    checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-      Seq(2, "a2", 11.0, 1000, "2021-11-25")
-    )
-
-    // Test alter table drop partition
-    spark.sql(s"alter table $tableName drop partition (dt='2021-11-25')")
-    checkAnswer(s"select count(1) from $tableName")(
-      Seq(0)
     )
   }
 }
