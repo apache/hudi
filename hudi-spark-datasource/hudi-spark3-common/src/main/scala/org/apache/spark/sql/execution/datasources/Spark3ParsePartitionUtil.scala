@@ -48,11 +48,11 @@ class Spark3ParsePartitionUtil(conf: SQLConf) extends SparkParsePartitionUtil {
    * And this method will generate and return `InternalRow` directly instead of `PartitionValues`.
    */
   override def parsePartition(
-      path: Path,
-      typeInference: Boolean,
-      basePaths: Set[Path],
-      userSpecifiedDataTypes: Map[String, DataType],
-      timeZone: TimeZone): InternalRow = {
+                               path: Path,
+                               typeInference: Boolean,
+                               basePaths: Set[Path],
+                               userSpecifiedDataTypes: Map[String, DataType],
+                               timeZone: TimeZone): InternalRow = {
     val dateFormatter = ReflectUtil.getDateFormatter(timeZone.toZoneId)
     val timestampFormatter = TimestampFormatter(timestampPartitionPattern,
       timeZone.toZoneId, isParsing = true)
@@ -85,14 +85,14 @@ class Spark3ParsePartitionUtil(conf: SQLConf) extends SparkParsePartitionUtil {
   }
 
   private def parsePartition(
-      path: Path,
-      typeInference: Boolean,
-      basePaths: Set[Path],
-      userSpecifiedDataTypes: Map[String, DataType],
-      validatePartitionColumns: Boolean,
-      zoneId: ZoneId,
-      dateFormatter: DateFormatter,
-      timestampFormatter: TimestampFormatter): (Option[PartitionValues], Option[Path]) = {
+                              path: Path,
+                              typeInference: Boolean,
+                              basePaths: Set[Path],
+                              userSpecifiedDataTypes: Map[String, DataType],
+                              validatePartitionColumns: Boolean,
+                              zoneId: ZoneId,
+                              dateFormatter: DateFormatter,
+                              timestampFormatter: TimestampFormatter): (Option[PartitionValues], Option[Path]) = {
 
     val columns = ArrayBuffer.empty[(String, TypedPartValue)]
     // Old Hadoop versions don't have `Path.isRoot`
@@ -130,7 +130,7 @@ class Spark3ParsePartitionUtil(conf: SQLConf) extends SparkParsePartitionUtil {
         //    i.e. currentPath.getParent == null. For the example of "/table/a=1/",
         //    the top level dir is "/table".
         finished =
-        (maybeColumn.isEmpty && !columns.isEmpty) || currentPath.getParent == null
+          (maybeColumn.isEmpty && !columns.isEmpty) || currentPath.getParent == null
 
         if (!finished) {
           // For the above example, currentPath will be "/table/".
@@ -148,13 +148,13 @@ class Spark3ParsePartitionUtil(conf: SQLConf) extends SparkParsePartitionUtil {
   }
 
   private def parsePartitionColumn(
-      columnSpec: String,
-      typeInference: Boolean,
-      userSpecifiedDataTypes: Map[String, DataType],
-      validatePartitionColumns: Boolean,
-      zoneId: ZoneId,
-      dateFormatter: DateFormatter,
-      timestampFormatter: TimestampFormatter): Option[(String, TypedPartValue)] = {
+                                    columnSpec: String,
+                                    typeInference: Boolean,
+                                    userSpecifiedDataTypes: Map[String, DataType],
+                                    validatePartitionColumns: Boolean,
+                                    zoneId: ZoneId,
+                                    dateFormatter: DateFormatter,
+                                    timestampFormatter: TimestampFormatter): Option[(String, TypedPartValue)] = {
     val equalSignIndex = columnSpec.indexOf('=')
     if (equalSignIndex == -1) {
       None
@@ -182,11 +182,11 @@ class Spark3ParsePartitionUtil(conf: SQLConf) extends SparkParsePartitionUtil {
   }
 
   private def inferPartitionColumnValue(
-      raw: String,
-      typeInference: Boolean,
-      zoneId: ZoneId,
-      dateFormatter: DateFormatter,
-      timestampFormatter: TimestampFormatter): DataType = {
+                                         raw: String,
+                                         typeInference: Boolean,
+                                         zoneId: ZoneId,
+                                         dateFormatter: DateFormatter,
+                                         timestampFormatter: TimestampFormatter): DataType = {
     val decimalTry = Try {
       // `BigDecimal` conversion can fail when the `field` is not a form of number.
       val bigDecimal = new JBigDecimal(raw)
@@ -248,9 +248,9 @@ class Spark3ParsePartitionUtil(conf: SQLConf) extends SparkParsePartitionUtil {
   }
 
   def castPartValueToDesiredType(
-      desiredType: DataType,
-      value: String,
-      zoneId: ZoneId): Any = desiredType match {
+                                  desiredType: DataType,
+                                  value: String,
+                                  zoneId: ZoneId): Any = desiredType match {
     case _ if value == DEFAULT_PARTITION_PATH => null
     case NullType => null
     case StringType => UTF8String.fromString(unescapePathName(value))

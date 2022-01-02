@@ -15,16 +15,10 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.catalyst.trees
+package org.apache.hudi
 
-/**
- * Similar to `LeafLike` in Spark3.2.
- */
-trait HoodieLeafLike[T <: TreeNode[T]] { self: TreeNode[T] =>
+import org.apache.spark.sql.sources.DataSourceRegister
 
-  override final def children: Seq[T] = Nil
-
-  override final def mapChildren(f: T => T): T = this.asInstanceOf[T]
-
-  final def withNewChildrenInternal(newChildren: IndexedSeq[T]): T = this.asInstanceOf[T]
+class Spark3xDefaultSource extends DefaultSource with DataSourceRegister {
+  override def shortName(): String = "hudi"
 }
