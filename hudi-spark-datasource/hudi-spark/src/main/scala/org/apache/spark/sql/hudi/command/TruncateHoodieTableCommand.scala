@@ -43,6 +43,9 @@ class TruncateHoodieTableCommand(
       // Delete all data in the table directory
       super.run(sparkSession)
     } catch {
+      // TruncateTableCommand will delete the related directories first, and then refresh the table.
+      // It will fail when refresh table, because the hudi meta directory(.hoodie) has been deleted at the first step.
+      // So here ignore this failure, and refresh table later.
       case NonFatal(_) =>
     }
 
@@ -55,6 +58,10 @@ class TruncateHoodieTableCommand(
         .fromProperties(properties)
         .initTable(hadoopConf, hoodieCatalogTable.tableLocation)
     }
+
+    // After deleting the data, refresh the table to make sure we don't keep around a stale
+    // file relation in the metastore cache and cached table data in the cache manager.
+    sparkSession.catalog.refreshTable(hoodieCatalogTable.table.identifier.quotedString)
     Seq.empty[Row]
   }
 }
