@@ -179,7 +179,6 @@ public class HoodieHiveUtils {
   }
 
   public static boolean isIncrementalUseDatabase(JobContext job) {
-    return job.getConfiguration().get(HOODIE_INCREMENTAL_USE_DATABASE, String.valueOf(DEFAULT_INCREMENTAL_USE_DATABASE))
-            .equalsIgnoreCase(String.valueOf(true));
+    return job.getConfiguration().getBoolean(HOODIE_INCREMENTAL_USE_DATABASE, false);
   }
 }

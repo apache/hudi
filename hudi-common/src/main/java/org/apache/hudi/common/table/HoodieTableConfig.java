@@ -78,7 +78,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
       .key("hoodie.database.name")
-      .defaultValue("default")
+      .noDefaultValue()
       .withDocumentation("Database name that will be used for incremental query.");
 
   public static final ConfigProperty<String> NAME = ConfigProperty

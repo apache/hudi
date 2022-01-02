@@ -33,7 +33,7 @@ import scala.collection.JavaConverters._
 class TestCreateTable extends TestHoodieSqlBase {
 
   test("Test Create Managed Hoodie Table") {
-    val databaseName = "test_incremental"
+    val databaseName = "hudi_database"
     spark.sql(s"create database if not exists $databaseName")
     spark.sql(s"use $databaseName")
 
@@ -344,7 +344,7 @@ class TestCreateTable extends TestHoodieSqlBase {
 
   test("Test Create Table From Exist Hoodie Table") {
     withTempDir { tmp =>
-      val databaseName = "test_incremental"
+      val databaseName = "hudi_database"
       spark.sql(s"create database if not exists $databaseName")
       spark.sql(s"use $databaseName")
 
@@ -355,7 +355,6 @@ class TestCreateTable extends TestHoodieSqlBase {
         val df = Seq((1, "a1", 10, 1000, partitionValue)).toDF("id", "name", "value", "ts", "dt")
         // Write a table by spark dataframe.
         df.write.format("hudi")
-          .option(HoodieWriteConfig.DATABASE_NAME.key, s"original_$databaseName")
           .option(HoodieWriteConfig.TBL_NAME.key, s"original_$tableName")
           .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
           .option(RECORDKEY_FIELD.key, "id")
@@ -390,7 +389,7 @@ class TestCreateTable extends TestHoodieSqlBase {
         assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
         assertResult("dt")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
         assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELD.key))
-        assertResult(s"original_$databaseName")(metaClient.getTableConfig.getDatabaseName)
+        assertResult("")(metaClient.getTableConfig.getDatabaseName)
         assertResult(s"original_$tableName")(metaClient.getTableConfig.getTableName)
 
         // Test insert into

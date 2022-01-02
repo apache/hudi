@@ -21,6 +21,7 @@ package org.apache.hudi.hadoop;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.exception.TableNotFoundException;
 
@@ -100,9 +101,7 @@ public class InputPathHandler {
           // We already know the base path for this inputPath.
           basePathKnown = true;
           // Check if this is for a snapshot query
-          String databaseName = metaClient.getTableConfig().getDatabaseName();
-          String tableName = metaClient.getTableConfig().getTableName();
-          tagAsIncrementalOrSnapshot(inputPath, databaseName, tableName, metaClient, incrementalTables);
+          tagAsIncrementalOrSnapshot(inputPath, metaClient, incrementalTables);
           break;
         }
       }
@@ -113,8 +112,9 @@ public class InputPathHandler {
           metaClient = getTableMetaClientForBasePath(inputPath.getFileSystem(conf), inputPath);
           String databaseName = metaClient.getTableConfig().getDatabaseName();
           String tableName = metaClient.getTableConfig().getTableName();
-          tableMetaClientMap.put(isIncrementalUseDatabase ? databaseName + "." + tableName : tableName, metaClient);
-          tagAsIncrementalOrSnapshot(inputPath, databaseName, tableName, metaClient, incrementalTables);
+          tableMetaClientMap.put(isIncrementalUseDatabase && !StringUtils.isNullOrEmpty(databaseName)
+                  ? databaseName + "." + tableName : tableName, metaClient);
+          tagAsIncrementalOrSnapshot(inputPath, metaClient, incrementalTables);
         } catch (TableNotFoundException | InvalidTableException e) {
           // This is a non Hoodie inputPath
           LOG.info("Handling a non-hoodie path " + inputPath);
@@ -124,10 +124,11 @@ public class InputPathHandler {
     }
   }
 
-  private void tagAsIncrementalOrSnapshot(Path inputPath, String databaseName, String tableName,
-      HoodieTableMetaClient metaClient, List<String> incrementalTables) {
-    if ((isIncrementalUseDatabase && !incrementalTables.contains(databaseName + "." + tableName))
-            || (!isIncrementalUseDatabase && !incrementalTables.contains(tableName))) {
+  private void tagAsIncrementalOrSnapshot(Path inputPath, HoodieTableMetaClient metaClient, List<String> incrementalTables) {
+    String databaseName = metaClient.getTableConfig().getDatabaseName();
+    String tableName = metaClient.getTableConfig().getTableName();
+    if ((isIncrementalUseDatabase && !StringUtils.isNullOrEmpty(databaseName) && !incrementalTables.contains(databaseName + "." + tableName))
+            || (!(isIncrementalUseDatabase && !StringUtils.isNullOrEmpty(databaseName)) && !incrementalTables.contains(tableName))) {
       snapshotPaths.add(inputPath);
     } else {
       // Group incremental Paths belonging to same table.

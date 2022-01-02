@@ -169,13 +169,13 @@ class HoodieCatalogTable(val spark: SparkSession, val table: CatalogTable) exten
     val properties = new Properties()
     properties.putAll(tableConfigs.asJava)
 
-    val newDatabaseName = if (hoodieTableExists) databaseName else
+    val hoodieDatabaseName = if (hoodieTableExists) databaseName else
       formatName(spark, table.identifier.database.getOrElse(spark.sessionState.catalog.getCurrentDatabase))
     val hoodieTableName = if (hoodieTableExists) tableName else table.identifier.table
 
     HoodieTableMetaClient.withPropertyBuilder()
       .fromProperties(properties)
-      .setDatabaseName(newDatabaseName)
+      .setDatabaseName(hoodieDatabaseName)
       .setTableName(hoodieTableName)
       .setTableCreateSchema(SchemaConverters.toAvroType(finalSchema).toString())
       .setPartitionFields(table.partitionColumnNames.mkString(","))
