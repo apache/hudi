@@ -254,7 +254,9 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
         case action: MergeAction =>
           // SPARK-34962:  use UpdateStarAction as the explicit representation of * in UpdateAction.
           // So match and covert this in Spark3.2 env.
-          UpdateAction(action.condition, Seq.empty)
+          val (resolvedCondition, resolvedAssignments) =
+            resolveConditionAssignments(action.condition, Seq.empty)
+          UpdateAction(resolvedCondition, resolvedAssignments)
       }
       // Resolve the notMatchedActions
       val resolvedNotMatchedActions = notMatchedActions.map {
@@ -265,7 +267,9 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
         case action: MergeAction =>
           // SPARK-34962:  use InsertStarAction as the explicit representation of * in InsertAction.
           // So match and covert this in Spark3.2 env.
-          InsertAction(action.condition, Seq.empty)
+          val (resolvedCondition, resolvedAssignments) =
+            resolveConditionAssignments(action.condition, Seq.empty)
+          InsertAction(resolvedCondition, resolvedAssignments)
       }
       // Return the resolved MergeIntoTable
       MergeIntoTable(target, resolvedSource, resolvedMergeCondition,
