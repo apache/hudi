@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.log4j.Level
 import org.apache.spark.SparkConf
@@ -55,7 +56,14 @@ class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
 
   private var tableId = 0
 
-  def sparkConf(): SparkConf = new SparkConf()
+  def sparkConf(): SparkConf = {
+    val sparkConf = new SparkConf()
+    if (HoodieSparkUtils.isSpark3) {
+      sparkConf.set("spark.sql.catalog.spark_catalog",
+        "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
+    }
+    sparkConf
+  }
 
   protected def withTempDir(f: File => Unit): Unit = {
     val tempDir = Utils.createTempDir()

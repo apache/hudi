@@ -44,4 +44,10 @@ class Spark3DefaultSource extends DefaultSource with DataSourceRegister with Tab
     HoodieInternalV2Table(SparkSession.active, path)
   }
 
+  /*override def supportsExternalMetadata() = true
+
+  override def inferPartitioning(options: CaseInsensitiveStringMap): Array[Transform] = {
+    getTable(null, null, options).partitioning
+  }*/
+
 }

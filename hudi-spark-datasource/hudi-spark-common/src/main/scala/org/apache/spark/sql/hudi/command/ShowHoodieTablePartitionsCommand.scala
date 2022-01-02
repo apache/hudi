@@ -32,9 +32,9 @@ import org.apache.spark.sql.types.StringType
  * Command for show hudi table's partitions.
  */
 case class ShowHoodieTablePartitionsCommand(
-    tableIdentifier: TableIdentifier,
-    specOpt: Option[TablePartitionSpec])
-extends HoodieLeafRunnableCommand {
+                                             tableIdentifier: TableIdentifier,
+                                             specOpt: Option[TablePartitionSpec])
+  extends HoodieLeafRunnableCommand {
 
   override val output: Seq[Attribute] = {
     AttributeReference("partition", StringType, nullable = false)() :: Nil

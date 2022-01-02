@@ -161,7 +161,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
       if (metaBootstrapFileIdToFullPath.nonEmpty) {
         df = sqlContext.sparkSession.read
-          .format("hudi")
+          .format("hudi_v1")
           .schema(usedSchema)
           .option(DataSourceReadOptions.READ_PATHS.key, filteredMetaBootstrapFullPaths.mkString(","))
           .load()

@@ -31,8 +31,8 @@ import scala.util.control.NonFatal
  * Command for truncate hudi table.
  */
 class TruncateHoodieTableCommand(
-   tableIdentifier: TableIdentifier,
-   partitionSpec: Option[TablePartitionSpec])
+                                  tableIdentifier: TableIdentifier,
+                                  partitionSpec: Option[TablePartitionSpec])
   extends TruncateTableCommand(tableIdentifier, partitionSpec) {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {

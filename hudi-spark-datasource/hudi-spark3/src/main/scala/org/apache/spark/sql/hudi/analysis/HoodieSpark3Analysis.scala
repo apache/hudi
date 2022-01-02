@@ -133,13 +133,13 @@ case class HoodieSpark3ResolveReferences(sparkSession: SparkSession) extends Rul
       }
     case DropPartitions(child, specs, ifExists, purge)
       if child.resolved && child.isInstanceOf[ResolvedTable] && child.asInstanceOf[ResolvedTable].table.isInstanceOf[HoodieInternalV2Table] =>
-        AlterHoodieTableDropPartitionCommand(
-          child.asInstanceOf[ResolvedTable].identifier.asTableIdentifier,
-          specs.seq.map(f => f.asInstanceOf[UnresolvedPartitionSpec]).map(s => s.spec),
-          ifExists,
-          purge,
-          retainData = true
-        )
+      AlterHoodieTableDropPartitionCommand(
+        child.asInstanceOf[ResolvedTable].identifier.asTableIdentifier,
+        specs.seq.map(f => f.asInstanceOf[UnresolvedPartitionSpec]).map(s => s.spec),
+        ifExists,
+        purge,
+        retainData = true
+      )
     case p => p
   }
 }

@@ -34,12 +34,12 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.{AnalysisException, Row, SaveMode, SparkSession}
 
 case class AlterHoodieTableDropPartitionCommand(
-    tableIdentifier: TableIdentifier,
-    specs: Seq[TablePartitionSpec],
-    ifExists : Boolean,
-    purge : Boolean,
-    retainData : Boolean)
-extends HoodieLeafRunnableCommand {
+                                                 tableIdentifier: TableIdentifier,
+                                                 specs: Seq[TablePartitionSpec],
+                                                 ifExists : Boolean,
+                                                 purge : Boolean,
+                                                 retainData : Boolean)
+  extends HoodieLeafRunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val fullTableName = s"${tableIdentifier.database}.${tableIdentifier.table}"
@@ -87,9 +87,9 @@ extends HoodieLeafRunnableCommand {
   }
 
   private def buildHoodieConfig(
-      sparkSession: SparkSession,
-      hoodieCatalogTable: HoodieCatalogTable,
-      partitionsToDrop: String): Map[String, String] = {
+                                 sparkSession: SparkSession,
+                                 hoodieCatalogTable: HoodieCatalogTable,
+                                 partitionsToDrop: String): Map[String, String] = {
     val partitionFields = hoodieCatalogTable.partitionFields.mkString(",")
     val enableHive = isEnableHive(sparkSession)
     withSparkConf(sparkSession, Map.empty) {
@@ -116,10 +116,10 @@ extends HoodieLeafRunnableCommand {
   }
 
   def normalizePartitionSpec[T](
-      partitionSpec: Map[String, T],
-      partColNames: Seq[String],
-      tblName: String,
-      resolver: Resolver): Map[String, T] = {
+                                 partitionSpec: Map[String, T],
+                                 partColNames: Seq[String],
+                                 tblName: String,
+                                 resolver: Resolver): Map[String, T] = {
     val normalizedPartSpec = partitionSpec.toSeq.map { case (key, value) =>
       val normalizedKey = partColNames.find(resolver(_, key)).getOrElse {
         throw new AnalysisException(s"$key is not a valid partition column in table $tblName.")
@@ -145,8 +145,8 @@ extends HoodieLeafRunnableCommand {
   }
 
   def getPartitionPathToDrop(
-      hoodieCatalogTable: HoodieCatalogTable,
-      normalizedSpecs: Seq[Map[String, String]]): String = {
+                              hoodieCatalogTable: HoodieCatalogTable,
+                              normalizedSpecs: Seq[Map[String, String]]): String = {
     val table = hoodieCatalogTable.table
     val allPartitionPaths = hoodieCatalogTable.getAllPartitionPaths
     val enableHiveStylePartitioning = isHiveStyledPartitioning(allPartitionPaths, table)

@@ -33,7 +33,7 @@ import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.hive.HiveSyncConfig
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.DataSourceTestUtils
-import org.apache.spark.SparkContext
+import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
@@ -96,11 +96,18 @@ class TestHoodieSparkSqlWriter {
    * Utility method for initializing the spark context.
    */
   def initSparkContext(): Unit = {
+    val sparkConf = new SparkConf()
+    if (HoodieSparkUtils.isSpark3) {
+      sparkConf.set("spark.sql.catalog.spark_catalog",
+        "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
+    }
+
     spark = SparkSession.builder()
       .appName(hoodieFooTableName)
       .master("local[2]")
       .withExtensions(new HoodieSparkSessionExtension)
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      .config(sparkConf)
       .getOrCreate()
     sc = spark.sparkContext
     sc.setLogLevel("ERROR")
