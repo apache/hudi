@@ -178,9 +178,10 @@ public class HiveTestUtil {
     createCommitFile(commitMetadata, instantTime);
   }
 
-  public static void createReplaceCommit(String instantTime, String partitions, WriteOperationType type)
+  public static void createReplaceCommit(String instantTime, String partitions, WriteOperationType type, boolean isParquetSchemaSimple, boolean useSchemaFromCommitMetadata)
       throws IOException {
     HoodieReplaceCommitMetadata replaceCommitMetadata = new HoodieReplaceCommitMetadata();
+    addSchemaToCommitMetadata(replaceCommitMetadata, isParquetSchemaSimple, useSchemaFromCommitMetadata);
     replaceCommitMetadata.setOperationType(type);
     Map<String, List<String>> partitionToReplaceFileIds = new HashMap<>();
     partitionToReplaceFileIds.put(partitions, new ArrayList<>());

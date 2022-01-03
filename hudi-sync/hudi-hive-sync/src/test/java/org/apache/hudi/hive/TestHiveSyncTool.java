@@ -812,12 +812,14 @@ public class TestHiveSyncTool {
     assertEquals(hiveClient.getTableSchema(HiveTestUtil.hiveSyncConfig.tableName).size(),
         hiveClient.getDataSchema().getColumns().size() + 1,
         "Hive Schema should match the table schema + partition field");
-    assertEquals(1, hiveClient.scanTablePartitions(hiveSyncConfig.tableName).size(),
+    List<Partition> partitions = hiveClient.scanTablePartitions(hiveSyncConfig.tableName);
+    assertEquals(1, partitions.size(),
         "Table partitions should match the number of partitions we wrote");
     assertEquals(instantTime, hiveClient.getLastCommitTimeSynced(hiveSyncConfig.tableName).get(),
         "The last commit that was synced should be updated in the TBLPROPERTIES");
-    // create a replace commit to delete current partitions
-    HiveTestUtil.createReplaceCommit("101", "2021/12/28", WriteOperationType.DELETE_PARTITION);
+    String partitiontoDelete = partitions.get(0).getValues().get(0).replace("-","/");
+    // create a replace commit to delete current partitions+
+    HiveTestUtil.createReplaceCommit("101", partitiontoDelete, WriteOperationType.DELETE_PARTITION, true, true);
 
     // sync drop partitins
     tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
