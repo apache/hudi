@@ -79,15 +79,22 @@
                   <include>org.apache.hbase:hbase-protocol</include>
                   <include>org.apache.hbase:hbase-server</include>
                   <include>org.apache.hbase:hbase-annotations</include>
-                  <include>org.apache.htrace:htrace-core</include>
+                  <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
+                  <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
+                  <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
+                  <include>org.apache.htrace:htrace-core4</include>
                   <include>com.yammer.metrics:metrics-core</include>
                   <include>com.google.guava:guava</include>
+                  <include>commons-io:commons-io</include>
                   <include>commons-lang:commons-lang</include>
                   <include>com.google.protobuf:protobuf-java</include>
                 </includes>
               </artifactSet>
               <relocations>
-
+                <relocation>
+                  <pattern>org.apache.parquet.avro.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.parquet.avro.</shadedPattern>
+                </relocation>
                 <relocation>
                   <pattern>org.apache.avro.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
@@ -109,12 +116,20 @@
                   <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
                 </relocation>
                 <relocation>
+                  <pattern>org.apache.htrace.</pattern>
+                  <shadedPattern>${trino.bundle.bootstrap.shade.prefix}org.apache.htrace.</shadedPattern>
+                </relocation>
+                <relocation>
                   <pattern>com.yammer.metrics.</pattern>
                   <shadedPattern>org.apache.hudi.com.yammer.metrics.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.google.common.</pattern>
                   <shadedPattern>${trino.bundle.bootstrap.shade.prefix}com.google.common.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.commons.io.</pattern>
+                  <shadedPattern>${trino.bundle.bootstrap.shade.prefix}org.apache.commons.io.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.commons.lang.</pattern>
@@ -159,16 +174,6 @@
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-common</artifactId>
       <version>${project.version}</version>
-      <exclusions>
-        <exclusion>
-          <groupId>org.apache.hbase</groupId>
-          <artifactId>hbase-server</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.apache.hbase</groupId>
-          <artifactId>hbase-client</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
