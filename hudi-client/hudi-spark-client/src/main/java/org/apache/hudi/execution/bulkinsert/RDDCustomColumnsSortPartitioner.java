@@ -22,6 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
@@ -55,8 +56,17 @@ public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload>
     final String[] sortColumns = this.sortColumnNames;
     final SerializableSchema schema = this.serializableSchema;
     return records.sortBy(
-        record -> HoodieAvroUtils.getRecordColumnValues(record, sortColumns, schema),
+        record -> {
+          Object recordValue = HoodieAvroUtils.getRecordColumnValues(record, sortColumns, schema);
+          // null values are replaced with empty string for null_first order
+          if (recordValue == null) {
+            return StringUtils.EMPTY_STRING;
+          } else {
+            return StringUtils.objToString(record);
+          }
+        },
         true, outputSparkPartitions);
+
   }
 
   @Override
