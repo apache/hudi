@@ -181,8 +181,7 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
     val pathGlobPattern = optParams.getOrElse(
       DataSourceReadOptions.INCR_PATH_GLOB.key,
       DataSourceReadOptions.INCR_PATH_GLOB.defaultValue)
-    val filteredFileGroup = if(!pathGlobPattern
-      .equals(DataSourceReadOptions.INCR_PATH_GLOB.defaultValue)) {
+    val filteredFileGroup = if (!pathGlobPattern.equals(DataSourceReadOptions.INCR_PATH_GLOB.defaultValue)) {
       val globMatcher = new GlobPattern("*" + pathGlobPattern)
       fileGroup.filter(f => {
         if (f.getLatestFileSlice.get().getBaseFile.isPresent) {
