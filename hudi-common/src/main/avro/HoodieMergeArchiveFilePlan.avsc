@@ -20,6 +20,11 @@
    "type":"record",
    "name":"HoodieMergeArchiveFilePlan",
    "fields":[
+    {
+      "name":"version",
+      "type":["int", "null"],
+      "default": 1
+    },
      {
          "name":"candidate",
          "type":["null", {
