@@ -66,6 +66,7 @@ import org.apache.log4j.Logger;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -120,10 +121,9 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     try {
       if (this.writer != null) {
         this.writer.close();
+        this.writer = null;
       }
-      this.writer = HoodieLogFormat.newWriterBuilder().onParentPath(archiveFilePath.getParent())
-          .withFileId(archiveFilePath.getName()).withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
-          .withFs(metaClient.getFs()).overBaseCommit("").build();
+      this.writer = openWriter();
     } catch (IOException e) {
       throw new HoodieException("Unable to initialize HoodieLogFormat writer", e);
     }
@@ -161,7 +161,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
         LOG.info("No Instants to archive");
       }
 
-      if (config.getArchiveAutoMergeEnable()) {
+      if (config.getArchiveAutoMergeEnable() && !StorageSchemes.isAppendSupported(metaClient.getFs().getScheme())) {
         mergeArchiveFilesIfNecessary(context);
       }
       return success;
@@ -170,6 +170,17 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     }
   }
 
+  /**
+   * Here Hoodie can merge the small archive files into a new larger one.
+   * Only used for filesystem which is not supported append operation.
+   * The hole merge small archive files operation has four stages:
+   * 1. Build merge plan with merge candidates/merged file name infos.
+   * 2. Do merge.
+   * 3. Delete all the candidates.
+   * 4. Delete the merge plan.
+   * @param context HoodieEngineContext
+   * @throws IOException
+   */
   private void mergeArchiveFilesIfNecessary(HoodieEngineContext context) throws IOException {
     Path planPath = new Path(metaClient.getArchivePath(), mergeArchivePlanName);
     // Flush reminded content if existed and open a new write
@@ -177,20 +188,15 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     // List all archive files
     FileStatus[] fsStatuses = metaClient.getFs().globStatus(
         new Path(metaClient.getArchivePath() + "/.commits_.archive*"));
-    List<FileStatus> mergeCandidate = new ArrayList<>();
-    int archiveFilesCompactBatch = config.getArchiveFilesMergeBatchSize();
+    // Sort files by version suffix in reverse (implies reverse chronological order)
+    Arrays.sort(fsStatuses, new HoodieArchivedTimeline.ArchiveFileVersionComparator());
+
+    int archiveFilesMergeBatch = config.getArchiveFilesMergeBatchSize();
     long smallFileLimitBytes = config.getArchiveMergeSmallFileLimitBytes();
 
-    for (FileStatus fs: fsStatuses) {
-      if (fs.getLen() < smallFileLimitBytes) {
-        mergeCandidate.add(fs);
-      }
-      if (mergeCandidate.size() >= archiveFilesCompactBatch) {
-        break;
-      }
-    }
+    List<FileStatus> mergeCandidate = getMergeCandidates(smallFileLimitBytes, fsStatuses);
 
-    if (mergeCandidate.size() >= archiveFilesCompactBatch) {
+    if (mergeCandidate.size() >= archiveFilesMergeBatch) {
       List<String> candidateFiles = mergeCandidate.stream().map(fs -> fs.getPath().toString()).collect(Collectors.toList());
       // before merge archive files build merge plan
       String logFileName = computeLogFileName();
@@ -205,16 +211,30 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
   }
 
   /**
+   * Find the latest 'huge archive file' index as a break point and only check/merge newer archive files.
+   * Because we need to keep the original order of archive files which is important when loading archived instants with time filter.
+   * {@link HoodieArchivedTimeline} loadInstants(TimeRangeFilter filter, boolean loadInstantDetails, Function<GenericRecord, Boolean> commitsFilter)
+   * @param smallFileLimitBytes small File Limit Bytes
+   * @param fsStatuses Sort by version suffix in reverse
+   * @return merge candidates
+   */
+  private List<FileStatus> getMergeCandidates(long smallFileLimitBytes, FileStatus[] fsStatuses) {
+    int index = 0;
+    for (; index < fsStatuses.length; index++) {
+      if (fsStatuses[index].getLen() > smallFileLimitBytes) {
+        break;
+      }
+    }
+    return Arrays.stream(fsStatuses).limit(index).collect(Collectors.toList());
+  }
+
+  /**
    * Get final written archive file name based on storageSchemes support append or not.
    */
   private String computeLogFileName() throws IOException {
-    if (!StorageSchemes.isAppendSupported(metaClient.getFs().getScheme())) {
-      String logWriteToken = writer.getLogFile().getLogWriteToken();
-      HoodieLogFile hoodieLogFile = writer.getLogFile().rollOver(metaClient.getFs(), logWriteToken);
-      return hoodieLogFile.getFileName();
-    } else {
-      return writer.getLogFile().getFileName();
-    }
+    String logWriteToken = writer.getLogFile().getLogWriteToken();
+    HoodieLogFile hoodieLogFile = writer.getLogFile().rollOver(metaClient.getFs(), logWriteToken);
+    return hoodieLogFile.getFileName();
   }
 
   /**
@@ -223,7 +243,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
    * @throws IOException
    */
   private void verifyLastMergeArchiveFilesIfNecessary(HoodieEngineContext context) throws IOException {
-    if (config.getArchiveAutoMergeEnable()) {
+    if (config.getArchiveAutoMergeEnable() && !StorageSchemes.isAppendSupported(metaClient.getFs().getScheme())) {
       Path planPath = new Path(metaClient.getArchivePath(), mergeArchivePlanName);
       HoodieWrapperFileSystem fs = metaClient.getFs();
       // If plan exist, last merge small archive files was failed.
@@ -306,6 +326,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
   }
 
   public void mergeArchiveFiles(List<FileStatus> compactCandidate) throws IOException {
+    Schema wrapperSchema = HoodieArchivedMetaEntry.getClassSchema();
     try {
       List<IndexedRecord> records = new ArrayList<>();
       for (FileStatus fs : compactCandidate) {
@@ -317,10 +338,12 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
             HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
             List<IndexedRecord> recordsPerFile = blk.getRecords();
             records.addAll(recordsPerFile);
+            if (records.size() >= this.config.getCommitArchivalBatchSize()) {
+              writeToFile(wrapperSchema, records);
+            }
           }
         }
       }
-      Schema wrapperSchema = HoodieArchivedMetaEntry.getClassSchema();
       writeToFile(wrapperSchema, records);
     } catch (Exception e) {
       throw new HoodieCommitException("Failed to merge small archive files", e);
