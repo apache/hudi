@@ -19,15 +19,14 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.client.utils.LazyIterableIterator;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
-import org.apache.hudi.io.HoodieKeyMetaBloomIndexLookupHandle;
-import org.apache.hudi.io.HoodieKeyMetaBloomIndexLookupHandle.MetaBloomIndexKeyLookupResult;
+import org.apache.hudi.io.HoodieKeyMetaIndexLookupHandle;
+import org.apache.hudi.io.HoodieKeyMetaIndexLookupHandle.MetaBloomIndexKeyLookupResult;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -41,9 +40,7 @@ import java.util.List;
 /**
  * Function performing actual checking of RDD partition containing (fileId, hoodieKeys) against the actual files.
  */
-public class HoodieBloomMetaIndexLazyCheckFunction
-    implements Function2<Integer, Iterator<Tuple2<Tuple2<String, String>, HoodieKey>>,
-    Iterator<List<MetaBloomIndexKeyLookupResult>>> {
+public class HoodieBloomMetaIndexLazyCheckFunction implements Function2<Integer, Iterator<Tuple2<String, HoodieKey>>, Iterator<List<MetaBloomIndexKeyLookupResult>>> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieBloomMetaIndexLazyCheckFunction.class);
   private final HoodieTable hoodieTable;
@@ -55,17 +52,15 @@ public class HoodieBloomMetaIndexLazyCheckFunction
   }
 
   @Override
-  public Iterator<List<MetaBloomIndexKeyLookupResult>> call(Integer integer,
-                                                            Iterator<Tuple2<Tuple2<String, String>, HoodieKey>> tupleIterator) throws Exception {
-    return new LazyKeyCheckIterator(tupleIterator);
+  public Iterator<List<MetaBloomIndexKeyLookupResult>> call(Integer integer, Iterator<Tuple2<String, HoodieKey>> tuple2Iterator) throws Exception {
+    return new LazyKeyCheckIterator(tuple2Iterator);
   }
 
-  class LazyKeyCheckIterator extends LazyIterableIterator<Tuple2<Tuple2<String, String>, HoodieKey>,
-      List<MetaBloomIndexKeyLookupResult>> {
+  class LazyKeyCheckIterator extends LazyIterableIterator<Tuple2<String, HoodieKey>, List<MetaBloomIndexKeyLookupResult>> {
 
-    private HoodieKeyMetaBloomIndexLookupHandle keyLookupHandle;
+    private HoodieKeyMetaIndexLookupHandle keyLookupHandle;
 
-    LazyKeyCheckIterator(Iterator<Tuple2<Tuple2<String, String>, HoodieKey>> filePartitionRecordKeyTripletItr) {
+    LazyKeyCheckIterator(Iterator<Tuple2<String, HoodieKey>> filePartitionRecordKeyTripletItr) {
       super(filePartitionRecordKeyTripletItr);
     }
 
@@ -80,9 +75,8 @@ public class HoodieBloomMetaIndexLazyCheckFunction
       try {
         // process one file in each go.
         while (inputItr.hasNext()) {
-          Tuple2<Tuple2<String, String>, HoodieKey> currentTuple = inputItr.next();
-          final String fileName = currentTuple._1._1;
-          final String fileId = FSUtils.getFileId(fileName);
+          Tuple2<String, HoodieKey> currentTuple = inputItr.next();
+          final String fileId = currentTuple._1;
           ValidationUtils.checkState(!fileId.isEmpty());
           String partitionPath = currentTuple._2.getPartitionPath();
           String recordKey = currentTuple._2.getRecordKey();
@@ -90,8 +84,7 @@ public class HoodieBloomMetaIndexLazyCheckFunction
 
           // lazily init state
           if (keyLookupHandle == null) {
-            keyLookupHandle = new HoodieKeyMetaBloomIndexLookupHandle(config, hoodieTable, partitionPathFileIdPair,
-                fileName);
+            keyLookupHandle = new HoodieKeyMetaIndexLookupHandle(config, hoodieTable, partitionPathFileIdPair, fileId);
           }
 
           // if continue on current file
@@ -100,8 +93,8 @@ public class HoodieBloomMetaIndexLazyCheckFunction
           } else {
             // do the actual checking of file & break out
             ret.add(keyLookupHandle.getLookupResult());
-            keyLookupHandle = new HoodieKeyMetaBloomIndexLookupHandle(config, hoodieTable, partitionPathFileIdPair,
-                fileName);
+            keyLookupHandle = new HoodieKeyMetaIndexLookupHandle(config, hoodieTable, partitionPathFileIdPair,
+                fileId);
             keyLookupHandle.addKey(recordKey);
             break;
           }

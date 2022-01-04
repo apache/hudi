@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieColumnStatsMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -404,7 +405,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static String getColumnStatsRecordKey(HoodieColumnStatsMetadata<Comparable> columnStatsMetadata) {
     final ColumnIndexID columnID = new ColumnIndexID(columnStatsMetadata.getColumnName());
     final PartitionIndexID partitionID = new PartitionIndexID(columnStatsMetadata.getPartitionPath());
-    final FileIndexID fileID = new FileIndexID(columnStatsMetadata.getFilePath());
+    final FileIndexID fileID = new FileIndexID(FSUtils.getFileId(new Path(columnStatsMetadata.getFilePath()).getName()));
     return columnID.asBase64EncodedString()
         .concat(partitionID.asBase64EncodedString())
         .concat(fileID.asBase64EncodedString());

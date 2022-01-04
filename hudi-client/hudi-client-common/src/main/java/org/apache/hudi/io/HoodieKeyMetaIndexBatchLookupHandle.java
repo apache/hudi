@@ -47,10 +47,10 @@ import java.util.Set;
 /**
  * Takes a bunch of keys and returns ones that are present in the file group.
  */
-public class HoodieKeyMetaBloomIndexGroupedLookupHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieReadHandle<T,
+public class HoodieKeyMetaIndexBatchLookupHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieReadHandle<T,
     I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieKeyMetaBloomIndexGroupedLookupHandle.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieKeyMetaIndexBatchLookupHandle.class);
 
   private final HoodieTableType tableType;
 
@@ -60,8 +60,8 @@ public class HoodieKeyMetaBloomIndexGroupedLookupHandle<T extends HoodieRecordPa
 
   private long totalKeysChecked;
 
-  public HoodieKeyMetaBloomIndexGroupedLookupHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
-                                                    Pair<String, String> partitionPathFileIdPair, String fileName) {
+  public HoodieKeyMetaIndexBatchLookupHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
+                                             Pair<String, String> partitionPathFileIdPair, String fileName) {
     super(config, null, hoodieTable, partitionPathFileIdPair);
     this.tableType = hoodieTable.getMetaClient().getTableType();
 
