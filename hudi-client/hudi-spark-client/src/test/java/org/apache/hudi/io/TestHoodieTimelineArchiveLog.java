@@ -281,7 +281,6 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     assertEquals(16 * 3, archivedTimeLine1.countInstants() + rawActiveTimeline1.countInstants());
   }
 
-
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testNoArchivalUntilMaxArchiveConfigWithExtraInflightCommits(boolean enableMetadata) throws Exception {
