@@ -27,6 +27,7 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.util.TypeUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 
 import javax.annotation.Nonnull;
 import java.io.File;
@@ -54,6 +55,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
       "org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy";
   public static final String JAVA_SORT_AND_SIZE_EXECUTION_STRATEGY =
       "org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy";
+  public static final String PLAN_PARTITION_FILTER_MODE =
+      "hoodie.clustering.plan.partition.filter.mode";
 
   // Any Space-filling curves optimize(z-order/hilbert) params can be saved with this prefix
   public static final String LAYOUT_OPTIMIZE_PARAM_PREFIX = "hoodie.layout.optimize.";
@@ -63,6 +66,20 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .defaultValue("2")
       .sinceVersion("0.7.0")
       .withDocumentation("Number of partitions to list to create ClusteringPlan");
+
+  public static final ConfigProperty<String> PARTITION_FILTER_BEGIN_PARTITION = ConfigProperty
+      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "cluster.begin.partition")
+      .noDefaultValue()
+      .sinceVersion("0.11.0")
+      .withDocumentation("Begin partition used to filter partition (inclusive), only effective when the filter mode '"
+          + PLAN_PARTITION_FILTER_MODE + "' is " + ClusteringPlanPartitionFilterMode.SELECTED_PARTITIONS.name());
+
+  public static final ConfigProperty<String> PARTITION_FILTER_END_PARTITION = ConfigProperty
+      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "cluster.end.partition")
+      .noDefaultValue()
+      .sinceVersion("0.11.0")
+      .withDocumentation("End partition used to filter partition (inclusive), only effective when the filter mode '"
+          + PLAN_PARTITION_FILTER_MODE + "' is " + ClusteringPlanPartitionFilterMode.SELECTED_PARTITIONS.name());
 
   public static final ConfigProperty<String> PLAN_STRATEGY_SMALL_FILE_LIMIT = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "small.file.limit")
@@ -109,6 +126,17 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .defaultValue("0")
       .sinceVersion("0.9.0")
       .withDocumentation("Number of partitions to skip from latest when choosing partitions to create ClusteringPlan");
+
+  public static final ConfigProperty<ClusteringPlanPartitionFilterMode> PLAN_PARTITION_FILTER_MODE_NAME = ConfigProperty
+      .key(PLAN_PARTITION_FILTER_MODE)
+      .defaultValue(ClusteringPlanPartitionFilterMode.NONE)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Partition filter mode used in the creation of clustering plan. Available values are - "
+          + "NONE: do not filter table partition and thus the clustering plan will include all partitions that have clustering candidate."
+          + "RECENT_DAYS: keep a continuous range of partitions, worked together with configs '" + DAYBASED_LOOKBACK_PARTITIONS.key() + "' and '"
+          + PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST.key() + "."
+          + "SELECTED_PARTITIONS: keep partitions that are in the specified range ['" + PARTITION_FILTER_BEGIN_PARTITION.key() + "', '"
+          + PARTITION_FILTER_END_PARTITION.key() + "'].");
 
   public static final ConfigProperty<String> PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "max.bytes.per.group")
@@ -381,6 +409,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withClusteringPlanPartitionFilterMode(ClusteringPlanPartitionFilterMode mode) {
+      clusteringConfig.setValue(PLAN_PARTITION_FILTER_MODE_NAME.key(), mode.toString());
+      return this;
+    }
+
     public Builder withClusteringExecutionStrategyClass(String runClusteringStrategyClass) {
       clusteringConfig.setValue(EXECUTION_STRATEGY_CLASS_NAME, runClusteringStrategyClass);
       return this;
@@ -393,6 +426,16 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
     public Builder withClusteringSkipPartitionsFromLatest(int clusteringSkipPartitionsFromLatest) {
       clusteringConfig.setValue(PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST, String.valueOf(clusteringSkipPartitionsFromLatest));
+      return this;
+    }
+
+    public Builder withClusteringPartitionFilterBeginPartition(String begin) {
+      clusteringConfig.setValue(PARTITION_FILTER_BEGIN_PARTITION, begin);
+      return this;
+    }
+
+    public Builder withClusteringPartitionFilterEndPartition(String end) {
+      clusteringConfig.setValue(PARTITION_FILTER_END_PARTITION, end);
       return this;
     }
 

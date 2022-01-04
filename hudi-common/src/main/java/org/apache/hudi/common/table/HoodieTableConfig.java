@@ -27,7 +27,9 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
@@ -166,6 +168,11 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.table.keygenerator.class")
       .noDefaultValue()
       .withDocumentation("Key Generator class property for the hoodie table");
+
+  public static final ConfigProperty<HoodieTimelineTimeZone> TIMELINE_TIMEZONE = ConfigProperty
+      .key("hoodie.table.timeline.timezone")
+      .defaultValue(HoodieTimelineTimeZone.LOCAL)
+      .withDocumentation("User can set hoodie commit timeline timezone, such as utc, local and so on. local is default");
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
@@ -314,6 +321,9 @@ public class HoodieTableConfig extends HoodieConfig {
       if (hoodieConfig.contains(BOOTSTRAP_BASE_PATH)) {
         // Use the default bootstrap index class.
         hoodieConfig.setDefaultValue(BOOTSTRAP_INDEX_CLASS_NAME, getDefaultBootstrapIndexClass(properties));
+      }
+      if (hoodieConfig.contains(TIMELINE_TIMEZONE)) {
+        HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getString(TIMELINE_TIMEZONE)));
       }
       hoodieConfig.getProps().store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
     }

@@ -28,7 +28,6 @@ import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.execution.SparkPlan
-import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.hudi.HoodieSqlUtils
 
 import scala.collection.JavaConverters._
@@ -39,9 +38,9 @@ import scala.collection.JavaConverters._
 case class CreateHoodieTableAsSelectCommand(
    table: CatalogTable,
    mode: SaveMode,
-   query: LogicalPlan) extends DataWritingCommand {
+   query: LogicalPlan) extends HoodieLeafRunnableCommand {
 
-  override def run(sparkSession: SparkSession, child: SparkPlan): Seq[Row] = {
+  override def run(sparkSession: SparkSession): Seq[Row] = {
     assert(table.tableType != CatalogTableType.VIEW)
     assert(table.provider.isDefined)
 
@@ -113,8 +112,6 @@ case class CreateHoodieTableAsSelectCommand(
     val fs = path.getFileSystem(conf)
     fs.delete(path, true)
   }
-
-  override def outputColumnNames: Seq[String] = query.output.map(_.name)
 
   private def reOrderPartitionColumn(query: LogicalPlan,
     partitionColumns: Seq[String]): LogicalPlan = {

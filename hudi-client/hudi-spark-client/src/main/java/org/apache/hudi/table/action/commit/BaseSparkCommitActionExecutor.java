@@ -216,7 +216,10 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   }
 
   protected Partitioner getPartitioner(WorkloadProfile profile) {
-    if (WriteOperationType.isChangingRecords(operationType)) {
+    Option<String> layoutPartitionerClass = table.getStorageLayout().layoutPartitionerClass();
+    if (layoutPartitionerClass.isPresent()) {
+      return getLayoutPartitioner(profile, layoutPartitionerClass.get());
+    } else if (WriteOperationType.isChangingRecords(operationType)) {
       return getUpsertPartitioner(profile);
     } else {
       return getInsertPartitioner(profile);
@@ -305,7 +308,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   @SuppressWarnings("unchecked")
   protected Iterator<List<WriteStatus>> handleUpsertPartition(String instantTime, Integer partition, Iterator recordItr,
                                                               Partitioner partitioner) {
-    UpsertPartitioner upsertPartitioner = (UpsertPartitioner) partitioner;
+    SparkHoodiePartitioner upsertPartitioner = (SparkHoodiePartitioner) partitioner;
     BucketInfo binfo = upsertPartitioner.getBucketInfo(partition);
     BucketType btype = binfo.bucketType;
     try {
@@ -392,6 +395,12 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
 
   public Partitioner getInsertPartitioner(WorkloadProfile profile) {
     return getUpsertPartitioner(profile);
+  }
+
+  public Partitioner getLayoutPartitioner(WorkloadProfile profile, String layoutPartitionerClass) {
+    return (Partitioner) ReflectionUtils.loadClass(layoutPartitionerClass,
+        new Class[] { WorkloadProfile.class, HoodieEngineContext.class, HoodieTable.class, HoodieWriteConfig.class },
+        profile, context, table, config);
   }
 
   @Override

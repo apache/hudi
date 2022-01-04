@@ -149,6 +149,11 @@ class HoodieCatalogTable(val spark: SparkSession, val table: CatalogTable) exten
   def getAllPartitionPaths: Seq[String] = HoodieSqlUtils.getAllPartitionPaths(spark, table)
 
   /**
+   * Check if table is a partitioned table
+   */
+  def isPartitionedTable: Boolean = table.partitionColumnNames.nonEmpty
+
+  /**
    * init hoodie table for create table (as select)
    */
   def initHoodieTable(): Unit = {

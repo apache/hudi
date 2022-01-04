@@ -18,10 +18,11 @@
 
 package org.apache.hudi.table.format.cow;
 
+import org.apache.hudi.table.format.cow.data.ColumnarRowData;
+import org.apache.hudi.table.format.cow.vector.VectorizedColumnBatch;
+
 import org.apache.flink.formats.parquet.vector.reader.ColumnReader;
-import org.apache.flink.table.data.ColumnarRowData;
 import org.apache.flink.table.data.vector.ColumnVector;
-import org.apache.flink.table.data.vector.VectorizedColumnBatch;
 import org.apache.flink.table.data.vector.writable.WritableColumnVector;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
@@ -208,11 +209,14 @@ public class ParquetColumnarRowSplitReader implements Closeable {
 
   private WritableColumnVector[] createWritableVectors() {
     WritableColumnVector[] columns = new WritableColumnVector[requestedTypes.length];
+    List<Type> types = requestedSchema.getFields();
+    List<ColumnDescriptor> descriptors = requestedSchema.getColumns();
     for (int i = 0; i < requestedTypes.length; i++) {
       columns[i] = createWritableColumnVector(
           batchSize,
           requestedTypes[i],
-          requestedSchema.getColumns().get(i).getPrimitiveType());
+          types.get(i),
+          descriptors);
     }
     return columns;
   }
@@ -236,11 +240,6 @@ public class ParquetColumnarRowSplitReader implements Closeable {
      * Check that the requested schema is supported.
      */
     for (int i = 0; i < requestedSchema.getFieldCount(); ++i) {
-      Type t = requestedSchema.getFields().get(i);
-      if (!t.isPrimitive() || t.isRepetition(Type.Repetition.REPEATED)) {
-        throw new UnsupportedOperationException("Complex types not supported.");
-      }
-
       String[] colPath = requestedSchema.getPaths().get(i);
       if (fileSchema.containsPath(colPath)) {
         ColumnDescriptor fd = fileSchema.getColumnDescription(colPath);
@@ -322,14 +321,16 @@ public class ParquetColumnarRowSplitReader implements Closeable {
       throw new IOException("expecting more rows but reached last block. Read "
           + rowsReturned + " out of " + totalRowCount);
     }
+    List<Type> types = requestedSchema.getFields();
     List<ColumnDescriptor> columns = requestedSchema.getColumns();
-    columnReaders = new ColumnReader[columns.size()];
-    for (int i = 0; i < columns.size(); ++i) {
+    columnReaders = new ColumnReader[types.size()];
+    for (int i = 0; i < types.size(); ++i) {
       columnReaders[i] = createColumnReader(
           utcTimestamp,
           requestedTypes[i],
-          columns.get(i),
-          pages.getPageReader(columns.get(i)));
+          types.get(i),
+          columns,
+          pages);
     }
     totalCountLoadedSoFar += pages.getRowCount();
   }

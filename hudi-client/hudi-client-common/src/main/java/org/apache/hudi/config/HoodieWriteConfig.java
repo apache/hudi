@@ -53,10 +53,12 @@ import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 import org.apache.hudi.table.RandomFileIdPrefixProvider;
+import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.hadoop.hbase.io.compress.Compression;
+import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.orc.CompressionKind;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
@@ -1226,6 +1228,19 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(HoodieClusteringConfig.PLAN_STRATEGY_CLASS_NAME);
   }
 
+  public ClusteringPlanPartitionFilterMode getClusteringPlanPartitionFilterMode() {
+    String mode = getString(HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME);
+    return ClusteringPlanPartitionFilterMode.valueOf(mode);
+  }
+
+  public String getBeginPartitionForClustering() {
+    return getString(HoodieClusteringConfig.PARTITION_FILTER_BEGIN_PARTITION);
+  }
+
+  public String getEndPartitionForClustering() {
+    return getString(HoodieClusteringConfig.PARTITION_FILTER_END_PARTITION);
+  }
+
   public String getClusteringExecutionStrategyClass() {
     return getString(HoodieClusteringConfig.EXECUTION_STRATEGY_CLASS_NAME);
   }
@@ -1436,6 +1451,14 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean getGlobalSimpleIndexUpdatePartitionPath() {
     return getBoolean(HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE);
+  }
+
+  public int getBucketIndexNumBuckets() {
+    return getIntOrDefault(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS);
+  }
+
+  public String getBucketIndexHashField() {
+    return getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD);
   }
 
   /**
@@ -1846,6 +1869,13 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(FILEID_PREFIX_PROVIDER_CLASS);
   }
 
+  /**
+   * Layout configs.
+   */
+  public HoodieStorageLayout.LayoutType getLayoutType() {
+    return HoodieStorageLayout.LayoutType.valueOf(getString(HoodieLayoutConfig.LAYOUT_TYPE));
+  }
+
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();
@@ -1867,6 +1897,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     private boolean isPreCommitValidationConfigSet = false;
     private boolean isMetricsJmxConfigSet = false;
     private boolean isMetricsGraphiteConfigSet = false;
+    private boolean isLayoutConfigSet = false;
 
     public Builder withEngineType(EngineType engineType) {
       this.engineType = engineType;
@@ -2097,6 +2128,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withLayoutConfig(HoodieLayoutConfig layoutConfig) {
+      writeConfig.getProps().putAll(layoutConfig.getProps());
+      isLayoutConfigSet = true;
+      return this;
+    }
+
     public Builder withFinalizeWriteParallelism(int parallelism) {
       writeConfig.setValue(FINALIZE_WRITE_PARALLELISM_VALUE, String.valueOf(parallelism));
       return this;
@@ -2237,6 +2274,8 @@ public class HoodieWriteConfig extends HoodieConfig {
           HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isPreCommitValidationConfigSet,
           HoodiePreCommitValidatorConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
+      writeConfig.setDefaultOnCondition(!isLayoutConfigSet,
+          HoodieLayoutConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultValue(TIMELINE_LAYOUT_VERSION_NUM, String.valueOf(TimelineLayoutVersion.CURR_VERSION));
     }
 

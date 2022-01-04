@@ -28,8 +28,10 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
@@ -174,6 +176,17 @@ public class HiveTestUtil {
         useSchemaFromCommitMetadata, dateTime, instantTime);
     createdTablesSet.add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName);
     createCommitFile(commitMetadata, instantTime);
+  }
+
+  public static void createReplaceCommit(String instantTime, String partitions, WriteOperationType type, boolean isParquetSchemaSimple, boolean useSchemaFromCommitMetadata)
+      throws IOException {
+    HoodieReplaceCommitMetadata replaceCommitMetadata = new HoodieReplaceCommitMetadata();
+    addSchemaToCommitMetadata(replaceCommitMetadata, isParquetSchemaSimple, useSchemaFromCommitMetadata);
+    replaceCommitMetadata.setOperationType(type);
+    Map<String, List<String>> partitionToReplaceFileIds = new HashMap<>();
+    partitionToReplaceFileIds.put(partitions, new ArrayList<>());
+    replaceCommitMetadata.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
+    createReplaceCommitFile(replaceCommitMetadata, instantTime);
   }
 
   public static void createCOWTableWithSchema(String instantTime, String schemaFileName)
@@ -437,6 +450,15 @@ public class HiveTestUtil {
     byte[] bytes = commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8);
     Path fullPath = new Path(hiveSyncConfig.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
         + HoodieTimeline.makeCommitFileName(instantTime));
+    FSDataOutputStream fsout = fileSystem.create(fullPath, true);
+    fsout.write(bytes);
+    fsout.close();
+  }
+
+  public static void createReplaceCommitFile(HoodieCommitMetadata commitMetadata, String instantTime) throws IOException {
+    byte[] bytes = commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8);
+    Path fullPath = new Path(hiveSyncConfig.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+        + HoodieTimeline.makeReplaceFileName(instantTime));
     FSDataOutputStream fsout = fileSystem.create(fullPath, true);
     fsout.write(bytes);
     fsout.close();

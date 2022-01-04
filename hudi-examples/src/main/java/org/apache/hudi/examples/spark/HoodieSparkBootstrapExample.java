@@ -40,7 +40,7 @@ public class HoodieSparkBootstrapExample {
 
   public static void main(String[] args) throws Exception {
     if (args.length < 5) {
-      System.err.println("Usage: HoodieWriteClientExample <tablePath> <tableName>");
+      System.err.println("Usage: HoodieSparkBootstrapExample <recordKey> <tableName> <partitionPath> <preCombineField> <basePath>");
       System.exit(1);
     }
     String recordKey = args[0];

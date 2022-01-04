@@ -31,7 +31,7 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
-import org.apache.spark.sql.execution.command.{DDLUtils, RunnableCommand}
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.util.SchemaUtils
 
@@ -44,7 +44,7 @@ import scala.util.control.NonFatal
 case class AlterHoodieTableAddColumnsCommand(
    tableId: TableIdentifier,
    colsToAdd: Seq[StructField])
-  extends RunnableCommand {
+  extends HoodieLeafRunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     if (colsToAdd.nonEmpty) {
@@ -74,7 +74,7 @@ case class AlterHoodieTableAddColumnsCommand(
   }
 
   private def refreshSchemaInMeta(sparkSession: SparkSession, table: CatalogTable,
-      newSqlSchema: StructType): Unit = {
+      newSqlDataSchema: StructType): Unit = {
     try {
       sparkSession.catalog.uncacheTable(tableId.quotedString)
     } catch {
@@ -84,12 +84,11 @@ case class AlterHoodieTableAddColumnsCommand(
     sparkSession.catalog.refreshTable(table.identifier.unquotedString)
 
     SchemaUtils.checkColumnNameDuplication(
-      newSqlSchema.map(_.name),
+      newSqlDataSchema.map(_.name),
       "in the table definition of " + table.identifier,
       conf.caseSensitiveAnalysis)
-    DDLUtils.checkDataColNames(table, colsToAdd.map(_.name))
 
-    sparkSession.sessionState.catalog.alterTableDataSchema(tableId, newSqlSchema)
+    sparkSession.sessionState.catalog.alterTableDataSchema(tableId, newSqlDataSchema)
   }
 }
 

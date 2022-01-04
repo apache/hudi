@@ -61,14 +61,18 @@ class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
   }
 
   override protected def test(testName: String, testTags: Tag*)(testFun: => Any /* Assertion */)(implicit pos: source.Position): Unit = {
-    try super.test(testName, testTags: _*)(try testFun finally {
-      val catalog = spark.sessionState.catalog
-      catalog.listDatabases().foreach{db =>
-        catalog.listTables(db).foreach {table =>
-          catalog.dropTable(table, true, true)
+    super.test(testName, testTags: _*)(
+      try {
+        testFun
+      } finally {
+        val catalog = spark.sessionState.catalog
+        catalog.listDatabases().foreach{db =>
+          catalog.listTables(db).foreach {table =>
+            catalog.dropTable(table, true, true)
+          }
         }
       }
-    })
+    )
   }
 
   protected def generateTableName: String = {
