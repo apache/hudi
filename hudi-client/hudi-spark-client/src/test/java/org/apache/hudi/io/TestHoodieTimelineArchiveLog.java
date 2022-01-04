@@ -208,46 +208,42 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
   }
 
   @Test
-  public void testArchiveTableWithArchivalSmallFileMergeEnable() throws Exception {
-    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(false, 2, 3, 2, true, 3, 30000);
-
-    for (int i = 1; i < 5; i++) {
+  public void testArchiveTableWithArchivalSmallFileMergeEnableRecoverFromDeleteFailed() throws Exception {
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(false, 2, 3, 2, true, 3, 209715200);
+    for (int i = 1; i < 8; i++) {
       testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
-    }
-
-    // trigger archival and generate a small archive file.
-    archiveAndGetCommitsList(writeConfig);
-    RemoteIterator<LocatedFileStatus> iter0 = metaClient.getFs().listFiles(new Path(metaClient.getArchivePath()), false);
-    Path smallArchiveFile = null;
-    while (iter0.hasNext()) {
-      smallArchiveFile = iter0.next().getPath();
-    }
-
-    for (int i = 1; i < 10; i++) {
-      testTable.doWriteOperation("1000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
-    }
-
-    // trigger archival and generate a big archive file.
-    archiveAndGetCommitsList(writeConfig);
-    RemoteIterator<LocatedFileStatus> iter = metaClient.getFs().listFiles(new Path(metaClient.getArchivePath()), false);
-    Path hugeArchiveFile = null;
-    while (iter.hasNext()) {
-      hugeArchiveFile = iter.next().getPath();
-    }
-
-    // keep ingest and archive
-    for (int i = 1; i < 10; i++) {
-      testTable.doWriteOperation("2000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
       archiveAndGetCommitsList(writeConfig);
     }
 
-    // this huge archive file is not under merge and still exists.
-    assertTrue(hugeArchiveFile != null && metaClient.getFs().exists(hugeArchiveFile));
-    // this small archive file is not under merge and still exists.
-    assertTrue(smallArchiveFile != null && metaClient.getFs().exists(smallArchiveFile));
+    HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
+    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(writeConfig, table);
+    FileStatus[] fsStatuses = metaClient.getFs().globStatus(
+        new Path(metaClient.getArchivePath() + "/.commits_.archive*"));
+    List<String> candidateFiles = Arrays.stream(fsStatuses).map(fs -> fs.getPath().toString()).collect(Collectors.toList());
+
+    archiveLog.reOpenWriter();
+
+    archiveLog.buildArchiveMergePlan(candidateFiles, new Path(metaClient.getArchivePath(), archiveLog.getMergeArchivePlanName()), ".commits_.archive.3_1-0-1");
+    archiveLog.mergeArchiveFiles(Arrays.stream(fsStatuses).collect(Collectors.toList()));
+    archiveLog.reOpenWriter();
+
+    metaClient.getFs().delete(fsStatuses[0].getPath());
+
+
     HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
     HoodieArchivedTimeline archivedTimeLine = metaClient.getArchivedTimeline().reload();
-    assertEquals(22 * 3, archivedTimeLine.countInstants() + rawActiveTimeline.countInstants());
+    assertEquals(7 * 3, rawActiveTimeline.countInstants() + archivedTimeLine.countInstants());
+
+
+    for (int i = 1; i < 10; i++) {
+      testTable.doWriteOperation("1000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+      archiveAndGetCommitsList(writeConfig);
+    }
+
+    HoodieActiveTimeline rawActiveTimeline1 = new HoodieActiveTimeline(metaClient, false);
+    HoodieArchivedTimeline archivedTimeLine1 = metaClient.getArchivedTimeline().reload();
+
+    assertEquals(16 * 3, archivedTimeLine1.countInstants() + rawActiveTimeline1.countInstants());
   }
 
   @Test
