@@ -150,7 +150,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> ENABLE_META_INDEX_BLOOM_FILTER_BATCH_LOAD_MODE = ConfigProperty
       .key(METADATA_PREFIX + ".index.bloomfilter.batchload.enable")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("0.11.0")
       .withDocumentation("Enable batch/bulk loading of bloom filter index for the entire partition when looking "
           + "up index. This is useful when upserting large set of records under the same partition.");

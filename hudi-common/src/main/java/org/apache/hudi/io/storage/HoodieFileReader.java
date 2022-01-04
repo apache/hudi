@@ -20,6 +20,7 @@ package org.apache.hudi.io.storage;
 
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Set;
 
 import org.apache.avro.Schema;
@@ -34,6 +35,10 @@ public interface HoodieFileReader<R extends IndexedRecord> {
   public BloomFilter readBloomFilter();
 
   public Set<String> filterRowKeys(Set<String> candidateRowKeys);
+
+  default Map<String, R> filterRecords(Set<String> candidateRowKeys) {
+    throw new UnsupportedOperationException();
+  }
 
   public Iterator<R> getRecordIterator(Schema readerSchema) throws IOException;
 

@@ -236,10 +236,12 @@ public class HoodieTableMetadataUtil {
         int offset = partition.equals(NON_PARTITIONED_NAME) ? (pathWithPartition.startsWith("/") ? 1 : 0) :
             partition.length() + 1;
 
-        String filename = pathWithPartition.substring(offset);
-        ValidationUtils.checkState(FSUtils.isBaseFile(new Path(filename)));
-        ValidationUtils.checkState(!newFiles.containsKey(filename), "Duplicate files in HoodieCommitMetadata");
-        Path writeFilePath = new Path(dataMetaClient.getBasePath(), pathWithPartition);
+        final String fileName = pathWithPartition.substring(offset);
+        ValidationUtils.checkState(FSUtils.isBaseFile(new Path(fileName)));
+        ValidationUtils.checkState(!newFiles.containsKey(fileName), "Duplicate files in HoodieCommitMetadata");
+
+        final String fileId = FSUtils.getFileId(fileName);
+        final Path writeFilePath = new Path(dataMetaClient.getBasePath(), pathWithPartition);
         try {
           HoodieFileReader<IndexedRecord> fileReader =
               HoodieFileReaderFactory.getFileReader(dataMetaClient.getHadoopConf(), writeFilePath);
@@ -250,7 +252,7 @@ public class HoodieTableMetadataUtil {
           }
           ByteBuffer bloomByteBuffer = ByteBuffer.wrap(fileBloomFilter.serializeToString().getBytes());
           HoodieRecord record = HoodieMetadataPayload.createBloomFilterMetadataRecord(
-              new PartitionIndexID(partition), new FileIndexID(filename), instantTime,
+              new PartitionIndexID(partition), new FileIndexID(fileId), instantTime,
               bloomByteBuffer, false);
           records.add(record);
           fileReader.close();
@@ -878,9 +880,12 @@ public class HoodieTableMetadataUtil {
                                                     HoodieTableMetaClient datasetMetaClient,
                                                     Option<List<String>> latestColumns,
                                                     boolean isDeleted) {
+    final String partition = partitionPath.equals(EMPTY_PARTITION_NAME) ? NON_PARTITIONED_NAME : partitionPath;
+    final int offset = partition.equals(NON_PARTITIONED_NAME) ? (filePathWithPartition.startsWith("/") ? 1 : 0)
+        : partition.length() + 1;
+    final String fileName = filePathWithPartition.substring(offset);
+
     if (filePathWithPartition.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
-      //TODO: we are capturing range for most columns in the schema. Should we
-      // have allowList/denyList to reduce storage size of index?
       Collection<HoodieColumnStatsMetadata<Comparable>> columnStatsMetadata = new ArrayList<>();
       if (!isDeleted) {
         columnStatsMetadata = new ParquetUtils().readColumnStatsFromParquetMetadata(
@@ -888,12 +893,12 @@ public class HoodieTableMetadataUtil {
             latestColumns);
       } else {
         columnStatsMetadata =
-            latestColumns.get().stream().map(entry -> new HoodieColumnStatsMetadata<Comparable>(partitionPath, filePathWithPartition,
+            latestColumns.get().stream().map(entry -> new HoodieColumnStatsMetadata<Comparable>(partitionPath, fileName,
                 entry, null, null, 0, true)).collect(Collectors.toList());
       }
       return HoodieMetadataPayload.createColumnStatsRecords(columnStatsMetadata);
     } else {
-      throw new HoodieException("Column range index not supported for filePathWithPartition " + filePathWithPartition);
+      throw new HoodieException("Column range index not supported for filePathWithPartition " + fileName);
     }
   }
 

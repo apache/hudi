@@ -18,6 +18,9 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -48,10 +51,6 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -59,6 +58,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -107,6 +107,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       try {
         this.metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get()).setBasePath(metadataBasePath).build();
         this.metadataTableConfig = metadataMetaClient.getTableConfig();
+        this.isMetaIndexBloomFilterEnabled = metadataConfig.isMetaIndexBloomFilterEnabled();
+        this.isMetaIndexColumnStatsEnabled = metadataConfig.isMetaIndexColumnStatsEnabled();
       } catch (TableNotFoundException e) {
         LOG.warn("Metadata table was not found at path " + metadataBasePath);
         this.isMetadataTableEnabled = false;
@@ -130,12 +132,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   @Override
   protected List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> keys,
                                                                                              String partitionName) {
-    Map<Pair<String, FileSlice>, List<String>> partitionFileSliceToKeysMap = new HashMap<>();
-    for (final String key : keys) {
-      final Pair<String, FileSlice> partitionFileSlicePair = getPartitionFileSlice(partitionName, key);
-      partitionFileSliceToKeysMap.computeIfAbsent(partitionFileSlicePair, k -> new ArrayList<>()).add(key);
-    }
-
+    Map<Pair<String, FileSlice>, List<String>> partitionFileSliceToKeysMap = getPartitionFileSlices(partitionName, keys);
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> result = new ArrayList<>();
     AtomicInteger fileSlicesKeysCount = new AtomicInteger();
     partitionFileSliceToKeysMap.forEach((partitionFileSlicePair, fileSliceKeys) -> {
@@ -210,11 +207,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Retrieve record from base file
     if (baseFileReader != null) {
       HoodieTimer readTimer = new HoodieTimer();
+      Map<String, GenericRecord> baseFileRecords = baseFileReader.filterRecords(new HashSet<>(keys));
       for (String key : keys) {
         readTimer.startTimer();
-        Option<GenericRecord> baseRecord = baseFileReader.getRecordByKey(key);
-        if (baseRecord.isPresent()) {
-          hoodieRecord = getRecord(baseRecord, partitionName);
+        if (baseFileRecords.containsKey(key)) {
+          hoodieRecord = getRecord(Option.of(baseFileRecords.get(key)), partitionName);
           metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BASEFILE_READ_STR, readTimer.endTimer()));
           // merge base file record w/ log record if present
           if (logRecords.containsKey(key) && logRecords.get(key).isPresent()) {
@@ -271,6 +268,33 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     final FileSlice slice = latestFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(key,
         latestFileSlices.size()));
     return Pair.of(partitionName, slice);
+  }
+
+  /**
+   * Get the latest file slices for the interested keys in a given partition.
+   *
+   * @param partitionName - Partition to get the file slices from
+   * @param keys          - Interested keys
+   * @return FileSlices for the keys
+   */
+  private Map<Pair<String, FileSlice>, List<String>> getPartitionFileSlices(final String partitionName, final List<String> keys) {
+    // Metadata is in sync till the latest completed instant on the dataset
+    List<FileSlice> latestFileSlices =
+        HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, partitionName);
+    Option<MetadataPartitionType> partitionType = HoodieTableMetadataUtil.fromPartitionPath(partitionName);
+    ValidationUtils.checkArgument(partitionType.isPresent());
+    ValidationUtils.checkArgument(latestFileSlices.size() == partitionType.get().getFileGroupCount(),
+        String.format("Invalid number of file slices: found=%d, required=%d", latestFileSlices.size(),
+            partitionType.get().getFileGroupCount()));
+
+    Map<Pair<String, FileSlice>, List<String>> partitionFileSliceToKeysMap = new HashMap<>();
+    for (String key : keys) {
+      final FileSlice slice = latestFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(key,
+          latestFileSlices.size()));
+      final Pair<String, FileSlice> keyFileSlicePair = Pair.of(partitionName, slice);
+      partitionFileSliceToKeysMap.computeIfAbsent(keyFileSlicePair, k -> new ArrayList<>()).add(key);
+    }
+    return partitionFileSliceToKeysMap;
   }
 
   /**

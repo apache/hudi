@@ -397,13 +397,12 @@ public class ParquetUtils extends BaseFileUtils {
         metadata.getBlocks().stream().flatMap(blockMetaData -> {
           return blockMetaData.getColumns().stream().filter(columnChunkMetaData -> {
             if (latestColumns.isPresent()) {
-              return latestColumns.get().contains(columnChunkMetaData.getPath().toDotString());
-
+              return latestColumns.get().contains(columnChunkMetaData.getPrimitiveType().getName());
             }
             return true;
           }).map(
               columnChunkMetaData -> new HoodieColumnStatsMetadata<>(partitionPath, parquetFilePath.getName(),
-                  columnChunkMetaData.getPath().toDotString(),
+                  columnChunkMetaData.getPrimitiveType().getName(),
                   columnChunkMetaData.getStatistics().genericGetMin(),
                   columnChunkMetaData.getStatistics().genericGetMax(),
                   columnChunkMetaData.getStatistics().getNumNulls(),

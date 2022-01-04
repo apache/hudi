@@ -23,7 +23,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -53,8 +53,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
-public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileReader {
+public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileReader<R> {
+  private static final Logger LOG = LogManager.getLogger(HoodieHFileReader.class);
   private Path path;
   private Configuration conf;
   private HFile.Reader reader;
@@ -138,12 +141,17 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     // Current implementation reads all records and filters them. In certain cases, it many be better to:
     //  1. Scan a limited subset of keys (min/max range of candidateRowKeys)
     //  2. Lookup keys individually (if the size of candidateRowKeys is much less than the total keys in file)
+    return filterRecords(candidateRowKeys).keySet();
+  }
+
+  @Override
+  public HashMap<String, R> filterRecords(Set<String> candidateRowKeys) {
     try {
       List<Pair<String, R>> allRecords = readAllRecords();
-      Set<String> rowKeys = new HashSet<>();
+      HashMap<String, R> rowKeys = new HashMap<>();
       allRecords.forEach(t -> {
         if (candidateRowKeys.contains(t.getFirst())) {
-          rowKeys.add(t.getFirst());
+          rowKeys.put(t.getFirst(), t.getSecond());
         }
       });
       return rowKeys;

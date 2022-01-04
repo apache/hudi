@@ -21,7 +21,6 @@ package org.apache.hudi.index.bloom;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -32,7 +31,7 @@ import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
-import org.apache.hudi.io.HoodieKeyMetaBloomIndexGroupedLookupHandle.MetaBloomIndexGroupedKeyLookupResult;
+import org.apache.hudi.io.HoodieKeyMetaIndexBatchLookupHandle.MetaBloomIndexGroupedKeyLookupResult;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.HoodieTable;
@@ -55,9 +54,8 @@ import java.util.stream.Collectors;
 /**
  * Function performing actual checking of RDD partition containing (fileId, hoodieKeys) against the actual files.
  */
-public class HoodieBloomMetaIndexBatchCheckFunction
-    implements Function2<Integer, Iterator<Tuple2<Tuple2<String, String>, HoodieKey>>,
-    Iterator<List<MetaBloomIndexGroupedKeyLookupResult>>> {
+public class HoodieBloomMetaIndexBatchCheckFunction implements
+    Function2<Integer, Iterator<Tuple2<String, HoodieKey>>, Iterator<List<MetaBloomIndexGroupedKeyLookupResult>>> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieBloomMetaIndexBatchCheckFunction.class);
   private final HoodieTable hoodieTable;
@@ -69,39 +67,34 @@ public class HoodieBloomMetaIndexBatchCheckFunction
   }
 
   @Override
-  public Iterator<List<MetaBloomIndexGroupedKeyLookupResult>> call(Integer integer,
-                                                                   Iterator<Tuple2<Tuple2<String, String>, HoodieKey>> tupleIterator) throws Exception {
+  public Iterator<List<MetaBloomIndexGroupedKeyLookupResult>> call(Integer integer, Iterator<Tuple2<String, HoodieKey>> tuple2Iterator) throws Exception {
     List<List<MetaBloomIndexGroupedKeyLookupResult>> resultList = new ArrayList<>();
-
-    // <PartitionPath, FileName> => List<HoodieKey>
     Map<Pair<String, String>, List<HoodieKey>> fileToKeysMap = new HashMap<>();
 
-    while (tupleIterator.hasNext()) {
-      Tuple2<Tuple2<String, String>, HoodieKey> entry = tupleIterator.next();
-      fileToKeysMap.computeIfAbsent(Pair.of(entry._2.getPartitionPath(), entry._1._1), k -> new ArrayList<>()).add(entry._2);
+    while (tuple2Iterator.hasNext()) {
+      Tuple2<String, HoodieKey> entry = tuple2Iterator.next();
+      fileToKeysMap.computeIfAbsent(Pair.of(entry._2.getPartitionPath(), entry._1), k -> new ArrayList<>()).add(entry._2);
     }
 
     List<Pair<PartitionIndexID, FileIndexID>> partitionIDFileIDList =
-        fileToKeysMap.keySet().stream().map(partitionFileNamePair -> {
-          return Pair.of(new PartitionIndexID(partitionFileNamePair.getLeft()),
-              new FileIndexID(partitionFileNamePair.getRight()));
+        fileToKeysMap.keySet().stream().map(partitionFileIdPair -> {
+          return Pair.of(new PartitionIndexID(partitionFileIdPair.getLeft()),
+              new FileIndexID(partitionFileIdPair.getRight()));
         }).collect(Collectors.toList());
 
     Map<String, ByteBuffer> fileIDToBloomFilterByteBufferMap =
         hoodieTable.getMetadataTable().getBloomFilters(partitionIDFileIDList);
 
-    fileToKeysMap.forEach((partitionPathFileNamePair, hoodieKeyList) -> {
-      final String partitionPath = partitionPathFileNamePair.getLeft();
-      final String fileName = partitionPathFileNamePair.getRight();
-
-      final String fileId = FSUtils.getFileId(fileName);
+    fileToKeysMap.forEach((partitionPathFileIdPair, hoodieKeyList) -> {
+      final String partitionPath = partitionPathFileIdPair.getLeft();
+      final String fileId = partitionPathFileIdPair.getRight();
       ValidationUtils.checkState(!fileId.isEmpty());
 
       final String partitionIDHash = new PartitionIndexID(partitionPath).asBase64EncodedString();
-      final String fileIDHash = new FileIndexID(fileName).asBase64EncodedString();
+      final String fileIDHash = new FileIndexID(fileId).asBase64EncodedString();
       final String bloomKey = partitionIDHash.concat(fileIDHash);
       if (!fileIDToBloomFilterByteBufferMap.containsKey(bloomKey)) {
-        throw new HoodieIndexException("Failed to get the bloom filter for " + partitionPathFileNamePair);
+        throw new HoodieIndexException("Failed to get the bloom filter for " + partitionPathFileIdPair);
       }
       final ByteBuffer fileBloomFilterByteBuffer = fileIDToBloomFilterByteBufferMap.get(bloomKey);
 
@@ -116,8 +109,7 @@ public class HoodieBloomMetaIndexBatchCheckFunction
         }
       });
 
-      Option<HoodieBaseFile> dataFile = hoodieTable.getBaseFileOnlyView()
-          .getLatestBaseFile(partitionPath, fileId);
+      Option<HoodieBaseFile> dataFile = hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId);
       if (!dataFile.isPresent()) {
         throw new HoodieIndexException("Failed to find the base file for partition: " + partitionPath
             + ", fileId: " + fileId);
@@ -139,8 +131,7 @@ public class HoodieBloomMetaIndexBatchCheckFunction
     return resultList.iterator();
   }
 
-  public List<String> checkCandidatesAgainstFile(List<String> candidateRecordKeys,
-                                                 Path latestDataFilePath) throws HoodieIndexException {
+  public List<String> checkCandidatesAgainstFile(List<String> candidateRecordKeys, Path latestDataFilePath) throws HoodieIndexException {
     List<String> foundRecordKeys = new ArrayList<>();
     try {
       // Load all rowKeys from the file, to double-confirm

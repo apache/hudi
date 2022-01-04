@@ -174,7 +174,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
   }
 
   /**
-   * Load the column stats as BloomIndexFileInfo for all the involved files in the partition.
+   * Load the column stats index as BloomIndexFileInfo for all the involved files in the partition.
    *
    * @param partitions  - List of partitions for which column stats need to be loaded
    * @param context     - Engine context
@@ -182,20 +182,16 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
    */
   List<Pair<String, BloomIndexFileInfo>> loadColumnStats(
       List<String> partitions, final HoodieEngineContext context, final HoodieTable hoodieTable) {
-    // Obtain the latest data files from all the partitions.
-    List<Pair<String, String>> partitionPathFileIDList = getLatestBaseFilesForAllPartitions(partitions, context,
-        hoodieTable).stream()
-        .map(pair -> Pair.of(pair.getKey(), pair.getValue().getFileId()))
-        .collect(toList());
-
+    HoodieTimer timer = new HoodieTimer().startTimer();
     if (config.getBloomIndexPruneByRanges()) {
       // also obtain file ranges, if range pruning is enabled
       context.setJobStatus(this.getClass().getName(), "Obtain key ranges for file slices (range pruning=on)");
 
+      final String keyField = hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
       return context.flatMap(partitions, new SerializableFunction<String, Stream<Pair<String, BloomIndexFileInfo>>>() {
         @Override
         public Stream<Pair<String, BloomIndexFileInfo>> apply(String partitionName) throws Exception {
-          final String columnIndexID = new ColumnIndexID(HoodieRecord.RECORD_KEY_METADATA_FIELD).asBase64EncodedString();
+          final String columnIndexID = new ColumnIndexID(keyField).asBase64EncodedString();
           final String partitionIndexID = new PartitionIndexID(partitionName).asBase64EncodedString();
 
           List<Pair<String, String>> partitionFileIdList =
@@ -208,7 +204,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
             for (Pair<String, String> fileIdFileName : partitionFileIdList) {
               final String columnStatIndexKey = columnIndexID
                   .concat(partitionIndexID)
-                  .concat(new FileIndexID(fileIdFileName.getRight()).asBase64EncodedString());
+                  .concat(new FileIndexID(fileIdFileName.getLeft()).asBase64EncodedString());
               columnStatKeys.add(columnStatIndexKey);
               columnStatKeyToFileIdMap.put(columnStatIndexKey, fileIdFileName.getLeft());
             }
@@ -232,6 +228,11 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
         }
       }, Math.max(partitions.size(), 1));
     } else {
+      // Obtain the latest data files from all the partitions.
+      List<Pair<String, String>> partitionPathFileIDList = getLatestBaseFilesForAllPartitions(partitions, context,
+          hoodieTable).stream()
+          .map(pair -> Pair.of(pair.getKey(), pair.getValue().getFileId()))
+          .collect(toList());
       return partitionPathFileIDList.stream()
           .map(pf -> Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue()))).collect(toList());
     }

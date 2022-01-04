@@ -51,6 +51,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 public abstract class BaseTableMetadata implements HoodieTableMetadata {
@@ -70,8 +72,8 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   protected final String spillableMapDirectory;
 
   protected boolean isMetadataTableEnabled;
-  protected boolean isMetaIndexBloomFilterEnabled;
-  protected boolean isMetaIndexColumnStatsEnabled;
+  protected boolean isMetaIndexBloomFilterEnabled = false;
+  protected boolean isMetaIndexColumnStatsEnabled = false;
 
   protected BaseTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
                               String dataBasePath, String spillableMapDirectory) {
@@ -83,8 +85,6 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     this.metadataConfig = metadataConfig;
 
     this.isMetadataTableEnabled = metadataConfig.enabled();
-    this.isMetaIndexBloomFilterEnabled = (this.isMetadataTableEnabled && metadataConfig.isMetaIndexBloomFilterEnabled());
-    this.isMetaIndexColumnStatsEnabled = (this.isMetadataTableEnabled && metadataConfig.isMetaIndexColumnStatsEnabled());
     if (metadataConfig.enableMetrics()) {
       this.metrics = Option.of(new HoodieMetadataMetrics(Registry.getRegistry("HoodieMetadata")));
     } else {
@@ -194,13 +194,15 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     }
 
     HoodieTimer timer = new HoodieTimer().startTimer();
-    List<String> partitionIDFileIDStrings = new ArrayList<>();
+    Set<String> partitionIDFileIDSortedStrings = new TreeSet<>();
     partitionFileIndexIDList.forEach(partitionIDFileIDPair -> {
           final String bloomKey = partitionIDFileIDPair.getLeft().asBase64EncodedString()
               .concat(partitionIDFileIDPair.getRight().asBase64EncodedString());
-          partitionIDFileIDStrings.add(bloomKey);
+          partitionIDFileIDSortedStrings.add(bloomKey);
         }
     );
+    List<String> partitionIDFileIDStrings = new ArrayList<>(partitionIDFileIDSortedStrings);
+
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> hoodieRecordList =
         getRecordsByKeys(partitionIDFileIDStrings, MetadataPartitionType.BLOOM_FILTERS.partitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_METADATA_STR, timer.endTimer()));

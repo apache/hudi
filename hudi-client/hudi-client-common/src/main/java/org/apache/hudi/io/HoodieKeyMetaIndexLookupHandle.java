@@ -47,17 +47,17 @@ import java.util.Set;
 /**
  * Takes a bunch of keys and returns ones that are present in the file group.
  */
-public class HoodieKeyMetaBloomIndexLookupHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieReadHandle<T,
+public class HoodieKeyMetaIndexLookupHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieReadHandle<T,
     I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieKeyMetaBloomIndexLookupHandle.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieKeyMetaIndexLookupHandle.class);
   private final HoodieTableType tableType;
   private final BloomFilter bloomFilter;
   private final List<String> candidateRecordKeys;
   private long totalKeysChecked;
 
-  public HoodieKeyMetaBloomIndexLookupHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
-                                             Pair<String, String> partitionPathFileIdPair, String fileName) {
+  public HoodieKeyMetaIndexLookupHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
+                                        Pair<String, String> partitionPathFileIdPair, String fileId) {
     super(config, null, hoodieTable, partitionPathFileIdPair);
     this.tableType = hoodieTable.getMetaClient().getTableType();
     this.candidateRecordKeys = new ArrayList<>();
@@ -66,16 +66,16 @@ public class HoodieKeyMetaBloomIndexLookupHandle<T extends HoodieRecordPayload, 
     HoodieTimer timer = new HoodieTimer().startTimer();
     Option<ByteBuffer> bloomFilterByteBuffer =
         hoodieTable.getMetadataTable().getBloomFilter(new PartitionIndexID(partitionPathFileIdPair.getLeft()),
-            new FileIndexID(fileName));
+            new FileIndexID(fileId));
     if (!bloomFilterByteBuffer.isPresent()) {
-      throw new HoodieIndexException("BloomFilter missing for " + fileName);
+      throw new HoodieIndexException("BloomFilter missing for " + fileId);
     }
 
     // TODO: Go via the factory and the filter type
     this.bloomFilter =
         new HoodieDynamicBoundedBloomFilter(StandardCharsets.UTF_8.decode(bloomFilterByteBuffer.get()).toString(),
             BloomFilterTypeCode.DYNAMIC_V0);
-    LOG.debug(String.format("Read bloom filter from %s,%s, size: %s in %d ms", partitionPathFileIdPair, fileName,
+    LOG.debug(String.format("Read bloom filter from %s,%s, size: %s in %d ms", partitionPathFileIdPair, fileId,
         bloomFilterByteBuffer.get().array().length, timer.endTimer()));
   }
 
