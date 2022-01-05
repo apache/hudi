@@ -109,7 +109,7 @@ public class RowKeyGeneratorHelper {
           val = HUDI_DEFAULT_PARTITION_PATH;
         } else {
           Object data = row.get(fieldPos);
-          val = convertInstantToTimestampIfNeed(data).toString();
+          val = convertToTimestampIfInstant(data).toString();
           if (val.isEmpty()) {
             val = HUDI_DEFAULT_PARTITION_PATH;
           }
@@ -118,12 +118,12 @@ public class RowKeyGeneratorHelper {
           val = field + "=" + val;
         }
       } else { // nested
-        Object nestedVal = getNestedFieldVal(row, partitionPathPositions.get(field));
-        nestedVal = convertInstantToTimestampIfNeed(nestedVal);
-        if (nestedVal.toString().contains(NULL_RECORDKEY_PLACEHOLDER) || nestedVal.toString().contains(EMPTY_RECORDKEY_PLACEHOLDER)) {
+        Object data = getNestedFieldVal(row, partitionPathPositions.get(field));
+        data = convertToTimestampIfInstant(data);
+        if (data.toString().contains(NULL_RECORDKEY_PLACEHOLDER) || data.toString().contains(EMPTY_RECORDKEY_PLACEHOLDER)) {
           val = hiveStylePartitioning ? field + "=" + HUDI_DEFAULT_PARTITION_PATH : HUDI_DEFAULT_PARTITION_PATH;
         } else {
-          val = hiveStylePartitioning ? field + "=" + nestedVal.toString() : nestedVal.toString();
+          val = hiveStylePartitioning ? field + "=" + data.toString() : data.toString();
         }
       }
       return val;
@@ -271,7 +271,7 @@ public class RowKeyGeneratorHelper {
     return positions;
   }
 
-  private static Object convertInstantToTimestampIfNeed(Object data) {
+  private static Object convertToTimestampIfInstant(Object data) {
     if (data instanceof Instant) {
       return Timestamp.from((Instant) data);
     }
