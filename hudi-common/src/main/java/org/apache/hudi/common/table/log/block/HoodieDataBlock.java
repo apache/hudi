@@ -47,7 +47,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
   // TODO rebase records/content to leverage Either to warrant
   //      that they are mutex (used by read/write flows respectively)
-  private List<IndexedRecord> records;
+  private Option<List<IndexedRecord>> records;
 
   /**
    * Dot-path notation reference to the key field w/in the record's schema
@@ -66,7 +66,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
                          Map<HeaderMetadataType, String> footer,
                          String keyFieldRef) {
     super(header, footer, Option.empty(), Option.empty(), null, false);
-    this.records = records;
+    this.records = Option.of(records);
     this.keyFieldRef = keyFieldRef;
     // If no reader-schema has been provided assume writer-schema as one
     this.readerSchema = getWriterSchema(super.getLogBlockHeader());
@@ -86,7 +86,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
                             String keyFieldRef,
                             boolean enablePointLookups) {
     super(headers, footer, blockContentLocation, content, inputStream, readBlockLazily);
-    this.records = null;
+    this.records = Option.empty();
     this.keyFieldRef = keyFieldRef;
     // If no reader-schema has been provided assume writer-schema as one
     this.readerSchema = readerSchema.orElseGet(() -> getWriterSchema(super.getLogBlockHeader()));
@@ -134,13 +134,13 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     // In case this method is called before realizing records from content
     Option<byte[]> content = getContent();
 
-    checkState(content.isPresent() || records != null, "Block is in invalid state");
+    checkState(content.isPresent() || records.isPresent(), "Block is in invalid state");
 
     if (content.isPresent()) {
       return content.get();
     }
 
-    return serializeRecords(records);
+    return serializeRecords(records.get());
   }
 
   protected static Schema getWriterSchema(Map<HeaderMetadataType, String> logBlockHeader) {
@@ -151,15 +151,15 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    * Returns all the records contained w/in this block
    */
   public final List<IndexedRecord> getRecords() {
-    if (records == null) {
+    if (!records.isPresent()) {
       try {
         // in case records are absent, read content lazily and then convert to IndexedRecords
-        records = readRecordsFromBlockPayload();
+        records = Option.of(readRecordsFromBlockPayload());
       } catch (IOException io) {
         throw new HoodieIOException("Unable to convert content bytes to records", io);
       }
     }
-    return records;
+    return records.get();
   }
 
   public Schema getSchema() {
