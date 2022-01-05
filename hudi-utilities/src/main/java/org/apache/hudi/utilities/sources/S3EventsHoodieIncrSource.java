@@ -110,6 +110,10 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
         .option(DataSourceReadOptions.BEGIN_INSTANTTIME().key(), instantEndpts.getLeft())
         .option(DataSourceReadOptions.END_INSTANTTIME().key(), instantEndpts.getRight());
     Dataset<Row> source = metaReader.load(srcPath);
+    
+    if (source.isEmpty()) {
+      return Pair.of(Option.empty(), instantEndpts.getRight());
+    }
 
     String filter = "s3.object.size > 0";
     if (!StringUtils.isNullOrEmpty(props.getString(Config.S3_KEY_PREFIX))) {
