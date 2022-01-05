@@ -63,18 +63,15 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   private final ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
   private final ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
 
-  public HoodieAvroDataBlock(HoodieLogFile logFile,
-                             FSDataInputStream inputStream,
+  public HoodieAvroDataBlock(FSDataInputStream inputStream,
                              Option<byte[]> content,
                              boolean readBlockLazily,
-                             long position, long blockSize, long blockEndPos,
+                             HoodieLogBlockContentLocation logBlockContentLocation,
                              Option<Schema> readerSchema,
                              Map<HeaderMetadataType, String> header,
                              Map<HeaderMetadataType, String> footer,
                              String keyField) {
-    super(content, inputStream, readBlockLazily,
-        Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)), readerSchema, header,
-        footer, keyField, false);
+    super(content, inputStream, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false);
   }
 
   public HoodieAvroDataBlock(@Nonnull List<IndexedRecord> records,

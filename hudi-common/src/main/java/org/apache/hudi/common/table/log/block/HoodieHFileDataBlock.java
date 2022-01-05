@@ -69,25 +69,16 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   private static final int DEFAULT_BLOCK_SIZE = 1024 * 1024;
   private static final Compression.Algorithm DEFAULT_COMPRESSION_ALGO = Compression.Algorithm.GZ;
 
-  public HoodieHFileDataBlock(HoodieLogFile logFile,
-                              FSDataInputStream inputStream,
+  public HoodieHFileDataBlock(FSDataInputStream inputStream,
                               Option<byte[]> content,
                               boolean readBlockLazily,
-                              long position, long blockSize, long blockEndPos,
+                              HoodieLogBlockContentLocation logBlockContentLocation,
                               Option<Schema> readerSchema,
                               Map<HeaderMetadataType, String> header,
                               Map<HeaderMetadataType, String> footer,
 
                               boolean enablePointLookups) {
-    super(content,
-        inputStream,
-        readBlockLazily,
-        Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)),
-        readerSchema,
-        header,
-        footer,
-        HoodieHFileReader.KEY_FIELD_NAME,
-        enablePointLookups);
+    super(content, inputStream, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, HoodieHFileReader.KEY_FIELD_NAME, enablePointLookups);
   }
 
   public HoodieHFileDataBlock(@Nonnull List<IndexedRecord> records, @Nonnull Map<HeaderMetadataType, String> header,
@@ -174,10 +165,10 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   // TODO abstract this w/in HoodieDataBlock
   @Override
   protected List<IndexedRecord> lookupRecords(List<String> keys) throws IOException {
+    HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
+
     Configuration inlineConf = new Configuration();
     inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
-
-    HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
 
     Path inlinePath = InLineFSUtils.getInlineFilePath(
         blockContentLoc.getLogFile().getPath(),

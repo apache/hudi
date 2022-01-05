@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
@@ -157,7 +158,8 @@ public abstract class HoodieLogBlock {
    * intensive CompactedScanner, the location helps to lazily read contents from the log file
    */
   public static final class HoodieLogBlockContentLocation {
-
+    // Hadoop Config required to access the file
+    private final Configuration hadoopConf;
     // The logFile that contains this block
     private final HoodieLogFile logFile;
     // The filePosition in the logFile for the contents of this block
@@ -167,13 +169,19 @@ public abstract class HoodieLogBlock {
     // The final position where the complete block ends
     private final long blockEndPos;
 
-    HoodieLogBlockContentLocation(HoodieLogFile logFile, long contentPositionInLogFile, long blockSize,
-        long blockEndPos) {
+    public HoodieLogBlockContentLocation(Configuration hadoopConf,
+                                         HoodieLogFile logFile,
+                                         long contentPositionInLogFile,
+                                         long blockSize,
+                                         long blockEndPos) {
+      this.hadoopConf = hadoopConf;
       this.logFile = logFile;
       this.contentPositionInLogFile = contentPositionInLogFile;
       this.blockSize = blockSize;
       this.blockEndPos = blockEndPos;
     }
+
+    public Configuration getHadoopConf() { return hadoopConf; }
 
     public HoodieLogFile getLogFile() {
       return logFile;
