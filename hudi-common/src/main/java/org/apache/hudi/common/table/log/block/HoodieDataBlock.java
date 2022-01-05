@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -101,9 +102,11 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    * @param header             - data block header
    * @return Data block of the requested type.
    */
-  public static HoodieLogBlock getBlock(HoodieLogBlockType logDataBlockFormat, List<IndexedRecord> recordList,
-                                        Map<HeaderMetadataType, String> header) {
-    return getBlock(logDataBlockFormat, recordList, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+  public static HoodieLogBlock getBlock(HoodieLogBlockType logDataBlockFormat,
+                                        List<IndexedRecord> recordList,
+                                        Map<HeaderMetadataType, String> header,
+                                        CompressionCodecName parquetCompressionCodecName) {
+    return getBlock(logDataBlockFormat, recordList, header, parquetCompressionCodecName, HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
   /**
@@ -115,15 +118,18 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    * @param keyField           - FieldId to get the key from the records
    * @return Data block of the requested type.
    */
-  public static HoodieLogBlock getBlock(HoodieLogBlockType logDataBlockFormat, List<IndexedRecord> recordList,
-                                        Map<HeaderMetadataType, String> header, String keyField) {
+  public static HoodieLogBlock getBlock(HoodieLogBlockType logDataBlockFormat,
+                                        List<IndexedRecord> recordList,
+                                        Map<HeaderMetadataType, String> header,
+                                        CompressionCodecName parquetCompressionCodecName,
+                                        String keyField) {
     switch (logDataBlockFormat) {
       case AVRO_DATA_BLOCK:
         return new HoodieAvroDataBlock(recordList, header, keyField);
       case HFILE_DATA_BLOCK:
         return new HoodieHFileDataBlock(recordList, header, keyField);
       case PARQUET_DATA_BLOCK:
-        return new HoodieParquetDataBlock(recordList, header, keyField);
+        return new HoodieParquetDataBlock(recordList, header, keyField, parquetCompressionCodecName);
       default:
         throw new HoodieException("Data block format " + logDataBlockFormat + " not implemented");
     }
@@ -209,7 +215,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
   protected List<IndexedRecord> lookupRecords(List<String> keys) throws IOException {
     throw new UnsupportedOperationException(
-        String.format("Point-wise records lookups are not supported by this Data block type (%s)", getBlockType())
+        String.format("Point lookups are not supported by this Data block type (%s)", getBlockType())
     );
   }
 

@@ -360,12 +360,15 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writeSchemaWithMetaFields.toString());
       List<HoodieLogBlock> blocks = new ArrayList<>(2);
       if (recordList.size() > 0) {
+        HoodieLogBlock block;
         if (config.populateMetaFields()) {
-          blocks.add(HoodieDataBlock.getBlock(hoodieTable.getLogDataBlockType(), recordList, header));
+          block = HoodieDataBlock.getBlock(hoodieTable.getLogDataBlockType(), recordList, header, config.getParquetCompressionCodec());
         } else {
           final String keyField = hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
-          blocks.add(HoodieDataBlock.getBlock(hoodieTable.getLogDataBlockType(), recordList, header, keyField));
+          block = HoodieDataBlock.getBlock(hoodieTable.getLogDataBlockType(), recordList, header, config.getParquetCompressionCodec(), keyField);
         }
+
+        blocks.add(block);
       }
       if (keysToDelete.size() > 0) {
         blocks.add(new HoodieDeleteBlock(keysToDelete.toArray(new HoodieKey[keysToDelete.size()]), header));

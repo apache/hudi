@@ -28,7 +28,6 @@ import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.hudi.io.storage.HoodieAvroParquetConfig;
@@ -56,6 +55,8 @@ import java.util.Map;
  */
 public class HoodieParquetDataBlock extends HoodieDataBlock {
 
+  private final Option<CompressionCodecName> compressionCodecName;
+
   public HoodieParquetDataBlock(HoodieLogFile logFile,
                                 FSDataInputStream inputStream,
                                 Option<byte[]> content,
@@ -74,14 +75,19 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
         footer,
         keyField,
         false);
+
+    this.compressionCodecName = Option.empty();
   }
 
   public HoodieParquetDataBlock(
       @Nonnull List<IndexedRecord> records,
       @Nonnull Map<HeaderMetadataType, String> header,
-      @Nonnull String keyField
+      @Nonnull String keyField,
+      @Nonnull CompressionCodecName compressionCodecName
   ) {
     super(records, header, new HashMap<>(), keyField);
+
+    this.compressionCodecName = Option.of(compressionCodecName);
   }
 
   @Override
@@ -103,8 +109,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     HoodieAvroParquetConfig avroParquetConfig =
         new HoodieAvroParquetConfig(
             writeSupport,
-            // TODO fetch compression codec from the config
-            CompressionCodecName.GZIP,
+            compressionCodecName.get(),
             ParquetWriter.DEFAULT_BLOCK_SIZE,
             ParquetWriter.DEFAULT_PAGE_SIZE,
             1024 * 1024 * 1024,
