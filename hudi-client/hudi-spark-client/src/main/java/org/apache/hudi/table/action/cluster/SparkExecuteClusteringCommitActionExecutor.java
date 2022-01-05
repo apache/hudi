@@ -82,7 +82,6 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
         .performClustering(clusteringPlan, schema, instantTime);
     JavaRDD<WriteStatus> writeStatusRDD = writeMetadata.getWriteStatuses();
     JavaRDD<WriteStatus> statuses = updateIndex(writeStatusRDD, writeMetadata);
-    // TODO review, this pulls in all of the RDDs into driver's memory
     writeMetadata.setWriteStats(statuses.map(WriteStatus::getStat).collect());
     writeMetadata.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(writeMetadata));
     commitOnAutoCommit(writeMetadata);
