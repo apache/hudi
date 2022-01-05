@@ -208,8 +208,11 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
               columnStatKeys.add(columnStatIndexKey);
               columnStatKeyToFileIdMap.put(columnStatIndexKey, fileIdFileName.getLeft());
             }
-            Collections.sort(columnStatKeys);
+            if (columnStatKeys.isEmpty()) {
+              return Stream.empty();
+            }
 
+            Collections.sort(columnStatKeys);
             Map<String, HoodieColumnStats> columnKeyHashToStatMap = hoodieTable
                 .getMetadataTable().getColumnStats(columnStatKeys);
             List<Pair<String, BloomIndexFileInfo>> result = new ArrayList<>();

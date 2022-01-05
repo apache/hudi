@@ -232,29 +232,34 @@ public class HoodieTableMetadataUtil {
           LOG.error("Failed to find path in write stat to update metadata table " + hoodieWriteStat);
           return;
         }
-
         int offset = partition.equals(NON_PARTITIONED_NAME) ? (pathWithPartition.startsWith("/") ? 1 : 0) :
             partition.length() + 1;
 
         final String fileName = pathWithPartition.substring(offset);
-        ValidationUtils.checkState(FSUtils.isBaseFile(new Path(fileName)));
-        ValidationUtils.checkState(!newFiles.containsKey(fileName), "Duplicate files in HoodieCommitMetadata");
+        if (!FSUtils.isBaseFile(new Path(fileName))) {
+          return;
+        }
 
         final String fileId = FSUtils.getFileId(fileName);
         final Path writeFilePath = new Path(dataMetaClient.getBasePath(), pathWithPartition);
         try {
           HoodieFileReader<IndexedRecord> fileReader =
               HoodieFileReaderFactory.getFileReader(dataMetaClient.getHadoopConf(), writeFilePath);
-          final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
-          if (fileBloomFilter == null) {
+          try {
+            final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
+            if (fileBloomFilter == null) {
+              LOG.error("Failed to read bloom filter for " + writeFilePath);
+              return;
+            }
+            ByteBuffer bloomByteBuffer = ByteBuffer.wrap(fileBloomFilter.serializeToString().getBytes());
+            HoodieRecord record = HoodieMetadataPayload.createBloomFilterMetadataRecord(
+                new PartitionIndexID(partition), new FileIndexID(fileId), instantTime,
+                bloomByteBuffer, false);
+            records.add(record);
+          } catch (Exception e) {
             LOG.error("Failed to read bloom filter for " + writeFilePath);
             return;
           }
-          ByteBuffer bloomByteBuffer = ByteBuffer.wrap(fileBloomFilter.serializeToString().getBytes());
-          HoodieRecord record = HoodieMetadataPayload.createBloomFilterMetadataRecord(
-              new PartitionIndexID(partition), new FileIndexID(fileId), instantTime,
-              bloomByteBuffer, false);
-          records.add(record);
           fileReader.close();
         } catch (IOException e) {
           LOG.error("Failed to get bloom filter for file: " + writeFilePath + ", write stat: " + hoodieWriteStat);
@@ -813,10 +818,12 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
-   * @param engineContext
-   * @param datasetMetaClient
-   * @param allWriteStats
-   * @param isMetaIndexColumnStatsForAllColumns
+   * Create column stats from write status.
+   *
+   * @param engineContext                       - Enging context
+   * @param datasetMetaClient                   - Dataset meta client
+   * @param allWriteStats                       - Write status to convert
+   * @param isMetaIndexColumnStatsForAllColumns - Are all columns enabled for indexing
    */
   public static List<HoodieRecord> createColumnStatsFromWriteStats(HoodieEngineContext engineContext,
                                                                    HoodieTableMetaClient datasetMetaClient,
@@ -884,6 +891,9 @@ public class HoodieTableMetadataUtil {
     final int offset = partition.equals(NON_PARTITIONED_NAME) ? (filePathWithPartition.startsWith("/") ? 1 : 0)
         : partition.length() + 1;
     final String fileName = filePathWithPartition.substring(offset);
+    if (!FSUtils.isBaseFile(new Path(fileName))) {
+      return Stream.empty();
+    }
 
     if (filePathWithPartition.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
       Collection<HoodieColumnStatsMetadata<Comparable>> columnStatsMetadata = new ArrayList<>();
