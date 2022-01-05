@@ -18,9 +18,15 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.BufferedFSInputStream;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSInputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.fs.SchemeAwareFSDataInputStream;
 import org.apache.hudi.common.fs.TimedFSDataInputStream;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -38,13 +44,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.CorruptedLogFileException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.BufferedFSInputStream;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSInputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -101,7 +100,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     // NOTE: We repackage {@code HoodieLogFile} here to make sure that the provided path
     //       is prefixed with an appropriate scheme given that we're not propagating the FS
     //       further
-    this.logFile = new HoodieLogFile(HoodieWrapperFileSystem.convertPathWithScheme(logFile.getPath(), fs.getScheme()));
+    this.logFile = new HoodieLogFile(makeQualified(fs, logFile.getPath()));
     this.inputStream = getFSDataInputStream(fs, this.logFile, bufferSize);
     this.readerSchema = readerSchema;
     this.readBlockLazily = readBlockLazily;
@@ -447,6 +446,10 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   @Override
   public void remove() {
     throw new UnsupportedOperationException("Remove not supported for HoodieLogFileReader");
+  }
+
+  private static Path makeQualified(FileSystem fs, Path path) {
+    return path.makeQualified(fs.getUri(), fs.getWorkingDirectory());
   }
 
   /**
