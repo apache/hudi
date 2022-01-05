@@ -181,7 +181,9 @@ public abstract class HoodieLogBlock {
       this.blockEndPos = blockEndPos;
     }
 
-    public Configuration getHadoopConf() { return hadoopConf; }
+    public Configuration getHadoopConf() {
+      return hadoopConf;
+    }
 
     public HoodieLogFile getLogFile() {
       return logFile;

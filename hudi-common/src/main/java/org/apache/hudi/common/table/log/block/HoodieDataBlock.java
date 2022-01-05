@@ -21,11 +21,8 @@ package org.apache.hudi.common.table.log.block;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import java.io.IOException;
 import java.util.HashSet;

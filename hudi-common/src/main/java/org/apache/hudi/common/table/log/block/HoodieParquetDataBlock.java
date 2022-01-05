@@ -27,7 +27,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.hudi.io.storage.HoodieAvroParquetConfig;
