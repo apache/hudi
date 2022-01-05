@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -154,6 +155,18 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     LOG.info("Creating a new instant " + instant);
     // Create the in-flight file
     createFileInMetaPath(instant.getFileName(), Option.empty(), false);
+  }
+
+  public void createRequestedReplaceCommit(String instantTime, String actionType) {
+    try {
+      HoodieInstant instant = new HoodieInstant(State.REQUESTED, actionType, instantTime);
+      LOG.info("Creating a new instant " + instant);
+      // Create the request replace file
+      createFileInMetaPath(instant.getFileName(),
+              TimelineMetadataUtils.serializeRequestedReplaceMetadata(new HoodieRequestedReplaceMetadata()), false);
+    } catch (IOException e) {
+      throw new HoodieIOException("Error create requested replace commit ", e);
+    }
   }
 
   public void saveAsComplete(HoodieInstant instant, Option<byte[]> data) {
