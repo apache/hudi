@@ -31,7 +31,7 @@ import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
-import org.apache.hudi.io.HoodieKeyMetaIndexBatchLookupHandle.MetaBloomIndexGroupedKeyLookupResult;
+import org.apache.hudi.io.HoodieKeyMetaIndexLookupResult;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.HoodieTable;
@@ -43,6 +43,7 @@ import scala.Tuple2;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -55,7 +56,7 @@ import java.util.stream.Collectors;
  * Function performing actual checking of RDD partition containing (fileId, hoodieKeys) against the actual files.
  */
 public class HoodieBloomMetaIndexBatchCheckFunction implements
-    Function2<Integer, Iterator<Tuple2<String, HoodieKey>>, Iterator<List<MetaBloomIndexGroupedKeyLookupResult>>> {
+    Function2<Integer, Iterator<Tuple2<String, HoodieKey>>, Iterator<List<HoodieKeyMetaIndexLookupResult>>> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieBloomMetaIndexBatchCheckFunction.class);
   private final HoodieTable hoodieTable;
@@ -67,13 +68,16 @@ public class HoodieBloomMetaIndexBatchCheckFunction implements
   }
 
   @Override
-  public Iterator<List<MetaBloomIndexGroupedKeyLookupResult>> call(Integer integer, Iterator<Tuple2<String, HoodieKey>> tuple2Iterator) throws Exception {
-    List<List<MetaBloomIndexGroupedKeyLookupResult>> resultList = new ArrayList<>();
+  public Iterator<List<HoodieKeyMetaIndexLookupResult>> call(Integer integer, Iterator<Tuple2<String, HoodieKey>> tuple2Iterator) throws Exception {
+    List<List<HoodieKeyMetaIndexLookupResult>> resultList = new ArrayList<>();
     Map<Pair<String, String>, List<HoodieKey>> fileToKeysMap = new HashMap<>();
 
     while (tuple2Iterator.hasNext()) {
       Tuple2<String, HoodieKey> entry = tuple2Iterator.next();
       fileToKeysMap.computeIfAbsent(Pair.of(entry._2.getPartitionPath(), entry._1), k -> new ArrayList<>()).add(entry._2);
+    }
+    if (fileToKeysMap.isEmpty()) {
+      return Collections.emptyListIterator();
     }
 
     List<Pair<PartitionIndexID, FileIndexID>> partitionIDFileIDList =
@@ -122,8 +126,8 @@ public class HoodieBloomMetaIndexBatchCheckFunction implements
               hoodieKeyList.size(), candidateRecordKeys.size(),
               candidateRecordKeys.size() - matchingKeys.size(), matchingKeys.size()));
 
-      ArrayList<MetaBloomIndexGroupedKeyLookupResult> subList = new ArrayList<>();
-      subList.add(new MetaBloomIndexGroupedKeyLookupResult(fileId, partitionPath, dataFile.get().getCommitTime(),
+      ArrayList<HoodieKeyMetaIndexLookupResult> subList = new ArrayList<>();
+      subList.add(new HoodieKeyMetaIndexLookupResult(fileId, partitionPath, dataFile.get().getCommitTime(),
           matchingKeys));
       resultList.add(subList);
     });

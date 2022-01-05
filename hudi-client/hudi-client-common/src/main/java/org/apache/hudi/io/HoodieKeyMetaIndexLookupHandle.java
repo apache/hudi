@@ -71,7 +71,6 @@ public class HoodieKeyMetaIndexLookupHandle<T extends HoodieRecordPayload, I, K,
       throw new HoodieIndexException("BloomFilter missing for " + fileId);
     }
 
-    // TODO: Go via the factory and the filter type
     this.bloomFilter =
         new HoodieDynamicBoundedBloomFilter(StandardCharsets.UTF_8.decode(bloomFilterByteBuffer.get()).toString(),
             BloomFilterTypeCode.DYNAMIC_V0);
