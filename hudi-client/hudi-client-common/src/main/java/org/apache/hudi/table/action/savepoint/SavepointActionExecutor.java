@@ -65,11 +65,9 @@ public class SavepointActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
 
   @Override
   public HoodieSavepointMetadata execute() {
-    if (table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
-      throw new UnsupportedOperationException("Savepointing is not supported or MergeOnRead table types");
-    }
     Option<HoodieInstant> cleanInstant = table.getCompletedCleanTimeline().lastInstant();
-    HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, instantTime);
+    HoodieInstant commitInstant = new HoodieInstant(false, this.table.getMetaClient().getTableConfig().getTableType() == HoodieTableType.COPY_ON_WRITE
+        ? HoodieTimeline.COMMIT_ACTION : HoodieTimeline.DELTA_COMMIT_ACTION, instantTime);
     if (!table.getCompletedCommitsTimeline().containsInstant(commitInstant)) {
       throw new HoodieSavepointException("Could not savepoint non-existing commit " + commitInstant);
     }

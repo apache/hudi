@@ -26,6 +26,7 @@ import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -78,8 +79,10 @@ public class SavepointsCommand implements CommandMarker {
       throws Exception {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    HoodieTimeline timeline = activeTimeline.getCommitTimeline().filterCompletedInstants();
-    HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime);
+    HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
+    HoodieInstant commitInstant = new HoodieInstant(false,
+        metaClient.getTableConfig().getTableType() == HoodieTableType.COPY_ON_WRITE ? HoodieTimeline.COMMIT_ACTION : HoodieTimeline.DELTA_COMMIT_ACTION,
+        commitTime);
 
     if (!timeline.containsInstant(commitInstant)) {
       return "Commit " + commitTime + " not found in Commits " + timeline;
@@ -112,8 +115,10 @@ public class SavepointsCommand implements CommandMarker {
       throw new HoodieException("There are no completed instants to run rollback");
     }
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    HoodieTimeline timeline = activeTimeline.getCommitTimeline().filterCompletedInstants();
-    HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, instantTime);
+    HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
+    HoodieInstant commitInstant = new HoodieInstant(false,
+        metaClient.getTableConfig().getTableType() == HoodieTableType.COPY_ON_WRITE ? HoodieTimeline.COMMIT_ACTION : HoodieTimeline.DELTA_COMMIT_ACTION,
+        instantTime);
 
     if (!timeline.containsInstant(commitInstant)) {
       return "Commit " + instantTime + " not found in Commits " + timeline;
