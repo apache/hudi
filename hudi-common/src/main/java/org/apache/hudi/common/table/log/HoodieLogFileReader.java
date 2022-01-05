@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.fs.SchemeAwareFSDataInputStream;
 import org.apache.hudi.common.fs.TimedFSDataInputStream;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -100,7 +101,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     // NOTE: We repackage {@code HoodieLogFile} here to make sure that the provided path
     //       is prefixed with an appropriate scheme given that we're not propagating the FS
     //       further
-    this.logFile = new HoodieLogFile(fs.getFileStatus(logFile.getPath()));
+    this.logFile = new HoodieLogFile(HoodieWrapperFileSystem.convertPathWithScheme(logFile.getPath(), fs.getScheme()));
     this.inputStream = getFSDataInputStream(fs, this.logFile, bufferSize);
     this.readerSchema = readerSchema;
     this.readBlockLazily = readBlockLazily;
