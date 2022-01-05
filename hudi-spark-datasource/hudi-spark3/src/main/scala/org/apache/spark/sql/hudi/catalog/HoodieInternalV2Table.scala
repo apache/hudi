@@ -30,7 +30,7 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
 
 import java.util
-import scala.collection.JavaConverters.setAsJavaSetConverter
+import scala.collection.JavaConverters.{mapAsJavaMapConverter, setAsJavaSetConverter}
 
 case class HoodieInternalV2Table(spark: SparkSession,
                                  path: String,
@@ -60,8 +60,15 @@ case class HoodieInternalV2Table(spark: SparkSession,
   override def schema(): StructType = tableSchema
 
   override def capabilities(): util.Set[TableCapability] = Set(
-    BATCH_READ, V1_BATCH_WRITE, OVERWRITE_BY_FILTER, TRUNCATE
+    BATCH_READ, V1_BATCH_WRITE, OVERWRITE_BY_FILTER, TRUNCATE, ACCEPT_ANY_SCHEMA
   ).asJava
+
+  override def properties(): util.Map[String, String] = {
+    val map = new util.HashMap[String, String]()
+    map.put("provider", "hudi")
+    map.putAll(hoodieCatalogTable.catalogProperties.asJava)
+    map
+  }
 
   override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder = {
     new WriteIntoHoodieBuilder(info.options, hoodieCatalogTable, spark)

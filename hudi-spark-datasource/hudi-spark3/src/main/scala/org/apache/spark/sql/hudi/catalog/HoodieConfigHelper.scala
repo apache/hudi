@@ -20,13 +20,14 @@ package org.apache.spark.sql.hudi.catalog
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.MultiPartKeysValueExtractor
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.sql.InsertMode
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -37,7 +38,7 @@ import org.apache.spark.sql.types.StructField
 
 import scala.collection.JavaConverters.propertiesAsScalaMapConverter
 
-trait HoodieConfigHelper {
+trait HoodieConfigHelper extends Logging {
 
   def buildHoodieConfig(hoodieCatalogTable: HoodieCatalogTable): Map[String, String] = {
     val sparkSession: SparkSession = hoodieCatalogTable.spark
@@ -80,22 +81,26 @@ trait HoodieConfigHelper {
     castIfNeeded(exp, field.dataType, sqlConf)
   }
 
-  def buildHoodieInsertConfig(
-                               hoodieCatalogTable: HoodieCatalogTable,
-                               sparkSession: SparkSession,
-                               isOverwrite: Boolean,
-                               insertPartitions: Map[String, Option[String]] = Map.empty,
-                               extraOptions: Map[String, String]): Map[String, String] = {
+  /**
+   * Build the default config for insert.
+   * @return
+   */
+    def buildHoodieInsertConfig(hoodieCatalogTable: HoodieCatalogTable,
+                                sparkSession: SparkSession,
+                                isOverwrite: Boolean,
+                                insertPartitions: Map[String, Option[String]] = Map.empty,
+                                extraOptions: Map[String, String]): Map[String, String] = {
 
     if (insertPartitions.nonEmpty &&
       (insertPartitions.keys.toSet != hoodieCatalogTable.partitionFields.toSet)) {
       throw new IllegalArgumentException(s"Insert partition fields" +
-        s"[${insertPartitions.keys.mkString(" ")}]" +
+        s"[${insertPartitions.keys.mkString(" " )}]" +
         s" not equal to the defined partition in table[${hoodieCatalogTable.partitionFields.mkString(",")}]")
     }
     val path = hoodieCatalogTable.tableLocation
     val tableType = hoodieCatalogTable.tableTypeName
     val tableConfig = hoodieCatalogTable.tableConfig
+    val tableSchema = hoodieCatalogTable.tableSchema
 
     val options = hoodieCatalogTable.catalogProperties ++ tableConfig.getProps.asScala.toMap ++ extraOptions
     val parameters = withSparkConf(sparkSession, options)()
@@ -147,8 +152,9 @@ trait HoodieConfigHelper {
       // on reading.
       classOf[ValidateDuplicateKeyPayload].getCanonicalName
     } else {
-      classOf[DefaultHoodieRecordPayload].getCanonicalName
+      classOf[OverwriteWithLatestAvroPayload].getCanonicalName
     }
+    logInfo(s"insert statement use write operation type: $operation, payloadClass: $payloadClassName")
 
     val enableHive = isEnableHive(sparkSession)
     withSparkConf(sparkSession, options) {

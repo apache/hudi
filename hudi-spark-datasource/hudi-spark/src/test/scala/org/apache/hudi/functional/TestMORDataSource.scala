@@ -17,8 +17,6 @@
 
 package org.apache.hudi.functional
 
-import java.util.Properties
-
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig

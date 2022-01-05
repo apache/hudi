@@ -58,7 +58,7 @@ class Spark2Adapter extends SparkAdapter {
   }
 
   override def getInsertIntoChildren(plan: LogicalPlan):
-  Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] = {
+    Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] = {
     plan match {
       case InsertIntoTable(table, partition, query, overwrite, ifPartitionNotExists) =>
         Some((table, partition, query, overwrite, ifPartitionNotExists))

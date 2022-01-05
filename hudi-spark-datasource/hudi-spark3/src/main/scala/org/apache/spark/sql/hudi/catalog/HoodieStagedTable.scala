@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.hudi.catalog
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions.RECORDKEY_FIELD
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.connector.catalog.{Identifier, StagedTable, SupportsWrite, TableCapability}
@@ -33,7 +35,7 @@ case class HoodieStagedTable(ident: Identifier,
                              override val schema: StructType,
                              partitions: Array[Transform],
                              override val properties: util.Map[String, String],
-                             modes: TableCreationMode) extends StagedTable with SupportsWrite {
+                             mode: TableCreationMode) extends StagedTable with SupportsWrite {
 
   private var sourceQuery: Option[DataFrame] = None
   private var writeOptions: Map[String, String] = Map.empty
@@ -55,17 +57,22 @@ case class HoodieStagedTable(ident: Identifier,
       writeOptions = sqlWriteOptions.asScala.toMap
     }
     props.putAll(properties)
-    // TODO more options
-    props.put("path", properties.get("location"))
     props.put("hoodie.table.name", ident.name())
-    props.put("hoodie.datasource.write.operation", "bulk_insert")
     props.put(RECORDKEY_FIELD.key, properties.get("primaryKey"))
-    catalog.createHoodieTable(ident, schema, partitions, props, writeOptions, sourceQuery, modes)
+    catalog.createHoodieTable(ident, schema, partitions, props, writeOptions, sourceQuery, mode)
   }
 
   override def name(): String = ident.name()
 
-  override def abortStagedChanges(): Unit = {}
+  override def abortStagedChanges(): Unit = {
+    clearTablePath(properties.get("location"), catalog.spark.sparkContext.hadoopConfiguration)
+  }
+
+  private def clearTablePath(tablePath: String, conf: Configuration): Unit = {
+    val path = new Path(tablePath)
+    val fs = path.getFileSystem(conf)
+    fs.delete(path, true)
+  }
 
   override def capabilities(): util.Set[TableCapability] = Set(TableCapability.V1_BATCH_WRITE).asJava
 

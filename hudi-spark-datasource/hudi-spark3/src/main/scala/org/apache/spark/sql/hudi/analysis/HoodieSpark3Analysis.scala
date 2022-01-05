@@ -27,7 +27,7 @@ import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, V2SessionCatalog}
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{castIfNeeded, tableExistsInPath}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{castIfNeeded, removeMetaFields, tableExistsInPath}
 import org.apache.spark.sql.hudi.catalog.{HoodieCatalog, HoodieConfigHelper, HoodieInternalV2Table}
 import org.apache.spark.sql.hudi.command.{AlterHoodieTableDropPartitionCommand, ShowHoodieTablePartitionsCommand, TruncateHoodieTableCommand}
 import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, SparkSqlUtils}
@@ -52,8 +52,9 @@ case class HoodieSpark3Analysis(sparkSession: SparkSession) extends Rule[Logical
       val relation = new DefaultSource().createRelation(new SQLContext(sparkSession),
         buildHoodieConfig(d.hoodieCatalogTable))
       LogicalRelation(relation, output, catalogTable, isStreaming = false)
-    case a @ InsertIntoStatement(r, d, _, _, _, _) if a.query.resolved
-      && r.isInstanceOf[DataSourceV2Relation] && needsSchemaAdjustment(a.query, r.schema) =>
+    case a @ InsertIntoStatement(r: DataSourceV2Relation, partitionSpec, _, _, _, _) if a.query.resolved &&
+      r.table.isInstanceOf[HoodieInternalV2Table] &&
+      needsSchemaAdjustment(a.query, r.table.asInstanceOf[HoodieInternalV2Table], partitionSpec, r.schema) =>
       val projection = resolveQueryColumnsByOrdinal(a.query, r.output)
       if (projection != a.query) {
         a.copy(query = projection)
@@ -63,17 +64,36 @@ case class HoodieSpark3Analysis(sparkSession: SparkSession) extends Rule[Logical
   }
 
   private def needsSchemaAdjustment(query: LogicalPlan,
+                                    hoodieTable: HoodieInternalV2Table,
+                                    partitionSpec: Map[String, Option[String]],
                                     schema: StructType): Boolean = {
     val output = query.output
+    val queryOutputWithoutMetaFields = removeMetaFields(output)
+    val partitionFields = hoodieTable.hoodieCatalogTable.partitionFields
+    val partitionSchema = hoodieTable.hoodieCatalogTable.partitionSchema
+    val staticPartitionValues = partitionSpec.filter(p => p._2.isDefined).mapValues(_.get)
+
+    assert(staticPartitionValues.isEmpty ||
+      staticPartitionValues.size == partitionSchema.size,
+      s"Required partition columns is: ${partitionSchema.json}, Current static partitions " +
+        s"is: ${staticPartitionValues.mkString("," + "")}")
+
+    assert(staticPartitionValues.size + queryOutputWithoutMetaFields.size
+      == hoodieTable.hoodieCatalogTable.tableSchemaWithoutMetaFields.size,
+      s"Required select columns count: ${hoodieTable.hoodieCatalogTable.tableSchemaWithoutMetaFields.size}, " +
+        s"Current select columns(including static partition column) count: " +
+        s"${staticPartitionValues.size + queryOutputWithoutMetaFields.size}，columns: " +
+        s"(${(queryOutputWithoutMetaFields.map(_.name) ++ staticPartitionValues.keys).mkString(",")})")
+
     // static partition insert.
-    if (output.length < schema.length) {
-      // scalastyle:off
-      return false
-      // scalastyle:on
+    if (staticPartitionValues.nonEmpty) {
+      // drop partition fields in origin schema to align fields.
+      schema.dropWhile(p => partitionFields.contains(p.name))
     }
 
     val existingSchemaOutput = output.take(schema.length)
-    existingSchemaOutput.map(_.name) != schema.map(_.name)
+    existingSchemaOutput.map(_.name) != schema.map(_.name) ||
+      existingSchemaOutput.map(_.dataType) != schema.map(_.dataType)
   }
 
   private def resolveQueryColumnsByOrdinal(query: LogicalPlan,

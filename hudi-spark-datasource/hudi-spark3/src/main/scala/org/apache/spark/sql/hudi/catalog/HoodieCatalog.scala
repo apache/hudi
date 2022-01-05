@@ -19,7 +19,12 @@
 package org.apache.spark.sql.hudi.catalog
 
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.hive.util.ConfigUtils
+import org.apache.hudi.sql.InsertMode
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{NoSuchTableException, TableAlreadyExistsException}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, CatalogUtils, HoodieCatalogTable}
@@ -34,7 +39,7 @@ import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.{Dataset, SaveMode, SparkSession, _}
 
 import java.util
-import scala.collection.JavaConverters.mapAsScalaMapConverter
+import scala.collection.JavaConverters.{mapAsJavaMapConverter, mapAsScalaMapConverter}
 
 class HoodieCatalog extends DelegatingCatalogExtension with StagingTableCatalog with HoodieConfigHelper {
 
@@ -109,12 +114,27 @@ class HoodieCatalog extends DelegatingCatalogExtension with StagingTableCatalog 
 
   override def dropTable(ident: Identifier): Boolean = super.dropTable(ident)
 
+  override def purgeTable(ident: Identifier): Boolean = {
+    val table = loadTable(ident)
+    table match {
+      case hoodieTable: HoodieInternalV2Table =>
+        val location = hoodieTable.hoodieCatalogTable.tableLocation
+        val targetPath = new Path(location)
+        val engineContext = new HoodieSparkEngineContext(spark.sparkContext)
+        val fs = FSUtils.getFs(location, spark.sparkContext.hadoopConfiguration)
+        FSUtils.deleteDir(engineContext, fs, targetPath, spark.sparkContext.defaultParallelism)
+        super.dropTable(ident)
+      case _ =>
+    }
+    true
+  }
+
   @throws[NoSuchTableException]
   @throws[TableAlreadyExistsException]
   override def renameTable(oldIdent: Identifier, newIdent: Identifier): Unit = {
     loadTable(oldIdent) match {
       case _: HoodieInternalV2Table =>
-        new AlterHoodieTableRenameCommand(oldIdent.asTableIdentifier, newIdent.asTableIdentifier, false)
+        new AlterHoodieTableRenameCommand(oldIdent.asTableIdentifier, newIdent.asTableIdentifier, false).run(spark)
       case _ => super.renameTable(oldIdent, newIdent)
     }
   }
@@ -170,12 +190,7 @@ class HoodieCatalog extends DelegatingCatalogExtension with StagingTableCatalog 
 
     val isByPath = isPathIdentifier(ident)
 
-    val location = if (isByPath) {
-      Option(ident.name())
-    } else {
-      Option(allTableProperties.get("location"))
-    }
-    //val id = TableIdentifier(ident.name(), ident.namespace().lastOption)
+    val location = if (isByPath) Option(ident.name()) else Option(allTableProperties.get("location"))
     val id = ident.asTableIdentifier
 
     val locUriOpt = location.map(CatalogUtils.stringToURI)
@@ -189,6 +204,10 @@ class HoodieCatalog extends DelegatingCatalogExtension with StagingTableCatalog 
       if (location.isDefined) CatalogTableType.EXTERNAL else CatalogTableType.MANAGED
     val commentOpt = Option(allTableProperties.get("comment"))
 
+    val tablePropertiesNew = new util.HashMap[String, String](allTableProperties)
+    // put path to table properties.
+    tablePropertiesNew.put("path", loc.getPath)
+
     val tableDesc = new CatalogTable(
       identifier = id,
       tableType = tableType,
@@ -197,36 +216,46 @@ class HoodieCatalog extends DelegatingCatalogExtension with StagingTableCatalog 
       provider = Option("hudi"),
       partitionColumnNames = newPartitionColumns,
       bucketSpec = newBucketSpec,
-      properties = allTableProperties.asScala.toMap,
+      properties = tablePropertiesNew.asScala.toMap,
       comment = commentOpt)
 
     val hoodieCatalogTable = HoodieCatalogTable(spark, tableDesc)
 
     if (operation == TableCreationMode.STAGE_CREATE) {
+      val tablePath = hoodieCatalogTable.tableLocation
+      val hadoopConf = spark.sessionState.newHadoopConf()
+      assert(HoodieSqlCommonUtils.isEmptyPath(tablePath, hadoopConf),
+        s"Path '$tablePath' should be empty for CTAS")
       hoodieCatalogTable.initHoodieTable()
-      saveSourceDF(sourceQuery, tableDesc.properties ++ buildHoodieInsertConfig(hoodieCatalogTable, spark, isOverwrite = false, Map.empty, Map.empty))
-    } else {
-      if (sourceQuery.isEmpty) {
-        saveSourceDF(sourceQuery, tableDesc.properties)
-      } else {
-        saveSourceDF(sourceQuery, tableDesc.properties ++ buildHoodieInsertConfig(hoodieCatalogTable, spark, isOverwrite = false, Map.empty, Map.empty))
-      }
-    }
 
-    new CreateHoodieTableCommand(tableDesc, false).run(spark)
+      val tblProperties = hoodieCatalogTable.catalogProperties
+      val options = Map(
+        DataSourceWriteOptions.HIVE_CREATE_MANAGED_TABLE.key -> (tableDesc.tableType == CatalogTableType.MANAGED).toString,
+        DataSourceWriteOptions.HIVE_TABLE_SERDE_PROPERTIES.key -> ConfigUtils.configToString(tblProperties.asJava),
+        DataSourceWriteOptions.HIVE_TABLE_PROPERTIES.key -> ConfigUtils.configToString(tableDesc.properties.asJava),
+        DataSourceWriteOptions.SQL_INSERT_MODE.key -> InsertMode.NON_STRICT.value(),
+        DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.key -> "true"
+      )
+      saveSourceDF(sourceQuery, tableDesc.properties ++ buildHoodieInsertConfig(hoodieCatalogTable, spark, isOverwrite = false, Map.empty, options))
+      CreateHoodieTableCommand.createTableInCatalog(spark, hoodieCatalogTable, ignoreIfExists = false)
+    } else if (sourceQuery.isEmpty) {
+      saveSourceDF(sourceQuery, tableDesc.properties)
+      new CreateHoodieTableCommand(tableDesc, false).run(spark)
+    } else {
+      saveSourceDF(sourceQuery, tableDesc.properties ++ buildHoodieInsertConfig(hoodieCatalogTable, spark, isOverwrite = false, Map.empty, Map.empty))
+      new CreateHoodieTableCommand(tableDesc, false).run(spark)
+    }
 
     loadTable(ident)
   }
 
-  private def isPathIdentifier(ident: Identifier) = {
-    new Path(ident.name()).isAbsolute
-  }
+  private def isPathIdentifier(ident: Identifier) = new Path(ident.name()).isAbsolute
 
   protected def isPathIdentifier(table: CatalogTable): Boolean = {
     isPathIdentifier(table.identifier)
   }
 
-  protected def isPathIdentifier(tableIdentifier: TableIdentifier) : Boolean = {
+  protected def isPathIdentifier(tableIdentifier: TableIdentifier): Boolean = {
     isPathIdentifier(HoodieIdentifierHelper.of(tableIdentifier.database.toArray, tableIdentifier.table))
   }
 
@@ -235,24 +264,16 @@ class HoodieCatalog extends DelegatingCatalogExtension with StagingTableCatalog 
     // will check the file system itself
     val catalog = spark.sessionState.catalog
     // scalastyle:off
-    if (isPathIdentifier(table)) {
-      return None
-    }
+    if (isPathIdentifier(table)) return None
     // scalastyle:on
     val tableExists = catalog.tableExists(table)
     if (tableExists) {
       val oldTable = catalog.getTableMetadata(table)
-      if (oldTable.tableType == CatalogTableType.VIEW) {
-        throw new HoodieException(
-          s"$table is a view. You may not write data into a view.")
-      }
-      if (!HoodieSqlCommonUtils.isHoodieTable(oldTable)) {
-        throw new HoodieException(s"$table is not a Hoodie table.")
-      }
+      if (oldTable.tableType == CatalogTableType.VIEW) throw new HoodieException(
+        s"$table is a view. You may not write data into a view.")
+      if (!HoodieSqlCommonUtils.isHoodieTable(oldTable)) throw new HoodieException(s"$table is not a Hoodie table.")
       Some(oldTable)
-    } else {
-      None
-    }
+    } else None
   }
 
   private def saveSourceDF(sourceQuery: Option[Dataset[_]],
