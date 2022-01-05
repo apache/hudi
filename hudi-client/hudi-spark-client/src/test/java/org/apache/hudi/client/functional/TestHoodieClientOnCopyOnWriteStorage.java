@@ -1836,9 +1836,12 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     Map<String, List<GenericRecord>> recordsByCommitTime = records.stream()
         .collect(Collectors.groupingBy(r -> r.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString()));
     assertTrue(commitTimes.containsAll(recordsByCommitTime.keySet()));
+    Set<String> expectedFileIds = allStatus.stream().map(WriteStatus::getFileId).collect(Collectors.toSet());
     for (GenericRecord record : records) {
       String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
       assertTrue(expectedKeys.contains(recordKey));
+      String fileName = record.get(HoodieRecord.FILENAME_METADATA_FIELD).toString();
+      assertTrue(expectedFileIds.contains(FSUtils.getFileId(fileName)));
     }
   }
 
