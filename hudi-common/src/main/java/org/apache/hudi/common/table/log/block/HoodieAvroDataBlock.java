@@ -84,11 +84,6 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     super(records, header, new HashMap<>(), keyField);
   }
 
-  public HoodieAvroDataBlock(@Nonnull List<IndexedRecord> records,
-                             @Nonnull Map<HeaderMetadataType, String> header) {
-    this(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
-  }
-
   @Override
   public HoodieLogBlockType getBlockType() {
     return HoodieLogBlockType.AVRO_DATA_BLOCK;

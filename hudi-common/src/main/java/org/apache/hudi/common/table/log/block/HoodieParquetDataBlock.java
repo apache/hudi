@@ -84,13 +84,6 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     super(records, header, new HashMap<>(), keyField);
   }
 
-  public HoodieParquetDataBlock(
-      @Nonnull List<IndexedRecord> records,
-      @Nonnull Map<HeaderMetadataType, String> header
-  ) {
-    super(records, header, new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
-  }
-
   @Override
   public HoodieLogBlockType getBlockType() {
     return HoodieLogBlockType.PARQUET_DATA_BLOCK;

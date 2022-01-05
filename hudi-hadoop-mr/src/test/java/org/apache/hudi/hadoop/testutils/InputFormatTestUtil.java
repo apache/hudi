@@ -368,9 +368,9 @@ public class InputFormatTestUtil {
     if (logBlockType == HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK) {
       dataBlock = new HoodieHFileDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
     } else if (logBlockType == HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK) {
-      dataBlock = new HoodieParquetDataBlock(records, header);
+      dataBlock = new HoodieParquetDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
     } else {
-      dataBlock = new HoodieAvroDataBlock(records, header);
+      dataBlock = new HoodieAvroDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
     }
     writer.appendBlock(dataBlock);
     return writer;

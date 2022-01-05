@@ -19,6 +19,7 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
@@ -39,6 +40,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -132,12 +134,12 @@ public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
         try {
           GenericRecord val = (GenericRecord) r.getData().getInsertValue(schema).get();
           HoodieAvroUtils.addHoodieKeyToRecord(val, r.getRecordKey(), r.getPartitionPath(), "");
-          return (org.apache.avro.generic.IndexedRecord) val;
-        } catch (java.io.IOException e) {
+          return (IndexedRecord) val;
+        } catch (IOException e) {
           LOG.warn("Failed to convert record " + r.toString(), e);
           return null;
         }
-      }).collect(Collectors.toList()), header));
+      }).collect(Collectors.toList()), header, HoodieRecord.RECORD_KEY_METADATA_FIELD));
       return Pair.of(partitionPath, logWriter.getLogFile());
     }
   }
