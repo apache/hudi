@@ -94,47 +94,6 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     this.enablePointLookups = enablePointLookups;
   }
 
-  /**
-   * Util method to get a data block for the requested type.
-   *
-   * @param logDataBlockFormat - Data block type
-   * @param recordList         - List of records that goes in the data block
-   * @param header             - data block header
-   * @return Data block of the requested type.
-   */
-  public static HoodieLogBlock getBlock(HoodieLogBlockType logDataBlockFormat,
-                                        List<IndexedRecord> recordList,
-                                        Map<HeaderMetadataType, String> header,
-                                        CompressionCodecName parquetCompressionCodecName) {
-    return getBlock(logDataBlockFormat, recordList, header, parquetCompressionCodecName, HoodieRecord.RECORD_KEY_METADATA_FIELD);
-  }
-
-  /**
-   * Util method to get a data block for the requested type.
-   *
-   * @param logDataBlockFormat - Data block type
-   * @param recordList         - List of records that goes in the data block
-   * @param header             - data block header
-   * @param keyField           - FieldId to get the key from the records
-   * @return Data block of the requested type.
-   */
-  public static HoodieLogBlock getBlock(HoodieLogBlockType logDataBlockFormat,
-                                        List<IndexedRecord> recordList,
-                                        Map<HeaderMetadataType, String> header,
-                                        CompressionCodecName parquetCompressionCodecName,
-                                        String keyField) {
-    switch (logDataBlockFormat) {
-      case AVRO_DATA_BLOCK:
-        return new HoodieAvroDataBlock(recordList, header, keyField);
-      case HFILE_DATA_BLOCK:
-        return new HoodieHFileDataBlock(recordList, header, keyField);
-      case PARQUET_DATA_BLOCK:
-        return new HoodieParquetDataBlock(recordList, header, keyField, parquetCompressionCodecName);
-      default:
-        throw new HoodieException("Data block format " + logDataBlockFormat + " not implemented");
-    }
-  }
-
   @Override
   public byte[] getContentBytes() throws IOException {
     // In case this method is called before realizing records from content
