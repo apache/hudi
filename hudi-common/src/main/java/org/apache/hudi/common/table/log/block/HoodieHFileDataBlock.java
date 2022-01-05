@@ -167,7 +167,9 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   protected List<IndexedRecord> lookupRecords(List<String> keys) throws IOException {
     HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
 
-    Configuration inlineConf = new Configuration();
+    // NOTE: It's important to extend Hadoop configuration here to make sure configuration
+    //       is appropriately carried over
+    Configuration inlineConf = new Configuration(blockContentLoc.getHadoopConf());
     inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
 
     Path inlinePath = InLineFSUtils.getInlineFilePath(
