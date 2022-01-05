@@ -14,12 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.sql.hudi.parser
+package org.apache.spark.sql.parser
 
 import org.antlr.v4.runtime.ParserRuleContext
 import org.antlr.v4.runtime.tree.{ParseTree, TerminalNode}
-import org.apache.hudi.spark.sql.parser.HoodieSqlBaseBaseVisitor
 import org.apache.hudi.spark.sql.parser.HoodieSqlBaseParser._
+import org.apache.hudi.spark.sql.parser._
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis._
@@ -35,7 +35,7 @@ import scala.collection.JavaConverters._
  * Here we only do the parser for the extended sql syntax. e.g MergeInto. For
  * other sql syntax we use the delegate sql parser which is the SparkSqlParser.
  */
-class HoodieSpark2ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterface) extends HoodieSqlBaseBaseVisitor[AnyRef] with Logging {
+class HoodieSpark3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterface) extends HoodieSqlBaseBaseVisitor[AnyRef] with Logging {
 
   import ParserUtils._
 
