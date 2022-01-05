@@ -20,6 +20,7 @@ package org.apache.hudi.hadoop.testutils;
 
 import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.RawLocalFileSystem;
+import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -367,7 +368,7 @@ public class InputFormatTestUtil {
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writeSchema.toString());
     HoodieDataBlock dataBlock = null;
     if (logBlockType == HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK) {
-      dataBlock = new HoodieHFileDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+      dataBlock = new HoodieHFileDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, Compression.Algorithm.GZ);
     } else if (logBlockType == HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK) {
       dataBlock = new HoodieParquetDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, CompressionCodecName.GZIP);
     } else {

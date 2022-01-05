@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
@@ -36,7 +37,6 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.KeyValue;
-import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
@@ -67,7 +67,8 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   private static final Logger LOG = LogManager.getLogger(HoodieHFileDataBlock.class);
 
   private static final int DEFAULT_BLOCK_SIZE = 1024 * 1024;
-  private static final Compression.Algorithm DEFAULT_COMPRESSION_ALGO = Compression.Algorithm.GZ;
+
+  private final Option<Compression.Algorithm> compressionAlgorithm;
 
   public HoodieHFileDataBlock(FSDataInputStream inputStream,
                               Option<byte[]> content,
@@ -79,11 +80,15 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
 
                               boolean enablePointLookups) {
     super(content, inputStream, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, HoodieHFileReader.KEY_FIELD_NAME, enablePointLookups);
+    this.compressionAlgorithm = Option.empty();
   }
 
-  public HoodieHFileDataBlock(@Nonnull List<IndexedRecord> records, @Nonnull Map<HeaderMetadataType, String> header,
-                              String keyField) {
+  public HoodieHFileDataBlock(List<IndexedRecord> records,
+                              Map<HeaderMetadataType, String> header,
+                              String keyField,
+                              Compression.Algorithm compressionAlgorithm) {
     super(records, header, new HashMap<>(), keyField);
+    this.compressionAlgorithm = Option.of(compressionAlgorithm);
   }
 
   @Override
@@ -95,9 +100,9 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   protected byte[] serializeRecords(List<IndexedRecord> records) throws IOException {
     HFileContext context = new HFileContextBuilder()
         .withBlockSize(DEFAULT_BLOCK_SIZE)
-        // TODO fetch value from the config
-        .withCompression(DEFAULT_COMPRESSION_ALGO)
+        .withCompression(compressionAlgorithm.get())
         .build();
+
     Configuration conf = new Configuration();
     CacheConfig cacheConfig = new CacheConfig(conf);
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
