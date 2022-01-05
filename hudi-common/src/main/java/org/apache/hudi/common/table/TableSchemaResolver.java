@@ -198,8 +198,15 @@ public class TableSchemaResolver {
    */
   public MessageType getTableParquetSchema() throws Exception {
     Option<Schema> schemaFromCommitMetadata = getTableSchemaFromCommitMetadata(true);
-    return schemaFromCommitMetadata.isPresent() ? convertAvroSchemaToParquet(schemaFromCommitMetadata.get()) :
-           getTableParquetSchemaFromDataFile();
+    if (schemaFromCommitMetadata.isPresent()) {
+      return convertAvroSchemaToParquet(schemaFromCommitMetadata.get());
+    }
+    Option<Schema> schemaFromTableConfig = metaClient.getTableConfig().getTableCreateSchema();
+    if (schemaFromTableConfig.isPresent()) {
+      Schema schema = HoodieAvroUtils.addMetadataFields(schemaFromTableConfig.get(), withOperationField);
+      return convertAvroSchemaToParquet(schema);
+    }
+    return getTableParquetSchemaFromDataFile();
   }
 
   /**
