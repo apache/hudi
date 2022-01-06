@@ -19,7 +19,9 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.client.utils.LazyIterableIterator;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -34,8 +36,10 @@ import org.apache.spark.api.java.function.Function2;
 import scala.Tuple2;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Function performing actual checking of RDD partition containing (fileId, hoodieKeys) against the actual files.
@@ -73,18 +77,27 @@ public class HoodieBloomMetaIndexLazyCheckFunction implements Function2<Integer,
 
       List<MetaBloomIndexKeyLookupResult> ret = new ArrayList<>();
       try {
-        // process one file in each go.
+        final Map<String, HoodieBaseFile> fileIDBaseFileMap = new HashMap<>();
         while (inputItr.hasNext()) {
           Tuple2<String, HoodieKey> currentTuple = inputItr.next();
+          final String partitionPath = currentTuple._2.getPartitionPath();
+          final String recordKey = currentTuple._2.getRecordKey();
           final String fileId = currentTuple._1;
           ValidationUtils.checkState(!fileId.isEmpty());
-          String partitionPath = currentTuple._2.getPartitionPath();
-          String recordKey = currentTuple._2.getRecordKey();
-          Pair<String, String> partitionPathFileIdPair = Pair.of(partitionPath, fileId);
+          if (!fileIDBaseFileMap.containsKey(fileId)) {
+            Option<HoodieBaseFile> baseFile = hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId);
+            if (!baseFile.isPresent()) {
+              throw new HoodieIndexException("Failed to find the base file for partition: " + partitionPath
+                  + ", fileId: " + fileId);
+            }
+            fileIDBaseFileMap.put(fileId, baseFile.get());
+          }
+          final Pair<String, String> partitionPathFileIdPair = Pair.of(partitionPath, fileId);
 
           // lazily init state
           if (keyLookupHandle == null) {
-            keyLookupHandle = new HoodieKeyMetaIndexLookupHandle(config, hoodieTable, partitionPathFileIdPair, fileId);
+            keyLookupHandle = new HoodieKeyMetaIndexLookupHandle(config, hoodieTable, partitionPathFileIdPair,
+                fileIDBaseFileMap.get(fileId).getFileName());
           }
 
           // if continue on current file
@@ -94,7 +107,7 @@ public class HoodieBloomMetaIndexLazyCheckFunction implements Function2<Integer,
             // do the actual checking of file & break out
             ret.add(keyLookupHandle.getLookupResult());
             keyLookupHandle = new HoodieKeyMetaIndexLookupHandle(config, hoodieTable, partitionPathFileIdPair,
-                fileId);
+                fileIDBaseFileMap.get(fileId).getFileName());
             keyLookupHandle.addKey(recordKey);
             break;
           }

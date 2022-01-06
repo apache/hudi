@@ -227,18 +227,23 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   /**
    * Create bloom filter metadata record.
    *
-   * @param fileID      - FileID for which the bloom filter needs to persisted
-   * @param timestamp   - Instant timestamp responsible for this record
-   * @param bloomFilter - Bloom filter for the File
-   * @param isDeleted   - Is the bloom filter no more valid
+   * @param partitionName - Partition name
+   * @param baseFileName  - Base file name for which the bloom filter needs to persisted
+   * @param timestamp     - Instant timestamp responsible for this record
+   * @param bloomFilter   - Bloom filter for the File
+   * @param isDeleted     - Is the bloom filter no more valid
    * @return Metadata payload containing the fileID and its bloom filter record
    */
-  public static HoodieRecord<HoodieMetadataPayload> createBloomFilterMetadataRecord(final PartitionIndexID partitionID,
-                                                                                    final FileIndexID fileID,
+  public static HoodieRecord<HoodieMetadataPayload> createBloomFilterMetadataRecord(final String partitionName,
+                                                                                    final String baseFileName,
                                                                                     final String timestamp,
                                                                                     final ByteBuffer bloomFilter,
                                                                                     final boolean isDeleted) {
-    final String bloomFilterKey = partitionID.asBase64EncodedString().concat(fileID.asBase64EncodedString());
+    ValidationUtils.checkArgument(!baseFileName.contains(Path.SEPARATOR)
+            && FSUtils.isBaseFile(new Path(baseFileName)),
+        "Invalid base file '" + baseFileName + "' for MetaIndexBloomFilter!");
+    final String bloomFilterKey = new PartitionIndexID(partitionName).asBase64EncodedString()
+        .concat(new FileIndexID(baseFileName).asBase64EncodedString());
     HoodieKey key = new HoodieKey(bloomFilterKey, MetadataPartitionType.BLOOM_FILTERS.partitionPath());
 
     // TODO: Get the bloom filter type from the file
@@ -405,17 +410,10 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static String getColumnStatsRecordKey(HoodieColumnStatsMetadata<Comparable> columnStatsMetadata) {
     final ColumnIndexID columnID = new ColumnIndexID(columnStatsMetadata.getColumnName());
     final PartitionIndexID partitionID = new PartitionIndexID(columnStatsMetadata.getPartitionPath());
-    final FileIndexID fileID = new FileIndexID(FSUtils.getFileId(new Path(columnStatsMetadata.getFilePath()).getName()));
+    final FileIndexID fileID = new FileIndexID(new Path(columnStatsMetadata.getFileName()).getName());
     return columnID.asBase64EncodedString()
         .concat(partitionID.asBase64EncodedString())
         .concat(fileID.asBase64EncodedString());
-  }
-
-  // parse attribute in record key. TODO: find better way to get this attribute instaed of parsing key
-  public static String getAttributeFromRecordKey(String recordKey, String attribute) {
-    final String columnIDBase64EncodedString = recordKey.substring(0, ColumnIndexID.ID_COLUMN_HASH_SIZE.bits());
-
-    return "";
   }
 
   @Override

@@ -449,7 +449,7 @@ public class ParquetUtils extends BaseFileUtils {
     } else {
       maxValue = range1.getMaxValue();
     }
-    return new HoodieColumnStatsMetadata<>(range1.getPartitionPath(), range1.getFilePath(), range1.getColumnName(),
+    return new HoodieColumnStatsMetadata<>(range1.getPartitionPath(), range1.getFileName(), range1.getColumnName(),
         minValue, maxValue, nullCount, false);
   }
 

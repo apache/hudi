@@ -204,7 +204,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
             for (Pair<String, String> fileIdFileName : partitionFileIdList) {
               final String columnStatIndexKey = columnIndexID
                   .concat(partitionIndexID)
-                  .concat(new FileIndexID(fileIdFileName.getLeft()).asBase64EncodedString());
+                  .concat(new FileIndexID(fileIdFileName.getRight()).asBase64EncodedString());
               columnStatKeys.add(columnStatIndexKey);
               columnStatKeyToFileIdMap.put(columnStatIndexKey, fileIdFileName.getLeft());
             }

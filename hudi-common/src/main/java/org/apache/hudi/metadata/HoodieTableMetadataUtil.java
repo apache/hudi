@@ -46,8 +46,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.util.hash.FileIndexID;
-import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.io.storage.HoodieFileReader;
@@ -239,8 +237,8 @@ public class HoodieTableMetadataUtil {
         if (!FSUtils.isBaseFile(new Path(fileName))) {
           return;
         }
+        ValidationUtils.checkState(!newFiles.containsKey(fileName), "Duplicate files in HoodieCommitMetadata");
 
-        final String fileId = FSUtils.getFileId(fileName);
         final Path writeFilePath = new Path(dataMetaClient.getBasePath(), pathWithPartition);
         try {
           HoodieFileReader<IndexedRecord> fileReader =
@@ -253,8 +251,7 @@ public class HoodieTableMetadataUtil {
             }
             ByteBuffer bloomByteBuffer = ByteBuffer.wrap(fileBloomFilter.serializeToString().getBytes());
             HoodieRecord record = HoodieMetadataPayload.createBloomFilterMetadataRecord(
-                new PartitionIndexID(partition), new FileIndexID(fileId), instantTime,
-                bloomByteBuffer, false);
+                partition, fileName, instantTime, bloomByteBuffer, false);
             records.add(record);
           } catch (Exception e) {
             LOG.error("Failed to read bloom filter for " + writeFilePath);
@@ -345,16 +342,16 @@ public class HoodieTableMetadataUtil {
       // Files deleted from a partition
       List<String> deletedFiles = partitionMetadata.getDeletePathPatterns();
       deletedFiles.forEach(entry -> {
-        if (FSUtils.isBaseFile(new Path(entry))) {
-          deleteFileList.add(Pair.of(partition, entry));
+        final Path deletedFilePath = new Path(entry);
+        if (FSUtils.isBaseFile(deletedFilePath)) {
+          deleteFileList.add(Pair.of(partition, deletedFilePath.getName()));
         }
       });
     });
 
     return engineContext.map(deleteFileList, deleteFileInfo -> {
       return HoodieMetadataPayload.createBloomFilterMetadataRecord(
-          new PartitionIndexID(deleteFileInfo.getLeft()), new FileIndexID(deleteFileInfo.getRight()),
-          instantTime, ByteBuffer.allocate(0), true);
+          deleteFileInfo.getLeft(), deleteFileInfo.getRight(), instantTime, ByteBuffer.allocate(0), true);
     }, 1).stream().collect(Collectors.toList());
   }
 
@@ -656,8 +653,7 @@ public class HoodieTableMetadataUtil {
 
       final String partition = partitionName.equals(EMPTY_PARTITION_NAME) ? NON_PARTITIONED_NAME : partitionName;
       records.add(HoodieMetadataPayload.createBloomFilterMetadataRecord(
-          new PartitionIndexID(partition), new FileIndexID(deletedFile),
-          instantTime, ByteBuffer.allocate(0), true));
+          partition, deletedFile, instantTime, ByteBuffer.allocate(0), true));
     }));
 
     partitionToAppendedFiles.forEach((partitionName, appendedFileMap) -> {
@@ -678,8 +674,7 @@ public class HoodieTableMetadataUtil {
           }
           ByteBuffer bloomByteBuffer = ByteBuffer.wrap(fileBloomFilter.serializeToString().getBytes());
           HoodieRecord record = HoodieMetadataPayload.createBloomFilterMetadataRecord(
-              new PartitionIndexID(partition), new FileIndexID(appendedFile), instantTime,
-              bloomByteBuffer, false);
+              partition, appendedFile, instantTime, bloomByteBuffer, false);
           records.add(record);
           fileReader.close();
         } catch (IOException e) {
@@ -898,9 +893,13 @@ public class HoodieTableMetadataUtil {
     if (filePathWithPartition.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
       Collection<HoodieColumnStatsMetadata<Comparable>> columnStatsMetadata = new ArrayList<>();
       if (!isDeleted) {
-        columnStatsMetadata = new ParquetUtils().readColumnStatsFromParquetMetadata(
-            datasetMetaClient.getHadoopConf(), partitionPath, new Path(datasetMetaClient.getBasePath(), filePathWithPartition),
-            latestColumns);
+        final Path fullFilePath = new Path(datasetMetaClient.getBasePath(), filePathWithPartition);
+        try {
+          columnStatsMetadata = new ParquetUtils().readColumnStatsFromParquetMetadata(
+              datasetMetaClient.getHadoopConf(), partitionPath, fullFilePath, latestColumns);
+        } catch (Exception e) {
+          LOG.error("Failed to read column stats for " + fullFilePath);
+        }
       } else {
         columnStatsMetadata =
             latestColumns.get().stream().map(entry -> new HoodieColumnStatsMetadata<Comparable>(partitionPath, fileName,
