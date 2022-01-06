@@ -240,6 +240,8 @@ case class HoodieFileIndex(spark: SparkSession,
     })
   }
 
+  override def refresh(): Unit = super.refresh()
+
   override def inputFiles: Array[String] = {
     val fileStatusList = allFiles
     fileStatusList.map(_.getPath.toString).toArray
