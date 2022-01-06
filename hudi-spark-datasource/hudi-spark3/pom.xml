@@ -29,8 +29,6 @@
 
   <properties>
     <main.basedir>${project.parent.parent.basedir}</main.basedir>
-    <maven.compiler.source>8</maven.compiler.source>
-    <maven.compiler.target>8</maven.compiler.target>
   </properties>
 
   <build>

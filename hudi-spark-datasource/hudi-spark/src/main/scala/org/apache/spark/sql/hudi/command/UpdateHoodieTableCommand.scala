@@ -29,6 +29,7 @@ import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Expression}
 import org.apache.spark.sql.catalyst.plans.logical.{Assignment, UpdateTable}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
+import org.apache.spark.sql.hudi.HoodieSqlUtils.castIfNeeded
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructField
 
@@ -38,7 +39,7 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends HoodieLeaf
   with SparkAdapterSupport {
 
   private val table = updateTable.table
-  private val tableId = getTableIdentify(table)
+  private val tableId = getTableIdentifier(table)
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     logInfo(s"start execute update command for $tableId")

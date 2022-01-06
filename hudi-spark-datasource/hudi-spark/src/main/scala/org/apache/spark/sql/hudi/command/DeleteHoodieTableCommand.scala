@@ -33,7 +33,7 @@ case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends Hoodie
 
   private val table = deleteTable.table
 
-  private val tableId = getTableIdentify(table)
+  private val tableId = getTableIdentifier(table)
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     logInfo(s"start execute delete command for $tableId")

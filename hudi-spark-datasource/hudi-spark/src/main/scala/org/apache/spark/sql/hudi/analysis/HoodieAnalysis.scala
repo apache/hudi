@@ -28,7 +28,7 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{getTableIdentify, getTableLocation, isHoodieTable, removeMetaFields, tableExistsInPath}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{getTableIdentifier, getTableLocation, isHoodieTable, removeMetaFields, tableExistsInPath}
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlCommonUtils, HoodieSqlUtils}
@@ -91,7 +91,7 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
       // Convert to CompactionHoodieTableCommand
       case CompactionTable(table, operation, options)
         if table.resolved && isHoodieTable(table, sparkSession) =>
-        val tableId = getTableIdentify(table)
+        val tableId = getTableIdentifier(table)
         val catalogTable = sparkSession.sessionState.catalog.getTableMetadata(tableId)
         CompactionHoodieTableCommand(catalogTable, operation, options)
       // Convert to CompactionHoodiePathCommand
@@ -100,7 +100,7 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
       // Convert to CompactionShowOnTable
       case CompactionShowOnTable(table, limit)
         if isHoodieTable(table, sparkSession) =>
-        val tableId = getTableIdentify(table)
+        val tableId = getTableIdentifier(table)
         val catalogTable = sparkSession.sessionState.catalog.getTableMetadata(tableId)
         CompactionShowHoodieTableCommand(catalogTable, limit)
       // Convert to CompactionShowHoodiePathCommand

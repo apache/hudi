@@ -17,34 +17,30 @@
 
 package org.apache.spark.sql.hudi
 
-import scala.collection.JavaConverters._
-import java.net.URI
-import java.util.{Date, Locale, Properties}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-
-import org.apache.hudi.{AvroConversionUtils, SparkAdapterSupport}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.DFSPropertiesConfiguration
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieMetadataConfig}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator}
-import org.apache.spark.SPARK_VERSION
-import org.apache.spark.sql.{Column, DataFrame, SparkSession}
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.{AvroConversionUtils, SparkAdapterSupport}
+import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
-import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Cast, Expression, Literal}
+import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
-import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
-import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.types.{DataType, NullType, StringType, StructField, StructType}
+import org.apache.spark.sql.internal.StaticSQLConf
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 
+import java.net.URI
 import java.text.SimpleDateFormat
-
+import java.util.{Locale, Properties}
+import scala.collection.JavaConverters._
 import scala.collection.immutable.Map
 
 object HoodieSqlCommonUtils extends SparkAdapterSupport {
@@ -73,7 +69,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     }
   }
 
-  def getTableIdentify(table: LogicalPlan): TableIdentifier = {
+  def getTableIdentifier(table: LogicalPlan): TableIdentifier = {
     table match {
       case SubqueryAlias(name, _) => sparkAdapter.toTableIdentifier(name)
       case _ => throw new IllegalArgumentException(s"Illegal table: $table")
@@ -237,14 +233,6 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     val fs = basePath.getFileSystem(conf)
     val metaPath = new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME)
     fs.exists(metaPath)
-  }
-
-  def castIfNeeded(child: Expression, dataType: DataType, conf: SQLConf): Expression = {
-    child match {
-      case Literal(nul, NullType) => Literal(nul, dataType)
-      case _ => if (child.dataType != dataType)
-        Cast(child, dataType, Option(conf.sessionLocalTimeZone)) else child
-    }
   }
 
   /**
