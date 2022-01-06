@@ -143,7 +143,7 @@ class Spark3ParsePartitionUtil(conf: SQLConf) extends SparkParsePartitionUtil {
       (None, Some(path))
     } else {
       val (columnNames, values) = columns.reverse.unzip
-      (Some(PartitionValues(columnNames.toSeq, values.toSeq)), Some(currentPath))
+      (Some(PartitionValues(columnNames, values)), Some(currentPath))
     }
   }
 

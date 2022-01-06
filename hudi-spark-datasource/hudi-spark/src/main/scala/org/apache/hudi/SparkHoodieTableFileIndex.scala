@@ -65,14 +65,19 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   private lazy val _partitionSchemaFromProperties: StructType = {
     val tableConfig = metaClient.getTableConfig
     val partitionColumns = tableConfig.getPartitionFields
-
-    val nameFieldMap = schema.fields.map(filed => filed.name -> filed).toMap
+    val nameFieldMap = generateNameFieldMap(Right(schema))
 
     if (partitionColumns.isPresent) {
-      val partitionFields = partitionColumns.get().map(column =>
-        nameFieldMap.getOrElse(column, throw new IllegalArgumentException(s"Cannot find column: '" +
-          s"$column' in the schema[${schema.fields.mkString(",")}]")))
-      new StructType(partitionFields)
+      if (tableConfig.getKeyGeneratorClassName.equalsIgnoreCase(classOf[TimestampBasedKeyGenerator].getName)
+        || tableConfig.getKeyGeneratorClassName.equalsIgnoreCase(classOf[TimestampBasedAvroKeyGenerator].getName)) {
+        val partitionFields = partitionColumns.get().map(column => StructField(column, StringType))
+        StructType(partitionFields)
+      } else {
+        val partitionFields = partitionColumns.get().map(column =>
+          nameFieldMap.getOrElse(column, throw new IllegalArgumentException(s"Cannot find column: '" +
+            s"$column' in the schema[${schema.fields.mkString(",")}]")))
+        StructType(partitionFields)
+      }
     } else { // If the partition columns have not stored in hoodie.properties(the table that was
       // created earlier), we trait it as a non-partitioned table.
       logWarning("No partition columns available from hoodie.properties." +
@@ -164,5 +169,24 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       DateTimeUtils.getTimeZone(timeZoneId)
     )
       .map(pv => pv.columnNames.zip(pv.literals).map(t => Tuple2(t._1, t._2.value)))
+  }
+
+  /**
+   * This method traverses StructType recursively to build map of columnName -> StructField
+   * Note : If there is nesting of columns like ["a.b.c.d", "a.b.c.e"]  -> final map will have keys corresponding
+   * only to ["a.b.c.d", "a.b.c.e"] and not for subsets like ["a.b.c", "a.b"]
+   * @param structField
+   * @return map of ( columns names -> StructField )
+   */
+  private def generateNameFieldMap(structField: Either[StructField, StructType]) : Map[String, StructField] = {
+    structField match {
+      case Right(field) => field.fields.map(f => generateNameFieldMap(Left(f))).flatten.toMap
+      case Left(field) => field.dataType match {
+        case struct: StructType => generateNameFieldMap(Right(struct)).map {
+          case (key: String, sf: StructField)  => (field.name + "." + key, sf)
+        }
+        case _ => Map(field.name -> field)
+      }
+    }
   }
 }
