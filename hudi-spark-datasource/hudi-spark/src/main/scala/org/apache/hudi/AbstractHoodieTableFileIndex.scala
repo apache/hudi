@@ -56,10 +56,10 @@ import scala.collection.mutable
  * path with the partition columns in this case.
  *
  */
-abstract class HoodieTableFileIndex(engineContext: HoodieEngineContext,
-                                    metaClient: HoodieTableMetaClient,
-                                    configProperties: TypedProperties,
-                                    @transient fileStatusCache: FileStatusCache = NoopCache) {
+abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
+                                            metaClient: HoodieTableMetaClient,
+                                            configProperties: TypedProperties,
+                                            @transient fileStatusCache: FileStatusCache = NoopCache) {
   /**
    * Get all completeCommits.
    */

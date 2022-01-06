@@ -19,10 +19,8 @@ package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.HoodieFileIndex.getConfigProperties
-import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, Expression}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
@@ -57,13 +55,14 @@ import scala.util.{Failure, Success, Try}
  * path with the partition columns in this case.
  *
  */
+// TODO rename to HoodieSparkSqlFileIndex
 case class HoodieFileIndex(spark: SparkSession,
                            metaClient: HoodieTableMetaClient,
                            schemaSpec: Option[StructType],
                            options: Map[String, String],
                            @transient fileStatusCache: FileStatusCache = NoopCache)
   extends SparkHoodieTableFileIndex(
-    engineContext = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)),
+    spark = spark,
     metaClient = metaClient,
     schemaSpec = schemaSpec,
     configProperties = getConfigProperties(spark, options),
@@ -244,10 +243,6 @@ case class HoodieFileIndex(spark: SparkSession,
   override def inputFiles: Array[String] = {
     val fileStatusList = allFiles
     fileStatusList.map(_.getPath.toString).toArray
-  }
-
-  override def refresh(): Unit = {
-    super.refresh()
   }
 
   override def sizeInBytes: Long = {

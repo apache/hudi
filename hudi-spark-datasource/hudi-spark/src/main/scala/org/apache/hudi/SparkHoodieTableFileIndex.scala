@@ -18,10 +18,13 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.{InternalRow, expressions}
@@ -29,16 +32,20 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundRefer
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache, SparkParsePartitionUtil}
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
 
-// TODO merge w/ HoodieFileIndex
+// TODO unify w/ HoodieFileIndex
 class SparkHoodieTableFileIndex(spark: SparkSession,
-                                engineContext: HoodieEngineContext,
                                 metaClient: HoodieTableMetaClient,
                                 schemaSpec: Option[StructType],
                                 configProperties: TypedProperties,
                                 @transient fileStatusCache: FileStatusCache = NoopCache)
-  extends HoodieTableFileIndex(engineContext, metaClient, configProperties, fileStatusCache)
+  extends AbstractHoodieTableFileIndex(
+    engineContext = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)),
+    metaClient,
+    configProperties,
+    fileStatusCache
+  )
     with SparkAdapterSupport
     with Logging {
 
