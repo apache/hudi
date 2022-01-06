@@ -67,7 +67,6 @@ public class TestStringToRowDataConverter {
     Object[] expected = new Object[] {
         1.1f, 3.4D, (int) LocalDate.parse("2021-03-30").toEpochDay(),
         LocalTime.parse("15:44:29").get(ChronoField.MILLI_OF_DAY),
-        // TimestampData.fromEpochMillis(Instant.parse("2021-03-30T15:44:29Z").toEpochMilli()),
         timestampDataToLong(stringToTimestampData("2021-03-30T15:44:29"), ChronoUnit.MILLIS),
         timestampDataToLong(stringToTimestampData("2021-03-30T15:44:29.666111"), ChronoUnit.MICROS),
         DecimalData.fromBigDecimal(new BigDecimal("12345.67"), 7, 2)
