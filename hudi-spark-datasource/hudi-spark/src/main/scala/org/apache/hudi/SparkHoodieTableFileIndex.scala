@@ -18,19 +18,19 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.SparkHoodieTableFileIndex.generateFieldMap
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache, SparkParsePartitionUtil}
+import org.apache.spark.sql.catalyst.{InternalRow, expressions}
+import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 
@@ -65,7 +65,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   private lazy val _partitionSchemaFromProperties: StructType = {
     val tableConfig = metaClient.getTableConfig
     val partitionColumns = tableConfig.getPartitionFields
-    val nameFieldMap = generateNameFieldMap(Right(schema))
+    val nameFieldMap = generateFieldMap(schema)
 
     if (partitionColumns.isPresent) {
       if (tableConfig.getKeyGeneratorClassName.equalsIgnoreCase(classOf[TimestampBasedKeyGenerator].getName)
@@ -78,7 +78,8 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
             s"$column' in the schema[${schema.fields.mkString(",")}]")))
         StructType(partitionFields)
       }
-    } else { // If the partition columns have not stored in hoodie.properties(the table that was
+    } else {
+      // If the partition columns have not stored in hoodie.properties(the table that was
       // created earlier), we trait it as a non-partitioned table.
       logWarning("No partition columns available from hoodie.properties." +
         " Partition pruning will not work")
@@ -170,23 +171,46 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     )
       .toSeq(partitionSchema)
   }
+}
+
+object SparkHoodieTableFileIndex {
 
   /**
-   * This method traverses StructType recursively to build map of columnName -> StructField
-   * Note : If there is nesting of columns like ["a.b.c.d", "a.b.c.e"]  -> final map will have keys corresponding
-   * only to ["a.b.c.d", "a.b.c.e"] and not for subsets like ["a.b.c", "a.b"]
-   * @param structField
-   * @return map of ( columns names -> StructField )
+   * This method unravels [[StructType]] into a [[Map]] of pairs of dot-path notation with corresponding
+   * [[StructField]] object for every field of the provided [[StructType]], recursively.
+   *
+   * For example, following struct
+   * <pre>
+   *   StructType(
+   *     StructField("a",
+   *       StructType(
+   *          StructField("b", StringType),
+   *          StructField("c", IntType)
+   *       )
+   *     )
+   *   )
+   * </pre>
+   *
+   * will be converted into following mapping:
+   *
+   * <pre>
+   *   "a.b" -> StructField("b", StringType),
+   *   "a.c" -> StructField("c", IntType),
+   * </pre>
    */
-  private def generateNameFieldMap(structField: Either[StructField, StructType]) : Map[String, StructField] = {
-    structField match {
-      case Right(field) => field.fields.map(f => generateNameFieldMap(Left(f))).flatten.toMap
-      case Left(field) => field.dataType match {
-        case struct: StructType => generateNameFieldMap(Right(struct)).map {
-          case (key: String, sf: StructField)  => (field.name + "." + key, sf)
+  private def generateFieldMap(structType: StructType) : Map[String, StructField] = {
+    def traverse(structField: Either[StructField, StructType]) : Map[String, StructField] = {
+      structField match {
+        case Right(struct) => struct.fields.flatMap(f => traverse(Left(f))).toMap
+        case Left(field) => field.dataType match {
+          case struct: StructType => traverse(Right(struct)).map {
+            case (key, structField)  => (s"${field.name}.$key", structField)
+          }
+          case _ => Map(field.name -> field)
         }
-        case _ => Map(field.name -> field)
       }
     }
+
+    traverse(Right(structType))
   }
 }
