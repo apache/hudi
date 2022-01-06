@@ -160,7 +160,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
 
     // step5
     // find all file status in partitionPaths.
-    FileStatus[] fileStatuses = super.listStatus(job);
+    FileStatus[] fileStatuses = doListStatus(job);
     Map<String, FileStatus> candidateFileStatus = new HashMap<>();
     for (int i = 0; i < fileStatuses.length; i++) {
       String key = fileStatuses[i].getPath().toString();

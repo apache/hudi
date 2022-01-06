@@ -88,7 +88,7 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
     List<Path> nonHoodiePaths = inputPathHandler.getNonHoodieInputPaths();
     if (nonHoodiePaths.size() > 0) {
       setInputPaths(job, nonHoodiePaths.toArray(new Path[nonHoodiePaths.size()]));
-      FileStatus[] fileStatuses = super.listStatus(job);
+      FileStatus[] fileStatuses = doListStatus(job);
       returns.addAll(Arrays.asList(fileStatuses));
     }
 
@@ -123,7 +123,16 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
       return null;
     }
     setInputPaths(job, incrementalInputPaths.get());
-    FileStatus[] fileStatuses = super.listStatus(job);
+    FileStatus[] fileStatuses = doListStatus(job);
     return HoodieInputFormatUtils.filterIncrementalFileStatus(jobContext, tableMetaClient, timeline.get(), fileStatuses, commitsToCheck.get());
+  }
+
+  /**
+   * Abstracts and exposes {@link FileInputFormat#listStatus(JobConf)} operation to subclasses that
+   * lists files (returning an array of {@link FileStatus}) corresponding to the input paths specified
+   * as part of provided {@link JobConf}
+   */
+  protected final FileStatus[] doListStatus(JobConf job) throws IOException {
+    return super.listStatus(job);
   }
 }
