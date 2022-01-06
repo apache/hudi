@@ -101,7 +101,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
    *
    * @deprecated
    */
-  public HoodieArchivedTimeline() {}
+  public HoodieArchivedTimeline() {
+  }
 
   /**
    * This method is only used when this object is deserialized in a spark executor.
@@ -190,6 +191,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
         return Option.of("hoodieCompactionPlan");
       case HoodieTimeline.REPLACE_COMMIT_ACTION:
         return Option.of("hoodieReplaceCommitMetadata");
+      case HoodieTimeline.INDEX_ACTION:
+        return Option.of("hoodieIndexCommitMetadata");
       default:
         LOG.error(String.format("Unknown action in metadata (%s)", action));
         return Option.empty();
@@ -328,7 +331,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   @Override
   public HoodieDefaultTimeline getWriteTimeline() {
     // filter in-memory instants
-    Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
+    Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, REPLACE_COMMIT_ACTION, INDEX_ACTION);
     return new HoodieDefaultTimeline(getInstants().filter(i ->
         readCommits.keySet().contains(i.getTimestamp()))
         .filter(s -> validActions.contains(s.getAction())), details);

@@ -55,10 +55,11 @@ public interface HoodieTimeline extends Serializable {
   String COMPACTION_ACTION = "compaction";
   String REQUESTED_EXTENSION = ".requested";
   String RESTORE_ACTION = "restore";
+  String INDEX_ACTION = "index";
 
   String[] VALID_ACTIONS_IN_TIMELINE = {COMMIT_ACTION, DELTA_COMMIT_ACTION,
       CLEAN_ACTION, SAVEPOINT_ACTION, RESTORE_ACTION, ROLLBACK_ACTION,
-      COMPACTION_ACTION, REPLACE_COMMIT_ACTION};
+      COMPACTION_ACTION, REPLACE_COMMIT_ACTION, INDEX_ACTION};
 
   String COMMIT_EXTENSION = "." + COMMIT_ACTION;
   String DELTA_COMMIT_EXTENSION = "." + DELTA_COMMIT_ACTION;
@@ -83,6 +84,9 @@ public interface HoodieTimeline extends Serializable {
   String INFLIGHT_REPLACE_COMMIT_EXTENSION = "." + REPLACE_COMMIT_ACTION + INFLIGHT_EXTENSION;
   String REQUESTED_REPLACE_COMMIT_EXTENSION = "." + REPLACE_COMMIT_ACTION + REQUESTED_EXTENSION;
   String REPLACE_COMMIT_EXTENSION = "." + REPLACE_COMMIT_ACTION;
+  String INFLIGHT_INDEX_COMMIT_EXTENSION = "." + INDEX_ACTION + INFLIGHT_EXTENSION;
+  String REQUESTED_INDEX_COMMIT_EXTENSION = "." + INDEX_ACTION + REQUESTED_EXTENSION;
+  String INDEX_COMMIT_EXTENSION = "." + INDEX_ACTION;
 
   String INVALID_INSTANT_TS = "0";
 
@@ -196,6 +200,16 @@ public interface HoodieTimeline extends Serializable {
    * Custom Filter of Instants.
    */
   HoodieTimeline filter(Predicate<HoodieInstant> filter);
+
+  /**
+   * Filter this timeline to just include requested and inflight index instants.
+   */
+  HoodieTimeline filterPendingIndexTimeline();
+
+  /**
+   * Filter this timeline to just include completed index instants.
+   */
+  HoodieTimeline filterCompletedIndexTimeline();
 
   /**
    * If the timeline has any instants.
@@ -340,6 +354,14 @@ public interface HoodieTimeline extends Serializable {
     return instant.isRequested() ? instant : HoodieTimeline.getRequestedInstant(instant);
   }
 
+  static HoodieInstant getIndexRequestedInstant(final String timestamp) {
+    return new HoodieInstant(State.REQUESTED, INDEX_ACTION, timestamp);
+  }
+
+  static HoodieInstant getIndexInflightInstant(final String timestamp) {
+    return new HoodieInstant(State.INFLIGHT, INDEX_ACTION, timestamp);
+  }
+
   /**
    * Returns the inflight instant corresponding to the instant being passed. Takes care of changes in action names
    * between inflight and completed instants (compaction <=> commit).
@@ -448,5 +470,17 @@ public interface HoodieTimeline extends Serializable {
 
   static String makeFileNameAsInflight(String fileName) {
     return StringUtils.join(fileName, HoodieTimeline.INFLIGHT_EXTENSION);
+  }
+
+  static String makeIndexCommitFileName(String instant) {
+    return StringUtils.join(instant, HoodieTimeline.INDEX_COMMIT_EXTENSION);
+  }
+
+  static String makeInflightIndexFileName(String instant) {
+    return StringUtils.join(instant, HoodieTimeline.INFLIGHT_INDEX_COMMIT_EXTENSION);
+  }
+
+  static String makeRequestedIndexFileName(String instant) {
+    return StringUtils.join(instant, HoodieTimeline.REQUESTED_INDEX_COMMIT_EXTENSION);
   }
 }
