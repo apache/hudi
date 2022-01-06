@@ -118,7 +118,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     // Prune the partition path by the partition filters
     val prunedPartitions = prunePartition(cachedAllInputFileSlices.keys.toSeq, partitionFilters)
     prunedPartitions.map(partition => {
-      (partition.partitionPath, cachedAllInputFileSlices(partition))
+      (partition.path, cachedAllInputFileSlices(partition))
     }).toMap
   }
 
@@ -130,8 +130,8 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    * @param predicates     The filter condition.
    * @return The Pruned partition paths.
    */
-  def prunePartition(partitionPaths: Seq[PartitionRowPath],
-                     predicates: Seq[Expression]): Seq[PartitionRowPath] = {
+  def prunePartition(partitionPaths: Seq[PartitionPath],
+                     predicates: Seq[Expression]): Seq[PartitionPath] = {
 
     val partitionColumnNames = partitionSchema.fields.map(_.name).toSet
     val partitionPruningPredicates = predicates.filter {
@@ -147,7 +147,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       })
 
       val prunedPartitionPaths = partitionPaths.filter {
-        case PartitionRowPath(values, _) => boundPredicate.eval(InternalRow.fromSeq(values))
+        case PartitionPath(_, values) => boundPredicate.eval(InternalRow.fromSeq(values))
       }
       logInfo(s"Total partition size is: ${partitionPaths.size}," +
         s" after partition prune size is: ${prunedPartitionPaths.size}")
