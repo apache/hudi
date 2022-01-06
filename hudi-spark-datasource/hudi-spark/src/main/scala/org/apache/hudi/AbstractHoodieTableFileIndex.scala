@@ -270,8 +270,7 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
       case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL) =>
         // Fetch and store latest base and log files, and their sizes
         cachedAllInputFileSlices = partitionFiles.map(p => {
-          // TODO conditional is incorrect -- this should be queryInstant
-          val latestSlices = if (latestInstant.isPresent) {
+          val latestSlices = if (queryInstant.isDefined) {
             fileSystemView.getLatestMergedFileSlicesBeforeOrOn(p._1.partitionPath, queryInstant.get)
               .iterator().asScala.toSeq
           } else {
