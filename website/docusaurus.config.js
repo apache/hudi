@@ -9,7 +9,7 @@ const allDocHomesPaths = [
 
 /** @type {import('@docusaurus/types').DocusaurusConfig} */
 module.exports = {
-  title: 'Apache Hudi!',
+  title: 'Apache Hudi',
   tagline: 'Hudi brings transactions, record-level updates/deletes and change streams to data lakes!',
   url: 'https://hudi.apache.org',
   baseUrl: '/',
@@ -195,6 +195,7 @@ module.exports = {
           ],
         },
         {to: '/powered-by', label: "Who's Using", position: 'left'},
+        {to: '/roadmap', label: "Roadmap", position: 'left'},
         {to: '/releases/download', label: 'Download', position: 'left'},
         // right
         {
