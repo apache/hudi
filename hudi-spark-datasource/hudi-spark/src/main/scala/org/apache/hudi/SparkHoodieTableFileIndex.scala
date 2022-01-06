@@ -33,6 +33,7 @@ import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.unsafe.types.UTF8String
 
 // TODO unify w/ HoodieFileIndex
 class SparkHoodieTableFileIndex(spark: SparkSession,
@@ -157,7 +158,60 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     }
   }
 
-  override protected def parsePartitionValuesFromPath(partitionPath: Path): Seq[Any] = {
+  protected def parsePartitionRow(partitionColumns: Array[String], partitionPath: String): Array[Any] = {
+    if (partitionColumns.length == 0) {
+      // This is a non-partitioned table
+      Array.empty
+    } else {
+      val partitionFragments = partitionPath.split("/")
+
+      if (partitionFragments.length != partitionColumns.length &&
+        partitionColumns.length == 1) {
+        // If the partition column size is not equal to the partition fragment size
+        // and the partition column size is 1, we map the whole partition path
+        // to the partition column which can benefit from the partition prune.
+        val prefix = s"${partitionColumns.head}="
+        val partitionValue = if (partitionPath.startsWith(prefix)) {
+          // support hive style partition path
+          partitionPath.substring(prefix.length)
+        } else {
+          partitionPath
+        }
+        Array(UTF8String.fromString(partitionValue))
+      } else if (partitionFragments.length != partitionColumns.length &&
+        partitionColumns.length > 1) {
+        // If the partition column size is not equal to the partition fragments size
+        // and the partition column size > 1, we do not know how to map the partition
+        // fragments to the partition columns. So we trait it as a Non-Partitioned Table
+        // for the query which do not benefit from the partition prune.
+        logWarning(s"Cannot do the partition prune for table $basePath." +
+          s"The partitionFragments size (${partitionFragments.mkString(",")})" +
+          s" is not equal to the partition columns size(${partitionColumns.mkString(",")})")
+        Array.empty
+      } else {
+        // If partitionSeqs.length == partitionSchema.fields.length
+        // Append partition name to the partition value if the
+        // HIVE_STYLE_PARTITIONING is disable.
+        // e.g. convert "/xx/xx/2021/02" to "/xx/xx/year=2021/month=02"
+        val partitionWithName =
+        partitionFragments.zip(partitionColumns).map {
+          case (partition, columnName) =>
+            if (partition.indexOf("=") == -1) {
+              s"${columnName}=$partition"
+            } else {
+              partition
+            }
+        }.mkString("/")
+
+        val pathWithPartitionName = new Path(basePath, partitionWithName)
+        val partitionValues = parsePartitionColumnValues(pathWithPartitionName, partitionSchema)
+
+        partitionValues.toArray
+      }
+    }
+  }
+
+  private def parsePartitionColumnValues(partitionPath: Path, partitionSchema: StructType): Seq[Any] = {
     val timeZoneId = Option.apply(configProperties.getString(DateTimeUtils.TIMEZONE_OPTION))
       .getOrElse(SQLConf.get.sessionLocalTimeZone)
     val partitionDataTypes = partitionSchema.map(f => f.name -> f.dataType).toMap
