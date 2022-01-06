@@ -265,7 +265,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     // generate data and metadata
     Map<String, Integer[]> data = new LinkedHashMap<>();
 
-    for (int i = 194 ; i >= 154 ; i--) {
+    for (int i = 194; i >= 154; i--) {
       data.put(String.valueOf(i), new Integer[] {i, i});
     }
 
@@ -289,7 +289,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
         "There should 3 instants not be archived!");
 
     Map<String, Integer[]> data2 = new LinkedHashMap<>();
-    for (int i = 174 ; i >= 161 ; i--) {
+    for (int i = 174; i >= 161; i--) {
       data2.put(String.valueOf(i), new Integer[] {i, i});
     }
     String expected = generateExpectData(1, data2);
