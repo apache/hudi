@@ -158,7 +158,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     }
   }
 
-  protected def parsePartitionRow(partitionColumns: Array[String], partitionPath: String): Array[Any] = {
+  protected def parsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Any] = {
     if (partitionColumns.length == 0) {
       // This is a non-partitioned table
       Array.empty
@@ -204,14 +204,14 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         }.mkString("/")
 
         val pathWithPartitionName = new Path(basePath, partitionWithName)
-        val partitionValues = parsePartitionColumnValues(pathWithPartitionName, partitionSchema)
+        val partitionValues = parsePartitionPath(pathWithPartitionName, partitionSchema)
 
         partitionValues.toArray
       }
     }
   }
 
-  private def parsePartitionColumnValues(partitionPath: Path, partitionSchema: StructType): Seq[Any] = {
+  private def parsePartitionPath(partitionPath: Path, partitionSchema: StructType): Seq[Any] = {
     val timeZoneId = Option.apply(configProperties.getString(DateTimeUtils.TIMEZONE_OPTION))
       .getOrElse(SQLConf.get.sessionLocalTimeZone)
     val partitionDataTypes = partitionSchema.map(f => f.name -> f.dataType).toMap

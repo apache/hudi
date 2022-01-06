@@ -251,18 +251,19 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
 
     // Convert partition's path into partition descriptor
     partitionPaths.map { partitionPath =>
-      val partitionRow = parsePartitionRow(partitionSchema, partitionPath)
-      PartitionPath(partitionPath, partitionRow)
+      val partitionColumnValues = parsePartitionColumnValues(partitionSchema, partitionPath)
+      PartitionPath(partitionPath, partitionColumnValues)
     }
   }
 
   /**
-   * Parses partition columns' values from the provided partition's path
+   * Parses partition columns' values from the provided partition's path, returning list of
+   * values (that might have engine-specific representation)
    *
    * @param partitionColumns partitioning columns identifying the partition
    * @param partitionPath partition's path to parse partitioning columns' values from
    */
-  protected def parsePartitionRow(partitionColumns: Array[String], partitionPath: String): Array[Any]
+  protected def parsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Any]
 
   // TODO eval whether we should just use logger directly
   protected def logWarning(str: => String): Unit
