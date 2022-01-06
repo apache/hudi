@@ -22,11 +22,16 @@ import org.apache.flink.table.data.vector.writable.WritableIntVector;
 import org.apache.flink.table.data.vector.writable.WritableTimestampVector;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.column.page.PageReader;
+import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.PrimitiveType;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 
 /**
  * Timestamp {@link org.apache.flink.formats.parquet.vector.reader.ColumnReader} that supports INT64 8 bytes,
@@ -40,12 +45,16 @@ public class Int64TimestampColumnReader extends AbstractColumnReader<WritableTim
 
   private final boolean utcTimestamp;
 
+  private final LogicalTypeAnnotation.TimeUnit unit;
+
   public Int64TimestampColumnReader(
       boolean utcTimestamp,
       ColumnDescriptor descriptor,
       PageReader pageReader) throws IOException {
     super(descriptor, pageReader);
     this.utcTimestamp = utcTimestamp;
+    this.unit =  ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) descriptor.getPrimitiveType()
+        .getLogicalTypeAnnotation()).getUnit();
     checkTypeName(PrimitiveType.PrimitiveTypeName.INT64);
   }
 
@@ -59,7 +68,7 @@ public class Int64TimestampColumnReader extends AbstractColumnReader<WritableTim
     for (int i = 0; i < num; i++) {
       if (runLenDecoder.readInteger() == maxDefLevel) {
         ByteBuffer buffer = readDataBuffer(8);
-        column.setTimestamp(rowId + i, int64ToTimestamp(utcTimestamp, buffer.getLong()));
+        column.setTimestamp(rowId + i, int64ToTimestamp(utcTimestamp, buffer.getLong(), unit));
       } else {
         column.setNullAt(rowId + i);
       }
@@ -75,7 +84,7 @@ public class Int64TimestampColumnReader extends AbstractColumnReader<WritableTim
     for (int i = rowId; i < rowId + num; ++i) {
       if (!column.isNullAt(i)) {
         column.setTimestamp(i, decodeInt64ToTimestamp(
-            utcTimestamp, dictionary, dictionaryIds.getInt(i)));
+            utcTimestamp, dictionary, dictionaryIds.getInt(i), unit));
       }
     }
   }
@@ -83,14 +92,30 @@ public class Int64TimestampColumnReader extends AbstractColumnReader<WritableTim
   public static TimestampData decodeInt64ToTimestamp(
       boolean utcTimestamp,
       org.apache.parquet.column.Dictionary dictionary,
-      int id) {
+      int id,
+      LogicalTypeAnnotation.TimeUnit unit) {
     long value = dictionary.decodeToLong(id);
-    return int64ToTimestamp(utcTimestamp, value);
+    return int64ToTimestamp(utcTimestamp, value, unit);
   }
 
-  private static TimestampData int64ToTimestamp(boolean utcTimestamp, long millionsOfDay) {
+  private static TimestampData int64ToTimestamp(
+      boolean utcTimestamp,
+      long millionsOfDay,
+      LogicalTypeAnnotation.TimeUnit unit) {
     if (utcTimestamp) {
-      return TimestampData.fromEpochMillis(millionsOfDay, 0);
+      final ChronoUnit chronoUnit;
+      switch (unit) {
+        case MILLIS:
+          chronoUnit = ChronoUnit.MILLIS;
+          break;
+        case MICROS:
+          chronoUnit = ChronoUnit.MICROS;
+          break;
+        default:
+          chronoUnit = ChronoUnit.MILLIS;
+      }
+      return TimestampData.fromLocalDateTime(
+          LocalDateTime.ofInstant(Instant.ofEpochSecond(0).plus(millionsOfDay, chronoUnit), ZoneId.systemDefault()));
     } else {
       Timestamp timestamp = new Timestamp(millionsOfDay);
       return TimestampData.fromTimestamp(timestamp);

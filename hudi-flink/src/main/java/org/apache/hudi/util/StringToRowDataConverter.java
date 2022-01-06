@@ -18,6 +18,7 @@
 
 package org.apache.hudi.util;
 
+import org.apache.flink.table.types.logical.TimestampType;
 import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.flink.annotation.Internal;
@@ -29,7 +30,11 @@ import org.apache.flink.table.types.logical.LogicalType;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 
 /**
@@ -85,7 +90,7 @@ public class StringToRowDataConverter {
         // see HoodieAvroUtils#convertValueForAvroLogicalTypes
         return field -> (int) LocalDate.parse(field).toEpochDay();
       case TIMESTAMP_WITHOUT_TIME_ZONE:
-        return field -> TimestampData.fromEpochMillis(Long.parseLong(field));
+        return field -> convertToTimestamp(Long.parseLong(field), (TimestampType) logicalType);
       case CHAR:
       case VARCHAR:
         return StringData::fromString;
@@ -103,5 +108,22 @@ public class StringToRowDataConverter {
         throw new UnsupportedOperationException(
             "Unsupported type " + logicalType.getTypeRoot() + " for " + StringToRowDataConverter.class.getName());
     }
+  }
+
+  private static TimestampData convertToTimestamp(long timestamp, TimestampType logicalType) {
+    final int precision = logicalType.getPrecision();
+    final ChronoUnit chronoUnit;
+    if (precision <= 3) {
+      chronoUnit = ChronoUnit.MILLIS;
+    } else if (precision <= 6) {
+      chronoUnit = ChronoUnit.MICROS;
+    } else {
+      throw new IllegalArgumentException(
+          "Avro does not support TIMESTAMP type with precision: "
+              + precision
+              + ", it only supports precision less than 6.");
+    }
+    return TimestampData.fromLocalDateTime(
+        LocalDateTime.ofInstant(Instant.ofEpochSecond(0).plus(timestamp, chronoUnit), ZoneId.systemDefault()));
   }
 }

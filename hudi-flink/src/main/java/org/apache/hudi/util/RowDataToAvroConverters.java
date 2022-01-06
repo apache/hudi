@@ -18,6 +18,7 @@
 
 package org.apache.hudi.util;
 
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -34,10 +35,14 @@ import org.apache.flink.table.types.logical.RowType;
 
 import java.io.Serializable;
 import java.nio.ByteBuffer;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoField;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Tool class used to convert from {@link RowData} to Avro {@link GenericRecord}.
@@ -157,7 +162,15 @@ public class RowDataToAvroConverters {
 
               @Override
               public Object convert(Schema schema, Object object) {
-                return ((TimestampData) object).toInstant().toEpochMilli();
+                final LocalDateTime now = ((TimestampData) object).toLocalDateTime();
+                final ZoneOffset offset = ZoneOffset.systemDefault().getRules().getOffset(LocalDateTime.now());
+                if (schema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
+                  return now.toInstant(offset).toEpochMilli();
+                } else if (schema.getLogicalType() instanceof LogicalTypes.TimestampMicros) {
+                  return TimeUnit.SECONDS.toMicros(now.toEpochSecond(offset)) + now.toInstant(offset).getLong(ChronoField.MICRO_OF_SECOND);
+                } else {
+                  return ((TimestampData) object).toInstant().toEpochMilli();
+                }
               }
             };
         break;
