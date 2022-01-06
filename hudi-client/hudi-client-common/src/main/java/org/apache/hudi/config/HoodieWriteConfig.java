@@ -1892,6 +1892,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieMetadataConfig.ASYNC_CLEAN_ENABLE);
   }
 
+  public boolean isMetadataAsyncIndex() {
+    return getBooleanOrDefault(HoodieMetadataConfig.ASYNC_INDEX_ENABLE);
+  }
+
   public int getMetadataMaxCommitsToKeep() {
     return getInt(HoodieMetadataConfig.MAX_COMMITS_TO_KEEP);
   }

@@ -23,6 +23,8 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
+import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -66,6 +68,7 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.marker.WriteMarkers;
@@ -447,7 +450,6 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    */
   public abstract void rollbackBootstrap(HoodieEngineContext context, String instantTime);
 
-
   /**
    * Schedule cleaning for the instant time.
    *
@@ -496,6 +498,25 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
                                                   HoodieInstant commitInstant,
                                                   boolean deleteInstants,
                                                   boolean skipLocking);
+
+  /**
+   * Schedules Indexing for the table to the given instant.
+   *
+   * @param context HoodieEngineContext
+   * @param indexInstantTime Instant time for scheduling index action.
+   * @param partitionsToIndex List of {@link MetadataPartitionType#partitionPath()} that should be indexed.
+   * @return HoodieIndexPlan containing metadata partitions and instant upto which they should be indexed.
+   */
+  public abstract Option<HoodieIndexPlan> scheduleIndex(HoodieEngineContext context, String indexInstantTime, List<String> partitionsToIndex);
+
+  /**
+   * Execute requested index action.
+   *
+   * @param context HoodieEngineContext
+   * @param indexInstantTime Instant time for which index action was scheduled.
+   * @return HoodieIndexCommitMetadata containing write stats for each metadata partition.
+   */
+  public abstract Option<HoodieIndexCommitMetadata> index(HoodieEngineContext context, String indexInstantTime);
 
   /**
    * Create a savepoint at the specified instant, so that the table can be restored
@@ -764,7 +785,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    * Get Table metadata writer.
    *
    * @param triggeringInstantTimestamp - The instant that is triggering this metadata write
-   * @return instance of {@link HoodieTableMetadataWriter
+   * @return instance of {@link HoodieTableMetadataWriter}
    */
   public final Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp) {
     return getMetadataWriter(triggeringInstantTimestamp, Option.empty());

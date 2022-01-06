@@ -73,7 +73,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       INFLIGHT_COMPACTION_EXTENSION, REQUESTED_COMPACTION_EXTENSION,
       REQUESTED_RESTORE_EXTENSION, INFLIGHT_RESTORE_EXTENSION, RESTORE_EXTENSION,
       ROLLBACK_EXTENSION, REQUESTED_ROLLBACK_EXTENSION, INFLIGHT_ROLLBACK_EXTENSION,
-      REQUESTED_REPLACE_COMMIT_EXTENSION, INFLIGHT_REPLACE_COMMIT_EXTENSION, REPLACE_COMMIT_EXTENSION));
+      REQUESTED_REPLACE_COMMIT_EXTENSION, INFLIGHT_REPLACE_COMMIT_EXTENSION, REPLACE_COMMIT_EXTENSION,
+      REQUESTED_INDEX_COMMIT_EXTENSION, INFLIGHT_INDEX_COMMIT_EXTENSION, INDEX_COMMIT_EXTENSION));
   private static final Logger LOG = LogManager.getLogger(HoodieActiveTimeline.class);
   protected HoodieTableMetaClient metaClient;
 
@@ -98,7 +99,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   public static String createNewInstantTime() {
     return HoodieInstantTimeGenerator.createNewInstantTime(0);
   }
-
 
   /**
    * Returns next instant time that adds N milliseconds to current time.
@@ -332,6 +332,10 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         throw e;
       }
     }
+  }
+
+  public Option<byte[]> readIndexPlanAsBytes(HoodieInstant instant) {
+    return readDataFromPath(new Path(metaClient.getMetaPath(), instant.getFileName()));
   }
 
   /**
@@ -644,6 +648,65 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.RESTORE_ACTION));
     ValidationUtils.checkArgument(instant.getState().equals(State.REQUESTED));
     // Plan is stored in meta path
+    createFileInMetaPath(instant.getFileName(), content, false);
+  }
+
+  /**
+   * Transition index instant state from requested to inflight.
+   *
+   * @param requestedInstant Inflight Instant
+   * @return inflight instant
+   */
+  public HoodieInstant transitionIndexRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data) {
+    ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.INDEX_ACTION),
+        String.format("%s is not equal to %s action", requestedInstant.getAction(), INDEX_ACTION));
+    ValidationUtils.checkArgument(requestedInstant.isRequested(),
+        String.format("Instant %s not in requested state", requestedInstant.getTimestamp()));
+    HoodieInstant inflightInstant = new HoodieInstant(State.INFLIGHT, INDEX_ACTION, requestedInstant.getTimestamp());
+    transitionState(requestedInstant, inflightInstant, data);
+    return inflightInstant;
+  }
+
+  /**
+   * Transition index instant state from inflight to completed.
+   * @param inflightInstant Inflight Instant
+   * @return completed instant
+   */
+  public HoodieInstant transitionIndexInflightToComplete(HoodieInstant inflightInstant, Option<byte[]> data) {
+    ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.INDEX_ACTION),
+        String.format("%s is not equal to %s action", inflightInstant.getAction(), INDEX_ACTION));
+    ValidationUtils.checkArgument(inflightInstant.isInflight(),
+        String.format("Instant %s not inflight", inflightInstant.getTimestamp()));
+    HoodieInstant commitInstant = new HoodieInstant(State.COMPLETED, INDEX_ACTION, inflightInstant.getTimestamp());
+    transitionState(inflightInstant, commitInstant, data);
+    return commitInstant;
+  }
+
+  /**
+   * Revert index instant state from inflight to requested.
+   * @param inflightInstant Inflight Instant
+   * @return requested instant
+   */
+  public HoodieInstant revertIndexInflightToRequested(HoodieInstant inflightInstant) {
+    ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.INDEX_ACTION),
+        String.format("%s is not equal to %s action", inflightInstant.getAction(), INDEX_ACTION));
+    ValidationUtils.checkArgument(inflightInstant.isInflight(),
+        String.format("Instant %s not inflight", inflightInstant.getTimestamp()));
+    HoodieInstant requestedInstant = new HoodieInstant(State.REQUESTED, INDEX_ACTION, inflightInstant.getTimestamp());
+    if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
+      transitionState(inflightInstant, requestedInstant, Option.empty());
+    } else {
+      deleteInflight(inflightInstant);
+    }
+    return requestedInstant;
+  }
+
+  /**
+   * Save content for inflight/requested index instant.
+   */
+  public void saveToPendingIndexCommit(HoodieInstant instant, Option<byte[]> content) {
+    ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.INDEX_ACTION),
+        String.format("%s is not equal to %s action", instant.getAction(), INDEX_ACTION));
     createFileInMetaPath(instant.getFileName(), content, false);
   }
 

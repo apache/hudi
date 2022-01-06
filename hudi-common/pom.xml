@@ -90,6 +90,9 @@
             <import>${basedir}/src/main/avro/HoodieClusteringPlan.avsc</import>
             <import>${basedir}/src/main/avro/HoodieRequestedReplaceMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieMetadata.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieIndexPartitionInfo.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieIndexPlan.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieIndexCommitMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieArchivedMetaEntry.avsc</import>
           </imports>
         </configuration>

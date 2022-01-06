@@ -129,6 +129,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
+import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
+import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
@@ -1131,28 +1134,28 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
           LOG.info("Cluster success");
         } else {
           LOG.warn("Import failed");
-          if (!runningMode.toLowerCase().equals(HoodieClusteringJob.EXECUTE)) {
+          if (!runningMode.toLowerCase().equals(EXECUTE)) {
             return false;
           }
         }
       } catch (Exception e) {
         LOG.warn("ScheduleAndExecute clustering failed", e);
         exception = e;
-        if (!runningMode.equalsIgnoreCase(HoodieClusteringJob.EXECUTE)) {
+        if (!runningMode.equalsIgnoreCase(EXECUTE)) {
           return false;
         }
       }
       switch (runningMode.toLowerCase()) {
-        case HoodieClusteringJob.SCHEDULE_AND_EXECUTE: {
+        case SCHEDULE_AND_EXECUTE: {
           TestHelpers.assertAtLeastNReplaceCommits(2, tableBasePath, dfs);
           return true;
         }
-        case HoodieClusteringJob.SCHEDULE: {
+        case SCHEDULE: {
           TestHelpers.assertAtLeastNReplaceRequests(2, tableBasePath, dfs);
           TestHelpers.assertNoReplaceCommits(tableBasePath, dfs);
           return true;
         }
-        case HoodieClusteringJob.EXECUTE: {
+        case EXECUTE: {
           TestHelpers.assertNoReplaceCommits(tableBasePath, dfs);
           return true;
         }

@@ -24,6 +24,8 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
+import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -399,7 +401,6 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    */
   public abstract O bulkInsert(I records, final String instantTime,
                                Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner);
-
 
   /**
    * Loads the given HoodieRecords, as inserts into the table. This is suitable for doing big bulk loads into a Hoodie
@@ -923,6 +924,21 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    */
   public boolean scheduleCompactionAtInstant(String instantTime, Option<Map<String, String>> extraMetadata) throws HoodieIOException {
     return scheduleTableService(instantTime, extraMetadata, TableServiceType.COMPACT).isPresent();
+  }
+
+  public Option<String> scheduleIndexing(List<String> partitions) {
+    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    return scheduleIndexingAtInstant(partitions, instantTime) ? Option.of(instantTime) : Option.empty();
+  }
+
+  private boolean scheduleIndexingAtInstant(List<String> partitionsToIndex, String instantTime) throws HoodieIOException {
+    Option<HoodieIndexPlan> indexPlan = createTable(config, hadoopConf, config.isMetadataTableEnabled())
+        .scheduleIndex(context, instantTime, partitionsToIndex);
+    return indexPlan.isPresent();
+  }
+
+  public Option<HoodieIndexCommitMetadata> index(String indexInstantTime) {
+    return createTable(config, hadoopConf, config.isMetadataTableEnabled()).index(context, indexInstantTime);
   }
 
   /**

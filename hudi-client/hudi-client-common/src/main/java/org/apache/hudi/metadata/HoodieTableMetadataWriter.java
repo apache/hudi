@@ -19,16 +19,21 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 
 import java.io.Serializable;
+import java.util.List;
 
 /**
  * Interface that supports updating metadata for a given table, as actions complete.
  */
 public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
+
+  void index(HoodieEngineContext engineContext, List<HoodieIndexPartitionInfo> indexPartitionInfos);
 
   /**
    * Update the metadata table due to a COMMIT operation.
@@ -59,5 +64,4 @@ public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
    * @param instantTime instant time of the commit.
    */
   void update(HoodieRollbackMetadata rollbackMetadata, String instantTime);
-
 }
