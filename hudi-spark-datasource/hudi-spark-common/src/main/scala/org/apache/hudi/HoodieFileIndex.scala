@@ -66,6 +66,7 @@ case class HoodieFileIndex(spark: SparkSession,
     metaClient = metaClient,
     schemaSpec = schemaSpec,
     configProperties = getConfigProperties(spark, options),
+    specifiedQueryInstant = options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key).map(HoodieSqlUtils.formatQueryInstant),
     fileStatusCache = fileStatusCache
   )
     with FileIndex {

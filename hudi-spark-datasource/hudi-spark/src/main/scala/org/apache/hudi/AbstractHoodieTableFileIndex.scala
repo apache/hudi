@@ -50,14 +50,15 @@ import scala.collection.mutable
  * partition path (e.g. 2021/03/10) to the only partition column (e.g. "dt").
  *
  * 3、Else the the partition columns size is not equal to the partition directory level and the
- * size is great than "1" (e.g. partition column is "dt,hh", the partition path is "2021/03/10/12")
- * , we read it as a Non-Partitioned table because we cannot know how to mapping the partition
+ * size is great than "1" (e.g. partition column is "dt,hh", the partition path is "2021/03/10/12"),
+ * we read it as a Non-Partitioned table because we cannot know how to mapping the partition
  * path with the partition columns in this case.
  *
  */
 abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
                                             metaClient: HoodieTableMetaClient,
                                             configProperties: TypedProperties,
+                                            specifiedQueryInstant: Option[String] = None,
                                             @transient fileStatusCache: FileStatusCache = NoopCache) {
   /**
    * Get all completeCommits.
@@ -80,10 +81,6 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
 
   private val queryType = configProperties(QUERY_TYPE.key())
   private val tableType = metaClient.getTableType
-
-  private val specifiedQueryInstant =
-    Option.apply(configProperties.getString(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key))
-      .map(HoodieSqlUtils.formatQueryInstant)
 
   @transient private val queryPath = new Path(configProperties.getOrElse("path", "'path' option required"))
   @transient
