@@ -2,7 +2,7 @@
     "version": "https://jsonfeed.org/version/1",
     "title": "Apache Hudi: User-Facing Analytics",
     "home_page_url": "https://hudi.apache.org/cn/blog",
-    "description": "Apache Hudi! Blog",
+    "description": "Apache Hudi Blog",
     "items": [
         {
             "id": "/2021/12/29/hudi-zorder-and-hilbert-space-filling-curves",

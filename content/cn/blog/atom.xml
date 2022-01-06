@@ -5,7 +5,7 @@
     <updated>2021-12-29T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/cn/blog"/>
-    <subtitle>Apache Hudi! Blog</subtitle>
+    <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/cn/assets/images/favicon.ico</icon>
     <entry>
         <title type="html"><![CDATA[Hudi Z-Order and Hilbert Space Filling Curves]]></title>

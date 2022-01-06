@@ -3,7 +3,7 @@
     <channel>
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/cn/blog</link>
-        <description>Apache Hudi! Blog</description>
+        <description>Apache Hudi Blog</description>
         <lastBuildDate>Wed, 29 Dec 2021 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
