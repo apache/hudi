@@ -58,7 +58,7 @@ public class TestStringToRowDataConverter {
         DataTypes.DOUBLE().getLogicalType(),
         DataTypes.DATE().getLogicalType(),
         DataTypes.TIME(3).getLogicalType(),
-        DataTypes.TIMESTAMP().getLogicalType(),
+        DataTypes.TIMESTAMP(3).getLogicalType(),
         DataTypes.TIMESTAMP(6).getLogicalType(),
         DataTypes.DECIMAL(7, 2).getLogicalType()
     };
@@ -67,8 +67,8 @@ public class TestStringToRowDataConverter {
     Object[] expected = new Object[] {
         1.1f, 3.4D, (int) LocalDate.parse("2021-03-30").toEpochDay(),
         LocalTime.parse("15:44:29").get(ChronoField.MILLI_OF_DAY),
-        timestampDataToLong(stringToTimestampData("2021-03-30T15:44:29"), ChronoUnit.MILLIS),
-        timestampDataToLong(stringToTimestampData("2021-03-30T15:44:29.666111"), ChronoUnit.MICROS),
+        stringToTimestampData("2021-03-30T15:44:29"),
+        stringToTimestampData("2021-03-30T15:44:29.666111"),
         DecimalData.fromBigDecimal(new BigDecimal("12345.67"), 7, 2)
     };
     assertArrayEquals(expected, converted);

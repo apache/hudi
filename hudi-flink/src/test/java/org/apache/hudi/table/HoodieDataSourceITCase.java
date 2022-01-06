@@ -570,10 +570,10 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     execInsertSql(streamTableEnv, insertInto);
 
     final String expected = "["
-        + "+I[1, Danny, 2021-12-01 01:02:01.100001], "
-        + "+I[2, Stephen, 2021-12-02 03:04:02.200002], "
-        + "+I[3, Julian, 2021-12-03 13:14:03.300003], "
-        + "+I[4, Fabian, 2021-12-04 15:16:04.400004]]";
+        + "+I[1, Danny, 2021-12-01T01:02:01.100001], "
+        + "+I[2, Stephen, 2021-12-02T03:04:02.200002], "
+        + "+I[3, Julian, 2021-12-03T13:14:03.300003], "
+        + "+I[4, Fabian, 2021-12-04T15:16:04.400004]]";
 
     List<Row> result = execSelectSql(streamTableEnv, "select * from t1", execMode);
 
