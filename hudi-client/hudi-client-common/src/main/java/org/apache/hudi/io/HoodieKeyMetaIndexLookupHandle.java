@@ -57,7 +57,7 @@ public class HoodieKeyMetaIndexLookupHandle<T extends HoodieRecordPayload, I, K,
   private long totalKeysChecked;
 
   public HoodieKeyMetaIndexLookupHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
-                                        Pair<String, String> partitionPathFileIdPair, String fileId) {
+                                        Pair<String, String> partitionPathFileIdPair, String fileName) {
     super(config, null, hoodieTable, partitionPathFileIdPair);
     this.tableType = hoodieTable.getMetaClient().getTableType();
     this.candidateRecordKeys = new ArrayList<>();
@@ -66,15 +66,15 @@ public class HoodieKeyMetaIndexLookupHandle<T extends HoodieRecordPayload, I, K,
     HoodieTimer timer = new HoodieTimer().startTimer();
     Option<ByteBuffer> bloomFilterByteBuffer =
         hoodieTable.getMetadataTable().getBloomFilter(new PartitionIndexID(partitionPathFileIdPair.getLeft()),
-            new FileIndexID(fileId));
+            new FileIndexID(fileName));
     if (!bloomFilterByteBuffer.isPresent()) {
-      throw new HoodieIndexException("BloomFilter missing for " + fileId);
+      throw new HoodieIndexException("BloomFilter missing for " + fileName);
     }
 
     this.bloomFilter =
         new HoodieDynamicBoundedBloomFilter(StandardCharsets.UTF_8.decode(bloomFilterByteBuffer.get()).toString(),
             BloomFilterTypeCode.DYNAMIC_V0);
-    LOG.debug(String.format("Read bloom filter from %s,%s, size: %s in %d ms", partitionPathFileIdPair, fileId,
+    LOG.debug(String.format("Read bloom filter from %s,%s, size: %s in %d ms", partitionPathFileIdPair, fileName,
         bloomFilterByteBuffer.get().array().length, timer.endTimer()));
   }
 

@@ -19,6 +19,10 @@ package org.apache.hudi.common.model;
  * under the License.
  */
 
+import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.ValidationUtils;
+
 import java.util.Objects;
 
 /**
@@ -27,17 +31,19 @@ import java.util.Objects;
 public class HoodieColumnStatsMetadata<T> {
 
   private final String partitionPath;
-  private final String filePath;
+  private final String fileName;
   private final String columnName;
   private final T minValue;
   private final T maxValue;
   private final long nullCount;
   private final boolean isDeleted;
 
-  public HoodieColumnStatsMetadata(final String partitionPath, final String filePath, final String columnName,
+  public HoodieColumnStatsMetadata(final String partitionPath, final String fileName, final String columnName,
                                    final T minValue, final T maxValue, final long nullCount, final boolean isDeleted) {
+    ValidationUtils.checkArgument(!fileName.contains(Path.SEPARATOR) && FSUtils.isBaseFile(new Path(fileName)),
+        "Invalid file name '" + fileName + "' for MetaIndexColumnStats!");
     this.partitionPath = partitionPath;
-    this.filePath = filePath;
+    this.fileName = fileName;
     this.columnName = columnName;
     this.minValue = minValue;
     this.maxValue = maxValue;
@@ -49,8 +55,8 @@ public class HoodieColumnStatsMetadata<T> {
     return partitionPath;
   }
 
-  public String getFilePath() {
-    return this.filePath;
+  public String getFileName() {
+    return this.fileName;
   }
 
   public String getColumnName() {
@@ -83,7 +89,7 @@ public class HoodieColumnStatsMetadata<T> {
     }
     final HoodieColumnStatsMetadata<?> that = (HoodieColumnStatsMetadata<?>) o;
     return Objects.equals(getPartitionPath(), that.getPartitionPath())
-        && Objects.equals(getFilePath(), that.getFilePath())
+        && Objects.equals(getFileName(), that.getFileName())
         && Objects.equals(getColumnName(), that.getColumnName())
         && Objects.equals(getMinValue(), that.getMinValue())
         && Objects.equals(getMaxValue(), that.getMaxValue())
@@ -100,7 +106,7 @@ public class HoodieColumnStatsMetadata<T> {
   public String toString() {
     return "HoodieColumnStatsMetadata{"
         + "partitionPath: " + partitionPath
-        + ", filePath: " + filePath
+        + ", filePath: " + fileName
         + ", columnName: " + columnName
         + ", minValue: " + minValue
         + ", maxValue: " + maxValue

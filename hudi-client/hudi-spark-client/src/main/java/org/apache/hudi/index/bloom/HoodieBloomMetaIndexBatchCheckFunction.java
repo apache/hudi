@@ -21,6 +21,7 @@ package org.apache.hudi.index.bloom;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -72,9 +73,21 @@ public class HoodieBloomMetaIndexBatchCheckFunction implements
     List<List<HoodieKeyMetaIndexLookupResult>> resultList = new ArrayList<>();
     Map<Pair<String, String>, List<HoodieKey>> fileToKeysMap = new HashMap<>();
 
+    final Map<String, HoodieBaseFile> fileIDBaseFileMap = new HashMap<>();
     while (tuple2Iterator.hasNext()) {
       Tuple2<String, HoodieKey> entry = tuple2Iterator.next();
-      fileToKeysMap.computeIfAbsent(Pair.of(entry._2.getPartitionPath(), entry._1), k -> new ArrayList<>()).add(entry._2);
+      final String partitionPath = entry._2.getPartitionPath();
+      final String fileId = entry._1;
+      if (!fileIDBaseFileMap.containsKey(fileId)) {
+        Option<HoodieBaseFile> baseFile = hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId);
+        if (!baseFile.isPresent()) {
+          throw new HoodieIndexException("Failed to find the base file for partition: " + partitionPath
+              + ", fileId: " + fileId);
+        }
+        fileIDBaseFileMap.put(fileId, baseFile.get());
+      }
+      fileToKeysMap.computeIfAbsent(Pair.of(partitionPath, fileIDBaseFileMap.get(fileId).getFileName()),
+          k -> new ArrayList<>()).add(entry._2);
     }
     if (fileToKeysMap.isEmpty()) {
       return Collections.emptyListIterator();
@@ -91,11 +104,12 @@ public class HoodieBloomMetaIndexBatchCheckFunction implements
 
     fileToKeysMap.forEach((partitionPathFileIdPair, hoodieKeyList) -> {
       final String partitionPath = partitionPathFileIdPair.getLeft();
-      final String fileId = partitionPathFileIdPair.getRight();
-      ValidationUtils.checkState(!fileId.isEmpty());
+      final String fileName = partitionPathFileIdPair.getRight();
+      final String fileId = FSUtils.getFileId(fileName);
+      ValidationUtils.checkState(!fileName.isEmpty());
 
       final String partitionIDHash = new PartitionIndexID(partitionPath).asBase64EncodedString();
-      final String fileIDHash = new FileIndexID(fileId).asBase64EncodedString();
+      final String fileIDHash = new FileIndexID(fileName).asBase64EncodedString();
       final String bloomKey = partitionIDHash.concat(fileIDHash);
       if (!fileIDToBloomFilterByteBufferMap.containsKey(bloomKey)) {
         throw new HoodieIndexException("Failed to get the bloom filter for " + partitionPathFileIdPair);
@@ -113,21 +127,16 @@ public class HoodieBloomMetaIndexBatchCheckFunction implements
         }
       });
 
-      Option<HoodieBaseFile> dataFile = hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId);
-      if (!dataFile.isPresent()) {
-        throw new HoodieIndexException("Failed to find the base file for partition: " + partitionPath
-            + ", fileId: " + fileId);
-      }
-
+      final HoodieBaseFile dataFile = fileIDBaseFileMap.get(fileId);
       List<String> matchingKeys =
-          checkCandidatesAgainstFile(candidateRecordKeys, new Path(dataFile.get().getPath()));
+          checkCandidatesAgainstFile(candidateRecordKeys, new Path(dataFile.getPath()));
       LOG.debug(
           String.format("Total records (%d), bloom filter candidates (%d)/fp(%d), actual matches (%d)",
               hoodieKeyList.size(), candidateRecordKeys.size(),
               candidateRecordKeys.size() - matchingKeys.size(), matchingKeys.size()));
 
       ArrayList<HoodieKeyMetaIndexLookupResult> subList = new ArrayList<>();
-      subList.add(new HoodieKeyMetaIndexLookupResult(fileId, partitionPath, dataFile.get().getCommitTime(),
+      subList.add(new HoodieKeyMetaIndexLookupResult(fileId, partitionPath, dataFile.getCommitTime(),
           matchingKeys));
       resultList.add(subList);
     });
