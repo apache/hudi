@@ -24,7 +24,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -66,10 +65,8 @@ public class SavepointActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
   @Override
   public HoodieSavepointMetadata execute() {
     Option<HoodieInstant> cleanInstant = table.getCompletedCleanTimeline().lastInstant();
-    HoodieInstant commitInstant = new HoodieInstant(false, this.table.getMetaClient().getTableConfig().getTableType() == HoodieTableType.COPY_ON_WRITE
-        ? HoodieTimeline.COMMIT_ACTION : HoodieTimeline.DELTA_COMMIT_ACTION, instantTime);
-    if (!table.getCompletedCommitsTimeline().containsInstant(commitInstant)) {
-      throw new HoodieSavepointException("Could not savepoint non-existing commit " + commitInstant);
+    if (!table.getCompletedCommitsTimeline().containsInstant(instantTime)) {
+      throw new HoodieSavepointException("Could not savepoint non-existing commit " + instantTime);
     }
 
     try {
