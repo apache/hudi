@@ -48,6 +48,10 @@ if [ $# -lt 1 ]; then
   exit 0
 fi
 
+if [ ! $HUDI_DIR ]; then
+  export HUDI_DIR=$(dirname "$(dirname $PWD)")
+fi
+
 ## defaults
 rawDataFile=${HUDI_DIR}/docker/demo/data/batch_1.json
 kafkaBrokerHostname=localhost
