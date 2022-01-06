@@ -184,10 +184,7 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
               }
           }.mkString("/")
           val pathWithPartitionName = new Path(basePath, partitionWithName)
-          val partitionValues = parsePartitionValuesFromPath(pathWithPartitionName)
-            .getOrElse(Seq())
-            .map(_._2)
-            .toArray
+          val partitionValues = parsePartitionValuesFromPath(pathWithPartitionName).toArray
 
           partitionValues
         }
@@ -310,8 +307,11 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
       s" spend: $flushSpend ms")
   }
 
-  // TODO java-doc
-  protected def parsePartitionValuesFromPath(pathWithPartitionName: Path): Option[Seq[(String, Any)]]
+  /**
+   * Parses partitioning columns' values from the provided path to the partition
+   * @param partitionPath partition's path to parse partitioning columns' values from
+   */
+  protected def parsePartitionValuesFromPath(partitionPath: Path): Seq[Any]
 
   // TODO eval whether we should just use logger directly
   protected def logWarning(str: => String): Unit
