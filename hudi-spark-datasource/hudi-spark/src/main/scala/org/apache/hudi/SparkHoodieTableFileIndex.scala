@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.Path
+import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.SparkHoodieTableFileIndex.generateFieldMap
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.TypedProperties
@@ -47,7 +47,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     metaClient,
     configProperties,
     specifiedQueryInstant,
-    fileStatusCache
+    SparkHoodieTableFileIndex.adapt(fileStatusCache)
   )
     with SparkAdapterSupport
     with Logging {
@@ -268,5 +268,13 @@ object SparkHoodieTableFileIndex {
     }
 
     traverse(Right(structType))
+  }
+
+  private def adapt(cache: FileStatusCache): FileStatusCacheTrait = {
+    new FileStatusCacheTrait {
+      override def get(path: Path): Option[Array[FileStatus]] = cache.getLeafFiles(path)
+      override def put(path: Path, leafFiles: Array[FileStatus]): Unit = cache.putLeafFiles(path, leafFiles)
+      override def invalidate(): Unit = cache.invalidateAll()
+    }
   }
 }

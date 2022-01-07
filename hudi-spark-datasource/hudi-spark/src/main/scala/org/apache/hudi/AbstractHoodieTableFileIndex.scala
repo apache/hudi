@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.{FileSystemViewStorageConfig, HoodieTableFileSystemView}
-import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
@@ -58,7 +57,7 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
                                             metaClient: HoodieTableMetaClient,
                                             configProperties: TypedProperties,
                                             specifiedQueryInstant: Option[String] = None,
-                                            @transient fileStatusCache: FileStatusCache = NoopCache) {
+                                            @transient fileStatusCache: FileStatusCacheTrait) {
   /**
    * Get all completeCommits.
    */
@@ -185,7 +184,7 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
   }
 
   protected def refresh(): Unit = {
-    fileStatusCache.invalidateAll()
+    fileStatusCache.invalidate()
     refresh0()
   }
 
@@ -208,7 +207,7 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
     val cachePartitionToFiles = mutable.Map[PartitionPath, Array[FileStatus]]()
     // Fetch from the FileStatusCache
     partitionPaths.foreach { partitionPath =>
-      fileStatusCache.getLeafFiles(partitionPath.fullPartitionPath(basePath)) match {
+      fileStatusCache.get(partitionPath.fullPartitionPath(basePath)) match {
         case Some(filesInPartition) =>
           cachePartitionToFiles.put(partitionPath, filesInPartition)
 
@@ -231,7 +230,7 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
     // Update the fileStatusCache
     fetchedPartitionToFiles.foreach {
       case (partitionRowPath, filesInPartition) =>
-        fileStatusCache.putLeafFiles(partitionRowPath.fullPartitionPath(basePath), filesInPartition)
+        fileStatusCache.put(partitionRowPath.fullPartitionPath(basePath), filesInPartition)
     }
     cachePartitionToFiles.toMap ++ fetchedPartitionToFiles
   }
@@ -301,4 +300,10 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
       }
     }
   }
+}
+
+trait FileStatusCacheTrait {
+  def get(path: Path): Option[Array[FileStatus]]
+  def put(path: Path, leafFiles: Array[FileStatus]): Unit
+  def invalidate(): Unit
 }
