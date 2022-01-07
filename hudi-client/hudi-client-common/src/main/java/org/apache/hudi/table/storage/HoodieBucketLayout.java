@@ -40,7 +40,8 @@ public class HoodieBucketLayout extends HoodieStorageLayout {
       add(WriteOperationType.DELETE);
       add(WriteOperationType.COMPACT);
       add(WriteOperationType.DELETE_PARTITION);
-    }};
+    }
+  };
 
   public HoodieBucketLayout(HoodieWriteConfig config) {
     super(config);
