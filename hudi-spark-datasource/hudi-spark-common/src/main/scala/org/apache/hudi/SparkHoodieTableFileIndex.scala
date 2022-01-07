@@ -49,12 +49,14 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
                                 metaClient: HoodieTableMetaClient,
                                 schemaSpec: Option[StructType],
                                 configProperties: TypedProperties,
+                                queryPaths: Seq[Path],
                                 specifiedQueryInstant: Option[String] = None,
                                 @transient fileStatusCache: FileStatusCache = NoopCache)
   extends AbstractHoodieTableFileIndex(
     engineContext = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)),
     metaClient,
     configProperties,
+    queryPaths,
     specifiedQueryInstant,
     SparkHoodieTableFileIndex.adapt(fileStatusCache)
   )

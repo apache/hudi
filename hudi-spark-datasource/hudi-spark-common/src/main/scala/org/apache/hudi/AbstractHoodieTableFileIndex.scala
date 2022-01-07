@@ -53,6 +53,7 @@ import scala.collection.mutable
 abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
                                             metaClient: HoodieTableMetaClient,
                                             configProperties: TypedProperties,
+                                            protected val queryPaths: Seq[Path],
                                             specifiedQueryInstant: Option[String] = None,
                                             @transient fileStatusCache: FileStatusCacheTrait) {
   /**
@@ -74,7 +75,8 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
   private val queryType = configProperties(QUERY_TYPE.key())
   private val tableType = metaClient.getTableType
 
-  @transient private val queryPath = new Path(configProperties.getOrElse("path", "'path' option required"))
+  protected val basePath: String = metaClient.getBasePath
+
   @transient
   @volatile protected var cachedFileSize: Long = 0L
   @transient
@@ -215,11 +217,11 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
   }
 
   def getAllQueryPartitionPaths: Seq[PartitionPath] = {
-    val queryPartitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), queryPath)
+    val queryPartitionPaths = queryPaths.map(FSUtils.getRelativePartitionPath(new Path(basePath), _))
     // Load all the partition path from the basePath, and filter by the query partition path.
-    // TODO load files from the queryPartitionPath directly.
+    // TODO load files from the queryPartitionPaths directly.
     val partitionPaths = FSUtils.getAllPartitionPaths(engineContext, metadataConfig, basePath).asScala
-      .filter(_.startsWith(queryPartitionPath))
+      .filter(path => queryPartitionPaths.exists(path.startsWith))
 
     val partitionSchema = _partitionColumns
 
