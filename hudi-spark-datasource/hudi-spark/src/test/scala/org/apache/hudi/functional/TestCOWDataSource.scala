@@ -803,7 +803,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
     val snapshotDF1 = spark.read.format("org.apache.hudi")
-      .load(basePath)
+      .load(basePath + "/*/*/*/*")
     snapshotDF1.registerTempTable("tmptable")
     val result = spark.sql("select * from tmptable limit 1").collect()(0)
     result.schema.contains(new StructField("partition", StringType, true))

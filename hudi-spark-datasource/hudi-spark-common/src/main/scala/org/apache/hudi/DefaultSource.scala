@@ -203,7 +203,7 @@ class DefaultSource extends RelationProvider
       HadoopFsRelation(
         fileIndex,
         fileIndex.partitionSchema,
-        fileIndex.dataSchema,
+        fileIndex.schema,
         bucketSpec = None,
         fileFormat = tableFileFormat,
         optParams)(sqlContext.sparkSession)
