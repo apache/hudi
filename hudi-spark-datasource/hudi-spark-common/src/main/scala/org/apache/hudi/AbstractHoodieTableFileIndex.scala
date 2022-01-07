@@ -18,11 +18,10 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, Path}
-import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.{FileSystemViewStorageConfig, HoodieTableFileSystemView}
@@ -53,6 +52,7 @@ import scala.collection.mutable
 abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
                                             metaClient: HoodieTableMetaClient,
                                             configProperties: TypedProperties,
+                                            queryType: HoodieTableQueryType,
                                             protected val queryPaths: Seq[Path],
                                             specifiedQueryInstant: Option[String] = None,
                                             @transient fileStatusCache: FileStatusCacheTrait) {
@@ -72,7 +72,6 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
     .fromProperties(configProperties)
     .build()
 
-  private val queryType = configProperties(QUERY_TYPE.key())
   private val tableType = metaClient.getTableType
 
   protected val basePath: String = metaClient.getBasePath
@@ -125,7 +124,7 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
     }
 
     (tableType, queryType) match {
-      case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL) =>
+      case (MERGE_ON_READ, HoodieTableQueryType.QUERY_TYPE_SNAPSHOT) =>
         // Fetch and store latest base and log files, and their sizes
         cachedAllInputFileSlices = partitionFiles.map(p => {
           val latestSlices = if (queryInstant.isDefined) {
