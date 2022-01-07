@@ -214,8 +214,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   }
 
   private def parsePartitionPath(partitionPath: Path, partitionSchema: StructType): Seq[Any] = {
-    val timeZoneId = Option.apply(configProperties.getString(DateTimeUtils.TIMEZONE_OPTION))
-      .getOrElse(SQLConf.get.sessionLocalTimeZone)
+    val timeZoneId = configProperties.getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone)
     val partitionDataTypes = partitionSchema.map(f => f.name -> f.dataType).toMap
 
     sparkParsePartitionUtil.parsePartition(
