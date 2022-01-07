@@ -37,6 +37,20 @@
       <version>${project.version}</version>
     </dependency>
 
+    <!-- PLEASE NOTE: THIS IS A TEMPORARY DEPENDENCY THAT WOULD BE CLEANED UP SOON -->
+    <!-- TODO(HUDI-3082) remove -->
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
+      <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.curator</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
     <!-- Avro -->
     <dependency>
       <groupId>org.apache.avro</groupId>
