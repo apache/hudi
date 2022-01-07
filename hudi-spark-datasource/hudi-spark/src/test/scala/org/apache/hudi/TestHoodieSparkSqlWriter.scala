@@ -235,6 +235,7 @@ class TestHoodieSparkSqlWriter {
     } finally {
       session.stop()
       initSparkContext()
+      cleanupSparkContexts()
     }
   }
 

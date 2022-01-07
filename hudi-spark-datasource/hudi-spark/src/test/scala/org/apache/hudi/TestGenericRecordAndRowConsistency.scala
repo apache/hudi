@@ -50,6 +50,7 @@ class TestGenericRecordAndRowConsistency extends HoodieClientTestBase {
   }
 
   @AfterEach override def tearDown(): Unit = {
+    spark.stop()
     cleanupSparkContexts()
   }
 
