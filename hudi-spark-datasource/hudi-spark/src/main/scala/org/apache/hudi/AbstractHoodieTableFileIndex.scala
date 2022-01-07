@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.{FileSystemViewStorageConfig, HoodieTableFileSystemView}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
-import org.apache.spark.sql.hudi.HoodieSqlUtils
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
