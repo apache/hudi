@@ -216,11 +216,11 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
   }
 
   def getAllQueryPartitionPaths: Seq[PartitionPath] = {
-    val queryPartitionPaths = queryPaths.map(FSUtils.getRelativePartitionPath(new Path(basePath), _))
+    val queryRelativePartitionPaths = queryPaths.map(FSUtils.getRelativePartitionPath(new Path(basePath), _))
     // Load all the partition path from the basePath, and filter by the query partition path.
-    // TODO load files from the queryPartitionPaths directly.
+    // TODO load files from the queryRelativePartitionPaths directly.
     val partitionPaths = FSUtils.getAllPartitionPaths(engineContext, metadataConfig, basePath).asScala
-      .filter(path => queryPartitionPaths.exists(path.startsWith))
+      .filter(path => queryRelativePartitionPaths.exists(path.startsWith))
 
     val partitionSchema = _partitionColumns
 
