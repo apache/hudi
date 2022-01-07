@@ -289,15 +289,15 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     for (; i <= 2; i++) {
       doWriteOperation(testTable, "000000" + (commitTime.getAndIncrement()), INSERT);
     }
-    // expected num commits = 1 (bootstrap) + 2 (writes) + 1 compaction.
+    // expected num commits = 1 (bootstrap) + 2 (writes)
     HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
     HoodieActiveTimeline metadataTimeline = metadataMetaClient.reloadActiveTimeline();
-    assertEquals(metadataTimeline.getCommitsTimeline().filterCompletedInstants().countInstants(), 4);
+    assertEquals(metadataTimeline.getCommitsTimeline().filterCompletedInstants().countInstants(), 3);
 
     // trigger a async table service, archival should not kick in, even though conditions are met.
     doCluster(testTable, "000000" + commitTime.getAndIncrement());
     metadataTimeline = metadataMetaClient.reloadActiveTimeline();
-    assertEquals(metadataTimeline.getCommitsTimeline().filterCompletedInstants().countInstants(), 5);
+    assertEquals(metadataTimeline.getCommitsTimeline().filterCompletedInstants().countInstants(), 4);
 
     // trigger a regular write operation. archival should kick in.
     doWriteOperation(testTable, "000000" + (commitTime.getAndIncrement()), INSERT);
@@ -371,7 +371,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // this should have triggered compaction in metadata table
     tableMetadata = metadata(writeConfig, context);
     assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
-    assertEquals(tableMetadata.getLatestCompactionTime().get(), "0000004001");
+    assertEquals(tableMetadata.getLatestCompactionTime().get(), "0000003001");
   }
 
 
@@ -402,7 +402,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     HoodieTableMetadata tableMetadata = metadata(writeConfig, context);
     assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
-    assertEquals(tableMetadata.getLatestCompactionTime().get(), "0000004001");
+    assertEquals(tableMetadata.getLatestCompactionTime().get(), "0000003001");
 
     HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
     HoodieWriteConfig metadataTableWriteConfig = getMetadataWriteConfig(writeConfig);
@@ -447,6 +447,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // this new write is expected to trigger metadata table compaction
     String commitInstant = "0000002";
     doWriteOperation(testTable, commitInstant, INSERT);
+    doWriteOperation(testTable, "0000003", INSERT);
 
     HoodieTableMetadata tableMetadata = metadata(writeConfig, context);
     String metadataCompactionInstant = commitInstant + "001";
@@ -467,7 +468,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     if (simulateFailedCompaction) {
       // this should retry the compaction in metadata table.
-      doWriteOperation(testTable, "0000003", INSERT);
+      doWriteOperation(testTable, "0000004", INSERT);
     } else {
       // let the compaction succeed in metadata and validation should succeed.
       FileCreateUtils.renameTempToMetaFile(tempFilePath, metaFilePath);
@@ -476,8 +477,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     validateMetadata(testTable);
 
     // add few more write and validate
-    doWriteOperation(testTable, "0000004", INSERT);
-    doWriteOperation(testTable, "0000005", UPSERT);
+    doWriteOperation(testTable, "0000005", INSERT);
+    doWriteOperation(testTable, "0000006", UPSERT);
     validateMetadata(testTable);
 
     if (simulateFailedCompaction) {
@@ -496,13 +497,13 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       validateMetadata(testTable);
 
       // this should retry the failed compaction in metadata table.
-      doWriteOperation(testTable, "0000006", INSERT);
+      doWriteOperation(testTable, "0000007", INSERT);
 
       validateMetadata(testTable);
 
       // add few more write and validate
-      doWriteOperation(testTable, "0000007", INSERT);
-      doWriteOperation(testTable, "0000008", UPSERT);
+      doWriteOperation(testTable, "0000008", INSERT);
+      doWriteOperation(testTable, "0000009", UPSERT);
       validateMetadata(testTable);
     }
   }
