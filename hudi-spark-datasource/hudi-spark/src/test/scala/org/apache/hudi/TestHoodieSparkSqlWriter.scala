@@ -25,9 +25,8 @@ import org.apache.hudi.common.config.HoodieConfig
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.{ExceptionUtil, HoodieException}
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.hive.HiveSyncConfig
@@ -39,10 +38,9 @@ import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
-import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SaveMode, SparkSession}
+import org.apache.spark.sql._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
-import org.junit.jupiter.api.function.Executable
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 import org.mockito.ArgumentMatchers.any
@@ -223,6 +221,7 @@ class TestHoodieSparkSqlWriter {
    * Test case for invalid serializer provided.
    */
   @Test
+  @Disabled
   def testThrowExceptionInvalidSerializer(): Unit = {
     spark.stop()
     val session = SparkSession.builder().appName("hoodie_test").master("local").getOrCreate()
@@ -235,7 +234,6 @@ class TestHoodieSparkSqlWriter {
     } finally {
       session.stop()
       initSparkContext()
-      cleanupSparkContexts()
     }
   }
 
