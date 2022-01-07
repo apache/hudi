@@ -6,6 +6,7 @@ import org.apache.hudi.AbstractHoodieTableFileIndex;
 import org.apache.hudi.FileStatusCacheTrait;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.slf4j.Logger;
@@ -25,11 +26,13 @@ public class HiveHoodieTableFileIndex extends AbstractHoodieTableFileIndex {
   public HiveHoodieTableFileIndex(HoodieEngineContext engineContext,
                                   HoodieTableMetaClient metaClient,
                                   TypedProperties configProperties,
+                                  HoodieTableQueryType queryType,
                                   List<Path> queryPaths,
                                   Option<String> specifiedQueryInstant) {
     super(engineContext,
         metaClient,
         configProperties,
+        queryType,
         JavaConverters.asScalaBuffer(queryPaths),
         toScalaOption(specifiedQueryInstant),
         new NoopCache());

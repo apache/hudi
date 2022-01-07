@@ -27,13 +27,13 @@ import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.Job;
-import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -158,11 +158,7 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(job);
     List<FileStatus> targetFiles = new ArrayList<>();
 
-    TypedProperties props = new TypedProperties(
-        new Properties() {{
-          put(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL());
-        }}
-    );
+    TypedProperties props = new TypedProperties(new Properties());
 
     Map<HoodieTableMetaClient, List<Path>> groupedPaths =
         HoodieInputFormatUtils.groupSnapshotPathsByMetaClient(tableMetaClientMap.values(), snapshotPaths);
@@ -172,7 +168,13 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
       List<Path> partitionPaths = entry.getValue();
 
       HiveHoodieTableFileIndex fileIndex =
-          new HiveHoodieTableFileIndex(engineContext, tableMetaClient, props, trimBasePath(tableMetaClient, partitionPaths), Option.empty());
+          new HiveHoodieTableFileIndex(
+              engineContext,
+              tableMetaClient,
+              props,
+              HoodieTableQueryType.QUERY_TYPE_SNAPSHOT,
+              trimBasePath(tableMetaClient, partitionPaths),
+              Option.empty());
 
       Map<String, Seq<FileSlice>> partitionedFileSlices = JavaConverters.mapAsJavaMap(fileIndex.listFileSlices());
 
