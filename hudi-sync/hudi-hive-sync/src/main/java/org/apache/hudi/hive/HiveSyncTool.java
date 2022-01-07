@@ -251,9 +251,9 @@ public class HiveSyncTool extends AbstractSyncTool {
         LOG.info("Schema difference found for " + tableName);
         hoodieHiveClient.updateTableDefinition(tableName, schema);
         // Sync the table properties if the schema has changed
-        if (cfg.tableProperties != null) {
+        if (cfg.tableProperties != null || cfg.syncAsSparkDataSourceTable) {
           hoodieHiveClient.updateTableProperties(tableName, tableProperties);
-          LOG.info("Sync table properties for " + tableName + ", table properties is: " + cfg.tableProperties);
+          LOG.info("Sync table properties for " + tableName + ", table properties is: " + tableProperties);
         }
         schemaChanged = true;
       } else {
