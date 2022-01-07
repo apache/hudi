@@ -70,7 +70,6 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
   private lazy val metadataConfig = HoodieMetadataConfig.newBuilder
     .fromProperties(configProperties)
     .build()
-  protected val basePath: String = metaClient.getBasePath
 
   private val queryType = configProperties(QUERY_TYPE.key())
   private val tableType = metaClient.getTableType
