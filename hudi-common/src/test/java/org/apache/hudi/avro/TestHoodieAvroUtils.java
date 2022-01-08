@@ -225,15 +225,15 @@ public class TestHoodieAvroUtils {
     rec.put("non_pii_col", "val1");
     rec.put("pii_col", "val2");
 
-    Object rowKey = HoodieAvroUtils.getNestedFieldVal(rec, "_row_key", true);
+    Object rowKey = HoodieAvroUtils.getNestedFieldVal(rec, "_row_key", true, false);
     assertEquals("key1", rowKey);
 
-    Object rowKeyNotExist = HoodieAvroUtils.getNestedFieldVal(rec, "fake_key", true);
+    Object rowKeyNotExist = HoodieAvroUtils.getNestedFieldVal(rec, "fake_key", true, false);
     assertNull(rowKeyNotExist);
 
     // Field does not exist
     try {
-      HoodieAvroUtils.getNestedFieldVal(rec, "fake_key", false);
+      HoodieAvroUtils.getNestedFieldVal(rec, "fake_key", false, false);
     } catch (Exception e) {
       assertEquals("fake_key(Part -fake_key) field not found in record. Acceptable fields were :[timestamp, _row_key, non_pii_col, pii_col]",
           e.getMessage());
@@ -241,7 +241,7 @@ public class TestHoodieAvroUtils {
 
     // Field exist while value not
     try {
-      HoodieAvroUtils.getNestedFieldVal(rec, "timestamp", false);
+      HoodieAvroUtils.getNestedFieldVal(rec, "timestamp", false, false);
     } catch (Exception e) {
       assertEquals("The value of timestamp can not be null", e.getMessage());
     }
@@ -255,7 +255,7 @@ public class TestHoodieAvroUtils {
     ByteBuffer byteBuffer = ByteBuffer.wrap(bigDecimal.unscaledValue().toByteArray());
     rec.put("decimal_col", byteBuffer);
 
-    Object decimalCol = HoodieAvroUtils.getNestedFieldVal(rec, "decimal_col", true);
+    Object decimalCol = HoodieAvroUtils.getNestedFieldVal(rec, "decimal_col", true, false);
     assertEquals(bigDecimal, decimalCol);
 
     Object obj = rec.get(1);

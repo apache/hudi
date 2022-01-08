@@ -56,6 +56,16 @@ public class KeyGeneratorOptions extends HoodieConfig {
       .withDocumentation("Partition path field. Value to be used at the partitionPath component of HoodieKey. "
           + "Actual value ontained by invoking .toString()");
 
+  public static final ConfigProperty<String> KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED = ConfigProperty
+      .key("hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled")
+      .defaultValue("false")
+      .withDocumentation("When set to true, consistent value will be generated for a logical timestamp type column, "
+          + "like timestamp-millis and timestamp-micros, irrespective of whether row-writer is enabled. Disabled by default so "
+          + "as not to break the pipeline that deploy either fully row-writer path or non row-writer path. For example, "
+          + "if it is kept disabled then record key of timestamp type with value `2016-12-29 09:54:00` will be written as timestamp "
+          + "`2016-12-29 09:54:00.0` in row-writer path, while it will be written as long value `1483023240000000` in non row-writer path. "
+          + "If enabled, then the timestamp value will be written in both the cases.");
+
   /**
    * @deprecated Use {@link #URL_ENCODE_PARTITIONING} and its methods.
    */

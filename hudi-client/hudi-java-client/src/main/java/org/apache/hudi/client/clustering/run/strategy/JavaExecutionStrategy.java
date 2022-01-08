@@ -124,7 +124,8 @@ public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
     if (strategyParams.containsKey(PLAN_STRATEGY_SORT_COLUMNS.key())) {
       return Option.of(new JavaCustomColumnsSortPartitioner(
           strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()).split(","),
-          HoodieAvroUtils.addMetadataFields(schema)));
+          HoodieAvroUtils.addMetadataFields(schema),
+          getWriteConfig().isConsistentLogicalTimestampEnabled()));
     } else {
       return Option.empty();
     }
