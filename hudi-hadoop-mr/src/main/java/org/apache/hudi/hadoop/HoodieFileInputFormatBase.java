@@ -29,7 +29,6 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -104,13 +103,6 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
     }
   }
 
-  private static List<Path> trimBasePath(HoodieTableMetaClient tableMetaClient, List<Path> partitionPaths) {
-    String tableBasePath = tableMetaClient.getBasePath();
-    return partitionPaths.stream()
-        .map(path -> new Path(FSUtils.getRelativePartitionPath(new Path(tableBasePath), path)))
-        .collect(Collectors.toList());
-  }
-
   @Override
   public FileStatus[] listStatus(JobConf job) throws IOException {
     // Segregate inputPaths[] to incremental, snapshot and non hoodie paths
@@ -173,7 +165,7 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
               tableMetaClient,
               props,
               HoodieTableQueryType.QUERY_TYPE_SNAPSHOT,
-              trimBasePath(tableMetaClient, partitionPaths),
+              partitionPaths,
               Option.empty());
 
       Map<String, Seq<FileSlice>> partitionedFileSlices = JavaConverters.mapAsJavaMap(fileIndex.listFileSlices());
