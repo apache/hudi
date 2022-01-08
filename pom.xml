@@ -98,7 +98,6 @@
     <confluent.version>5.3.4</confluent.version>
     <glassfish.version>2.17</glassfish.version>
     <parquet.version>1.10.1</parquet.version>
-    <parquet.spark3.version>1.12.1</parquet.spark3.version>
     <junit.jupiter.version>5.7.0-M1</junit.jupiter.version>
     <junit.vintage.version>5.7.0-M1</junit.vintage.version>
     <junit.platform.version>1.7.0-M1</junit.platform.version>
@@ -1579,7 +1578,7 @@
         <hudi.spark.module>hudi-spark3</hudi.spark.module>
         <scalatest.version>3.1.0</scalatest.version>
         <kafka.version>2.4.1</kafka.version>
-        <parquet.version>${parquet.spark3.version}</parquet.version>
+        <parquet.version>1.12.1</parquet.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
@@ -1621,12 +1620,25 @@
 
     <profile>
       <id>spark3.0.x</id>
-<!--      for spark 3.0.x we need override the follow propeprties to package and run test-->
       <properties>
         <spark3.version>3.0.3</spark3.version>
         <spark.version>${spark3.version}</spark.version>
+        <scala.version>${scala12.version}</scala.version>
+        <scala.binary.version>2.12</scala.binary.version>
+        <hudi.spark.module>hudi-spark3</hudi.spark.module>
         <scalatest.version>3.0.1</scalatest.version>
+        <kafka.version>2.4.1</kafka.version>
+        <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
+        <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
+        <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
+        <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
+        <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
       </properties>
+      <activation>
+        <property>
+          <name>spark3.0.x</name>
+        </property>
+      </activation>
     </profile>
 
     <profile>
