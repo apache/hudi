@@ -159,6 +159,11 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
       HoodieTableMetaClient tableMetaClient = entry.getKey();
       List<Path> partitionPaths = entry.getValue();
 
+      // Hive job might specify a max commit instant up to which table's state
+      // should be examined. We simply pass it as query's instant to the file-index
+      Option<String> queryCommitInstant =
+          HoodieHiveUtils.getMaxCommit(job, tableMetaClient.getTableConfig().getTableName());
+
       HiveHoodieTableFileIndex fileIndex =
           new HiveHoodieTableFileIndex(
               engineContext,
@@ -166,7 +171,7 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
               props,
               HoodieTableQueryType.QUERY_TYPE_SNAPSHOT,
               partitionPaths,
-              Option.empty());
+              queryCommitInstant);
 
       Map<String, Seq<FileSlice>> partitionedFileSlices = JavaConverters.mapAsJavaMap(fileIndex.listFileSlices());
 
