@@ -301,21 +301,25 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
       Pair<List<HoodieInstant>, List<HoodieInstant>> commitsList = archiveAndGetCommitsList(writeConfig);
       List<HoodieInstant> originalCommits = commitsList.getKey();
       List<HoodieInstant> commitsAfterArchival = commitsList.getValue();
-      if (i != 6) {
+      if (enableMetadata) {
         assertEquals(originalCommits, commitsAfterArchival);
       } else {
-        // on 6th commit, archival will kick in. but will archive only one commit since 2nd compaction commit is inflight.
-        assertEquals(originalCommits.size() - commitsAfterArchival.size(), 1);
-        for (int j = 1; j <= 6; j++) {
-          if (j == 1) {
-            // first commit should be archived
-            assertFalse(commitsAfterArchival.contains(new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "0000000" + j)));
-          } else if (j == 2) {
-            // 2nd compaction should not be archived
-            assertFalse(commitsAfterArchival.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "0000000" + j)));
-          } else {
-            // every other commit should not be archived
-            assertTrue(commitsAfterArchival.contains(new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "0000000" + j)));
+        if (i != 6) {
+          assertEquals(originalCommits, commitsAfterArchival);
+        } else {
+          // on 7th commit, archival will kick in. but will archive only one commit since 2nd compaction commit is inflight.
+          assertEquals(originalCommits.size() - commitsAfterArchival.size(), 1);
+          for (int j = 1; j <= 6; j++) {
+            if (j == 1) {
+              // first commit should be archived
+              assertFalse(commitsAfterArchival.contains(new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "0000000" + j)));
+            } else if (j == 2) {
+              // 2nd compaction should not be archived
+              assertFalse(commitsAfterArchival.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "0000000" + j)));
+            } else {
+              // every other commit should not be archived
+              assertTrue(commitsAfterArchival.contains(new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "0000000" + j)));
+            }
           }
         }
       }
@@ -578,37 +582,39 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
       assertEquals(originalCommits, commitsAfterArchival);
     }
 
-    // one more commit will trigger compaction in metadata table and will let archival move forward.
+    // two more commits will trigger compaction in metadata table and will let archival move forward.
     testTable.doWriteOperation("00000006", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+    testTable.doWriteOperation("00000007", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
     // trigger archival
     Pair<List<HoodieInstant>, List<HoodieInstant>> commitsList = archiveAndGetCommitsList(writeConfig);
     List<HoodieInstant> originalCommits = commitsList.getKey();
     List<HoodieInstant> commitsAfterArchival = commitsList.getValue();
-    // before archival 1,2,3,4,5,6
-    // after archival 5,6
-    assertEquals(originalCommits.size() - commitsAfterArchival.size(), 4);
-    verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000001", "00000002", "00000003", "00000004")), getActiveCommitInstants(Arrays.asList("00000005", "00000006")), commitsAfterArchival);
+    // before archival 1,2,3,4,5,6,7
+    // after archival 6,7
+    assertEquals(originalCommits.size() - commitsAfterArchival.size(), 5);
+    verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000001", "00000002", "00000003", "00000004", "00000005")),
+        getActiveCommitInstants(Arrays.asList("00000006", "00000007")), commitsAfterArchival);
 
-    // 3 more commits, 5 and 6 will be archived. but will not move after 6 since compaction has to kick in in metadata table.
-    testTable.doWriteOperation("00000007", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+    // 3 more commits, 6 and 7 will be archived. but will not move after 6 since compaction has to kick in metadata table.
     testTable.doWriteOperation("00000008", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+    testTable.doWriteOperation("00000009", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
     // trigger archival
     commitsList = archiveAndGetCommitsList(writeConfig);
     originalCommits = commitsList.getKey();
     commitsAfterArchival = commitsList.getValue();
     assertEquals(originalCommits, commitsAfterArchival);
 
-    // ideally, this will archive commits 5, 6, 7, but since compaction in metadata is until 6, only 5 and 6 will get archived,
-    testTable.doWriteOperation("00000009", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+    // ideally, this will archive commits 6, 7, 8 but since compaction in metadata is until 6, only 6 will get archived,
+    testTable.doWriteOperation("00000010", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
     commitsList = archiveAndGetCommitsList(writeConfig);
     originalCommits = commitsList.getKey();
     commitsAfterArchival = commitsList.getValue();
-    assertEquals(originalCommits.size() - commitsAfterArchival.size(), 2);
+    assertEquals(originalCommits.size() - commitsAfterArchival.size(), 1);
     verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000001", "00000002", "00000003", "00000004", "00000005", "00000006")),
-        getActiveCommitInstants(Arrays.asList("00000007", "00000008", "00000009")), commitsAfterArchival);
+        getActiveCommitInstants(Arrays.asList("00000007", "00000008", "00000009", "00000010")), commitsAfterArchival);
 
     // and then 2nd compaction will take place at 12th commit
-    for (int i = 10; i < 13; i++) {
+    for (int i = 11; i < 14; i++) {
       testTable.doWriteOperation("000000" + i, WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
       // trigger archival
       commitsList = archiveAndGetCommitsList(writeConfig);
@@ -618,16 +624,16 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     }
 
     // one more commit will trigger compaction in metadata table and will let archival move forward.
-    testTable.doWriteOperation("00000013", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+    testTable.doWriteOperation("00000014", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
     // trigger archival
     commitsList = archiveAndGetCommitsList(writeConfig);
     originalCommits = commitsList.getKey();
     commitsAfterArchival = commitsList.getValue();
-    // before archival 5,6,7,8,9,10,11,12,13
-    // after archival 12,13
-    assertEquals(originalCommits.size() - commitsAfterArchival.size(), 5);
+    // before archival 7,8,9,10,11,12,13,14
+    // after archival 13,14
+    assertEquals(originalCommits.size() - commitsAfterArchival.size(), 6);
     verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000001", "00000002", "00000003", "00000004", "00000005", "00000006", "00000007", "00000008",
-        "00000009", "00000010", "00000011")), getActiveCommitInstants(Arrays.asList("00000012", "00000013")), commitsAfterArchival);
+        "00000009", "00000010", "00000011", "00000012")), getActiveCommitInstants(Arrays.asList("00000013", "00000014")), commitsAfterArchival);
   }
 
   private Pair<List<HoodieInstant>, List<HoodieInstant>> archiveAndGetCommitsList(HoodieWriteConfig writeConfig) throws IOException {
