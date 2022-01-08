@@ -51,7 +51,7 @@ public class HiveHoodieTableFileIndex extends AbstractHoodieTableFileIndex {
         metaClient,
         configProperties,
         queryType,
-        JavaConverters.asScalaBuffer(queryPaths),
+        JavaConverters.asScalaBufferConverter(queryPaths).asScala(),
         toScalaOption(specifiedQueryInstant),
         new NoopCache());
   }

@@ -173,12 +173,13 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
               partitionPaths,
               queryCommitInstant);
 
-      Map<String, Seq<FileSlice>> partitionedFileSlices = JavaConverters.mapAsJavaMap(fileIndex.listFileSlices());
+      Map<String, Seq<FileSlice>> partitionedFileSlices =
+          JavaConverters.mapAsJavaMapConverter(fileIndex.listFileSlices()).asJava();
 
       targetFiles.addAll(
           partitionedFileSlices.values()
               .stream()
-              .flatMap(seq -> JavaConverters.seqAsJavaList(seq).stream())
+              .flatMap(seq -> JavaConverters.seqAsJavaListConverter(seq).asJava().stream())
               .map(fileSlice -> {
                 Option<HoodieBaseFile> baseFileOpt = fileSlice.getBaseFile();
                 Option<HoodieLogFile> latestLogFileOpt = fileSlice.getLatestLogFile();
