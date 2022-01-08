@@ -46,13 +46,16 @@ public class HiveHoodieTableFileIndex extends AbstractHoodieTableFileIndex {
                                   TypedProperties configProperties,
                                   HoodieTableQueryType queryType,
                                   List<Path> queryPaths,
-                                  Option<String> specifiedQueryInstant) {
+                                  Option<String> specifiedQueryInstant,
+                                  boolean shouldIncludePendingCommits
+  ) {
     super(engineContext,
         metaClient,
         configProperties,
         queryType,
         JavaConverters.asScalaBufferConverter(queryPaths).asScala(),
         toScalaOption(specifiedQueryInstant),
+        shouldIncludePendingCommits,
         new NoopCache());
   }
 

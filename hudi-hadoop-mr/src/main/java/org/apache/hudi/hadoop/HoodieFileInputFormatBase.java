@@ -164,6 +164,9 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
       Option<String> queryCommitInstant =
           HoodieHiveUtils.getMaxCommit(job, tableMetaClient.getTableConfig().getTableName());
 
+      boolean shouldIncludePendingCommits =
+          HoodieHiveUtils.shouldIncludePendingCommits(job, tableMetaClient.getTableConfig().getTableName());
+
       HiveHoodieTableFileIndex fileIndex =
           new HiveHoodieTableFileIndex(
               engineContext,
@@ -171,7 +174,8 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
               props,
               HoodieTableQueryType.QUERY_TYPE_SNAPSHOT,
               partitionPaths,
-              queryCommitInstant);
+              queryCommitInstant,
+              shouldIncludePendingCommits);
 
       Map<String, Seq<FileSlice>> partitionedFileSlices =
           JavaConverters.mapAsJavaMapConverter(fileIndex.listFileSlices()).asJava();

@@ -55,6 +55,7 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
                                             queryType: HoodieTableQueryType,
                                             protected val queryPaths: Seq[Path],
                                             specifiedQueryInstant: Option[String] = None,
+                                            shouldIncludePendingCommits: Boolean = false,
                                             @transient fileStatusCache: FileStatusCacheTrait) {
   /**
    * Get all completeCommits.
@@ -109,12 +110,13 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
       .getOrElse(Array.empty[FileStatus])
 
     metaClient.reloadActiveTimeline()
-    val activeInstants = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
-    val latestInstant = activeInstants.lastInstant()
+
+    val activeTimeline = getActiveTimeline
+    val latestInstant = activeTimeline.lastInstant()
     // TODO we can optimize the flow by:
     //  - First fetch list of files from instants of interest
     //  - Load FileStatus's
-    fileSystemView = new HoodieTableFileSystemView(metaClient, activeInstants, allFiles)
+    fileSystemView = new HoodieTableFileSystemView(metaClient, activeTimeline, allFiles)
     val queryInstant = if (specifiedQueryInstant.isDefined) {
       specifiedQueryInstant
     } else if (latestInstant.isPresent) {
@@ -166,6 +168,15 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
   protected def refresh(): Unit = {
     fileStatusCache.invalidate()
     refresh0()
+  }
+
+  private def getActiveTimeline = {
+    val timeline = metaClient.getActiveTimeline.getCommitsTimeline
+    if (shouldIncludePendingCommits) {
+      timeline
+    } else {
+      timeline.filterCompletedInstants()
+    }
   }
 
   private def fileSliceSize(fileSlice: FileSlice): Long = {
