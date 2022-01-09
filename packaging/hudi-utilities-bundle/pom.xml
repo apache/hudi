@@ -113,10 +113,6 @@
                   <include>org.antlr:stringtemplate</include>
                   <include>org.apache.parquet:parquet-avro</include>
 
-                  <include>com.amazonaws:dynamodb-lock-client</include>
-                  <include>com.amazonaws:aws-java-sdk-dynamodb</include>
-                  <include>com.amazonaws:aws-java-sdk-core</include>
-
                   <include>com.github.davidmoten:guava-mini</include>
                   <include>com.github.davidmoten:hilbert-curve</include>
                   <include>com.twitter:bijection-avro_${scala.binary.version}</include>
