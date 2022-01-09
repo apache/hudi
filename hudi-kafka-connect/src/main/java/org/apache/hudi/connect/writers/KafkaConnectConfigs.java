@@ -93,6 +93,17 @@ public class KafkaConnectConfigs extends HoodieConfig {
       .defaultValue(true)
       .withDocumentation("Commit even when some records failed to be written");
 
+  // Reference https://docs.confluent.io/kafka-connect-hdfs/current/configuration_options.html#hdfs
+  public static final ConfigProperty<String> HADOOP_CONF_DIR = ConfigProperty
+          .key("hadoop.conf.dir")
+          .noDefaultValue()
+          .withDocumentation("The Hadoop configuration directory.");
+
+  public static final ConfigProperty<String> HADOOP_HOME = ConfigProperty
+          .key("hadoop.home")
+          .noDefaultValue()
+          .withDocumentation("The Hadoop home directory.");
+
   protected KafkaConnectConfigs() {
     super();
   }
@@ -145,6 +156,14 @@ public class KafkaConnectConfigs extends HoodieConfig {
     return getBoolean(ALLOW_COMMIT_ON_ERRORS);
   }
 
+  public String getHadoopConfDir() {
+    return getString(HADOOP_CONF_DIR);
+  }
+
+  public String getHadoopConfHome() {
+    return getString(HADOOP_HOME);
+  }
+
   public static class Builder {
 
     protected final KafkaConnectConfigs connectConfigs = new KafkaConnectConfigs();
@@ -182,6 +201,16 @@ public class KafkaConnectConfigs extends HoodieConfig {
 
     public Builder withProperties(Properties properties) {
       connectConfigs.getProps().putAll(properties);
+      return this;
+    }
+
+    public Builder withHadoopConfDir(String hadoopConfDir) {
+      connectConfigs.setValue(HADOOP_CONF_DIR, String.valueOf(hadoopConfDir));
+      return this;
+    }
+
+    public Builder withHadoopHome(String hadoopHome) {
+      connectConfigs.setValue(HADOOP_HOME, String.valueOf(hadoopHome));
       return this;
     }
 
