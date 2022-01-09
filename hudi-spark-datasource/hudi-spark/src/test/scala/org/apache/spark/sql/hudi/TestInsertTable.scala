@@ -370,6 +370,38 @@ class TestInsertTable extends TestHoodieSqlBase {
     spark.sql("set hoodie.sql.insert.mode = upsert")
   }
 
+
+  test("Test Insert timestamp when 'spark.sql.datetime.java8API.enabled' enables") {
+    try {
+      // enable spark.sql.datetime.java8API.enabled
+      // and use java.time.Instant to replace java.sql.Timestamp to represent TimestampType.
+      spark.conf.set("spark.sql.datetime.java8API.enabled", value = true)
+
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  dt timestamp
+           |)
+           |using hudi
+           |partitioned by(dt)
+           |options(type = 'cow', primaryKey = 'id')
+           |""".stripMargin
+      )
+
+      spark.sql(s"insert into $tableName values (1, 'a1', 10, cast('2021-05-07 00:00:00' as timestamp))")
+      checkAnswer(s"select id, name, price, cast(dt as string) from $tableName")(
+        Seq(1, "a1", 10, "2021-05-07 00:00:00")
+      )
+
+    } finally {
+      spark.conf.set("spark.sql.datetime.java8API.enabled", value = false)
+    }
+  }
+
   test("Test bulk insert") {
     spark.sql("set hoodie.sql.insert.mode = non-strict")
     withTempDir { tmp =>
