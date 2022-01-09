@@ -28,6 +28,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -2291,9 +2292,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       // Async table services can update the metadata table and a lock provider is
       // needed to guard against any concurrent table write operations. If user has
       // not configured any lock provider, let's use the InProcess lock provider.
+      final TypedProperties writeConfigProperties = writeConfig.getProps();
+      final boolean isLockProviderPropertySet = writeConfigProperties.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME)
+          || writeConfigProperties.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_PROP);
       if (!isLockConfigSet) {
         HoodieLockConfig.Builder lockConfigBuilder = HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps());
-        if (writeConfig.areAnyTableServicesAsync()) {
+        if (!isLockProviderPropertySet && writeConfig.areAnyTableServicesAsync()) {
           lockConfigBuilder.withLockProvider(InProcessLockProvider.class);
         }
         writeConfig.setDefault(lockConfigBuilder.build());

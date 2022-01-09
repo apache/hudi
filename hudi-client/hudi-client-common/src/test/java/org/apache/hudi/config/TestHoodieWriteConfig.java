@@ -20,6 +20,8 @@ package org.apache.hudi.config;
 
 import org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
+import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.config.HoodieWriteConfig.Builder;
@@ -176,6 +178,15 @@ public class TestHoodieWriteConfig {
             .build())
         .build();
     assertEquals(FileSystemBasedLockProviderTestClass.class.getName(), writeConfig.getLockProviderClass());
+
+    // 6. User can set the lock provider via properties
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), ZookeeperBasedLockProvider.class.getName());
+    writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withProperties(properties)
+        .build();
+    assertEquals(ZookeeperBasedLockProvider.class.getName(), writeConfig.getLockProviderClass());
 
     // Default config should have default lock provider
     writeConfig = createWriteConfig(Collections.emptyMap());
