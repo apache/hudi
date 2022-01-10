@@ -577,6 +577,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     client = getHoodieWriteClient(newConfig);
     client.restoreToInstant("004");
 
+    assertFalse(metaClient.reloadActiveTimeline().getRollbackTimeline().lastInstant().isPresent());
+
     // Check the entire dataset has all records still
     String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
     for (int i = 0; i < fullPartitionPaths.length; i++) {
