@@ -52,7 +52,10 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 public class TestStringToRowDataConverter {
   @Test
   void testConvert() {
-    String[] fields = new String[] {"1.1", "3.4", "2021-03-30", "56669000", "1617090269000", "1617090269666111", "12345.67"};
+    String[] fields = new String[] {"1.1", "3.4", "2021-03-30", "56669000",
+        String.valueOf(timestampDataToLong(stringToTimestampData("2021-03-30T15:44:29"), ChronoUnit.MILLIS)),
+        String.valueOf(timestampDataToLong(stringToTimestampData("2021-03-30T15:44:29.666111"), ChronoUnit.MICROS)),
+        "12345.67"};
     LogicalType[] fieldTypes = new LogicalType[] {
         DataTypes.FLOAT().getLogicalType(),
         DataTypes.DOUBLE().getLogicalType(),
