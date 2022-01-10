@@ -37,6 +37,7 @@ import org.apache.flink.table.catalog.ResolvedCatalogTable;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.catalog.UniqueConstraint;
 import org.apache.flink.table.catalog.exceptions.CatalogException;
+import org.apache.flink.table.catalog.exceptions.DatabaseAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.DatabaseNotExistException;
 import org.apache.flink.table.catalog.exceptions.TableAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
@@ -157,6 +158,10 @@ public class TestHoodieCatalog {
     CatalogDatabase actual = catalog.getDatabase("db1");
     assertTrue(catalog.listDatabases().contains("db1"));
     assertEquals(expected.getProperties(), actual.getProperties());
+
+    // create exist database
+    assertThrows(DatabaseAlreadyExistException.class,
+        () -> catalog.createDatabase("db1", expected, false));
 
     // drop exist database
     catalog.dropDatabase("db1", true);

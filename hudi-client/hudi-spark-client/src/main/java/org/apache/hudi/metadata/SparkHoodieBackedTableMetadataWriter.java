@@ -128,6 +128,13 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     JavaRDD<HoodieRecord> recordRDD = prepRecords(records, partitionName, 1);
 
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, metadataWriteConfig, true)) {
+      if (canTriggerTableService) {
+        // trigger compaction before doing the delta commit. this is to ensure, if this delta commit succeeds in metadata table, but failed in data table,
+        // we would have compacted metadata table and so could have included uncommitted data which will never be ignored while reading from metadata
+        // table (since reader will filter out only from delta commits)
+        compactIfNecessary(writeClient, instantTime);
+      }
+
       if (!metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(instantTime)) {
         // if this is a new commit being applied to metadata for the first time
         writeClient.startCommitWithTime(instantTime);
@@ -153,7 +160,6 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       // reload timeline
       metadataMetaClient.reloadActiveTimeline();
       if (canTriggerTableService) {
-        compactIfNecessary(writeClient, instantTime);
         cleanIfNecessary(writeClient, instantTime);
         writeClient.archive();
       }

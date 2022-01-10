@@ -190,6 +190,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     }
   }
 
+  public void deleteEmptyInstantIfExists(HoodieInstant instant) {
+    ValidationUtils.checkArgument(isEmpty(instant));
+    deleteInstantFileIfExists(instant);
+  }
+
   public void deleteCompactionRequested(HoodieInstant instant) {
     ValidationUtils.checkArgument(instant.isRequested());
     ValidationUtils.checkArgument(Objects.equals(instant.getAction(), HoodieTimeline.COMPACTION_ACTION));
@@ -376,14 +381,13 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * Transition Rollback State from requested to inflight.
    *
    * @param requestedInstant requested instant
-   * @param data Optional data to be stored
    * @return commit instant
    */
-  public HoodieInstant transitionRollbackRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data) {
+  public HoodieInstant transitionRollbackRequestedToInflight(HoodieInstant requestedInstant) {
     ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION));
     ValidationUtils.checkArgument(requestedInstant.isRequested());
     HoodieInstant inflight = new HoodieInstant(State.INFLIGHT, ROLLBACK_ACTION, requestedInstant.getTimestamp());
-    transitionState(requestedInstant, inflight, data);
+    transitionState(requestedInstant, inflight, Option.empty());
     return inflight;
   }
 

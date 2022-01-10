@@ -577,6 +577,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     client = getHoodieWriteClient(newConfig);
     client.restoreToInstant("004");
 
+    assertFalse(metaClient.reloadActiveTimeline().getRollbackTimeline().lastInstant().isPresent());
+
     // Check the entire dataset has all records still
     String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
     for (int i = 0; i < fullPartitionPaths.length; i++) {
@@ -1602,7 +1604,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     SparkRDDWriteClient client = getHoodieWriteClient(config);
     String clusteringCommitTime = client.scheduleClustering(Option.empty()).get().toString();
     HoodieWriteMetadata<JavaRDD<WriteStatus>> clusterMetadata = client.cluster(clusteringCommitTime, completeClustering);
-    if (config.isPreserveHoodieCommitMetadata() && config.populateMetaFields()) {
+    if (config.isPreserveHoodieCommitMetadataForClustering() && config.populateMetaFields()) {
       verifyRecordsWrittenWithPreservedMetadata(new HashSet<>(allRecords.getRight()), allRecords.getLeft(), clusterMetadata.getWriteStatuses().collect());
     } else {
       verifyRecordsWritten(clusteringCommitTime, populateMetaFields, allRecords.getLeft(), clusterMetadata.getWriteStatuses().collect(), config);
@@ -1836,9 +1838,12 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     Map<String, List<GenericRecord>> recordsByCommitTime = records.stream()
         .collect(Collectors.groupingBy(r -> r.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString()));
     assertTrue(commitTimes.containsAll(recordsByCommitTime.keySet()));
+    Set<String> expectedFileIds = allStatus.stream().map(WriteStatus::getFileId).collect(Collectors.toSet());
     for (GenericRecord record : records) {
       String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
       assertTrue(expectedKeys.contains(recordKey));
+      String fileName = record.get(HoodieRecord.FILENAME_METADATA_FIELD).toString();
+      assertTrue(expectedFileIds.contains(FSUtils.getFileId(fileName)));
     }
   }
 

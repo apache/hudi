@@ -120,7 +120,10 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
     return Collections.singletonList(Pair.of(key, Option.ofNullable((HoodieRecord) records.get(key))));
   }
 
-  public List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> keys) {
+  public synchronized List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> keys) {
+    // Following operations have to be atomic, otherwise concurrent
+    // readers would race with each other and could crash when
+    // processing log block records as part of scan.
     records.clear();
     scan(Option.of(keys));
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> metadataRecords = new ArrayList<>();

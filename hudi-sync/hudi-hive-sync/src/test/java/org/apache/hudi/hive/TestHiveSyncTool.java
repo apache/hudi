@@ -20,6 +20,7 @@ package org.apache.hudi.hive;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -785,6 +786,49 @@ public class TestHiveSyncTool {
     List<Partition> hivePartitions = hiveClient.scanTablePartitions(hiveSyncConfig.tableName);
     assertEquals(1, hivePartitions.size(),
         "Table should have 1 partition because of the drop 1 partition");
+  }
+
+  @ParameterizedTest
+  @MethodSource("syncMode")
+  public void testDropPartition(String syncMode) throws Exception {
+    hiveSyncConfig.syncMode = syncMode;
+    HiveTestUtil.hiveSyncConfig.batchSyncNum = 3;
+    String instantTime = "100";
+    HiveTestUtil.createCOWTable(instantTime, 1, true);
+
+    HoodieHiveClient hiveClient =
+        new HoodieHiveClient(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    assertFalse(hiveClient.doesTableExist(hiveSyncConfig.tableName),
+        "Table " + hiveSyncConfig.tableName + " should not exist initially");
+    // Lets do the sync
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    tool.syncHoodieTable();
+    // we need renew the hiveclient after tool.syncHoodieTable(), because it will close hive
+    // session, then lead to connection retry, we can see there is a exception at log.
+    hiveClient =
+        new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    assertTrue(hiveClient.doesTableExist(HiveTestUtil.hiveSyncConfig.tableName),
+        "Table " + HiveTestUtil.hiveSyncConfig.tableName + " should exist after sync completes");
+    assertEquals(hiveClient.getTableSchema(HiveTestUtil.hiveSyncConfig.tableName).size(),
+        hiveClient.getDataSchema().getColumns().size() + 1,
+        "Hive Schema should match the table schema + partition field");
+    List<Partition> partitions = hiveClient.scanTablePartitions(hiveSyncConfig.tableName);
+    assertEquals(1, partitions.size(),
+        "Table partitions should match the number of partitions we wrote");
+    assertEquals(instantTime, hiveClient.getLastCommitTimeSynced(hiveSyncConfig.tableName).get(),
+        "The last commit that was synced should be updated in the TBLPROPERTIES");
+    String partitiontoDelete = partitions.get(0).getValues().get(0).replace("-","/");
+    // create a replace commit to delete current partitions+
+    HiveTestUtil.createReplaceCommit("101", partitiontoDelete, WriteOperationType.DELETE_PARTITION, true, true);
+
+    // sync drop partitins
+    tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    tool.syncHoodieTable();
+
+    hiveClient = new HoodieHiveClient(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    List<Partition> hivePartitions = hiveClient.scanTablePartitions(hiveSyncConfig.tableName);
+    assertEquals(0, hivePartitions.size(),
+        "Table should have 0 partition because of the drop the only one partition");
   }
 
   @ParameterizedTest
