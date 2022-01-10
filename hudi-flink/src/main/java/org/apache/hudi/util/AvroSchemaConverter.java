@@ -221,8 +221,7 @@ public class AvroSchemaConverter {
           avroLogicalType = LogicalTypes.timestampMicros();
         } else {
           throw new IllegalArgumentException(
-              "Avro does not support TIMESTAMP type "
-                  + "with precision: "
+              "Avro does not support TIMESTAMP type with precision: "
                   + precision
                   + ", it only supports precision less than 6.");
         }
