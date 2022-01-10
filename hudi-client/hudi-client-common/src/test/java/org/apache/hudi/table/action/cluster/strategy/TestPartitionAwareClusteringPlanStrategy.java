@@ -65,6 +65,7 @@ public class TestPartitionAwareClusteringPlanStrategy {
 
     ArrayList<String> fakeTimeBasedPartitionsPath = new ArrayList<>();
     fakeTimeBasedPartitionsPath.add("20210718");
+    fakeTimeBasedPartitionsPath.add("20210715");
     fakeTimeBasedPartitionsPath.add("20210723");
     fakeTimeBasedPartitionsPath.add("20210716");
     fakeTimeBasedPartitionsPath.add("20210719");
