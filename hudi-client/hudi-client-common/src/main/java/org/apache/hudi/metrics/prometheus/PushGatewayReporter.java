@@ -68,7 +68,7 @@ public class PushGatewayReporter extends ScheduledReporter {
   private PushGateway createPushGatewayClient(String serverHost, int serverPort) {
     if (serverPort == 443) {
       try {
-        return new PushGateway(new URL("https://" + serverHost));
+        return new PushGateway(new URL("https://" + serverHost + ":" + serverPort));
       } catch (MalformedURLException e) {
         e.printStackTrace();
         throw new IllegalArgumentException("Malformed pushgateway host: " + serverHost);
