@@ -130,7 +130,7 @@ fi
 # Setup the schema registry
 export SCHEMA=$(sed 's|/\*|\n&|g;s|*/|&\n|g' ${schemaFile} | sed '/\/\*/,/*\//d' | jq tostring)
 curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data "{\"schema\": $SCHEMA}" http://localhost:8082/subjects/${kafkaTopicName}/versions
-curl -X GET http://localhost:8081/subjects/${kafkaTopicName}/versions/latest
+curl -X GET http://localhost:8082/subjects/${kafkaTopicName}/versions/latest
 
 # Generate kafka messages from raw records
 # Each records with unique keys and generate equal messages across each hudi partition
