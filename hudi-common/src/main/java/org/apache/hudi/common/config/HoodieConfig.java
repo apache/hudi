@@ -199,8 +199,12 @@ public class HoodieConfig implements Serializable {
 
   public void setDefaultOnCondition(boolean condition, HoodieConfig config) {
     if (condition) {
-      props.putAll(config.getProps());
+      setDefault(config);
     }
+  }
+
+  public void setDefault(HoodieConfig config) {
+    props.putAll(config.getProps());
   }
 
   public <T> String getStringOrThrow(ConfigProperty<T> configProperty, String errorMessage) throws HoodieException {

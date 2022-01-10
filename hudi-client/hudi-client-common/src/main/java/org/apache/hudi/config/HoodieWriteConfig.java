@@ -21,12 +21,14 @@ package org.apache.hudi.config;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -1834,8 +1836,22 @@ public class HoodieWriteConfig extends HoodieConfig {
     return WriteConcurrencyMode.fromValue(getString(WRITE_CONCURRENCY_MODE));
   }
 
-  public Boolean inlineTableServices() {
+  /**
+   * Are any table services configured to run inline?
+   *
+   * @return True if any table services are configured to run inline, false otherwise.
+   */
+  public Boolean areAnyTableServicesInline() {
     return inlineClusteringEnabled() || inlineCompactionEnabled() || isAutoClean();
+  }
+
+  /**
+   * Are any table services configured to run async?
+   *
+   * @return True if any table services are configured to run async, false otherwise.
+   */
+  public Boolean areAnyTableServicesAsync() {
+    return isAsyncClusteringEnabled() || !inlineCompactionEnabled() || isAsyncClean();
   }
 
   public String getPreCommitValidators() {
@@ -2267,13 +2283,25 @@ public class HoodieWriteConfig extends HoodieConfig {
           HoodiePayloadConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isMetadataConfigSet,
           HoodieMetadataConfig.newBuilder().withEngineType(engineType).fromProperties(writeConfig.getProps()).build());
-      writeConfig.setDefaultOnCondition(!isLockConfigSet,
-          HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isPreCommitValidationConfigSet,
           HoodiePreCommitValidatorConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isLayoutConfigSet,
           HoodieLayoutConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultValue(TIMELINE_LAYOUT_VERSION_NUM, String.valueOf(TimelineLayoutVersion.CURR_VERSION));
+
+      // Async table services can update the metadata table and a lock provider is
+      // needed to guard against any concurrent table write operations. If user has
+      // not configured any lock provider, let's use the InProcess lock provider.
+      final TypedProperties writeConfigProperties = writeConfig.getProps();
+      final boolean isLockProviderPropertySet = writeConfigProperties.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME)
+          || writeConfigProperties.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_PROP);
+      if (!isLockConfigSet) {
+        HoodieLockConfig.Builder lockConfigBuilder = HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps());
+        if (!isLockProviderPropertySet && writeConfig.areAnyTableServicesAsync()) {
+          lockConfigBuilder.withLockProvider(InProcessLockProvider.class);
+        }
+        writeConfig.setDefault(lockConfigBuilder.build());
+      }
     }
 
     private void validate() {
