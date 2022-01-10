@@ -1531,6 +1531,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieStorageConfig.HFILE_BLOCK_SIZE);
   }
 
+  public String getHFileSchemaKeyFieldId() {
+    return getStringOrDefault(HoodieStorageConfig.HFILE_SCHEMA_KEY_FIELD_ID);
+  }
+
   public Compression.Algorithm getHFileCompressionAlgorithm() {
     return Compression.Algorithm.valueOf(getString(HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME));
   }

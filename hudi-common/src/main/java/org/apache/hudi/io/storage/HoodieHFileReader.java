@@ -162,7 +162,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
         do {
           Cell c = scanner.getKeyValue();
           final Pair<String, R> keyAndRecordPair = getRecordFromCell(c, writerSchema, readerSchema, keySchemaField);
-          recordList.add(new Pair<>(keyAndRecordPair.getFirst(), keyAndRecordPair.getSecond()));
+          recordList.add(keyAndRecordPair);
         } while (scanner.next());
       }
 

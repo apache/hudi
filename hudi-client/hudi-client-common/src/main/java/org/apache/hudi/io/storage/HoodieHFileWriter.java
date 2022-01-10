@@ -39,7 +39,7 @@ import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.io.Writable;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.metadata.HoodieMetadataPayload;
+import org.apache.hudi.common.util.StringUtils;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -82,7 +82,7 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
     this.fs = (HoodieWrapperFileSystem) this.file.getFileSystem(conf);
     this.hfileConfig = hfileConfig;
     this.schema = schema;
-    this.schemaRecordKeyField = Option.ofNullable(schema.getField(HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY));
+    this.schemaRecordKeyField = Option.ofNullable(schema.getField(hfileConfig.getKeyFieldId()));
 
     // TODO - compute this compression ratio dynamically by looking at the bytes written to the
     // stream and the actual file size reported by HDFS
@@ -131,7 +131,7 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
     byte[] value = HoodieAvroUtils.avroToBytes((GenericRecord) object);
     if (schemaRecordKeyField.isPresent()) {
       GenericRecord recordKeyExcludedRecord = HoodieAvroUtils.bytesToAvro(value, this.schema);
-      recordKeyExcludedRecord.put(this.schemaRecordKeyField.get().pos(), "");
+      recordKeyExcludedRecord.put(this.schemaRecordKeyField.get().pos(), StringUtils.EMPTY_STRING);
       value = HoodieAvroUtils.avroToBytes(recordKeyExcludedRecord);
     }
 

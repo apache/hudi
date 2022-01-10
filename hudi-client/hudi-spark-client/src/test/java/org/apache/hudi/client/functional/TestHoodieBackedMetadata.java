@@ -575,8 +575,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(table, enableMetaFields);
     }, "Metadata table should not have a base file yet!");
 
-    // 3rd commit
+    // 2 more commits
     doWriteOperation(testTable, "0000002", UPSERT);
+    doWriteOperation(testTable, "0000004", UPSERT);
 
     // Compaction should be triggered by now. Let's verify the log files
     // if any for the metadata records persisted on disk as per the config.
@@ -590,8 +591,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(table, enableMetaFields);
     }, "Metadata table should have a valid base file!");
 
-    // 3 more commits to trigger one more compaction, along with a clean
-    doWriteOperation(testTable, "0000004", UPSERT);
+    // 2 more commits to trigger one more compaction, along with a clean
     doWriteOperation(testTable, "0000005", UPSERT);
     doClean(testTable, "0000006", Arrays.asList("0000004"));
     doWriteOperation(testTable, "0000007", UPSERT);
