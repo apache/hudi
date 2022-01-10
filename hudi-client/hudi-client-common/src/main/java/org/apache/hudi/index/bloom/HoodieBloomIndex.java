@@ -90,12 +90,9 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
     HoodiePairData<String, String> partitionRecordKeyPairs = records.mapToPair(
         record -> new ImmutablePair<>(record.getPartitionPath(), record.getRecordKey()));
 
-    HoodieTimer timer = new HoodieTimer().startTimer();
     // Step 2: Lookup indexes for all the partition/recordkey pair
     HoodiePairData<HoodieKey, HoodieRecordLocation> keyFilenamePairs =
         lookupIndex(partitionRecordKeyPairs, context, hoodieTable);
-    final long indexLookupTime = timer.endTimer();
-    LOG.debug("Index lookup time taken: " + indexLookupTime + " ms");
 
     // Cache the result, for subsequent stages.
     if (config.getBloomIndexUseCaching()) {
@@ -179,6 +176,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
    * @param partitions  - List of partitions for which column stats need to be loaded
    * @param context     - Engine context
    * @param hoodieTable - Hoodie table
+   * @return List of partition and file column range info pairs
    */
   List<Pair<String, BloomIndexFileInfo>> loadColumnStats(
       List<String> partitions, final HoodieEngineContext context, final HoodieTable hoodieTable) {

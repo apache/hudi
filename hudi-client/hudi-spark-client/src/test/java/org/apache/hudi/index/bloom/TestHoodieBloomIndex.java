@@ -18,12 +18,18 @@
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.Path;
+import org.apache.hudi.client.functional.TestHoodieMetadataBase;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -32,14 +38,11 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.HoodieKeyLookupHandle;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
-
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
@@ -48,6 +51,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import scala.Tuple2;
 
 import java.nio.file.Paths;
 import java.util.Arrays;
@@ -55,11 +59,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import scala.Tuple2;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -69,14 +72,14 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestHoodieBloomIndex extends HoodieClientTestHarness {
+public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
 
   private static final Schema SCHEMA = getSchemaFromResource(TestHoodieBloomIndex.class, "/exampleSchema.avsc", true);
   private static final String TEST_NAME_WITH_PARAMS = "[{index}] Test with rangePruning={0}, treeFiltering={1}, bucketizedChecking={2}";
 
   public static Stream<Arguments> configParams() {
     Object[][] data =
-        new Object[][] {{true, true, true}, {false, true, true}, {true, true, false}, {true, false, true}};
+        new Object[][]{{true, true, true}, {false, true, true}, {true, true, false}, {true, false, true}};
     return Stream.of(data).map(Arguments::of);
   }
 
@@ -89,6 +92,22 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     initMetaClient();
   }
 
+  public void setUp2() throws Exception {
+    initPath();
+    HoodieIndexConfig.Builder indexBuilder = HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM);
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withIndexConfig(indexBuilder.build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withMetaIndexBloomFilter(false)
+            .withMetaIndexColumnStats(false)
+            .build())
+        .build();
+    init(HoodieTableType.COPY_ON_WRITE, config);
+    writeClient = getHoodieWriteClient(config);
+    metaClient = HoodieTestUtils.init(hadoopConf, basePath, tableType, new Properties());
+  }
+
   @AfterEach
   public void tearDown() throws Exception {
     cleanupResources();
@@ -99,6 +118,10 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
         .withIndexConfig(HoodieIndexConfig.newBuilder().bloomIndexPruneByRanges(rangePruning)
             .bloomIndexTreebasedFilter(treeFiltering).bloomIndexBucketizedChecking(bucketizedChecking)
             .bloomIndexKeysPerBucket(2).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .withMetaIndexBloomFilter(false)
+            .withMetaIndexColumnStats(false)
+            .build())
         .build();
   }
 
