@@ -125,11 +125,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Enable full scanning of log files while reading log records. If disabled, hudi does look up of only interested entries.");
 
   public static final ConfigProperty<Boolean> ENABLE_META_INDEX_BLOOM_FILTER = ConfigProperty
-      .key(METADATA_PREFIX + ".index.bloomfilter.enable")
+      .key(METADATA_PREFIX + ".index.bloom.filter.enable")
       .defaultValue(false)
       .sinceVersion("0.11.0")
       .withDocumentation("Enable indexing user data files bloom filters under metadata table. When enabled, "
-          + "a new partition under metadata table will be created to store the bloom filter index and will be "
+          + "metadata table will have a partition to store the bloom filter index and will be "
           + "used during the index lookups.");
 
   public static final ConfigProperty<Boolean> ENABLE_META_INDEX_COLUMN_STATS = ConfigProperty
@@ -137,7 +137,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .defaultValue(false)
       .sinceVersion("0.11.0")
       .withDocumentation("Enable indexing user data files column ranges under metadata table key lookups. When "
-          + "enabled, a new partition under metadata table will be created to store the column ranges and will "
+          + "enabled, metadata table will have a partition to store the column ranges and will "
           + "used for pruning files during the index lookups.");
 
   public static final ConfigProperty<Boolean> META_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS = ConfigProperty
@@ -145,11 +145,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .defaultValue(false)
       .sinceVersion("0.11.0")
       .withDocumentation("Enable indexing user data files column ranges under metadata table key lookups. When "
-          + "enabled, a new partition under metadata table will be created to store the column ranges and will "
+          + "enabled, metadata table will have a partition to store the column ranges and will "
           + "used for pruning files during the index lookups.");
 
   public static final ConfigProperty<Boolean> ENABLE_META_INDEX_BLOOM_FILTER_BATCH_LOAD_MODE = ConfigProperty
-      .key(METADATA_PREFIX + ".index.bloomfilter.batchload.enable")
+      .key(METADATA_PREFIX + ".index.bloom.filter.batchload.enable")
       .defaultValue(true)
       .sinceVersion("0.11.0")
       .withDocumentation("Enable batch/bulk loading of bloom filter index for the entire partition when looking "
