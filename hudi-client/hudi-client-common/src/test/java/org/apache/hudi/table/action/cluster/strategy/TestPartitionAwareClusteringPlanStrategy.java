@@ -48,7 +48,7 @@ public class TestPartitionAwareClusteringPlanStrategy {
   @BeforeEach
   public void setUp() {
     Properties props = new Properties();
-    props.setProperty("hoodie.clustering.plan.strategy.cluster.partition.regex.pattern", "2021072.*");
+    props.setProperty("hoodie.clustering.plan.strategy.partition.regex.pattern", "2021072.*");
     this.hoodieWriteConfig = HoodieWriteConfig
         .newBuilder()
         .withPath("dummy_Table_Path")
@@ -61,7 +61,7 @@ public class TestPartitionAwareClusteringPlanStrategy {
 
   @Test
   public void testFilterPartitionPaths() {
-    PartitionAwareClusteringPlanStrategy sg = new DummyPartitionAwareClusteringPlanStrategy(table, context, hoodieWriteConfig);
+    PartitionAwareClusteringPlanStrategy strategyTestRegexPattern = new DummyPartitionAwareClusteringPlanStrategy(table, context, hoodieWriteConfig);
 
     ArrayList<String> fakeTimeBasedPartitionsPath = new ArrayList<>();
     fakeTimeBasedPartitionsPath.add("20210718");
@@ -70,7 +70,7 @@ public class TestPartitionAwareClusteringPlanStrategy {
     fakeTimeBasedPartitionsPath.add("20210719");
     fakeTimeBasedPartitionsPath.add("20210721");
 
-    List list = sg.getRegexPatternMatchedPartitions(hoodieWriteConfig, fakeTimeBasedPartitionsPath);
+    List list = strategyTestRegexPattern.getRegexPatternMatchedPartitions(hoodieWriteConfig, fakeTimeBasedPartitionsPath);
     assertEquals(2, list.size());
     assertTrue(list.contains("20210721"));
     assertTrue(list.contains("20210723"));

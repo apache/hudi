@@ -88,7 +88,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .withDocumentation("Files smaller than the size specified here are candidates for clustering");
 
   public static final ConfigProperty<String> PARTITION_REGEX_PATTERN = ConfigProperty
-      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "cluster.partition.regex.pattern")
+      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "partition.regex.pattern")
       .noDefaultValue()
       .sinceVersion("0.11.0")
       .withDocumentation("Filter clustering partitions that matched regex pattern");
