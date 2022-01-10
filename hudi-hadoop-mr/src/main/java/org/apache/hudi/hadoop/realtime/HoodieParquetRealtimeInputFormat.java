@@ -217,7 +217,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
   }
 
   @Override
-  protected boolean includeLogFilesForSnapShotView() {
+  protected boolean includeLogFilesForSnapshotView() {
     return true;
   }
 
