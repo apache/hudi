@@ -1758,14 +1758,20 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     extraMetadata.put(HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY, "abc");
     addCommitToTimeline(metaClient, extraMetadata);
     metaClient.reloadActiveTimeline();
-    assertEquals(testDeltaSync.getPreviousCheckpoint(metaClient.getActiveTimeline().getCommitsTimeline()).get(), "abc");
+    assertEquals(testDeltaSync.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
+        .getCommitsTimeline()).get().getMetadata(CHECKPOINT_KEY), "abc");
 
-    addCommitToTimeline(metaClient, Collections.emptyMap());
-    metaClient.reloadActiveTimeline();
     extraMetadata.put(HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY, "def");
     addCommitToTimeline(metaClient, extraMetadata);
     metaClient.reloadActiveTimeline();
-    assertEquals(testDeltaSync.getPreviousCheckpoint(metaClient.getActiveTimeline().getCommitsTimeline()).get(), "def");
+    assertEquals(testDeltaSync.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
+        .getCommitsTimeline()).get().getMetadata(CHECKPOINT_KEY), "def");
+
+    // add a replace commit which does not have CEHCKPOINT_KEY. Deltastreamer should be able to go back and pick the right checkpoint.
+    addReplaceCommitToTimeline(metaClient, Collections.emptyMap());
+    metaClient.reloadActiveTimeline();
+    assertEquals(testDeltaSync.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
+        .getCommitsTimeline()).get().getMetadata(CHECKPOINT_KEY), "def");
   }
 
   class TestDeltaSync extends DeltaSync {
@@ -1776,8 +1782,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       super(cfg, sparkSession, schemaProvider, props, jssc, fs, conf, onInitializingHoodieWriteClient);
     }
 
-    protected Option<String> getPreviousCheckpoint(HoodieTimeline timeline) throws IOException {
-      return super.getPreviousCheckpoint(timeline);
+    protected Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
+      return super.getLatestCommitMetadataWithValidCheckpointInfo(timeline);
     }
   }
 

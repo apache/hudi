@@ -330,6 +330,33 @@ class TestCreateTable extends TestHoodieSqlBase {
     }
   }
 
+  test("Test Create Table As Select when 'spark.sql.datetime.java8API.enabled' enables") {
+    try {
+      // enable spark.sql.datetime.java8API.enabled
+      // and use java.time.Instant to replace java.sql.Timestamp to represent TimestampType.
+      spark.conf.set("spark.sql.datetime.java8API.enabled", value = true)
+
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName
+           |using hudi
+           |partitioned by(dt)
+           |options(type = 'cow', primaryKey = 'id')
+           |as
+           |select 1 as id, 'a1' as name, 10 as price, cast('2021-05-07 00:00:00' as timestamp) as dt
+           |""".stripMargin
+      )
+
+      checkAnswer(s"select id, name, price, cast(dt as string) from $tableName")(
+        Seq(1, "a1", 10, "2021-05-07 00:00:00")
+      )
+
+    } finally {
+      spark.conf.set("spark.sql.datetime.java8API.enabled", value = false)
+    }
+  }
+
   test("Test Create Table From Exist Hoodie Table") {
     withTempDir { tmp =>
       Seq("2021-08-02", "2021/08/02").foreach { partitionValue =>

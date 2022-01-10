@@ -91,6 +91,8 @@ public class HiveIncrementalPuller {
     public String fromCommitTime;
     @Parameter(names = {"--maxCommits"})
     public int maxCommits = 3;
+    @Parameter(names = {"--fsDefaultFs"})
+    public String fsDefaultFs = "file:///";
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
   }
@@ -124,6 +126,7 @@ public class HiveIncrementalPuller {
 
   public void saveDelta() throws IOException {
     Configuration conf = new Configuration();
+    conf.set("fs.defaultFS",config.fsDefaultFs);
     FileSystem fs = FileSystem.get(conf);
     Statement stmt = null;
     try {

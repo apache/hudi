@@ -105,7 +105,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
         .setInputGroups(clusteringGroups)
         .setExtraMetadata(getExtraMetadata())
         .setVersion(getPlanVersion())
-        .setPreserveHoodieMetadata(getWriteConfig().isPreserveHoodieCommitMetadata())
+        .setPreserveHoodieMetadata(getWriteConfig().isPreserveHoodieCommitMetadataForClustering())
         .build());
   }
 }

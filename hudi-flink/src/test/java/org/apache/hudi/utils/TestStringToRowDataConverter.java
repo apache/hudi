@@ -94,7 +94,7 @@ public class TestStringToRowDataConverter {
         (GenericRecord) converter.convert(AvroSchemaConverter.convertToSchema(rowType), rowData);
     StringToRowDataConverter stringToRowDataConverter =
         new StringToRowDataConverter(rowType.getChildren().toArray(new LogicalType[0]));
-    final String recordKey = KeyGenUtils.getRecordKey(avroRecord, rowType.getFieldNames());
+    final String recordKey = KeyGenUtils.getRecordKey(avroRecord, rowType.getFieldNames(), false);
     final String[] recordKeys = KeyGenUtils.extractRecordKeys(recordKey);
     Object[] convertedKeys = stringToRowDataConverter.convert(recordKeys);
 

@@ -123,6 +123,14 @@
                   <pattern>com.google.protobuf.</pattern>
                   <shadedPattern>${presto.bundle.bootstrap.shade.prefix}com.google.protobuf.</shadedPattern>
                 </relocation>
+                <relocation>
+                  <pattern>org.apache.htrace.</pattern>
+                  <shadedPattern>${presto.bundle.bootstrap.shade.prefix}org.apache.htrace.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.parquet.avro.</pattern>
+                  <shadedPattern>${presto.bundle.bootstrap.shade.prefix}org.apache.parquet.avro.</shadedPattern>
+                </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
               <filters>
@@ -133,6 +141,9 @@
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.RSA</exclude>
                     <exclude>META-INF/services/javax.*</exclude>
+                    <exclude>com/esotericsoftware/reflectasm/**</exclude>
+                    <exclude>avro/shaded/com/google/common/**</exclude>
+                    <exclude>stringBehavior.avsc</exclude>
                   </excludes>
                 </filter>
               </filters>
