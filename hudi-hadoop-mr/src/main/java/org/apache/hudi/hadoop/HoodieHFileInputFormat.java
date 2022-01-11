@@ -55,6 +55,6 @@ public class HoodieHFileInputFormat extends HoodieFileInputFormatBase {
   @Override
   protected boolean isSplitable(FileSystem fs, Path filename) {
     // This file isn't splittable.
-    return includeLogFilesForSnapShotView();
+    return false;
   }
 }
