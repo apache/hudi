@@ -154,8 +154,8 @@ public class RowDataToAvroConverters {
             };
         break;
       case TIMESTAMP_WITHOUT_TIME_ZONE:
-          final int precision = ((TimestampType) type).getPrecision();
-          if (precision <= 3) {
+        final int precision = ((TimestampType) type).getPrecision();
+        if (precision <= 3) {
           converter =
               new RowDataToAvroConverter() {
                 private static final long serialVersionUID = 1L;
