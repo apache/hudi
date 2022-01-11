@@ -22,6 +22,7 @@ import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.hive.HoodieHiveClient;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.utilities.exception.HoodieIncrementalPullSQLException;
 import org.junit.jupiter.api.AfterEach;
@@ -122,6 +123,12 @@ public class TestHiveIncrementalPuller {
     return config;
   }
 
+  private HiveSyncConfig getAssertionSyncConfig(String databaseName) {
+    HiveSyncConfig config = HiveSyncConfig.copy(hiveSyncConfig);
+    config.databaseName = databaseName;
+    return config;
+  }
+
   private void createTables() throws IOException, URISyntaxException {
     createSourceTable();
     createTargetTable();
@@ -145,6 +152,20 @@ public class TestHiveIncrementalPuller {
     Exception e = assertThrows(HoodieIncrementalPullSQLException.class, puller::saveDelta,
             "Should fail when source db and table names not provided!");
     assertTrue(e.getMessage().contains("Incremental SQL does not have testdb.test1"));
+  }
+
+  @Test
+  public void testPuller() throws IOException, URISyntaxException {
+    createTables();
+    HiveIncrementalPuller.Config cfg = getHivePullerConfig("select name from testdb.test1 where `_hoodie_commit_time` > '%s'");
+    HoodieHiveClient hiveClient = new HoodieHiveClient(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    hiveClient.createDatabase(cfg.tmpDb);
+    HiveIncrementalPuller puller = new HiveIncrementalPuller(cfg);
+    puller.saveDelta();
+    HiveSyncConfig assertingConfig = getAssertionSyncConfig(cfg.tmpDb);
+    HoodieHiveClient assertingClient = new HoodieHiveClient(assertingConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    String tmpTable = cfg.targetTable + "__" + cfg.sourceTable;
+    assertTrue(assertingClient.doesTableExist(tmpTable));
   }
 
 }

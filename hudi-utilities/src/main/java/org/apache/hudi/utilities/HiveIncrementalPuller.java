@@ -52,7 +52,8 @@ import java.util.stream.Collectors;
 
 /**
  * Utility to pull data after a given commit, based on the supplied HiveQL and save the delta as another hive temporary
- * table.
+ * table. This temporary table can be further read using {@link org.apache.hudi.utilities.sources.HiveIncrPullSource} and the changes can
+ * be applied to the target table.
  * <p>
  * Current Limitations:
  * <p>
