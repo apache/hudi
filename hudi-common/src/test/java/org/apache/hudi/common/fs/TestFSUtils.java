@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -454,5 +455,22 @@ public class TestFSUtils extends HoodieCommonTestHarness {
         assertEquals(Collections.singletonList("file3.txt"), result.get(subPath));
       }
     }
+  }
+
+  @Test
+  public void testGetFileStatusAtLevel() throws IOException {
+    String rootDir = basePath + "/.hoodie/.temp";
+    FileSystem fileSystem = metaClient.getFs();
+    prepareTestDirectory(fileSystem, rootDir);
+    List<FileStatus> fileStatusList = FSUtils.getFileStatusAtLevel(
+        new HoodieLocalEngineContext(fileSystem.getConf()), fileSystem,
+        new Path(basePath), 3, 2);
+    assertEquals(CollectionUtils.createImmutableList(
+            "file:" + basePath + "/.hoodie/.temp/subdir1/file1.txt",
+            "file:" + basePath + "/.hoodie/.temp/subdir2/file2.txt"),
+        fileStatusList.stream()
+            .map(fileStatus -> fileStatus.getPath().toString())
+            .filter(filePath -> filePath.endsWith(".txt"))
+            .collect(Collectors.toList()));
   }
 }
