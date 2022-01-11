@@ -41,7 +41,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
-import scala.Function0;
 import scala.collection.JavaConverters;
 import scala.collection.Seq;
 
