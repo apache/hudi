@@ -34,10 +34,9 @@ import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoField;
 import java.time.temporal.ChronoUnit;
 import java.util.concurrent.TimeUnit;
@@ -52,10 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 public class TestStringToRowDataConverter {
   @Test
   void testConvert() {
-    String[] fields = new String[] {"1.1", "3.4", "2021-03-30", "56669000",
-        String.valueOf(timestampDataToLong(stringToTimestampData("2021-03-30T15:44:29"), ChronoUnit.MILLIS)),
-        String.valueOf(timestampDataToLong(stringToTimestampData("2021-03-30T15:44:29.666111"), ChronoUnit.MICROS)),
-        "12345.67"};
+    String[] fields = new String[] {"1.1", "3.4", "2021-03-30", "56669000", "1617119069000", "1617119069666111", "12345.67"};
     LogicalType[] fieldTypes = new LogicalType[] {
         DataTypes.FLOAT().getLogicalType(),
         DataTypes.DOUBLE().getLogicalType(),
@@ -70,8 +66,8 @@ public class TestStringToRowDataConverter {
     Object[] expected = new Object[] {
         1.1f, 3.4D, (int) LocalDate.parse("2021-03-30").toEpochDay(),
         LocalTime.parse("15:44:29").get(ChronoField.MILLI_OF_DAY),
-        stringToTimestampData("2021-03-30T15:44:29"),
-        stringToTimestampData("2021-03-30T15:44:29.666111"),
+        TimestampData.fromInstant(Instant.parse("2021-03-30T15:44:29Z")),
+        TimestampData.fromInstant(Instant.parse("2021-03-30T15:44:29.666111Z")),
         DecimalData.fromBigDecimal(new BigDecimal("12345.67"), 7, 2)
     };
     assertArrayEquals(expected, converted);
@@ -84,8 +80,8 @@ public class TestStringToRowDataConverter {
     rowData.setField(1, 3.4D);
     rowData.setField(2, (int) LocalDate.parse("2021-03-30").toEpochDay());
     rowData.setField(3, LocalTime.parse("15:44:29").get(ChronoField.MILLI_OF_DAY));
-    rowData.setField(4, stringToTimestampData("2021-03-30T15:44:29"));
-    rowData.setField(5, stringToTimestampData("2021-03-30T15:44:29.666111"));
+    rowData.setField(4, TimestampData.fromInstant(Instant.parse("2021-03-30T15:44:29Z")));
+    rowData.setField(5, TimestampData.fromInstant(Instant.parse("2021-03-30T15:44:29.666111Z")));
     rowData.setField(6, DecimalData.fromBigDecimal(new BigDecimal("12345.67"), 7, 2));
 
     DataType dataType = DataTypes.ROW(
@@ -115,23 +111,15 @@ public class TestStringToRowDataConverter {
     assertThat(converted, is(rowData));
   }
 
-  private TimestampData stringToTimestampData(String timestamp) {
-    return TimestampData.fromLocalDateTime(LocalDateTime.parse(timestamp));
-  }
-
   private long timestampDataToLong(TimestampData timestamp, ChronoUnit unit) {
-    final LocalDateTime now = timestamp.toLocalDateTime();
-    final ZoneOffset offset = ZoneOffset.systemDefault().getRules().getOffset(LocalDateTime.now());
+    final Instant instant = timestamp.toInstant();
     switch (unit) {
       case MILLIS:
-        return TimeUnit.SECONDS.toMillis(now.toEpochSecond(offset))
-            + now.toInstant(offset).getLong(ChronoField.MILLI_OF_SECOND);
+        return instant.toEpochMilli();
       case MICROS:
-        return TimeUnit.SECONDS.toMicros(now.toEpochSecond(offset))
-            + now.toInstant(offset).getLong(ChronoField.MICRO_OF_SECOND);
+        return TimeUnit.SECONDS.toMicros(instant.getEpochSecond()) + instant.getLong(ChronoField.MICRO_OF_SECOND);
       default:
-        return TimeUnit.SECONDS.toMillis(now.toEpochSecond(offset))
-            + now.toInstant(offset).getLong(ChronoField.MILLI_OF_SECOND);
+        return instant.toEpochMilli();
     }
   }
 }

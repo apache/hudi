@@ -22,15 +22,12 @@ import org.apache.flink.table.data.vector.writable.WritableIntVector;
 import org.apache.flink.table.data.vector.writable.WritableTimestampVector;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.column.page.PageReader;
-import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.PrimitiveType;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 
 /**
@@ -45,16 +42,25 @@ public class Int64TimestampColumnReader extends AbstractColumnReader<WritableTim
 
   private final boolean utcTimestamp;
 
-  private final LogicalTypeAnnotation.TimeUnit unit;
+  private final ChronoUnit chronoUnit;
 
   public Int64TimestampColumnReader(
       boolean utcTimestamp,
       ColumnDescriptor descriptor,
-      PageReader pageReader) throws IOException {
+      PageReader pageReader,
+      int precision) throws IOException {
     super(descriptor, pageReader);
     this.utcTimestamp = utcTimestamp;
-    this.unit =  ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) descriptor.getPrimitiveType()
-        .getLogicalTypeAnnotation()).getUnit();
+    if (precision <= 3) {
+      this.chronoUnit = ChronoUnit.MILLIS;
+    } else if (precision <= 6) {
+      this.chronoUnit = ChronoUnit.MICROS;
+    } else {
+      throw new IllegalArgumentException(
+          "Avro does not support TIMESTAMP type with precision: "
+              + precision
+              + ", it only supports precision less than 6.");
+    }
     checkTypeName(PrimitiveType.PrimitiveTypeName.INT64);
   }
 
@@ -68,7 +74,7 @@ public class Int64TimestampColumnReader extends AbstractColumnReader<WritableTim
     for (int i = 0; i < num; i++) {
       if (runLenDecoder.readInteger() == maxDefLevel) {
         ByteBuffer buffer = readDataBuffer(8);
-        column.setTimestamp(rowId + i, int64ToTimestamp(utcTimestamp, buffer.getLong(), unit));
+        column.setTimestamp(rowId + i, int64ToTimestamp(utcTimestamp, buffer.getLong(), chronoUnit));
       } else {
         column.setNullAt(rowId + i);
       }
@@ -84,7 +90,7 @@ public class Int64TimestampColumnReader extends AbstractColumnReader<WritableTim
     for (int i = rowId; i < rowId + num; ++i) {
       if (!column.isNullAt(i)) {
         column.setTimestamp(i, decodeInt64ToTimestamp(
-            utcTimestamp, dictionary, dictionaryIds.getInt(i), unit));
+            utcTimestamp, dictionary, dictionaryIds.getInt(i), chronoUnit));
       }
     }
   }
@@ -93,7 +99,7 @@ public class Int64TimestampColumnReader extends AbstractColumnReader<WritableTim
       boolean utcTimestamp,
       org.apache.parquet.column.Dictionary dictionary,
       int id,
-      LogicalTypeAnnotation.TimeUnit unit) {
+      ChronoUnit unit) {
     long value = dictionary.decodeToLong(id);
     return int64ToTimestamp(utcTimestamp, value, unit);
   }
@@ -101,24 +107,12 @@ public class Int64TimestampColumnReader extends AbstractColumnReader<WritableTim
   private static TimestampData int64ToTimestamp(
       boolean utcTimestamp,
       long millionsOfDay,
-      LogicalTypeAnnotation.TimeUnit unit) {
+      ChronoUnit unit) {
+    final Instant instant = Instant.EPOCH.plus(millionsOfDay, unit);
     if (utcTimestamp) {
-      final ChronoUnit chronoUnit;
-      switch (unit) {
-        case MILLIS:
-          chronoUnit = ChronoUnit.MILLIS;
-          break;
-        case MICROS:
-          chronoUnit = ChronoUnit.MICROS;
-          break;
-        default:
-          chronoUnit = ChronoUnit.MILLIS;
-      }
-      return TimestampData.fromLocalDateTime(
-          LocalDateTime.ofInstant(Instant.ofEpochSecond(0).plus(millionsOfDay, chronoUnit), ZoneId.systemDefault()));
+      return TimestampData.fromInstant(instant);
     } else {
-      Timestamp timestamp = new Timestamp(millionsOfDay);
-      return TimestampData.fromTimestamp(timestamp);
+      return TimestampData.fromTimestamp(Timestamp.from(instant));
     }
   }
 }

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.util;
 
-import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -32,17 +31,16 @@ import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.table.types.logical.TimestampType;
 
 import java.io.Serializable;
 import java.nio.ByteBuffer;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
-import java.time.temporal.ChronoField;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Tool class used to convert from {@link RowData} to Avro {@link GenericRecord}.
@@ -156,23 +154,30 @@ public class RowDataToAvroConverters {
             };
         break;
       case TIMESTAMP_WITHOUT_TIME_ZONE:
-        converter =
-            new RowDataToAvroConverter() {
-              private static final long serialVersionUID = 1L;
+        TimestampType timestampType = (TimestampType) type;
+        if (timestampType.getPrecision() <= 3) {
+          converter =
+              new RowDataToAvroConverter() {
+                private static final long serialVersionUID = 1L;
 
-              @Override
-              public Object convert(Schema schema, Object object) {
-                final LocalDateTime now = ((TimestampData) object).toLocalDateTime();
-                final ZoneOffset offset = ZoneOffset.systemDefault().getRules().getOffset(LocalDateTime.now());
-                if (schema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
-                  return now.toInstant(offset).toEpochMilli();
-                } else if (schema.getLogicalType() instanceof LogicalTypes.TimestampMicros) {
-                  return TimeUnit.SECONDS.toMicros(now.toEpochSecond(offset)) + now.toInstant(offset).getLong(ChronoField.MICRO_OF_SECOND);
-                } else {
+                @Override
+                public Object convert(Schema schema, Object object) {
                   return ((TimestampData) object).toInstant().toEpochMilli();
                 }
-              }
-            };
+              };
+        } else if (timestampType.getPrecision() <= 6) {
+          converter =
+              new RowDataToAvroConverter() {
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                public Object convert(Schema schema, Object object) {
+                  return ChronoUnit.MICROS.between(Instant.EPOCH, ((TimestampData) object).toInstant());
+                }
+              };
+        } else {
+          throw new UnsupportedOperationException("Unsupported type: " + type);
+        }
         break;
       case DECIMAL:
         converter =

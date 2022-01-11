@@ -44,9 +44,7 @@ import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.ZoneId;
 import java.time.temporal.ChronoField;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
@@ -129,7 +127,7 @@ public class AvroToRowDataConverters {
       case TIME_WITHOUT_TIME_ZONE:
         return AvroToRowDataConverters::convertToTime;
       case TIMESTAMP_WITHOUT_TIME_ZONE:
-        return avroObject -> convertToTimestamp(avroObject, (TimestampType) type);
+        return createTimestampConverter((TimestampType) type);
       case CHAR:
       case VARCHAR:
         return avroObject -> StringData.fromString(avroObject.toString());
@@ -204,23 +202,8 @@ public class AvroToRowDataConverters {
     };
   }
 
-  private static TimestampData convertToTimestamp(Object object, TimestampType logicalType) {
-    final long timestamp;
-    if (object instanceof Long) {
-      timestamp = (Long) object;
-    } else if (object instanceof Instant) {
-      timestamp = ((Instant) object).toEpochMilli();
-    } else {
-      JodaConverter jodaConverter = JodaConverter.getConverter();
-      if (jodaConverter != null) {
-        timestamp = jodaConverter.convertTimestamp(object);
-      } else {
-        throw new IllegalArgumentException(
-            "Unexpected object type for TIMESTAMP logical type. Received: " + object);
-      }
-    }
-
-    final int precision = logicalType.getPrecision();
+  private static AvroToRowDataConverter createTimestampConverter(TimestampType timestampType) {
+    final int precision = timestampType.getPrecision();
     final ChronoUnit chronoUnit;
     if (precision <= 3) {
       chronoUnit = ChronoUnit.MILLIS;
@@ -232,8 +215,23 @@ public class AvroToRowDataConverters {
               + precision
               + ", it only supports precision less than 6.");
     }
-    return TimestampData.fromLocalDateTime(
-        LocalDateTime.ofInstant(Instant.ofEpochSecond(0).plus(timestamp, chronoUnit), ZoneId.systemDefault()));
+    return avroObject -> {
+      final long timestamp;
+      if (avroObject instanceof Long) {
+        timestamp = (Long) avroObject;
+      } else if (avroObject instanceof Instant) {
+        timestamp = ((Instant) avroObject).toEpochMilli();
+      } else {
+        JodaConverter jodaConverter = JodaConverter.getConverter();
+        if (jodaConverter != null) {
+          timestamp = jodaConverter.convertTimestamp(avroObject);
+        } else {
+          throw new IllegalArgumentException(
+              "Unexpected object type for TIMESTAMP logical type. Received: " + avroObject);
+        }
+      }
+      return TimestampData.fromInstant(Instant.EPOCH.plus(timestamp, chronoUnit));
+    };
   }
 
   private static int convertToDate(Object object) {
