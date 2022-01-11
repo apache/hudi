@@ -24,11 +24,13 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ
 import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.view.{FileSystemViewStorageConfig, HoodieTableFileSystemView}
 
 import scala.collection.JavaConverters._
 import scala.collection.JavaConversions._
 import scala.collection.mutable
+import scala.language.implicitConversions
 
 /**
  * Common (engine-agnostic) File Index implementation enabling individual query engines to
@@ -86,6 +88,12 @@ abstract class HoodieTableFileIndexBase(engineContext: HoodieEngineContext,
   @volatile private var fileSystemView: HoodieTableFileSystemView = _
 
   refresh0()
+
+  /**
+   * Returns latest completed instant as seen by this instance of the file-index
+   */
+  def latestCompletedInstant(): Option[HoodieInstant] =
+    getActiveTimeline.filterCompletedInstants().lastInstant()
 
   /**
    * Fetch list of latest base files and log files per partition.
@@ -291,6 +299,16 @@ abstract class HoodieTableFileIndexBase(engineContext: HoodieEngineContext,
       }
     }
   }
+
+  /**
+   * Converts Hudi's internal representation of the {@code Option} into Scala's default one
+   */
+  implicit def asScalaOption[T](opt: org.apache.hudi.common.util.Option[T]): Option[T] =
+    if (opt.isPresent) {
+      Some(opt.get)
+    } else {
+      None
+    }
 }
 
 trait FileStatusCacheTrait {
