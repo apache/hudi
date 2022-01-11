@@ -28,7 +28,6 @@ import org.apache.hadoop.mapred.Reporter;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.hadoop.HoodieHFileInputFormat;
-import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.UseFileSplitsFromInputFormat;
 import org.apache.hudi.hadoop.UseRecordReaderFromInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
