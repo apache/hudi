@@ -160,4 +160,25 @@ public class FileIOUtils {
       LOG.warn("IOException during close", e);
     }
   }
+
+  public static void createFileInPath(FileSystem fileSystem, org.apache.hadoop.fs.Path fullPath, Option<byte[]> content) {
+    try {
+      // If the path does not exist, create it first
+      if (!fileSystem.exists(fullPath)) {
+        if (fileSystem.createNewFile(fullPath)) {
+          LOG.info("Created a new file in meta path: " + fullPath);
+        } else {
+          throw new HoodieIOException("Failed to create file " + fullPath);
+        }
+      }
+
+      if (content.isPresent()) {
+        FSDataOutputStream fsout = fileSystem.create(fullPath, true);
+        fsout.write(content.get());
+        fsout.close();
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to create file " + fullPath, e);
+    }
+  }
 }

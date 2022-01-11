@@ -249,6 +249,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
               break;
             }
           }
+        } catch (Exception e) {
+
         }
       }
 

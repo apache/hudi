@@ -161,7 +161,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
         LOG.info("No Instants to archive");
       }
 
-      if (config.getArchiveAutoMergeEnable() && !StorageSchemes.isAppendSupported(metaClient.getFs().getScheme())) {
+      if (shouldMergeSmallArchiveFies()) {
         mergeArchiveFilesIfNecessary(context);
       }
       return success;
@@ -170,9 +170,13 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     }
   }
 
+  public boolean shouldMergeSmallArchiveFies() {
+    return config.getArchiveMergeEnable() && !StorageSchemes.isAppendSupported(metaClient.getFs().getScheme());
+  }
+
   /**
    * Here Hoodie can merge the small archive files into a new larger one.
-   * Only used for filesystem which is not supported append operation.
+   * Only used for filesystem which does not support append operation.
    * The hole merge small archive files operation has four stages:
    * 1. Build merge plan with merge candidates/merged file name infos.
    * 2. Do merge.
@@ -183,7 +187,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
    */
   private void mergeArchiveFilesIfNecessary(HoodieEngineContext context) throws IOException {
     Path planPath = new Path(metaClient.getArchivePath(), mergeArchivePlanName);
-    // Flush reminded content if existed and open a new write
+    // Flush remained content if existed and open a new write
     reOpenWriter();
     // List all archive files
     FileStatus[] fsStatuses = metaClient.getFs().globStatus(
@@ -191,12 +195,12 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     // Sort files by version suffix in reverse (implies reverse chronological order)
     Arrays.sort(fsStatuses, new HoodieArchivedTimeline.ArchiveFileVersionComparator());
 
-    int archiveFilesMergeBatch = config.getArchiveFilesMergeBatchSize();
+    int archiveMergeFilesBatchSize = config.getArchiveMergeFilesBatchSize();
     long smallFileLimitBytes = config.getArchiveMergeSmallFileLimitBytes();
 
     List<FileStatus> mergeCandidate = getMergeCandidates(smallFileLimitBytes, fsStatuses);
 
-    if (mergeCandidate.size() >= archiveFilesMergeBatch) {
+    if (mergeCandidate.size() >= archiveMergeFilesBatchSize) {
       List<String> candidateFiles = mergeCandidate.stream().map(fs -> fs.getPath().toString()).collect(Collectors.toList());
       // before merge archive files build merge plan
       String logFileName = computeLogFileName();
@@ -205,8 +209,10 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
       mergeArchiveFiles(mergeCandidate);
       // after merge, delete the small archive files.
       deleteFilesParallelize(metaClient, candidateFiles, context, true);
-      // finally, delete archiveMergePlan which means merge small archive files operatin is succeed.
+      LOG.info("Success to delete replaced small archive files.");
+      // finally, delete archiveMergePlan which means merging small archive files operation is succeed.
       metaClient.getFs().delete(planPath, false);
+      LOG.info("Success to merge small archive files.");
     }
   }
 
@@ -229,7 +235,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
   }
 
   /**
-   * Get final written archive file name based on storageSchemes support append or not.
+   * Get final written archive file name based on storageSchemes which does not support append.
    */
   private String computeLogFileName() throws IOException {
     String logWriteToken = writer.getLogFile().getLogWriteToken();
@@ -243,13 +249,21 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
    * @throws IOException
    */
   private void verifyLastMergeArchiveFilesIfNecessary(HoodieEngineContext context) throws IOException {
-    if (config.getArchiveAutoMergeEnable() && !StorageSchemes.isAppendSupported(metaClient.getFs().getScheme())) {
+    if (shouldMergeSmallArchiveFies()) {
       Path planPath = new Path(metaClient.getArchivePath(), mergeArchivePlanName);
       HoodieWrapperFileSystem fs = metaClient.getFs();
       // If plan exist, last merge small archive files was failed.
       // we need to revert or complete last action.
       if (fs.exists(planPath)) {
-        HoodieMergeArchiveFilePlan plan = TimelineMetadataUtils.deserializeAvroMetadata(readDataFromPath(planPath).get(), HoodieMergeArchiveFilePlan.class);
+        HoodieMergeArchiveFilePlan plan = null;
+        try {
+          plan = TimelineMetadataUtils.deserializeAvroMetadata(readDataFromPath(planPath).get(), HoodieMergeArchiveFilePlan.class);
+        } catch (IOException e) {
+          LOG.warn("Parsing merge archive plan failed.", e);
+          // Reading partial plan file which means last merge action is failed during writing plan file.
+          fs.delete(planPath);
+          return;
+        }
         Path mergedArchiveFile = new Path(metaClient.getArchivePath(), plan.getMergedArchiveFileName());
         List<Path> candidates = plan.getCandidate().stream().map(Path::new).collect(Collectors.toList());
         if (candidateAllExists(candidates)) {
@@ -296,36 +310,19 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
   }
 
   public void buildArchiveMergePlan(List<String> compactCandidate, Path planPath, String compactedArchiveFileName) throws IOException {
+    LOG.info("Start to build archive merge plan.");
     HoodieMergeArchiveFilePlan plan = HoodieMergeArchiveFilePlan.newBuilder()
         .setCandidate(compactCandidate)
         .setMergedArchiveFileName(compactedArchiveFileName)
         .build();
     Option<byte[]> content = TimelineMetadataUtils.serializeAvroMetadata(plan, HoodieMergeArchiveFilePlan.class);
-    createFileInPath(planPath, content);
-  }
-
-  private void createFileInPath(Path fullPath, Option<byte[]> content) {
-    try {
-      // If the path does not exist, create it first
-      if (!metaClient.getFs().exists(fullPath)) {
-        if (metaClient.getFs().createNewFile(fullPath)) {
-          LOG.info("Created a new file in meta path: " + fullPath);
-        } else {
-          throw new HoodieIOException("Failed to create file " + fullPath);
-        }
-      }
-
-      if (content.isPresent()) {
-        FSDataOutputStream fsout = metaClient.getFs().create(fullPath, true);
-        fsout.write(content.get());
-        fsout.close();
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to create file " + fullPath, e);
-    }
+    // building merge archive files plan.
+    FileIOUtils.createFileInPath(metaClient.getFs(), planPath, content);
+    LOG.info("Success to build archive merge plan");
   }
 
   public void mergeArchiveFiles(List<FileStatus> compactCandidate) throws IOException {
+    LOG.info("Starting to merge small archive files.");
     Schema wrapperSchema = HoodieArchivedMetaEntry.getClassSchema();
     try {
       List<IndexedRecord> records = new ArrayList<>();
@@ -350,6 +347,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     } finally {
       writer.close();
     }
+    LOG.info("Success to merge small archive files.");
   }
 
   private Map<String, Boolean> deleteFilesParallelize(HoodieTableMetaClient metaClient, List<String> paths, HoodieEngineContext context, boolean ignoreFailed) {

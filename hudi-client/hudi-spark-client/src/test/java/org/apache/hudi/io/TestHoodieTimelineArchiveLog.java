@@ -37,6 +37,8 @@ import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -146,8 +148,8 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(minArchivalCommits, maxArchivalCommits)
-            .withArchiveAutoMergeEnable(enableArchiveMerge)
-            .withArchiveFilesMergeBatchSize(archiveFilesBatch)
+            .withArchiveMergeEnable(enableArchiveMerge)
+            .withArchiveMergeFilesBatchSize(archiveFilesBatch)
             .withArchiveMergeSmallFileLimit(size)
             .build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
@@ -227,11 +229,45 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
 
     metaClient.getFs().delete(fsStatuses[0].getPath());
 
-
     HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
     HoodieArchivedTimeline archivedTimeLine = metaClient.getArchivedTimeline().reload();
     assertEquals(7 * 3, rawActiveTimeline.countInstants() + archivedTimeLine.countInstants());
 
+    for (int i = 1; i < 10; i++) {
+      testTable.doWriteOperation("1000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+      archiveAndGetCommitsList(writeConfig);
+    }
+
+    HoodieActiveTimeline rawActiveTimeline1 = new HoodieActiveTimeline(metaClient, false);
+    HoodieArchivedTimeline archivedTimeLine1 = metaClient.getArchivedTimeline().reload();
+
+    assertEquals(16 * 3, archivedTimeLine1.countInstants() + rawActiveTimeline1.countInstants());
+  }
+
+  @Test
+  public void testArchiveTableWithArchivalSmallFileMergeEnableRecoverFromBuildPlanFailed() throws Exception {
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(false, 2, 3, 2, true, 3, 209715200);
+    for (int i = 1; i < 8; i++) {
+      testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+      archiveAndGetCommitsList(writeConfig);
+    }
+
+    HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
+    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(writeConfig, table);
+    FileStatus[] fsStatuses = metaClient.getFs().globStatus(
+        new Path(metaClient.getArchivePath() + "/.commits_.archive*"));
+    List<String> candidateFiles = Arrays.stream(fsStatuses).map(fs -> fs.getPath().toString()).collect(Collectors.toList());
+
+    archiveLog.reOpenWriter();
+    Path plan = new Path(metaClient.getArchivePath(), archiveLog.getMergeArchivePlanName());
+    archiveLog.buildArchiveMergePlan(candidateFiles, plan, ".commits_.archive.3_1-0-1");
+    String s = "Dummy Content";
+    // stain the current merge plan file.
+    FileIOUtils.createFileInPath(metaClient.getFs(), plan, Option.of(s.getBytes()));
+
+    HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
+    HoodieArchivedTimeline archivedTimeLine = metaClient.getArchivedTimeline().reload();
+    assertEquals(7 * 3, rawActiveTimeline.countInstants() + archivedTimeLine.countInstants());
 
     for (int i = 1; i < 10; i++) {
       testTable.doWriteOperation("1000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
@@ -258,7 +294,6 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
         new Path(metaClient.getArchivePath() + "/.commits_.archive*"));
     List<String> candidateFiles = Arrays.stream(fsStatuses).map(fs -> fs.getPath().toString()).collect(Collectors.toList());
     archiveLog.reOpenWriter();
-
 
     archiveLog.buildArchiveMergePlan(candidateFiles, new Path(metaClient.getArchivePath(), archiveLog.getMergeArchivePlanName()), ".commits_.archive.3_1-0-1");
     archiveLog.mergeArchiveFiles(Arrays.stream(fsStatuses).collect(Collectors.toList()));
