@@ -39,7 +39,8 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.stream.Stream;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * HoodieRealtimeInputFormat for HUDI datasets which store data in HFile base file format.
@@ -52,7 +53,9 @@ public class HoodieHFileRealtimeInputFormat extends HoodieHFileInputFormat {
 
   @Override
   public InputSplit[] getSplits(JobConf job, int numSplits) throws IOException {
-    Stream<FileSplit> fileSplits = Arrays.stream(super.getSplits(job, numSplits)).map(is -> (FileSplit) is);
+    List<FileSplit> fileSplits = Arrays.stream(super.getSplits(job, numSplits))
+        .map(is -> (FileSplit) is)
+        .collect(Collectors.toList());
     return HoodieRealtimeInputFormatUtils.getRealtimeSplits(job, fileSplits);
   }
 
