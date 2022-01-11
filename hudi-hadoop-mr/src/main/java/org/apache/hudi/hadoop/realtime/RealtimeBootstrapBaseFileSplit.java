@@ -43,10 +43,6 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
 
   private String basePath;
 
-  public RealtimeBootstrapBaseFileSplit() {
-    super();
-  }
-
   public RealtimeBootstrapBaseFileSplit(FileSplit baseSplit, String basePath, List<HoodieLogFile> deltaLogFiles,
                                         String maxInstantTime, FileSplit externalFileSplit) throws IOException {
     super(baseSplit, externalFileSplit);

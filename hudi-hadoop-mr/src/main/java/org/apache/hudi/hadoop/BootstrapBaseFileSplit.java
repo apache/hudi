@@ -32,10 +32,6 @@ public class BootstrapBaseFileSplit extends FileSplit {
 
   private FileSplit bootstrapFileSplit;
 
-  public BootstrapBaseFileSplit() {
-    super();
-  }
-
   public BootstrapBaseFileSplit(FileSplit baseSplit, FileSplit bootstrapFileSplit)
       throws IOException {
     super(baseSplit.getPath(), baseSplit.getStart(), baseSplit.getLength(), baseSplit.getLocations());
