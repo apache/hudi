@@ -208,8 +208,10 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         copyOfRecords = dataGen.generateUpdates(commitTime1, copyOfRecords);
         copyOfRecords.addAll(dataGen.generateInserts(commitTime1, 200));
 
-        List<String> dataFiles = tableView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
-        List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), dataFiles,
+        List<String> inputPaths = tableView.getLatestBaseFiles()
+            .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
+            .collect(Collectors.toList());
+        List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), inputPaths,
             basePath());
         assertEquals(200, recordsRead.size());
 
@@ -225,8 +227,10 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
             .contains(commitTime1)).map(fileStatus -> fileStatus.getPath().toString()).collect(Collectors.toList());
         assertEquals(0, remainingFiles.size(), "There files should have been rolled-back "
             + "when rolling back commit " + commitTime1 + " but are still remaining. Files: " + remainingFiles);
-        dataFiles = tableView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
-        recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), dataFiles, basePath());
+        inputPaths = tableView.getLatestBaseFiles()
+            .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
+            .collect(Collectors.toList());
+        recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), inputPaths, basePath());
         assertEquals(200, recordsRead.size());
       }
 
@@ -241,8 +245,10 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         copyOfRecords = dataGen.generateUpdates(commitTime2, copyOfRecords);
         copyOfRecords.addAll(dataGen.generateInserts(commitTime2, 200));
 
-        List<String> dataFiles = tableView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
-        List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), dataFiles,
+        List<String> inputPaths = tableView.getLatestBaseFiles()
+            .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
+            .collect(Collectors.toList());
+        List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), inputPaths,
             basePath());
         assertEquals(200, recordsRead.size());
 
@@ -262,8 +268,10 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         metaClient = HoodieTableMetaClient.reload(metaClient);
         hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
         tableView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
-        dataFiles = tableView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
-        recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), dataFiles, basePath());
+        inputPaths = tableView.getLatestBaseFiles()
+            .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
+            .collect(Collectors.toList());
+        recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), inputPaths, basePath());
         // check that the number of records read is still correct after rollback operation
         assertEquals(200, recordsRead.size());
 
@@ -368,7 +376,9 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         copyOfRecords = dataGen.generateUpdates(newCommitTime, copyOfRecords);
         copyOfRecords.addAll(dataGen.generateInserts(newCommitTime, 200));
 
-        List<String> dataFiles = tableView.getLatestBaseFiles().map(hf -> hf.getPath()).collect(Collectors.toList());
+        List<String> dataFiles = tableView.getLatestBaseFiles()
+            .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
+            .collect(Collectors.toList());
         List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), dataFiles,
             basePath());
         assertEquals(200, recordsRead.size());
