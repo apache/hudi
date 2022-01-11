@@ -24,7 +24,6 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
@@ -50,10 +49,8 @@ import java.io.Serializable;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -292,9 +289,6 @@ public class HoodieRepairTool {
    */
   static List<String> listFilesFromBasePath(
       HoodieEngineContext context, String basePathStr, int expectedLevel, int parallelism) {
-    final Set<String> validFileExtensions = Arrays.stream(HoodieFileFormat.values())
-        .map(HoodieFileFormat::getFileExtension).collect(Collectors.toCollection(HashSet::new));
-    final String logFileExtension = HoodieFileFormat.HOODIE_LOG.getFileExtension();
     FileSystem fs = FSUtils.getFs(basePathStr, context.getHadoopConf().get());
     Path basePath = new Path(basePathStr);
     return FSUtils.getFileStatusAtLevel(
@@ -303,9 +297,7 @@ public class HoodieRepairTool {
           if (!fileStatus.isFile()) {
             return false;
           }
-          Path path = fileStatus.getPath();
-          String extension = FSUtils.getFileExtension(path.getName());
-          return validFileExtensions.contains(extension) || path.getName().contains(logFileExtension);
+          return FSUtils.isDataFile(fileStatus.getPath());
         })
         .map(fileStatus -> fileStatus.getPath().toString())
         .collect(Collectors.toList());
@@ -357,8 +349,7 @@ public class HoodieRepairTool {
     // Buckets the files based on instant time
     // instant time -> relative paths of base and log files to base path
     Map<String, List<String>> instantToFilesMap = RepairUtils.tagInstantsOfBaseAndLogFiles(
-        metaClient.getBasePath(),
-        metaClient.getTableConfig().getBaseFileFormat().getFileExtension(), allFilesInPartitions);
+        metaClient.getBasePath(), allFilesInPartitions);
     List<String> instantTimesToRepair = instantToFilesMap.keySet().stream()
         .filter(instant -> (!startingInstantOption.isPresent()
             || instant.compareTo(startingInstantOption.get()) >= 0)

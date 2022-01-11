@@ -28,7 +28,6 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.Path;
@@ -115,8 +114,7 @@ public class TestRepairUtils {
     }
 
     assertEquals(expectedResult,
-        RepairUtils.tagInstantsOfBaseAndLogFiles(
-            basePath, HoodieWriteConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension(), inputPathList));
+        RepairUtils.tagInstantsOfBaseAndLogFiles(basePath, inputPathList));
   }
 
   @Test
