@@ -106,9 +106,9 @@ public class Int64TimestampColumnReader extends AbstractColumnReader<WritableTim
 
   private static TimestampData int64ToTimestamp(
       boolean utcTimestamp,
-      long millionsOfDay,
+      long interval,
       ChronoUnit unit) {
-    final Instant instant = Instant.EPOCH.plus(millionsOfDay, unit);
+    final Instant instant = Instant.EPOCH.plus(interval, unit);
     if (utcTimestamp) {
       return TimestampData.fromInstant(instant);
     } else {
