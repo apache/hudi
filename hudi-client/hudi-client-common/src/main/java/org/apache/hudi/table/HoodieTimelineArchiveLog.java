@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
@@ -177,7 +176,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
   /**
    * Here Hoodie can merge the small archive files into a new larger one.
    * Only used for filesystem which does not support append operation.
-   * The hole merge small archive files operation has four stages:
+   * The whole merge small archive files operation has four stages:
    * 1. Build merge plan with merge candidates/merged file name infos.
    * 2. Do merge.
    * 3. Delete all the candidates.
