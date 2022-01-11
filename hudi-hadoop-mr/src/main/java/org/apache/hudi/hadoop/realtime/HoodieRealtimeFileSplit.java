@@ -44,9 +44,7 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
 
   private Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo = Option.empty();
 
-  public HoodieRealtimeFileSplit() {
-    super();
-  }
+  public HoodieRealtimeFileSplit() {}
 
   public HoodieRealtimeFileSplit(FileSplit baseSplit, String basePath, List<HoodieLogFile> deltaLogFiles, String maxCommitTime,
                                  Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo)
