@@ -19,7 +19,6 @@
 package org.apache.hudi.table;
 
 import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
@@ -117,13 +116,14 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     }
   }
 
-  public void reOpenWriter() {
+  public Writer reOpenWriter() {
     try {
       if (this.writer != null) {
         this.writer.close();
         this.writer = null;
       }
       this.writer = openWriter();
+      return writer;
     } catch (IOException e) {
       throw new HoodieException("Unable to initialize HoodieLogFormat writer", e);
     }
@@ -257,7 +257,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
       if (fs.exists(planPath)) {
         HoodieMergeArchiveFilePlan plan = null;
         try {
-          plan = TimelineMetadataUtils.deserializeAvroMetadata(readDataFromPath(planPath).get(), HoodieMergeArchiveFilePlan.class);
+          plan = TimelineMetadataUtils.deserializeAvroMetadata(FileIOUtils.readDataFromPath(fs, planPath).get(), HoodieMergeArchiveFilePlan.class);
         } catch (IOException e) {
           LOG.warn("Parsing merge archive plan failed.", e);
           // Reading partial plan file which means last merge action is failed during writing plan file.
@@ -299,14 +299,6 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
       }
     }
     return true;
-  }
-
-  private Option<byte[]> readDataFromPath(Path detailPath) {
-    try (FSDataInputStream is = metaClient.getFs().open(detailPath)) {
-      return Option.of(FileIOUtils.readAsByteArray(is));
-    } catch (IOException e) {
-      throw new HoodieIOException("Could not read commit details from " + detailPath, e);
-    }
   }
 
   public void buildArchiveMergePlan(List<String> compactCandidate, Path planPath, String compactedArchiveFileName) throws IOException {

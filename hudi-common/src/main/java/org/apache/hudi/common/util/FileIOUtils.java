@@ -181,4 +181,12 @@ public class FileIOUtils {
       throw new HoodieIOException("Failed to create file " + fullPath, e);
     }
   }
+
+  public static Option<byte[]> readDataFromPath(FileSystem fileSystem, org.apache.hadoop.fs.Path detailPath) {
+    try (FSDataInputStream is = fileSystem.open(detailPath)) {
+      return Option.of(FileIOUtils.readAsByteArray(is));
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not read commit details from " + detailPath, e);
+    }
+  }
 }

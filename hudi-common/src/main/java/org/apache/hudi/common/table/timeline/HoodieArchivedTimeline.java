@@ -20,13 +20,17 @@ package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
+import org.apache.hudi.avro.model.HoodieMergeArchiveFilePlan;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.generic.GenericRecord;
@@ -249,8 +253,26 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
               break;
             }
           }
-        } catch (Exception e) {
-
+        } catch (Exception originalException) {
+          // merge small archive files may left uncompleted archive file which will cause exception.
+          // need to ignore this kind of exception here.
+          try {
+            Path planPath = new Path(metaClient.getArchivePath(), "mergeArchivePlan");
+            HoodieWrapperFileSystem fileSystem = metaClient.getFs();
+            if (fileSystem.exists(planPath)) {
+              HoodieMergeArchiveFilePlan plan = TimelineMetadataUtils.deserializeAvroMetadata(FileIOUtils.readDataFromPath(fileSystem, planPath).get(), HoodieMergeArchiveFilePlan.class);
+              String mergedArchiveFileName = plan.getMergedArchiveFileName();
+              if (!StringUtils.isNullOrEmpty(mergedArchiveFileName) && fs.getPath().getName().equalsIgnoreCase(mergedArchiveFileName)) {
+                LOG.warn("Catch exception because of reading uncompleted merging archive file " + mergedArchiveFileName + ". Ignore it here.");
+                continue;
+              }
+            }
+            throw originalException;
+          } catch (Exception e) {
+            // If anything wrong during parsing merge archive plan, we need to throw the original exception.
+            // For example corrupted archive file and corrupted plan are both existed.
+            throw originalException;
+          }
         }
       }
 
