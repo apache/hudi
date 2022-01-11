@@ -459,14 +459,15 @@ public class HoodieAvroUtils {
     int i = 0;
     for (; i < parts.length; i++) {
       String part = parts[i];
-      Object val = valueNode.get(part);
-      if (val == null) {
+      Field field = valueNode.getSchema().getField(part);
+      if (field == null) {
         break;
       }
 
-      // return, if last part of name
+      Object val = valueNode.get(field.pos());
+      // Return, if last part of name
       if (i == parts.length - 1) {
-        Schema fieldSchema = valueNode.getSchema().getField(part).schema();
+        Schema fieldSchema = field.schema();
         return convertValueForSpecificDataTypes(fieldSchema, val, consistentLogicalTimestampEnabled);
       } else {
         // VC: Need a test here
