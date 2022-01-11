@@ -18,6 +18,13 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
+import org.apache.hadoop.mapred.FileSplit;
+import org.apache.hadoop.mapred.InputSplit;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.SplitLocationInfo;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -42,14 +49,6 @@ import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
 import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
 import org.apache.hudi.hadoop.realtime.RealtimeBootstrapBaseFileSplit;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
-
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
-import org.apache.hadoop.mapred.FileSplit;
-import org.apache.hadoop.mapred.InputSplit;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.SplitLocationInfo;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
@@ -65,11 +64,49 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.TypeUtils.unsafeCast;
+
 public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
 
   private static final Logger LOG = LogManager.getLogger(HoodieRealtimeInputFormatUtils.class);
 
-  public static InputSplit[] getRealtimeSplits(Configuration conf, Stream<FileSplit> fileSplits) {
+  public static InputSplit[] getRealtimeSplits(Configuration conf, List<FileSplit> fileSplits) throws IOException {
+    if (fileSplits.isEmpty()) {
+      return new InputSplit[0];
+    }
+
+    FileSplit fileSplit = fileSplits.get(0);
+
+    // Pre-process table-config to fetch virtual key info
+    Path partitionPath = fileSplit.getPath().getParent();
+    HoodieTableMetaClient metaClient = getTableMetaClientForBasePathUnchecked(conf, partitionPath);
+
+    Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfoOpt = getHoodieVirtualKeyInfo(metaClient);
+
+    InputSplit[] finalSplits = fileSplits.stream()
+      .map(split -> {
+        if (split instanceof RealtimeBootstrapBaseFileSplit) {
+          RealtimeBootstrapBaseFileSplit bootstrapBaseFileSplit = unsafeCast(split);
+          return createRealtimeBoostrapBaseFileSplit(bootstrapBaseFileSplit, metaClient.getBasePath(),
+              bootstrapBaseFileSplit.getDeltaLogFiles(), bootstrapBaseFileSplit.getMaxCommitTime());
+        } else if (split instanceof BaseFileWithLogsSplit) {
+          BaseFileWithLogsSplit baseFileWithLogsSplit = unsafeCast(split);
+          return createHoodieRealtimeSplitUnchecked(baseFileWithLogsSplit, hoodieVirtualKeyInfoOpt);
+        } else {
+          throw new IllegalStateException(String.format("Unrecognized type of split (%s)", split.getClass().getSimpleName()));
+        }
+      })
+      .toArray(InputSplit[]::new);
+
+    LOG.info("Returning a total splits of " + finalSplits.length);
+
+    return finalSplits;
+  }
+
+  /**
+   * @deprecated
+   */
+  public static InputSplit[] getRealtimeSplitsLegacy(Configuration conf, Stream<FileSplit> fileSplits) {
     Map<Path, List<FileSplit>> partitionsToParquetSplits =
         fileSplits.collect(Collectors.groupingBy(split -> split.getPath().getParent()));
     // TODO(vc): Should we handle also non-hoodie splits here?
@@ -328,6 +365,20 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
       if (LOG.isDebugEnabled()) {
         LOG.debug("The projection Ids: {" + columnIds + "} start with ','. First comma is removed");
       }
+    }
+  }
+
+  private static HoodieRealtimeFileSplit createHoodieRealtimeSplitUnchecked(BaseFileWithLogsSplit baseFileWithLogsSplit,
+                                                                            Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfoOpt) {
+    try {
+      return new HoodieRealtimeFileSplit(
+          baseFileWithLogsSplit,
+          baseFileWithLogsSplit.getBasePath(),
+          baseFileWithLogsSplit.getDeltaLogFiles(),
+          baseFileWithLogsSplit.getMaxCommitTime(),
+          hoodieVirtualKeyInfoOpt);
+    } catch (IOException e) {
+      throw new HoodieIOException(String.format("Failed to init %s", HoodieRealtimeFileSplit.class.getSimpleName()), e);
     }
   }
 }
