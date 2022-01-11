@@ -115,12 +115,10 @@
     <prometheus.version>0.8.0</prometheus.version>
     <http.version>4.4.1</http.version>
     <spark.version>${spark2.version}</spark.version>
-    <sparkbundle.version>${spark2bundle.version}</sparkbundle.version>
+    <sparkbundle.version></sparkbundle.version>
     <flink.version>1.13.1</flink.version>
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.2.0</spark3.version>
-    <spark2bundle.version></spark2bundle.version>
-    <spark3bundle.version>3</spark3bundle.version>
     <hudi.spark.module>hudi-spark2</hudi.spark.module>
     <avro.version>1.8.2</avro.version>
     <scala11.version>2.11.12</scala11.version>
@@ -1572,7 +1570,7 @@
       <id>spark3</id>
       <properties>
         <spark.version>${spark3.version}</spark.version>
-        <sparkbundle.version>${spark3bundle.version}</sparkbundle.version>
+        <sparkbundle.version>${spark3.version}</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
         <hudi.spark.module>hudi-spark3</hudi.spark.module>
@@ -1598,7 +1596,7 @@
       <properties>
         <spark3.version>3.1.2</spark3.version>
         <spark.version>${spark3.version}</spark.version>
-        <sparkbundle.version>${spark3bundle.version}</sparkbundle.version>
+        <sparkbundle.version>${spark3.version}</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
         <hudi.spark.module>hudi-spark3</hudi.spark.module>
@@ -1614,29 +1612,6 @@
       <activation>
         <property>
           <name>spark3.1.x</name>
-        </property>
-      </activation>
-    </profile>
-
-    <profile>
-      <id>spark3.0.x</id>
-      <properties>
-        <spark3.version>3.0.3</spark3.version>
-        <spark.version>${spark3.version}</spark.version>
-        <scala.version>${scala12.version}</scala.version>
-        <scala.binary.version>2.12</scala.binary.version>
-        <hudi.spark.module>hudi-spark3</hudi.spark.module>
-        <scalatest.version>3.0.1</scalatest.version>
-        <kafka.version>2.4.1</kafka.version>
-        <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
-        <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
-        <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
-        <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
-        <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
-      </properties>
-      <activation>
-        <property>
-          <name>spark3.0.x</name>
         </property>
       </activation>
     </profile>
