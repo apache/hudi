@@ -283,7 +283,7 @@ public class HoodieAvroUtils {
 
     for (Schema.Field schemaField: fileSchema.getFields()) {
       if (fields.contains(schemaField.name())) {
-        toBeAddedFields.add(new Schema.Field(schemaField.name(), schemaField.schema(), schemaField.doc(), schemaField.defaultValue()));
+        toBeAddedFields.add(new Schema.Field(schemaField.name(), schemaField.schema(), schemaField.doc(), schemaField.defaultVal()));
       }
     }
     recordSchema.setFields(toBeAddedFields);

@@ -120,7 +120,7 @@
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.2.0</spark3.version>
     <hudi.spark.module>hudi-spark2</hudi.spark.module>
-    <avro.version>1.8.2</avro.version>
+    <avro.version>1.10.2</avro.version>
     <scala11.version>2.11.12</scala11.version>
     <scala12.version>2.12.10</scala12.version>
     <scala.version>${scala11.version}</scala.version>
