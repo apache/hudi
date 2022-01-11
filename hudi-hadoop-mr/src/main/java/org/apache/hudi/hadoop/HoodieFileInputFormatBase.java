@@ -41,7 +41,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * TODO java-doc
+ * Base implementation of the Hive's {@link FileInputFormat} allowing for reading of Hudi's
+ * Copy-on-Write (COW) tables in various configurations:
+ *
+ * <ul>
+ *   <li>Snapshot mode: reading table's state as of particular timestamp (or instant, in Hudi's terms)</li>
+ *   <li>Incremental mode: reading table's state as of particular timestamp (or instant, in Hudi's terms)</li>
+ *   <li>External mode: reading non-Hudi partitions</li>
+ * </ul>
  */
 public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWritable, ArrayWritable>
     implements Configurable {
