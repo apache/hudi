@@ -90,7 +90,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
 
     return isIncrementalSplits
         ? HoodieRealtimeInputFormatUtils.getIncrementalRealtimeSplits(job, fileSplits.stream())
-        : HoodieRealtimeInputFormatUtils.getRealtimeSplits(job, fileSplits.stream());
+        : HoodieRealtimeInputFormatUtils.getRealtimeSplits(job, fileSplits);
   }
 
   /**
