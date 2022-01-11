@@ -232,7 +232,7 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
   }
 
   private static Option<HoodieInstant> fromScala(scala.Option<HoodieInstant> option) {
-    return Option.ofNullable(option.getOrElse(() -> null));
+    return Option.ofNullable(option.getOrElse(() -> (HoodieInstant) null));
   }
 
   @Nonnull
