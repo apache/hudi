@@ -90,7 +90,7 @@ import java.util.Set;
  *
  * </p>
  */
-public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
+public class HoodieMergeHandle<T extends HoodieRecordPayload<T>, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieMergeHandle.class);
 

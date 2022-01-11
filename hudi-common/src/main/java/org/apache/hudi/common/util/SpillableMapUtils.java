@@ -132,6 +132,7 @@ public class SpillableMapUtils {
   /**
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
+  @SuppressWarnings({"rawtypes", "unchecked"})
   public static <R> R convertToHoodieRecordPayload(GenericRecord record, String payloadClazz,
                                                    String preCombineField,
                                                    Pair<String, String> recordKeyPartitionPathFieldPair,
@@ -144,8 +145,8 @@ public class SpillableMapUtils {
     Object preCombineVal = getPreCombineVal(record, preCombineField);
     HoodieOperation operation = withOperationField
         ? HoodieOperation.fromName(getNullableValAsString(record, HoodieRecord.OPERATION_METADATA_FIELD)) : null;
-    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieRecord<>(new HoodieKey(recKey, partitionPath),
-        ReflectionUtils.loadPayload(payloadClazz, new Object[]{record, preCombineVal}, GenericRecord.class,
+    HoodieRecord<? extends HoodieRecordPayload<?>> hoodieRecord = new HoodieRecord<>(new HoodieKey(recKey, partitionPath),
+        ReflectionUtils.<HoodieRecordPayload>loadPayload(payloadClazz, new Object[]{record, preCombineVal}, GenericRecord.class,
             Comparable.class), operation);
 
     return (R) hoodieRecord;
@@ -169,9 +170,10 @@ public class SpillableMapUtils {
   /**
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
+  @SuppressWarnings({"rawtypes", "unchecked"})
   public static <R> R generateEmptyPayload(String recKey, String partitionPath, String payloadClazz) {
-    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieRecord<>(new HoodieKey(recKey, partitionPath),
-        ReflectionUtils.loadPayload(payloadClazz, new Object[] {Option.empty()}, Option.class));
+    HoodieRecord<? extends HoodieRecordPayload<?>> hoodieRecord = new HoodieRecord<>(new HoodieKey(recKey, partitionPath),
+        ReflectionUtils.<HoodieRecordPayload>loadPayload(payloadClazz, new Object[] {Option.empty()}, Option.class));
     return (R) hoodieRecord;
   }
 }

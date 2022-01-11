@@ -37,7 +37,7 @@ import java.util.Map;
 /**
  * Consumes stream of hoodie records from in-memory queue and writes to one or more create-handles.
  */
-public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
+public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload<T>>
     extends BoundedInMemoryQueueConsumer<HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {
 
   private HoodieWriteConfig config;

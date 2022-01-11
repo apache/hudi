@@ -50,7 +50,7 @@ import java.util.List;
  * then closes the file and rename to the old file name,
  * behaves like the new data buffer are appended to the old file.
  */
-public class FlinkMergeAndReplaceHandle<T extends HoodieRecordPayload, I, K, O>
+public class FlinkMergeAndReplaceHandle<T extends HoodieRecordPayload<T>, I, K, O>
     extends HoodieMergeHandle<T, I, K, O>
     implements MiniBatchHandle {
 

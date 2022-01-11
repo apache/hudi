@@ -38,13 +38,13 @@ import java.util.List;
 
 import static org.apache.hudi.common.data.HoodieList.getList;
 
-public abstract class HoodieJavaTable<T extends HoodieRecordPayload>
+public abstract class HoodieJavaTable<T extends HoodieRecordPayload<T>>
     extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
   protected HoodieJavaTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
   }
 
-  public static <T extends HoodieRecordPayload> HoodieJavaTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
+  public static <T extends HoodieRecordPayload<T>> HoodieJavaTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
@@ -52,7 +52,7 @@ public abstract class HoodieJavaTable<T extends HoodieRecordPayload>
     return HoodieJavaTable.create(config, (HoodieJavaEngineContext) context, metaClient);
   }
 
-  public static <T extends HoodieRecordPayload> HoodieJavaTable<T> create(HoodieWriteConfig config,
+  public static <T extends HoodieRecordPayload<T>> HoodieJavaTable<T> create(HoodieWriteConfig config,
                                                                           HoodieJavaEngineContext context,
                                                                           HoodieTableMetaClient metaClient) {
     switch (metaClient.getTableType()) {

@@ -73,7 +73,7 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
   }
 
   @Override
-  protected void processNextRecord(HoodieRecord<? extends HoodieRecordPayload> hoodieRecord) throws IOException {
+  protected void processNextRecord(HoodieRecord<? extends HoodieRecordPayload<?>> hoodieRecord) throws IOException {
     if (mergeKeyFilter.isEmpty() || mergeKeyFilter.contains(hoodieRecord.getRecordKey())) {
       super.processNextRecord(hoodieRecord);
     }

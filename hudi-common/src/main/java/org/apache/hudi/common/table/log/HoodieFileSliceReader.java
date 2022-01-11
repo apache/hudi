@@ -36,9 +36,10 @@ import java.util.stream.StreamSupport;
 /**
  * Reads records from base file and merges any updates from log files and provides iterable over all records in the file slice.
  */
-public class HoodieFileSliceReader<T extends HoodieRecordPayload> implements Iterator<HoodieRecord<T>> {
+public class HoodieFileSliceReader<T extends HoodieRecordPayload<T>> implements Iterator<HoodieRecord<T>> {
   private final Iterator<HoodieRecord<T>> recordsIterator;
 
+  @SuppressWarnings({"rawtypes", "unchecked"})
   public static HoodieFileSliceReader getFileSliceReader(
       Option<HoodieFileReader> baseFileReader, HoodieMergedLogRecordScanner scanner, Schema schema, String payloadClass,
       String preCombineField, Option<Pair<String, String>> simpleKeyGenFieldsOpt) throws IOException {
@@ -52,7 +53,7 @@ public class HoodieFileSliceReader<T extends HoodieRecordPayload> implements Ite
       }
       return new HoodieFileSliceReader(scanner.iterator());
     } else {
-      Iterable<HoodieRecord<? extends HoodieRecordPayload>> iterable = () -> scanner.iterator();
+      Iterable<HoodieRecord<? extends HoodieRecordPayload<?>>> iterable = scanner;
       return new HoodieFileSliceReader(StreamSupport.stream(iterable.spliterator(), false)
           .map(e -> {
             try {

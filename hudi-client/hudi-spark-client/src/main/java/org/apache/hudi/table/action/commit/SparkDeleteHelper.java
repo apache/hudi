@@ -47,7 +47,7 @@ import java.util.HashMap;
  * @param <T>
  */
 @SuppressWarnings("checkstyle:LineLength")
-public class SparkDeleteHelper<T extends HoodieRecordPayload,R> extends
+public class SparkDeleteHelper<T extends HoodieRecordPayload<T>,R> extends
     AbstractDeleteHelper<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, R> {
   private SparkDeleteHelper() {
   }

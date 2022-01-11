@@ -44,7 +44,7 @@ import java.util.List;
  * @param <T>
  */
 @SuppressWarnings("checkstyle:LineLength")
-public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends AbstractBulkInsertHelper<T, List<HoodieRecord<T>>,
+public class JavaBulkInsertHelper<T extends HoodieRecordPayload<T>, R> extends AbstractBulkInsertHelper<T, List<HoodieRecord<T>>,
     List<HoodieKey>, List<WriteStatus>, R> {
 
   private JavaBulkInsertHelper() {

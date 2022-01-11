@@ -185,19 +185,28 @@ public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
     // Test sizeEstimator without hoodie metadata fields and without schema object in the payload
     schema = SchemaTestUtil.getSimpleSchema();
     List<IndexedRecord> indexedRecords = SchemaTestUtil.generateHoodieTestRecords(0, 1);
-    hoodieRecords =
-        indexedRecords.stream().map(r -> new HoodieRecord<>(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
-            new AvroBinaryTestPayload(Option.of((GenericRecord) r)))).collect(Collectors.toList());
+
+    hoodieRecords = (List<HoodieRecord>) indexedRecords.stream()
+        .map(r ->
+            new HoodieRecord<>(
+                new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
+                new AvroBinaryTestPayload(Option.of((GenericRecord) r))
+            )
+        )
+        .collect(Collectors.toList());
+
     payloadSize = SpillableMapUtils.computePayloadSize(hoodieRecords.remove(0), new HoodieRecordSizeEstimator(schema));
     assertTrue(payloadSize > 0);
 
     // Test sizeEstimator with hoodie metadata fields and without schema object in the payload
     final Schema simpleSchemaWithMetadata = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
     indexedRecords = SchemaTestUtil.generateHoodieTestRecords(0, 1);
-    hoodieRecords = indexedRecords.stream()
-        .map(r -> new HoodieRecord<>(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
-            new AvroBinaryTestPayload(
-                Option.of(HoodieAvroUtils.rewriteRecord((GenericRecord) r, simpleSchemaWithMetadata)))))
+    hoodieRecords = (List<HoodieRecord>) indexedRecords.stream()
+        .map(r ->
+            new HoodieRecord<>(
+                new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
+                new AvroBinaryTestPayload(Option.of(HoodieAvroUtils.rewriteRecord((GenericRecord) r, simpleSchemaWithMetadata))))
+        )
         .collect(Collectors.toList());
     payloadSize = SpillableMapUtils.computePayloadSize(hoodieRecords.remove(0), new HoodieRecordSizeEstimator(schema));
     assertTrue(payloadSize > 0);

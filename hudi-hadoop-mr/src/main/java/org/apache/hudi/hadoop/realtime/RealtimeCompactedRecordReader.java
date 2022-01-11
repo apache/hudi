@@ -50,7 +50,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
   private static final Logger LOG = LogManager.getLogger(AbstractRealtimeRecordReader.class);
 
   protected final RecordReader<NullWritable, ArrayWritable> parquetReader;
-  private final Map<String, HoodieRecord<? extends HoodieRecordPayload>> deltaRecordMap;
+  private final Map<String, HoodieRecord<? extends HoodieRecordPayload<?>>> deltaRecordMap;
 
   private final Set<String> deltaRecordKeys;
   private final HoodieMergedLogRecordScanner mergedLogRecordScanner;

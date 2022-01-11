@@ -47,7 +47,7 @@ import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
  * support z-curve optimization, hilbert will come soon.
  * @param <T> HoodieRecordPayload type
  */
-public class RDDSpatialCurveOptimizationSortPartitioner<T extends HoodieRecordPayload>
+public class RDDSpatialCurveOptimizationSortPartitioner<T extends HoodieRecordPayload<T>>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
   private final HoodieSparkEngineContext sparkEngineContext;
   private final SerializableSchema serializableSchema;

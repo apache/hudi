@@ -55,12 +55,12 @@ import java.util.Map;
  */
 
 public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
-    implements Iterable<HoodieRecord<? extends HoodieRecordPayload>> {
+    implements Iterable<HoodieRecord<? extends HoodieRecordPayload<?>>> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieMergedLogRecordScanner.class);
 
   // Final map of compacted/merged records
-  protected final ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records;
+  protected final ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload<?>>> records;
 
   // count of merged records in log
   private long numMergedRecordsInLog;
@@ -113,11 +113,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   }
 
   @Override
-  public Iterator<HoodieRecord<? extends HoodieRecordPayload>> iterator() {
+  public Iterator<HoodieRecord<? extends HoodieRecordPayload<?>>> iterator() {
     return records.iterator();
   }
 
-  public Map<String, HoodieRecord<? extends HoodieRecordPayload>> getRecords() {
+  public Map<String, HoodieRecord<? extends HoodieRecordPayload<?>>> getRecords() {
     return records;
   }
 
@@ -133,15 +133,17 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   }
 
   @Override
-  protected void processNextRecord(HoodieRecord<? extends HoodieRecordPayload> hoodieRecord) throws IOException {
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  protected void processNextRecord(HoodieRecord<? extends HoodieRecordPayload<?>> hoodieRecord) throws IOException {
     String key = hoodieRecord.getRecordKey();
     if (records.containsKey(key)) {
       // Merge and store the merged record. The HoodieRecordPayload implementation is free to decide what should be
       // done when a delete (empty payload) is encountered before or after an insert/update.
 
-      HoodieRecord<? extends HoodieRecordPayload> oldRecord = records.get(key);
+      HoodieRecord<? extends HoodieRecordPayload<?>> oldRecord = records.get(key);
       HoodieRecordPayload oldValue = oldRecord.getData();
-      HoodieRecordPayload combinedValue = hoodieRecord.getData().preCombine(oldValue);
+      HoodieRecordPayload newValue = hoodieRecord.getData();
+      HoodieRecordPayload combinedValue = newValue.preCombine(oldValue);
       boolean choosePrev = combinedValue.equals(oldValue);
       HoodieOperation operation = choosePrev ? oldRecord.getOperation() : hoodieRecord.getOperation();
       records.put(key, new HoodieRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()), combinedValue, operation));

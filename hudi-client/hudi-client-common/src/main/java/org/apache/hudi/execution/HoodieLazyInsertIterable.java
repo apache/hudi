@@ -41,7 +41,7 @@ import java.util.function.Function;
 /**
  * Lazy Iterable, that writes a stream of HoodieRecords sorted by the partitionPath, into new files.
  */
-public abstract class HoodieLazyInsertIterable<T extends HoodieRecordPayload>
+public abstract class HoodieLazyInsertIterable<T extends HoodieRecordPayload<T>>
     extends LazyIterableIterator<HoodieRecord<T>, List<WriteStatus>> {
 
   protected final HoodieWriteConfig hoodieConfig;
@@ -98,12 +98,12 @@ public abstract class HoodieLazyInsertIterable<T extends HoodieRecordPayload>
    * Transformer function to help transform a HoodieRecord. This transformer is used by BufferedIterator to offload some
    * expensive operations of transformation to the reader thread.
    */
-  static <T extends HoodieRecordPayload> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformFunction(
+  static <T extends HoodieRecordPayload<T>> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformFunction(
       Schema schema, HoodieWriteConfig config) {
     return hoodieRecord -> new HoodieInsertValueGenResult(hoodieRecord, schema, config.getProps());
   }
 
-  static <T extends HoodieRecordPayload> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformFunction(
+  static <T extends HoodieRecordPayload<T>> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformFunction(
       Schema schema) {
     return hoodieRecord -> new HoodieInsertValueGenResult(hoodieRecord, schema, CollectionUtils.EMPTY_PROPERTIES);
   }

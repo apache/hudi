@@ -40,7 +40,7 @@ import org.apache.spark.sql.SQLContext;
  * 
  * Expects query results dont match.
  */
-public class SqlQueryInequalityPreCommitValidator<T extends HoodieRecordPayload, I, K, O extends JavaRDD<WriteStatus>> extends SqlQueryPreCommitValidator<T, I, K, O> {
+public class SqlQueryInequalityPreCommitValidator<T extends HoodieRecordPayload<T>, I, K, O extends JavaRDD<WriteStatus>> extends SqlQueryPreCommitValidator<T, I, K, O> {
   private static final Logger LOG = LogManager.getLogger(SqlQueryInequalityPreCommitValidator.class);
 
   public SqlQueryInequalityPreCommitValidator(HoodieSparkTable<T> table, HoodieEngineContext engineContext, HoodieWriteConfig config) {

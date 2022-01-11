@@ -30,7 +30,7 @@ import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 
-public class CopyOnWriteRestoreActionExecutor<T extends HoodieRecordPayload, I, K, O>
+public class CopyOnWriteRestoreActionExecutor<T extends HoodieRecordPayload<T>, I, K, O>
     extends BaseRestoreActionExecutor<T, I, K, O> {
   public CopyOnWriteRestoreActionExecutor(HoodieEngineContext context,
                                           HoodieWriteConfig config,

@@ -210,7 +210,7 @@ public class HDFSParquetImporter implements Serializable {
    * @param hoodieRecords Hoodie Records
    * @param <T> Type
    */
-  protected <T extends HoodieRecordPayload> JavaRDD<WriteStatus> load(SparkRDDWriteClient<T> client, String instantTime,
+  protected <T extends HoodieRecordPayload<T>> JavaRDD<WriteStatus> load(SparkRDDWriteClient<T> client, String instantTime,
                                                                       JavaRDD<HoodieRecord<T>> hoodieRecords) {
     switch (cfg.command.toLowerCase()) {
       case "upsert": {

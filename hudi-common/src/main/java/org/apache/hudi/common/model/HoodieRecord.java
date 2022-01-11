@@ -32,7 +32,7 @@ import org.apache.hudi.common.util.collection.Pair;
 /**
  * A Single Record managed by Hoodie.
  */
-public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable {
+public class HoodieRecord<T extends HoodieRecordPayload<T>> implements Serializable {
 
   public static final String COMMIT_TIME_METADATA_FIELD = "_hoodie_commit_time";
   public static final String COMMIT_SEQNO_METADATA_FIELD = "_hoodie_commit_seqno";

@@ -47,7 +47,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCompactionPlan>> {
+public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload<T>, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCompactionPlan>> {
 
   private static final Logger LOG = LogManager.getLogger(ScheduleCompactionActionExecutor.class);
 

@@ -72,7 +72,7 @@ import static java.util.stream.Collectors.toList;
 /**
  * A HoodieCompactor runs compaction on a hoodie table.
  */
-public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> implements Serializable {
+public abstract class HoodieCompactor<T extends HoodieRecordPayload<T>, I, K, O> implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieCompactor.class);
 

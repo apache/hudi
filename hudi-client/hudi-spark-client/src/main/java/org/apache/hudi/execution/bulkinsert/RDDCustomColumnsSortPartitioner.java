@@ -34,7 +34,7 @@ import org.apache.spark.api.java.JavaRDD;
  *
  * @param <T> HoodieRecordPayload type
  */
-public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload>
+public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload<T>>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   private final String[] sortColumnNames;

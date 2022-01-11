@@ -45,7 +45,7 @@ import java.io.Serializable;
  * @param <O> Type of outputs for deprecated APIs
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
-public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implements Serializable {
+public abstract class HoodieIndex<T extends HoodieRecordPayload<T>, I, K, O> implements Serializable {
 
   protected final HoodieWriteConfig config;
 

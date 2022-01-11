@@ -34,7 +34,7 @@ import org.apache.log4j.Logger;
 import java.util.ArrayList;
 import java.util.List;
 
-public class CopyOnWriteRollbackActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseRollbackActionExecutor<T, I, K, O> {
+public class CopyOnWriteRollbackActionExecutor<T extends HoodieRecordPayload<T>, I, K, O> extends BaseRollbackActionExecutor<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(CopyOnWriteRollbackActionExecutor.class);
 

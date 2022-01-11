@@ -45,7 +45,7 @@ import java.io.IOException;
 
 import static org.apache.hudi.data.HoodieJavaRDD.getJavaRDD;
 
-public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
+public abstract class HoodieSparkTable<T extends HoodieRecordPayload<T>>
     extends HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   private volatile boolean isMetadataTableExists = false;
@@ -54,11 +54,11 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
     super(config, context, metaClient);
   }
 
-  public static <T extends HoodieRecordPayload> HoodieSparkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
+  public static <T extends HoodieRecordPayload<T>> HoodieSparkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
     return create(config, context, false);
   }
 
-  public static <T extends HoodieRecordPayload> HoodieSparkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context,
+  public static <T extends HoodieRecordPayload<T>> HoodieSparkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context,
                                                                            boolean refreshTimeline) {
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
@@ -67,13 +67,13 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
     return HoodieSparkTable.create(config, (HoodieSparkEngineContext) context, metaClient, refreshTimeline);
   }
 
-  public static <T extends HoodieRecordPayload> HoodieSparkTable<T> create(HoodieWriteConfig config,
+  public static <T extends HoodieRecordPayload<T>> HoodieSparkTable<T> create(HoodieWriteConfig config,
                                                                            HoodieSparkEngineContext context,
                                                                            HoodieTableMetaClient metaClient) {
     return create(config, context, metaClient, false);
   }
 
-  public static <T extends HoodieRecordPayload> HoodieSparkTable<T> create(HoodieWriteConfig config,
+  public static <T extends HoodieRecordPayload<T>> HoodieSparkTable<T> create(HoodieWriteConfig config,
                                                                            HoodieSparkEngineContext context,
                                                                            HoodieTableMetaClient metaClient,
                                                                            boolean refreshTimeline) {

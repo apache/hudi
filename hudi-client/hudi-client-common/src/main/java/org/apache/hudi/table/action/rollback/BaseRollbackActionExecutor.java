@@ -50,7 +50,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieRollbackMetadata> {
+public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload<T>, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieRollbackMetadata> {
 
   private static final Logger LOG = LogManager.getLogger(BaseRollbackActionExecutor.class);
 

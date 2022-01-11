@@ -98,7 +98,7 @@ import java.util.stream.Stream;
  * @param <K> Type of keys
  * @param <O> Type of outputs
  */
-public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I, K, O> extends AbstractHoodieClient {
+public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload<T>, I, K, O> extends AbstractHoodieClient {
 
   protected static final String LOOKUP_STR = "lookup";
   private static final long serialVersionUID = 1L;

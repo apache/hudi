@@ -34,7 +34,7 @@ import org.apache.hadoop.fs.Path;
 /**
  * Base class for read operations done logically on the file group.
  */
-public abstract class HoodieReadHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieIOHandle<T, I, K, O> {
+public abstract class HoodieReadHandle<T extends HoodieRecordPayload<T>, I, K, O> extends HoodieIOHandle<T, I, K, O> {
 
   protected final Pair<String, String> partitionPathFilePair;
 

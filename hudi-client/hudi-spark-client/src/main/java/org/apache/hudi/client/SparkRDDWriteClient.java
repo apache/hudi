@@ -73,7 +73,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @SuppressWarnings("checkstyle:LineLength")
-public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
+public class SparkRDDWriteClient<T extends HoodieRecordPayload<T>> extends
     AbstractHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   private static final Logger LOG = LogManager.getLogger(SparkRDDWriteClient.class);

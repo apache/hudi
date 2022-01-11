@@ -40,7 +40,7 @@ import java.util.stream.Stream;
  *
  * @param <T>
  */
-public class HoodieKeyLocationFetchHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieReadHandle<T, I, K, O> {
+public class HoodieKeyLocationFetchHandle<T extends HoodieRecordPayload<T>, I, K, O> extends HoodieReadHandle<T, I, K, O> {
 
   private final Pair<String, HoodieBaseFile> partitionPathBaseFilePair;
   private final Option<BaseKeyGenerator> keyGeneratorOpt;

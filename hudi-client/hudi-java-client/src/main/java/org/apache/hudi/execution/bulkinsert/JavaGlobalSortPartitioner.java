@@ -32,7 +32,7 @@ import java.util.List;
  *
  * @param <T> HoodieRecordPayload type
  */
-public class JavaGlobalSortPartitioner<T extends HoodieRecordPayload>
+public class JavaGlobalSortPartitioner<T extends HoodieRecordPayload<T>>
     implements BulkInsertPartitioner<List<HoodieRecord<T>>> {
 
   @Override

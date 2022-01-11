@@ -34,7 +34,7 @@ import java.util.stream.Collectors;
  *
  * @param <T> HoodieRecordPayload type
  */
-public class JavaCustomColumnsSortPartitioner<T extends HoodieRecordPayload>
+public class JavaCustomColumnsSortPartitioner<T extends HoodieRecordPayload<T>>
     implements BulkInsertPartitioner<List<HoodieRecord<T>>> {
 
   private final String[] sortColumnNames;

@@ -30,7 +30,7 @@ import org.apache.spark.api.java.JavaRDD;
  *
  * @param <T> HoodieRecordPayload type
  */
-public class NonSortPartitioner<T extends HoodieRecordPayload>
+public class NonSortPartitioner<T extends HoodieRecordPayload<T>>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   @Override

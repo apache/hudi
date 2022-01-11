@@ -77,7 +77,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @SuppressWarnings("checkstyle:LineLength")
-public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
+public class HoodieFlinkWriteClient<T extends HoodieRecordPayload<T>> extends
     AbstractHoodieWriteClient<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkWriteClient.class);

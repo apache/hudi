@@ -49,7 +49,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
+public class HoodieCreateHandle<T extends HoodieRecordPayload<T>, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieCreateHandle.class);
 

@@ -34,7 +34,7 @@ import java.io.Serializable;
 /**
  * Pluggable implementation for writing data into new file groups based on ClusteringPlan.
  */
-public abstract class ClusteringExecutionStrategy<T extends HoodieRecordPayload, I, K, O> implements Serializable {
+public abstract class ClusteringExecutionStrategy<T extends HoodieRecordPayload<T>, I, K, O> implements Serializable {
   private static final Logger LOG = LogManager.getLogger(ClusteringExecutionStrategy.class);
 
   private final HoodieTable<T, I, K, O> hoodieTable;

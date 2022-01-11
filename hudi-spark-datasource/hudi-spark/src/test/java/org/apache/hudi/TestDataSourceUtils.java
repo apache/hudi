@@ -254,7 +254,7 @@ public class TestDataSourceUtils {
     assertThat(config.getUserDefinedBulkInsertPartitionerClass(), is(equalTo(partitionerClassName)));
   }
 
-  public static class NoOpBulkInsertPartitioner<T extends HoodieRecordPayload>
+  public static class NoOpBulkInsertPartitioner<T extends HoodieRecordPayload<T>>
       implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
     public NoOpBulkInsertPartitioner(HoodieWriteConfig config) {}

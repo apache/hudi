@@ -35,7 +35,7 @@ import org.apache.avro.Schema;
 import java.util.Iterator;
 import java.util.List;
 
-public class JavaLazyInsertIterable<T extends HoodieRecordPayload> extends HoodieLazyInsertIterable<T> {
+public class JavaLazyInsertIterable<T extends HoodieRecordPayload<T>> extends HoodieLazyInsertIterable<T> {
   public JavaLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,
                                 boolean areRecordsSorted,
                                 HoodieWriteConfig config,

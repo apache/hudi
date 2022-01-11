@@ -65,7 +65,7 @@ import java.util.stream.Stream;
  * <p>
  * 2) It bounds the growth of the files in the file system
  */
-public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Serializable {
+public class CleanPlanner<T extends HoodieRecordPayload<T>, I, K, O> implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(CleanPlanner.class);
 

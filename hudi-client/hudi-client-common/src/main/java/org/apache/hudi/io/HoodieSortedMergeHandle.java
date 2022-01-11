@@ -45,7 +45,7 @@ import java.util.Queue;
  * The implementation performs a merge-sort by comparing the key of the record being written to the list of
  * keys in newRecordKeys (sorted in-memory).
  */
-public class HoodieSortedMergeHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
+public class HoodieSortedMergeHandle<T extends HoodieRecordPayload<T>, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
 
   private Queue<String> newRecordKeysSorted = new PriorityQueue<>();
 

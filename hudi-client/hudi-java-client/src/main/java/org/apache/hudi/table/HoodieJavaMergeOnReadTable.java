@@ -38,7 +38,7 @@ import org.apache.hudi.table.action.deltacommit.JavaUpsertPreppedDeltaCommitActi
 import java.util.List;
 import java.util.Map;
 
-public class HoodieJavaMergeOnReadTable<T extends HoodieRecordPayload> extends HoodieJavaCopyOnWriteTable<T> {
+public class HoodieJavaMergeOnReadTable<T extends HoodieRecordPayload<T>> extends HoodieJavaCopyOnWriteTable<T> {
   protected HoodieJavaMergeOnReadTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
   }

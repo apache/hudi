@@ -55,7 +55,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieCleanMetadata> {
+public class CleanActionExecutor<T extends HoodieRecordPayload<T>, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieCleanMetadata> {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(CleanActionExecutor.class);

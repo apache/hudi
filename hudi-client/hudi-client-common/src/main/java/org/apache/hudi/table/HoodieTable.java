@@ -98,7 +98,7 @@ import java.util.stream.Stream;
  * @param <K> Type of keys
  * @param <O> Type of outputs
  */
-public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implements Serializable {
+public abstract class HoodieTable<T extends HoodieRecordPayload<T>, I, K, O> implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieTable.class);
 

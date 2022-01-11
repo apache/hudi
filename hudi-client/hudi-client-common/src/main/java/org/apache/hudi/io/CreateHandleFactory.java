@@ -25,7 +25,7 @@ import org.apache.hudi.table.HoodieTable;
 
 import java.io.Serializable;
 
-public class CreateHandleFactory<T extends HoodieRecordPayload, I, K, O> extends WriteHandleFactory<T, I, K, O> implements Serializable {
+public class CreateHandleFactory<T extends HoodieRecordPayload<T>, I, K, O> extends WriteHandleFactory<T, I, K, O> implements Serializable {
 
   private boolean preserveMetadata = false;
 

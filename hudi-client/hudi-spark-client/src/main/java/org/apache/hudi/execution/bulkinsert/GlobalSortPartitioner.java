@@ -31,7 +31,7 @@ import org.apache.spark.api.java.JavaRDD;
  *
  * @param <T> HoodieRecordPayload type
  */
-public class GlobalSortPartitioner<T extends HoodieRecordPayload>
+public class GlobalSortPartitioner<T extends HoodieRecordPayload<T>>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   @Override

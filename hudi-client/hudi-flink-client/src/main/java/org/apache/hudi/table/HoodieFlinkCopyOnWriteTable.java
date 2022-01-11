@@ -81,7 +81,7 @@ import java.util.Map;
  * <p>
  * UPDATES - Produce a new version of the file, just replacing the updated records with new values
  */
-public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
+public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload<T>>
     extends HoodieFlinkTable<T> implements HoodieCompactionHandler<T> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkCopyOnWriteTable.class);

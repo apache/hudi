@@ -34,7 +34,7 @@ import java.util.Map;
  *
  * @param <T> HoodieRecordPayload type.
  */
-public interface HoodieCompactionHandler<T extends HoodieRecordPayload> {
+public interface HoodieCompactionHandler<T extends HoodieRecordPayload<T>> {
   Iterator<List<WriteStatus>> handleUpdate(String instantTime, String partitionPath, String fileId,
                                            Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException;
 

@@ -52,7 +52,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *  1. Records should be added in order of keys
  *  2. There are no column stats
  */
-public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedRecord>
+public class HoodieHFileWriter<T extends HoodieRecordPayload<T>, R extends IndexedRecord>
     implements HoodieFileWriter<R> {
   private static AtomicLong recordIndex = new AtomicLong(1);
 

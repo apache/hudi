@@ -38,7 +38,7 @@ import org.apache.spark.api.java.JavaRDD;
  * a normal commit
  */
 @SuppressWarnings("checkstyle:LineLength")
-public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
+public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload<T>>
     extends HoodieCompactor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   @Override

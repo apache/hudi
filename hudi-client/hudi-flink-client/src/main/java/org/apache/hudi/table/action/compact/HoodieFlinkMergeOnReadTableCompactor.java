@@ -38,7 +38,7 @@ import java.util.List;
  * <p>Note: the compaction logic is invoked through the flink pipeline.
  */
 @SuppressWarnings("checkstyle:LineLength")
-public class HoodieFlinkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
+public class HoodieFlinkMergeOnReadTableCompactor<T extends HoodieRecordPayload<T>>
     extends HoodieCompactor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
 
   @Override

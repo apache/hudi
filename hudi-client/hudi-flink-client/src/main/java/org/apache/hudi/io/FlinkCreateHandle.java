@@ -48,7 +48,7 @@ import java.util.List;
  *
  * @see FlinkMergeAndReplaceHandle
  */
-public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
+public class FlinkCreateHandle<T extends HoodieRecordPayload<T>, I, K, O>
     extends HoodieCreateHandle<T, I, K, O> implements MiniBatchHandle {
 
   private static final Logger LOG = LogManager.getLogger(FlinkCreateHandle.class);

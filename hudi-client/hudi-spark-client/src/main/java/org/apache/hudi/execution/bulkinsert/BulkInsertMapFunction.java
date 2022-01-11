@@ -34,7 +34,7 @@ import java.util.List;
 /**
  * Map function that handles a stream of HoodieRecords.
  */
-public class BulkInsertMapFunction<T extends HoodieRecordPayload>
+public class BulkInsertMapFunction<T extends HoodieRecordPayload<T>>
     implements Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<List<WriteStatus>>> {
 
   private String instantTime;

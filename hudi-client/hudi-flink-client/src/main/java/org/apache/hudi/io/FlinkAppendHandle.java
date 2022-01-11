@@ -44,7 +44,7 @@ import java.util.List;
  * <p>The back-up writer may rollover on condition(for e.g, the filesystem does not support append
  * or the file size hits the configured threshold).
  */
-public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
+public class FlinkAppendHandle<T extends HoodieRecordPayload<T>, I, K, O>
     extends HoodieAppendHandle<T, I, K, O> implements MiniBatchHandle {
 
   private static final Logger LOG = LoggerFactory.getLogger(FlinkAppendHandle.class);

@@ -79,7 +79,7 @@ import java.util.Map;
 
 import static org.apache.hudi.common.util.ClusteringUtils.getAllFileGroupsInPendingClusteringPlans;
 
-public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayload> extends
+public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayload<T>> extends
     BaseCommitActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, HoodieWriteMetadata> {
 
   private static final Logger LOG = LogManager.getLogger(BaseSparkCommitActionExecutor.class);

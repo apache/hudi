@@ -46,7 +46,7 @@ import java.util.stream.IntStream;
  * @param <T>
  */
 @SuppressWarnings("checkstyle:LineLength")
-public class SparkBulkInsertHelper<T extends HoodieRecordPayload, R> extends AbstractBulkInsertHelper<T, JavaRDD<HoodieRecord<T>>,
+public class SparkBulkInsertHelper<T extends HoodieRecordPayload<T>, R> extends AbstractBulkInsertHelper<T, JavaRDD<HoodieRecord<T>>,
     JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, R> {
 
   private SparkBulkInsertHelper() {

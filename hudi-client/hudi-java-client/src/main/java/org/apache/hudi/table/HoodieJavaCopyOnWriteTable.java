@@ -75,7 +75,7 @@ import javax.annotation.Nonnull;
 import java.util.List;
 import java.util.Map;
 
-public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
+public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload<T>>
     extends HoodieJavaTable<T> implements HoodieCompactionHandler<T> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieJavaCopyOnWriteTable.class);

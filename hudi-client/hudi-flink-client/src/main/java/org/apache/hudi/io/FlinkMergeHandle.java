@@ -51,7 +51,7 @@ import java.util.List;
  *
  * @see FlinkMergeAndReplaceHandle
  */
-public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
+public class FlinkMergeHandle<T extends HoodieRecordPayload<T>, I, K, O>
     extends HoodieMergeHandle<T, I, K, O>
     implements MiniBatchHandle {
 

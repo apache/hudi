@@ -50,7 +50,7 @@ import java.util.List;
 /**
  * Base class for all write operations logically performed at the file group level.
  */
-public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieIOHandle<T, I, K, O> {
+public abstract class HoodieWriteHandle<T extends HoodieRecordPayload<T>, I, K, O> extends HoodieIOHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieWriteHandle.class);
 

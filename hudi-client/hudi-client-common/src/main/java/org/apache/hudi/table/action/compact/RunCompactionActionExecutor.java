@@ -41,7 +41,7 @@ import java.io.IOException;
 import java.util.List;
 
 @SuppressWarnings("checkstyle:LineLength")
-public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
+public class RunCompactionActionExecutor<T extends HoodieRecordPayload<T>> extends
     BaseActionExecutor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, HoodieWriteMetadata<HoodieData<WriteStatus>>> {
 
   private final HoodieCompactor compactor;

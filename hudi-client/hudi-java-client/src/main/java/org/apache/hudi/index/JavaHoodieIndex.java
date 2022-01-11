@@ -34,7 +34,7 @@ import org.apache.hudi.table.HoodieTable;
 
 import java.util.List;
 
-public abstract class JavaHoodieIndex<T extends HoodieRecordPayload> extends HoodieIndex<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
+public abstract class JavaHoodieIndex<T extends HoodieRecordPayload<T>> extends HoodieIndex<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
   protected JavaHoodieIndex(HoodieWriteConfig config) {
     super(config);
   }

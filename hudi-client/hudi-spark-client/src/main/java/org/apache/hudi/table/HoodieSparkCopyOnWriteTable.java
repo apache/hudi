@@ -100,7 +100,7 @@ import java.util.stream.Collectors;
  * <p>
  * UPDATES - Produce a new version of the file, just replacing the updated records with new values
  */
-public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
+public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload<T>>
     extends HoodieSparkTable<T> implements HoodieCompactionHandler<T> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieSparkCopyOnWriteTable.class);

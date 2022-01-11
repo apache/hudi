@@ -41,7 +41,7 @@ import java.util.List;
 
 import static org.apache.hudi.common.data.HoodieList.getList;
 
-public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
+public abstract class HoodieFlinkTable<T extends HoodieRecordPayload<T>>
     extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>>
     implements ExplicitWriteHandleTable<T> {
 
@@ -49,7 +49,7 @@ public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
     super(config, context, metaClient);
   }
 
-  public static <T extends HoodieRecordPayload> HoodieFlinkTable<T> create(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
+  public static <T extends HoodieRecordPayload<T>> HoodieFlinkTable<T> create(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
@@ -57,13 +57,13 @@ public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
     return HoodieFlinkTable.create(config, context, metaClient);
   }
 
-  public static <T extends HoodieRecordPayload> HoodieFlinkTable<T> create(HoodieWriteConfig config,
+  public static <T extends HoodieRecordPayload<T>> HoodieFlinkTable<T> create(HoodieWriteConfig config,
                                                                            HoodieFlinkEngineContext context,
                                                                            HoodieTableMetaClient metaClient) {
     return HoodieFlinkTable.create(config, context, metaClient, config.isMetadataTableEnabled());
   }
 
-  public static <T extends HoodieRecordPayload> HoodieFlinkTable<T> create(HoodieWriteConfig config,
+  public static <T extends HoodieRecordPayload<T>> HoodieFlinkTable<T> create(HoodieWriteConfig config,
                                                                            HoodieFlinkEngineContext context,
                                                                            HoodieTableMetaClient metaClient,
                                                                            boolean refreshTimeline) {

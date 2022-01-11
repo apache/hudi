@@ -42,7 +42,7 @@ import java.util.Set;
 /**
  * Takes a bunch of keys and returns ones that are present in the file group.
  */
-public class HoodieKeyLookupHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieReadHandle<T, I, K, O> {
+public class HoodieKeyLookupHandle<T extends HoodieRecordPayload<T>, I, K, O> extends HoodieReadHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieKeyLookupHandle.class);
 

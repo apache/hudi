@@ -28,7 +28,7 @@ import java.io.Serializable;
 /**
  * Client will run one round of clustering.
  */
-public abstract class AbstractClusteringClient<T extends HoodieRecordPayload, I, K, O> implements Serializable {
+public abstract class AbstractClusteringClient<T extends HoodieRecordPayload<T>, I, K, O> implements Serializable {
 
   private static final long serialVersionUID = 1L;
 

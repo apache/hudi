@@ -36,7 +36,7 @@ import java.util.List;
  * compactions, passes it through a CompactionFilter and executes all the compactions and
  * writes a new version of base files and make a normal commit.
  */
-public class HoodieJavaMergeOnReadTableCompactor<T extends HoodieRecordPayload>
+public class HoodieJavaMergeOnReadTableCompactor<T extends HoodieRecordPayload<T>>
     extends HoodieCompactor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
 
   @Override

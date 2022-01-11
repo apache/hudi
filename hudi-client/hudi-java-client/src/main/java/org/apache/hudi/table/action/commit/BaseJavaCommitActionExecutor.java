@@ -64,7 +64,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload> extends
+public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload<T>> extends
     BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, HoodieWriteMetadata> {
 
   private static final Logger LOG = LogManager.getLogger(BaseJavaCommitActionExecutor.class);

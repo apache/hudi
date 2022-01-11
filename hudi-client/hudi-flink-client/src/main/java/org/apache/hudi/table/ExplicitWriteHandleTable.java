@@ -32,7 +32,7 @@ import java.util.List;
  * HoodieTable that need to pass in the
  * {@link org.apache.hudi.io.HoodieWriteHandle} explicitly.
  */
-public interface ExplicitWriteHandleTable<T extends HoodieRecordPayload> {
+public interface ExplicitWriteHandleTable<T extends HoodieRecordPayload<T>> {
   /**
    * Upsert a batch of new records into Hoodie table at the supplied instantTime.
    *

@@ -71,7 +71,7 @@ import java.util.stream.Collectors;
 /**
  * IO Operation to append data onto an existing file.
  */
-public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
+public class HoodieAppendHandle<T extends HoodieRecordPayload<T>, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieAppendHandle.class);
   // This acts as the sequenceID for records written

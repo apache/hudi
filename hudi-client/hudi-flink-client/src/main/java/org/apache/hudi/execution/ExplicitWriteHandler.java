@@ -30,7 +30,7 @@ import java.util.List;
 /**
  * Consumes stream of hoodie records from in-memory queue and writes to one explicit create handle.
  */
-public class ExplicitWriteHandler<T extends HoodieRecordPayload>
+public class ExplicitWriteHandler<T extends HoodieRecordPayload<T>>
     extends BoundedInMemoryQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {
 
   private final List<WriteStatus> statuses = new ArrayList<>();

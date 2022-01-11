@@ -41,7 +41,7 @@ import java.util.stream.Collectors;
 /**
  * Validator can be configured pre-commit. 
  */
-public abstract class SparkPreCommitValidator<T extends HoodieRecordPayload, I, K, O extends JavaRDD<WriteStatus>> {
+public abstract class SparkPreCommitValidator<T extends HoodieRecordPayload<T>, I, K, O extends JavaRDD<WriteStatus>> {
   private static final Logger LOG = LogManager.getLogger(SparkPreCommitValidator.class);
 
   private HoodieSparkTable<T> table;

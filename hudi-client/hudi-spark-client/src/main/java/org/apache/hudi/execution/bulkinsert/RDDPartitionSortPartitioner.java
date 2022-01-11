@@ -37,7 +37,7 @@ import scala.Tuple2;
  *
  * @param <T> HoodieRecordPayload type
  */
-public class RDDPartitionSortPartitioner<T extends HoodieRecordPayload>
+public class RDDPartitionSortPartitioner<T extends HoodieRecordPayload<T>>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   @Override

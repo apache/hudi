@@ -43,7 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCleanerPlan>> {
+public class CleanPlanActionExecutor<T extends HoodieRecordPayload<T>, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCleanerPlan>> {
 
   private static final Logger LOG = LogManager.getLogger(CleanPlanner.class);
 

@@ -65,7 +65,7 @@ import java.util.Map;
  * Users should ensure there are no duplicates when "insert" operation is used and if the respective config is enabled. So, above scenario should not
  * happen and every batch should have new records to be inserted. Above example is for illustration purposes only.
  */
-public class HoodieConcatHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
+public class HoodieConcatHandle<T extends HoodieRecordPayload<T>, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieConcatHandle.class);
   // a representation of incoming records that tolerates duplicate keys

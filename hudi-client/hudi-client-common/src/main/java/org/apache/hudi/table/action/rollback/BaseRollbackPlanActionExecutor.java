@@ -44,7 +44,7 @@ import java.util.List;
  * Base rollback plan action executor to assist in scheduling rollback requests. This phase serialized {@link HoodieRollbackPlan}
  * to rollback.requested instant.
  */
-public class BaseRollbackPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieRollbackPlan>> {
+public class BaseRollbackPlanActionExecutor<T extends HoodieRecordPayload<T>, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieRollbackPlan>> {
 
   private static final Logger LOG = LogManager.getLogger(BaseRollbackPlanActionExecutor.class);
 

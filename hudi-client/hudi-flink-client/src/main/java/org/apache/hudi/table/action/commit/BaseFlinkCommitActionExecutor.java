@@ -67,7 +67,7 @@ import java.util.stream.Collectors;
  * <p>Computing the records batch locations all at a time is a pressure to the engine,
  * we should avoid that in streaming system.
  */
-public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayload> extends
+public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayload<T>> extends
     BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, HoodieWriteMetadata> {
 
   private static final Logger LOG = LogManager.getLogger(BaseFlinkCommitActionExecutor.class);

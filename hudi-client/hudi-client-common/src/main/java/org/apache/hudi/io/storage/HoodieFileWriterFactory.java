@@ -45,7 +45,7 @@ import static org.apache.hudi.io.storage.HoodieHFileConfig.PREFETCH_ON_OPEN;
 
 public class HoodieFileWriterFactory {
 
-  public static <T extends HoodieRecordPayload, R extends IndexedRecord, I, K, O> HoodieFileWriter<R> getFileWriter(
+  public static <T extends HoodieRecordPayload<T>, R extends IndexedRecord, I, K, O> HoodieFileWriter<R> getFileWriter(
       String instantTime, Path path, HoodieTable<T, I, K, O> hoodieTable, HoodieWriteConfig config, Schema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     final String extension = FSUtils.getFileExtension(path.getName());
@@ -61,13 +61,13 @@ public class HoodieFileWriterFactory {
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
-  private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieFileWriter<R> newParquetFileWriter(
+  private static <T extends HoodieRecordPayload<T>, R extends IndexedRecord> HoodieFileWriter<R> newParquetFileWriter(
       String instantTime, Path path, HoodieWriteConfig config, Schema schema, HoodieTable hoodieTable,
       TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
     return newParquetFileWriter(instantTime, path, config, schema, hoodieTable, taskContextSupplier, populateMetaFields, populateMetaFields);
   }
 
-  private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieFileWriter<R> newParquetFileWriter(
+  private static <T extends HoodieRecordPayload<T>, R extends IndexedRecord> HoodieFileWriter<R> newParquetFileWriter(
       String instantTime, Path path, HoodieWriteConfig config, Schema schema, HoodieTable hoodieTable,
       TaskContextSupplier taskContextSupplier, boolean populateMetaFields, boolean enableBloomFilter) throws IOException {
     Option<BloomFilter> filter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
@@ -80,7 +80,7 @@ public class HoodieFileWriterFactory {
     return new HoodieParquetWriter<>(instantTime, path, parquetConfig, schema, taskContextSupplier, populateMetaFields);
   }
 
-  private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieFileWriter<R> newHFileFileWriter(
+  private static <T extends HoodieRecordPayload<T>, R extends IndexedRecord> HoodieFileWriter<R> newHFileFileWriter(
       String instantTime, Path path, HoodieWriteConfig config, Schema schema, HoodieTable hoodieTable,
       TaskContextSupplier taskContextSupplier) throws IOException {
 
@@ -92,7 +92,7 @@ public class HoodieFileWriterFactory {
     return new HoodieHFileWriter<>(instantTime, path, hfileConfig, schema, taskContextSupplier, config.populateMetaFields());
   }
 
-  private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieFileWriter<R> newOrcFileWriter(
+  private static <T extends HoodieRecordPayload<T>, R extends IndexedRecord> HoodieFileWriter<R> newOrcFileWriter(
       String instantTime, Path path, HoodieWriteConfig config, Schema schema, HoodieTable hoodieTable,
       TaskContextSupplier taskContextSupplier) throws IOException {
     BloomFilter filter = createBloomFilter(config);

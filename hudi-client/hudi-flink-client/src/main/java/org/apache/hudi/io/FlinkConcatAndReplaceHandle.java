@@ -41,7 +41,7 @@ import java.util.Iterator;
  * <P>The records iterator for super constructor is reset as empty thus the initialization for new records
  * does nothing. This handle keep the iterator for itself to override the write behavior.
  */
-public class FlinkConcatAndReplaceHandle<T extends HoodieRecordPayload, I, K, O>
+public class FlinkConcatAndReplaceHandle<T extends HoodieRecordPayload<T>, I, K, O>
     extends FlinkMergeAndReplaceHandle<T, I, K, O> {
   private static final Logger LOG = LoggerFactory.getLogger(FlinkConcatAndReplaceHandle.class);
 

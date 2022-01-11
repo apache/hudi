@@ -44,7 +44,7 @@ import java.util.List;
  * @param <K> Type of keys
  * @param <O> Type of outputs
  */
-public class CompactHelpers<T extends HoodieRecordPayload, I, K, O> {
+public class CompactHelpers<T extends HoodieRecordPayload<T>, I, K, O> {
 
   private static final CompactHelpers SINGLETON_INSTANCE = new CompactHelpers();
 

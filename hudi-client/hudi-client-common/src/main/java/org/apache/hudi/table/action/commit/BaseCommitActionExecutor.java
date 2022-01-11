@@ -55,7 +55,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I, K, O, R>
+public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>, I, K, O, R>
     extends BaseActionExecutor<T, I, K, O, R> {
 
   private static final Logger LOG = LogManager.getLogger(BaseCommitActionExecutor.class);

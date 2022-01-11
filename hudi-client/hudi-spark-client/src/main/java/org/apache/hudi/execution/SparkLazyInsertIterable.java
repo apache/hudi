@@ -33,7 +33,7 @@ import org.apache.hudi.table.HoodieTable;
 import java.util.Iterator;
 import java.util.List;
 
-public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends HoodieLazyInsertIterable<T> {
+public class SparkLazyInsertIterable<T extends HoodieRecordPayload<T>> extends HoodieLazyInsertIterable<T> {
 
   private boolean useWriterSchema;
 

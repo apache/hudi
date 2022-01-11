@@ -28,7 +28,7 @@ import java.io.IOException;
 /**
  * Extract range information for a given file slice.
  */
-public class HoodieRangeInfoHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieReadHandle<T, I, K, O> {
+public class HoodieRangeInfoHandle<T extends HoodieRecordPayload<T>, I, K, O> extends HoodieReadHandle<T, I, K, O> {
 
   public HoodieRangeInfoHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
       Pair<String, String> partitionPathFilePair) {
