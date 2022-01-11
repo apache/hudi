@@ -93,7 +93,9 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
           BaseFileWithLogsSplit baseFileWithLogsSplit = unsafeCast(split);
           return createHoodieRealtimeSplitUnchecked(baseFileWithLogsSplit, hoodieVirtualKeyInfoOpt);
         } else {
-          throw new IllegalStateException(String.format("Unrecognized type of split (%s)", split.getClass().getSimpleName()));
+          // Non-Hudi paths might result in just generic {@code FileSplit} being
+          // propagated up to this point
+          return split;
         }
       })
       .toArray(InputSplit[]::new);
