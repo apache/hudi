@@ -35,6 +35,8 @@ import org.apache.hudi.testutils.providers.SparkProvider;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
@@ -73,6 +75,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestHoodieRepairTool implements SparkProvider {
   @TempDir
   public static java.nio.file.Path tempDir;
+  private static final Logger LOG = LogManager.getLogger(TestHoodieRepairTool.class);
   // Instant time -> List<Pair<relativePartitionPath, fileId>>
   private static final Map<String, List<Pair<String, String>>> BASE_FILE_INFO = new HashMap<>();
   private static final Map<String, List<Pair<String, String>>> LOG_FILE_INFO = new HashMap<>();
@@ -317,10 +320,14 @@ public class TestHoodieRepairTool implements SparkProvider {
     List<String> restoreDanglingFileList = DANGLING_DATA_FILE_LIST.stream()
         .map(filePath -> new Path(basePath, filePath).toString())
         .collect(Collectors.toList());
+    LOG.error("ALL_FILE_ABSOLUTE_PATH_LIST: " + ALL_FILE_ABSOLUTE_PATH_LIST);
+    LOG.error("backupDanglingFileList: " + backupDanglingFileList);
     List<String> existingFileList = new ArrayList<>(ALL_FILE_ABSOLUTE_PATH_LIST);
     existingFileList.addAll(backupDanglingFileList);
     existingFileList.addAll(restoreDanglingFileList);
 
+    verifyFilesInFS(ALL_FILE_ABSOLUTE_PATH_LIST, restoreDanglingFileList);
+    verifyFilesInFS(backupDanglingFileList, Collections.emptyList());
     testRepairToolWithMode(
         Option.empty(), Option.empty(), HoodieRepairTool.Mode.UNDO.toString(),
         backupPath, true,

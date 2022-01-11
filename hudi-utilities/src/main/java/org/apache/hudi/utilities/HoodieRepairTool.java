@@ -259,14 +259,17 @@ public class HoodieRepairTool {
           FileSystem fs = FSUtils.getFs(destBasePath, conf.get());
           iterator.forEachRemaining(filePath -> {
             boolean success = false;
+            Path sourcePath = new Path(sourceBasePath, filePath);
             Path destPath = new Path(destBasePath, filePath);
             try {
               if (!fs.exists(destPath)) {
-                FileIOUtils.copy(fs, new Path(sourceBasePath, filePath), destPath);
+                FileIOUtils.copy(fs, sourcePath, destPath);
                 success = true;
               }
             } catch (IOException e) {
               // Copy Fail
+              LOG.error(String.format("Copying file fails: source [%s], destination [%s]",
+                  sourcePath, destPath));
             } finally {
               results.add(success);
             }
