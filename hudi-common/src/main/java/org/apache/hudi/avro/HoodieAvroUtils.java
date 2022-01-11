@@ -596,6 +596,7 @@ public class HoodieAvroUtils {
       if (columns.length == 1) {
         return HoodieAvroUtils.getNestedFieldVal(genericRecord, columns[0], true, consistentLogicalTimestampEnabled);
       } else {
+        // TODO this is inefficient, instead we can simply return array of Comparable
         StringBuilder sb = new StringBuilder();
         for (String col : columns) {
           sb.append(HoodieAvroUtils.getNestedFieldValAsString(genericRecord, col, true, consistentLogicalTimestampEnabled));
