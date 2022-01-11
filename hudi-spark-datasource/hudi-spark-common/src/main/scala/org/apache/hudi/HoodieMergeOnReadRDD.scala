@@ -54,7 +54,11 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
   private val preCombineField = tableState.preCombineField
   private val recordKeyFieldOpt = tableState.recordKeyFieldOpt
   private val payloadProps = if (preCombineField.isDefined) {
-    Some(HoodiePayloadConfig.newBuilder.withPayloadOrderingField(preCombineField.get).build.getProps)
+    val properties = HoodiePayloadConfig.newBuilder
+      .withPayloadOrderingField(preCombineField.get)
+      .withPayloadEventTimeField(preCombineField.get)
+      .build.getProps
+    Some(properties)
   } else {
     None
   }
@@ -62,7 +66,8 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     val mergeOnReadPartition = split.asInstanceOf[HoodieMergeOnReadPartition]
     val iter = mergeOnReadPartition.split match {
       case dataFileOnlySplit if dataFileOnlySplit.logPaths.isEmpty =>
-        read(dataFileOnlySplit.dataFile.get, requiredSchemaFileReader)
+        val rows = read(dataFileOnlySplit.dataFile.get, requiredSchemaFileReader)
+        extractRequiredSchema(rows)
       case logFileOnlySplit if logFileOnlySplit.dataFile.isEmpty =>
         logFileIterator(logFileOnlySplit, getConfig)
       case skipMergeSplit if skipMergeSplit.mergeType
@@ -115,6 +120,18 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       case r: InternalRow => Seq(r)
       case b: ColumnarBatch => b.rowIterator().asScala
     })
+    rows
+  }
+
+  private def extractRequiredSchema(iter: Iterator[InternalRow]): Iterator[InternalRow] = {
+    val tableAvroSchema = new Schema.Parser().parse(tableState.tableAvroSchema)
+    val requiredAvroSchema = new Schema.Parser().parse(tableState.requiredAvroSchema)
+    val requiredFieldPosition = tableState.requiredStructSchema
+      .map(f => tableAvroSchema.getField(f.name).pos()).toList
+    val unsafeProjection = UnsafeProjection.create(tableState.requiredStructSchema)
+    val rows = iter.map { row =>
+      unsafeProjection(createRowWithRequiredSchema(row, requiredFieldPosition))
+    }
     rows
   }
 
@@ -188,7 +205,8 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       @scala.annotation.tailrec
       override def hasNext: Boolean = {
         if (baseFileIterator.hasNext) {
-          recordToLoad = baseFileIterator.next()
+          val curRow = baseFileIterator.next()
+          recordToLoad = unsafeProjection(createRowWithRequiredSchema(curRow, requiredFieldPosition))
           true
         } else {
           if (logRecordsKeyIterator.hasNext) {
@@ -272,7 +290,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
             }
           } else {
             // No merge needed, load current row with required schema
-            recordToLoad = unsafeProjection(createRowWithRequiredSchema(curRow))
+            recordToLoad = unsafeProjection(createRowWithRequiredSchema(curRow, requiredFieldPosition))
             true
           }
         } else {
@@ -317,21 +335,6 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
         }
       }
 
-      private def createRowWithRequiredSchema(row: InternalRow): InternalRow = {
-        val rowToReturn = new SpecificInternalRow(tableState.requiredStructSchema)
-        val posIterator = requiredFieldPosition.iterator
-        var curIndex = 0
-        tableState.requiredStructSchema.foreach(
-          f => {
-            val curPos = posIterator.next()
-            val curField = if (row.isNullAt(curPos)) null else row.get(curPos, f.dataType)
-            rowToReturn.update(curIndex, curField)
-            curIndex = curIndex + 1
-          }
-        )
-        rowToReturn
-      }
-
       private def mergeRowWithLog(curRow: InternalRow, curKey: String) = {
         val historyAvroRecord = serializer.serialize(curRow).asInstanceOf[GenericRecord]
         if (payloadProps.isDefined) {
@@ -342,7 +345,23 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
         }
       }
     }
-}
+
+    private def createRowWithRequiredSchema(row: InternalRow, requiredFieldPosition: Seq[Int]): InternalRow = {
+      val rowToReturn = new SpecificInternalRow(tableState.requiredStructSchema)
+      val posIterator = requiredFieldPosition.iterator
+      var curIndex = 0
+      tableState.requiredStructSchema.foreach(
+        f => {
+          val curPos = posIterator.next()
+          val curField = if (row.isNullAt(curPos)) null else row.get(curPos, f.dataType)
+          rowToReturn.update(curIndex, curField)
+          curIndex = curIndex + 1
+        }
+      )
+      rowToReturn
+    }
+
+  }
 
 private object HoodieMergeOnReadRDD {
   val CONFIG_INSTANTIATION_LOCK = new Object()

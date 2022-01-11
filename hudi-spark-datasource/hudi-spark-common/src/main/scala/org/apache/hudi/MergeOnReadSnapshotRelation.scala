@@ -131,7 +131,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
       sparkSession = sqlContext.sparkSession,
       dataSchema = tableStructSchema,
       partitionSchema = StructType(Nil),
-      requiredSchema = requiredStructSchema,
+      requiredSchema = tableStructSchema,
       filters = filters,
       options = optParams,
       hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
