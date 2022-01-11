@@ -127,7 +127,7 @@ public class AvroToRowDataConverters {
       case TIME_WITHOUT_TIME_ZONE:
         return AvroToRowDataConverters::convertToTime;
       case TIMESTAMP_WITHOUT_TIME_ZONE:
-        return createTimestampConverter((TimestampType) type);
+        return createTimestampConverter(((TimestampType) type).getPrecision());
       case CHAR:
       case VARCHAR:
         return avroObject -> StringData.fromString(avroObject.toString());
@@ -202,8 +202,7 @@ public class AvroToRowDataConverters {
     };
   }
 
-  private static AvroToRowDataConverter createTimestampConverter(TimestampType timestampType) {
-    final int precision = timestampType.getPrecision();
+  private static AvroToRowDataConverter createTimestampConverter(int precision) {
     final ChronoUnit chronoUnit;
     if (precision <= 3) {
       chronoUnit = ChronoUnit.MILLIS;
@@ -216,21 +215,22 @@ public class AvroToRowDataConverters {
               + ", it only supports precision less than 6.");
     }
     return avroObject -> {
-      final long timestamp;
+      final Instant instant;
       if (avroObject instanceof Long) {
-        timestamp = (Long) avroObject;
+        instant = Instant.EPOCH.plus((Long) avroObject, chronoUnit);
       } else if (avroObject instanceof Instant) {
-        timestamp = ((Instant) avroObject).toEpochMilli();
+        instant = (Instant) avroObject;
       } else {
         JodaConverter jodaConverter = JodaConverter.getConverter();
         if (jodaConverter != null) {
-          timestamp = jodaConverter.convertTimestamp(avroObject);
+          // joda time has only millisecond precision
+          instant = Instant.ofEpochMilli(jodaConverter.convertTimestamp(avroObject));
         } else {
           throw new IllegalArgumentException(
               "Unexpected object type for TIMESTAMP logical type. Received: " + avroObject);
         }
       }
-      return TimestampData.fromInstant(Instant.EPOCH.plus(timestamp, chronoUnit));
+      return TimestampData.fromInstant(instant);
     };
   }
 
@@ -288,10 +288,9 @@ public class AvroToRowDataConverters {
   static class JodaConverter {
 
     private static JodaConverter instance;
-    private static boolean instantiated = false;
 
     public static JodaConverter getConverter() {
-      if (instantiated) {
+      if (instance != null) {
         return instance;
       }
 
@@ -303,8 +302,6 @@ public class AvroToRowDataConverters {
         instance = new JodaConverter();
       } catch (ClassNotFoundException e) {
         instance = null;
-      } finally {
-        instantiated = true;
       }
       return instance;
     }

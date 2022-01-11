@@ -549,18 +549,15 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
   @EnumSource(value = ExecMode.class)
   void testWriteAndReadWithTimestampMicros(ExecMode execMode) throws Exception {
     boolean streaming = execMode == ExecMode.STREAM;
-    String hoodieTableDDL = "create table t1(\n"
-        + "  id int,\n"
-        + "  name varchar(10),\n"
-        + "  dt timestamp(6)\n" // test streaming read with timestamp-micros
-        + ")\n"
-        + "with (\n"
-        + "  'connector' = 'hudi',\n"
-        + "  'path' = '" + tempFile.getAbsolutePath() + "',\n"
-        + "  'hoodie.datasource.write.recordkey.field' = 'id',\n"
-        + "  'write.precombine.field' = 'id',\n"
-        + "  'read.streaming.enabled' = '" + streaming + "'\n"
-        + ")";
+    String hoodieTableDDL = sql("t1")
+        .field("id int")
+        .field("name varchar(10)")
+        .field("ts timestamp(6)")
+        .pkField("id")
+        .noPartition()
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.READ_AS_STREAMING, streaming)
+        .end();
     streamTableEnv.executeSql(hoodieTableDDL);
     String insertInto = "insert into t1 values\n"
         + "(1,'Danny',TIMESTAMP '2021-12-01 01:02:01.100001'),\n"
@@ -576,7 +573,6 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
         + "+I[4, Fabian, 2021-12-04T15:16:04.400004]]";
 
     List<Row> result = execSelectSql(streamTableEnv, "select * from t1", execMode);
-
     assertRowsEquals(result, expected);
 
     // insert another batch of data

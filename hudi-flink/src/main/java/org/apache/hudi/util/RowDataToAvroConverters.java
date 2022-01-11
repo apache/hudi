@@ -154,8 +154,8 @@ public class RowDataToAvroConverters {
             };
         break;
       case TIMESTAMP_WITHOUT_TIME_ZONE:
-        TimestampType timestampType = (TimestampType) type;
-        if (timestampType.getPrecision() <= 3) {
+          final int precision = ((TimestampType) type).getPrecision();
+          if (precision <= 3) {
           converter =
               new RowDataToAvroConverter() {
                 private static final long serialVersionUID = 1L;
@@ -165,7 +165,7 @@ public class RowDataToAvroConverters {
                   return ((TimestampData) object).toInstant().toEpochMilli();
                 }
               };
-        } else if (timestampType.getPrecision() <= 6) {
+        } else if (precision <= 6) {
           converter =
               new RowDataToAvroConverter() {
                 private static final long serialVersionUID = 1L;
@@ -176,7 +176,7 @@ public class RowDataToAvroConverters {
                 }
               };
         } else {
-          throw new UnsupportedOperationException("Unsupported type: " + type);
+          throw new UnsupportedOperationException("Unsupported timestamp precision: " + precision);
         }
         break;
       case DECIMAL:

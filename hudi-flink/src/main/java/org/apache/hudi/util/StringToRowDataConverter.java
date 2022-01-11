@@ -110,8 +110,7 @@ public class StringToRowDataConverter {
                 decimalType.getPrecision(),
                 decimalType.getScale());
       default:
-        throw new UnsupportedOperationException(
-            "Unsupported type " + logicalType.getTypeRoot() + " for " + StringToRowDataConverter.class.getName());
+        throw new UnsupportedOperationException("Unsupported type: " + logicalType);
     }
   }
 }

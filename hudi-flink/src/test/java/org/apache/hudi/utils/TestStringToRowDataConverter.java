@@ -38,8 +38,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.temporal.ChronoField;
-import java.time.temporal.ChronoUnit;
-import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -109,17 +107,5 @@ public class TestStringToRowDataConverter {
       converted.setField(i, convertedKeys[i]);
     }
     assertThat(converted, is(rowData));
-  }
-
-  private long timestampDataToLong(TimestampData timestamp, ChronoUnit unit) {
-    final Instant instant = timestamp.toInstant();
-    switch (unit) {
-      case MILLIS:
-        return instant.toEpochMilli();
-      case MICROS:
-        return TimeUnit.SECONDS.toMicros(instant.getEpochSecond()) + instant.getLong(ChronoField.MICRO_OF_SECOND);
-      default:
-        return instant.toEpochMilli();
-    }
   }
 }

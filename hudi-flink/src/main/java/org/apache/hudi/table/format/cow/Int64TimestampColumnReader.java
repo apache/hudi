@@ -112,6 +112,7 @@ public class Int64TimestampColumnReader extends AbstractColumnReader<WritableTim
     if (utcTimestamp) {
       return TimestampData.fromInstant(instant);
     } else {
+      // this applies the local timezone
       return TimestampData.fromTimestamp(Timestamp.from(instant));
     }
   }
