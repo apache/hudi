@@ -30,10 +30,8 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
-import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -56,10 +54,6 @@ public class HoodieParquetInputFormat extends HoodieFileInputFormatBase implemen
   // NOTE: We're only using {@code MapredParquetInputFormat} to compose vectorized
   //       {@code RecordReader}
   private final MapredParquetInputFormat mapredParquetInputFormat = new MapredParquetInputFormat();
-
-  protected HoodieDefaultTimeline filterInstantsTimeline(HoodieDefaultTimeline timeline) {
-    return HoodieInputFormatUtils.filterInstantsTimeline(timeline);
-  }
 
   protected boolean includeLogFilesForSnapshotView() {
     return false;
