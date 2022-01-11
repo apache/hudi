@@ -357,11 +357,13 @@ public class TestHoodieRepairTool implements SparkProvider {
     FileSystem fs = metaClient.getFs();
 
     for (String filePath : existFilePathList) {
-      assertTrue(fs.exists(new Path(filePath)));
+      assertTrue(fs.exists(new Path(filePath)),
+          String.format("File %s should exist but it's not in the file system", filePath));
     }
 
     for (String filePath : nonExistFilePathList) {
-      assertFalse(fs.exists(new Path(filePath)));
+      assertFalse(fs.exists(new Path(filePath)),
+          String.format("File %s should not exist but it's in the file system", filePath));
     }
   }
 
