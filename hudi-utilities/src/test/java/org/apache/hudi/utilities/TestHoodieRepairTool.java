@@ -104,7 +104,7 @@ public class TestHoodieRepairTool implements SparkProvider {
     long randomLong = random.nextLong();
     backupTempDir = Paths.get("/tmp/test_backup_" + randomLong);
     HoodieTestCommitGenerator.setupTimelineInFS(
-        basePath, BASE_FILE_INFO, LOG_FILE_INFO, INSTANT_INFO_MAP);
+        metaClient.getFs(), basePath, BASE_FILE_INFO, LOG_FILE_INFO, INSTANT_INFO_MAP);
     ALL_FILE_ABSOLUTE_PATH_LIST.addAll(INSTANT_INFO_MAP.entrySet().stream()
         .flatMap(e -> e.getValue().entrySet().stream()
             .flatMap(partition -> partition.getValue().stream()
@@ -376,6 +376,7 @@ public class TestHoodieRepairTool implements SparkProvider {
 
   private List<String> createDanglingDataFilesInFS(String parentPath) {
     FileSystem fs = metaClient.getFs();
+    LOG.error("FileSystem: " + fs);
     return DANGLING_DATA_FILE_LIST.stream().map(relativeFilePath -> {
       Path path = new Path(parentPath, relativeFilePath);
       try {
@@ -384,7 +385,7 @@ public class TestHoodieRepairTool implements SparkProvider {
           fs.create(path, false);
         }
       } catch (IOException e) {
-        e.printStackTrace();
+        LOG.error("Error creating file: " + path);
       }
       return path.toString();
     })

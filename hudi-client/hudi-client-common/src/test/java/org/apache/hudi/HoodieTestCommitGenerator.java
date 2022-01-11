@@ -31,7 +31,10 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -49,6 +52,7 @@ import static org.apache.hudi.common.table.log.HoodieLogFormat.DEFAULT_WRITE_TOK
 public class HoodieTestCommitGenerator {
   public static final String BASE_FILE_WRITE_TOKEN = "1-0-1";
   public static final String LOG_FILE_WRITE_TOKEN = DEFAULT_WRITE_TOKEN;
+  private static final Logger LOG = LogManager.getLogger(HoodieTestCommitGenerator.class);
 
   public static void initCommitInfoForRepairTests(
       Map<String, List<Pair<String, String>>> baseFileInfo,
@@ -74,7 +78,7 @@ public class HoodieTestCommitGenerator {
   }
 
   public static void setupTimelineInFS(
-      String basePath,
+      FileSystem fs, String basePath,
       Map<String, List<Pair<String, String>>> baseFileInfo,
       Map<String, List<Pair<String, String>>> logFileInfo,
       Map<String, Map<String, List<Pair<String, String>>>> instantInfoMap) throws IOException {
@@ -120,10 +124,12 @@ public class HoodieTestCommitGenerator {
     for (String partitionPath : partitionPathToFileIdAndNameMap.keySet()) {
       partitionPathToFileIdAndNameMap.get(partitionPath)
           .forEach(fileInfo -> {
+            String filename = fileInfo.getValue();
             try {
-              createDataFile(basePath, partitionPath, fileInfo.getValue(), 1000);
+              createDataFile(basePath, new Configuration(), partitionPath, filename);
             } catch (IOException e) {
-              e.printStackTrace();
+              LOG.error(String.format("Failed to create data file: %s/%s/%s",
+                  basePath, partitionPath, filename));
             }
           });
     }
@@ -164,12 +170,16 @@ public class HoodieTestCommitGenerator {
   }
 
   public static void createDataFile(
-      String basePath, String partitionPath, String filename, long length) throws IOException {
-    java.nio.file.Path parentPath = Paths.get(basePath, partitionPath);
-    Files.createDirectories(parentPath);
-    java.nio.file.Path baseFilePath = parentPath.resolve(filename);
-    if (Files.notExists(baseFilePath)) {
-      Files.createFile(baseFilePath);
+      String basePath, Configuration configuration,
+      String partitionPath, String filename) throws IOException {
+    FileSystem fs = FSUtils.getFs(basePath, configuration);
+    Path filePath = new Path(new Path(basePath, partitionPath), filename);
+    Path parent = filePath.getParent();
+    if (!fs.exists(parent)) {
+      fs.mkdirs(parent);
+    }
+    if (!fs.exists(filePath)) {
+      fs.create(filePath);
     }
   }
 }
