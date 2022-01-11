@@ -41,6 +41,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+import scala.Function0;
 import scala.collection.JavaConverters;
 import scala.collection.Seq;
 
@@ -231,8 +232,12 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
     }
   }
 
-  private static Option<HoodieInstant> fromScala(scala.Option<HoodieInstant> option) {
-    return Option.ofNullable(option.getOrElse(() -> (HoodieInstant) null));
+  private static Option<HoodieInstant> fromScala(scala.Option<HoodieInstant> opt) {
+    if (opt.isDefined()) {
+      return Option.of(opt.get());
+    }
+
+    return Option.empty();
   }
 
   @Nonnull
