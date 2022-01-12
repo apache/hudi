@@ -68,3 +68,4 @@ The list of all RFCs can be found here.
 | 42 | [Consistent Hashing Index](./rfc-42/rfc-42.md) | `UNDER REVIEW` |
 | 43 | [Compaction / Clustering Service](./rfc-43/rfc-43.md) | `UNDER REVIEW` |
 | 44 | [Hudi Connector for Presto](./rfc-44/rfc-44.md) | `UNDER REVIEW` |
+| 45 | [Asynchronous Metadata Indexing](./rfc-45/rfc-45.md) | `UNDER REVIEW` |
