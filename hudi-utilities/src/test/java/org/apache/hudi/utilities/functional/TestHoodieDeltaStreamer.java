@@ -745,9 +745,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     });
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testDeltaSyncWithPendingClustering(Boolean retryPendingClustering) throws Exception {
+  @Test
+  public void testDeltaSyncWithPendingClustering() throws Exception {
+    Boolean retryPendingClustering = true;
     String tableBasePath = dfsBasePath + "/inlineClusteringPending";
     // ingest data
     int totalRecords = 2000;
@@ -768,12 +768,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     meta.getActiveTimeline().transitionReplaceRequestedToInflight(clusteringRequest, Option.empty());
 
     // do another ingestion with inline clustering enabled
-    cfg.configs.addAll(getAsyncServicesConfigs(totalRecords, "false", "true", "1", "", ""));
+    cfg.configs.addAll(getAsyncServicesConfigs(totalRecords, "false", "true", "10", "", ""));
     if (retryPendingClustering) {
       cfg.retryLastPendingInlineClusteringJob = true;
       HoodieDeltaStreamer ds2 = new HoodieDeltaStreamer(cfg, jsc);
       ds2.sync();
-      String completeClusteringTimeStamp = meta.getActiveTimeline().reload().getCompletedReplaceTimeline().lastInstant().get().getTimestamp();
+      String completeClusteringTimeStamp = meta.reloadActiveTimeline().getCompletedReplaceTimeline().lastInstant().get().getTimestamp();
       assertEquals(clusteringRequest.getTimestamp(), completeClusteringTimeStamp);
       TestHelpers.assertAtLeastNCommits(2, tableBasePath, dfs);
       TestHelpers.assertAtLeastNReplaceCommits(1, tableBasePath, dfs);
