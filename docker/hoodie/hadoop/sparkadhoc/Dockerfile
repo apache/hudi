@@ -31,6 +31,20 @@ ENV PRESTO_VERSION ${PRESTO_VERSION}
 ENV TRINO_VERSION ${TRINO_VERSION}
 ENV BASE_URL=https://repo1.maven.org/maven2
 
+RUN apt-get update
+RUN apt-get install -y \
+    curl \
+    tar \
+    sudo \
+    rsync \
+    python \
+    wget \
+    python3-pip \
+    python-dev \
+    build-essential \
+    uuid-runtime \
+    less
+
 RUN set -x \
     ## presto-client
     && wget -q -O /usr/local/bin/presto ${BASE_URL}/com/facebook/presto/presto-cli/${PRESTO_VERSION}/presto-cli-${PRESTO_VERSION}-executable.jar \
