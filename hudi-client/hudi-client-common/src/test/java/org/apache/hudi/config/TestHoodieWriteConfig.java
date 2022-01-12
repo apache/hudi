@@ -18,6 +18,10 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass;
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
+import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.config.HoodieWriteConfig.Builder;
@@ -30,13 +34,19 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.function.Function;
 
+import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
+import static org.apache.hudi.config.HoodieCompactionConfig.ASYNC_CLEAN;
+import static org.apache.hudi.config.HoodieCompactionConfig.AUTO_CLEAN;
+import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieWriteConfig {
@@ -102,6 +112,98 @@ public class TestHoodieWriteConfig {
             EngineType.SPARK, MarkerType.TIMELINE_SERVER_BASED,
             EngineType.FLINK, MarkerType.DIRECT,
             EngineType.JAVA, MarkerType.DIRECT));
+  }
+
+  @Test
+  public void testDefaultLockProviderWhenAsyncServicesEnabled() {
+    final String inProcessLockProviderClassName = InProcessLockProvider.class.getCanonicalName();
+
+    // Any async clustering enabled should use InProcess lock provider
+    // as default when no other lock provider is set.
+
+    // 1. Async clustering
+    HoodieWriteConfig writeConfig = createWriteConfig(new HashMap<String, String>() {
+      {
+        put(ASYNC_CLUSTERING_ENABLE.key(), "true");
+        put(INLINE_COMPACT.key(), "true");
+        put(AUTO_CLEAN.key(), "true");
+        put(ASYNC_CLEAN.key(), "false");
+      }
+    });
+    assertTrue(writeConfig.areAnyTableServicesAsync());
+    assertEquals(inProcessLockProviderClassName, writeConfig.getLockProviderClass());
+
+    // 2. Async clean
+    writeConfig = createWriteConfig(new HashMap<String, String>() {
+      {
+        put(ASYNC_CLUSTERING_ENABLE.key(), "false");
+        put(INLINE_COMPACT.key(), "true");
+        put(AUTO_CLEAN.key(), "true");
+        put(ASYNC_CLEAN.key(), "true");
+      }
+    });
+    assertTrue(writeConfig.areAnyTableServicesAsync());
+    assertEquals(inProcessLockProviderClassName, writeConfig.getLockProviderClass());
+
+    // 3. Async compaction
+    writeConfig = createWriteConfig(new HashMap<String, String>() {
+      {
+        put(ASYNC_CLUSTERING_ENABLE.key(), "false");
+        put(INLINE_COMPACT.key(), "false");
+        put(AUTO_CLEAN.key(), "true");
+        put(ASYNC_CLEAN.key(), "false");
+      }
+    });
+    assertTrue(writeConfig.areAnyTableServicesAsync());
+    assertEquals(inProcessLockProviderClassName, writeConfig.getLockProviderClass());
+
+    // 4. All inline services
+    writeConfig = createWriteConfig(new HashMap<String, String>() {
+      {
+        put(ASYNC_CLUSTERING_ENABLE.key(), "false");
+        put(INLINE_COMPACT.key(), "true");
+        put(AUTO_CLEAN.key(), "true");
+        put(ASYNC_CLEAN.key(), "false");
+      }
+    });
+    assertFalse(writeConfig.areAnyTableServicesAsync());
+    assertTrue(writeConfig.areAnyTableServicesInline());
+    assertEquals(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue(), writeConfig.getLockProviderClass());
+
+    // 5. User override for the lock provider should always take the precedence
+    writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(FileSystemBasedLockProviderTestClass.class)
+            .build())
+        .build();
+    assertEquals(FileSystemBasedLockProviderTestClass.class.getName(), writeConfig.getLockProviderClass());
+
+    // 6. User can set the lock provider via properties
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), ZookeeperBasedLockProvider.class.getName());
+    writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withProperties(properties)
+        .build();
+    assertEquals(ZookeeperBasedLockProvider.class.getName(), writeConfig.getLockProviderClass());
+
+    // Default config should have default lock provider
+    writeConfig = createWriteConfig(Collections.emptyMap());
+    if (!writeConfig.areAnyTableServicesAsync()) {
+      assertEquals(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue(), writeConfig.getLockProviderClass());
+    } else {
+      assertEquals(inProcessLockProviderClassName, writeConfig.getLockProviderClass());
+    }
+  }
+
+  private HoodieWriteConfig createWriteConfig(Map<String, String> configs) {
+    final Properties properties = new Properties();
+    configs.forEach(properties::setProperty);
+    return HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withProperties(properties)
+        .build();
   }
 
   private ByteArrayOutputStream saveParamsIntoOutputStream(Map<String, String> params) throws IOException {

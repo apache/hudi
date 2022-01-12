@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.spark.sql.Row
 
@@ -352,7 +353,7 @@ class TestMergeIntoTable2 extends TestHoodieSqlBase {
            | when not matched and flag = '1' then insert *
            |""".stripMargin
 
-      if (HoodieSqlUtils.isSpark3) {
+      if (HoodieSparkUtils.isSpark3) {
         checkExceptionContain(mergeSql)("Columns aliases are not allowed in MERGE")
       } else {
         spark.sql(mergeSql)

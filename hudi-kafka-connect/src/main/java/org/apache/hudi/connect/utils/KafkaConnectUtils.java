@@ -32,6 +32,8 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.connect.ControlMessage;
 import org.apache.hudi.connect.writers.KafkaConnectConfigs;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hive.HiveSyncConfig;
+import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.CustomAvroKeyGenerator;
 import org.apache.hudi.keygen.CustomKeyGenerator;
@@ -49,9 +51,15 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.FileVisitOption;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -65,6 +73,52 @@ public class KafkaConnectUtils {
 
   private static final Logger LOG = LogManager.getLogger(KafkaConnectUtils.class);
   private static final String HOODIE_CONF_PREFIX = "hoodie.";
+  public static final String HADOOP_CONF_DIR = "HADOOP_CONF_DIR";
+  public static final String HADOOP_HOME = "HADOOP_HOME";
+  private static final List<Path> DEFAULT_HADOOP_CONF_FILES;
+
+  static {
+    DEFAULT_HADOOP_CONF_FILES = new ArrayList<>();
+    try {
+      String hadoopConfigPath = System.getenv(HADOOP_CONF_DIR);
+      String hadoopHomePath = System.getenv(HADOOP_HOME);
+      DEFAULT_HADOOP_CONF_FILES.addAll(getHadoopConfigFiles(hadoopConfigPath, hadoopHomePath));
+      if (!DEFAULT_HADOOP_CONF_FILES.isEmpty()) {
+        LOG.info(String.format("Found Hadoop default config files %s", DEFAULT_HADOOP_CONF_FILES));
+      }
+    } catch (IOException e) {
+      LOG.error("An error occurred while getting the default Hadoop configuration. "
+              + "Please use hadoop.conf.dir or hadoop.home to configure Hadoop environment variables", e);
+    }
+  }
+
+  /**
+   * Get hadoop config files by HADOOP_CONF_DIR or HADOOP_HOME
+   */
+  public static List<Path> getHadoopConfigFiles(String hadoopConfigPath, String hadoopHomePath)
+          throws IOException {
+    List<Path> hadoopConfigFiles = new ArrayList<>();
+    if (!StringUtils.isNullOrEmpty(hadoopConfigPath)) {
+      hadoopConfigFiles.addAll(walkTreeForXml(Paths.get(hadoopConfigPath)));
+    }
+    if (hadoopConfigFiles.isEmpty() && !StringUtils.isNullOrEmpty(hadoopHomePath)) {
+      hadoopConfigFiles.addAll(walkTreeForXml(Paths.get(hadoopHomePath, "etc", "hadoop")));
+    }
+    return hadoopConfigFiles;
+  }
+
+  /**
+   * Files walk to find xml
+   */
+  private static List<Path> walkTreeForXml(Path basePath) throws IOException {
+    if (Files.notExists(basePath)) {
+      return new ArrayList<>();
+    }
+    return Files.walk(basePath, FileVisitOption.FOLLOW_LINKS)
+            .filter(path -> path.toFile().isFile())
+            .filter(path -> path.toString().endsWith(".xml"))
+            .collect(Collectors.toList());
+  }
 
   public static int getLatestNumPartitions(String bootstrapServers, String topicName) {
     Properties props = new Properties();
@@ -89,6 +143,23 @@ public class KafkaConnectUtils {
    */
   public static Configuration getDefaultHadoopConf(KafkaConnectConfigs connectConfigs) {
     Configuration hadoopConf = new Configuration();
+
+    // add hadoop config files
+    if (!StringUtils.isNullOrEmpty(connectConfigs.getHadoopConfDir())
+            || !StringUtils.isNullOrEmpty(connectConfigs.getHadoopConfHome())) {
+      try {
+        List<Path> configFiles = getHadoopConfigFiles(connectConfigs.getHadoopConfDir(),
+                connectConfigs.getHadoopConfHome());
+        configFiles.forEach(f ->
+                hadoopConf.addResource(new org.apache.hadoop.fs.Path(f.toAbsolutePath().toUri())));
+      } catch (Exception e) {
+        throw new HoodieException("Failed to read hadoop configuration!", e);
+      }
+    } else {
+      DEFAULT_HADOOP_CONF_FILES.forEach(f ->
+              hadoopConf.addResource(new org.apache.hadoop.fs.Path(f.toAbsolutePath().toUri())));
+    }
+
     connectConfigs.getProps().keySet().stream().filter(prop -> {
       // In order to prevent printing unnecessary warn logs, here filter out the hoodie
       // configuration items before passing to hadoop/hive configs
@@ -197,5 +268,33 @@ public class KafkaConnectUtils {
   public static List<WriteStatus> getWriteStatuses(ControlMessage.ParticipantInfo participantInfo) {
     ControlMessage.ConnectWriteStatus connectWriteStatus = participantInfo.getWriteStatus();
     return SerializationUtils.deserialize(connectWriteStatus.getSerializedWriteStatus().toByteArray());
+  }
+
+  /**
+   * Build Hive Sync Config
+   * Note: This method is a temporary solution.
+   * Future solutions can be referred to: https://issues.apache.org/jira/browse/HUDI-3199
+   */
+  public static HiveSyncConfig buildSyncConfig(TypedProperties props, String tableBasePath) {
+    HiveSyncConfig hiveSyncConfig = new HiveSyncConfig();
+    hiveSyncConfig.basePath = tableBasePath;
+    hiveSyncConfig.usePreApacheInputFormat = props.getBoolean(KafkaConnectConfigs.HIVE_USE_PRE_APACHE_INPUT_FORMAT, false);
+    hiveSyncConfig.databaseName = props.getString(KafkaConnectConfigs.HIVE_DATABASE, "default");
+    hiveSyncConfig.tableName = props.getString(KafkaConnectConfigs.HIVE_TABLE, "");
+    hiveSyncConfig.hiveUser = props.getString(KafkaConnectConfigs.HIVE_USER, "");
+    hiveSyncConfig.hivePass = props.getString(KafkaConnectConfigs.HIVE_PASS, "");
+    hiveSyncConfig.jdbcUrl = props.getString(KafkaConnectConfigs.HIVE_URL, "");
+    hiveSyncConfig.partitionFields = props.getStringList(KafkaConnectConfigs.HIVE_PARTITION_FIELDS, ",", Collections.emptyList());
+    hiveSyncConfig.partitionValueExtractorClass =
+            props.getString(KafkaConnectConfigs.HIVE_PARTITION_EXTRACTOR_CLASS, SlashEncodedDayPartitionValueExtractor.class.getName());
+    hiveSyncConfig.useJdbc = props.getBoolean(KafkaConnectConfigs.HIVE_USE_JDBC, true);
+    if (props.containsKey(KafkaConnectConfigs.HIVE_SYNC_MODE)) {
+      hiveSyncConfig.syncMode = props.getString(KafkaConnectConfigs.HIVE_SYNC_MODE);
+    }
+    hiveSyncConfig.autoCreateDatabase = props.getBoolean(KafkaConnectConfigs.HIVE_AUTO_CREATE_DATABASE, true);
+    hiveSyncConfig.ignoreExceptions = props.getBoolean(KafkaConnectConfigs.HIVE_IGNORE_EXCEPTIONS, false);
+    hiveSyncConfig.skipROSuffix = props.getBoolean(KafkaConnectConfigs.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE, false);
+    hiveSyncConfig.supportTimestamp = props.getBoolean(KafkaConnectConfigs.HIVE_SUPPORT_TIMESTAMP_TYPE, false);
+    return hiveSyncConfig;
   }
 }

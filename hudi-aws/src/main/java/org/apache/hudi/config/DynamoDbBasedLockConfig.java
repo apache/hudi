@@ -34,10 +34,10 @@ import static org.apache.hudi.common.config.LockConfiguration.LOCK_PREFIX;
  * Hoodie Configs for Locks.
  */
 @ConfigClassProperty(name = "DynamoDB based Locks Configurations",
-    groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Configs that control DynamoDB based locking mechanisms required for concurrency control "
-        + " between writers to a Hudi table. Concurrency between Hudi's own table services "
-        + " are auto managed internally.")
+                     groupName = ConfigGroups.Names.WRITE_CLIENT,
+                     description = "Configs that control DynamoDB based locking mechanisms required for concurrency control "
+                                   + " between writers to a Hudi table. Concurrency between Hudi's own table services "
+                                   + " are auto managed internally.")
 public class DynamoDbBasedLockConfig extends HoodieConfig {
 
   // configs for DynamoDb based locks
@@ -60,8 +60,8 @@ public class DynamoDbBasedLockConfig extends HoodieConfig {
         return Option.empty();
       })
       .withDocumentation("For DynamoDB based lock provider, the partition key for the DynamoDB lock table. "
-          + "Each Hudi dataset should has it's unique key so concurrent writers could refer to the same partition key."
-          + " By default we use the Hudi table name specified to be the partition key");
+                         + "Each Hudi dataset should has it's unique key so concurrent writers could refer to the same partition key."
+                         + " By default we use the Hudi table name specified to be the partition key");
 
   public static final ConfigProperty<String> DYNAMODB_LOCK_REGION = ConfigProperty
       .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "region")
@@ -75,7 +75,7 @@ public class DynamoDbBasedLockConfig extends HoodieConfig {
         return Option.empty();
       })
       .withDocumentation("For DynamoDB based lock provider, the region used in endpoint for Amazon DynamoDB service."
-          + " Would try to first get it from AWS_REGION environment variable. If not find, by default use us-east-1");
+                         + " Would try to first get it from AWS_REGION environment variable. If not find, by default use us-east-1");
 
   public static final ConfigProperty<String> DYNAMODB_LOCK_BILLING_MODE = ConfigProperty
       .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "billing_mode")
@@ -100,4 +100,11 @@ public class DynamoDbBasedLockConfig extends HoodieConfig {
       .defaultValue(String.valueOf(10 * 60 * 1000))
       .sinceVersion("0.10.0")
       .withDocumentation("For DynamoDB based lock provider, the maximum number of milliseconds to wait for creating DynamoDB table");
+
+  public static final ConfigProperty<String> DYNAMODB_ENDPOINT_URL = ConfigProperty
+      .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "endpoint_url")
+      .defaultValue("us-east-1")
+      .sinceVersion("0.11.0")
+      .withDocumentation("For DynamoDB based lock provider, the url endpoint used for Amazon DynamoDB service."
+                         + " Useful for development with a local dynamodb instance.");
 }

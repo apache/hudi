@@ -25,6 +25,8 @@ import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.execution.command.TruncateTableCommand
 
+import scala.util.control.NonFatal
+
 /**
  * Command for truncate hudi table.
  */
@@ -36,10 +38,16 @@ class TruncateHoodieTableCommand(
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableIdentifier)
     val properties = hoodieCatalogTable.tableConfig.getProps
-    val tablePath = hoodieCatalogTable.tableLocation
 
-    // Delete all data in the table directory
-    super.run(sparkSession)
+    try {
+      // Delete all data in the table directory
+      super.run(sparkSession)
+    } catch {
+      // TruncateTableCommand will delete the related directories first, and then refresh the table.
+      // It will fail when refresh table, because the hudi meta directory(.hoodie) has been deleted at the first step.
+      // So here ignore this failure, and refresh table later.
+      case NonFatal(_) =>
+    }
 
     // If we have not specified the partition, truncate will delete all the data in the table path
     // include the hoodi.properties. In this case we should reInit the table.
@@ -50,6 +58,10 @@ class TruncateHoodieTableCommand(
         .fromProperties(properties)
         .initTable(hadoopConf, hoodieCatalogTable.tableLocation)
     }
+
+    // After deleting the data, refresh the table to make sure we don't keep around a stale
+    // file relation in the metastore cache and cached table data in the cache manager.
+    sparkSession.catalog.refreshTable(hoodieCatalogTable.table.identifier.quotedString)
     Seq.empty[Row]
   }
 }

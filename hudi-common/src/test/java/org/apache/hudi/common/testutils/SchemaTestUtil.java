@@ -202,6 +202,10 @@ public final class SchemaTestUtil {
     return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/timestamp-test-evolved.avsc"));
   }
 
+  public static Schema getTimestampWithLogicalTypeSchema() throws IOException {
+    return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/timestamp-logical-type.avsc"));
+  }
+
   public static GenericRecord generateAvroRecordFromJson(Schema schema, int recordNumber, String instantTime,
                                                          String fileId) throws IOException {
     return generateAvroRecordFromJson(schema, recordNumber, instantTime, fileId, true);

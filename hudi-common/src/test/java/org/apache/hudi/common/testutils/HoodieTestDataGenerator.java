@@ -76,7 +76,7 @@ import java.util.stream.Stream;
  * <p>
  * Test data uses a toy Uber trips, data model.
  */
-public class HoodieTestDataGenerator {
+public class HoodieTestDataGenerator implements AutoCloseable {
 
   // based on examination of sample file, the schema produces the following per record size
   public static final int BYTES_PER_RECORD = (int) (1.2 * 1024);
@@ -860,6 +860,7 @@ public class HoodieTestDataGenerator {
     public String partitionPath;
   }
 
+  @Override
   public void close() {
     existingKeysBySchema.clear();
   }

@@ -66,6 +66,11 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     // control whether to filter the s3 objects starting with this prefix
     static final String S3_KEY_PREFIX = "hoodie.deltastreamer.source.s3incr.key.prefix";
     static final String S3_FS_PREFIX = "hoodie.deltastreamer.source.s3incr.fs.prefix";
+
+    // control whether to ignore the s3 objects starting with this prefix
+    static final String S3_IGNORE_KEY_PREFIX = "hoodie.deltastreamer.source.s3incr.ignore.key.prefix";
+    // control whether to ignore the s3 objects with this substring
+    static final String S3_IGNORE_KEY_SUBSTRING = "hoodie.deltastreamer.source.s3incr.ignore.key.substring";
   }
 
   public S3EventsHoodieIncrSource(
@@ -83,6 +88,12 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     int numInstantsPerFetch = props.getInteger(NUM_INSTANTS_PER_FETCH, DEFAULT_NUM_INSTANTS_PER_FETCH);
     boolean readLatestOnMissingCkpt = props.getBoolean(
         READ_LATEST_INSTANT_ON_MISSING_CKPT, DEFAULT_READ_LATEST_INSTANT_ON_MISSING_CKPT);
+    IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy = (props.containsKey(HoodieIncrSource.Config.MISSING_CHECKPOINT_STRATEGY))
+        ? IncrSourceHelper.MissingCheckpointStrategy.valueOf(props.getString(HoodieIncrSource.Config.MISSING_CHECKPOINT_STRATEGY)) : null;
+    if (readLatestOnMissingCkpt) {
+      missingCheckpointStrategy = IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST;
+    }
+    String fileFormat = props.getString(SOURCE_FILE_FORMAT, DEFAULT_SOURCE_FILE_FORMAT);
 
     // Use begin Instant if set and non-empty
     Option<String> beginInstant =
@@ -92,7 +103,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
 
     Pair<String, String> instantEndpts =
         IncrSourceHelper.calculateBeginAndEndInstants(
-            sparkContext, srcPath, numInstantsPerFetch, beginInstant, readLatestOnMissingCkpt);
+            sparkContext, srcPath, numInstantsPerFetch, beginInstant, missingCheckpointStrategy);
 
     if (instantEndpts.getKey().equals(instantEndpts.getValue())) {
       LOG.warn("Already caught up. Begin Checkpoint was :" + instantEndpts.getKey());
@@ -105,11 +116,23 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
         .option(DataSourceReadOptions.BEGIN_INSTANTTIME().key(), instantEndpts.getLeft())
         .option(DataSourceReadOptions.END_INSTANTTIME().key(), instantEndpts.getRight());
     Dataset<Row> source = metaReader.load(srcPath);
+    
+    if (source.isEmpty()) {
+      return Pair.of(Option.empty(), instantEndpts.getRight());
+    }
 
     String filter = "s3.object.size > 0";
     if (!StringUtils.isNullOrEmpty(props.getString(Config.S3_KEY_PREFIX))) {
       filter = filter + " and s3.object.key like '" + props.getString(Config.S3_KEY_PREFIX) + "%'";
     }
+    if (!StringUtils.isNullOrEmpty(props.getString(Config.S3_IGNORE_KEY_PREFIX))) {
+      filter = filter + " and s3.object.key not like '" + props.getString(Config.S3_IGNORE_KEY_PREFIX) + "%'";
+    }
+    if (!StringUtils.isNullOrEmpty(props.getString(Config.S3_IGNORE_KEY_SUBSTRING))) {
+      filter = filter + " and s3.object.key not like '%" + props.getString(Config.S3_IGNORE_KEY_SUBSTRING) + "%'";
+    }
+    // add file format filtering by default
+    filter = filter +  " and s3.object.key like '%" + fileFormat + "%'";
 
     String s3FS = props.getString(Config.S3_FS_PREFIX, "s3").toLowerCase();
     String s3Prefix = s3FS + "://";
@@ -140,7 +163,6 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
         cloudFiles.add(filePath);
       }
     }
-    String fileFormat = props.getString(SOURCE_FILE_FORMAT, DEFAULT_SOURCE_FILE_FORMAT);
     Option<Dataset<Row>> dataset = Option.empty();
     if (!cloudFiles.isEmpty()) {
       dataset = Option.of(sparkSession.read().format(fileFormat).load(cloudFiles.toArray(new String[0])));

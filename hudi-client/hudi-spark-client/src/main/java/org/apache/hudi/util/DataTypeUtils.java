@@ -63,7 +63,8 @@ public class DataTypeUtils {
         // String types
         put(StringType$.class,
             newHashSet(VarcharType$.class, StringType$.class));
-      }};
+      }
+  };
 
   /**
    * Validates whether one {@link StructType} is compatible w/ the other one.

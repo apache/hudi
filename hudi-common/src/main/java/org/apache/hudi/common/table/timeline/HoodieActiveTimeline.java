@@ -36,7 +36,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.text.ParseException;
-import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
@@ -76,13 +75,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    */
   public static Date parseDateFromInstantTime(String timestamp) throws ParseException {
     return HoodieInstantTimeGenerator.parseDateFromInstantTime(timestamp);
-  }
-
-  /**
-   * Format the java.time.Instant to a String representing the timestamp of a Hoodie Instant.
-   */
-  public static String formatInstantTime(Instant timestamp) {
-    return HoodieInstantTimeGenerator.formatInstantTime(timestamp);
   }
 
   /**
@@ -198,9 +190,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     }
   }
 
-  public void deletePendingIfExists(HoodieInstant.State state, String action, String instantStr) {
-    HoodieInstant instant = new HoodieInstant(state, action, instantStr);
-    ValidationUtils.checkArgument(!instant.isCompleted());
+  public void deleteEmptyInstantIfExists(HoodieInstant instant) {
+    ValidationUtils.checkArgument(isEmpty(instant));
     deleteInstantFileIfExists(instant);
   }
 
@@ -390,14 +381,13 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * Transition Rollback State from requested to inflight.
    *
    * @param requestedInstant requested instant
-   * @param data Optional data to be stored
    * @return commit instant
    */
-  public HoodieInstant transitionRollbackRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data) {
+  public HoodieInstant transitionRollbackRequestedToInflight(HoodieInstant requestedInstant) {
     ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION));
     ValidationUtils.checkArgument(requestedInstant.isRequested());
     HoodieInstant inflight = new HoodieInstant(State.INFLIGHT, ROLLBACK_ACTION, requestedInstant.getTimestamp());
-    transitionState(requestedInstant, inflight, data);
+    transitionState(requestedInstant, inflight, Option.empty());
     return inflight;
   }
 

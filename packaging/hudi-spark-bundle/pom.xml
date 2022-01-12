@@ -103,10 +103,6 @@
                   <include>com.yammer.metrics:metrics-core</include>
                   <include>com.google.guava:guava</include>
 
-                  <include>com.amazonaws:dynamodb-lock-client</include>
-                  <include>com.amazonaws:aws-java-sdk-dynamodb</include>
-                  <include>com.amazonaws:aws-java-sdk-core</include>
-
                   <include>org.apache.spark:spark-avro_${scala.binary.version}</include>
                   <include>org.apache.hive:hive-common</include>
                   <include>org.apache.hive:hive-service</include>

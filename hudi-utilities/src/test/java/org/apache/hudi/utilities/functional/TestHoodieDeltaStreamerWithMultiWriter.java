@@ -86,16 +86,12 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
   void testUpsertsContinuousModeWithMultipleWritersForConflicts(HoodieTableType tableType) throws Exception {
-    // NOTE : Overriding the LockProvider to FileSystemBasedLockProviderTestClass since Zookeeper locks work in unit test but fail on Jenkins with connection timeouts
+    // NOTE : Overriding the LockProvider to InProcessLockProvider since Zookeeper locks work in unit test but fail on Jenkins with connection timeouts
     setUpTestTable(tableType);
     prepareInitialConfigs(fs(), basePath, "foo");
     TypedProperties props = prepareMultiWriterProps(fs(), basePath, propsFilePath);
-    props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
-    props.setProperty("hoodie.write.lock.filesystem.path", tableBasePath);
-    props.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY, "10");
-    props.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "250");
-    props.setProperty(LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY,"250");
-    props.setProperty(LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY,"10");
+    props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.InProcessLockProvider");
+    props.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,"3000");
     UtilitiesTestBase.Helpers.savePropsToDFS(props, fs(), propsFilePath);
 
     HoodieDeltaStreamer.Config cfgIngestionJob = getDeltaStreamerConfig(tableBasePath, tableType.name(), WriteOperationType.UPSERT,
@@ -128,22 +124,18 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
   void testUpsertsContinuousModeWithMultipleWritersWithoutConflicts(HoodieTableType tableType) throws Exception {
-    // NOTE : Overriding the LockProvider to FileSystemBasedLockProviderTestClass since Zookeeper locks work in unit test but fail on Jenkins with connection timeouts
+    // NOTE : Overriding the LockProvider to InProcessLockProvider since Zookeeper locks work in unit test but fail on Jenkins with connection timeouts
     setUpTestTable(tableType);
     prepareInitialConfigs(fs(), basePath, "foo");
     TypedProperties props = prepareMultiWriterProps(fs(), basePath, propsFilePath);
-    props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
-    props.setProperty("hoodie.write.lock.filesystem.path", tableBasePath);
-    props.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY, "10");
-    props.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "250");
-    props.setProperty(LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY,"250");
-    props.setProperty(LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY,"10");
+    props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.InProcessLockProvider");
+    props.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,"3000");
     UtilitiesTestBase.Helpers.savePropsToDFS(props, fs(), propsFilePath);
 
     // create new ingestion & backfill job config to generate only INSERTS to avoid conflict
     props = prepareMultiWriterProps(fs(), basePath, propsFilePath);
-    props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
-    props.setProperty("hoodie.write.lock.filesystem.path", tableBasePath);
+    props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.InProcessLockProvider");
+    props.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,"3000");
     props.setProperty("hoodie.test.source.generate.inserts", "true");
     UtilitiesTestBase.Helpers.savePropsToDFS(props, fs(), basePath + "/" + PROPS_FILENAME_TEST_MULTI_WRITER);
     HoodieDeltaStreamer.Config cfgBackfillJob2 = getDeltaStreamerConfig(tableBasePath, tableType.name(), WriteOperationType.INSERT,
@@ -179,12 +171,12 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
   }
 
   private void testCheckpointCarryOver(HoodieTableType tableType) throws Exception {
-    // NOTE : Overriding the LockProvider to FileSystemBasedLockProviderTestClass since Zookeeper locks work in unit test but fail on Jenkins with connection timeouts
+    // NOTE : Overriding the LockProvider to InProcessLockProvider since Zookeeper locks work in unit test but fail on Jenkins with connection timeouts
     setUpTestTable(tableType);
     prepareInitialConfigs(fs(), basePath, "foo");
     TypedProperties props = prepareMultiWriterProps(fs(), basePath, propsFilePath);
-    props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
-    props.setProperty("hoodie.write.lock.filesystem.path", tableBasePath);
+    props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.InProcessLockProvider");
+    props.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,"3000");
     UtilitiesTestBase.Helpers.savePropsToDFS(props, fs(), propsFilePath);
 
     HoodieDeltaStreamer.Config cfgIngestionJob = getDeltaStreamerConfig(tableBasePath, tableType.name(), WriteOperationType.UPSERT,
@@ -205,8 +197,8 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
 
     // run the backfill job
     props = prepareMultiWriterProps(fs(), basePath, propsFilePath);
-    props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
-    props.setProperty("hoodie.write.lock.filesystem.path", tableBasePath);
+    props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.InProcessLockProvider");
+    props.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,"3000");
     UtilitiesTestBase.Helpers.savePropsToDFS(props, fs(), propsFilePath);
 
     // get current checkpoint after preparing base dataset with some commits
