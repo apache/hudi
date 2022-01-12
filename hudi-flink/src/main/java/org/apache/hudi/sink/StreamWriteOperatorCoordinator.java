@@ -246,21 +246,25 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void handleEventFromOperator(int i, OperatorEvent operatorEvent) {
-    executor.execute(
-        () -> {
-          // no event to handle
-          ValidationUtils.checkState(operatorEvent instanceof WriteMetadataEvent,
-              "The coordinator can only handle WriteMetaEvent");
-          WriteMetadataEvent event = (WriteMetadataEvent) operatorEvent;
-          if (event.isBootstrap()) {
-            handleBootstrapEvent(event);
-          } else if (event.isEndInput()) {
-            handleEndInputEvent(event);
-          } else {
-            handleWriteMetaEvent(event);
-          }
-        }, "handle write metadata event for instant %s", this.instant
-    );
+    // no event to handle
+    ValidationUtils.checkState(operatorEvent instanceof WriteMetadataEvent,
+            "The coordinator can only handle WriteMetaEvent");
+    WriteMetadataEvent event = (WriteMetadataEvent) operatorEvent;
+
+    if (event.isEndInput()) {
+      // Process EndInputEvent synchronously
+      handleEndInputEvent(event);
+    } else {
+      executor.execute(
+              () -> {
+                if (event.isBootstrap()) {
+                  handleBootstrapEvent(event);
+                } else {
+                  handleWriteMetaEvent(event);
+                }
+              }, "handle write metadata event for instant %s", this.instant
+      );
+    }
   }
 
   @Override
@@ -292,6 +296,12 @@ public class StreamWriteOperatorCoordinator
   private void syncHiveIfEnabled() {
     if (tableState.syncHive) {
       this.hiveSyncExecutor.execute(this::syncHive, "sync hive metadata for instant %s", this.instant);
+    }
+  }
+
+  private void syncHiveSynchronously() {
+    if (tableState.syncHive) {
+      syncHive();
     }
   }
 
@@ -380,8 +390,8 @@ public class StreamWriteOperatorCoordinator
       // The executor thread inherits the classloader of the #handleEventFromOperator
       // caller, which is a AppClassLoader.
       Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
-      // sync Hive if is enabled in batch mode.
-      syncHiveIfEnabled();
+      // sync Hive Synchronously if is enabled in batch mode.
+      syncHiveSynchronously();
     }
   }
 
