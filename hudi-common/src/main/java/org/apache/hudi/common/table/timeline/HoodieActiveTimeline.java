@@ -260,9 +260,9 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Get the last instant with data written, and convert this to HoodieCommitMetadata
+   * Get the last instant with valid data, and convert this to HoodieCommitMetadata
    */
-  public Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLastCommitMetadataToWrite() {
+  public Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLastCommitMetadataWithValidData() {
     List<HoodieInstant> completed = getCommitsTimeline().filterCompletedInstants().getInstants()
         .sorted(Comparator.comparing(HoodieInstant::getTimestamp).reversed()).collect(Collectors.toList());
     for (HoodieInstant instant : completed) {
