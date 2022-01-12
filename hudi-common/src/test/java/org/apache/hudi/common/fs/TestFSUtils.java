@@ -36,6 +36,7 @@ import org.apache.hadoop.fs.Path;
 import org.junit.Rule;
 import org.junit.contrib.java.lang.system.EnvironmentVariables;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -378,7 +379,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
         new HoodieLocalEngineContext(metaClient.getHadoopConf()), fileSystem, new Path(rootDir), 2));
   }
 
-  @Test
+  @Disabled
   public void testDeleteSubDirectoryRecursively() throws IOException {
     String rootDir = basePath + "/.hoodie/.temp";
     String subPathStr = rootDir + "/subdir1";
@@ -402,7 +403,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
             subPathStr, new SerializableConfiguration(fileSystem.getConf()), false));
   }
 
-  @Test
+  @Disabled
   public void testDeleteSubPathAsFile() throws IOException {
     String rootDir = basePath + "/.hoodie/.temp";
     String subPathStr = rootDir + "/file3.txt";
@@ -413,7 +414,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
         subPathStr, new SerializableConfiguration(fileSystem.getConf()), false));
   }
 
-  @Test
+  @Disabled
   public void testDeleteNonExistingSubDirectory() throws IOException {
     String rootDir = basePath + "/.hoodie/.temp";
     String subPathStr = rootDir + "/subdir10";
