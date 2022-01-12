@@ -4,15 +4,16 @@ toc: true
 last_modified_at: 2020-08-12T15:19:57+08:00
 ---
 
-This guide provides a document at Hudi's capabilities using Flink SQL. We can feel the unique charm of Flink stream computing engine on Hudi.
-Reading this guide, you can quickly start using Flink to write to(read from) Hudi, have a deeper understanding of configuration and optimization:
+This guide provides an instruction for Flink Hudi integration. We can feel the unique charm of how Flink brings in the power of streaming into Hudi.
+Reading this guide, you can quickly start using Flink on Hudi, learn different modes for reading/writing Hudi by Flink:
 
 - **Quick Start** : Read [Quick Start](#quick-start) to get started quickly Flink sql client to write to(read from) Hudi.
-- **Configuration** : For [Flink Configuration](flink_configuration#global-configurations), sets up through `$FLINK_HOME/conf/flink-conf.yaml`. For per job configuration, sets up through [Table Option](flink_configuration#table-options).
-- **Writing Data** : Flink supports different writing data use cases, such as [CDC Ingestion](hoodie_deltastreamer#cdc-ingestion), [Bulk Insert](hoodie_deltastreamer#bulk-insert), [Index Bootstrap](hoodie_deltastreamer#index-bootstrap), [Changelog Mode](hoodie_deltastreamer#changelog-mode) and [Append Mode](hoodie_deltastreamer#append-mode).
-- **Querying Data** : Flink supports different querying data use cases, such as [Incremental Query](hoodie_deltastreamer#incremental-query), [Hive Query](syncing_metastore#flink-setup), [Presto Query](query_engine_setup#prestodb).
+- **Configuration** : For [Global Configuration](flink_configuration#global-configurations), sets up through `$FLINK_HOME/conf/flink-conf.yaml`. For per job configuration, sets up through [Table Option](flink_configuration#table-options).
+- **Writing Data** : Flink supports different modes for writing, such as [CDC Ingestion](hoodie_deltastreamer#cdc-ingestion), [Bulk Insert](hoodie_deltastreamer#bulk-insert), [Index Bootstrap](hoodie_deltastreamer#index-bootstrap), [Changelog Mode](hoodie_deltastreamer#changelog-mode) and [Append Mode](hoodie_deltastreamer#append-mode).
+- **Querying Data** : Flink supports different modes for reading, such as [Streaming Query](hoodie_deltastreamer#streaming-query) and [Incremental Query](hoodie_deltastreamer#incremental-query).
 - **Tuning** : For write/read tasks, this guide gives some tuning suggestions, such as [Memory Optimization](flink_configuration#memory-optimization) and [Write Rate Limit](flink_configuration#write-rate-limit).
 - **Optimization**: Offline compaction is supported [Offline Compaction](compaction#flink-offline-compaction).
+- **Query Engines**: Besides Flink, many other engines are integrated: [Hive Query](syncing_metastore#flink-setup), [Presto Query](query_engine_setup#prestodb).
 
 ## Quick Start
 

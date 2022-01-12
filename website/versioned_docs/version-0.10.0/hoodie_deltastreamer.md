@@ -462,6 +462,24 @@ There are many use cases that user put the full history data set onto the messag
 |  -----------  | -------  | ------- | ------- |
 | `write.rate.limit` | `false` | `0` | Default disable the rate limit |
 
+### Streaming Query
+By default, the hoodie table is read as batch, that is to read the latest snapshot data set and returns. Turns on the streaming read
+mode by setting option `read.streaming.enabled` as `true`. Sets up option `read.start-commit` to specify the read start offset, specifies the
+value as `earliest` if you want to consume all the history data set.
+
+#### Options
+|  Option Name  | Required | Default | Remarks |
+|  -----------  | -------  | ------- | ------- |
+| `read.streaming.enabled` | false | `false` | Specify `true` to read as streaming |
+| `read.start-commit` | false | the latest commit | Start commit time in format 'yyyyMMddHHmmss', use `earliest` to consume from the start commit |
+| `read.streaming.skip_compaction` | false | `false` | Whether to skip compaction commits while reading, generally for two purposes: 1) Avoid consuming duplications from the compaction instants 2) When change log mode is enabled, to only consume change logs for right semantics. |
+| `clean.retain_commits` | false | `10` | The max number of commits to retain before cleaning, when change log mode is enabled, tweaks this option to adjust the change log live time. For example, the default strategy keeps 50 minutes of change logs if the checkpoint interval is set up as 5 minutes. |
+
+:::note
+When option `read.streaming.skip_compaction` turns on and the streaming reader lags behind by commits of number
+`clean.retain_commits`, the data loss may occur.
+:::
+
 ### Incremental Query
 There are 3 use cases for incremental query:
 1. Streaming query: specify the start commit with option `read.start-commit`;
@@ -472,8 +490,8 @@ There are 3 use cases for incremental query:
 #### Options
 |  Option Name  | Required | Default | Remarks |
 |  -----------  | -------  | ------- | ------- |
-| `write.start-commit` | `false` | the latest commit | Specify `earliest` to consume from the start commit |
-| `write.end-commit` | `false` | the latest commit | -- |
+| `read.start-commit` | `false` | the latest commit | Specify `earliest` to consume from the start commit |
+| `read.end-commit` | `false` | the latest commit | -- |
 
 ## Kafka Connect Sink
 If you want to perform streaming ingestion into Hudi format similar to HoodieDeltaStreamer, but you don't want to depend on Spark,
