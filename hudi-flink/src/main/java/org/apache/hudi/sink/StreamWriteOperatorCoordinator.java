@@ -248,7 +248,7 @@ public class StreamWriteOperatorCoordinator
   public void handleEventFromOperator(int i, OperatorEvent operatorEvent) {
     // no event to handle
     ValidationUtils.checkState(operatorEvent instanceof WriteMetadataEvent,
-            "The coordinator can only handle WriteMetaEvent");
+        "The coordinator can only handle WriteMetaEvent");
     WriteMetadataEvent event = (WriteMetadataEvent) operatorEvent;
 
     if (event.isEndInput()) {
@@ -256,13 +256,13 @@ public class StreamWriteOperatorCoordinator
       handleEndInputEvent(event);
     } else {
       executor.execute(
-              () -> {
-                if (event.isBootstrap()) {
-                  handleBootstrapEvent(event);
-                } else {
-                  handleWriteMetaEvent(event);
-                }
-              }, "handle write metadata event for instant %s", this.instant
+          () -> {
+            if (event.isBootstrap()) {
+              handleBootstrapEvent(event);
+            } else {
+              handleWriteMetaEvent(event);
+            }
+          }, "handle write metadata event for instant %s", this.instant
       );
     }
   }
