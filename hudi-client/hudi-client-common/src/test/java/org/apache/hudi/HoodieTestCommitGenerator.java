@@ -76,7 +76,7 @@ public class HoodieTestCommitGenerator {
   }
 
   public static void setupTimelineInFS(
-      FileSystem fs, String basePath,
+      String basePath,
       Map<String, List<Pair<String, String>>> baseFileInfo,
       Map<String, List<Pair<String, String>>> logFileInfo,
       Map<String, Map<String, List<Pair<String, String>>>> instantInfoMap) throws IOException {

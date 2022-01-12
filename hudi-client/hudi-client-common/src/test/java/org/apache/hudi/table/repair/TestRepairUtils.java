@@ -71,7 +71,7 @@ public class TestRepairUtils {
 
   public void setupTimelineInFS() throws IOException {
     HoodieTestCommitGenerator.setupTimelineInFS(
-        metaClient.getFs(), basePath, BASE_FILE_INFO, LOG_FILE_INFO, instantInfoMap);
+        basePath, BASE_FILE_INFO, LOG_FILE_INFO, instantInfoMap);
   }
 
   @Test
