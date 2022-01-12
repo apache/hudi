@@ -318,8 +318,6 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
     List<String> restoreDanglingFileList = DANGLING_DATA_FILE_LIST.stream()
         .map(filePath -> new Path(basePath, filePath).toString())
         .collect(Collectors.toList());
-    LOG.error("ALL_FILE_ABSOLUTE_PATH_LIST: " + allFileAbsolutePathList);
-    LOG.error("backupDanglingFileList: " + backupDanglingFileList);
     List<String> existingFileList = new ArrayList<>(allFileAbsolutePathList);
     existingFileList.addAll(backupDanglingFileList);
     existingFileList.addAll(restoreDanglingFileList);
@@ -374,7 +372,6 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
 
   private List<String> createDanglingDataFilesInFS(String parentPath) {
     FileSystem fs = metaClient.getFs();
-    LOG.error("FileSystem: " + fs);
     return DANGLING_DATA_FILE_LIST.stream().map(relativeFilePath -> {
       Path path = new Path(parentPath, relativeFilePath);
       try {
