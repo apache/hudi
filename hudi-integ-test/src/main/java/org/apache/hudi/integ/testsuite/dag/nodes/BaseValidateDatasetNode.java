@@ -161,7 +161,6 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
         .filter("_hoodie_is_deleted != true");
   }
 
-
   private ExpressionEncoder getEncoder(StructType schema) {
     List<Attribute> attributes = JavaConversions.asJavaCollection(schema.toAttributes()).stream()
         .map(Attribute::toAttribute).collect(Collectors.toList());

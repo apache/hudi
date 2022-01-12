@@ -21,7 +21,7 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
@@ -254,7 +254,7 @@ object InsertIntoHoodieTableCommand extends Logging {
       // on reading.
       classOf[ValidateDuplicateKeyPayload].getCanonicalName
     } else {
-      classOf[DefaultHoodieRecordPayload].getCanonicalName
+      classOf[OverwriteWithLatestAvroPayload].getCanonicalName
     }
     logInfo(s"insert statement use write operation type: $operation, payloadClass: $payloadClassName")
 

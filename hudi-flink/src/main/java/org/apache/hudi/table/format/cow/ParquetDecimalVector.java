@@ -32,9 +32,9 @@ import org.apache.flink.table.data.vector.DecimalColumnVector;
  */
 public class ParquetDecimalVector implements DecimalColumnVector {
 
-  private final ColumnVector vector;
+  public final ColumnVector vector;
 
-  ParquetDecimalVector(ColumnVector vector) {
+  public ParquetDecimalVector(ColumnVector vector) {
     this.vector = vector;
   }
 

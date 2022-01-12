@@ -18,19 +18,19 @@
 
 package org.apache.hudi.sort;
 
+import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.optimize.HilbertCurveUtils;
-import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.Row$;
-import org.apache.spark.sql.hudi.execution.RangeSampleSort$;
+import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.hudi.execution.ByteArraySorting;
+import org.apache.spark.sql.hudi.execution.RangeSampleSort$;
 import org.apache.spark.sql.types.BinaryType;
 import org.apache.spark.sql.types.BinaryType$;
 import org.apache.spark.sql.types.BooleanType;
@@ -51,8 +51,9 @@ import org.apache.spark.sql.types.StructType$;
 import org.apache.spark.sql.types.TimestampType;
 import org.davidmoten.hilbert.HilbertCurve;
 import scala.collection.JavaConversions;
+import scala.collection.mutable.WrappedArray;
 
-import java.util.ArrayList;
+import javax.annotation.Nonnull;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
@@ -126,7 +127,7 @@ public class SpaceCurveSortingHelper {
         sortedRDD = createHilbertSortedRDD(df.toJavaRDD(), fieldMap, fieldNum, targetPartitionCount);
         break;
       default:
-        throw new IllegalArgumentException(String.format("new only support z-order/hilbert optimize but find: %s", layoutOptStrategy));
+        throw new UnsupportedOperationException(String.format("Not supported layout-optimization strategy (%s)", layoutOptStrategy));
     }
 
     // Compose new {@code StructType} for ordered RDDs
@@ -148,51 +149,24 @@ public class SpaceCurveSortingHelper {
 
   private static JavaRDD<Row> createZCurveSortedRDD(JavaRDD<Row> originRDD, Map<Integer, StructField> fieldMap, int fieldNum, int fileNum) {
     return originRDD.map(row -> {
-      List<byte[]> zBytesList = fieldMap.entrySet().stream().map(entry -> {
-        int index = entry.getKey();
-        StructField field = entry.getValue();
-        DataType dataType = field.dataType();
-        if (dataType instanceof LongType) {
-          return BinaryUtil.longTo8Byte(row.isNullAt(index) ? Long.MAX_VALUE : row.getLong(index));
-        } else if (dataType instanceof DoubleType) {
-          return BinaryUtil.doubleTo8Byte(row.isNullAt(index) ? Double.MAX_VALUE : row.getDouble(index));
-        } else if (dataType instanceof IntegerType) {
-          return BinaryUtil.intTo8Byte(row.isNullAt(index) ? Integer.MAX_VALUE : row.getInt(index));
-        } else if (dataType instanceof FloatType) {
-          return BinaryUtil.doubleTo8Byte(row.isNullAt(index) ? Float.MAX_VALUE : row.getFloat(index));
-        } else if (dataType instanceof StringType) {
-          return BinaryUtil.utf8To8Byte(row.isNullAt(index) ? "" : row.getString(index));
-        } else if (dataType instanceof DateType) {
-          return BinaryUtil.longTo8Byte(row.isNullAt(index) ? Long.MAX_VALUE : row.getDate(index).getTime());
-        } else if (dataType instanceof TimestampType) {
-          return BinaryUtil.longTo8Byte(row.isNullAt(index) ? Long.MAX_VALUE : row.getTimestamp(index).getTime());
-        } else if (dataType instanceof ByteType) {
-          return BinaryUtil.byteTo8Byte(row.isNullAt(index) ? Byte.MAX_VALUE : row.getByte(index));
-        } else if (dataType instanceof ShortType) {
-          return BinaryUtil.intTo8Byte(row.isNullAt(index) ? Short.MAX_VALUE : row.getShort(index));
-        } else if (dataType instanceof DecimalType) {
-          return BinaryUtil.longTo8Byte(row.isNullAt(index) ? Long.MAX_VALUE : row.getDecimal(index).longValue());
-        } else if (dataType instanceof BooleanType) {
-          boolean value = row.isNullAt(index) ? false : row.getBoolean(index);
-          return BinaryUtil.intTo8Byte(value ? 1 : 0);
-        } else if (dataType instanceof BinaryType) {
-          return BinaryUtil.paddingTo8Byte(row.isNullAt(index) ? new byte[] {0} : (byte[]) row.get(index));
-        }
-        return null;
-      }).filter(f -> f != null).collect(Collectors.toList());
-      byte[][] zBytes = new byte[zBytesList.size()][];
-      for (int i = 0; i < zBytesList.size(); i++) {
-        zBytes[i] = zBytesList.get(i);
-      }
-      List<Object> zVaules = new ArrayList<>();
-      zVaules.addAll(scala.collection.JavaConverters.bufferAsJavaListConverter(row.toSeq().toBuffer()).asJava());
-      zVaules.add(BinaryUtil.interleaving(zBytes, 8));
-      return Row$.MODULE$.apply(JavaConversions.asScalaBuffer(zVaules));
+      byte[][] zBytes = fieldMap.entrySet().stream()
+        .map(entry -> {
+          int index = entry.getKey();
+          StructField field = entry.getValue();
+          return mapColumnValueTo8Bytes(row, index, field.dataType());
+        })
+        .toArray(byte[][]::new);
+
+      // Interleave received bytes to produce Z-curve ordinal
+      byte[] zOrdinalBytes = BinaryUtil.interleaving(zBytes, 8);
+      return appendToRow(row, zOrdinalBytes);
     })
-        .sortBy(f -> new ByteArraySorting((byte[]) f.get(fieldNum)), true, fileNum);
+      .sortBy(f -> new ByteArraySorting((byte[]) f.get(fieldNum)), true, fileNum);
   }
 
   private static JavaRDD<Row> createHilbertSortedRDD(JavaRDD<Row> originRDD, Map<Integer, StructField> fieldMap, int fieldNum, int fileNum) {
+    // NOTE: Here {@code mapPartitions} is used to make sure Hilbert curve instance is initialized
+    //       only once per partition
     return originRDD.mapPartitions(rows -> {
       HilbertCurve hilbertCurve = HilbertCurve.bits(63).dimensions(fieldMap.size());
       return new Iterator<Row>() {
@@ -205,48 +179,91 @@ public class SpaceCurveSortingHelper {
         @Override
         public Row next() {
           Row row = rows.next();
-          List<Long> longList = fieldMap.entrySet().stream().map(entry -> {
-            int index = entry.getKey();
-            StructField field = entry.getValue();
-            DataType dataType = field.dataType();
-            if (dataType instanceof LongType) {
-              return row.isNullAt(index) ? Long.MAX_VALUE : row.getLong(index);
-            } else if (dataType instanceof DoubleType) {
-              return row.isNullAt(index) ? Long.MAX_VALUE : Double.doubleToLongBits(row.getDouble(index));
-            } else if (dataType instanceof IntegerType) {
-              return row.isNullAt(index) ? Long.MAX_VALUE : (long)row.getInt(index);
-            } else if (dataType instanceof FloatType) {
-              return row.isNullAt(index) ? Long.MAX_VALUE : Double.doubleToLongBits((double) row.getFloat(index));
-            } else if (dataType instanceof StringType) {
-              return row.isNullAt(index) ? Long.MAX_VALUE : BinaryUtil.convertStringToLong(row.getString(index));
-            } else if (dataType instanceof DateType) {
-              return row.isNullAt(index) ? Long.MAX_VALUE : row.getDate(index).getTime();
-            } else if (dataType instanceof TimestampType) {
-              return row.isNullAt(index) ? Long.MAX_VALUE : row.getTimestamp(index).getTime();
-            } else if (dataType instanceof ByteType) {
-              return row.isNullAt(index) ? Long.MAX_VALUE : BinaryUtil.convertBytesToLong(new byte[] {row.getByte(index)});
-            } else if (dataType instanceof ShortType) {
-              return row.isNullAt(index) ? Long.MAX_VALUE : (long)row.getShort(index);
-            } else if (dataType instanceof DecimalType) {
-              return row.isNullAt(index) ? Long.MAX_VALUE : row.getDecimal(index).longValue();
-            } else if (dataType instanceof BooleanType) {
-              boolean value = row.isNullAt(index) ? false : row.getBoolean(index);
-              return value ? Long.MAX_VALUE : 0;
-            } else if (dataType instanceof BinaryType) {
-              return row.isNullAt(index) ? Long.MAX_VALUE : BinaryUtil.convertBytesToLong((byte[]) row.get(index));
-            }
-            return null;
-          }).filter(f -> f != null).collect(Collectors.toList());
+          long[] longs = fieldMap.entrySet().stream()
+              .mapToLong(entry -> {
+                int index = entry.getKey();
+                StructField field = entry.getValue();
+                return mapColumnValueToLong(row, index, field.dataType());
+              })
+              .toArray();
 
-          byte[] hilbertValue = HilbertCurveUtils.indexBytes(
-              hilbertCurve, longList.stream().mapToLong(l -> l).toArray(), 63);
-          List<Object> values = new ArrayList<>();
-          values.addAll(scala.collection.JavaConverters.bufferAsJavaListConverter(row.toSeq().toBuffer()).asJava());
-          values.add(hilbertValue);
-          return Row$.MODULE$.apply(JavaConversions.asScalaBuffer(values));
+          // Map N-dimensional coordinates into position on the Hilbert curve
+          byte[] hilbertCurvePosBytes = HilbertCurveUtils.indexBytes(hilbertCurve, longs, 63);
+          return appendToRow(row, hilbertCurvePosBytes);
         }
       };
-    }).sortBy(f -> new ByteArraySorting((byte[]) f.get(fieldNum)), true, fileNum);
+    })
+        .sortBy(f -> new ByteArraySorting((byte[]) f.get(fieldNum)), true, fileNum);
+  }
+
+  private static Row appendToRow(Row row, Object value) {
+    // NOTE: This is an ugly hack to avoid array re-allocation --
+    //       Spark's {@code Row#toSeq} returns array of Objects
+    Object[] currentValues = (Object[]) ((WrappedArray<Object>) row.toSeq()).array();
+    return RowFactory.create(CollectionUtils.append(currentValues, value));
+  }
+
+  @Nonnull
+  private static byte[] mapColumnValueTo8Bytes(Row row, int index, DataType dataType) {
+    if (dataType instanceof LongType) {
+      return BinaryUtil.longTo8Byte(row.isNullAt(index) ? Long.MAX_VALUE : row.getLong(index));
+    } else if (dataType instanceof DoubleType) {
+      return BinaryUtil.doubleTo8Byte(row.isNullAt(index) ? Double.MAX_VALUE : row.getDouble(index));
+    } else if (dataType instanceof IntegerType) {
+      return BinaryUtil.intTo8Byte(row.isNullAt(index) ? Integer.MAX_VALUE : row.getInt(index));
+    } else if (dataType instanceof FloatType) {
+      return BinaryUtil.doubleTo8Byte(row.isNullAt(index) ? Float.MAX_VALUE : row.getFloat(index));
+    } else if (dataType instanceof StringType) {
+      return BinaryUtil.utf8To8Byte(row.isNullAt(index) ? "" : row.getString(index));
+    } else if (dataType instanceof DateType) {
+      return BinaryUtil.longTo8Byte(row.isNullAt(index) ? Long.MAX_VALUE : row.getDate(index).getTime());
+    } else if (dataType instanceof TimestampType) {
+      return BinaryUtil.longTo8Byte(row.isNullAt(index) ? Long.MAX_VALUE : row.getTimestamp(index).getTime());
+    } else if (dataType instanceof ByteType) {
+      return BinaryUtil.byteTo8Byte(row.isNullAt(index) ? Byte.MAX_VALUE : row.getByte(index));
+    } else if (dataType instanceof ShortType) {
+      return BinaryUtil.intTo8Byte(row.isNullAt(index) ? Short.MAX_VALUE : row.getShort(index));
+    } else if (dataType instanceof DecimalType) {
+      return BinaryUtil.longTo8Byte(row.isNullAt(index) ? Long.MAX_VALUE : row.getDecimal(index).longValue());
+    } else if (dataType instanceof BooleanType) {
+      boolean value = row.isNullAt(index) ? false : row.getBoolean(index);
+      return BinaryUtil.intTo8Byte(value ? 1 : 0);
+    } else if (dataType instanceof BinaryType) {
+      return BinaryUtil.paddingTo8Byte(row.isNullAt(index) ? new byte[] {0} : (byte[]) row.get(index));
+    }
+
+    throw new UnsupportedOperationException(String.format("Unsupported data-type (%s)", dataType.typeName()));
+  }
+
+  private static long mapColumnValueToLong(Row row, int index, DataType dataType) {
+    if (dataType instanceof LongType) {
+      return row.isNullAt(index) ? Long.MAX_VALUE : row.getLong(index);
+    } else if (dataType instanceof DoubleType) {
+      return row.isNullAt(index) ? Long.MAX_VALUE : Double.doubleToLongBits(row.getDouble(index));
+    } else if (dataType instanceof IntegerType) {
+      return row.isNullAt(index) ? Long.MAX_VALUE : (long) row.getInt(index);
+    } else if (dataType instanceof FloatType) {
+      return row.isNullAt(index) ? Long.MAX_VALUE : Double.doubleToLongBits((double) row.getFloat(index));
+    } else if (dataType instanceof StringType) {
+      return row.isNullAt(index) ? Long.MAX_VALUE : BinaryUtil.convertStringToLong(row.getString(index));
+    } else if (dataType instanceof DateType) {
+      return row.isNullAt(index) ? Long.MAX_VALUE : row.getDate(index).getTime();
+    } else if (dataType instanceof TimestampType) {
+      return row.isNullAt(index) ? Long.MAX_VALUE : row.getTimestamp(index).getTime();
+    } else if (dataType instanceof ByteType) {
+      return row.isNullAt(index) ? Long.MAX_VALUE : BinaryUtil.convertBytesToLong(new byte[] {row.getByte(index)});
+    } else if (dataType instanceof ShortType) {
+      return row.isNullAt(index) ? Long.MAX_VALUE : (long) row.getShort(index);
+    } else if (dataType instanceof DecimalType) {
+      return row.isNullAt(index) ? Long.MAX_VALUE : row.getDecimal(index).longValue();
+    } else if (dataType instanceof BooleanType) {
+      boolean value = row.isNullAt(index) ? false : row.getBoolean(index);
+      return value ? Long.MAX_VALUE : 0;
+    } else if (dataType instanceof BinaryType) {
+      return row.isNullAt(index) ? Long.MAX_VALUE : BinaryUtil.convertBytesToLong((byte[]) row.get(index));
+    }
+
+    throw new UnsupportedOperationException(String.format("Unsupported data-type (%s)", dataType.typeName()));
   }
 
   public static Dataset<Row> orderDataFrameBySamplingValues(

@@ -300,6 +300,8 @@ object DataSourceWriteOptions {
     .withInferFunction(keyGeneraterInferFunc)
     .withDocumentation("Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator`")
 
+  val KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED: ConfigProperty[String] = KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED
+
   val ENABLE_ROW_WRITER: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.row.writer.enable")
     .defaultValue("true")
@@ -495,6 +497,16 @@ object DataSourceWriteOptions {
     .withDocumentation("‘INT64’ with original type TIMESTAMP_MICROS is converted to hive ‘timestamp’ type. " +
       "Disabled by default for backward compatibility.")
 
+  /**
+   * Flag to indicate whether to use conditional syncing in HiveSync.
+   * If set true, the Hive sync procedure will only run if partition or schema changes are detected.
+   * By default true.
+   */
+  val HIVE_CONDITIONAL_SYNC: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.hive_sync.conditional_sync")
+    .defaultValue("false")
+    .withDocumentation("Enables conditional hive sync, where partition or schema change must exist to perform sync to hive.")
+
   val HIVE_TABLE_PROPERTIES: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.table_properties")
     .noDefaultValue()
@@ -525,6 +537,12 @@ object DataSourceWriteOptions {
     .key("hoodie.datasource.hive_sync.mode")
     .noDefaultValue()
     .withDocumentation("Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql.")
+
+  val HIVE_SYNC_BUCKET_SYNC: ConfigProperty[Boolean] = ConfigProperty
+    .key("hoodie.datasource.hive_sync.bucket_sync")
+    .defaultValue(false)
+    .withDocumentation("Whether sync hive metastore bucket specification when using bucket index." +
+      "The specification is 'CLUSTERED BY (trace_id) SORTED BY (trace_id ASC) INTO 65536 BUCKETS'")
 
   // Async Compaction - Enabled by default for MOR
   val ASYNC_COMPACT_ENABLE: ConfigProperty[String] = ConfigProperty

@@ -108,7 +108,6 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
     return writeMetadata;
   }
 
-
   /**
    * Execute clustering to write inputRecords into new files as defined by rules in strategy parameters.
    * The number of new file groups created is bounded by numOutputGroups.
@@ -141,7 +140,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
           getWriteConfig(), HoodieAvroUtils.addMetadataFields(schema)));
     } else if (strategyParams.containsKey(PLAN_STRATEGY_SORT_COLUMNS.key())) {
       return Option.of(new RDDCustomColumnsSortPartitioner(strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()).split(","),
-          HoodieAvroUtils.addMetadataFields(schema)));
+          HoodieAvroUtils.addMetadataFields(schema), getWriteConfig().isConsistentLogicalTimestampEnabled()));
     } else {
       return Option.empty();
     }

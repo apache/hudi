@@ -305,7 +305,9 @@ public class HoodieCatalog extends AbstractCatalog {
     try {
       StreamerUtil.initTableIfNotExists(conf);
       // prepare the non-table-options properties
-      options.put(TableOptionProperties.COMMENT, resolvedTable.getComment());
+      if (!StringUtils.isNullOrWhitespaceOnly(resolvedTable.getComment())) {
+        options.put(TableOptionProperties.COMMENT, resolvedTable.getComment());
+      }
       TableOptionProperties.createProperties(tablePathStr, hadoopConf, options);
     } catch (IOException e) {
       throw new CatalogException(String.format("Initialize table path %s exception.", tablePathStr), e);
