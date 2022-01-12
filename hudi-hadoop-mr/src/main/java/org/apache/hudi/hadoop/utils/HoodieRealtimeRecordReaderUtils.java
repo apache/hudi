@@ -49,6 +49,7 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import javax.annotation.Nullable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -186,7 +187,7 @@ public class HoodieRealtimeRecordReaderUtils {
         Writable[] recordValues = new Writable[schema.getFields().size()];
         int recordValueIndex = 0;
         for (Schema.Field field : schema.getFields()) {
-          recordValues[recordValueIndex++] = avroToArrayWritable(record.get(field.name()), field.schema());
+          recordValues[recordValueIndex++] = avroToArrayWritable(getFieldVal(record, field.name()), field.schema());
         }
         return new ArrayWritable(Writable.class, recordValues);
       case ENUM:
@@ -288,5 +289,15 @@ public class HoodieRealtimeRecordReaderUtils {
         .filter(x -> !firstLevelFieldNames.contains(x)).collect(Collectors.toList());
 
     return HoodieAvroUtils.appendNullSchemaFields(schema, fieldsToAdd);
+  }
+
+  @Nullable
+  private static Object getFieldVal(GenericRecord record, String fieldName) {
+    Schema.Field recordField = record.getSchema().getField(fieldName);
+    if (recordField == null) {
+      return null;
+    }
+
+    return record.get(recordField.pos());
   }
 }
