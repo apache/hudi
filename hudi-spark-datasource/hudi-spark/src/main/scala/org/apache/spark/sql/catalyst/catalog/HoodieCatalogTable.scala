@@ -98,7 +98,7 @@ class HoodieCatalogTable(val spark: SparkSession, val table: CatalogTable) exten
   lazy val tableTypeName: String = tableType.name()
 
   /**
-   * Recored Field List(Primary Key List)
+   * Record Field List(Primary Key List)
    */
   lazy val primaryKeys: Array[String] = tableConfig.getRecordKeyFields.orElse(Array.empty)
 
@@ -108,7 +108,7 @@ class HoodieCatalogTable(val spark: SparkSession, val table: CatalogTable) exten
   lazy val preCombineKey: Option[String] = Option(tableConfig.getPreCombineField)
 
   /**
-   * Paritition Fields
+   * Partition Fields
    */
   lazy val partitionFields: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
