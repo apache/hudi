@@ -390,7 +390,7 @@ public class StreamWriteOperatorCoordinator
       // The executor thread inherits the classloader of the #handleEventFromOperator
       // caller, which is a AppClassLoader.
       Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
-      // sync Hive Synchronously if is enabled in batch mode.
+      // sync Hive synchronously if it is enabled in batch mode.
       syncHiveSynchronously();
     }
   }
