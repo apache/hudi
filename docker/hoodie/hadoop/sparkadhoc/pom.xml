@@ -65,7 +65,7 @@
               <skip>${docker.build.skip}</skip>
               <pullNewerImage>false</pullNewerImage>
               <repository>
-                yihua/hudi-hadoop_${docker.hadoop.version}-hive_${docker.hive.version}-sparkadhoc_${docker.spark.version}
+                apachehudi/hudi-hadoop_${docker.hadoop.version}-hive_${docker.hive.version}-sparkadhoc_${docker.spark.version}
               </repository>
               <force>true</force>
               <tag>latest</tag>
@@ -83,7 +83,7 @@
               <skip>${docker.build.skip}</skip>
               <pullNewerImage>false</pullNewerImage>
               <repository>
-                yihua/hudi-hadoop_${docker.hadoop.version}-hive_${docker.hive.version}-sparkadhoc_${docker.spark.version}
+                apachehudi/hudi-hadoop_${docker.hadoop.version}-hive_${docker.hive.version}-sparkadhoc_${docker.spark.version}
               </repository>
               <force>true</force>
               <tag>${project.version}</tag>

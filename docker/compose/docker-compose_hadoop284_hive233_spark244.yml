@@ -224,7 +224,7 @@ services:
   trino-coordinator-1:
     container_name: trino-coordinator-1
     hostname: trino-coordinator-1
-    image: yihua/hudi-hadoop_2.8.4-trinocoordinator_365:latest
+    image: apachehudi/hudi-hadoop_2.8.4-trinocoordinator_368:latest
     ports:
       - '8091:8091'
     links:
@@ -236,7 +236,7 @@ services:
   trino-worker-1:
     container_name: trino-worker-1
     hostname: trino-worker-1
-    image: yihua/hudi-hadoop_2.8.4-trinoworker_365:latest
+    image: apachehudi/hudi-hadoop_2.8.4-trinoworker_368:latest
     depends_on: [ "trino-coordinator-1" ]
     ports:
       - '8092:8092'
@@ -259,7 +259,7 @@ services:
       - 8126:8126
 
   adhoc-1:
-    image: yihua/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_2.4.4:latest
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_2.4.4:latest
     hostname: adhoc-1
     container_name: adhoc-1
     env_file:
@@ -281,7 +281,7 @@ services:
       - ${HUDI_WS}:/var/hoodie/ws
 
   adhoc-2:
-    image: yihua/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_2.4.4:latest
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_2.4.4:latest
     hostname: adhoc-2
     container_name: adhoc-2
     env_file:
