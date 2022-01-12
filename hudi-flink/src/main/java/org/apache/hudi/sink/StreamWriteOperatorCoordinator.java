@@ -252,7 +252,7 @@ public class StreamWriteOperatorCoordinator
     WriteMetadataEvent event = (WriteMetadataEvent) operatorEvent;
 
     if (event.isEndInput()) {
-      // Process EndInputEvent synchronously
+      // process end input event synchronously
       handleEndInputEvent(event);
     } else {
       executor.execute(
