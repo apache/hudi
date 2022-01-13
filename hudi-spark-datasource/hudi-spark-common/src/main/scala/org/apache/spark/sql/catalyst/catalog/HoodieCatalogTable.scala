@@ -164,12 +164,20 @@ class HoodieCatalogTable(val spark: SparkSession, val table: CatalogTable) exten
     val properties = new Properties()
     properties.putAll(tableConfigs.asJava)
 
-    HoodieTableMetaClient.withPropertyBuilder()
-      .fromProperties(properties)
-      .setTableName(table.identifier.table)
-      .setTableCreateSchema(SchemaConverters.toAvroType(finalSchema).toString())
-      .setPartitionFields(table.partitionColumnNames.mkString(","))
-      .initTable(hadoopConf, tableLocation)
+    if (hoodieTableExists) {
+      // just persist hoodie.table.create.schema
+      HoodieTableMetaClient.withPropertyBuilder()
+        .fromProperties(properties)
+        .setTableCreateSchema(SchemaConverters.toAvroType(finalSchema).toString())
+        .initTable(hadoopConf, tableLocation)
+    } else {
+      HoodieTableMetaClient.withPropertyBuilder()
+        .fromProperties(properties)
+        .setTableName(table.identifier.table)
+        .setTableCreateSchema(SchemaConverters.toAvroType(finalSchema).toString())
+        .setPartitionFields(table.partitionColumnNames.mkString(","))
+        .initTable(hadoopConf, tableLocation)
+    }
   }
 
   /**

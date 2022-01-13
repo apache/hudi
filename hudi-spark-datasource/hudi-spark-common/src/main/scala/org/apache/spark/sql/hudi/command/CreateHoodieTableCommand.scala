@@ -61,6 +61,7 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
     val hoodieCatalogTable = HoodieCatalogTable(sparkSession, table)
     // check if there are conflict between table configs defined in hoodie table and properties defined in catalog.
     CreateHoodieTableCommand.validateTblProperties(hoodieCatalogTable)
+
     // init hoodie table
     hoodieCatalogTable.initHoodieTable()
 
@@ -129,12 +130,14 @@ object CreateHoodieTableCommand {
     val newTableIdentifier = table.identifier
       .copy(table = tablName, database = Some(newDatabaseName))
 
+    val partitionColumnNames = hoodieCatalogTable.partitionSchema.map(_.name)
     // append pk, preCombineKey, type to the properties of table
     val newTblProperties = hoodieCatalogTable.catalogProperties ++ HoodieOptionConfig.extractSqlOptions(properties)
     val newTable = table.copy(
       identifier = newTableIdentifier,
-      schema = hoodieCatalogTable.tableSchema,
       storage = newStorage,
+      schema = hoodieCatalogTable.tableSchema,
+      partitionColumnNames = partitionColumnNames,
       createVersion = SPARK_VERSION,
       properties = newTblProperties
     )
