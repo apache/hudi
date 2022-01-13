@@ -77,10 +77,10 @@
                   <include>com.esotericsoftware:kryo-shaded</include>
                   <include>org.objenesis:objenesis</include>
                   <include>com.esotericsoftware:minlog</include>
-                  <include>org.apache.hbase:hbase-shaded-client</include>
-                  <include>org.apache.hbase:hbase-shaded-server</include>
                   <include>org.apache.hbase:hbase-common</include>
+                  <include>org.apache.hbase:hbase-client</include>
                   <include>org.apache.hbase:hbase-protocol</include>
+                  <include>org.apache.hbase:hbase-server</include>
                   <include>org.apache.hbase:hbase-annotations</include>
                   <include>org.apache.htrace:htrace-core</include>
                   <include>com.yammer.metrics:metrics-core</include>
@@ -197,21 +197,23 @@
       <version>${scala.version}</version>
     </dependency>
 
-    <!-- HBase (shaded) -->
+    <!-- HBase -->
     <dependency>
       <groupId>org.apache.hbase</groupId>
-      <artifactId>hbase-shaded-client</artifactId>
+      <artifactId>hbase-common</artifactId>
       <version>${hbase.version}</version>
-      <scope>test</scope>
     </dependency>
 
     <dependency>
       <groupId>org.apache.hbase</groupId>
-      <artifactId>hbase-shaded-server</artifactId>
+      <artifactId>hbase-server</artifactId>
       <version>${hbase.version}</version>
-      <!-- Unfortunately, HFile is packaged ONLY under hbase-server -->
       <scope>compile</scope>
       <exclusions>
+        <exclusion>
+          <groupId>org.apache.hbase</groupId>
+          <artifactId>hbase-common</artifactId>
+        </exclusion>
         <exclusion>
           <groupId>javax.servlet</groupId>
           <artifactId>*</artifactId>
