@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -82,20 +83,21 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
       }, listingParallelism);
       pathsToList.clear();
 
-      // If the listing reveals a directory, add it to queue. If the listing reveals a hoodie partition, add it to
-      // the results.
-      dirToFileListing.stream().flatMap(Arrays::stream).parallel().forEach(fileStatus -> {
-        if (fileStatus.getPath().getName().equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE)) {
-          partitionPaths.add(datasetBasePath);
-        }
-        if (fileStatus.isDirectory()) {
-          if (HoodiePartitionMetadata.hasPartitionMetadata(fs, fileStatus.getPath())) {
-            partitionPaths.add(FSUtils.getRelativePartitionPath(new Path(datasetBasePath), fileStatus.getPath()));
-          } else {
-            pathsToList.add(fileStatus.getPath());
-          }
-        }
-      });
+      // if current dictionary contains PartitionMetadata, add it to result
+      // if current dictionary does not contain PartitionMetadata, add it to queue
+      dirToFileListing.stream().flatMap(Arrays::stream).parallel()
+          .forEach(fileStatus -> {
+            if (fileStatus.isDirectory()) {
+              if (HoodiePartitionMetadata.hasPartitionMetadata(fs, fileStatus.getPath())) {
+                partitionPaths.add(FSUtils.getRelativePartitionPath(new Path(datasetBasePath), fileStatus.getPath()));
+              } else {
+                pathsToList.add(fileStatus.getPath());
+              }
+            } else if (fileStatus.getPath().getName().equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE)) {
+              String partitionName = FSUtils.getRelativePartitionPath(new Path(datasetBasePath), fileStatus.getPath().getParent());
+              partitionPaths.add(partitionName);
+            }
+          });
     }
     return partitionPaths;
   }
