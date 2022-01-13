@@ -71,6 +71,9 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--table-type"}, description = "Type of table. COPY_ON_WRITE (or) MERGE_ON_READ.", required = true)
   public String tableType;
 
+  @Parameter(names = {"--insert-overwrite"}, description = "Whether it is insert overwrite hoodie table.")
+  public Boolean insertOverwrite = false;
+
   @Parameter(names = {"--insert-cluster"}, description = "Whether to merge small files for insert mode, "
       + "if true, the write throughput will decrease because the read/write of existing small file, default false.")
   public Boolean insertCluster = false;
