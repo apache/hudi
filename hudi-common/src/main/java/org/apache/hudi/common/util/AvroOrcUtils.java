@@ -494,6 +494,7 @@ public class AvroOrcUtils {
       case SHORT:
         return (short) ((LongColumnVector) colVector).vector[vectorPos];
       case INT:
+      case DATE:
         return (int) ((LongColumnVector) colVector).vector[vectorPos];
       case LONG:
         return ((LongColumnVector) colVector).vector[vectorPos];
@@ -511,8 +512,8 @@ public class AvroOrcUtils {
           throw new HoodieIOException("CHAR/VARCHAR has length " + result.length() + " greater than Max Length allowed");
         }
       case STRING:
-        String stringType = avroSchema.getProp(GenericData.STRING_PROP);
-        if (stringType == null || !stringType.equals(StringType.String)) {
+        String stringType = avroSchema != null ? avroSchema.getProp(GenericData.STRING_PROP) : null;
+        if (!StringType.String.name().equals(stringType)) {
           int stringLength = ((BytesColumnVector) colVector).length[vectorPos];
           int stringOffset = ((BytesColumnVector) colVector).start[vectorPos];
           byte[] stringBytes = new byte[stringLength];
@@ -521,9 +522,6 @@ public class AvroOrcUtils {
         } else {
           return ((BytesColumnVector) colVector).toString(vectorPos);
         }
-      case DATE:
-        // convert to daysSinceEpoch for LogicalType.Date
-        return (int) ((LongColumnVector) colVector).vector[vectorPos];
       case TIMESTAMP:
         // The unit of time in ORC is millis. Convert (time,nanos) to the desired unit per logicalType
         long time = ((TimestampColumnVector) colVector).time[vectorPos];
