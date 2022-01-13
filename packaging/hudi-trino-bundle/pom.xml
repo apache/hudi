@@ -77,10 +77,10 @@
                   <include>com.esotericsoftware:kryo-shaded</include>
                   <include>org.objenesis:objenesis</include>
                   <include>com.esotericsoftware:minlog</include>
-                  <include>org.apache.hbase:hbase-client</include>
+                  <include>org.apache.hbase:hbase-shaded-client</include>
+                  <include>org.apache.hbase:hbase-shaded-server</include>
                   <include>org.apache.hbase:hbase-common</include>
                   <include>org.apache.hbase:hbase-protocol</include>
-                  <include>org.apache.hbase:hbase-server</include>
                   <include>org.apache.hbase:hbase-annotations</include>
                   <include>org.apache.htrace:htrace-core</include>
                   <include>com.yammer.metrics:metrics-core</include>
@@ -197,7 +197,7 @@
       <version>${scala.version}</version>
     </dependency>
 
-    <!-- https://mvnrepository.com/artifact/org.apache.hbase/hbase-shaded-client -->
+    <!-- HBase (shaded) -->
     <dependency>
       <groupId>org.apache.hbase</groupId>
       <artifactId>hbase-shaded-client</artifactId>

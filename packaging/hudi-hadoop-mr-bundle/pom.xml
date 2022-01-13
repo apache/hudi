@@ -186,6 +186,7 @@
       <scope>compile</scope>
     </dependency>
 
+    <!-- HBase -->
     <dependency>
       <groupId>org.apache.hbase</groupId>
       <artifactId>hbase-common</artifactId>
