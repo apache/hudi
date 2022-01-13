@@ -387,7 +387,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     prepareTestDirectory(fileSystem, rootDir);
 
     assertTrue(FSUtils.deleteSubPath(
-        subPathStr, new SerializableConfiguration(fileSystem.getConf()), true));
+        subPathStr, new SerializableConfiguration(metaClient.getHadoopConf()), true));
   }
 
   @Test
@@ -400,7 +400,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertThrows(
         HoodieIOException.class,
         () -> FSUtils.deleteSubPath(
-            subPathStr, new SerializableConfiguration(fileSystem.getConf()), false));
+            subPathStr, new SerializableConfiguration(metaClient.getHadoopConf()), false));
   }
 
   @Test
@@ -411,7 +411,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     prepareTestDirectory(fileSystem, rootDir);
 
     assertTrue(FSUtils.deleteSubPath(
-        subPathStr, new SerializableConfiguration(fileSystem.getConf()), false));
+        subPathStr, new SerializableConfiguration(metaClient.getHadoopConf()), false));
   }
 
   @Test
@@ -422,7 +422,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     cleanUpTestDirectory(fileSystem, rootDir);
 
     assertFalse(FSUtils.deleteSubPath(
-        subPathStr, new SerializableConfiguration(fileSystem.getConf()), true));
+        subPathStr, new SerializableConfiguration(metaClient.getHadoopConf()), true));
   }
 
   @Test
@@ -431,7 +431,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     FileSystem fileSystem = metaClient.getFs();
     prepareTestDirectory(fileSystem, rootDir);
     Map<String, List<String>> result = FSUtils.parallelizeSubPathProcess(
-        new HoodieLocalEngineContext(fileSystem.getConf()), fileSystem, new Path(rootDir), 2,
+        new HoodieLocalEngineContext(metaClient.getHadoopConf()), fileSystem, new Path(rootDir), 2,
         fileStatus -> !fileStatus.getPath().getName().contains("1"),
         pairOfSubPathAndConf -> {
           Path subPath = new Path(pairOfSubPathAndConf.getKey());
@@ -463,7 +463,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     FileSystem fileSystem = metaClient.getFs();
     prepareTestDirectory(fileSystem, rootDir);
     List<FileStatus> fileStatusList = FSUtils.getFileStatusAtLevel(
-        new HoodieLocalEngineContext(fileSystem.getConf()), fileSystem,
+        new HoodieLocalEngineContext(metaClient.getHadoopConf()), fileSystem,
         new Path(basePath), 3, 2);
     assertEquals(CollectionUtils.createImmutableSet(
             "file:" + basePath + "/.hoodie/.temp/subdir1/file1.txt",
