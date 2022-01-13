@@ -76,8 +76,8 @@ public class SparkValidatorUtils {
       SQLContext sqlContext = new SQLContext(HoodieSparkEngineContext.getSparkContext(context));
       // Refresh timeline to ensure validator sees the any other operations done on timeline (async operations such as other clustering/compaction/rollback)
       table.getMetaClient().reloadActiveTimeline();
-      Dataset<Row> beforeState = getRecordsFromCommittedFiles(sqlContext, partitionsModified, table).cache();
-      Dataset<Row> afterState  = getRecordsFromPendingCommits(sqlContext, partitionsModified, writeMetadata, table, instantTime).cache();
+      Dataset<Row> beforeState = getRecordsFromCommittedFiles(sqlContext, partitionsModified, table);
+      Dataset<Row> afterState  = getRecordsFromPendingCommits(sqlContext, partitionsModified, writeMetadata, table, instantTime);
 
       Stream<SparkPreCommitValidator> validators = Arrays.stream(config.getPreCommitValidators().split(","))
           .map(validatorClass -> ((SparkPreCommitValidator) ReflectionUtils.loadClass(validatorClass,
