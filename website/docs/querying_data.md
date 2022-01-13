@@ -234,5 +234,5 @@ Note that `Read Optimized` queries are not applicable for COPY_ON_WRITE tables.
 |**Flink SQL**|Y|Y|Y|
 |**PrestoDB**|Y|N|Y|
 |**Trino**|N|N|Y|
-|**Impala**|N|N|Y|
+|**Impala**|N|N|N|
 
