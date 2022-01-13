@@ -121,11 +121,13 @@
       <artifactId>hudi-common</artifactId>
       <version>${project.version}</version>
     </dependency>
+
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-hadoop-mr-bundle</artifactId>
       <version>${project.version}</version>
     </dependency>
+
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-hive-sync</artifactId>
@@ -140,16 +142,21 @@
       <version>${scala.version}</version>
     </dependency>
 
+    <!-- Parquet -->
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
+      <version>${parquet.version}</version>
       <scope>compile</scope>
     </dependency>
 
+    <!-- Avro -->
     <dependency>
       <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>
+      <version>${avro.version}</version>
       <scope>compile</scope>
     </dependency>
+
   </dependencies>
 </project>

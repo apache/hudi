@@ -71,10 +71,10 @@
                   <include>org.scala-lang:scala-library</include>
 
                   <include>org.apache.parquet:parquet-avro</include>
+                  <include>org.apache.avro:avro</include>
                   <include>com.esotericsoftware:kryo-shaded</include>
                   <include>org.objenesis:objenesis</include>
                   <include>com.esotericsoftware:minlog</include>
-                  <include>org.apache.avro:avro</include>
                   <include>org.apache.hbase:hbase-common</include>
                   <include>org.apache.hbase:hbase-client</include>
                   <include>org.apache.hbase:hbase-protocol</include>
@@ -171,9 +171,11 @@
       <scope>compile</scope>
     </dependency>
 
+    <!-- Avro -->
     <dependency>
       <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>
+      <version>${avro.version}</version>
       <scope>compile</scope>
     </dependency>
 
