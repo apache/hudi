@@ -30,8 +30,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.util.hash.FileIndexID;
-import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieMetadataException;
 
 import java.io.IOException;
@@ -145,19 +143,20 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
     // no-op
   }
 
-  public Option<ByteBuffer> getBloomFilter(final PartitionIndexID partitionIndexID, final FileIndexID fileIndexID)
+  public Option<ByteBuffer> getBloomFilter(final String partitionName, final String fileName)
       throws HoodieMetadataException {
-    throw new HoodieMetadataException("Unsupported operation: getBloomFilter for " + fileIndexID.getName());
+    throw new HoodieMetadataException("Unsupported operation: getBloomFilter for " + fileName);
   }
 
   @Override
-  public Map<String, ByteBuffer> getBloomFilters(final List<Pair<PartitionIndexID, FileIndexID>> partitionFileIndexIDList)
+  public Map<Pair<String, String>, ByteBuffer> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList)
       throws HoodieMetadataException {
     throw new HoodieMetadataException("Unsupported operation: getBloomFilters!");
   }
 
   @Override
-  public Map<String, HoodieColumnStats> getColumnStats(List<String> keySet) throws HoodieMetadataException {
+  public Map<Pair<String, String>, HoodieColumnStats> getColumnStats(final List<Pair<String, String>> partitionNameFileNameList, final String columnName)
+      throws HoodieMetadataException {
     throw new HoodieMetadataException("Unsupported operation: getColumnsStats!");
   }
 }

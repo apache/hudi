@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieMetadataException;
@@ -156,94 +157,104 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   }
 
   @Override
-  public Option<ByteBuffer> getBloomFilter(final PartitionIndexID partitionIndexID, final FileIndexID fileIndexID)
+  public Option<ByteBuffer> getBloomFilter(final String partitionName, final String fileName)
       throws HoodieMetadataException {
     if (!isMetaIndexBloomFilterEnabled) {
-      LOG.error("Meta bloom filter index is disabled!");
+      LOG.error("Meta index for bloom filters is disabled!");
       return Option.empty();
     }
 
-    HoodieTimer timer = new HoodieTimer().startTimer();
-    final String bloomIndexKey = partitionIndexID.asBase64EncodedString().concat(fileIndexID.asBase64EncodedString());
-    Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getRecordByKey(bloomIndexKey,
-        MetadataPartitionType.BLOOM_FILTERS.partitionPath());
-    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_METADATA_STR, timer.endTimer()));
-
-    if (!hoodieRecord.isPresent()) {
-      LOG.error("Meta bloom filter index: lookup failed for partition: " + partitionIndexID.getName() + ", file: "
-          + fileIndexID.getName());
+    final Pair<String, String> partitionFileName = Pair.of(partitionName, fileName);
+    Map<Pair<String, String>, ByteBuffer> bloomFilters = getBloomFilters(Collections.singletonList(partitionFileName));
+    if (bloomFilters.isEmpty()) {
+      LOG.error("Meta index: missing bloom filter for partition: " + partitionName + ", file: " + fileName);
       return Option.empty();
     }
 
-    final Option<HoodieMetadataBloomFilter> fileBloomFilter = hoodieRecord.get().getData().getBloomFilterMetadata();
-    if (!fileBloomFilter.isPresent()) {
-      LOG.error("Meta bloom filter index: bloom filter missing for partition: " + partitionIndexID.getName()
-          + ", file: " + fileIndexID.getName());
-      return Option.empty();
-    }
-
-    return Option.of(fileBloomFilter.get().getBloomFilter());
+    ValidationUtils.checkState(bloomFilters.containsKey(partitionFileName));
+    return Option.of(bloomFilters.get(partitionFileName));
   }
 
   @Override
-  public Map<String, ByteBuffer> getBloomFilters(final List<Pair<PartitionIndexID, FileIndexID>> partitionFileIndexIDList)
+  public Map<Pair<String, String>, ByteBuffer> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList)
       throws HoodieMetadataException {
     if (!isMetaIndexBloomFilterEnabled) {
-      LOG.error("Meta bloom filter index is disabled!");
+      LOG.error("Meta index for bloom filter is disabled!");
       return Collections.emptyMap();
     }
 
     HoodieTimer timer = new HoodieTimer().startTimer();
     Set<String> partitionIDFileIDSortedStrings = new TreeSet<>();
-    partitionFileIndexIDList.forEach(partitionIDFileIDPair -> {
-          final String bloomKey = partitionIDFileIDPair.getLeft().asBase64EncodedString()
-              .concat(partitionIDFileIDPair.getRight().asBase64EncodedString());
+    Map<String, Pair<String, String>> fileToKeyMap = new HashMap<>();
+    partitionNameFileNameList.forEach(partitionNameFileNamePair -> {
+          final String bloomKey = new PartitionIndexID(partitionNameFileNamePair.getLeft()).asBase64EncodedString()
+              .concat(new FileIndexID(partitionNameFileNamePair.getRight()).asBase64EncodedString());
           partitionIDFileIDSortedStrings.add(bloomKey);
+          fileToKeyMap.put(bloomKey, partitionNameFileNamePair);
         }
     );
-    List<String> partitionIDFileIDStrings = new ArrayList<>(partitionIDFileIDSortedStrings);
 
+    List<String> partitionIDFileIDStrings = new ArrayList<>(partitionIDFileIDSortedStrings);
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> hoodieRecordList =
         getRecordsByKeys(partitionIDFileIDStrings, MetadataPartitionType.BLOOM_FILTERS.partitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_METADATA_STR, timer.endTimer()));
 
-    Map<String, ByteBuffer> fileToBloomFilterMap = new HashMap<>();
+    Map<Pair<String, String>, ByteBuffer> partitionFileToBloomFilterMap = new HashMap<>();
     for (final Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>> entry : hoodieRecordList) {
       if (entry.getRight().isPresent()) {
         final Option<HoodieMetadataBloomFilter> optionalBloomFilterMetadata =
             entry.getRight().get().getData().getBloomFilterMetadata();
         if (optionalBloomFilterMetadata.isPresent()) {
-          fileToBloomFilterMap.put(entry.getLeft(), optionalBloomFilterMetadata.get().getBloomFilter());
+          ValidationUtils.checkState(fileToKeyMap.containsKey(entry.getLeft()));
+          partitionFileToBloomFilterMap.put(fileToKeyMap.get(entry.getLeft()), optionalBloomFilterMetadata.get().getBloomFilter());
+        } else {
+          LOG.error("Meta index bloom filter missing for: " + fileToKeyMap.get(entry.getLeft()));
         }
       }
     }
-    return fileToBloomFilterMap;
+    return partitionFileToBloomFilterMap;
   }
 
   @Override
-  public Map<String, HoodieColumnStats> getColumnStats(List<String> keySet) throws HoodieMetadataException {
+  public Map<Pair<String, String>, HoodieColumnStats> getColumnStats(final List<Pair<String, String>> partitionNameFileNameList, final String columnName)
+      throws HoodieMetadataException {
     if (!isMetaIndexColumnStatsEnabled) {
-      LOG.error("Meta column range index is disabled!");
+      LOG.error("Meta index for column stats is disabled!");
       return Collections.emptyMap();
+    }
+
+    Map<String, Pair<String, String>> columnStatKeyToFileNameMap = new HashMap<>();
+    List<String> columnStatKeys = new ArrayList<>();
+    final String columnIndexStr = new ColumnIndexID(columnName).asBase64EncodedString();
+    for (Pair<String, String> partitionNameFileNamePair : partitionNameFileNameList) {
+      final String columnStatIndexKey = columnIndexStr
+          .concat(new PartitionIndexID(partitionNameFileNamePair.getLeft()).asBase64EncodedString())
+          .concat(new FileIndexID(partitionNameFileNamePair.getRight()).asBase64EncodedString());
+      columnStatKeys.add(columnStatIndexKey);
+      columnStatKeyToFileNameMap.put(columnStatIndexKey, partitionNameFileNamePair);
     }
 
     HoodieTimer timer = new HoodieTimer().startTimer();
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> hoodieRecordList =
-        getRecordsByKeys(keySet, MetadataPartitionType.COLUMN_STATS.partitionPath());
+        getRecordsByKeys(columnStatKeys, MetadataPartitionType.COLUMN_STATS.partitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_COLUMN_STATS_METADATA_STR, timer.endTimer()));
 
-    Map<String, HoodieColumnStats> columnToRangeMap = new HashMap<>();
+    Map<Pair<String, String>, HoodieColumnStats> fileToColumnStatMap = new HashMap<>();
     for (final Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>> entry : hoodieRecordList) {
       if (entry.getRight().isPresent()) {
-        final Option<HoodieColumnStats> optionalColumnStatPayload =
+        final Option<HoodieColumnStats> columnStatPayload =
             entry.getRight().get().getData().getColumnStatMetadata();
-        if (optionalColumnStatPayload.isPresent()) {
-          ValidationUtils.checkState(!columnToRangeMap.containsKey(entry.getLeft()));
-          columnToRangeMap.put(entry.getLeft(), optionalColumnStatPayload.get());
+        if (columnStatPayload.isPresent()) {
+          ValidationUtils.checkState(columnStatKeyToFileNameMap.containsKey(entry.getLeft()));
+          final Pair<String, String> partitionFileNamePair = columnStatKeyToFileNameMap.get(entry.getLeft());
+          ValidationUtils.checkState(!fileToColumnStatMap.containsKey(partitionFileNamePair));
+          fileToColumnStatMap.put(partitionFileNamePair, columnStatPayload.get());
+        } else {
+          LOG.error("Meta index column stats missing for: " + entry.getLeft());
         }
       }
     }
-    return columnToRangeMap;
+    return fileToColumnStatMap;
   }
 
   /**

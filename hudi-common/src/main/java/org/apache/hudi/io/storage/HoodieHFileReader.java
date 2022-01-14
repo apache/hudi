@@ -23,12 +23,14 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -138,26 +140,43 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
 
   @Override
   public Set<String> filterRowKeys(Set candidateRowKeys) {
-    // Current implementation reads all records and filters them. In certain cases, it many be better to:
-    //  1. Scan a limited subset of keys (min/max range of candidateRowKeys)
-    //  2. Lookup keys individually (if the size of candidateRowKeys is much less than the total keys in file)
-    return filterRecords(candidateRowKeys).keySet();
+    try {
+      return filterKeys(new TreeSet<>(candidateRowKeys));
+    } catch (IOException e) {
+      LOG.error("Failed to fetch keys from " + path);
+    }
+    return Collections.emptySet();
   }
 
   @Override
-  public HashMap<String, R> filterRecords(Set<String> candidateRowKeys) {
-    try {
-      List<Pair<String, R>> allRecords = readAllRecords();
-      HashMap<String, R> rowKeys = new HashMap<>();
-      allRecords.forEach(t -> {
-        if (candidateRowKeys.contains(t.getFirst())) {
-          rowKeys.put(t.getFirst(), t.getSecond());
-        }
-      });
-      return rowKeys;
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to read row keys from " + path, e);
+  public Set<String> filterKeys(TreeSet<String> sortedCandidateRowKeys) throws IOException {
+    return filterRecordsImpl(sortedCandidateRowKeys).keySet();
+  }
+
+  @Override
+  public Map<String, R> getRecordsByKeys(TreeSet<String> sortedCandidateRowKeys) throws IOException {
+    return filterRecordsImpl(sortedCandidateRowKeys);
+  }
+
+  /**
+   * Filter records by sorted keys.
+   * <p>
+   * TODO: Implement single seek and sequential scan till the last candidate key
+   * instead of repeated seeks.
+   *
+   * @param sortedCandidateRowKeys - Sorted set of keys to fetch records for
+   * @return Map of keys to fetched records
+   * @throws IOException When the deserialization of records fail
+   */
+  private synchronized Map<String, R> filterRecordsImpl(TreeSet<String> sortedCandidateRowKeys) throws IOException {
+    HashMap<String, R> filteredRecords = new HashMap<>();
+    for (String key : sortedCandidateRowKeys) {
+      Option<R> record = getRecordByKey(key);
+      if (record.isPresent()) {
+        filteredRecords.put(key, record.get());
+      }
     }
+    return filteredRecords;
   }
 
   public List<Pair<String, R>> readAllRecords(Schema writerSchema, Schema readerSchema) throws IOException {

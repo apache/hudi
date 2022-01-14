@@ -27,8 +27,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
-import org.apache.hudi.io.HoodieKeyMetaIndexLookupHandle;
-import org.apache.hudi.io.HoodieKeyMetaIndexLookupHandle.MetaBloomIndexKeyLookupResult;
+import org.apache.hudi.io.HoodieKeyLookupResult;
+import org.apache.hudi.io.HoodieKeyLookupHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -44,7 +44,7 @@ import java.util.Map;
 /**
  * Function performing actual checking of RDD partition containing (fileId, hoodieKeys) against the actual files.
  */
-public class HoodieBloomMetaIndexLazyCheckFunction implements Function2<Integer, Iterator<Tuple2<String, HoodieKey>>, Iterator<List<MetaBloomIndexKeyLookupResult>>> {
+public class HoodieBloomMetaIndexLazyCheckFunction implements Function2<Integer, Iterator<Tuple2<String, HoodieKey>>, Iterator<List<HoodieKeyLookupResult>>> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieBloomMetaIndexLazyCheckFunction.class);
   private final HoodieTable hoodieTable;
@@ -56,13 +56,13 @@ public class HoodieBloomMetaIndexLazyCheckFunction implements Function2<Integer,
   }
 
   @Override
-  public Iterator<List<MetaBloomIndexKeyLookupResult>> call(Integer integer, Iterator<Tuple2<String, HoodieKey>> tuple2Iterator) throws Exception {
+  public Iterator<List<HoodieKeyLookupResult>> call(Integer integer, Iterator<Tuple2<String, HoodieKey>> tuple2Iterator) throws Exception {
     return new LazyKeyCheckIterator(tuple2Iterator);
   }
 
-  class LazyKeyCheckIterator extends LazyIterableIterator<Tuple2<String, HoodieKey>, List<MetaBloomIndexKeyLookupResult>> {
+  class LazyKeyCheckIterator extends LazyIterableIterator<Tuple2<String, HoodieKey>, List<HoodieKeyLookupResult>> {
 
-    private HoodieKeyMetaIndexLookupHandle keyLookupHandle;
+    private HoodieKeyLookupHandle keyLookupHandle;
 
     LazyKeyCheckIterator(Iterator<Tuple2<String, HoodieKey>> filePartitionRecordKeyTripletItr) {
       super(filePartitionRecordKeyTripletItr);
@@ -73,9 +73,9 @@ public class HoodieBloomMetaIndexLazyCheckFunction implements Function2<Integer,
     }
 
     @Override
-    protected List<MetaBloomIndexKeyLookupResult> computeNext() {
+    protected List<HoodieKeyLookupResult> computeNext() {
 
-      List<MetaBloomIndexKeyLookupResult> ret = new ArrayList<>();
+      List<HoodieKeyLookupResult> ret = new ArrayList<>();
       try {
         final Map<String, HoodieBaseFile> fileIDBaseFileMap = new HashMap<>();
         while (inputItr.hasNext()) {
@@ -96,18 +96,18 @@ public class HoodieBloomMetaIndexLazyCheckFunction implements Function2<Integer,
 
           // lazily init state
           if (keyLookupHandle == null) {
-            keyLookupHandle = new HoodieKeyMetaIndexLookupHandle(config, hoodieTable, partitionPathFileIdPair,
-                fileIDBaseFileMap.get(fileId).getFileName());
+            keyLookupHandle = new HoodieKeyLookupHandle(config, hoodieTable, partitionPathFileIdPair,
+                Option.of(fileIDBaseFileMap.get(fileId).getFileName()), true);
           }
 
           // if continue on current file
-          if (keyLookupHandle.getPartitionPathFilePair().equals(partitionPathFileIdPair)) {
+          if (keyLookupHandle.getPartitionPathFileIDPair().equals(partitionPathFileIdPair)) {
             keyLookupHandle.addKey(recordKey);
           } else {
             // do the actual checking of file & break out
             ret.add(keyLookupHandle.getLookupResult());
-            keyLookupHandle = new HoodieKeyMetaIndexLookupHandle(config, hoodieTable, partitionPathFileIdPair,
-                fileIDBaseFileMap.get(fileId).getFileName());
+            keyLookupHandle = new HoodieKeyLookupHandle(config, hoodieTable, partitionPathFileIdPair,
+                Option.of(fileIDBaseFileMap.get(fileId).getFileName()), true);
             keyLookupHandle.addKey(recordKey);
             break;
           }

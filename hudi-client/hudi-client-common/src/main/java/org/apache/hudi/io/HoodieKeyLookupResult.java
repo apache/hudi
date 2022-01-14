@@ -23,15 +23,15 @@ import java.util.List;
 /**
  * Encapsulates the result from a key lookup.
  */
-public class HoodieKeyMetaIndexLookupResult {
+public class HoodieKeyLookupResult {
 
   private final String fileId;
   private final String baseInstantTime;
   private final List<String> matchingRecordKeys;
   private final String partitionPath;
 
-  public HoodieKeyMetaIndexLookupResult(String fileId, String partitionPath, String baseInstantTime,
-                                        List<String> matchingRecordKeys) {
+  public HoodieKeyLookupResult(String fileId, String partitionPath, String baseInstantTime,
+                               List<String> matchingRecordKeys) {
     this.fileId = fileId;
     this.partitionPath = partitionPath;
     this.baseInstantTime = baseInstantTime;

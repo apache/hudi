@@ -85,11 +85,6 @@
                             "doc": "Bloom filter entry valid/deleted flag",
                             "name": "isDeleted",
                             "type": "boolean"
-                        },
-                        {
-                            "doc": "Reserved bytes for future use",
-                            "name": "reserved",
-                            "type": "bytes"
                         }
                     ]
                 }
@@ -133,11 +128,6 @@
                             "doc": "Column range entry valid/deleted flag",
                             "name": "isDeleted",
                             "type": "boolean"
-                        },
-                        {
-                            "doc": "Reserved bits for future use",
-                            "name": "reserved",
-                            "type": "bytes"
                         }
                     ]
                 }

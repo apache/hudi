@@ -27,9 +27,7 @@ import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -38,8 +36,7 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
-import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.io.HoodieKeyLookupHandle;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
@@ -59,7 +56,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -90,22 +86,6 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     initFileSystem();
     // We have some records to be tagged (two different partitions)
     initMetaClient();
-  }
-
-  public void setUp2() throws Exception {
-    initPath();
-    HoodieIndexConfig.Builder indexBuilder = HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM);
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withIndexConfig(indexBuilder.build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .enable(true)
-            .withMetaIndexBloomFilter(false)
-            .withMetaIndexColumnStats(false)
-            .build())
-        .build();
-    init(HoodieTableType.COPY_ON_WRITE, config);
-    writeClient = getHoodieWriteClient(config);
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, tableType, new Properties());
   }
 
   @AfterEach
@@ -264,9 +244,9 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
-    HoodieKeyLookupHandle keyHandle = new HoodieKeyLookupHandle<>(config, table, Pair.of(partition, fileId));
-    List<String> results = keyHandle.checkCandidatesAgainstFile(hadoopConf, uuids,
-        new Path(Paths.get(basePath, partition, filename).toString()));
+    List<String> results = HoodieIndexUtils.filterKeysFromFile(
+        new Path(Paths.get(basePath, partition, filename).toString()), uuids, hadoopConf);
+
     assertEquals(results.size(), 2);
     assertTrue(results.get(0).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")
         || results.get(1).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0"));

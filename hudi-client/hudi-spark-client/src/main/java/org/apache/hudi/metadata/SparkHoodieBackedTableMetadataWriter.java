@@ -40,7 +40,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
 import java.util.List;
@@ -191,7 +190,6 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       ValidationUtils.checkArgument(fileSlices.size() == fileGroupCount,
           String.format("Invalid number of file groups: found=%d, required=%d", fileSlices.size(), fileGroupCount));
 
-      JavaSparkContext jsc = ((HoodieSparkEngineContext) engineContext).getJavaSparkContext();
       JavaRDD<HoodieRecord> rddSinglePartitionRecords = recordsRDD.map(r -> {
         FileSlice slice = fileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(),
             fileGroupCount));
@@ -201,10 +199,8 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
       if (rddAllPartitionRecords == null) {
         rddAllPartitionRecords = rddSinglePartitionRecords;
-
       } else {
         rddAllPartitionRecords = rddAllPartitionRecords.union(rddSinglePartitionRecords);
-
       }
     }
     return rddAllPartitionRecords;
