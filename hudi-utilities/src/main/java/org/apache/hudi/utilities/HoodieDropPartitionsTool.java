@@ -246,32 +246,31 @@ public class HoodieDropPartitionsTool implements Serializable {
   }
 
   private String getConfigDetails() {
-    final StringBuilder sb = new StringBuilder("HoodieDropPartitionsToolConfig {\n");
-    sb.append("   --base-path ").append(cfg.basePath).append(", \n");
-    sb.append("   --mode ").append(cfg.runningMode).append(", \n");
-    sb.append("   --table-name ").append(cfg.tableName).append(", \n");
-    sb.append("   --partitions ").append(cfg.partitions).append(", \n");
-    sb.append("   --parallelism ").append(cfg.parallelism).append(", \n");
-    sb.append("   --instantTime ").append(cfg.instantTime).append(", \n");
-    sb.append("   --clean-up-empty-directory ").append(cfg.cleanUpEmptyDirectory).append(", \n");
-    sb.append("   --sync-hive-meta ").append(cfg.syncToHive).append(", \n");
-    sb.append("   --hive-database ").append(cfg.hiveDataBase).append(", \n");
-    sb.append("   --hive-table-name ").append(cfg.hiveTableName).append(", \n");
-    sb.append("   --hive-user-name ").append("Masked").append(", \n");
-    sb.append("   --hive-pass-word ").append("Masked").append(", \n");
-    sb.append("   --hive-jdbc-url ").append(cfg.hiveURL).append(", \n");
-    sb.append("   --hive-partition-field ").append(cfg.hivePartitionsField).append(", \n");
-    sb.append("   --hive-sync-use-jdbc ").append(cfg.hiveUseJdbc).append(", \n");
-    sb.append("   --hive-metastore-uris ").append(cfg.hiveHMSUris).append(", \n");
-    sb.append("   --hive-sync-mode ").append(cfg.hiveSyncMode).append(", \n");
-    sb.append("   --hive-sync-ignore-exception ").append(cfg.hiveSyncIgnoreException).append(", \n");
-    sb.append("   --hive-partition-value-extractor-class ").append(cfg.partitionValueExtractorClass).append(", \n");
-    sb.append("   --spark-master ").append(cfg.sparkMaster).append(", \n");
-    sb.append("   --spark-memory ").append(cfg.sparkMemory).append(", \n");
-    sb.append("   --props ").append(cfg.propsFilePath).append(", \n");
-    sb.append("   --hoodie-conf ").append(cfg.configs);
-    sb.append("\n}");
-    return sb.toString();
+    String sb = "HoodieDropPartitionsToolConfig {\n" + "   --base-path " + cfg.basePath + ", \n" +
+        "   --mode " + cfg.runningMode + ", \n" +
+        "   --table-name " + cfg.tableName + ", \n" +
+        "   --partitions " + cfg.partitions + ", \n" +
+        "   --parallelism " + cfg.parallelism + ", \n" +
+        "   --instantTime " + cfg.instantTime + ", \n" +
+        "   --clean-up-empty-directory " + cfg.cleanUpEmptyDirectory + ", \n" +
+        "   --sync-hive-meta " + cfg.syncToHive + ", \n" +
+        "   --hive-database " + cfg.hiveDataBase + ", \n" +
+        "   --hive-table-name " + cfg.hiveTableName + ", \n" +
+        "   --hive-user-name " + "Masked" + ", \n" +
+        "   --hive-pass-word " + "Masked" + ", \n" +
+        "   --hive-jdbc-url " + cfg.hiveURL + ", \n" +
+        "   --hive-partition-field " + cfg.hivePartitionsField + ", \n" +
+        "   --hive-sync-use-jdbc " + cfg.hiveUseJdbc + ", \n" +
+        "   --hive-metastore-uris " + cfg.hiveHMSUris + ", \n" +
+        "   --hive-sync-mode " + cfg.hiveSyncMode + ", \n" +
+        "   --hive-sync-ignore-exception " + cfg.hiveSyncIgnoreException + ", \n" +
+        "   --hive-partition-value-extractor-class " + cfg.partitionValueExtractorClass + ", \n" +
+        "   --spark-master " + cfg.sparkMaster + ", \n" +
+        "   --spark-memory " + cfg.sparkMemory + ", \n" +
+        "   --props " + cfg.propsFilePath + ", \n" +
+        "   --hoodie-conf " + cfg.configs +
+        "\n}";
+    return sb;
   }
 
   public static void main(String[] args) {
