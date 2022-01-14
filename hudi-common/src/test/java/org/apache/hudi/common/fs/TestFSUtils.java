@@ -21,6 +21,7 @@ package org.apache.hudi.common.fs;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -33,7 +34,10 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.junit.Rule;
 import org.junit.contrib.java.lang.system.EnvironmentVariables;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,8 +68,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestFSUtils extends HoodieCommonTestHarness {
 
+  private static final Logger LOG = LogManager.getLogger(TestFSUtils.class);
+
   private final long minRollbackToKeep = 10;
   private final long minCleanToKeep = 10;
+  protected transient Configuration hadoopConf = null;
+  protected transient FileSystem fs;
 
   private static final String TEST_WRITE_TOKEN = "1-0-1";
   private static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
@@ -76,7 +84,35 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   @BeforeEach
   public void setUp() throws IOException {
     initPath();
-    initMetaClient();
+    hadoopConf = new Configuration();
+    initFileSystemWithConfiguration(hadoopConf);
+    initMetaClient(HoodieTableType.COPY_ON_WRITE);
+  }
+
+  private void initFileSystemWithConfiguration(Configuration configuration) {
+    if (basePath == null) {
+      throw new IllegalStateException("The base path has not been initialized.");
+    }
+
+    fs = FSUtils.getFs(basePath, configuration);
+    if (fs instanceof LocalFileSystem) {
+      LocalFileSystem lfs = (LocalFileSystem) fs;
+      // With LocalFileSystem, with checksum disabled, fs.open() returns an inputStream which is FSInputStream
+      // This causes ClassCastExceptions in LogRecordScanner (and potentially other places) calling fs.open
+      // So, for the tests, we enforce checksum verification to circumvent the problem
+      lfs.setVerifyChecksum(true);
+    }
+    LOG.warn("BasePath : before " + basePath);
+    basePath = new Path(basePath).toString();
+    LOG.warn("BasePath : after " + basePath);
+  }
+
+  protected void initMetaClient(HoodieTableType tableType) throws IOException {
+    if (basePath == null) {
+      throw new IllegalStateException("The base path has not been initialized.");
+    }
+
+    metaClient = HoodieTestUtils.init(hadoopConf, basePath, tableType);
   }
 
   @Test
@@ -107,7 +143,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
         Arrays.asList("2016/04/15", "2016/05/16", ".hoodie/.temp/2/2016/04/15", ".hoodie/.temp/2/2016/05/16");
     folders.forEach(f -> {
       try {
-        metaClient.getFs().mkdirs(new Path(new Path(basePath), f));
+        fs.mkdirs(new Path(new Path(basePath), f));
       } catch (IOException e) {
         throw new HoodieException(e);
       }
@@ -123,7 +159,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
     files.forEach(f -> {
       try {
-        metaClient.getFs().create(new Path(new Path(basePath), f));
+        fs.create(new Path(new Path(basePath), f));
       } catch (IOException e) {
         throw new HoodieException(e);
       }
@@ -131,7 +167,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
     // Test excluding meta-folder
     final List<String> collected = new ArrayList<>();
-    FSUtils.processFiles(metaClient.getFs(), basePath, (status) -> {
+    FSUtils.processFiles(fs, basePath, (status) -> {
       collected.add(status.getPath().toString());
       return true;
     }, true);
@@ -143,7 +179,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
     // Test including meta-folder
     final List<String> collected2 = new ArrayList<>();
-    FSUtils.processFiles(metaClient.getFs(), basePath, (status) -> {
+    FSUtils.processFiles(fs, basePath, (status) -> {
       collected2.add(status.getPath().toString());
       return true;
     }, false);
@@ -360,32 +396,29 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   @Test
   public void testDeleteExistingDir() throws IOException {
     String rootDir = basePath + "/.hoodie/.temp";
-    FileSystem fileSystem = metaClient.getFs();
-    prepareTestDirectory(fileSystem, rootDir);
+    prepareTestDirectory(fs, rootDir);
 
     Path rootDirPath = new Path(rootDir);
-    assertTrue(fileSystem.exists(rootDirPath));
+    assertTrue(fs.exists(rootDirPath));
     assertTrue(FSUtils.deleteDir(
-        new HoodieLocalEngineContext(metaClient.getHadoopConf()), fileSystem, rootDirPath, 2));
-    assertFalse(fileSystem.exists(rootDirPath));
+        new HoodieLocalEngineContext(metaClient.getHadoopConf()), fs, rootDirPath, 2));
+    assertFalse(fs.exists(rootDirPath));
   }
 
   @Test
   public void testDeleteNonExistingDir() throws IOException {
     String rootDir = basePath + "/.hoodie/.temp";
-    FileSystem fileSystem = metaClient.getFs();
-    cleanUpTestDirectory(fileSystem, rootDir);
+    cleanUpTestDirectory(fs, rootDir);
 
     assertFalse(FSUtils.deleteDir(
-        new HoodieLocalEngineContext(metaClient.getHadoopConf()), fileSystem, new Path(rootDir), 2));
+        new HoodieLocalEngineContext(metaClient.getHadoopConf()), fs, new Path(rootDir), 2));
   }
 
   @Test
   public void testDeleteSubDirectoryRecursively() throws IOException {
     String rootDir = basePath + "/.hoodie/.temp";
     String subPathStr = rootDir + "/subdir1";
-    FileSystem fileSystem = metaClient.getFs();
-    prepareTestDirectory(fileSystem, rootDir);
+    prepareTestDirectory(fs, rootDir);
 
     assertTrue(FSUtils.deleteSubPath(
         subPathStr, new SerializableConfiguration(metaClient.getHadoopConf()), true));
@@ -395,8 +428,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testDeleteSubDirectoryNonRecursively() throws IOException {
     String rootDir = basePath + "/.hoodie/.temp";
     String subPathStr = rootDir + "/subdir1";
-    FileSystem fileSystem = metaClient.getFs();
-    prepareTestDirectory(fileSystem, rootDir);
+    prepareTestDirectory(fs, rootDir);
 
     assertThrows(
         HoodieIOException.class,
@@ -408,8 +440,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testDeleteSubPathAsFile() throws IOException {
     String rootDir = basePath + "/.hoodie/.temp";
     String subPathStr = rootDir + "/file3.txt";
-    FileSystem fileSystem = metaClient.getFs();
-    prepareTestDirectory(fileSystem, rootDir);
+    prepareTestDirectory(fs, rootDir);
 
     assertTrue(FSUtils.deleteSubPath(
         subPathStr, new SerializableConfiguration(metaClient.getHadoopConf()), false));
@@ -419,8 +450,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testDeleteNonExistingSubDirectory() throws IOException {
     String rootDir = basePath + "/.hoodie/.temp";
     String subPathStr = rootDir + "/subdir10";
-    FileSystem fileSystem = metaClient.getFs();
-    cleanUpTestDirectory(fileSystem, rootDir);
+    cleanUpTestDirectory(fs, rootDir);
 
     assertFalse(FSUtils.deleteSubPath(
         subPathStr, new SerializableConfiguration(metaClient.getHadoopConf()), true));
@@ -429,10 +459,9 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   @Test
   public void testParallelizeSubPathProcessWithExistingDir() throws IOException {
     String rootDir = basePath + "/.hoodie/.temp";
-    FileSystem fileSystem = metaClient.getFs();
-    prepareTestDirectory(fileSystem, rootDir);
+    prepareTestDirectory(fs, rootDir);
     Map<String, List<String>> result = FSUtils.parallelizeSubPathProcess(
-        new HoodieLocalEngineContext(metaClient.getHadoopConf()), fileSystem, new Path(rootDir), 2,
+        new HoodieLocalEngineContext(metaClient.getHadoopConf()), fs, new Path(rootDir), 2,
         fileStatus -> !fileStatus.getPath().getName().contains("1"),
         pairOfSubPathAndConf -> {
           Path subPath = new Path(pairOfSubPathAndConf.getKey());
@@ -461,10 +490,9 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   @Test
   public void testGetFileStatusAtLevel() throws IOException {
     String rootDir = basePath + "/.hoodie/.temp";
-    FileSystem fileSystem = metaClient.getFs();
-    prepareTestDirectory(fileSystem, rootDir);
+    prepareTestDirectory(fs, rootDir);
     List<FileStatus> fileStatusList = FSUtils.getFileStatusAtLevel(
-        new HoodieLocalEngineContext(metaClient.getHadoopConf()), fileSystem,
+        new HoodieLocalEngineContext(metaClient.getHadoopConf()), fs,
         new Path(basePath), 3, 2);
     assertEquals(CollectionUtils.createImmutableSet(
             "file:" + basePath + "/.hoodie/.temp/subdir1/file1.txt",
