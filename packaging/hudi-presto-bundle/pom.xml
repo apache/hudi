@@ -70,6 +70,8 @@
                   <!-- TODO(HUDI-3239) remove this -->
                   <include>org.scala-lang:scala-library</include>
 
+                  <include>org.apache.parquet:parquet-avro</include>
+                  <include>org.apache.avro:avro</include>
                   <include>org.codehaus.jackson:*</include>
                   <include>com.esotericsoftware:kryo-shaded</include>
                   <include>org.objenesis:objenesis</include>
@@ -86,6 +88,10 @@
                 </includes>
               </artifactSet>
               <relocations>
+                <relocation>
+                  <pattern>org.apache.avro.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
+                </relocation>
                 <relocation>
                   <pattern>org.codehaus.jackson.</pattern>
                   <shadedPattern>org.apache.hudi.org.codehaus.jackson.</shadedPattern>
@@ -121,6 +127,10 @@
                 <relocation>
                   <pattern>org.apache.htrace.</pattern>
                   <shadedPattern>${presto.bundle.bootstrap.shade.prefix}org.apache.htrace.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.parquet.avro.</pattern>
+                  <shadedPattern>${presto.bundle.bootstrap.shade.prefix}org.apache.parquet.avro.</shadedPattern>
                 </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
@@ -188,6 +198,20 @@
       <version>${scala.version}</version>
     </dependency>
 
+    <!-- Parquet -->
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-avro</artifactId>
+      <scope>compile</scope>
+    </dependency>
+
+    <!-- Avro -->
+    <dependency>
+      <groupId>org.apache.avro</groupId>
+      <artifactId>avro</artifactId>
+      <scope>compile</scope>
+    </dependency>
+
     <!-- HBase -->
     <dependency>
       <groupId>org.apache.hbase</groupId>
@@ -222,22 +246,6 @@
           <artifactId>*</artifactId>
         </exclusion>
       </exclusions>
-    </dependency>
-
-    <!-- Parquet -->
-    <dependency>
-      <groupId>org.apache.parquet</groupId>
-      <artifactId>parquet-avro</artifactId>
-      <version>${parquet.version}</version>
-      <scope>compile</scope>
-    </dependency>
-
-    <!-- Avro -->
-    <dependency>
-      <groupId>org.apache.avro</groupId>
-      <artifactId>avro</artifactId>
-      <version>${avro.version}</version>
-      <scope>compile</scope>
     </dependency>
 
     <!--Guava needs to be shaded because HBase 1.2.3 depends on an earlier guava version i.e 12.0.1 and hits runtime
