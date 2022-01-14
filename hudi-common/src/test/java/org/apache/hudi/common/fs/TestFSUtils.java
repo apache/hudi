@@ -470,12 +470,12 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     List<FileStatus> fileStatusList = FSUtils.getFileStatusAtLevel(
         new HoodieLocalEngineContext(fileSystem.getConf()), fileSystem,
         new Path(basePath), 3, 2);
-    assertEquals(CollectionUtils.createImmutableList(
+    assertEquals(CollectionUtils.createImmutableSet(
             "file:" + basePath + "/.hoodie/.temp/subdir1/file1.txt",
             "file:" + basePath + "/.hoodie/.temp/subdir2/file2.txt"),
         fileStatusList.stream()
             .map(fileStatus -> fileStatus.getPath().toString())
             .filter(filePath -> filePath.endsWith(".txt"))
-            .collect(Collectors.toList()));
+            .collect(Collectors.toSet()));
   }
 }
