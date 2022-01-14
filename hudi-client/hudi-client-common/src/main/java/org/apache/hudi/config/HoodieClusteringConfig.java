@@ -177,10 +177,10 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .withDocumentation("Determines how to handle updates, deletes to file groups that are under clustering."
           + " Default strategy just rejects the update");
 
-  public static final ConfigProperty<String> ASYNC_CLUSTERING_SCHEDULE = ConfigProperty
-      .key("hoodie.clustering.schedule.async")
+  public static final ConfigProperty<String> SCHEDULE_INLINE_CLUSTERING = ConfigProperty
+      .key("hoodie.clustering.schedule.inline")
       .defaultValue("false")
-      .withDocumentation("When set to true, clustering service will be attempted for scheduling after each write. Users have to ensure "
+      .withDocumentation("When set to true, clustering service will be attempted for inline scheduling after each write. Users have to ensure "
           + "they have a separate job to run async clustering(execution) for the one scheduled by this writer");
 
   public static final ConfigProperty<String> ASYNC_CLUSTERING_ENABLE = ConfigProperty
@@ -508,6 +508,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
     public Builder withInlineClustering(Boolean inlineClustering) {
       clusteringConfig.setValue(INLINE_CLUSTERING, String.valueOf(inlineClustering));
+      return this;
+    }
+
+    public Builder withScheduleInlineClustering(Boolean scheduleInlineClustering) {
+      clusteringConfig.setValue(SCHEDULE_INLINE_CLUSTERING, String.valueOf(scheduleInlineClustering));
       return this;
     }
 

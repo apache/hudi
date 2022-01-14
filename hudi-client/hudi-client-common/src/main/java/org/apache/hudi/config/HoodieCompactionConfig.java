@@ -90,10 +90,10 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("When set to true, compaction service is triggered after each write. While being "
           + " simpler operationally, this adds extra latency on the write path.");
 
-  public static final ConfigProperty<String> SCHEDULE_ASYNC_COMPACT = ConfigProperty
-      .key("hoodie.compact.schedule.async")
+  public static final ConfigProperty<String> SCHEDULE_INLINE_COMPACT = ConfigProperty
+      .key("hoodie.compact.schedule.inline")
       .defaultValue("false")
-      .withDocumentation("When set to true, compaction service will be attempted for scheduling after each write. Users have to ensure "
+      .withDocumentation("When set to true, compaction service will be attempted for inline scheduling after each write. Users have to ensure "
           + "they have a separate job to run async compaction(execution) for the one scheduled by this writer");
 
   public static final ConfigProperty<String> INLINE_COMPACT_NUM_DELTA_COMMITS = ConfigProperty
@@ -543,8 +543,8 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withScheduleAsyncCompaction(Boolean scheduleAsyncCompaction) {
-      compactionConfig.setValue(SCHEDULE_ASYNC_COMPACT, String.valueOf(scheduleAsyncCompaction));
+    public Builder withScheduleInlineCompaction(Boolean scheduleAsyncCompaction) {
+      compactionConfig.setValue(SCHEDULE_INLINE_COMPACT, String.valueOf(scheduleAsyncCompaction));
       return this;
     }
 

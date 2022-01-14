@@ -464,44 +464,44 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   }
 
   protected void runTableServicesInline(HoodieTable<T, I, K, O> table, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
-      if (config.areAnyTableServicesInline() || config.scheduleAsyncTableServices()) {
-        if (config.isMetadataTableEnabled()) {
-          table.getHoodieView().sync();
-        }
-        // Do an inline compaction if enabled
-        if (config.inlineCompactionEnabled()) {
-          runAnyPendingCompactions(table);
-          metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
-          inlineCompact(extraMetadata, !config.scheduleAsyncCompaction());
-        } else {
-          metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT.key(), "false");
-        }
-
-        // if just async schedule
-        if (config.scheduleAsyncCompaction() && table.getActiveTimeline().getWriteTimeline().filterPendingCompactionTimeline().getInstants().count() == 0) {
-          // proceed only if there are no pending compactions
-          // ?? what value to add for the metadata. true/false?
-          metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
-          inlineCompact(extraMetadata, !config.scheduleAsyncCompaction());
-        }
-
-        // Do an inline clustering if enabled
-        if (config.inlineClusteringEnabled() || config.scheduleAsyncClustering()) {
-          runAnyPendingClustering(table);
-          metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true");
-          inlineCluster(extraMetadata, !config.scheduleAsyncCompaction());
-        } else {
-          metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "false");
-        }
-
-        // if just async schedule
-        if (config.scheduleAsyncClustering() && table.getActiveTimeline().filterPendingReplaceTimeline().getInstants().count() == 0) {
-          // proceed only if there are no pending clustering
-          // ?? what value to add for the metadata. true/false?
-          metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true");
-          inlineCluster(extraMetadata, !config.scheduleAsyncCompaction());
-        }
+    if (config.areAnyTableServicesInline() || config.scheduleInlineTableServices()) {
+      if (config.isMetadataTableEnabled()) {
+        table.getHoodieView().sync();
       }
+      // Do an inline compaction if enabled
+      if (config.inlineCompactionEnabled()) {
+        runAnyPendingCompactions(table);
+        metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
+        inlineScheduleCompactAndOptionallyExecute(extraMetadata, !config.scheduleInlineCompaction());
+      } else {
+        metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT.key(), "false");
+      }
+
+      // if just inline schedule
+      if (config.scheduleInlineCompaction() && !table.getActiveTimeline().getWriteTimeline().filterPendingCompactionTimeline().getInstants().findAny().isPresent()) {
+        // proceed only if there are no pending compactions
+        // ?? what value to add for the metadata. true/false?
+        metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
+        inlineScheduleCompactAndOptionallyExecute(extraMetadata, false);
+      }
+
+      // Do an inline clustering if enabled
+      if (config.inlineClusteringEnabled()) {
+        runAnyPendingClustering(table);
+        metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true");
+        inlineScheduleClusterAndOptionallyExecute(extraMetadata, !config.scheduleInlineCompaction());
+      } else {
+        metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "false");
+      }
+
+      // if just inline schedule
+      if (config.scheduleInlineClustering() && !table.getActiveTimeline().filterPendingReplaceTimeline().getInstants().findAny().isPresent()) {
+        // proceed only if there are no pending clustering
+        // ?? what value to add for the metadata. true/false?
+        metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true");
+        inlineScheduleClusterAndOptionallyExecute(extraMetadata, false);
+      }
+    }
   }
 
   protected void runAnyPendingCompactions(HoodieTable<T, I, K, O> table) {
@@ -1021,8 +1021,9 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
 
   /**
    * Performs a compaction operation on a table, serially before or after an insert/upsert action.
+   * Scheduling is done inline, and optionally execution as well.
    */
-  protected Option<String> inlineCompact(Option<Map<String, String>> extraMetadata, boolean executeInline) {
+  protected Option<String> inlineScheduleCompactAndOptionallyExecute(Option<Map<String, String>> extraMetadata, boolean executeInline) {
     Option<String> compactionInstantTimeOpt = scheduleCompaction(extraMetadata);
     if (executeInline) {
       compactionInstantTimeOpt.ifPresent(compactInstantTime -> {
@@ -1134,8 +1135,9 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
 
   /**
    * Executes a clustering plan on a table, serially before or after an insert/upsert action.
+   * Schedules clustering inline and may be optionally execute.
    */
-  protected Option<String> inlineCluster(Option<Map<String, String>> extraMetadata, boolean executeInline) {
+  protected Option<String> inlineScheduleClusterAndOptionallyExecute(Option<Map<String, String>> extraMetadata, boolean executeInline) {
     Option<String> clusteringInstantOpt = scheduleClustering(extraMetadata);
     if (executeInline) {
       clusteringInstantOpt.ifPresent(clusteringInstant -> {
