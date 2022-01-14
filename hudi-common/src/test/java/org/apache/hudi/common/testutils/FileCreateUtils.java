@@ -19,7 +19,6 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.directory.api.util.Strings;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
@@ -73,6 +72,8 @@ public class FileCreateUtils {
 
   private static final String WRITE_TOKEN = "1-0-1";
   private static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
+  /** An empty byte array */
+  public static final byte[] EMPTY_BYTES = new byte[0];
 
   public static String baseFileName(String instantTime, String fileId) {
     return baseFileName(instantTime, fileId, BASE_FILE_EXTENSION);
@@ -221,7 +222,7 @@ public class FileCreateUtils {
   }
 
   public static void createCleanFile(String basePath, String instantTime, HoodieCleanMetadata metadata, boolean isEmpty) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.CLEAN_EXTENSION, isEmpty ? Strings.EMPTY_BYTES : serializeCleanMetadata(metadata).get());
+    createMetaFile(basePath, instantTime, HoodieTimeline.CLEAN_EXTENSION, isEmpty ? EMPTY_BYTES : serializeCleanMetadata(metadata).get());
   }
 
   public static void createRequestedCleanFile(String basePath, String instantTime, HoodieCleanerPlan cleanerPlan) throws IOException {
@@ -229,7 +230,7 @@ public class FileCreateUtils {
   }
 
   public static void createRequestedCleanFile(String basePath, String instantTime, HoodieCleanerPlan cleanerPlan, boolean isEmpty) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_CLEAN_EXTENSION, isEmpty ? Strings.EMPTY_BYTES : serializeCleanerPlan(cleanerPlan).get());
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_CLEAN_EXTENSION, isEmpty ? EMPTY_BYTES : serializeCleanerPlan(cleanerPlan).get());
   }
 
   public static void createInflightCleanFile(String basePath, String instantTime, HoodieCleanerPlan cleanerPlan) throws IOException {
@@ -237,7 +238,7 @@ public class FileCreateUtils {
   }
 
   public static void createInflightCleanFile(String basePath, String instantTime, HoodieCleanerPlan cleanerPlan, boolean isEmpty) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_CLEAN_EXTENSION, isEmpty ? Strings.EMPTY_BYTES : serializeCleanerPlan(cleanerPlan).get());
+    createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_CLEAN_EXTENSION, isEmpty ? EMPTY_BYTES : serializeCleanerPlan(cleanerPlan).get());
   }
 
   public static void createRequestedRollbackFile(String basePath, String instantTime, HoodieRollbackPlan plan) throws IOException {
@@ -249,7 +250,7 @@ public class FileCreateUtils {
   }
 
   public static void createRollbackFile(String basePath, String instantTime, HoodieRollbackMetadata hoodieRollbackMetadata, boolean isEmpty) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.ROLLBACK_EXTENSION, isEmpty ? Strings.EMPTY_BYTES : serializeRollbackMetadata(hoodieRollbackMetadata).get());
+    createMetaFile(basePath, instantTime, HoodieTimeline.ROLLBACK_EXTENSION, isEmpty ? EMPTY_BYTES : serializeRollbackMetadata(hoodieRollbackMetadata).get());
   }
 
   public static void createRestoreFile(String basePath, String instantTime, HoodieRestoreMetadata hoodieRestoreMetadata) throws IOException {
