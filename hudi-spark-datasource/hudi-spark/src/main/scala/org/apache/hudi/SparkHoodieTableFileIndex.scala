@@ -35,7 +35,16 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
-// TODO unify w/ HoodieFileIndex
+/**
+ * Implementation of the [[AbstractHoodieTableFileIndex]] for Spark
+ *
+ * @param spark spark session
+ * @param metaClient Hudi table's meta-client
+ * @param schemaSpec optional table's schema
+ * @param configProperties unifying configuration (in the form of generic properties)
+ * @param specifiedQueryInstant instant as of which table is being queried
+ * @param fileStatusCache transient cache of fetched [[FileStatus]]es
+ */
 class SparkHoodieTableFileIndex(spark: SparkSession,
                                 metaClient: HoodieTableMetaClient,
                                 schemaSpec: Option[StructType],

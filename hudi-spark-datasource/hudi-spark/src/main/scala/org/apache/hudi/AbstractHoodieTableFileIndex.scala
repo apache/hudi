@@ -32,26 +32,23 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 /**
- * A file index which support partition prune for hoodie snapshot and read-optimized query.
+ * Common (engine-agnostic) File Index implementation enabling individual query engines to
+ * list Hudi Table contents based on the
  *
- * Main steps to get the file list for query:
- * 1、Load all files and partition values from the table path.
- * 2、Do the partition prune by the partition filter condition.
+ * <ul>
+ *   <li>Table type (MOR, COW)</li>
+ *   <li>Query type (snapshot, read_optimized, incremental)</li>
+ *   <li>Query instant/range</li>
+ * </ul>
  *
- * There are 3 cases for this:
- * 1、If the partition columns size is equal to the actually partition path level, we
- * read it as partitioned table.(e.g partition column is "dt", the partition path is "2021-03-10")
- *
- * 2、If the partition columns size is not equal to the partition path level, but the partition
- * column size is "1" (e.g. partition column is "dt", but the partition path is "2021/03/10"
- * who's directory level is 3).We can still read it as a partitioned table. We will mapping the
- * partition path (e.g. 2021/03/10) to the only partition column (e.g. "dt").
- *
- * 3、Else the the partition columns size is not equal to the partition directory level and the
- * size is great than "1" (e.g. partition column is "dt,hh", the partition path is "2021/03/10/12"),
- * we read it as a Non-Partitioned table because we cannot know how to mapping the partition
- * path with the partition columns in this case.
- *
+ * @param engineContext Hudi engine-specific context
+ * @param metaClient Hudi table's meta-client
+ * @param configProperties unifying configuration (in the form of generic properties)
+ * @param queryType target query type
+ * @param queryPaths target DFS paths being queried
+ * @param specifiedQueryInstant instant as of which table is being queried
+ * @param shouldIncludePendingCommits flags whether file-index should exclude any pending operations
+ * @param fileStatusCache transient cache of fetched [[FileStatus]]es
  */
 abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
                                             metaClient: HoodieTableMetaClient,
@@ -103,21 +100,6 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
         (partition.path, cachedAllInputFileSlices(partition))
       }).toMap
     }
-  }
-
-  /**
-   * Returns the FileStatus for all the base files (excluding log files). This should be used only for
-   * cases where Spark directly fetches the list of files via HoodieFileIndex or for read optimized query logic
-   * implemented internally within Hudi like HoodieBootstrapRelation. This helps avoid the use of path filter
-   * to filter out log files within Spark.
-   *
-   * @return List of FileStatus for base files
-   */
-  def allFiles: Seq[FileStatus] = {
-    cachedAllInputFileSlices.values.flatten
-      .filter(_.getBaseFile.isPresent)
-      .map(_.getBaseFile.get().getFileStatus)
-      .toSeq
   }
 
   private def refresh0(): Unit = {

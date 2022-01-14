@@ -54,8 +54,8 @@ import scala.util.{Failure, Success, Try}
  * , we read it as a Non-Partitioned table because we cannot know how to mapping the partition
  * path with the partition columns in this case.
  *
+ * TODO rename to HoodieSparkSqlFileIndex
  */
-// TODO rename to HoodieSparkSqlFileIndex
 case class HoodieFileIndex(spark: SparkSession,
                            metaClient: HoodieTableMetaClient,
                            schemaSpec: Option[StructType],
@@ -78,6 +78,21 @@ case class HoodieFileIndex(spark: SparkSession,
   def enableDataSkipping(): Boolean = {
     options.getOrElse(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(),
       spark.sessionState.conf.getConfString(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "false")).toBoolean
+  }
+
+  /**
+   * Returns the FileStatus for all the base files (excluding log files). This should be used only for
+   * cases where Spark directly fetches the list of files via HoodieFileIndex or for read optimized query logic
+   * implemented internally within Hudi like HoodieBootstrapRelation. This helps avoid the use of path filter
+   * to filter out log files within Spark.
+   *
+   * @return List of FileStatus for base files
+   */
+  def allFiles: Seq[FileStatus] = {
+    cachedAllInputFileSlices.values.flatten
+      .filter(_.getBaseFile.isPresent)
+      .map(_.getBaseFile.get().getFileStatus)
+      .toSeq
   }
 
   /**
