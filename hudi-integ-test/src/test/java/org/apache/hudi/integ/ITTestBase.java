@@ -272,7 +272,7 @@ public abstract class ITTestBase {
     LOG.info("\n#################################################################################################");
 
     String[] hiveCmd = getHiveConsoleCommand(hiveCommand);
-    Map<String, String> env = Collections.singletonMap("AUX_CLASSPATH", "file://%s" + HUDI_HADOOP_BUNDLE);
+    Map<String, String> env = Collections.singletonMap("AUX_CLASSPATH", "file://" + HUDI_HADOOP_BUNDLE);
     TestExecStartResultCallback callback =
         executeCommandInDocker(HIVESERVER, hiveCmd, true, true, env);
     return Pair.of(callback.getStdout().toString().trim(), callback.getStderr().toString().trim());
