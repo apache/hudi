@@ -154,29 +154,29 @@ Next, we run the Hudi Deltastreamer using spark that will ingest the Debezium ch
 
 ```scala
 spark-submit \\
-  \--jars "/home/hadoop/hudi-utilities-bundle_2.12-0.10.0.jar,/usr/lib/spark/external/lib/spark-avro.jar" \\
-  \--master yarn --deploy-mode client \\
-  \--class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer /home/hadoop/hudi-packages/hudi-utilities-bundle_2.12-0.10.0-SNAPSHOT.jar \\
-  \--table-type COPY_ON_WRITE --op UPSERT \\
-  \--target-base-path s3://bucket_name/path/for/hudi_table1 \\
-  \--target-table hudi_table1  --continuous \\
-  \--min-sync-interval-seconds 60 \\
-  \--source-class org.apache.hudi.utilities.sources.debezium.PostgresDebeziumSource \\
-  \--source-ordering-field _event_lsn \\
-  \--payload-class org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload \\
-  \--hoodie-conf schema.registry.url=[https://localhost:8081](https://localhost/) \\
-  \--hoodie-conf hoodie.deltastreamer.schemaprovider.registry.url=[https://localhost:8081](https://localhost/)/subjects/postgres.schema1.table1-value/versions/latest \\
-  \--hoodie-conf hoodie.deltastreamer.source.kafka.value.deserializer.class=io.confluent.kafka.serializers.KafkaAvroDeserializer \\
-  \--hoodie-conf hoodie.deltastreamer.source.kafka.topic=postgres.schema1.table1 \\
-  \--hoodie-conf auto.offset.reset=earliest \\
-  \--hoodie-conf hoodie.datasource.write.recordkey.field=”database_primary_key” \\
-  \--hoodie-conf hoodie.datasource.write.partitionpath.field=partition_key \\
-  \--enable-hive-sync \\
-  \--hoodie-conf hoodie.datasource.hive_sync.partition_extractor_class=org.apache.hudi.hive.MultiPartKeysValueExtractor \\
-  \--hoodie-conf hoodie.datasource.write.hive_style_partitioning=true \\
-  \--hoodie-conf hoodie.datasource.hive_sync.database=default \\
-  \--hoodie-conf hoodie.datasource.hive_sync.table=hudi_table1 \\
-  \--hoodie-conf hoodie.datasource.hive_sync.partition_fields=partition_key
+  --jars "/home/hadoop/hudi-utilities-bundle_2.12-0.10.0.jar,/usr/lib/spark/external/lib/spark-avro.jar" \\
+  --master yarn --deploy-mode client \\
+  --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer /home/hadoop/hudi-packages/hudi-utilities-bundle_2.12-0.10.0-SNAPSHOT.jar \\
+  --table-type COPY_ON_WRITE --op UPSERT \\
+  --target-base-path s3://bucket_name/path/for/hudi_table1 \\
+  --target-table hudi_table1  --continuous \\
+  --min-sync-interval-seconds 60 \\
+  --source-class org.apache.hudi.utilities.sources.debezium.PostgresDebeziumSource \\
+  --source-ordering-field _event_lsn \\
+  --payload-class org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload \\
+  --hoodie-conf schema.registry.url=https://localhost:8081 \\
+  --hoodie-conf hoodie.deltastreamer.schemaprovider.registry.url=https://localhost:8081/subjects/postgres.schema1.table1-value/versions/latest \\
+  --hoodie-conf hoodie.deltastreamer.source.kafka.value.deserializer.class=io.confluent.kafka.serializers.KafkaAvroDeserializer \\
+  --hoodie-conf hoodie.deltastreamer.source.kafka.topic=postgres.schema1.table1 \\
+  --hoodie-conf auto.offset.reset=earliest \\
+  --hoodie-conf hoodie.datasource.write.recordkey.field=”database_primary_key” \\
+  --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_key \\
+  --enable-hive-sync \\
+  --hoodie-conf hoodie.datasource.hive_sync.partition_extractor_class=org.apache.hudi.hive.MultiPartKeysValueExtractor \\
+  --hoodie-conf hoodie.datasource.write.hive_style_partitioning=true \\
+  --hoodie-conf hoodie.datasource.hive_sync.database=default \\
+  --hoodie-conf hoodie.datasource.hive_sync.table=hudi_table1 \\
+  --hoodie-conf hoodie.datasource.hive_sync.partition_fields=partition_key
 ```
 
 ## Conclusion
