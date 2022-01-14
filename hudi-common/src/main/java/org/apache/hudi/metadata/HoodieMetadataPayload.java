@@ -24,7 +24,7 @@ import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieColumnStatsMetadata;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -382,34 +382,64 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return combinedFileInfo;
   }
 
+  /**
+   * Get bloom filter index key.
+   *
+   * @param partitionIndexID - Partition index id
+   * @param fileIndexID      - File index id
+   * @return Bloom filter index key
+   */
+  public static String getBloomFilterIndexKey(PartitionIndexID partitionIndexID, FileIndexID fileIndexID) {
+    return partitionIndexID.asBase64EncodedString()
+        .concat(fileIndexID.asBase64EncodedString());
+  }
+
+  /**
+   * Get column stats index key.
+   *
+   * @param partitionIndexID - Partition index id
+   * @param fileIndexID      - File index id
+   * @param columnIndexID    - Column index id
+   * @return Column stats index key
+   */
+  public static String getColumnStatsIndexKey(PartitionIndexID partitionIndexID, FileIndexID fileIndexID, ColumnIndexID columnIndexID) {
+    return columnIndexID.asBase64EncodedString()
+        .concat(partitionIndexID.asBase64EncodedString())
+        .concat(fileIndexID.asBase64EncodedString());
+  }
+
+  /**
+   * Get column stats index key from the column range metadata.
+   *
+   * @param partitionName       - Partition name
+   * @param columnRangeMetadata -  Column range metadata
+   * @return Column stats index key
+   */
+  public static String getColumnStatsIndexKey(String partitionName, HoodieColumnRangeMetadata<Comparable> columnRangeMetadata) {
+    final PartitionIndexID partitionIndexID = new PartitionIndexID(partitionName);
+    final FileIndexID fileIndexID = new FileIndexID(new Path(columnRangeMetadata.getFilePath()).getName());
+    final ColumnIndexID columnIndexID = new ColumnIndexID(columnRangeMetadata.getColumnName());
+    return getColumnStatsIndexKey(partitionIndexID, fileIndexID, columnIndexID);
+  }
+
   public static Stream<HoodieRecord> createColumnStatsRecords(
-      Collection<HoodieColumnStatsMetadata<Comparable>> columnRangeInfo) {
-    return columnRangeInfo.stream().map(columnStatsMetadata -> {
-      HoodieKey key = new HoodieKey(getColumnStatsRecordKey(columnStatsMetadata),
+      String partitionName, Collection<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList, boolean isDeleted) {
+    return columnRangeMetadataList.stream().map(columnRangeMetadata -> {
+      HoodieKey key = new HoodieKey(getColumnStatsIndexKey(partitionName, columnRangeMetadata),
           MetadataPartitionType.COLUMN_STATS.partitionPath());
 
       HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_COLUMN_STATS,
           HoodieColumnStats.newBuilder()
-              .setMinValue(columnStatsMetadata.getMinValue() == null ? null :
-                  new String(((Binary) columnStatsMetadata.getMinValue()).getBytes()))
-              .setMaxValue(columnStatsMetadata.getMaxValue() == null ? null :
-                  new String(((Binary) columnStatsMetadata.getMaxValue()).getBytes()))
-              .setNullCount(columnStatsMetadata.getNullCount())
-              .setIsDeleted(false)
+              .setMinValue(columnRangeMetadata.getMinValue() == null ? null :
+                  new String(((Binary) columnRangeMetadata.getMinValue()).getBytes()))
+              .setMaxValue(columnRangeMetadata.getMaxValue() == null ? null :
+                  new String(((Binary) columnRangeMetadata.getMaxValue()).getBytes()))
+              .setNullCount(columnRangeMetadata.getNumNulls())
+              .setIsDeleted(isDeleted)
               .build());
 
       return new HoodieRecord<>(key, payload);
     });
-  }
-
-  // get record key from column stats metadata
-  public static String getColumnStatsRecordKey(HoodieColumnStatsMetadata<Comparable> columnStatsMetadata) {
-    final ColumnIndexID columnID = new ColumnIndexID(columnStatsMetadata.getColumnName());
-    final PartitionIndexID partitionID = new PartitionIndexID(columnStatsMetadata.getPartitionPath());
-    final FileIndexID fileID = new FileIndexID(new Path(columnStatsMetadata.getFileName()).getName());
-    return columnID.asBase64EncodedString()
-        .concat(partitionID.asBase64EncodedString())
-        .concat(fileID.asBase64EncodedString());
   }
 
   @Override
