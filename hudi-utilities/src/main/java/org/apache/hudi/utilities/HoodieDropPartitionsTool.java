@@ -25,7 +25,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.HoodieSparkSqlWriter;
 import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.TypedProperties;
@@ -33,24 +32,23 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
-import org.apache.hudi.hive.HoodieHiveClient;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkTable;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
-import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import scala.Tuple2;
@@ -103,7 +101,7 @@ import java.util.stream.Collectors;
  * ```
  *
  * <p>
- * - DELETE_PARTITIONS_EAGER ("delete_partitions_eager"): This tool will mask/tombstone these partitions and corresponding data files and and delete these data files immediately.
+ * - DELETE_PARTITIONS_EAGER ("delete_partitions_eager"): This tool will mask/tombstone these partitions and corresponding data files. Also request a clean action eagerly.
  * - Also you can set --sync-hive-meta to sync current drop partition into hive
  * <p>
  * Example command:
@@ -181,7 +179,7 @@ public class HoodieDropPartitionsTool implements Serializable {
   public enum Mode {
     // Mask/Tombstone these partitions and corresponding data files and let cleaner delete these files later.
     DELETE_PARTITIONS_LAZY,
-    // Mask/Tombstone these partitions and corresponding data files. And delete these data files immediately.
+    // Mask/Tombstone these partitions and corresponding data files. Also request a clean action eagerly.
     DELETE_PARTITIONS_EAGER,
     // Dry run by looking for the table partitions and corresponding data files which will be deleted.
     DRY_RUN
@@ -192,7 +190,7 @@ public class HoodieDropPartitionsTool implements Serializable {
     public String basePath = null;
     @Parameter(names = {"--mode", "-m"}, description = "Set job mode: "
         + "Set \"delete_partitions_lazy\" means mask/tombstone these partitions and corresponding data files table partitions and let cleaner delete these files later;"
-        + "Set \"delete_partitions_eager\" means delete data files and corresponding directory directly through file system but don't change hoodie meta files;"
+        + "Set \"delete_partitions_eager\" means mask/Tombstone these partitions and corresponding data files. Also request a clean action eagerly;"
         + "Set \"dry_run\" means only looking for the table partitions will be deleted and corresponding data files.", required = true)
     public String runningMode = null;
     @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)
@@ -351,14 +349,15 @@ public class HoodieDropPartitionsTool implements Serializable {
     }
   }
 
-  public void doDeleteTablePartitions(Boolean runInlineCleaner) {
+  private void doDeleteTablePartitions(Boolean runInlineCleaner) {
     if (runInlineCleaner) {
-      this.props.put("hoodie.clean.automatic", true);
+      this.props.put(HoodieCompactionConfig.AUTO_CLEAN.key(), "true");
     } else {
-      this.props.put("hoodie.clean.automatic", false);
+      this.props.put(HoodieCompactionConfig.AUTO_CLEAN.key(), "false");
     }
-
-    this.props.put("hoodie.clean.async", false);
+    this.props.put(DataSourceWriteOptions.INLINE_CLUSTERING_ENABLE().key(), "false");
+    this.props.put(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "false");
+    this.props.put(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), "false");
 
     try (SparkRDDWriteClient<HoodieRecordPayload> client =  UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.empty(), props)) {
       List<String> partitionsToDelete = Arrays.asList(cfg.partitions.split(","));
@@ -378,6 +377,7 @@ public class HoodieDropPartitionsTool implements Serializable {
           recursiveDeleteDir(new Path(metaClient.getBasePath(), rootDir));
         } catch (IOException e) {
           // ignore exception here
+          LOG.warn("Failed to delete empty dir.", e);
         }
       });
     }
@@ -415,7 +415,7 @@ public class HoodieDropPartitionsTool implements Serializable {
       metaClient.getFs().delete(path);
       return true;
     } catch (IOException e) {
-      LOG.error("unable to delete file groups that are replaced", e);
+      LOG.warn("unable to delete file groups that are replaced", e);
       return false;
     }
   }
