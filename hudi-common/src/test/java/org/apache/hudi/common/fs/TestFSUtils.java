@@ -37,10 +37,10 @@ import org.apache.hadoop.fs.Path;
 import org.junit.Rule;
 import org.junit.contrib.java.lang.system.EnvironmentVariables;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -77,6 +77,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   @BeforeEach
   public void setUp() throws IOException {
     initMetaClient();
+    basePath = "file:" + basePath;
   }
 
   @Test
@@ -312,7 +313,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals(LOG_STR, FSUtils.getFileExtensionFromLog(new Path(logFileName)));
 
     // create three versions of log file
-    java.nio.file.Path partitionPath = Paths.get(basePath, partitionStr);
+    java.nio.file.Path partitionPath = Paths.get(URI.create(basePath + "/" + partitionStr));
     Files.createDirectories(partitionPath);
     String log1 = FSUtils.makeLogFileName(fileId, LOG_EXTENTION, instantTime, 1, writeToken);
     Files.createFile(partitionPath.resolve(log1));
@@ -380,7 +381,6 @@ public class TestFSUtils extends HoodieCommonTestHarness {
         new HoodieLocalEngineContext(metaClient.getHadoopConf()), fileSystem, new Path(rootDir), 2));
   }
 
-  @Disabled
   @Test
   public void testDeleteSubDirectoryRecursively() throws IOException {
     String rootDir = basePath + "/.hoodie/.temp";
@@ -405,7 +405,6 @@ public class TestFSUtils extends HoodieCommonTestHarness {
             subPathStr, new SerializableConfiguration(fileSystem.getConf()), false));
   }
 
-  @Disabled
   @Test
   public void testDeleteSubPathAsFile() throws IOException {
     String rootDir = basePath + "/.hoodie/.temp";
@@ -417,7 +416,6 @@ public class TestFSUtils extends HoodieCommonTestHarness {
         subPathStr, new SerializableConfiguration(fileSystem.getConf()), false));
   }
 
-  @Disabled
   @Test
   public void testDeleteNonExistingSubDirectory() throws IOException {
     String rootDir = basePath + "/.hoodie/.temp";
@@ -461,7 +459,6 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     }
   }
 
-  @Disabled
   @Test
   public void testGetFileStatusAtLevel() throws IOException {
     String rootDir = basePath + "/.hoodie/.temp";
@@ -471,8 +468,8 @@ public class TestFSUtils extends HoodieCommonTestHarness {
         new HoodieLocalEngineContext(fileSystem.getConf()), fileSystem,
         new Path(basePath), 3, 2);
     assertEquals(CollectionUtils.createImmutableSet(
-            "file:" + basePath + "/.hoodie/.temp/subdir1/file1.txt",
-            "file:" + basePath + "/.hoodie/.temp/subdir2/file2.txt"),
+            basePath + "/.hoodie/.temp/subdir1/file1.txt",
+            basePath + "/.hoodie/.temp/subdir2/file2.txt"),
         fileStatusList.stream()
             .map(fileStatus -> fileStatus.getPath().toString())
             .filter(filePath -> filePath.endsWith(".txt"))
