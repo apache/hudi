@@ -244,30 +244,30 @@ public class HoodieDropPartitionsTool implements Serializable {
   }
 
   private String getConfigDetails() {
-    String sb = "HoodieDropPartitionsToolConfig {\n" + "   --base-path " + cfg.basePath + ", \n" +
-        "   --mode " + cfg.runningMode + ", \n" +
-        "   --table-name " + cfg.tableName + ", \n" +
-        "   --partitions " + cfg.partitions + ", \n" +
-        "   --parallelism " + cfg.parallelism + ", \n" +
-        "   --instantTime " + cfg.instantTime + ", \n" +
-        "   --clean-up-empty-directory " + cfg.cleanUpEmptyDirectory + ", \n" +
-        "   --sync-hive-meta " + cfg.syncToHive + ", \n" +
-        "   --hive-database " + cfg.hiveDataBase + ", \n" +
-        "   --hive-table-name " + cfg.hiveTableName + ", \n" +
-        "   --hive-user-name " + "Masked" + ", \n" +
-        "   --hive-pass-word " + "Masked" + ", \n" +
-        "   --hive-jdbc-url " + cfg.hiveURL + ", \n" +
-        "   --hive-partition-field " + cfg.hivePartitionsField + ", \n" +
-        "   --hive-sync-use-jdbc " + cfg.hiveUseJdbc + ", \n" +
-        "   --hive-metastore-uris " + cfg.hiveHMSUris + ", \n" +
-        "   --hive-sync-mode " + cfg.hiveSyncMode + ", \n" +
-        "   --hive-sync-ignore-exception " + cfg.hiveSyncIgnoreException + ", \n" +
-        "   --hive-partition-value-extractor-class " + cfg.partitionValueExtractorClass + ", \n" +
-        "   --spark-master " + cfg.sparkMaster + ", \n" +
-        "   --spark-memory " + cfg.sparkMemory + ", \n" +
-        "   --props " + cfg.propsFilePath + ", \n" +
-        "   --hoodie-conf " + cfg.configs +
-        "\n}";
+    String sb = "HoodieDropPartitionsToolConfig {\n"
+        + "   --base-path " + cfg.basePath + ", \n"
+        + "   --mode " + cfg.runningMode + ", \n"
+        + "   --table-name " + cfg.tableName + ", \n"
+        + "   --partitions " + cfg.partitions + ", \n"
+        + "   --parallelism " + cfg.parallelism + ", \n"
+        + "   --instantTime " + cfg.instantTime + ", \n"
+        + "   --clean-up-empty-directory " + cfg.cleanUpEmptyDirectory + ", \n"
+        + "   --sync-hive-meta " + cfg.syncToHive + ", \n"
+        + "   --hive-database " + cfg.hiveDataBase + ", \n"
+        + "   --hive-table-name " + cfg.hiveTableName + ", \n"
+        + "   --hive-user-name " + "Masked" + ", \n"
+        + "   --hive-pass-word " + "Masked" + ", \n"
+        + "   --hive-jdbc-url " + cfg.hiveURL + ", \n"
+        + "   --hive-partition-field " + cfg.hivePartitionsField + ", \n"
+        + "   --hive-sync-use-jdbc " + cfg.hiveUseJdbc + ", \n"
+        + "   --hive-metastore-uris " + cfg.hiveHMSUris + ", \n"
+        + "   --hive-sync-ignore-exception " + cfg.hiveSyncIgnoreException + ", \n"
+        + "   --hive-partition-value-extractor-class " + cfg.partitionValueExtractorClass + ", \n"
+        + "   --spark-master " + cfg.sparkMaster + ", \n"
+        + "   --spark-memory " + cfg.sparkMemory + ", \n"
+        + "   --props " + cfg.propsFilePath + ", \n"
+        + "   --hoodie-conf " + cfg.configs
+        + "\n}";
     return sb;
   }
 
