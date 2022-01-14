@@ -51,11 +51,11 @@ The following describes steps to implement an end-to-end CDC pipeline using an A
 A few configuration changes are required for the RDS instance to enable logical replication.
 
 ```roomsql
-SET rds.logical\_replication to 1 (instead of 0)
+SET rds.logical_replication to 1 (instead of 0)
 
-psql --host=<aws\_rds\_instance> --port=5432 --username=postgres --password -d <database\_name>;
+psql --host=<aws_rds_instance> --port=5432 --username=postgres --password -d <database_name>;
 
-CREATE PUBLICATION <publication\_name> FOR TABLE schema1.table1, schema1.table2;
+CREATE PUBLICATION <publication_name> FOR TABLE schema1.table1, schema1.table2;
 
 ALTER TABLE schema1.table1 REPLICA IDENTITY FULL;
 ```
@@ -150,33 +150,33 @@ Next, we run the Hudi Deltastreamer using spark that will ingest the Debezium ch
 2.  Set the payload class to PostgresDebeziumAvroPayload.
 3.  Configure the schema registry URLs for Debezium Source and Kafka Source.
 4.  Set the record key(s) as the primary key(s) of the database table.
-5.  Set the source ordering field (dedup) to \_event\_lsn
+5.  Set the source ordering field (dedup) to _event_lsn
 
 ```scala
 spark-submit \\
-  \--jars "/home/hadoop/hudi-utilities-bundle\_2.12-0.10.0.jar,/usr/lib/spark/external/lib/spark-avro.jar" \\
+  \--jars "/home/hadoop/hudi-utilities-bundle_2.12-0.10.0.jar,/usr/lib/spark/external/lib/spark-avro.jar" \\
   \--master yarn --deploy-mode client \\
-  \--class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer /home/hadoop/hudi-packages/hudi-utilities-bundle\_2.12-0.10.0-SNAPSHOT.jar \\
-  \--table-type COPY\_ON\_WRITE --op UPSERT \\
-  \--target-base-path s3://bucket\_name/path/for/hudi\_table1 \\
-  \--target-table hudi\_table1  --continuous \\
+  \--class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer /home/hadoop/hudi-packages/hudi-utilities-bundle_2.12-0.10.0-SNAPSHOT.jar \\
+  \--table-type COPY_ON_WRITE --op UPSERT \\
+  \--target-base-path s3://bucket_name/path/for/hudi_table1 \\
+  \--target-table hudi_table1  --continuous \\
   \--min-sync-interval-seconds 60 \\
   \--source-class org.apache.hudi.utilities.sources.debezium.PostgresDebeziumSource \\
-  \--source-ordering-field \_event\_lsn \\
+  \--source-ordering-field _event_lsn \\
   \--payload-class org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload \\
   \--hoodie-conf schema.registry.url=[https://localhost:8081](https://localhost/) \\
   \--hoodie-conf hoodie.deltastreamer.schemaprovider.registry.url=[https://localhost:8081](https://localhost/)/subjects/postgres.schema1.table1-value/versions/latest \\
   \--hoodie-conf hoodie.deltastreamer.source.kafka.value.deserializer.class=io.confluent.kafka.serializers.KafkaAvroDeserializer \\
   \--hoodie-conf hoodie.deltastreamer.source.kafka.topic=postgres.schema1.table1 \\
   \--hoodie-conf auto.offset.reset=earliest \\
-  \--hoodie-conf hoodie.datasource.write.recordkey.field=”database\_primary\_key” \\
-  \--hoodie-conf hoodie.datasource.write.partitionpath.field=partition\_key \\
+  \--hoodie-conf hoodie.datasource.write.recordkey.field=”database_primary_key” \\
+  \--hoodie-conf hoodie.datasource.write.partitionpath.field=partition_key \\
   \--enable-hive-sync \\
-  \--hoodie-conf hoodie.datasource.hive\_sync.partition\_extractor\_class=org.apache.hudi.hive.MultiPartKeysValueExtractor \\
-  \--hoodie-conf hoodie.datasource.write.hive\_style\_partitioning=true \\
-  \--hoodie-conf hoodie.datasource.hive\_sync.database=default \\
-  \--hoodie-conf hoodie.datasource.hive\_sync.table=hudi\_table1 \\
-  \--hoodie-conf hoodie.datasource.hive\_sync.partition\_fields=partition\_key
+  \--hoodie-conf hoodie.datasource.hive_sync.partition_extractor_class=org.apache.hudi.hive.MultiPartKeysValueExtractor \\
+  \--hoodie-conf hoodie.datasource.write.hive_style_partitioning=true \\
+  \--hoodie-conf hoodie.datasource.hive_sync.database=default \\
+  \--hoodie-conf hoodie.datasource.hive_sync.table=hudi_table1 \\
+  \--hoodie-conf hoodie.datasource.hive_sync.partition_fields=partition_key
 ```
 
 ## Conclusion
