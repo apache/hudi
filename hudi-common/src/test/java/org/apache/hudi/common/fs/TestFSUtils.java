@@ -75,6 +75,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
   @BeforeEach
   public void setUp() throws IOException {
+    initPath();
     initMetaClient();
   }
 
