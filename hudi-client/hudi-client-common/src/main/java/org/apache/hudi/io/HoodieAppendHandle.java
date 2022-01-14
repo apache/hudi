@@ -367,7 +367,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
             ? HoodieRecord.RECORD_KEY_METADATA_FIELD
             : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
 
-        blocks.add(getBlock(config, hoodieTable.getLogDataBlockType(), recordList, header, keyField));
+        blocks.add(getBlock(config, pickLogDataBlockFormat(), recordList, header, keyField));
       }
 
       if (keysToDelete.size() > 0) {
@@ -498,6 +498,25 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       appendDataAndDeleteBlocks(header);
       estimatedNumberOfBytesWritten += averageRecordSize * numberOfRecords;
       numberOfRecords = 0;
+    }
+  }
+
+  private HoodieLogBlock.HoodieLogBlockType pickLogDataBlockFormat() {
+    HoodieLogBlock.HoodieLogBlockType logBlockType = config.getLogDataBlockFormat();
+    if (logBlockType != null) {
+      return logBlockType;
+    }
+
+    // Fallback to deduce data-block type based on the base file format
+    switch (hoodieTable.getBaseFileFormat()) {
+      case PARQUET:
+      case ORC:
+        return HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK;
+      case HFILE:
+        return HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK;
+      default:
+        throw new HoodieException("Base file format " + hoodieTable.getBaseFileFormat()
+            + " does not have associated log block type");
     }
   }
 

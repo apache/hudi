@@ -134,11 +134,6 @@ public class HoodieTableConfig extends HoodieConfig {
       .withAlternatives("hoodie.table.rt.file.format")
       .withDocumentation("Log format used for the delta logs.");
 
-  public static final ConfigProperty<String> LOG_BLOCK_TYPE = ConfigProperty
-      .key("hoodie.table.log.data.block.type")
-      .noDefaultValue()
-      .withDocumentation("Format of the data block within delta logs. Following formats are currently supported \"avro\", \"hfile\", \"parquet\"");
-
   public static final ConfigProperty<String> TIMELINE_LAYOUT_VERSION = ConfigProperty
       .key("hoodie.timeline.layout.version")
       .noDefaultValue()
@@ -464,20 +459,6 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public HoodieFileFormat getLogFileFormat() {
     return HoodieFileFormat.valueOf(getStringOrDefault(LOG_FILE_FORMAT));
-  }
-
-  /**
-   * Get the data log block format.
-   *
-   * @return HoodieBlockFormat for the log block
-   */
-  public HoodieLogBlock.HoodieLogBlockType getLogBlockFormat() {
-    String logBlockTypeId = getString(LOG_BLOCK_TYPE);
-    if (logBlockTypeId != null) {
-      return HoodieLogBlock.HoodieLogBlockType.fromId(logBlockTypeId);
-    } else {
-      return null;
-    }
   }
 
   /**

@@ -720,25 +720,6 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     return metaClient.getTableConfig().getLogFileFormat();
   }
 
-  public HoodieLogBlockType getLogDataBlockType() {
-    HoodieLogBlock.HoodieLogBlockType logBlockType = metaClient.getTableConfig().getLogBlockFormat();
-    if (logBlockType != null) {
-      return logBlockType;
-    }
-
-    // Fallback to deduce data-block type based on the base file format
-    switch (getBaseFileFormat()) {
-      case PARQUET:
-      case ORC:
-        return HoodieLogBlockType.AVRO_DATA_BLOCK;
-      case HFILE:
-        return HoodieLogBlockType.HFILE_DATA_BLOCK;
-      default:
-        throw new HoodieException("Base file format " + getBaseFileFormat()
-            + " does not have associated log block type");
-    }
-  }
-
   public String getBaseFileExtension() {
     return getBaseFileFormat().getFileExtension();
   }

@@ -37,6 +37,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -1504,6 +1505,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String parquetOutputTimestampType() {
     return getString(HoodieStorageConfig.PARQUET_OUTPUT_TIMESTAMP_TYPE);
+  }
+
+  public HoodieLogBlock.HoodieLogBlockType getLogDataBlockFormat() {
+    String logBlockTypeId = getString(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT);
+    return logBlockTypeId != null ? HoodieLogBlock.HoodieLogBlockType.fromId(logBlockTypeId) : null;
   }
 
   public long getLogFileMaxSize() {
