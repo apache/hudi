@@ -259,7 +259,7 @@ public class TestCleaner extends HoodieClientTestBase {
    * @param insertFn Insert API to be tested
    * @param upsertFn Upsert API to be tested
    * @param isPreppedAPI Flag to indicate if a prepped-version is used. If true, a wrapper function will be used during
-   *        record generation to also tag the regards (de-dupe is implicit as we use uniq record-gen APIs)
+   *        record generation to also tag the regards (de-dupe is implicit as we use unique record-gen APIs)
    * @throws Exception in case of errors
    */
   private void testInsertAndCleanByVersions(
@@ -274,7 +274,7 @@ public class TestCleaner extends HoodieClientTestBase {
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
         .build();
-    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
 
       final Function2<List<HoodieRecord>, String, Integer> recordInsertGenWrappedFunction =
           generateWrapRecordsFn(isPreppedAPI, cfg, dataGen::generateInserts);
@@ -429,7 +429,7 @@ public class TestCleaner extends HoodieClientTestBase {
    * @param insertFn Insert API to be tested
    * @param upsertFn Upsert API to be tested
    * @param isPreppedAPI Flag to indicate if a prepped-version is used. If true, a wrapper function will be used during
-   *        record generation to also tag the regards (de-dupe is implicit as we use uniq record-gen APIs)
+   *        record generation to also tag the regards (de-dupe is implicit as we use unique record-gen APIs)
    * @throws Exception in case of errors
    */
   private void testInsertAndCleanByCommits(
@@ -550,10 +550,10 @@ public class TestCleaner extends HoodieClientTestBase {
     HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
     assertTrue(timeline.getTimelineOfActions(
         CollectionUtils.createSet(HoodieTimeline.ROLLBACK_ACTION)).filterCompletedInstants().countInstants() == 3);
-    Option<HoodieInstant> rolleBackInstantForFailedCommit = timeline.getTimelineOfActions(
+    Option<HoodieInstant> rollBackInstantForFailedCommit = timeline.getTimelineOfActions(
         CollectionUtils.createSet(HoodieTimeline.ROLLBACK_ACTION)).filterCompletedInstants().lastInstant();
     HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeAvroMetadata(
-        timeline.getInstantDetails(rolleBackInstantForFailedCommit.get()).get(), HoodieRollbackMetadata.class);
+        timeline.getInstantDetails(rollBackInstantForFailedCommit.get()).get(), HoodieRollbackMetadata.class);
     // Rollback of one of the failed writes should have deleted 3 files
     assertEquals(3, rollbackMetadata.getTotalFilesDeleted());
   }
@@ -749,6 +749,59 @@ public class TestCleaner extends HoodieClientTestBase {
     assertEquals(0, hoodieCleanStatsFour.size(), "Must not clean any files");
     assertTrue(testTable.baseFileExists(p0, "00000000000003", file3P0C2));
   }
+
+  @Test
+  public void testCleanEmptyInstants() throws Exception {
+    HoodieWriteConfig config =
+            HoodieWriteConfig.newBuilder()
+                    .withPath(basePath)
+                    .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+                    .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+                            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).build())
+                    .build();
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    int commitCount = 20;
+    int cleanCount = 20;
+
+    int startInstant = 1;
+    for (int i = 0; i < commitCount; i++, startInstant++) {
+      String commitTime = makeNewCommitTime(startInstant);
+      HoodieTestTable.of(metaClient).addCommit(commitTime);
+    }
+
+    for (int i = 0; i < cleanCount; i++, startInstant++) {
+      String commitTime = makeNewCommitTime(startInstant);
+      createCleanMetadata(commitTime + "", false, true);
+    }
+
+    List<HoodieCleanStat> cleanStats = runCleaner(config);
+    HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
+
+    assertEquals(0, cleanStats.size(), "Must not clean any files");
+    assertEquals(1, timeline.getTimelineOfActions(
+            CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().countInstants());
+    assertEquals(0, timeline.getTimelineOfActions(
+            CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflights().countInstants());
+    assertEquals(--cleanCount, timeline.getTimelineOfActions(
+            CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants().countInstants());
+    assertTrue(timeline.getTimelineOfActions(
+            CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().containsInstant(makeNewCommitTime(--startInstant)));
+
+    cleanStats = runCleaner(config);
+    timeline = metaClient.reloadActiveTimeline();
+
+    assertEquals(0, cleanStats.size(), "Must not clean any files");
+    assertEquals(1, timeline.getTimelineOfActions(
+            CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().countInstants());
+    assertEquals(0, timeline.getTimelineOfActions(
+            CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflights().countInstants());
+    assertEquals(--cleanCount, timeline.getTimelineOfActions(
+            CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants().countInstants());
+    assertTrue(timeline.getTimelineOfActions(
+            CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().containsInstant(makeNewCommitTime(--startInstant)));
+  }
+
 
   /**
    * Test HoodieTable.clean() Cleaning by versions logic for MOR table with Log files.
@@ -1425,7 +1478,7 @@ public class TestCleaner extends HoodieClientTestBase {
    *
    * @param insertFn Insert API to be tested
    * @param isPreppedAPI Flag to indicate if a prepped-version is used. If true, a wrapper function will be used during
-   *        record generation to also tag the regards (de-dupe is implicit as we use uniq record-gen APIs)
+   *        record generation to also tag the regards (de-dupe is implicit as we use unique record-gen APIs)
    * @throws Exception in case of errors
    */
   private void testInsertAndCleanFailedWritesByVersions(
@@ -1441,7 +1494,7 @@ public class TestCleaner extends HoodieClientTestBase {
         .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1).withDeleteParallelism(1)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
         .build();
-    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
 
       final Function2<List<HoodieRecord>, String, Integer> recordInsertGenWrappedFunction =
           generateWrapRecordsFn(isPreppedAPI, cfg, dataGen::generateInserts);
@@ -1474,10 +1527,10 @@ public class TestCleaner extends HoodieClientTestBase {
       HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
       assertTrue(timeline.getTimelineOfActions(
           CollectionUtils.createSet(HoodieTimeline.ROLLBACK_ACTION)).filterCompletedInstants().countInstants() == 3);
-      Option<HoodieInstant> rolleBackInstantForFailedCommit = timeline.getTimelineOfActions(
+      Option<HoodieInstant> rollBackInstantForFailedCommit = timeline.getTimelineOfActions(
           CollectionUtils.createSet(HoodieTimeline.ROLLBACK_ACTION)).filterCompletedInstants().lastInstant();
       HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeAvroMetadata(
-          timeline.getInstantDetails(rolleBackInstantForFailedCommit.get()).get(), HoodieRollbackMetadata.class);
+          timeline.getInstantDetails(rollBackInstantForFailedCommit.get()).get(), HoodieRollbackMetadata.class);
       // Rollback of one of the failed writes should have deleted 3 files
       assertEquals(3, rollbackMetadata.getTotalFilesDeleted());
     }

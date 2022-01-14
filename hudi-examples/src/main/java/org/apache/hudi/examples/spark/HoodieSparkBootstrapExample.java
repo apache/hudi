@@ -31,16 +31,13 @@ import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.Dataset;
 
-
-
 public class HoodieSparkBootstrapExample {
 
   private static String tableType = HoodieTableType.MERGE_ON_READ.name();
 
-
   public static void main(String[] args) throws Exception {
     if (args.length < 5) {
-      System.err.println("Usage: HoodieWriteClientExample <tablePath> <tableName>");
+      System.err.println("Usage: HoodieSparkBootstrapExample <recordKey> <tableName> <partitionPath> <preCombineField> <basePath>");
       System.exit(1);
     }
     String recordKey = args[0];
@@ -68,7 +65,7 @@ public class HoodieSparkBootstrapExample {
             .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieFileFormat.ORC.name())
             .option(HoodieBootstrapConfig.BASE_PATH.key(), basePath)
             .option(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key(), NonpartitionedKeyGenerator.class.getCanonicalName())
-            .mode(SaveMode.Overwrite).save("/hudi/"+tableName);
+            .mode(SaveMode.Overwrite).save("/hudi/" + tableName);
 
     df.count();
   }

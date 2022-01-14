@@ -19,7 +19,7 @@
 package org.apache.hudi.client;
 
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass;
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -94,17 +94,14 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     }
     Properties properties = new Properties();
     properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
-    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY, "10");
-    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "250");
-    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY,"250");
-    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY,"10");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,"3000");
     HoodieWriteConfig writeConfig = getConfigBuilder()
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(false).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         // Timeline-server-based markers are not used for multi-writer tests
         .withMarkersType(MarkerType.DIRECT.name())
-        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(FileSystemBasedLockProviderTestClass.class)
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
             .build()).withAutoCommit(false).withProperties(properties).build();
 
     // Create the first commit
@@ -185,8 +182,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     Properties properties = new Properties();
     properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
-    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY, "10");
-    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "3000");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,"3000");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY,"3000");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY,"20");
 
     HoodieWriteConfig cfg = getConfigBuilder()
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
@@ -196,7 +194,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
             .build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder()
-            .withLockProvider(FileSystemBasedLockProviderTestClass.class)
+            .withLockProvider(InProcessLockProvider.class)
             .build())
         .withAutoCommit(false)
         // Timeline-server-based markers are not used for multi-writer tests
@@ -258,10 +256,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     }
     Properties properties = new Properties();
     properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
-    properties.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
     properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath);
-    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY, "3");
-    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "5000");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,"3000");
     // Disabling embedded timeline server, it doesn't work with multiwriter
     HoodieWriteConfig.Builder writeConfigBuilder = getConfigBuilder()
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withAutoClean(false)
@@ -274,7 +270,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withStorageType(
             FileSystemViewStorageType.MEMORY).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
-        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(FileSystemBasedLockProviderTestClass.class)
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
             .build()).withAutoCommit(false).withProperties(properties);
     Set<String> validInstants = new HashSet<>();
     // Create the first commit with inserts
@@ -399,13 +395,14 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     }
     Properties properties = new Properties();
     properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,"3000");
     HoodieWriteConfig.Builder writeConfigBuilder = getConfigBuilder()
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
             .withAutoClean(false).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         // Timeline-server-based markers are not used for multi-writer tests
         .withMarkersType(MarkerType.DIRECT.name())
-        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(FileSystemBasedLockProviderTestClass.class)
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
             .build()).withAutoCommit(false).withProperties(properties);
     HoodieWriteConfig cfg = writeConfigBuilder.build();
     HoodieWriteConfig cfg2 = writeConfigBuilder.build();

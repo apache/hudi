@@ -99,6 +99,16 @@ public abstract class BaseRestoreActionExecutor<T extends HoodieRecordPayload, I
     writeToMetadata(restoreMetadata);
     table.getActiveTimeline().saveAsComplete(new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, instantTime),
         TimelineMetadataUtils.serializeRestoreMetadata(restoreMetadata));
+    // get all rollbacks instants after restore instant time and delete them.
+    // if not, rollbacks will be considered not completed and might hinder metadata table compaction.
+    List<HoodieInstant> instantsToRollback = table.getActiveTimeline().getRollbackTimeline()
+        .getReverseOrderedInstants()
+        .filter(instant -> HoodieActiveTimeline.GREATER_THAN.test(instant.getTimestamp(), restoreInstantTime))
+        .collect(Collectors.toList());
+    instantsToRollback.forEach(entry -> {
+      table.getActiveTimeline().deletePending(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.ROLLBACK_ACTION, entry.getTimestamp()));
+      table.getActiveTimeline().deletePending(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, entry.getTimestamp()));
+    });
     LOG.info("Commits " + instantsRolledBack + " rollback is complete. Restored table to " + restoreInstantTime);
     return restoreMetadata;
   }

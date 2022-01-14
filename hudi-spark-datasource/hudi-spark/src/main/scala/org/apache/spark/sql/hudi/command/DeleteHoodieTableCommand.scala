@@ -22,20 +22,18 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
-
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.plans.logical.DeleteFromTable
-import org.apache.spark.sql.execution.command.RunnableCommand
-import org.apache.spark.sql.hudi.HoodieSqlUtils._
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.types.StructType
 
-case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends RunnableCommand
+case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends HoodieLeafRunnableCommand
   with SparkAdapterSupport {
 
   private val table = deleteTable.table
 
-  private val tableId = getTableIdentify(table)
+  private val tableId = getTableIdentifier(table)
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     logInfo(s"start execute delete command for $tableId")
