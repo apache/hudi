@@ -19,7 +19,6 @@ package org.apache.spark.sql.adapter
 
 import org.apache.hudi.Spark2RowSerDe
 import org.apache.hudi.client.utils.SparkRowSerDe
-import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.{Expression, Like}
@@ -31,6 +30,7 @@ import org.apache.spark.sql.execution.datasources.{Spark2ParsePartitionUtil, Spa
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.{Row, SparkSession}
 
 /**
  * The adapter for spark2.
@@ -41,11 +41,11 @@ class Spark2Adapter extends SparkAdapter {
     new Spark2RowSerDe(encoder)
   }
 
-  override def toTableIdentify(aliasId: AliasIdentifier): TableIdentifier = {
+  override def toTableIdentifier(aliasId: AliasIdentifier): TableIdentifier = {
     TableIdentifier(aliasId.identifier, aliasId.database)
   }
 
-  override def toTableIdentify(relation: UnresolvedRelation): TableIdentifier = {
+  override def toTableIdentifier(relation: UnresolvedRelation): TableIdentifier = {
     relation.tableIdentifier
   }
 
@@ -58,7 +58,7 @@ class Spark2Adapter extends SparkAdapter {
   }
 
   override def getInsertIntoChildren(plan: LogicalPlan):
-  Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] = {
+    Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] = {
     plan match {
       case InsertIntoTable(table, partition, query, overwrite, ifPartitionNotExists) =>
         Some((table, partition, query, overwrite, ifPartitionNotExists))

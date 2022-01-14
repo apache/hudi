@@ -65,7 +65,7 @@ class TestAlterTable extends TestHoodieSqlBase {
         spark.sql(s"alter table $newTableName add columns(ext0 string)")
         val table = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(newTableName))
         assertResult(Seq("id", "name", "price", "ts", "ext0")) {
-          HoodieSqlUtils.removeMetaFields(table.schema).fields.map(_.name)
+          HoodieSqlCommonUtils.removeMetaFields(table.schema).fields.map(_.name)
         }
         checkAnswer(s"select id, name, price, ts, ext0 from $newTableName")(
           Seq(1, "a1", 10.0, 1000, null)
