@@ -35,7 +35,7 @@ import scala.collection.JavaConverters;
 import java.util.List;
 
 /**
- * TODO java-doc
+ * Implementation of {@link AbstractHoodieTableFileIndex} for Hive-based query engines
  */
 public class HiveHoodieTableFileIndex extends AbstractHoodieTableFileIndex {
 
