@@ -357,20 +357,31 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     estimatedNumberOfBytesWritten += averageRecordSize * numberOfRecords;
   }
 
-  private static HoodieLogBlock getBlock(HoodieWriteConfig writeConfig,
-                                         HoodieLogBlock.HoodieLogBlockType logDataBlockFormat,
-                                         List<IndexedRecord> recordList,
-                                         Map<HeaderMetadataType, String> header,
-                                         String keyField) {
-    switch (logDataBlockFormat) {
-      case AVRO_DATA_BLOCK:
-        return new HoodieAvroDataBlock(recordList, header, keyField);
-      case HFILE_DATA_BLOCK:
-        return new HoodieHFileDataBlock(recordList, header, keyField, writeConfig.getHFileCompressionAlgorithm());
-      case PARQUET_DATA_BLOCK:
-        return new HoodieParquetDataBlock(recordList, header, keyField, writeConfig.getParquetCompressionCodec());
-      default:
-        throw new HoodieException("Data block format " + logDataBlockFormat + " not implemented");
+  protected void appendDataAndDeleteBlocks(Map<HeaderMetadataType, String> header) {
+    try {
+      header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, instantTime);
+      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writeSchemaWithMetaFields.toString());
+      List<HoodieLogBlock> blocks = new ArrayList<>(2);
+      if (recordList.size() > 0) {
+        String keyField = config.populateMetaFields()
+            ? HoodieRecord.RECORD_KEY_METADATA_FIELD
+            : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
+
+        blocks.add(getBlock(config, hoodieTable.getLogDataBlockType(), recordList, header, keyField));
+      }
+
+      if (keysToDelete.size() > 0) {
+        blocks.add(new HoodieDeleteBlock(keysToDelete.toArray(new HoodieKey[keysToDelete.size()]), header));
+      }
+
+      if (blocks.size() > 0) {
+        AppendResult appendResult = writer.appendBlocks(blocks);
+        processAppendResult(appendResult);
+        recordList.clear();
+        keysToDelete.clear();
+      }
+    } catch (Exception e) {
+      throw new HoodieAppendException("Failed while appending records to " + writer.getLogFile().getPath(), e);
     }
   }
 
@@ -490,31 +501,20 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     }
   }
 
-  protected void appendDataAndDeleteBlocks(Map<HeaderMetadataType, String> header) {
-    try {
-      header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, instantTime);
-      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writeSchemaWithMetaFields.toString());
-      List<HoodieLogBlock> blocks = new ArrayList<>(2);
-      if (recordList.size() > 0) {
-        String keyField = config.populateMetaFields()
-            ? HoodieRecord.RECORD_KEY_METADATA_FIELD
-            : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
-
-        blocks.add(getBlock(config, hoodieTable.getLogDataBlockType(), recordList, header, keyField));
-      }
-
-      if (keysToDelete.size() > 0) {
-        blocks.add(new HoodieDeleteBlock(keysToDelete.toArray(new HoodieKey[keysToDelete.size()]), header));
-      }
-
-      if (blocks.size() > 0) {
-        AppendResult appendResult = writer.appendBlocks(blocks);
-        processAppendResult(appendResult);
-        recordList.clear();
-        keysToDelete.clear();
-      }
-    } catch (Exception e) {
-      throw new HoodieAppendException("Failed while appending records to " + writer.getLogFile().getPath(), e);
+  private static HoodieLogBlock getBlock(HoodieWriteConfig writeConfig,
+                                         HoodieLogBlock.HoodieLogBlockType logDataBlockFormat,
+                                         List<IndexedRecord> recordList,
+                                         Map<HeaderMetadataType, String> header,
+                                         String keyField) {
+    switch (logDataBlockFormat) {
+      case AVRO_DATA_BLOCK:
+        return new HoodieAvroDataBlock(recordList, header, keyField);
+      case HFILE_DATA_BLOCK:
+        return new HoodieHFileDataBlock(recordList, header, keyField, writeConfig.getHFileCompressionAlgorithm());
+      case PARQUET_DATA_BLOCK:
+        return new HoodieParquetDataBlock(recordList, header, keyField, writeConfig.getParquetCompressionCodec());
+      default:
+        throw new HoodieException("Data block format " + logDataBlockFormat + " not implemented");
     }
   }
 }
