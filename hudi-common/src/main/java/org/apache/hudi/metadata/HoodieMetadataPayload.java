@@ -98,18 +98,17 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private static final String SCHEMA_FIELD_ID_BLOOM_FILTER = "BloomFilterMetadata";
 
   // HoodieMetadata bloom filter payload field ids
+  private static final String FIELD_IS_DELETED = "isDeleted";
   private static final String BLOOM_FILTER_FIELD_TYPE = "type";
   private static final String BLOOM_FILTER_FIELD_TIMESTAMP = "timestamp";
   private static final String BLOOM_FILTER_FIELD_BLOOM_FILTER = "bloomFilter";
-  private static final String BLOOM_FILTER_FIELD_IS_DELETED = "isDeleted";
-  private static final String BLOOM_FILTER_FIELD_RESERVED = "reserved";
+  private static final String BLOOM_FILTER_FIELD_IS_DELETED = FIELD_IS_DELETED;
 
   // HoodieMetadata column stats payload field ids
   private static final String COLUMN_STATS_FIELD_MIN_VALUE = "minValue";
   private static final String COLUMN_STATS_FIELD_MAX_VALUE = "maxValue";
   private static final String COLUMN_STATS_FIELD_NULL_COUNT = "nullCount";
-  private static final String COLUMN_STATS_FIELD_IS_DELETED = "isDeleted";
-  private static final String COLUMN_STATS_FIELD_RESERVED = "reserved";
+  private static final String COLUMN_STATS_FIELD_IS_DELETED = FIELD_IS_DELETED;
 
   private String key = null;
   private int type = 0;
@@ -144,8 +143,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
             (String) metadataRecord.get(BLOOM_FILTER_FIELD_TYPE),
             (String) metadataRecord.get(BLOOM_FILTER_FIELD_TIMESTAMP),
             (ByteBuffer) metadataRecord.get(BLOOM_FILTER_FIELD_BLOOM_FILTER),
-            (Boolean) metadataRecord.get(BLOOM_FILTER_FIELD_IS_DELETED),
-            (ByteBuffer) metadataRecord.get(BLOOM_FILTER_FIELD_RESERVED)
+            (Boolean) metadataRecord.get(BLOOM_FILTER_FIELD_IS_DELETED)
         );
       }
 
@@ -158,8 +156,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
             (String) v.get(COLUMN_STATS_FIELD_MIN_VALUE),
             (String) v.get(COLUMN_STATS_FIELD_MAX_VALUE),
             (Long) v.get(COLUMN_STATS_FIELD_NULL_COUNT),
-            (Boolean) v.get(COLUMN_STATS_FIELD_IS_DELETED),
-            (ByteBuffer) v.get(COLUMN_STATS_FIELD_RESERVED)
+            (Boolean) v.get(COLUMN_STATS_FIELD_IS_DELETED)
         );
       }
     }
@@ -249,7 +246,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     // TODO: Get the bloom filter type from the file
     HoodieMetadataBloomFilter metadataBloomFilter =
         new HoodieMetadataBloomFilter(BloomFilterTypeCode.DYNAMIC_V0.name(),
-            timestamp, bloomFilter, isDeleted, ByteBuffer.allocate(0));
+            timestamp, bloomFilter, isDeleted);
     HoodieMetadataPayload metadataPayload = new HoodieMetadataPayload(key.getRecordKey(),
         HoodieMetadataPayload.METADATA_TYPE_BLOOM_FILTER, metadataBloomFilter);
     return new HoodieRecord<>(key, metadataPayload);
@@ -399,7 +396,6 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
                   new String(((Binary) columnStatsMetadata.getMaxValue()).getBytes()))
               .setNullCount(columnStatsMetadata.getNullCount())
               .setIsDeleted(false)
-              .setReserved(ByteBuffer.allocate(0))
               .build());
 
       return new HoodieRecord<>(key, payload);

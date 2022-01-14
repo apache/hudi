@@ -25,18 +25,14 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.function.SerializableFunction;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.util.hash.ColumnIndexID;
-import org.apache.hudi.common.util.hash.FileIndexID;
-import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
@@ -51,7 +47,6 @@ import org.apache.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -126,9 +121,14 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
     List<String> affectedPartitionPathList = new ArrayList<>(recordsPerPartition.keySet());
 
     // Step 2: Load all involved files as <Partition, filename> pairs
-    List<Pair<String, BloomIndexFileInfo>> fileInfoList = (config.getMetadataConfig().isMetaIndexColumnStatsEnabled()
-        ? loadColumnStats(affectedPartitionPathList, context, hoodieTable) :
-        loadInvolvedFiles(affectedPartitionPathList, context, hoodieTable));
+    List<Pair<String, BloomIndexFileInfo>> fileInfoList;
+    if (config.getBloomIndexPruneByRanges()) {
+      fileInfoList = (config.getMetadataConfig().isMetaIndexColumnStatsEnabled()
+          ? loadColumnStats(affectedPartitionPathList, context, hoodieTable)
+          : loadInvolvedFiles(affectedPartitionPathList, context, hoodieTable));
+    } else {
+      fileInfoList = getLatestBaseFilesForPartitions(affectedPartitionPathList, context, hoodieTable);
+    }
     final Map<String, List<BloomIndexFileInfo>> partitionToFileInfo =
         fileInfoList.stream().collect(groupingBy(Pair::getLeft, mapping(Pair::getRight, toList())));
 
@@ -151,23 +151,35 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
         .map(pair -> Pair.of(pair.getKey(), pair.getValue().getFileId()))
         .collect(toList());
 
-    if (config.getBloomIndexPruneByRanges()) {
-      // also obtain file ranges, if range pruning is enabled
-      context.setJobStatus(this.getClass().getName(), "Obtain key ranges for file slices (range pruning=on)");
-      return context.map(partitionPathFileIDList, pf -> {
-        try {
-          HoodieRangeInfoHandle rangeInfoHandle = new HoodieRangeInfoHandle(config, hoodieTable, pf);
-          String[] minMaxKeys = rangeInfoHandle.getMinMaxKeys();
-          return Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue(), minMaxKeys[0], minMaxKeys[1]));
-        } catch (MetadataNotFoundException me) {
-          LOG.warn("Unable to find range metadata in file :" + pf);
-          return Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue()));
-        }
-      }, Math.max(partitionPathFileIDList.size(), 1));
-    } else {
-      return partitionPathFileIDList.stream()
-          .map(pf -> Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue()))).collect(toList());
-    }
+    context.setJobStatus(this.getClass().getName(), "Obtain key ranges for file slices (range pruning=on)");
+    return context.map(partitionPathFileIDList, pf -> {
+      try {
+        HoodieRangeInfoHandle rangeInfoHandle = new HoodieRangeInfoHandle(config, hoodieTable, pf);
+        String[] minMaxKeys = rangeInfoHandle.getMinMaxKeys();
+        return Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue(), minMaxKeys[0], minMaxKeys[1]));
+      } catch (MetadataNotFoundException me) {
+        LOG.warn("Unable to find range metadata in file :" + pf);
+        return Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue()));
+      }
+    }, Math.max(partitionPathFileIDList.size(), 1));
+  }
+
+  /**
+   * Get the latest base files for the requested partitions.
+   *
+   * @param partitions  - List of partitions to get the base files for
+   * @param context     - Engine context
+   * @param hoodieTable - Hoodie Table
+   * @return List of partition and file column range info pairs
+   */
+  List<Pair<String, BloomIndexFileInfo>> getLatestBaseFilesForPartitions(
+      List<String> partitions, final HoodieEngineContext context, final HoodieTable hoodieTable) {
+    List<Pair<String, String>> partitionPathFileIDList = getLatestBaseFilesForAllPartitions(partitions, context,
+        hoodieTable).stream()
+        .map(pair -> Pair.of(pair.getKey(), pair.getValue().getFileId()))
+        .collect(toList());
+    return partitionPathFileIDList.stream()
+        .map(pf -> Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue()))).collect(toList());
   }
 
   /**
@@ -180,63 +192,42 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
    */
   List<Pair<String, BloomIndexFileInfo>> loadColumnStats(
       List<String> partitions, final HoodieEngineContext context, final HoodieTable hoodieTable) {
-    HoodieTimer timer = new HoodieTimer().startTimer();
-    if (config.getBloomIndexPruneByRanges()) {
-      // also obtain file ranges, if range pruning is enabled
-      context.setJobStatus(this.getClass().getName(), "Obtain key ranges for file slices (range pruning=on)");
+    // also obtain file ranges, if range pruning is enabled
+    context.setJobStatus(this.getClass().getName(), "Load meta index key ranges for file slices");
 
-      final String keyField = hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
-      return context.flatMap(partitions, new SerializableFunction<String, Stream<Pair<String, BloomIndexFileInfo>>>() {
-        @Override
-        public Stream<Pair<String, BloomIndexFileInfo>> apply(String partitionName) throws Exception {
-          final String columnIndexID = new ColumnIndexID(keyField).asBase64EncodedString();
-          final String partitionIndexID = new PartitionIndexID(partitionName).asBase64EncodedString();
-
-          List<Pair<String, String>> partitionFileIdList =
-              HoodieIndexUtils.getLatestBaseFilesForPartition(partitionName,
-                      hoodieTable).stream().map(baseFile -> Pair.of(baseFile.getFileId(), baseFile.getFileName()))
-                  .collect(toList());
-          try {
-            Map<String, String> columnStatKeyToFileIdMap = new HashMap<>();
-            List<String> columnStatKeys = new ArrayList<>();
-            for (Pair<String, String> fileIdFileName : partitionFileIdList) {
-              final String columnStatIndexKey = columnIndexID
-                  .concat(partitionIndexID)
-                  .concat(new FileIndexID(fileIdFileName.getRight()).asBase64EncodedString());
-              columnStatKeys.add(columnStatIndexKey);
-              columnStatKeyToFileIdMap.put(columnStatIndexKey, fileIdFileName.getLeft());
-            }
-            if (columnStatKeys.isEmpty()) {
-              return Stream.empty();
-            }
-
-            Collections.sort(columnStatKeys);
-            Map<String, HoodieColumnStats> columnKeyHashToStatMap = hoodieTable
-                .getMetadataTable().getColumnStats(columnStatKeys);
-            List<Pair<String, BloomIndexFileInfo>> result = new ArrayList<>();
-            for (Map.Entry<String, HoodieColumnStats> entry : columnKeyHashToStatMap.entrySet()) {
-              result.add(Pair.of(partitionName,
-                  new BloomIndexFileInfo(
-                      columnStatKeyToFileIdMap.get(entry.getKey()),
-                      entry.getValue().getMinValue(),
-                      entry.getValue().getMaxValue()
-                  )));
-            }
-            return result.stream();
-          } catch (MetadataNotFoundException me) {
-            throw new HoodieMetadataException("Unable to find column range metadata for partition:" + partitionName, me);
-          }
+    final String keyField = hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
+    return context.flatMap(partitions, partitionName -> {
+      List<Pair<String, String>> partitionFileIdList =
+          HoodieIndexUtils.getLatestBaseFilesForPartition(partitionName,
+                  hoodieTable).stream().map(baseFile -> Pair.of(baseFile.getFileId(), baseFile.getFileName()))
+              .collect(toList());
+      try {
+        List<Pair<String, String>> columnStatKeys = new ArrayList<>();
+        for (Pair<String, String> fileIdFileName : partitionFileIdList) {
+          Pair<String, String> partitionFileNameKey = Pair.of(partitionName, fileIdFileName.getRight());
+          columnStatKeys.add(partitionFileNameKey);
         }
-      }, Math.max(partitions.size(), 1));
-    } else {
-      // Obtain the latest data files from all the partitions.
-      List<Pair<String, String>> partitionPathFileIDList = getLatestBaseFilesForAllPartitions(partitions, context,
-          hoodieTable).stream()
-          .map(pair -> Pair.of(pair.getKey(), pair.getValue().getFileId()))
-          .collect(toList());
-      return partitionPathFileIDList.stream()
-          .map(pf -> Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue()))).collect(toList());
-    }
+        if (columnStatKeys.isEmpty()) {
+          return Stream.empty();
+        }
+
+        Collections.sort(columnStatKeys);
+        Map<Pair<String, String>, HoodieColumnStats> fileToColumnStatMap = hoodieTable
+            .getMetadataTable().getColumnStats(columnStatKeys, keyField);
+        List<Pair<String, BloomIndexFileInfo>> result = new ArrayList<>();
+        for (Map.Entry<Pair<String, String>, HoodieColumnStats> entry : fileToColumnStatMap.entrySet()) {
+          result.add(Pair.of(entry.getKey().getLeft(),
+              new BloomIndexFileInfo(
+                  FSUtils.getFileId(entry.getKey().getRight()),
+                  entry.getValue().getMinValue(),
+                  entry.getValue().getMaxValue()
+              )));
+        }
+        return result.stream();
+      } catch (MetadataNotFoundException me) {
+        throw new HoodieMetadataException("Unable to find column range metadata for partition:" + partitionName, me);
+      }
+    }, Math.max(partitions.size(), 1));
   }
 
   @Override

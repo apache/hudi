@@ -58,11 +58,11 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -207,7 +207,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Retrieve record from base file
     if (baseFileReader != null) {
       HoodieTimer readTimer = new HoodieTimer();
-      Map<String, GenericRecord> baseFileRecords = baseFileReader.filterRecords(new HashSet<>(keys));
+      Map<String, GenericRecord> baseFileRecords = baseFileReader.getRecordsByKeys(new TreeSet<>(keys));
       for (String key : keys) {
         readTimer.startTimer();
         if (baseFileRecords.containsKey(key)) {

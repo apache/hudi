@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -36,8 +37,12 @@ public interface HoodieFileReader<R extends IndexedRecord> extends AutoCloseable
 
   public Set<String> filterRowKeys(Set<String> candidateRowKeys);
 
-  default Map<String, R> filterRecords(Set<String> candidateRowKeys) {
+  default Map<String, R> getRecordsByKeys(TreeSet<String> sortedCandidateRowKeys) throws IOException {
     throw new UnsupportedOperationException();
+  }
+
+  default Set<String> filterKeys(TreeSet<String> sortedCandidateRowKeys) throws IOException {
+    return filterRowKeys(sortedCandidateRowKeys);
   }
 
   public Iterator<R> getRecordIterator(Schema readerSchema) throws IOException;

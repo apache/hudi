@@ -35,12 +35,12 @@ import java.io.IOException;
  */
 public abstract class HoodieReadHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieIOHandle<T, I, K, O> {
 
-  protected final Pair<String, String> partitionPathFilePair;
+  protected final Pair<String, String> partitionPathFileIDPair;
 
   public HoodieReadHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-      Pair<String, String> partitionPathFilePair) {
+      Pair<String, String> partitionPathFileIDPair) {
     super(config, instantTime, hoodieTable);
-    this.partitionPathFilePair = partitionPathFilePair;
+    this.partitionPathFileIDPair = partitionPathFileIDPair;
   }
 
   @Override
@@ -48,17 +48,17 @@ public abstract class HoodieReadHandle<T extends HoodieRecordPayload, I, K, O> e
     return hoodieTable.getMetaClient().getFs();
   }
 
-  public Pair<String, String> getPartitionPathFilePair() {
-    return partitionPathFilePair;
+  public Pair<String, String> getPartitionPathFileIDPair() {
+    return partitionPathFileIDPair;
   }
 
   public String getFileId() {
-    return partitionPathFilePair.getRight();
+    return partitionPathFileIDPair.getRight();
   }
 
   protected HoodieBaseFile getLatestDataFile() {
     return hoodieTable.getBaseFileOnlyView()
-        .getLatestBaseFile(partitionPathFilePair.getLeft(), partitionPathFilePair.getRight()).get();
+        .getLatestBaseFile(partitionPathFileIDPair.getLeft(), partitionPathFileIDPair.getRight()).get();
   }
 
   protected HoodieFileReader createNewFileReader() throws IOException {

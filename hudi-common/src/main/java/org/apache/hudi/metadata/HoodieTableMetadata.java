@@ -27,8 +27,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.util.hash.FileIndexID;
-import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieMetadataException;
 
 import java.io.IOException;
@@ -113,33 +111,34 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   /**
    * Get the bloom filter for the FileID from the metadata table.
    *
-   * @param partitionIndexID
-   * @param fileIndexID      - FileID for which bloom filter needs to be retrieved
+   * @param partitionName - Partition name
+   * @param fileName      - File name for which bloom filter needs to be retrieved
    * @return BloomFilter byte buffer if available, otherwise empty
    * @throws HoodieMetadataException
    */
-  Option<ByteBuffer> getBloomFilter(final PartitionIndexID partitionIndexID, final FileIndexID fileIndexID)
+  Option<ByteBuffer> getBloomFilter(final String partitionName, final String fileName)
       throws HoodieMetadataException;
 
   /**
-   * Get bloom filters for the list of FileIDs from the metadata table.
+   * Get bloom filters for files from the metadata table index.
    *
-   * @param partitionFileIndexIDList - List of FileIDs for which bloom filters need to be retrieved
-   * @return Map of FileID to its bloom filter byte buffer
+   * @param partitionNameFileNameList - List of partition and file name pair for which bloom filters need to be retrieved
+   * @return Map of partition file name pair to its bloom filter byte buffer
    * @throws HoodieMetadataException
    */
-  Map<String, ByteBuffer> getBloomFilters(final List<Pair<PartitionIndexID, FileIndexID>> partitionFileIndexIDList)
+  Map<Pair<String, String>, ByteBuffer> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList)
       throws HoodieMetadataException;
 
   /**
-   * TODO: Comment.
+   * Get column stats for files from the metadata table index.
    *
-   * @param keyList
-   * @param keySet
-   * @return
+   * @param partitionNameFileNameList - List of partition and file name pair for which bloom filters need to be retrieved
+   * @param columnName                - Column name for which stats are needed
+   * @return Map of partition and file name pair to its column stats
    * @throws HoodieMetadataException
    */
-  Map<String, HoodieColumnStats> getColumnStats(final List<String> keySet) throws HoodieMetadataException;
+  Map<Pair<String, String>, HoodieColumnStats> getColumnStats(final List<Pair<String, String>> partitionNameFileNameList, final String columnName)
+      throws HoodieMetadataException;
 
   /**
    * Get the instant time to which the metadata is synced w.r.t data timeline.

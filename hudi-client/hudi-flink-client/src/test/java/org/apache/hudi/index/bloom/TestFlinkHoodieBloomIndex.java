@@ -31,7 +31,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.io.HoodieKeyLookupHandle;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
@@ -242,9 +242,8 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     HoodieFlinkTable table = HoodieFlinkTable.create(config, context, metaClient);
-    HoodieKeyLookupHandle keyHandle = new HoodieKeyLookupHandle<>(config, table, Pair.of(partition, fileId));
-    List<String> results = keyHandle.checkCandidatesAgainstFile(hadoopConf, uuids,
-        new Path(java.nio.file.Paths.get(basePath, partition, filename).toString()));
+    List<String> results = HoodieIndexUtils.filterKeysFromFile(
+        new Path(java.nio.file.Paths.get(basePath, partition, filename).toString()), uuids, hadoopConf);
     assertEquals(results.size(), 2);
     assertTrue(results.get(0).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")
         || results.get(1).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0"));
