@@ -63,9 +63,7 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
    */
   lazy val completedCommits = metaClient.getCommitsTimeline
     .filterCompletedInstants().getInstants.iterator().toList.map(_.getTimestamp)
-  /**
-   * Get the partition schema from the hoodie.properties.
-   */
+
   private lazy val _partitionColumns: Array[String] =
     metaClient.getTableConfig.getPartitionFields.orElse(Array[String]())
 
