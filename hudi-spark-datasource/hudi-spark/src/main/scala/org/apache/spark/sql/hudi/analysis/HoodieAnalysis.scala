@@ -322,30 +322,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
       } else {
         l
       }
-    // Fill schema for Create Table without specify schema info
-    case c @ CreateTable(tableDesc, _, _)
-      if isHoodieTable(tableDesc) =>
-        val tablePath = getTableLocation(c.tableDesc, sparkSession)
-        val tableExistInCatalog = sparkSession.sessionState.catalog.tableExists(tableDesc.identifier)
-        // Only when the table has not exist in catalog, we need to fill the schema info for creating table.
-        if (!tableExistInCatalog && tableExistsInPath(tablePath, sparkSession.sessionState.newHadoopConf())) {
-          val metaClient = HoodieTableMetaClient.builder()
-            .setBasePath(tablePath)
-            .setConf(sparkSession.sessionState.newHadoopConf())
-            .build()
-          val tableSchema = HoodieSqlCommonUtils.getTableSqlSchema(metaClient)
-          if (tableSchema.isDefined && tableDesc.schema.isEmpty) {
-            // Fill the schema with the schema from the table
-            c.copy(tableDesc.copy(schema = tableSchema.get))
-          } else if (tableSchema.isDefined && tableDesc.schema != tableSchema.get) {
-            throw new AnalysisException(s"Specified schema in create table statement is not equal to the table schema." +
-              s"You should not specify the schema for an exist table: ${tableDesc.identifier} ")
-          } else {
-            c
-          }
-      } else {
-        c
-      }
+
     case p => p
   }
 
