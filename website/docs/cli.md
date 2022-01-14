@@ -4,8 +4,44 @@ keywords: [hudi, cli]
 last_modified_at: 2021-08-18T15:59:57-04:00
 ---
 
+### Local set up
 Once hudi has been built, the shell can be fired by via  `cd hudi-cli && ./hudi-cli.sh`. A hudi table resides on DFS, in a location referred to as the `basePath` and
 we would need this location in order to connect to a Hudi table. Hudi library effectively manages this table internally, using `.hoodie` subfolder to track all metadata.
+
+
+### Using Hudi-cli in S3
+If you are using hudi that comes packaged with AWS EMR, you can find instructions to use hudi-cli [here](https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-hudi-cli.html).
+If you are not using EMR, or would like to use latest hudi-cli from master, you can follow the below steps to access S3 dataset in your local environment(laptop).  
+
+Build Hudi with corresponding Spark version, for eg, -Dspark3.1.x
+
+Set the following environment variables. 
+```
+export AWS_REGION=us-east-2
+export AWS_ACCESS_KEY_ID=<key_id>
+export AWS_SECRET_ACCESS_KEY=<secret_key>
+export SPARK_HOME=<spark_home>
+```
+Ensure you set the SPARK_HOME to your local spark home compatible to compiled hudi spark version above.
+
+Apart from these, we might need to add aws jars to class path so that accessing S3 is feasible from local. 
+We need two jars, namely, aws-java-sdk-bundle jar and hadoop-aws jar which you can find online.
+For eg:
+```
+wget https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.2.0/hadoop-aws-3.2.0.jar -o /lib/spark-3.2.0-bin-hadoop3.2/jars/hadoop-aws-3.2.0.jar
+wget https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.11.375/aws-java-sdk-bundle-1.11.375.jar -o /lib/spark-3.2.0-bin-hadoop3.2/jars/aws-java-sdk-bundle-1.11.375.jar
+```
+
+#### Note: These AWS jar versions below are specific to Spark 3.2.0
+```
+export CLIENT_JAR=/lib/spark-3.2.0-bin-hadoop3.2/jars/aws-java-sdk-bundle-1.12.48.jar:/lib/spark-3.2.0-bin-hadoop3.2/jars/hadoop-aws-3.3.1.jar
+```
+Once these are set, you are good to launch hudi-cli and access S3 dataset. 
+```
+./hudi-cli/hudi-cli.sh
+```
+
+## Using hudi-cli
 
 To initialize a hudi table, use the following command.
 
