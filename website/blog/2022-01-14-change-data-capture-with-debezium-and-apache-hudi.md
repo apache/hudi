@@ -67,18 +67,18 @@ ALTER TABLE schema1.table1 REPLICA IDENTITY FULL;
 
 ```
 kubectl create namespace kafka
-kubectl create -f '[https://strimzi.io/install/latest?namespace=kafka](https://strimzi.io/install/latest?namespace=kafka)' -n kafka
+kubectl create -f https://strimzi.io/install/latest?namespace=kafka -n kafka
 kubectl -n kafka apply -f kafka-connector.yaml
 ```
 
 An example for kafka-connector.yaml is shown below:
 ```yaml
-apiVersion: [kafka.strimzi.io/v1beta2](http://kafka.strimzi.io/v1beta2)
+apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaConnect
 metadata:
 name: debezium-kafka-connect
 annotations:
-[strimzi.io/use-connector-resources:](http://strimzi.io/use-connector-resources:) "false"
+strimzi.io/use-connector-resources: "false"
 spec:
 image: debezium-kafka-connect:latest
 replicas: 1
@@ -100,7 +100,7 @@ RUN yum -y update
 RUN yum -y install git
 RUN yum -y install wget
 
-RUN wget [https://repo1.maven.org/maven2/io/debezium/debezium-connector-postgres/1.6.1.Final/debezium-connector-postgres-1.6.1.Final-plugin.tar.gz](https://repo1.maven.org/maven2/io/debezium/debezium-connector-postgres/1.6.1.Final/debezium-connector-postgres-1.6.1.Final-plugin.tar.gz)
+RUN wget https://repo1.maven.org/maven2/io/debezium/debezium-connector-postgres/1.6.1.Final/debezium-connector-postgres-1.6.1.Final-plugin.tar.gz
 RUN tar xzf debezium-connector-postgres-1.6.1.Final-plugin.tar.gz
 
 RUN mkdir -p /opt/kafka/plugins/debezium && mkdir -p /opt/kafka/plugins/avro/
@@ -112,7 +112,7 @@ USER 1001
 Once the Strimzi operator and the Kafka connect are deployed, we can start the Debezium connector.
 
 ```
-curl -X POST -H "Content-Type:application/json" -d @connect-source.json [http://localhost:8083/connectors/](http://localhost:8083/connectors/)
+curl -X POST -H "Content-Type:application/json" -d @connect-source.json http://localhost:8083/connectors/
 ```
 
 The following is an example of a configuration to setup Debezium connector for generating the changelogs for two tables, table1, and table2.
@@ -128,8 +128,8 @@ Contents of connect-source.json:
     "database.user": "postgres",
     "database.password": "postgres",
     "database.dbname": "database",
-    "[plugin.name](http://plugin.name)": "pgoutput",
-    "[database.server.name](http://database.server.name)": "postgres",
+    "plugin.name": "pgoutput",
+    "database.server.name": "postgres",
     "table.include.list": "schema1.table1,schema1.table2",
     "publication.autocreate.mode": "filtered",
     "tombstones.on.delete":"false",
@@ -137,7 +137,7 @@ Contents of connect-source.json:
     "key.converter.schema.registry.url": "<schema_registry_host>",
     "value.converter": "io.confluent.connect.avro.AvroConverter",
     "value.converter.schema.registry.url": "<schema_registry_host>",
-    "[slot.name](http://slot.name)": "pgslot"
+    "slot.name": "pgslot"
   }
 }
 ```
