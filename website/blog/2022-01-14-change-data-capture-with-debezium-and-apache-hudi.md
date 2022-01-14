@@ -134,9 +134,9 @@ Contents of connect-source.json:
     "publication.autocreate.mode": "filtered",
     "tombstones.on.delete":"false",
     "key.converter": "io.confluent.connect.avro.AvroConverter",
-    "key.converter.schema.registry.url": "<schema\_registry\_host>",
+    "key.converter.schema.registry.url": "<schema_registry_host>",
     "value.converter": "io.confluent.connect.avro.AvroConverter",
-    "value.converter.schema.registry.url": "<schema\_registry\_host>",
+    "value.converter.schema.registry.url": "<schema_registry_host>",
     "[slot.name](http://slot.name)": "pgslot"
   }
 }
