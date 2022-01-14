@@ -11,7 +11,7 @@ we would need this location in order to connect to a Hudi table. Hudi library ef
 
 ### Using Hudi-cli in S3
 If you are using hudi that comes packaged with AWS EMR, you can find instructions to use hudi-cli [here](https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-hudi-cli.html).
-If you are not using EMR, or would like to use latest hudi-cli from master, you can follow the below steps to access S3 dataset in your local environment(laptop).  
+If you are not using EMR, or would like to use latest hudi-cli from master, you can follow the below steps to access S3 dataset in your local environment (laptop).  
 
 Build Hudi with corresponding Spark version, for eg, -Dspark3.1.x
 
