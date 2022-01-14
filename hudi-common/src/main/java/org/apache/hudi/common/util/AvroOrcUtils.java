@@ -494,7 +494,6 @@ public class AvroOrcUtils {
       case SHORT:
         return (short) ((LongColumnVector) colVector).vector[vectorPos];
       case INT:
-      case DATE:
         return (int) ((LongColumnVector) colVector).vector[vectorPos];
       case LONG:
         return ((LongColumnVector) colVector).vector[vectorPos];
@@ -522,6 +521,9 @@ public class AvroOrcUtils {
         } else {
           return ((BytesColumnVector) colVector).toString(vectorPos);
         }
+      case DATE:
+        // convert to daysSinceEpoch for LogicalType.Date
+        return (int) ((LongColumnVector) colVector).vector[vectorPos];
       case TIMESTAMP:
         // The unit of time in ORC is millis. Convert (time,nanos) to the desired unit per logicalType
         long time = ((TimestampColumnVector) colVector).time[vectorPos];
