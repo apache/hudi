@@ -28,7 +28,8 @@ import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.execution.SparkPlan
-import org.apache.spark.sql.hudi.HoodieSqlUtils
+import org.apache.spark.sql.execution.command.DataWritingCommand
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 
 import scala.collection.JavaConverters._
 
@@ -71,7 +72,7 @@ case class CreateHoodieTableAsSelectCommand(
     val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableWithSchema)
     val tablePath = hoodieCatalogTable.tableLocation
     val hadoopConf = sparkSession.sessionState.newHadoopConf()
-    assert(HoodieSqlUtils.isEmptyPath(tablePath, hadoopConf),
+    assert(HoodieSqlCommonUtils.isEmptyPath(tablePath, hadoopConf),
       s"Path '$tablePath' should be empty for CTAS")
 
     // Execute the insert query
