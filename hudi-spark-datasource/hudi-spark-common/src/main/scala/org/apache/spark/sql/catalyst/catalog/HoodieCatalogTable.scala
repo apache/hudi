@@ -82,11 +82,6 @@ class HoodieCatalogTable(val spark: SparkSession, val table: CatalogTable) exten
   lazy val tableConfig: HoodieTableConfig = metaClient.getTableConfig
 
   /**
-   * the name of database
-   */
-  lazy val databaseName: String = tableConfig.getDatabaseName
-
-  /**
    * the name of table
    */
   lazy val tableName: String = tableConfig.getTableName
@@ -168,17 +163,23 @@ class HoodieCatalogTable(val spark: SparkSession, val table: CatalogTable) exten
     val properties = new Properties()
     properties.putAll(tableConfigs.asJava)
 
-    val hoodieDatabaseName = if (hoodieTableExists) databaseName else
-      formatName(spark, table.identifier.database.getOrElse(spark.sessionState.catalog.getCurrentDatabase))
-    val hoodieTableName = if (hoodieTableExists) tableName else table.identifier.table
+    if (hoodieTableExists) {
+      // just persist hoodie.table.create.schema
+      HoodieTableMetaClient.withPropertyBuilder()
+        .fromProperties(properties)
+        .setTableCreateSchema(SchemaConverters.toAvroType(finalSchema).toString())
+        .initTable(hadoopConf, tableLocation)
+    } else {
+      val hoodieDatabaseName = formatName(spark, table.identifier.database.getOrElse(spark.sessionState.catalog.getCurrentDatabase))
 
-    HoodieTableMetaClient.withPropertyBuilder()
-      .fromProperties(properties)
-      .setDatabaseName(hoodieDatabaseName)
-      .setTableName(hoodieTableName)
-      .setTableCreateSchema(SchemaConverters.toAvroType(finalSchema).toString())
-      .setPartitionFields(table.partitionColumnNames.mkString(","))
-      .initTable(hadoopConf, tableLocation)
+      HoodieTableMetaClient.withPropertyBuilder()
+        .fromProperties(properties)
+        .setDatabaseName(hoodieDatabaseName)
+        .setTableName(table.identifier.table)
+        .setTableCreateSchema(SchemaConverters.toAvroType(finalSchema).toString())
+        .setPartitionFields(table.partitionColumnNames.mkString(","))
+        .initTable(hadoopConf, tableLocation)
+    }
   }
 
   /**

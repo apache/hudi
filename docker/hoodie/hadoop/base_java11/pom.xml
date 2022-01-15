@@ -15,7 +15,8 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 -->
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <parent>
     <artifactId>hudi-hadoop-docker</artifactId>
     <groupId>org.apache.hudi</groupId>
@@ -23,7 +24,7 @@
   </parent>
   <modelVersion>4.0.0</modelVersion>
   <packaging>pom</packaging>
-  <artifactId>hudi-hadoop-sparkadhoc-docker</artifactId>
+  <artifactId>hudi-hadoop-base-java11-docker</artifactId>
 
   <description>Base Docker Image with Hoodie</description>
 
@@ -33,11 +34,12 @@
     <main.basedir>${project.parent.parent.basedir}</main.basedir>
   </properties>
 
+
   <dependencyManagement>
     <dependencies>
       <dependency>
         <groupId>org.apache.hudi</groupId>
-        <artifactId>hudi-hadoop-sparkbase-docker</artifactId>
+        <artifactId>hudi-hadoop-docker</artifactId>
         <version>${project.version}</version>
         <type>pom</type>
         <scope>import</scope>
@@ -45,7 +47,9 @@
     </dependencies>
   </dependencyManagement>
 
+
   <build>
+    <finalName>hudi</finalName>
     <plugins>
       <!-- Build Docker image -->
       <plugin>
@@ -64,9 +68,7 @@
             <configuration>
               <skip>${docker.build.skip}</skip>
               <pullNewerImage>false</pullNewerImage>
-              <repository>
-                apachehudi/hudi-hadoop_${docker.hadoop.version}-hive_${docker.hive.version}-sparkadhoc_${docker.spark.version}
-              </repository>
+              <repository>apachehudi/hudi-hadoop_${docker.hadoop.version}-base-java11</repository>
               <force>true</force>
               <tag>latest</tag>
             </configuration>
@@ -82,9 +84,7 @@
             <configuration>
               <skip>${docker.build.skip}</skip>
               <pullNewerImage>false</pullNewerImage>
-              <repository>
-                apachehudi/hudi-hadoop_${docker.hadoop.version}-hive_${docker.hive.version}-sparkadhoc_${docker.spark.version}
-              </repository>
+              <repository>apachehudi/hudi-hadoop_${docker.hadoop.version}-base-java11</repository>
               <force>true</force>
               <tag>${project.version}</tag>
             </configuration>

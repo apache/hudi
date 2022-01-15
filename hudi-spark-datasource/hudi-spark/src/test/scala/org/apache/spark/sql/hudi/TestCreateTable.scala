@@ -179,7 +179,7 @@ class TestCreateTable extends TestHoodieSqlBase {
       assertResult(Seq("dt"))(table2.partitionColumnNames)
       assertResult(classOf[HoodieParquetRealtimeInputFormat].getCanonicalName)(table2.storage.inputFormat.get)
 
-      // Test create a external table with an exist table in the path
+      // Test create a external table with an existing table in the path
       val tableName3 = generateTableName
       spark.sql(
         s"""
@@ -289,7 +289,7 @@ class TestCreateTable extends TestHoodieSqlBase {
            | select 1 as id, 'a1' as name, 10 as price, '2021-04-01' as dt
          """.stripMargin
       )
-      checkAnswer(s"select id, name, price, dt from $tableName2") (
+      checkAnswer(s"select id, name, price, dt from $tableName2")(
         Seq(1, "a1", 10, "2021-04-01")
       )
 
@@ -306,8 +306,9 @@ class TestCreateTable extends TestHoodieSqlBase {
              | AS
              | select null as id, 'a1' as name, 10 as price, '2021-05-07' as dt
              |
-         """.stripMargin
-        )}
+             """.stripMargin
+        )
+      }
       // Create table with timestamp type partition
       spark.sql(
         s"""
@@ -369,7 +370,7 @@ class TestCreateTable extends TestHoodieSqlBase {
     }
   }
 
-  test("Test Create Table From Exist Hoodie Table") {
+  test("Test Create Table From Existing Hoodie Table") {
     withTempDir { tmp =>
       val databaseName = "hudi_database"
       spark.sql(s"create database if not exists $databaseName")
@@ -393,15 +394,19 @@ class TestCreateTable extends TestHoodieSqlBase {
           .mode(SaveMode.Overwrite)
           .save(tablePath)
 
-        // Create a table over the exist old table.
+        // Create a table over the existing table.
+        // Fail to create table if only specify partition columns, no table schema.
+        checkExceptionContain(
+          s"""
+             |create table $tableName using hudi
+             |partitioned by (dt)
+             |location '$tablePath'
+             |""".stripMargin
+        )("It is not allowed to specify partition columns when the table schema is not defined.")
+
         spark.sql(
           s"""
              |create table $tableName using hudi
-             |tblproperties (
-             | primaryKey = 'id',
-             | preCombineField = 'ts'
-             |)
-             |partitioned by (dt)
              |location '$tablePath'
              |""".stripMargin)
         checkAnswer(s"select id, name, value, ts, dt from $tableName")(
@@ -452,7 +457,7 @@ class TestCreateTable extends TestHoodieSqlBase {
     }
   }
 
-  test("Test Create Table From Exist Hoodie Table For Multi-Level Partitioned Table") {
+  test("Test Create Table From Existing Hoodie Table For Multi-Level Partitioned Table") {
     withTempDir { tmp =>
       Seq("2021-08-02", "2021/08/02").foreach { day =>
         val tableName = generateTableName
@@ -472,15 +477,10 @@ class TestCreateTable extends TestHoodieSqlBase {
           .mode(SaveMode.Overwrite)
           .save(tablePath)
 
-        // Create a table over the exist old table.
+        // Create a table over the existing table.
         spark.sql(
           s"""
              |create table $tableName using hudi
-             |tblproperties (
-             | primaryKey = 'id',
-             | preCombineField = 'ts'
-             |)
-             |partitioned by (day, hh)
              |location '$tablePath'
              |""".stripMargin)
         checkAnswer(s"select id, name, value, ts, day, hh from $tableName")(
@@ -529,7 +529,7 @@ class TestCreateTable extends TestHoodieSqlBase {
     }
   }
 
-  test("Test Create Table From Exist Hoodie Table For None Partitioned Table") {
+  test("Test Create Table From Existing Hoodie Table For None Partitioned Table") {
     withTempDir { tmp =>
       // Write a table by spark dataframe.
       val tableName = generateTableName
@@ -547,14 +547,10 @@ class TestCreateTable extends TestHoodieSqlBase {
         .mode(SaveMode.Overwrite)
         .save(tmp.getCanonicalPath)
 
-      // Create a table over the exist old table.
+      // Create a table over the existing table.
       spark.sql(
         s"""
            |create table $tableName using hudi
-           |tblproperties (
-           | primaryKey = 'id',
-           | preCombineField = 'ts'
-           |)
            |location '${tmp.getCanonicalPath}'
            |""".stripMargin)
       checkAnswer(s"select id, name, value, ts from $tableName")(
@@ -601,7 +597,7 @@ class TestCreateTable extends TestHoodieSqlBase {
     }
   }
 
-  test("Test Create Table Exists In Catalog") {
+  test("Test Create Table Existing In Catalog") {
     val tableName = generateTableName
     spark.sql(
       s"""
@@ -616,7 +612,7 @@ class TestCreateTable extends TestHoodieSqlBase {
 
     spark.sql(s"alter table $tableName add columns(ts bigint)")
 
-    // Check "create table if not exist" works after schema evolution.
+    // Check "create table if not exists" works after schema evolution.
     spark.sql(
       s"""
          |create table if not exists $tableName (

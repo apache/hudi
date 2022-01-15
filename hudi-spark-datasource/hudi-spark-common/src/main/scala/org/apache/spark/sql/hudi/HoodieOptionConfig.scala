@@ -202,11 +202,11 @@ object HoodieOptionConfig {
         s"Can't find primaryKey `$primaryKey` in ${schema.treeString}.")
     }
 
-    // validate precombine key
-    val precombineKey = sqlOptions.get(SQL_KEY_PRECOMBINE_FIELD.sqlKeyName)
-    if (precombineKey.isDefined && precombineKey.get.nonEmpty) {
-      ValidationUtils.checkArgument(schema.exists(f => resolver(f.name, precombineKey.get)),
-        s"Can't find preCombineKey `${precombineKey.get}` in ${schema.treeString}.")
+    // validate preCombine key
+    val preCombineKey = sqlOptions.get(SQL_KEY_PRECOMBINE_FIELD.sqlKeyName)
+    if (preCombineKey.isDefined && preCombineKey.get.nonEmpty) {
+      ValidationUtils.checkArgument(schema.exists(f => resolver(f.name, preCombineKey.get)),
+        s"Can't find preCombineKey `${preCombineKey.get}` in ${schema.treeString}.")
     }
 
     // validate table type
