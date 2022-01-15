@@ -1301,15 +1301,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public HoodieClusteringConfig.BuildCurveStrategyType getLayoutOptimizationCurveBuildMethod() {
     return HoodieClusteringConfig.BuildCurveStrategyType.fromValue(
-        getString(HoodieClusteringConfig.LAYOUT_OPTIMIZE_CURVE_BUILD_METHOD));
+        getString(HoodieClusteringConfig.LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD));
   }
 
   public int getLayoutOptimizationSampleSize() {
     return getInt(HoodieClusteringConfig.LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE);
-  }
-
-  public boolean isDataSkippingEnabled() {
-    return getBoolean(HoodieClusteringConfig.LAYOUT_OPTIMIZE_DATA_SKIPPING_ENABLE);
   }
 
   /**

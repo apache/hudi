@@ -119,7 +119,8 @@ object DataSourceReadOptions {
     .key("hoodie.enable.data.skipping")
     .defaultValue(true)
     .sinceVersion("0.10.0")
-    .withDocumentation("enable data skipping to boost query after doing z-order optimize for current table")
+    .withDocumentation("Enables data-skipping allowing queries to leverage indexes to reduce the search space by " +
+      "skipping over files")
 
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated

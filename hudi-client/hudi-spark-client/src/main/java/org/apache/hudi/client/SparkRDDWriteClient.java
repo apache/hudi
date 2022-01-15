@@ -381,14 +381,17 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     final HoodieInstant clusteringInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringCommitTime);
     try {
       this.txnManager.beginTransaction(Option.of(clusteringInstant), Option.empty());
+
       finalizeWrite(table, clusteringCommitTime, writeStats);
-      writeTableMetadataForTableServices(table, metadata,clusteringInstant);
+      writeTableMetadataForTableServices(table, metadata, clusteringInstant);
       // Update outstanding metadata indexes
       if (config.isLayoutOptimizationEnabled()
           && !config.getClusteringSortColumns().isEmpty()) {
         table.updateMetadataIndexes(context, writeStats, clusteringCommitTime);
       }
+
       LOG.info("Committing Clustering " + clusteringCommitTime + ". Finished with result " + metadata);
+
       table.getActiveTimeline().transitionReplaceInflightToComplete(
           HoodieTimeline.getReplaceCommitInflightInstant(clusteringCommitTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));

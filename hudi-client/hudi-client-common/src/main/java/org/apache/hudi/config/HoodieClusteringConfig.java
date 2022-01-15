@@ -189,16 +189,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.9.0")
       .withDocumentation("When rewriting data, preserves existing hoodie_commit_time");
 
-  /**
-   * Using space-filling curves to optimize the layout of table to boost query performance.
-   * The table data which sorted by space-filling curve has better aggregation;
-   * combine with min-max filtering, it can achieve good performance improvement.
-   *
-   * Notice:
-   * when we use this feature, we need specify the sort columns.
-   * The more columns involved in sorting, the worse the aggregation, and the smaller the query performance improvement.
-   * Choose the filter columns which commonly used in query sql as sort columns.
-   * It is recommend that 2 ~ 4 columns participate in sorting.
+`  /**
+   * @deprecated this setting has no effect
    */
   public static final ConfigProperty LAYOUT_OPTIMIZE_ENABLE = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "enable")
@@ -207,41 +199,71 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .withDocumentation("Enable use z-ordering/space-filling curves to optimize the layout of table to boost query performance. "
           + "This parameter takes precedence over clustering strategy set using " + EXECUTION_STRATEGY_CLASS_NAME.key());
 
+  /**
+   * Determines ordering strategy in for records layout optimization.
+   * Currently, following strategies are supported
+   * <ul>
+   *   <li>Linear: simply orders records lexicographically</li>
+   *   <li>Z-order: orders records along Z-order spatial-curve</li>
+   *   <li>Hilbert: orders records along Hilbert's spatial-curve</li>
+   * </ul>
+   *
+   * NOTE: "z-order", "hilbert" strategies may consume considerably more compute, than "linear".
+   *       Make sure to perform small-scale local testing for your dataset before applying globally.
+   */
   public static final ConfigProperty LAYOUT_OPTIMIZE_STRATEGY = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "strategy")
       .defaultValue("z-order")
       .sinceVersion("0.10.0")
-      .withDocumentation("Type of layout optimization to be applied, current only supports `z-order` and `hilbert` curves.");
+      .withDocumentation("Determines ordering strategy used in records layout optimization. " +
+          "Currently supported strategies are \"linear\", \"z-order\" and \"hilbert\" values are supported.");
 
   /**
-   * There exists two method to build z-curve.
-   * one is directly mapping sort cols to z-value to build z-curve;
-   * we can find this method in Amazon DynamoDB https://aws.amazon.com/cn/blogs/database/tag/z-order/
-   * the other one is Boundary-based Interleaved Index method which we proposed. simply call it sample method.
-   * Refer to rfc-28 for specific algorithm flow.
-   * Boundary-based Interleaved Index method has better generalization, but the build speed is slower than direct method.
+   * NOTE: This setting only has effect if {@link #LAYOUT_OPTIMIZE_STRATEGY} value is set to
+   *       either "z-order" or "hilbert" (ie leveraging space-filling curves)
+   *
+   * Currently, two methods to order records along the curve are supported "build" and "sample":
+   *
+   * <ul>
+   *   <li>Direct: entails that spatial curve will be built in full, "filling in" all of the individual
+   *   points corresponding to each individual record</li>
+   *   <li>Sample: leverages boundary-base interleaved index method (described in more details in
+   *   Amazon DynamoDB blog [1])</li>
+   * </ul>
+   *
+   * NOTE: Boundary-based interleaved Index method has better generalization,
+   *       but is slower than direct method.
+   *
+   * Please refer to RFC-28 for specific elaboration on both flows.
+   *
+   * [1] https://aws.amazon.com/cn/blogs/database/tag/z-order/
    */
-  public static final ConfigProperty LAYOUT_OPTIMIZE_CURVE_BUILD_METHOD = ConfigProperty
+  public static final ConfigProperty LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "curve.build.method")
       .defaultValue("direct")
       .sinceVersion("0.10.0")
-      .withDocumentation("Controls how data is sampled to build the space filling curves. two methods: `direct`,`sample`."
-          + "The direct method is faster than the sampling, however sample method would produce a better data layout.");
+      .withDocumentation("Controls how data is sampled to build the space-filling curves. " +
+          "Two methods: \"direct\", \"sample\". The direct method is faster than the sampling, " +
+          "however sample method would produce a better data layout.");
+
   /**
-   * Doing sample for table data is the first step in Boundary-based Interleaved Index method.
-   * larger sample number means better optimize result, but more memory consumption
+   * NOTE: This setting only has effect if {@link #LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD} value
+   *       is set to "sample"
+   *
+   * Determines target sample size used by the Boundary-based Interleaved Index method.
+   * Larger sample size entails better layout optimization outcomes, at the expense of higher memory
+   * footprint.
    */
   public static final ConfigProperty LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "build.curve.sample.size")
       .defaultValue("200000")
       .sinceVersion("0.10.0")
-      .withDocumentation("when setting" + LAYOUT_OPTIMIZE_CURVE_BUILD_METHOD.key() + " to `sample`, the amount of sampling to be done."
-          + "Large sample size leads to better results, at the expense of more memory usage.");
+      .withDocumentation("Determines target sample size used by the Boundary-based Interleaved Index method " +
+          "of building space-filling curve. Larger sample size entails better layout optimization outcomes, " +
+          "at the expense of higher memory footprint.");
 
   /**
-   * The best way to use Z-order/Space-filling curves is to cooperate with Data-Skipping
-   * with data-skipping query engine can greatly reduce the number of table files to be read.
-   * otherwise query engine can only do row-group skipping for files (parquet/orc)
+   * @deprecated this setting has no effect
    */
   public static final ConfigProperty LAYOUT_OPTIMIZE_DATA_SKIPPING_ENABLE = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "data.skipping.enable")
@@ -527,7 +549,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
     }
 
     public Builder withDataOptimizeBuildCurveStrategy(String method) {
-      clusteringConfig.setValue(LAYOUT_OPTIMIZE_CURVE_BUILD_METHOD, method);
+      clusteringConfig.setValue(LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD, method);
       return this;
     }
 
