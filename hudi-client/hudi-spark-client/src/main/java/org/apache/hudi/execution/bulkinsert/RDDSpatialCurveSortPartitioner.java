@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.sort.SpaceCurveSortingHelper;
@@ -38,67 +39,63 @@ import org.apache.spark.sql.Row;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
-
-import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
 /**
  * A partitioner that does spatial curve optimization sorting based on specified column values for each RDD partition.
  * support z-curve optimization, hilbert will come soon.
  * @param <T> HoodieRecordPayload type
  */
-public class RDDSpatialCurveOptimizationSortPartitioner<T extends HoodieRecordPayload>
+public class RDDSpatialCurveSortPartitioner<T extends HoodieRecordPayload>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+
   private final HoodieSparkEngineContext sparkEngineContext;
-  private final SerializableSchema serializableSchema;
+  private final String[] orderByColumns;
+  private final Schema schema;
   private final HoodieWriteConfig config;
 
-  public RDDSpatialCurveOptimizationSortPartitioner(HoodieSparkEngineContext sparkEngineContext, HoodieWriteConfig config, Schema schema) {
+  public RDDSpatialCurveSortPartitioner(HoodieSparkEngineContext sparkEngineContext,
+                                        String[] orderByColumns,
+                                        HoodieWriteConfig config,
+                                        Schema schema) {
     this.sparkEngineContext = sparkEngineContext;
+    this.orderByColumns = orderByColumns;
     this.config = config;
-    this.serializableSchema = new SerializableSchema(schema);
+    this.schema = schema;
   }
 
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {
-    JavaRDD<GenericRecord> preparedRecord = prepareGenericRecord(records, outputSparkPartitions, serializableSchema.get());
-    return preparedRecord.map(record -> {
-      String key = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-      String partition = record.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
-      HoodieKey hoodieKey = new HoodieKey(key, partition);
-      HoodieRecord hoodieRecord = new HoodieRecord(hoodieKey, new RewriteAvroPayload(record));
-      return hoodieRecord;
-    });
-  }
-
-  private JavaRDD<GenericRecord> prepareGenericRecord(JavaRDD<HoodieRecord<T>> inputRecords, final int numOutputGroups, final Schema schema) {
     SerializableSchema serializableSchema = new SerializableSchema(schema);
-    JavaRDD<GenericRecord> genericRecordJavaRDD =  inputRecords.map(f -> (GenericRecord) f.getData().getInsertValue(serializableSchema.get()).get());
-    Dataset<Row> originDF =
+    JavaRDD<GenericRecord> genericRecordsRDD =
+        records.map(f -> (GenericRecord) f.getData().getInsertValue(serializableSchema.get()).get());
+
+    Dataset<Row> sourceDataset =
         AvroConversionUtils.createDataFrame(
-            genericRecordJavaRDD.rdd(),
+            genericRecordsRDD.rdd(),
             schema.toString(),
             sparkEngineContext.getSqlContext().sparkSession()
         );
 
-    Dataset<Row> sortedDF = reorder(originDF, numOutputGroups);
+    Dataset<Row> sortedDataset = reorder(sourceDataset, outputSparkPartitions);
 
-    return HoodieSparkUtils.createRdd(sortedDF, schema.getName(),
-        schema.getNamespace(), false, org.apache.hudi.common.util.Option.empty()).toJavaRDD();
+    return HoodieSparkUtils.createRdd(sortedDataset, schema.getName(), schema.getNamespace(), false, Option.empty())
+        .toJavaRDD()
+        .map(record -> {
+          String key = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+          String partition = record.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+          HoodieKey hoodieKey = new HoodieKey(key, partition);
+          HoodieRecord hoodieRecord = new HoodieRecord(hoodieKey, new RewriteAvroPayload(record));
+          return hoodieRecord;
+        });
   }
 
-  private Dataset<Row> reorder(Dataset<Row> originDF, int numOutputGroups) {
-    String orderedColumnsListConfig = config.getClusteringSortColumns();
-
-    if (isNullOrEmpty(orderedColumnsListConfig) || numOutputGroups <= 0) {
+  private Dataset<Row> reorder(Dataset<Row> dataset, int numOutputGroups) {
+    if (orderByColumns.length == 0) {
       // No-op
-      return originDF;
+      return dataset;
     }
 
-    List<String> orderedCols =
-        Arrays.stream(orderedColumnsListConfig.split(","))
-            .map(String::trim)
-            .collect(Collectors.toList());
+    List<String> orderedCols = Arrays.asList(orderByColumns);
 
     HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy =
         HoodieClusteringConfig.LayoutOptimizationStrategy.fromValue(config.getLayoutOptimizationStrategy());
@@ -107,9 +104,9 @@ public class RDDSpatialCurveOptimizationSortPartitioner<T extends HoodieRecordPa
 
     switch (curveBuildStrategyType) {
       case DIRECT:
-        return SpaceCurveSortingHelper.orderDataFrameByMappingValues(originDF, layoutOptStrategy, orderedCols, numOutputGroups);
+        return SpaceCurveSortingHelper.orderDataFrameByMappingValues(dataset, layoutOptStrategy, orderedCols, numOutputGroups);
       case SAMPLE:
-        return SpaceCurveSortingHelper.orderDataFrameBySamplingValues(originDF, layoutOptStrategy, orderedCols, numOutputGroups);
+        return SpaceCurveSortingHelper.orderDataFrameBySamplingValues(dataset, layoutOptStrategy, orderedCols, numOutputGroups);
       default:
         throw new UnsupportedOperationException(String.format("Unsupported space-curve curve building strategy (%s)", curveBuildStrategyType));
     }
