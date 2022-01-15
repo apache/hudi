@@ -378,6 +378,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
       throw new HoodieClusteringException("Clustering failed to write to files:"
           + writeStats.stream().filter(s -> s.getTotalWriteErrors() > 0L).map(s -> s.getFileId()).collect(Collectors.joining(",")));
     }
+
     final HoodieInstant clusteringInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringCommitTime);
     try {
       this.txnManager.beginTransaction(Option.of(clusteringInstant), Option.empty());
