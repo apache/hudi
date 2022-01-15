@@ -138,12 +138,12 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
         Option.ofNullable(strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()))
             .map(listStr -> listStr.split(","));
 
-    return orderByColumnsOpt.map(columns -> {
+    return orderByColumnsOpt.map(orderByColumns -> {
       if (getWriteConfig().isLayoutOptimizationEnabled()) {
-        return new RDDSpatialCurveSortPartitioner((HoodieSparkEngineContext) getEngineContext(), columns,
+        return new RDDSpatialCurveSortPartitioner((HoodieSparkEngineContext) getEngineContext(), orderByColumns,
             getWriteConfig(), HoodieAvroUtils.addMetadataFields(schema));
       } else {
-        return new RDDCustomColumnsSortPartitioner(columns, HoodieAvroUtils.addMetadataFields(schema),
+        return new RDDCustomColumnsSortPartitioner(orderByColumns, HoodieAvroUtils.addMetadataFields(schema),
             getWriteConfig().isConsistentLogicalTimestampEnabled());
       }
     });
