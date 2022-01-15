@@ -30,7 +30,6 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.sort.SpaceCurveSortingHelper;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.spark.api.java.JavaRDD;
@@ -51,15 +50,18 @@ public class RDDSpatialCurveSortPartitioner<T extends HoodieRecordPayload>
   private final HoodieSparkEngineContext sparkEngineContext;
   private final String[] orderByColumns;
   private final Schema schema;
-  private final HoodieWriteConfig config;
+  private final HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy;
+  private final HoodieClusteringConfig.SpatialCurveCompositionStrategyType curveCompositionStrategyType;
 
   public RDDSpatialCurveSortPartitioner(HoodieSparkEngineContext sparkEngineContext,
                                         String[] orderByColumns,
-                                        HoodieWriteConfig config,
+                                        HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy,
+                                        HoodieClusteringConfig.SpatialCurveCompositionStrategyType curveCompositionStrategyType,
                                         Schema schema) {
     this.sparkEngineContext = sparkEngineContext;
     this.orderByColumns = orderByColumns;
-    this.config = config;
+    this.layoutOptStrategy = layoutOptStrategy;
+    this.curveCompositionStrategyType = curveCompositionStrategyType;
     this.schema = schema;
   }
 
@@ -97,12 +99,7 @@ public class RDDSpatialCurveSortPartitioner<T extends HoodieRecordPayload>
 
     List<String> orderedCols = Arrays.asList(orderByColumns);
 
-    HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy =
-        HoodieClusteringConfig.LayoutOptimizationStrategy.fromValue(config.getLayoutOptimizationStrategy());
-
-    HoodieClusteringConfig.BuildCurveStrategyType curveBuildStrategyType = config.getLayoutOptimizationCurveBuildMethod();
-
-    switch (curveBuildStrategyType) {
+    switch (curveCompositionStrategyType) {
       case DIRECT:
         return SpaceCurveSortingHelper.orderDataFrameByMappingValues(dataset, layoutOptStrategy, orderedCols, numOutputGroups);
       case SAMPLE:

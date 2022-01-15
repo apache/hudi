@@ -189,7 +189,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.9.0")
       .withDocumentation("When rewriting data, preserves existing hoodie_commit_time");
 
-`  /**
+  /**
    * @deprecated this setting has no effect
    */
   public static final ConfigProperty LAYOUT_OPTIMIZE_ENABLE = ConfigProperty
@@ -590,21 +590,21 @@ public class HoodieClusteringConfig extends HoodieConfig {
   /**
    * Type of a strategy for building Z-order/Hilbert space-filling curves.
    */
-  public enum BuildCurveStrategyType {
+  public enum SpatialCurveCompositionStrategyType {
     DIRECT("direct"),
     SAMPLE("sample");
 
-    private static final Map<String, BuildCurveStrategyType> VALUE_TO_ENUM_MAP =
-        TypeUtils.getValueToEnumMap(BuildCurveStrategyType.class, e -> e.value);
+    private static final Map<String, SpatialCurveCompositionStrategyType> VALUE_TO_ENUM_MAP =
+        TypeUtils.getValueToEnumMap(SpatialCurveCompositionStrategyType.class, e -> e.value);
 
     private final String value;
 
-    BuildCurveStrategyType(String value) {
+    SpatialCurveCompositionStrategyType(String value) {
       this.value = value;
     }
 
-    public static BuildCurveStrategyType fromValue(String value) {
-      BuildCurveStrategyType enumValue = VALUE_TO_ENUM_MAP.get(value);
+    public static SpatialCurveCompositionStrategyType fromValue(String value) {
+      SpatialCurveCompositionStrategyType enumValue = VALUE_TO_ENUM_MAP.get(value);
       if (enumValue == null) {
         throw new HoodieException(String.format("Invalid value (%s)", value));
       }
@@ -617,6 +617,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
    * Layout optimization strategies such as Z-order/Hilbert space-curves, etc
    */
   public enum LayoutOptimizationStrategy {
+    LINEAR("linear"),
     ZORDER("z-order"),
     HILBERT("hilbert");
 

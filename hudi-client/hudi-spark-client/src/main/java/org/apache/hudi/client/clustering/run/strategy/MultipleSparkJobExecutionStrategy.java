@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.FutureUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -68,6 +69,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -139,12 +141,21 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
             .map(listStr -> listStr.split(","));
 
     return orderByColumnsOpt.map(orderByColumns -> {
-      if (getWriteConfig().isLayoutOptimizationEnabled()) {
-        return new RDDSpatialCurveSortPartitioner((HoodieSparkEngineContext) getEngineContext(), orderByColumns,
-            getWriteConfig(), HoodieAvroUtils.addMetadataFields(schema));
-      } else {
-        return new RDDCustomColumnsSortPartitioner(orderByColumns, HoodieAvroUtils.addMetadataFields(schema),
-            getWriteConfig().isConsistentLogicalTimestampEnabled());
+      HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy = getWriteConfig().getLayoutOptimizationStrategy();
+      switch (layoutOptStrategy) {
+        case ZORDER:
+        case HILBERT:
+          return new RDDSpatialCurveSortPartitioner(
+              (HoodieSparkEngineContext) getEngineContext(),
+              orderByColumns,
+              layoutOptStrategy,
+              getWriteConfig().getLayoutOptimizationCurveBuildMethod(),
+              HoodieAvroUtils.addMetadataFields(schema));
+        case LINEAR:
+          return new RDDCustomColumnsSortPartitioner(orderByColumns, HoodieAvroUtils.addMetadataFields(schema),
+              getWriteConfig().isConsistentLogicalTimestampEnabled());
+        default:
+          throw new UnsupportedOperationException(String.format("Layout optimization strategy '%s' is not supported", layoutOptStrategy));
       }
     });
   }
