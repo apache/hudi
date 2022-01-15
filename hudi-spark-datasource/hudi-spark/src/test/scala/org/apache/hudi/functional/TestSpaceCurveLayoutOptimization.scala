@@ -98,7 +98,6 @@ class TestSpaceCurveLayoutOptimization extends HoodieClientTestBase {
       .option("hoodie.clustering.plan.strategy.small.file.limit", "629145600")
       .option("hoodie.clustering.plan.strategy.max.bytes.per.group", Long.MaxValue.toString)
       .option("hoodie.clustering.plan.strategy.target.file.max.bytes", String.valueOf(64 * 1024 * 1024L))
-      .option(HoodieClusteringConfig.LAYOUT_OPTIMIZE_ENABLE.key, "true")
       .option(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key, "begin_lat, begin_lon")
       .mode(SaveMode.Overwrite)
       .save(basePath)

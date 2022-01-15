@@ -538,11 +538,6 @@ public class HoodieClusteringConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withSpaceFillingCurveDataOptimizeEnable(Boolean enable) {
-      clusteringConfig.setValue(LAYOUT_OPTIMIZE_ENABLE, String.valueOf(enable));
-      return this;
-    }
-
     public Builder withDataOptimizeStrategy(String strategy) {
       clusteringConfig.setValue(LAYOUT_OPTIMIZE_STRATEGY, strategy);
       return this;
@@ -555,11 +550,6 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
     public Builder withDataOptimizeBuildCurveSampleNumber(int sampleNumber) {
       clusteringConfig.setValue(LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE, String.valueOf(sampleNumber));
-      return this;
-    }
-
-    public Builder withDataOptimizeDataSkippingEnable(boolean dataSkipping) {
-      clusteringConfig.setValue(LAYOUT_OPTIMIZE_DATA_SKIPPING_ENABLE, String.valueOf(dataSkipping));
       return this;
     }
 

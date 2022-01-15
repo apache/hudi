@@ -1288,13 +1288,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS);
   }
 
-  /**
-   * Data layout optimize properties.
-   */
-  public boolean isLayoutOptimizationEnabled() {
-    return getBoolean(HoodieClusteringConfig.LAYOUT_OPTIMIZE_ENABLE);
-  }
-
   public String getLayoutOptimizationStrategy() {
     return getString(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY);
   }
