@@ -215,8 +215,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "strategy")
       .defaultValue("z-order")
       .sinceVersion("0.10.0")
-      .withDocumentation("Determines ordering strategy used in records layout optimization. " +
-          "Currently supported strategies are \"linear\", \"z-order\" and \"hilbert\" values are supported.");
+      .withDocumentation("Determines ordering strategy used in records layout optimization. "
+          + "Currently supported strategies are \"linear\", \"z-order\" and \"hilbert\" values are supported.");
 
   /**
    * NOTE: This setting only has effect if {@link #LAYOUT_OPTIMIZE_STRATEGY} value is set to
@@ -242,9 +242,9 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "curve.build.method")
       .defaultValue("direct")
       .sinceVersion("0.10.0")
-      .withDocumentation("Controls how data is sampled to build the space-filling curves. " +
-          "Two methods: \"direct\", \"sample\". The direct method is faster than the sampling, " +
-          "however sample method would produce a better data layout.");
+      .withDocumentation("Controls how data is sampled to build the space-filling curves. "
+          + "Two methods: \"direct\", \"sample\". The direct method is faster than the sampling, "
+          + "however sample method would produce a better data layout.");
 
   /**
    * NOTE: This setting only has effect if {@link #LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD} value
@@ -258,9 +258,9 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "build.curve.sample.size")
       .defaultValue("200000")
       .sinceVersion("0.10.0")
-      .withDocumentation("Determines target sample size used by the Boundary-based Interleaved Index method " +
-          "of building space-filling curve. Larger sample size entails better layout optimization outcomes, " +
-          "at the expense of higher memory footprint.");
+      .withDocumentation("Determines target sample size used by the Boundary-based Interleaved Index method "
+          + "of building space-filling curve. Larger sample size entails better layout optimization outcomes, "
+          + "at the expense of higher memory footprint.");
 
   /**
    * @deprecated this setting has no effect

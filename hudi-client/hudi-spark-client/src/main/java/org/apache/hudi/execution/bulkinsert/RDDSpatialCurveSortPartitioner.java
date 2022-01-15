@@ -105,7 +105,7 @@ public class RDDSpatialCurveSortPartitioner<T extends HoodieRecordPayload>
       case SAMPLE:
         return SpaceCurveSortingHelper.orderDataFrameBySamplingValues(dataset, layoutOptStrategy, orderedCols, numOutputGroups);
       default:
-        throw new UnsupportedOperationException(String.format("Unsupported space-curve curve building strategy (%s)", curveBuildStrategyType));
+        throw new UnsupportedOperationException(String.format("Unsupported space-curve curve building strategy (%s)", curveCompositionStrategyType));
     }
   }
 
