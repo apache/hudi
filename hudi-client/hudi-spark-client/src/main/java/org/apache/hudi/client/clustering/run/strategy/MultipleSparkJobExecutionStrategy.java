@@ -43,7 +43,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
-import org.apache.hudi.execution.bulkinsert.RDDSpatialCurveOptimizationSortPartitioner;
+import org.apache.hudi.execution.bulkinsert.RDDSpatialCurveSortPartitioner;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
@@ -134,16 +134,19 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
    * @return {@link RDDCustomColumnsSortPartitioner} if sort columns are provided, otherwise empty.
    */
   protected Option<BulkInsertPartitioner<T>> getPartitioner(Map<String, String> strategyParams, Schema schema) {
-    if (getWriteConfig().isLayoutOptimizationEnabled()) {
-      // sort input records by z-order/hilbert
-      return Option.of(new RDDSpatialCurveOptimizationSortPartitioner((HoodieSparkEngineContext) getEngineContext(),
-          getWriteConfig(), HoodieAvroUtils.addMetadataFields(schema)));
-    } else if (strategyParams.containsKey(PLAN_STRATEGY_SORT_COLUMNS.key())) {
-      return Option.of(new RDDCustomColumnsSortPartitioner(strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()).split(","),
-          HoodieAvroUtils.addMetadataFields(schema), getWriteConfig().isConsistentLogicalTimestampEnabled()));
-    } else {
-      return Option.empty();
-    }
+    Option<String[]> orderByColumnsOpt =
+        Option.ofNullable(strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()))
+            .map(listStr -> listStr.split(","));
+
+    return orderByColumnsOpt.map(columns -> {
+      if (getWriteConfig().isLayoutOptimizationEnabled()) {
+        return new RDDSpatialCurveSortPartitioner((HoodieSparkEngineContext) getEngineContext(), columns,
+            getWriteConfig(), HoodieAvroUtils.addMetadataFields(schema));
+      } else {
+        return new RDDCustomColumnsSortPartitioner(columns, HoodieAvroUtils.addMetadataFields(schema),
+            getWriteConfig().isConsistentLogicalTimestampEnabled());
+      }
+    });
   }
 
   /**
