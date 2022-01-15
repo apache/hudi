@@ -211,7 +211,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
    * NOTE: "z-order", "hilbert" strategies may consume considerably more compute, than "linear".
    *       Make sure to perform small-scale local testing for your dataset before applying globally.
    */
-  public static final ConfigProperty LAYOUT_OPTIMIZE_STRATEGY = ConfigProperty
+  public static final ConfigProperty<String> LAYOUT_OPTIMIZE_STRATEGY = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "strategy")
       .defaultValue("z-order")
       .sinceVersion("0.10.0")
@@ -238,7 +238,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
    *
    * [1] https://aws.amazon.com/cn/blogs/database/tag/z-order/
    */
-  public static final ConfigProperty LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD = ConfigProperty
+  public static final ConfigProperty<String> LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "curve.build.method")
       .defaultValue("direct")
       .sinceVersion("0.10.0")
@@ -254,7 +254,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
    * Larger sample size entails better layout optimization outcomes, at the expense of higher memory
    * footprint.
    */
-  public static final ConfigProperty LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE = ConfigProperty
+  public static final ConfigProperty<String> LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "build.curve.sample.size")
       .defaultValue("200000")
       .sinceVersion("0.10.0")

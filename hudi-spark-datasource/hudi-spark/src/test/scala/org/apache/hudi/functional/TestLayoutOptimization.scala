@@ -82,6 +82,10 @@ class TestLayoutOptimization extends HoodieClientTestBase {
   def testLayoutOptimizationFunctional(tableType: String,
                                        layoutOptimizationStrategy: String,
                                        spatialCurveCompositionStrategy: String): Unit = {
+    val curveCompositionStrategy =
+      Option(spatialCurveCompositionStrategy)
+        .getOrElse(HoodieClusteringConfig.LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD.defaultValue())
+
     val targetRecordsCount = 10000
     // Bulk Insert Operation
     val records = recordsToStrings(dataGen.generateInserts("001", targetRecordsCount)).toList
@@ -101,7 +105,7 @@ class TestLayoutOptimization extends HoodieClientTestBase {
       .option("hoodie.clustering.plan.strategy.max.bytes.per.group", Long.MaxValue.toString)
       .option("hoodie.clustering.plan.strategy.target.file.max.bytes", String.valueOf(64 * 1024 * 1024L))
       .option(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY.key(), layoutOptimizationStrategy)
-      .option(HoodieClusteringConfig.LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD.key(), spatialCurveCompositionStrategy)
+      .option(HoodieClusteringConfig.LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD.key(), curveCompositionStrategy)
       .option(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key, "begin_lat,begin_lon")
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -178,8 +182,7 @@ object TestLayoutOptimization {
       arguments("MERGE_ON_READ", "z-order", "direct"),
       arguments("MERGE_ON_READ", "z-order", "sample"),
       arguments("MERGE_ON_READ", "hilbert", "direct"),
-      arguments("MERGE_ON_READ", "hilbert", "sample"),
+      arguments("MERGE_ON_READ", "hilbert", "sample")
     )
   }
 }
-
