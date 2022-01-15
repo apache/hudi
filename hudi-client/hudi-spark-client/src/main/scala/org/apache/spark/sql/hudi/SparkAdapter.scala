@@ -44,12 +44,12 @@ trait SparkAdapter extends Serializable {
   /**
    * Convert a AliasIdentifier to TableIdentifier.
    */
-  def toTableIdentify(aliasId: AliasIdentifier): TableIdentifier
+  def toTableIdentifier(aliasId: AliasIdentifier): TableIdentifier
 
   /**
    * Convert a UnresolvedRelation to TableIdentifier.
    */
-  def toTableIdentify(relation: UnresolvedRelation): TableIdentifier
+  def toTableIdentifier(relation: UnresolvedRelation): TableIdentifier
 
   /**
    * Create Join logical plan.

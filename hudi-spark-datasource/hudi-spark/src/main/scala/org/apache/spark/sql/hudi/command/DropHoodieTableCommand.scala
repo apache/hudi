@@ -26,7 +26,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.NoSuchDatabaseException
 import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
 import org.apache.spark.sql.hive.HiveClientUtils
-import org.apache.spark.sql.hudi.HoodieSqlUtils.isEnableHive
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isEnableHive
 
 import scala.util.control.NonFatal
 
