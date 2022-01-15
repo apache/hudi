@@ -59,7 +59,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
       "hoodie.clustering.plan.partition.filter.mode";
 
   // Any Space-filling curves optimize(z-order/hilbert) params can be saved with this prefix
-  public static final String LAYOUT_OPTIMIZE_PARAM_PREFIX = "hoodie.layout.optimize.";
+  private static final String LAYOUT_OPTIMIZE_PARAM_PREFIX = "hoodie.layout.optimize.";
 
   public static final ConfigProperty<String> DAYBASED_LOOKBACK_PARTITIONS = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "daybased.lookback.partitions")
