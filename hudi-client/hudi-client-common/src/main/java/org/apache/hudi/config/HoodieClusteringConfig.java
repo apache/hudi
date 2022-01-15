@@ -87,6 +87,12 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Files smaller than the size specified here are candidates for clustering");
 
+  public static final ConfigProperty<String> PARTITION_REGEX_PATTERN = ConfigProperty
+      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "partition.regex.pattern")
+      .noDefaultValue()
+      .sinceVersion("0.11.0")
+      .withDocumentation("Filter clustering partitions that matched regex pattern");
+
   public static final ConfigProperty<String> PLAN_STRATEGY_CLASS_NAME = ConfigProperty
       .key("hoodie.clustering.plan.strategy.class")
       .defaultValue(SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY)
@@ -421,6 +427,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
     public Builder withClusteringTargetPartitions(int clusteringTargetPartitions) {
       clusteringConfig.setValue(DAYBASED_LOOKBACK_PARTITIONS, String.valueOf(clusteringTargetPartitions));
+      return this;
+    }
+
+    public Builder withClusteringPartitionRegexPattern(String pattern) {
+      clusteringConfig.setValue(PARTITION_REGEX_PATTERN, pattern);
       return this;
     }
 

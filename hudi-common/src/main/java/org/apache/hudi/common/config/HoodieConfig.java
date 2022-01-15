@@ -146,6 +146,9 @@ public class HoodieConfig implements Serializable {
   }
 
   public <T> Boolean getBoolean(ConfigProperty<T> configProperty) {
+    if (configProperty.hasDefaultValue()) {
+      return getBooleanOrDefault(configProperty);
+    }
     Option<Object> rawValue = getRawValue(configProperty);
     return rawValue.map(v -> Boolean.parseBoolean(v.toString())).orElse(null);
   }
@@ -196,8 +199,12 @@ public class HoodieConfig implements Serializable {
 
   public void setDefaultOnCondition(boolean condition, HoodieConfig config) {
     if (condition) {
-      props.putAll(config.getProps());
+      setDefault(config);
     }
+  }
+
+  public void setDefault(HoodieConfig config) {
+    props.putAll(config.getProps());
   }
 
   public <T> String getStringOrThrow(ConfigProperty<T> configProperty, String errorMessage) throws HoodieException {

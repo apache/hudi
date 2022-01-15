@@ -21,12 +21,14 @@ package org.apache.hudi.config;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -49,6 +51,7 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
@@ -889,6 +892,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(KEYGENERATOR_CLASS_NAME);
   }
 
+  public boolean isConsistentLogicalTimestampEnabled() {
+    return getBooleanOrDefault(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED);
+  }
+
   public Boolean shouldAutoCommit() {
     return getBoolean(AUTO_COMMIT_ENABLE);
   }
@@ -1163,8 +1170,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE);
   }
 
-  public boolean isPreserveHoodieCommitMetadata() {
+  public boolean isPreserveHoodieCommitMetadataForClustering() {
     return getBoolean(HoodieClusteringConfig.PRESERVE_COMMIT_METADATA);
+  }
+
+  public boolean isPreserveHoodieCommitMetadataForCompaction() {
+    return getBoolean(HoodieCompactionConfig.PRESERVE_COMMIT_METADATA);
   }
 
   public boolean isClusteringEnabled() {
@@ -1239,6 +1250,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public long getClusteringSmallFileLimit() {
     return getLong(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT);
+  }
+
+  public String getClusteringPartitionFilterRegexPattern() {
+    return getString(HoodieClusteringConfig.PARTITION_REGEX_PATTERN);
   }
 
   public int getClusteringMaxNumGroups() {
@@ -1825,8 +1840,22 @@ public class HoodieWriteConfig extends HoodieConfig {
     return WriteConcurrencyMode.fromValue(getString(WRITE_CONCURRENCY_MODE));
   }
 
-  public Boolean inlineTableServices() {
+  /**
+   * Are any table services configured to run inline?
+   *
+   * @return True if any table services are configured to run inline, false otherwise.
+   */
+  public Boolean areAnyTableServicesInline() {
     return inlineClusteringEnabled() || inlineCompactionEnabled() || isAutoClean();
+  }
+
+  /**
+   * Are any table services configured to run async?
+   *
+   * @return True if any table services are configured to run async, false otherwise.
+   */
+  public Boolean areAnyTableServicesAsync() {
+    return isAsyncClusteringEnabled() || !inlineCompactionEnabled() || isAsyncClean();
   }
 
   public String getPreCommitValidators() {
@@ -2258,13 +2287,25 @@ public class HoodieWriteConfig extends HoodieConfig {
           HoodiePayloadConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isMetadataConfigSet,
           HoodieMetadataConfig.newBuilder().withEngineType(engineType).fromProperties(writeConfig.getProps()).build());
-      writeConfig.setDefaultOnCondition(!isLockConfigSet,
-          HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isPreCommitValidationConfigSet,
           HoodiePreCommitValidatorConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isLayoutConfigSet,
           HoodieLayoutConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultValue(TIMELINE_LAYOUT_VERSION_NUM, String.valueOf(TimelineLayoutVersion.CURR_VERSION));
+
+      // Async table services can update the metadata table and a lock provider is
+      // needed to guard against any concurrent table write operations. If user has
+      // not configured any lock provider, let's use the InProcess lock provider.
+      final TypedProperties writeConfigProperties = writeConfig.getProps();
+      final boolean isLockProviderPropertySet = writeConfigProperties.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME)
+          || writeConfigProperties.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_PROP);
+      if (!isLockConfigSet) {
+        HoodieLockConfig.Builder lockConfigBuilder = HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps());
+        if (!isLockProviderPropertySet && writeConfig.areAnyTableServicesAsync()) {
+          lockConfigBuilder.withLockProvider(InProcessLockProvider.class);
+        }
+        writeConfig.setDefault(lockConfigBuilder.build());
+      }
     }
 
     private void validate() {

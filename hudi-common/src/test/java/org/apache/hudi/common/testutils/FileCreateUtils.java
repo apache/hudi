@@ -304,6 +304,11 @@ public class FileCreateUtils {
     Files.setLastModifiedTime(baseFilePath, FileTime.fromMillis(lastModificationTimeMilli));
   }
 
+  public static Path getBaseFilePath(String basePath, String partitionPath, String instantTime, String fileId) {
+    Path parentPath = Paths.get(basePath, partitionPath);
+    return parentPath.resolve(baseFileName(instantTime, fileId));
+  }
+
   public static void createLogFile(String basePath, String partitionPath, String instantTime, String fileId, int version)
       throws Exception {
     createLogFile(basePath, partitionPath, instantTime, fileId, version, 0);

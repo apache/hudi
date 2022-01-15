@@ -98,12 +98,12 @@
     <confluent.version>5.3.4</confluent.version>
     <glassfish.version>2.17</glassfish.version>
     <parquet.version>1.10.1</parquet.version>
-    <parquet.spark3.version>1.12.1</parquet.spark3.version>
     <junit.jupiter.version>5.7.0-M1</junit.jupiter.version>
     <junit.vintage.version>5.7.0-M1</junit.vintage.version>
     <junit.platform.version>1.7.0-M1</junit.platform.version>
     <mockito.jupiter.version>3.3.3</mockito.jupiter.version>
     <log4j.version>1.2.17</log4j.version>
+    <log4j.test.version>2.17.0</log4j.test.version>
     <slf4j.version>1.7.30</slf4j.version>
     <joda.version>2.9.9</joda.version>
     <hadoop.version>2.7.3</hadoop.version>
@@ -116,13 +116,12 @@
     <prometheus.version>0.8.0</prometheus.version>
     <http.version>4.4.1</http.version>
     <spark.version>${spark2.version}</spark.version>
-    <sparkbundle.version>${spark2bundle.version}</sparkbundle.version>
+    <sparkbundle.version></sparkbundle.version>
     <flink.version>1.13.1</flink.version>
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.2.0</spark3.version>
-    <spark2bundle.version></spark2bundle.version>
-    <spark3bundle.version>3</spark3bundle.version>
     <hudi.spark.module>hudi-spark2</hudi.spark.module>
+    <hudi.spark.common.module>hudi-spark2-common</hudi.spark.common.module>
     <avro.version>1.8.2</avro.version>
     <scala11.version>2.11.12</scala11.version>
     <scala12.version>2.12.10</scala12.version>
@@ -1134,6 +1133,13 @@
           </exclusion>
         </exclusions>
       </dependency>
+      <!-- Needed for running HiveServer for Tests -->
+      <dependency>
+        <groupId>org.apache.logging.log4j</groupId>
+        <artifactId>log4j-core</artifactId>
+        <version>${log4j.test.version}</version>
+        <scope>test</scope>
+      </dependency>
 
     </dependencies>
   </dependencyManagement>
@@ -1573,13 +1579,14 @@
       <id>spark3</id>
       <properties>
         <spark.version>${spark3.version}</spark.version>
-        <sparkbundle.version>${spark3bundle.version}</sparkbundle.version>
+        <sparkbundle.version>${spark3.version}</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
         <hudi.spark.module>hudi-spark3</hudi.spark.module>
+        <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
         <scalatest.version>3.1.0</scalatest.version>
         <kafka.version>2.4.1</kafka.version>
-        <parquet.version>${parquet.spark3.version}</parquet.version>
+        <parquet.version>1.12.1</parquet.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
@@ -1599,10 +1606,11 @@
       <properties>
         <spark3.version>3.1.2</spark3.version>
         <spark.version>${spark3.version}</spark.version>
-        <sparkbundle.version>${spark3bundle.version}</sparkbundle.version>
+        <sparkbundle.version>${spark3.version}</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
-        <hudi.spark.module>hudi-spark3</hudi.spark.module>
+        <hudi.spark.module>hudi-spark3.1.x</hudi.spark.module>
+        <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
         <scalatest.version>3.1.0</scalatest.version>
         <kafka.version>2.4.1</kafka.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
@@ -1617,16 +1625,6 @@
           <name>spark3.1.x</name>
         </property>
       </activation>
-    </profile>
-
-    <profile>
-      <id>spark3.0.x</id>
-<!--      for spark 3.0.x we need override the follow propeprties to package and run test-->
-      <properties>
-        <spark3.version>3.0.3</spark3.version>
-        <spark.version>${spark3.version}</spark.version>
-        <scalatest.version>3.0.1</scalatest.version>
-      </properties>
     </profile>
 
     <profile>

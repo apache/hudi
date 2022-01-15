@@ -90,7 +90,6 @@ public class ClusteringUtils {
     Option<byte[]> content = metaClient.getActiveTimeline().getInstantDetails(requestedInstant);
     if (!content.isPresent() || content.get().length == 0) {
       // few operations create requested file without any content. Assume these are not clustering
-      LOG.warn("No content found in requested file for instant " + pendingReplaceInstant);
       return Option.empty();
     }
     return Option.of(TimelineMetadataUtils.deserializeRequestedReplaceMetadata(content.get()));
