@@ -22,7 +22,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.table.HoodieTableSource;
+import org.apache.hudi.source.HoodieSourceContext;
 import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.util.AvroSchemaConverter;
@@ -59,7 +59,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
  */
 public class TestInputFormat {
 
-  private HoodieTableSource tableSource;
+  private HoodieSourceContext hoodieSourceContext;
   private Configuration conf;
 
   @TempDir
@@ -76,7 +76,7 @@ public class TestInputFormat {
     options.forEach((key, value) -> conf.setString(key, value));
 
     StreamerUtil.initTableIfNotExists(conf);
-    this.tableSource = getTableSource(conf);
+    this.hoodieSourceContext = getSourceContext(conf);
   }
 
   @ParameterizedTest
@@ -86,7 +86,7 @@ public class TestInputFormat {
 
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
-    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    InputFormat<RowData, ?> inputFormat = this.hoodieSourceContext.getInputFormat();
 
     List<RowData> result = readData(inputFormat);
 
@@ -98,8 +98,8 @@ public class TestInputFormat {
     TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
 
     // refresh the input format
-    this.tableSource.reset();
-    inputFormat = this.tableSource.getInputFormat();
+    this.hoodieSourceContext.reset();
+    inputFormat = this.hoodieSourceContext.getInputFormat();
 
     result = readData(inputFormat);
 
@@ -128,7 +128,7 @@ public class TestInputFormat {
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
-    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    InputFormat<RowData, ?> inputFormat = this.hoodieSourceContext.getInputFormat();
 
     List<RowData> result = readData(inputFormat);
 
@@ -145,8 +145,8 @@ public class TestInputFormat {
     TestData.writeData(TestData.DATA_SET_INSERT_SEPARATE_PARTITION, conf);
 
     // refresh the input format
-    this.tableSource.reset();
-    inputFormat = this.tableSource.getInputFormat();
+    this.hoodieSourceContext.reset();
+    inputFormat = this.hoodieSourceContext.getInputFormat();
 
     result = readData(inputFormat);
 
@@ -185,7 +185,7 @@ public class TestInputFormat {
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
     TestData.writeData(TestData.DATA_SET_UPDATE_DELETE, conf);
 
-    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    InputFormat<RowData, ?> inputFormat = this.hoodieSourceContext.getInputFormat();
     assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
 
     // when isEmitDelete is false.
@@ -202,8 +202,8 @@ public class TestInputFormat {
     assertThat(actual1, is(expected1));
 
     // refresh the input format and set isEmitDelete to true.
-    this.tableSource.reset();
-    inputFormat = this.tableSource.getInputFormat();
+    this.hoodieSourceContext.reset();
+    inputFormat = this.hoodieSourceContext.getInputFormat();
     ((MergeOnReadInputFormat) inputFormat).isEmitDelete(true);
 
     List<RowData> result2 = readData(inputFormat);
@@ -238,7 +238,7 @@ public class TestInputFormat {
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, compact);
     TestData.writeData(TestData.DATA_SET_DISORDER_UPDATE_DELETE, conf);
 
-    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    InputFormat<RowData, ?> inputFormat = this.hoodieSourceContext.getInputFormat();
     assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
 
     // when isEmitDelete is false.
@@ -251,8 +251,8 @@ public class TestInputFormat {
     assertThat(actual1, is(expected));
 
     // refresh the input format and set isEmitDelete to true.
-    this.tableSource.reset();
-    inputFormat = this.tableSource.getInputFormat();
+    this.hoodieSourceContext.reset();
+    inputFormat = this.hoodieSourceContext.getInputFormat();
     ((MergeOnReadInputFormat) inputFormat).isEmitDelete(true);
 
     List<RowData> result2 = readData(inputFormat);
@@ -270,7 +270,7 @@ public class TestInputFormat {
     // write another commit to read again
     TestData.writeData(TestData.DATA_SET_UPDATE_DELETE, conf);
 
-    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    InputFormat<RowData, ?> inputFormat = this.hoodieSourceContext.getInputFormat();
     assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
     ((MergeOnReadInputFormat) inputFormat).isEmitDelete(true);
 
@@ -293,7 +293,7 @@ public class TestInputFormat {
     // write another commit to read again
     TestData.writeData(TestData.DATA_SET_UPDATE_DELETE, conf);
 
-    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    InputFormat<RowData, ?> inputFormat = this.hoodieSourceContext.getInputFormat();
     assertThat(inputFormat, instanceOf(CopyOnWriteInputFormat.class));
 
     List<RowData> result = readData(inputFormat);
@@ -315,8 +315,8 @@ public class TestInputFormat {
     Map<String, String> prunedPartitions = new HashMap<>();
     prunedPartitions.put("partition", "par1");
     // prune to only be with partition 'par1'
-    tableSource.applyPartitions(Collections.singletonList(prunedPartitions));
-    InputFormat<RowData, ?> inputFormat = tableSource.getInputFormat();
+    hoodieSourceContext.applyPartitions(Collections.singletonList(prunedPartitions));
+    InputFormat<RowData, ?> inputFormat = hoodieSourceContext.getInputFormat();
 
     List<RowData> result = readData(inputFormat);
 
@@ -336,7 +336,7 @@ public class TestInputFormat {
     // write another commit to read again
     TestData.writeData(TestData.DATA_SET_INSERT_UPDATE_DELETE, conf);
 
-    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    InputFormat<RowData, ?> inputFormat = this.hoodieSourceContext.getInputFormat();
     assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
 
     List<RowData> result1 = readData(inputFormat);
@@ -347,8 +347,8 @@ public class TestInputFormat {
     assertThat(actual1, is(expected1));
 
     // refresh the input format and set isEmitDelete to true.
-    this.tableSource.reset();
-    inputFormat = this.tableSource.getInputFormat();
+    this.hoodieSourceContext.reset();
+    inputFormat = this.hoodieSourceContext.getInputFormat();
     ((MergeOnReadInputFormat) inputFormat).isEmitDelete(true);
 
     List<RowData> result2 = readData(inputFormat);
@@ -368,7 +368,7 @@ public class TestInputFormat {
     // write another commit to read again
     TestData.writeData(TestData.DATA_SET_INSERT_UPDATE_DELETE, conf);
 
-    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    InputFormat<RowData, ?> inputFormat = this.hoodieSourceContext.getInputFormat();
     assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
 
     List<RowData> result = readData(inputFormat);
@@ -408,8 +408,8 @@ public class TestInputFormat {
 
     // only the start commit
     conf.setString(FlinkOptions.READ_START_COMMIT, commits.get(1));
-    this.tableSource = getTableSource(conf);
-    InputFormat<RowData, ?> inputFormat1 = this.tableSource.getInputFormat();
+    this.hoodieSourceContext = getSourceContext(conf);
+    InputFormat<RowData, ?> inputFormat1 = this.hoodieSourceContext.getInputFormat();
     assertThat(inputFormat1, instanceOf(MergeOnReadInputFormat.class));
 
     List<RowData> actual1 = readData(inputFormat1);
@@ -418,8 +418,8 @@ public class TestInputFormat {
 
     // only the start commit: earliest
     conf.setString(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
-    this.tableSource = getTableSource(conf);
-    InputFormat<RowData, ?> inputFormat2 = this.tableSource.getInputFormat();
+    this.hoodieSourceContext = getSourceContext(conf);
+    InputFormat<RowData, ?> inputFormat2 = this.hoodieSourceContext.getInputFormat();
     assertThat(inputFormat2, instanceOf(MergeOnReadInputFormat.class));
 
     List<RowData> actual2 = readData(inputFormat2);
@@ -429,8 +429,8 @@ public class TestInputFormat {
     // start and end commit: [start commit, end commit]
     conf.setString(FlinkOptions.READ_START_COMMIT, commits.get(0));
     conf.setString(FlinkOptions.READ_END_COMMIT, commits.get(1));
-    this.tableSource = getTableSource(conf);
-    InputFormat<RowData, ?> inputFormat3 = this.tableSource.getInputFormat();
+    this.hoodieSourceContext = getSourceContext(conf);
+    InputFormat<RowData, ?> inputFormat3 = this.hoodieSourceContext.getInputFormat();
     assertThat(inputFormat3, instanceOf(MergeOnReadInputFormat.class));
 
     List<RowData> actual3 = readData(inputFormat3);
@@ -440,8 +440,8 @@ public class TestInputFormat {
     // only the end commit: point in time query
     conf.removeConfig(FlinkOptions.READ_START_COMMIT);
     conf.setString(FlinkOptions.READ_END_COMMIT, commits.get(1));
-    this.tableSource = getTableSource(conf);
-    InputFormat<RowData, ?> inputFormat4 = this.tableSource.getInputFormat();
+    this.hoodieSourceContext = getSourceContext(conf);
+    InputFormat<RowData, ?> inputFormat4 = this.hoodieSourceContext.getInputFormat();
     assertThat(inputFormat4, instanceOf(MergeOnReadInputFormat.class));
 
     List<RowData> actual4 = readData(inputFormat4);
@@ -458,7 +458,7 @@ public class TestInputFormat {
     beforeEach(tableType, options);
 
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    InputFormat<RowData, ?> inputFormat = this.hoodieSourceContext.getInputFormat();
     List<RowData> result = readData(inputFormat);
     TestData.assertRowDataEquals(result, TestData.DATA_SET_INSERT);
   }
@@ -481,7 +481,7 @@ public class TestInputFormat {
       TestData.writeData(dataset, conf);
     }
 
-    InputFormat<RowData, ?> inputFormat1 = this.tableSource.getInputFormat();
+    InputFormat<RowData, ?> inputFormat1 = this.hoodieSourceContext.getInputFormat();
     assertThat(inputFormat1, instanceOf(MergeOnReadInputFormat.class));
 
     List<RowData> actual = readData(inputFormat1);
@@ -493,8 +493,8 @@ public class TestInputFormat {
   //  Utilities
   // -------------------------------------------------------------------------
 
-  private HoodieTableSource getTableSource(Configuration conf) {
-    return new HoodieTableSource(
+  private HoodieSourceContext getSourceContext(Configuration conf) {
+    return new HoodieSourceContext(
         TestConfigurations.TABLE_SCHEMA,
         new Path(tempFile.getAbsolutePath()),
         Collections.singletonList("partition"),

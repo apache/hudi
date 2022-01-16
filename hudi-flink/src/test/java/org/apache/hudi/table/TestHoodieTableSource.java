@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.source.HoodieSourceContext;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -70,13 +71,13 @@ public class TestHoodieTableSource {
   @Test
   void testGetReadPaths() throws Exception {
     beforeEach();
-    HoodieTableSource tableSource = new HoodieTableSource(
+    HoodieSourceContext hoodieSourceContext = new HoodieSourceContext(
         TestConfigurations.TABLE_SCHEMA,
         new Path(tempFile.getPath()),
         Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
         "default-par",
         conf);
-    Path[] paths = tableSource.getReadPaths();
+    Path[] paths = hoodieSourceContext.getReadPaths();
     assertNotNull(paths);
     String[] names = Arrays.stream(paths).map(Path::getName)
         .sorted(Comparator.naturalOrder()).toArray(String[]::new);
@@ -85,9 +86,9 @@ public class TestHoodieTableSource {
     Map<String, String> partitions = new HashMap<>();
     partitions.put("partition", "par1");
 
-    tableSource.applyPartitions(Collections.singletonList(partitions));
+    hoodieSourceContext.applyPartitions(Collections.singletonList(partitions));
 
-    Path[] paths2 = tableSource.getReadPaths();
+    Path[] paths2 = hoodieSourceContext.getReadPaths();
     assertNotNull(paths2);
     String[] names2 = Arrays.stream(paths2).map(Path::getName)
         .sorted(Comparator.naturalOrder()).toArray(String[]::new);
@@ -100,20 +101,20 @@ public class TestHoodieTableSource {
     // write some data to let the TableSchemaResolver get the right instant
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
-    HoodieTableSource tableSource = new HoodieTableSource(
+    HoodieSourceContext hoodieSourceContext = new HoodieSourceContext(
         TestConfigurations.TABLE_SCHEMA,
         new Path(tempFile.getPath()),
         Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
         "default-par",
         conf);
-    InputFormat<RowData, ?> inputFormat = tableSource.getInputFormat();
+    InputFormat<RowData, ?> inputFormat = hoodieSourceContext.getInputFormat();
     assertThat(inputFormat, is(instanceOf(FileInputFormat.class)));
     conf.setString(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
-    inputFormat = tableSource.getInputFormat();
+    inputFormat = hoodieSourceContext.getInputFormat();
     assertThat(inputFormat, is(instanceOf(MergeOnReadInputFormat.class)));
     conf.setString(FlinkOptions.QUERY_TYPE.key(), FlinkOptions.QUERY_TYPE_INCREMENTAL);
     assertDoesNotThrow(
-        (ThrowingSupplier<? extends InputFormat<RowData, ?>>) tableSource::getInputFormat,
+        (ThrowingSupplier<? extends InputFormat<RowData, ?>>) hoodieSourceContext::getInputFormat,
         "Query type: 'incremental' should be supported");
   }
 
@@ -123,14 +124,14 @@ public class TestHoodieTableSource {
     conf = TestConfigurations.getDefaultConf(path);
     conf.setBoolean(FlinkOptions.READ_AS_STREAMING, true);
 
-    HoodieTableSource tableSource = new HoodieTableSource(
+    HoodieSourceContext hoodieSourceContext = new HoodieSourceContext(
         TestConfigurations.TABLE_SCHEMA,
         new Path(tempFile.getPath()),
         Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
         "default-par",
         conf);
-    assertNull(tableSource.getMetaClient(), "Streaming source with empty table path is allowed");
-    final String schemaFields = tableSource.getTableAvroSchema().getFields().stream()
+    assertNull(hoodieSourceContext.getMetaClient(), "Streaming source with empty table path is allowed");
+    final String schemaFields = hoodieSourceContext.getTableAvroSchema().getFields().stream()
         .map(Schema.Field::name)
         .collect(Collectors.joining(","));
     final String expected = "_hoodie_commit_time,"
