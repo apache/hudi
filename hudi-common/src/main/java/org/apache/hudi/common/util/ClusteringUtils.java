@@ -77,7 +77,7 @@ public class ClusteringUtils {
    * @return
    * @throws IOException
    */
-  public static Option<HoodieRequestedReplaceMetadata> getRequestedReplaceMetadata(HoodieTableMetaClient metaClient, HoodieInstant pendingReplaceInstant) throws IOException {
+  private static Option<HoodieRequestedReplaceMetadata> getRequestedReplaceMetadata(HoodieTableMetaClient metaClient, HoodieInstant pendingReplaceInstant) throws IOException {
     final HoodieInstant requestedInstant;
     if (!pendingReplaceInstant.isRequested()) {
       // inflight replacecommit files don't have clustering plan.

@@ -828,8 +828,13 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     if (config.getFailedWritesCleanPolicy().isLazy()) {
       this.heartbeatClient.start(instantTime);
     }
-    metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.REQUESTED, actionType,
-        instantTime));
+
+    if (actionType.equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+      metaClient.getActiveTimeline().createRequestedReplaceCommit(instantTime, actionType);
+    } else {
+      metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.REQUESTED, actionType,
+              instantTime));
+    }
   }
 
   /**
