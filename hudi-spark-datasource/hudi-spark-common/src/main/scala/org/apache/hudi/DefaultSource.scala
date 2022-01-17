@@ -193,7 +193,6 @@ class DefaultSource extends RelationProvider
     }
 
     if (useHoodieFileIndex) {
-
       val fileIndex = HoodieFileIndex(sqlContext.sparkSession, metaClient,
         if (schema == null) Option.empty[StructType] else Some(schema),
         optParams, FileStatusCache.getOrCreate(sqlContext.sparkSession))

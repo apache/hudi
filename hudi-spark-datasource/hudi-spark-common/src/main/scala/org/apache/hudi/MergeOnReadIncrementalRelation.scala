@@ -168,31 +168,31 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
     val fsView = new HoodieTableFileSystemView(metaClient, commitsTimelineToReturn, affectedFileStatus)
 
     // Iterate partitions to create splits
-    val fileGroup = getWritePartitionPaths(metadataList).flatMap(partitionPath =>
+    val fileGroups = getWritePartitionPaths(metadataList).flatMap(partitionPath =>
       fsView.getAllFileGroups(partitionPath).iterator()
     ).toList
-    val latestCommit = fsView.getLastInstant.get().getTimestamp
+    val latestCommit = fsView.getLastInstant.get.getTimestamp
     if (log.isDebugEnabled) {
-      fileGroup.foreach(f => log.debug(s"current file group id: " +
-        s"${f.getFileGroupId} and file slices ${f.getLatestFileSlice.get().toString}"))
+      fileGroups.foreach(f => log.debug(s"current file group id: " +
+        s"${f.getFileGroupId} and file slices ${f.getLatestFileSlice.get.toString}"))
     }
 
     // Filter files based on user defined glob pattern
     val pathGlobPattern = optParams.getOrElse(
       DataSourceReadOptions.INCR_PATH_GLOB.key,
       DataSourceReadOptions.INCR_PATH_GLOB.defaultValue)
-    val filteredFileGroup = if(!pathGlobPattern
-      .equals(DataSourceReadOptions.INCR_PATH_GLOB.defaultValue)) {
+    val filteredFileGroup = if (!pathGlobPattern.equals(DataSourceReadOptions.INCR_PATH_GLOB.defaultValue)) {
       val globMatcher = new GlobPattern("*" + pathGlobPattern)
-      fileGroup.filter(f => {
-        if (f.getLatestFileSlice.get().getBaseFile.isPresent) {
-          globMatcher.matches(f.getLatestFileSlice.get().getBaseFile.get.getPath)
+      fileGroups.filter(fg => {
+        val latestFileSlice = fg.getLatestFileSlice.get
+        if (latestFileSlice.getBaseFile.isPresent) {
+          globMatcher.matches(latestFileSlice.getBaseFile.get.getPath)
         } else {
-          globMatcher.matches(f.getLatestFileSlice.get().getLatestLogFile.get().getPath.toString)
+          globMatcher.matches(latestFileSlice.getLatestLogFile.get.getPath.toString)
         }
       })
     } else {
-      fileGroup
+      fileGroups
     }
 
     // Build HoodieMergeOnReadFileSplit.
