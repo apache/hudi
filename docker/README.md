@@ -27,6 +27,16 @@ docker demo environment.
 The `/hoodie` folder contains all the configs for assembling necessary docker images. The name and repository of each
 docker image, e.g., `apachehudi/hudi-hadoop_2.8.4-trinobase_368`, is defined in the maven configuration file `pom.xml`.
 
+### Docker compose config for the Demo - `/compose`
+
+The `/compose` folder contains the yaml file to compose the Docker environment for running Hudi Demo.
+
+### Resources and Sample Data for the Demo - `/demo`
+
+The `/demo` folder contains useful resources and sample data use for the Demo.
+
+## Build and Test Image locally
+
 To build all docker images locally, you can run the script:
 
 ```shell
@@ -52,13 +62,11 @@ docker build <image_folder_name> -t <hub-user>/<repo-name>[:<tag>]
 docker build trinobase -t apachehudi/hudi-hadoop_2.8.4-trinobase_368
 ```
 
-### Docker compose config for the Demo - `/compose`
+After new images are built, you can run the following script to bring up docker demo with your local images:
 
-The `/compose` folder contains the yaml file to compose the Docker environment for running Hudi Demo.
-
-### Resources and Sample Data for the Demo - `/demo`
-
-The `/demo` folder contains useful resources and sample data use for the Demo.
+```shell
+./setup_demo.sh dev
+```
 
 ## Upload Updated Image to Repository on Docker Hub
 
