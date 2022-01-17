@@ -164,7 +164,7 @@
     <antlr.version>4.7</antlr.version>
     <aws.sdk.version>1.12.22</aws.sdk.version>
     <proto.version>3.17.3</proto.version>
-    <protoc.version>3.1.0</protoc.version>
+    <protoc.version>3.11.4</protoc.version>
     <dynamodb.lockclient.version>1.1.0</dynamodb.lockclient.version>
     <dynamodb-local.port>8000</dynamodb-local.port>
     <dynamodb-local.endpoint>http://localhost:${dynamodb-local.port}</dynamodb-local.endpoint>
