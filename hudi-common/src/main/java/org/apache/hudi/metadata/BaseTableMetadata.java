@@ -202,11 +202,13 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     Map<Pair<String, String>, ByteBuffer> partitionFileToBloomFilterMap = new HashMap<>();
     for (final Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>> entry : hoodieRecordList) {
       if (entry.getRight().isPresent()) {
-        final Option<HoodieMetadataBloomFilter> optionalBloomFilterMetadata =
+        final Option<HoodieMetadataBloomFilter> bloomFilterMetadata =
             entry.getRight().get().getData().getBloomFilterMetadata();
-        if (optionalBloomFilterMetadata.isPresent()) {
-          ValidationUtils.checkState(fileToKeyMap.containsKey(entry.getLeft()));
-          partitionFileToBloomFilterMap.put(fileToKeyMap.get(entry.getLeft()), optionalBloomFilterMetadata.get().getBloomFilter());
+        if (bloomFilterMetadata.isPresent()) {
+          if (!bloomFilterMetadata.get().getIsDeleted()) {
+            ValidationUtils.checkState(fileToKeyMap.containsKey(entry.getLeft()));
+            partitionFileToBloomFilterMap.put(fileToKeyMap.get(entry.getLeft()), bloomFilterMetadata.get().getBloomFilter());
+          }
         } else {
           LOG.error("Meta index bloom filter missing for: " + fileToKeyMap.get(entry.getLeft()));
         }
@@ -242,13 +244,15 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     Map<Pair<String, String>, HoodieColumnStats> fileToColumnStatMap = new HashMap<>();
     for (final Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>> entry : hoodieRecordList) {
       if (entry.getRight().isPresent()) {
-        final Option<HoodieColumnStats> columnStatPayload =
+        final Option<HoodieColumnStats> columnStatMetadata =
             entry.getRight().get().getData().getColumnStatMetadata();
-        if (columnStatPayload.isPresent()) {
-          ValidationUtils.checkState(columnStatKeyToFileNameMap.containsKey(entry.getLeft()));
-          final Pair<String, String> partitionFileNamePair = columnStatKeyToFileNameMap.get(entry.getLeft());
-          ValidationUtils.checkState(!fileToColumnStatMap.containsKey(partitionFileNamePair));
-          fileToColumnStatMap.put(partitionFileNamePair, columnStatPayload.get());
+        if (columnStatMetadata.isPresent()) {
+          if (!columnStatMetadata.get().getIsDeleted()) {
+            ValidationUtils.checkState(columnStatKeyToFileNameMap.containsKey(entry.getLeft()));
+            final Pair<String, String> partitionFileNamePair = columnStatKeyToFileNameMap.get(entry.getLeft());
+            ValidationUtils.checkState(!fileToColumnStatMap.containsKey(partitionFileNamePair));
+            fileToColumnStatMap.put(partitionFileNamePair, columnStatMetadata.get());
+          }
         } else {
           LOG.error("Meta index column stats missing for: " + entry.getLeft());
         }

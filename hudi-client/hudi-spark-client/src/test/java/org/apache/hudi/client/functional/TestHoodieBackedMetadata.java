@@ -423,41 +423,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   private void testTableOperationsForMetaIndexImpl(final HoodieWriteConfig writeConfig) throws Exception {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
-      // Write 1 (Bulk insert)
-      String newCommitTime = "0000001";
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
-      client.startCommitWithTime(newCommitTime);
-      List<WriteStatus> writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), newCommitTime).collect();
-      assertNoWriteErrors(writeStatuses);
-      validateMetadata(client);
-
-      // Write 2 (inserts)
-      newCommitTime = "0000002";
-      client.startCommitWithTime(newCommitTime);
-      validateMetadata(client);
-
-      records = dataGen.generateInserts(newCommitTime, 20);
-      writeStatuses = client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
-      assertNoWriteErrors(writeStatuses);
-      validateMetadata(client);
-
-      // Write 3 (updates)
-      newCommitTime = "0000003";
-      client.startCommitWithTime(newCommitTime);
-      records = dataGen.generateUniqueUpdates(newCommitTime, 10);
-      writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
-      assertNoWriteErrors(writeStatuses);
-
-      // Write 4 (updates and inserts)
-      newCommitTime = "0000004";
-      client.startCommitWithTime(newCommitTime);
-      records = dataGen.generateUpdates(newCommitTime, 10);
-      writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
-      assertNoWriteErrors(writeStatuses);
-      validateMetadata(client);
-    }
+    testTableOperationsImpl(engineContext, writeConfig);
   }
 
   /**
@@ -1138,10 +1104,20 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   public void testTableOperationsWithRestore(HoodieTableType tableType) throws Exception {
     init(tableType);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
+        .withRollbackUsingMarkers(false).build();
+    testTableOperationsImpl(engineContext, writeConfig);
+  }
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
-        getWriteConfigBuilder(true, true, false).withRollbackUsingMarkers(false).build())) {
-
+  /**
+   * Test all major table operations with the given table, config and context.
+   *
+   * @param engineContext - Engine context
+   * @param writeConfig   - Write config
+   * @throws IOException
+   */
+  private void testTableOperationsImpl(HoodieSparkEngineContext engineContext, HoodieWriteConfig writeConfig) throws IOException {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
       // Write 1 (Bulk insert)
       String newCommitTime = "0000001";
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
