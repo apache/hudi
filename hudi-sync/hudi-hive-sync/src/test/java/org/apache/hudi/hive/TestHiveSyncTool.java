@@ -996,7 +996,7 @@ public class TestHiveSyncTool {
 
     // create empty commit
     final String emptyCommitTime = "200";
-    HiveTestUtil.createCommitFile(commitMetadata, emptyCommitTime);
+    HiveTestUtil.createCommitFile(commitMetadata, emptyCommitTime, hiveSyncConfig.basePath);
 
     HoodieHiveClient hiveClient =
         new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);

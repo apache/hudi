@@ -52,7 +52,8 @@ import java.util.stream.Collectors;
 
 /**
  * Utility to pull data after a given commit, based on the supplied HiveQL and save the delta as another hive temporary
- * table.
+ * table. This temporary table can be further read using {@link org.apache.hudi.utilities.sources.HiveIncrPullSource} and the changes can
+ * be applied to the target table.
  * <p>
  * Current Limitations:
  * <p>
@@ -149,7 +150,7 @@ public class HiveIncrementalPuller {
       String tempDbTable = config.tmpDb + "." + config.targetTable + "__" + config.sourceTable;
       String tempDbTablePath =
           config.hoodieTmpDir + "/" + config.targetTable + "__" + config.sourceTable + "/" + lastCommitTime;
-      executeStatement("drop table " + tempDbTable, stmt);
+      executeStatement("drop table if exists " + tempDbTable, stmt);
       deleteHDFSPath(fs, tempDbTablePath);
       if (!ensureTempPathExists(fs, lastCommitTime)) {
         throw new IllegalStateException("Could not create target path at "
@@ -188,12 +189,12 @@ public class HiveIncrementalPuller {
       throw new HoodieIncrementalPullSQLException(
           "Incremental SQL does not have " + config.sourceDb + "." + config.sourceTable);
     }
-    if (!incrementalSQL.contains("`_hoodie_commit_time` > '%targetBasePath'")) {
+    if (!incrementalSQL.contains("`_hoodie_commit_time` > '%s'")) {
       LOG.error("Incremental SQL : " + incrementalSQL
-          + " does not contain `_hoodie_commit_time` > '%targetBasePath'. Please add "
+          + " does not contain `_hoodie_commit_time` > '%s'. Please add "
           + "this clause for incremental to work properly.");
       throw new HoodieIncrementalPullSQLException(
-          "Incremental SQL does not have clause `_hoodie_commit_time` > '%targetBasePath', which "
+          "Incremental SQL does not have clause `_hoodie_commit_time` > '%s', which "
               + "means its not pulling incrementally");
     }
 

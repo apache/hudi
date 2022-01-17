@@ -34,6 +34,7 @@ import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.table.types.logical.TimestampType;
 import org.apache.flink.table.types.logical.utils.LogicalTypeUtils;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeFieldType;
@@ -45,6 +46,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.temporal.ChronoField;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -125,7 +127,7 @@ public class AvroToRowDataConverters {
       case TIME_WITHOUT_TIME_ZONE:
         return AvroToRowDataConverters::convertToTime;
       case TIMESTAMP_WITHOUT_TIME_ZONE:
-        return AvroToRowDataConverters::convertToTimestamp;
+        return createTimestampConverter(((TimestampType) type).getPrecision());
       case CHAR:
       case VARCHAR:
         return avroObject -> StringData.fromString(avroObject.toString());
@@ -200,22 +202,36 @@ public class AvroToRowDataConverters {
     };
   }
 
-  private static TimestampData convertToTimestamp(Object object) {
-    final long millis;
-    if (object instanceof Long) {
-      millis = (Long) object;
-    } else if (object instanceof Instant) {
-      millis = ((Instant) object).toEpochMilli();
+  private static AvroToRowDataConverter createTimestampConverter(int precision) {
+    final ChronoUnit chronoUnit;
+    if (precision <= 3) {
+      chronoUnit = ChronoUnit.MILLIS;
+    } else if (precision <= 6) {
+      chronoUnit = ChronoUnit.MICROS;
     } else {
-      JodaConverter jodaConverter = JodaConverter.getConverter();
-      if (jodaConverter != null) {
-        millis = jodaConverter.convertTimestamp(object);
-      } else {
-        throw new IllegalArgumentException(
-            "Unexpected object type for TIMESTAMP logical type. Received: " + object);
-      }
+      throw new IllegalArgumentException(
+          "Avro does not support TIMESTAMP type with precision: "
+              + precision
+              + ", it only supports precision less than 6.");
     }
-    return TimestampData.fromEpochMillis(millis);
+    return avroObject -> {
+      final Instant instant;
+      if (avroObject instanceof Long) {
+        instant = Instant.EPOCH.plus((Long) avroObject, chronoUnit);
+      } else if (avroObject instanceof Instant) {
+        instant = (Instant) avroObject;
+      } else {
+        JodaConverter jodaConverter = JodaConverter.getConverter();
+        if (jodaConverter != null) {
+          // joda time has only millisecond precision
+          instant = Instant.ofEpochMilli(jodaConverter.convertTimestamp(avroObject));
+        } else {
+          throw new IllegalArgumentException(
+              "Unexpected object type for TIMESTAMP logical type. Received: " + avroObject);
+        }
+      }
+      return TimestampData.fromInstant(instant);
+    };
   }
 
   private static int convertToDate(Object object) {
@@ -272,10 +288,9 @@ public class AvroToRowDataConverters {
   static class JodaConverter {
 
     private static JodaConverter instance;
-    private static boolean instantiated = false;
 
     public static JodaConverter getConverter() {
-      if (instantiated) {
+      if (instance != null) {
         return instance;
       }
 
@@ -287,8 +302,6 @@ public class AvroToRowDataConverters {
         instance = new JodaConverter();
       } catch (ClassNotFoundException e) {
         instance = null;
-      } finally {
-        instantiated = true;
       }
       return instance;
     }

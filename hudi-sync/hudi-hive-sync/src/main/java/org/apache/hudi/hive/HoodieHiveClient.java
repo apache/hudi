@@ -261,23 +261,23 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   public Option<String> getLastCommitTimeSynced(String tableName) {
     // Get the last commit time from the TBLproperties
     try {
-      Table database = client.getTable(syncConfig.databaseName, tableName);
-      return Option.ofNullable(database.getParameters().getOrDefault(HOODIE_LAST_COMMIT_TIME_SYNC, null));
+      Table table = client.getTable(syncConfig.databaseName, tableName);
+      return Option.ofNullable(table.getParameters().getOrDefault(HOODIE_LAST_COMMIT_TIME_SYNC, null));
     } catch (Exception e) {
-      throw new HoodieHiveSyncException("Failed to get the last commit time synced from the database", e);
+      throw new HoodieHiveSyncException("Failed to get the last commit time synced from the table " + tableName, e);
     }
   }
 
   public Option<String> getLastReplicatedTime(String tableName) {
     // Get the last replicated time from the TBLproperties
     try {
-      Table database = client.getTable(syncConfig.databaseName, tableName);
-      return Option.ofNullable(database.getParameters().getOrDefault(GLOBALLY_CONSISTENT_READ_TIMESTAMP, null));
+      Table table = client.getTable(syncConfig.databaseName, tableName);
+      return Option.ofNullable(table.getParameters().getOrDefault(GLOBALLY_CONSISTENT_READ_TIMESTAMP, null));
     } catch (NoSuchObjectException e) {
       LOG.warn("the said table not found in hms " + syncConfig.databaseName + "." + tableName);
       return Option.empty();
     } catch (Exception e) {
-      throw new HoodieHiveSyncException("Failed to get the last replicated time from the database", e);
+      throw new HoodieHiveSyncException("Failed to get the last replicated time from the table " + tableName, e);
     }
   }
 

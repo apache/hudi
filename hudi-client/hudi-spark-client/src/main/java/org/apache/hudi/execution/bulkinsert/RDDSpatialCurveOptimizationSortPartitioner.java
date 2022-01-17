@@ -27,8 +27,7 @@ import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.model.RewriteAvroPayload;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.sort.SpaceCurveSortingHelper;
@@ -62,16 +61,12 @@ public class RDDSpatialCurveOptimizationSortPartitioner<T extends HoodieRecordPa
 
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {
-    String payloadClass = config.getPayloadClass();
-    // do sort
     JavaRDD<GenericRecord> preparedRecord = prepareGenericRecord(records, outputSparkPartitions, serializableSchema.get());
     return preparedRecord.map(record -> {
       String key = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
       String partition = record.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
       HoodieKey hoodieKey = new HoodieKey(key, partition);
-      HoodieRecordPayload avroPayload = ReflectionUtils.loadPayload(payloadClass,
-          new Object[] {Option.of(record)}, Option.class);
-      HoodieRecord hoodieRecord = new HoodieRecord(hoodieKey, avroPayload);
+      HoodieRecord hoodieRecord = new HoodieRecord(hoodieKey, new RewriteAvroPayload(record));
       return hoodieRecord;
     });
   }

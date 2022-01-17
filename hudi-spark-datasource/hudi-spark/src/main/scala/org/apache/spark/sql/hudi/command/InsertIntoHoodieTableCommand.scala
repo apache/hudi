@@ -17,31 +17,24 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.avro.Schema
-import org.apache.avro.generic.{GenericRecord, IndexedRecord}
-
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, OverwriteWithLatestAvroPayload}
-import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
-import org.apache.hudi.exception.HoodieDuplicateKeyException
 import org.apache.hudi.hive.MultiPartKeysValueExtractor
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkSqlWriter}
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
-import org.apache.spark.sql.hudi.HoodieSqlUtils._
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
+import org.apache.spark.sql.hudi.HoodieSqlUtils.castIfNeeded
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.{Dataset, Row, SaveMode, SparkSession}
-
-import java.util.Properties
 
 import scala.collection.JavaConverters._
 
@@ -173,7 +166,7 @@ object InsertIntoHoodieTableCommand extends Logging {
     } else { // insert static partitions
       targetPartitionSchema.fields.map(f => {
         val staticPartitionValue = staticPartitionValues.getOrElse(f.name,
-        s"Missing static partition value for: ${f.name}")
+            s"Missing static partition value for: ${f.name}")
         val castAttr = castIfNeeded(Literal.create(staticPartitionValue), f.dataType, conf)
         Alias(castAttr, f.name)()
       })
@@ -288,23 +281,5 @@ object InsertIntoHoodieTableCommand extends Logging {
         SqlKeyGenerator.PARTITION_SCHEMA -> hoodieCatalogTable.partitionSchema.toDDL
       )
     }
-  }
-}
-
-/**
- * Validate the duplicate key for insert statement without enable the INSERT_DROP_DUPS_OPT
- * config.
- */
-class ValidateDuplicateKeyPayload(record: GenericRecord, orderingVal: Comparable[_])
-  extends DefaultHoodieRecordPayload(record, orderingVal) {
-
-  def this(record: HOption[GenericRecord]) {
-    this(if (record.isPresent) record.get else null, 0)
-  }
-
-  override def combineAndGetUpdateValue(currentValue: IndexedRecord,
-      schema: Schema, properties: Properties): HOption[IndexedRecord] = {
-    val key = currentValue.asInstanceOf[GenericRecord].get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString
-    throw new HoodieDuplicateKeyException(key)
   }
 }
