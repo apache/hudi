@@ -21,24 +21,27 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ClusteringUtils
 import org.apache.hudi.common.util.{Option => HOption}
-import org.apache.hudi.config.HoodieClusteringConfig
+import org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS
+
 import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.spark.sql.execution.command.RunnableCommand
-import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, HoodieSqlUtils}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Map
 
-case class ClusteringHoodiePathCommand(path: String,
-  orderByColumns: Seq[String], timestamp: Option[Long]) extends HoodieLeafRunnableCommand {
+case class ClusteringHoodiePathCommand(
+  path: String,
+  orderByColumns: Seq[String],
+  timestamp: Option[Long]) extends HoodieLeafRunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val metaClient = HoodieTableMetaClient.builder().setBasePath(path)
       .setConf(sparkSession.sessionState.newHadoopConf()).build()
-    val client = HoodieSqlCommonUtils.createHoodieClientFromPath(sparkSession, path,
-      Map(
-        HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key() -> orderByColumns.mkString(",")
-      )
+
+    val client = HoodieSqlCommonUtils.createHoodieClientFromPath(
+      sparkSession,
+      metaClient,
+      Map(PLAN_STRATEGY_SORT_COLUMNS.key() -> orderByColumns.mkString(","))
     )
 
     // Get all of the pending clustering.
@@ -57,7 +60,8 @@ case class ClusteringHoodiePathCommand(path: String,
       } else { // If exist pending cluster, cluster all of the pending plan.
         pendingClustering
       }
-    } else { // Clustering the specified instant.
+    } else {
+      // Clustering the specified instant.
       if (pendingClustering.contains(timestamp.get.toString)) {
         Seq(timestamp.get.toString)
       } else {
@@ -65,6 +69,7 @@ case class ClusteringHoodiePathCommand(path: String,
           s" Available pending clustering instants are: ${pendingClustering.mkString(",")}.")
       }
     }
+
     logInfo(s"Clustering instants are: ${clusteringInstants.mkString(",")}.")
     val startTs = System.currentTimeMillis()
     clusteringInstants.foreach(client.cluster(_, true))

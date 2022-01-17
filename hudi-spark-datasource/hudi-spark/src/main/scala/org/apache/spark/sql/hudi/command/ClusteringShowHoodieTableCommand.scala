@@ -18,18 +18,16 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.spark.sql.catalyst.catalog.CatalogTable
+import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
-import org.apache.spark.sql.execution.command.RunnableCommand
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.getTableLocation
 import org.apache.spark.sql.types.{IntegerType, StringType}
 
 case class ClusteringShowHoodieTableCommand(table: CatalogTable, limit: Int)
   extends HoodieLeafRunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
-    val basePath = getTableLocation(table, sparkSession)
-    ClusteringShowHoodiePathCommand(basePath, limit).run(sparkSession)
+    val hoodieCatalogTable = HoodieCatalogTable(sparkSession, table)
+    ClusteringShowHoodiePathCommand(hoodieCatalogTable.tableLocation, limit).run(sparkSession)
   }
 
   override val output: Seq[Attribute] = {

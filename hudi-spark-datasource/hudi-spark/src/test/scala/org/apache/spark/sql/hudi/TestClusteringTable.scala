@@ -18,7 +18,9 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hadoop.fs.Path
+
 import org.apache.hudi.HoodieDataSourceHelpers
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieTimeline}
 
@@ -41,14 +43,18 @@ class TestClusteringTable extends TestHoodieSqlBase {
              |) using hudi
              | location '$basePath'
              | options (
-             |  primaryKey ='id',
              |  type = '$tableType',
+             |  primaryKey ='id',
              |  preCombineField = 'ts'
              | )
        """.stripMargin)
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
-        val client = HoodieSqlCommonUtils.createHoodieClientFromPath(spark, basePath, Map.empty)
+
+        val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath)
+          .setConf(spark.sessionState.newHadoopConf()).build()
+        val client = HoodieSqlCommonUtils.createHoodieClientFromPath(spark, metaClient, Map.empty)
+
         // First schedule a clustering plan
         val firstScheduleInstant = HoodieActiveTimeline.createNewInstantTime
         client.scheduleClusteringAtInstant(firstScheduleInstant, HOption.empty())
@@ -76,6 +82,7 @@ class TestClusteringTable extends TestHoodieSqlBase {
         spark.sql(s"insert into $tableName values(4, 'a4', 10, 1003)")
         spark.sql(s"insert into $tableName values(5, 'a5', 10, 1004)")
         spark.sql(s"run clustering on $tableName")
+
         // Get the second replace commit
         val fs = new Path(basePath).getFileSystem(spark.sessionState.newHadoopConf())
         val thirdClusteringInstant = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
@@ -99,7 +106,7 @@ class TestClusteringTable extends TestHoodieSqlBase {
   }
 
 
-  test("Test clustring table path") {
+  test("Test clustering table path") {
     withTempDir{tmp =>
       Seq("cow", "mor").foreach {tableType =>
         val tableName = generateTableName
@@ -124,13 +131,18 @@ class TestClusteringTable extends TestHoodieSqlBase {
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
-        val client = HoodieSqlCommonUtils.createHoodieClientFromPath(spark, basePath, Map.empty)
+
+        val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath)
+          .setConf(spark.sessionState.newHadoopConf()).build()
+        val client = HoodieSqlCommonUtils.createHoodieClientFromPath(spark, metaClient, Map.empty)
+
         // Schedule a clustering plan
         val scheduleInstant = HoodieActiveTimeline.createNewInstantTime
         client.scheduleClusteringAtInstant(scheduleInstant, HOption.empty())
         checkAnswer(s"show clustering on '$basePath'")(
           Seq(scheduleInstant, 1)
         )
+
         // Do clustering for all the clustering plan
         spark.sql(s"run clustering on '$basePath' order by ts at $scheduleInstant")
         checkAnswer(s"select id, name, price, ts from $tableName order by id")(

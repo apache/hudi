@@ -20,6 +20,7 @@ package org.apache.spark.sql.parser
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.spark.sql.parser.HoodieSqlCommonBaseVisitor
 import org.apache.hudi.spark.sql.parser.HoodieSqlCommonParser.{ClusteringOnPathContext, ClusteringOnTableContext, CompactionOnPathContext, CompactionOnTableContext, ShowClusteringOnPathContext, ShowClusteringOnTableContext, ShowCompactionOnPathContext, ShowCompactionOnTableContext, SingleStatementContext, TableIdentifierContext}
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier

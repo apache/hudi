@@ -19,9 +19,9 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ClusteringUtils
+
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.types.{IntegerType, StringType}
 
 import scala.collection.JavaConverters._
@@ -32,6 +32,7 @@ case class ClusteringShowHoodiePathCommand(path: String, limit: Int)
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val metaClient = HoodieTableMetaClient.builder().setBasePath(path)
       .setConf(sparkSession.sessionState.newHadoopConf()).build()
+
     ClusteringUtils.getAllPendingClusteringPlans(metaClient).iterator().asScala.map { p =>
       Row(p.getLeft.getTimestamp, p.getRight.getInputGroups.size())
     }.toSeq.take(limit)

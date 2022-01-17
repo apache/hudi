@@ -23,8 +23,8 @@ import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieTimeli
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.{HoodieTimer, Option => HOption}
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.{DataSourceUtils, DataSourceWriteOptions, HoodieWriterUtils}
-import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
+
+import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import org.apache.spark.sql.catalyst.plans.logical.CompactionOperation
 import org.apache.spark.sql.catalyst.plans.logical.CompactionOperation.{CompactionOperation, RUN, SCHEDULE}
@@ -45,7 +45,7 @@ case class CompactionHoodiePathCommand(path: String,
 
     assert(metaClient.getTableType == HoodieTableType.MERGE_ON_READ,
       s"Must compaction on a Merge On Read table.")
-    val client = HoodieSqlCommonUtils.createHoodieClientFromPath(sparkSession, path, Map.empty)
+    val client = HoodieSqlCommonUtils.createHoodieClientFromPath(sparkSession, metaClient, Map.empty)
     operation match {
       case SCHEDULE =>
         val instantTime = instantTimestamp.map(_.toString).getOrElse(HoodieActiveTimeline.createNewInstantTime)
@@ -58,7 +58,7 @@ case class CompactionHoodiePathCommand(path: String,
         // Do compaction
         val timeLine = metaClient.getActiveTimeline
          val pendingCompactionInstants = timeLine.getWriteTimeline.getInstants.iterator().asScala
-          .filter(p => p.getAction == HoodieTimeline.COMPACTION_ACTION)
+           .filter(p => p.getAction == HoodieTimeline.COMPACTION_ACTION)
            .map(_.getTimestamp)
           .toSeq.sortBy(f => f)
         val willCompactionInstants = if (instantTimestamp.isEmpty) {

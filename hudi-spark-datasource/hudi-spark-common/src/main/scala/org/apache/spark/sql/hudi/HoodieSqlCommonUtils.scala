@@ -48,6 +48,7 @@ import scala.collection.JavaConverters._
 import scala.collection.immutable.Map
 
 object HoodieSqlCommonUtils extends SparkAdapterSupport {
+
   // NOTE: {@code SimpleDataFormat} is NOT thread-safe
   // TODO replace w/ DateTimeFormatter
   private val defaultDateFormat =
@@ -317,23 +318,25 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   /**
    * Create the SparkRDDWriteClient from the exists hoodie table path.
    * @param sparkSession The spark session.
-   * @param basePath The base path of the hoodie table.
+   * @param metaClient The meta client of the hoodie table.
    * @param parameters The parameters passed to the SparkRDDWriteClient.
    */
-  def createHoodieClientFromPath(sparkSession: SparkSession, basePath: String,
-                                 parameters: Map[String, String]): SparkRDDWriteClient[_] = {
-    val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath)
-    .setConf(sparkSession.sessionState.newHadoopConf()).build()
+  def createHoodieClientFromPath(
+      sparkSession: SparkSession,
+      metaClient: HoodieTableMetaClient,
+      parameters: Map[String, String]): SparkRDDWriteClient[_] = {
     val schemaUtil = new TableSchemaResolver(metaClient)
     val schemaStr = schemaUtil.getTableAvroSchemaWithoutMetadataFields.toString
+
     // Append the spark conf to the parameters and fill the missing key with the default value.
     val finalParameters = HoodieWriterUtils.parametersWithWriteDefaults(
       withSparkConf(sparkSession, Map.empty)(
-        parameters + (DataSourceWriteOptions.TABLE_TYPE.key() -> metaClient.getTableType.name()))
+        parameters + (DataSourceWriteOptions.TABLE_TYPE.key() -> metaClient.getTableType.name())
+      )
     )
 
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
-    DataSourceUtils.createHoodieClient(jsc, schemaStr, basePath,
+    DataSourceUtils.createHoodieClient(jsc, schemaStr, metaClient.getBasePath,
       metaClient.getTableConfig.getTableName, finalParameters.asJava)
   }
 }

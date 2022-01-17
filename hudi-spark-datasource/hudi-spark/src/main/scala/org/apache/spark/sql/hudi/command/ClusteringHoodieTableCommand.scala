@@ -18,18 +18,21 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.execution.command.RunnableCommand
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.getTableLocation
+import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 
 case class ClusteringHoodieTableCommand(table: CatalogTable,
   orderByColumns: Seq[String], timestamp: Option[Long]) extends HoodieLeafRunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
-    val basePath = getTableLocation(table, sparkSession)
+    val hoodieCatalogTable = HoodieCatalogTable(sparkSession, table)
+
     val notExistsColumns = orderByColumns.filterNot(table.schema.fieldNames.contains(_))
     assert(notExistsColumns.isEmpty, s"Order by columns:[${notExistsColumns.mkString(",")}] is not exists" +
       s" in table ${table.identifier.unquotedString}.")
-    ClusteringHoodiePathCommand(basePath, orderByColumns, timestamp).run(sparkSession)
+
+    ClusteringHoodiePathCommand(
+      hoodieCatalogTable.tableLocation,
+      orderByColumns,
+      timestamp).run(sparkSession)
   }
 }

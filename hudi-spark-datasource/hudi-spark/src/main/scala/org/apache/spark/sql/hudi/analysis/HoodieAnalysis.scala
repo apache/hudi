@@ -21,6 +21,7 @@ import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.hudi.DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableMetaClient
+
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedStar}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, Expression, Literal, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.Inner
@@ -31,7 +32,7 @@ import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{getTableIdentifier, getTableLocation, isHoodieTable, removeMetaFields, tableExistsInPath}
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
 import org.apache.spark.sql.hudi.command._
-import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlCommonUtils, HoodieSqlUtils}
+import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlCommonUtils}
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 
@@ -107,18 +108,16 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
       case CompactionShowOnPath(path, limit) =>
         CompactionShowHoodiePathCommand(path, limit)
 
-      case ShowClusteringOnTable(table, limit)
-        if isHoodieTable(table, sparkSession) =>
-        val tableId = getTableIdentify(table)
+      case ShowClusteringOnTable(table, limit) if isHoodieTable(table, sparkSession) =>
+        val tableId = getTableIdentifier(table)
         val catalogTable = sparkSession.sessionState.catalog.getTableMetadata(tableId)
         ClusteringShowHoodieTableCommand(catalogTable, limit)
 
       case ShowClusteringOnPath(path, limit) =>
         ClusteringShowHoodiePathCommand(path, limit)
 
-      case ClusteringOnTable(table, orderByColumns, timestamp)
-        if isHoodieTable(table, sparkSession) =>
-        val tableId = getTableIdentify(table)
+      case ClusteringOnTable(table, orderByColumns, timestamp) if isHoodieTable(table, sparkSession) =>
+        val tableId = getTableIdentifier(table)
         val catalogTable = sparkSession.sessionState.catalog.getTableMetadata(tableId)
         ClusteringHoodieTableCommand(catalogTable, orderByColumns, timestamp)
 
