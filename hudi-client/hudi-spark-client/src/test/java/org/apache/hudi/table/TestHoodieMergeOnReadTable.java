@@ -39,9 +39,7 @@ import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.Transformations;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
@@ -54,11 +52,14 @@ import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.avro.generic.GenericRecord;
+
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.mapred.JobConf;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -201,13 +202,11 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
   }
 
   // TODO: Enable metadata virtual keys in this test once the feature HUDI-2593 is completed
-  @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  public void testLogFileCountsAfterCompaction(boolean preserveCommitMeta) throws Exception {
+  @Test
+  public void testLogFileCountsAfterCompaction() throws Exception {
     boolean populateMetaFields = true;
     // insert 100 records
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true, false, HoodieIndex.IndexType.BLOOM,
-        1024 * 1024 * 1024L, HoodieClusteringConfig.newBuilder().build(), preserveCommitMeta)
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build());
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig config = cfgBuilder.build();
@@ -288,7 +287,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       List<Row> rows = actual.collectAsList();
       assertEquals(updatedRecords.size(), rows.size());
       for (Row row: rows) {
-        assertEquals(row.getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD), preserveCommitMeta ? newCommitTime : compactionInstantTime);
+        assertEquals(row.getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD), newCommitTime);
       }
     }
   }

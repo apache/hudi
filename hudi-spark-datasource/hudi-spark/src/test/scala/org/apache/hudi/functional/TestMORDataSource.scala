@@ -268,8 +268,8 @@ class TestMORDataSource extends HoodieClientTestBase {
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commit5Time)
       .option(DataSourceReadOptions.END_INSTANTTIME.key, commit6Time)
       .load(basePath)
-    // compaction updated 150 rows + inserted 2 new row
-    assertEquals(152, hudiIncDF6.count())
+    // compaction updated 150 rows + inserted 2 new row, but only 2 new records upsert between commit5Time and commit6Time
+    assertEquals(2, hudiIncDF6.count())
   }
 
   @Test
