@@ -90,6 +90,8 @@ Data Summit Connect, May, 2021
 
 37. ["Building Open Data Lakes on AWS with Debezium and Apache Hudi"](https://programmaticponderings.com/2021/10/31/demonstration-building-open-data-lakes-on-aws-with-debezium-and-apache-hudi/) - By Gary A. Stafford. Oct 31, 2021
 
+38. ["Apache Hudi Meetup at Uber with talks from Disney, Walmart & Uber"](https://youtu.be/ZamXiT9aqs8) - By Vinay Patil (Disney+Hotstar), Samuel Guleff (Walmart), Surya Prasanna Yalla, Meenal Binwade (Uber), Jan 2022
+
 ## Articles
 
 You can check out [our blog pages](https://hudi.apache.org/blog.html) for content written by our committers/contributors.
