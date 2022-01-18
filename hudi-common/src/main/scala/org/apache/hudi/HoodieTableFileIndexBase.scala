@@ -49,14 +49,14 @@ import scala.collection.mutable
  * @param shouldIncludePendingCommits flags whether file-index should exclude any pending operations
  * @param fileStatusCache transient cache of fetched [[FileStatus]]es
  */
-abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
-                                            metaClient: HoodieTableMetaClient,
-                                            configProperties: TypedProperties,
-                                            queryType: HoodieTableQueryType,
-                                            protected val queryPaths: Seq[Path],
-                                            specifiedQueryInstant: Option[String] = None,
-                                            shouldIncludePendingCommits: Boolean = false,
-                                            @transient fileStatusCache: FileStatusCacheTrait) {
+abstract class HoodieTableFileIndexBase(engineContext: HoodieEngineContext,
+                                        metaClient: HoodieTableMetaClient,
+                                        configProperties: TypedProperties,
+                                        queryType: HoodieTableQueryType,
+                                        protected val queryPaths: Seq[Path],
+                                        specifiedQueryInstant: Option[String] = None,
+                                        shouldIncludePendingCommits: Boolean = false,
+                                        @transient fileStatusCache: FileStatusCacheTrait) {
   /**
    * Get all completeCommits.
    */

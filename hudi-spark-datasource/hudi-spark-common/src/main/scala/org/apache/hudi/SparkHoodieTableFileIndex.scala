@@ -39,7 +39,7 @@ import org.apache.spark.unsafe.types.UTF8String
 import scala.collection.JavaConversions._
 
 /**
- * Implementation of the [[AbstractHoodieTableFileIndex]] for Spark
+ * Implementation of the [[HoodieTableFileIndexBase]] for Spark
  *
  * @param spark spark session
  * @param metaClient Hudi table's meta-client
@@ -55,7 +55,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
                                 queryPaths: Seq[Path],
                                 specifiedQueryInstant: Option[String] = None,
                                 @transient fileStatusCache: FileStatusCache = NoopCache)
-  extends AbstractHoodieTableFileIndex(
+  extends HoodieTableFileIndexBase(
     engineContext = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)),
     metaClient,
     configProperties,
