@@ -281,6 +281,8 @@ public interface HoodieTimeline extends Serializable {
    */
   Option<byte[]> getInstantDetails(HoodieInstant instant);
 
+  boolean isEmpty(HoodieInstant instant);
+
   /**
    * Helper methods to compare instants.
    **/

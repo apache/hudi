@@ -352,6 +352,11 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public boolean isEmpty(HoodieInstant instant) {
+    return getInstantDetails(instant).get().length == 0;
+  }
+
+  @Override
   public String toString() {
     return this.getClass().getName() + ": " + instants.stream().map(Object::toString).collect(Collectors.joining(","));
   }
