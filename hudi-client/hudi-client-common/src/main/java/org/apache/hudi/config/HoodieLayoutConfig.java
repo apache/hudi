@@ -80,7 +80,7 @@ public class HoodieLayoutConfig extends HoodieConfig {
     }
 
     private void setDefault() {
-      if (layoutConfig.getString(HoodieIndexConfig.INDEX_TYPE.key()).equals(HoodieIndex.IndexType.BUCKET.name())) {
+      if (layoutConfig.contains(HoodieIndexConfig.INDEX_TYPE.key()) && layoutConfig.getString(HoodieIndexConfig.INDEX_TYPE.key()).equals(HoodieIndex.IndexType.BUCKET.name())) {
         layoutConfig.setDefaultValue(LAYOUT_TYPE, HoodieStorageLayout.LayoutType.BUCKET.name());
       }
       layoutConfig.setDefaultValue(LAYOUT_TYPE, LAYOUT_TYPE.defaultValue());

@@ -121,6 +121,7 @@
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.2.0</spark3.version>
     <hudi.spark.module>hudi-spark2</hudi.spark.module>
+    <hudi.spark.common.module>hudi-spark2-common</hudi.spark.common.module>
     <avro.version>1.8.2</avro.version>
     <scala11.version>2.11.12</scala11.version>
     <scala12.version>2.12.10</scala12.version>
@@ -1582,6 +1583,7 @@
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
         <hudi.spark.module>hudi-spark3</hudi.spark.module>
+        <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
         <scalatest.version>3.1.0</scalatest.version>
         <kafka.version>2.4.1</kafka.version>
         <parquet.version>1.12.1</parquet.version>
@@ -1607,7 +1609,8 @@
         <sparkbundle.version>${spark3.version}</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
-        <hudi.spark.module>hudi-spark3</hudi.spark.module>
+        <hudi.spark.module>hudi-spark3.1.x</hudi.spark.module>
+        <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
         <scalatest.version>3.1.0</scalatest.version>
         <kafka.version>2.4.1</kafka.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>

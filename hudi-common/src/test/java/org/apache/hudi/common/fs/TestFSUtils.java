@@ -40,6 +40,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -76,6 +77,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   @BeforeEach
   public void setUp() throws IOException {
     initMetaClient();
+    basePath = "file:" + basePath;
   }
 
   @Test
@@ -311,7 +313,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals(LOG_STR, FSUtils.getFileExtensionFromLog(new Path(logFileName)));
 
     // create three versions of log file
-    java.nio.file.Path partitionPath = Paths.get(basePath, partitionStr);
+    java.nio.file.Path partitionPath = Paths.get(URI.create(basePath + "/" + partitionStr));
     Files.createDirectories(partitionPath);
     String log1 = FSUtils.makeLogFileName(fileId, LOG_EXTENTION, instantTime, 1, writeToken);
     Files.createFile(partitionPath.resolve(log1));
@@ -465,12 +467,12 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     List<FileStatus> fileStatusList = FSUtils.getFileStatusAtLevel(
         new HoodieLocalEngineContext(fileSystem.getConf()), fileSystem,
         new Path(basePath), 3, 2);
-    assertEquals(CollectionUtils.createImmutableList(
-            "file:" + basePath + "/.hoodie/.temp/subdir1/file1.txt",
-            "file:" + basePath + "/.hoodie/.temp/subdir2/file2.txt"),
+    assertEquals(CollectionUtils.createImmutableSet(
+            basePath + "/.hoodie/.temp/subdir1/file1.txt",
+            basePath + "/.hoodie/.temp/subdir2/file2.txt"),
         fileStatusList.stream()
             .map(fileStatus -> fileStatus.getPath().toString())
             .filter(filePath -> filePath.endsWith(".txt"))
-            .collect(Collectors.toList()));
+            .collect(Collectors.toSet()));
   }
 }

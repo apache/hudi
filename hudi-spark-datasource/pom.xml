@@ -35,5 +35,9 @@
     <module>hudi-spark</module>
     <module>hudi-spark2</module>
     <module>hudi-spark3</module>
+    <module>hudi-spark3.1.x</module>
+    <module>hudi-spark3-common</module>
+    <module>hudi-spark2-common</module>
   </modules>
+
 </project>

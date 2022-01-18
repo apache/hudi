@@ -421,8 +421,8 @@ public class HoodieInputFormatUtils {
   }
 
   public static Map<HoodieTableMetaClient, List<Path>> groupSnapshotPathsByMetaClient(
-          Collection<HoodieTableMetaClient> metaClientList,
-          List<Path> snapshotPaths
+      Collection<HoodieTableMetaClient> metaClientList,
+      List<Path> snapshotPaths
   ) {
     Map<HoodieTableMetaClient, List<Path>> grouped = new HashMap<>();
     metaClientList.forEach(metaClient -> grouped.put(metaClient, new ArrayList<>()));
@@ -445,9 +445,11 @@ public class HoodieInputFormatUtils {
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(job);
     List<FileStatus> returns = new ArrayList<>();
 
-    Map<HoodieTableMetaClient, List<Path>> groupedPaths = HoodieInputFormatUtils
-        .groupSnapshotPathsByMetaClient(tableMetaClientMap.values(), snapshotPaths);
+    Map<HoodieTableMetaClient, List<Path>> groupedPaths =
+        HoodieInputFormatUtils.groupSnapshotPathsByMetaClient(tableMetaClientMap.values(), snapshotPaths);
+
     Map<HoodieTableMetaClient, HoodieTableFileSystemView> fsViewCache = new HashMap<>();
+
     LOG.info("Found a total of " + groupedPaths.size() + " groups");
 
     try {
