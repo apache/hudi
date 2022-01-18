@@ -557,7 +557,9 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
     FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
     HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
-    List<String> dataFiles = tableView.getLatestBaseFiles().map(hf -> hf.getPath()).collect(Collectors.toList());
+    List<String> dataFiles = tableView.getLatestBaseFiles()
+        .map(hf -> new Path(hf.getPath()).getParent().toString())
+        .collect(Collectors.toList());
     List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), dataFiles,
         basePath());
     assertRecords(expectedRecords, recordsRead);
