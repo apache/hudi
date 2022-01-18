@@ -130,7 +130,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
         new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
     List<String> partitions = asList("2016/01/21", "2016/04/01", "2015/03/12");
-    List<Pair<String, BloomIndexFileInfo>> filesList = index.loadInvolvedFiles(partitions, context, hoodieTable);
+    List<Pair<String, BloomIndexFileInfo>> filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
     // Still 0, as no valid commit
     assertEquals(0, filesList.size());
 
@@ -140,7 +140,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
         .withInserts("2015/03/12", "4", record2, record3, record4);
     metaClient.reloadActiveTimeline();
 
-    filesList = index.loadInvolvedFiles(partitions, context, hoodieTable);
+    filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
     assertEquals(4, filesList.size());
 
     if (rangePruning) {

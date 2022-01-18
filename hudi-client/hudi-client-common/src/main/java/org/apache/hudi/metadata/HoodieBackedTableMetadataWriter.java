@@ -109,6 +109,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   protected boolean enabled;
   protected SerializableConfiguration hadoopConf;
   protected final transient HoodieEngineContext engineContext;
+  // TODO: HUDI-3258 Support secondary key via multiple partitions within a single type
   protected final List<MetadataPartitionType> enabledPartitionTypes;
 
   /**

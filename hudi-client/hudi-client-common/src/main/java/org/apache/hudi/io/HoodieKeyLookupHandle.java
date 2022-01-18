@@ -52,8 +52,8 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload, I, K, O> exten
 
   private final BloomFilter bloomFilter;
   private final List<String> candidateRecordKeys;
-  private final Option<String> fileName;
   private final boolean useMetadataTableIndex;
+  private Option<String> fileName = Option.empty();
   private long totalKeysChecked;
 
   public HoodieKeyLookupHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
@@ -70,12 +70,9 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload, I, K, O> exten
     if (fileName.isPresent()) {
       ValidationUtils.checkArgument(FSUtils.getFileId(fileName.get()).equals(getFileId()));
       this.fileName = fileName;
-    } else {
-      this.fileName = Option.empty();
     }
     this.useMetadataTableIndex = useMetadataTableIndex;
     this.bloomFilter = getBloomFilter();
-
   }
 
   private BloomFilter getBloomFilter() {

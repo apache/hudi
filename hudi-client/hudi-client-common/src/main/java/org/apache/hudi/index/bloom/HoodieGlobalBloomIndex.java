@@ -55,11 +55,11 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload<T>> extends Ho
    * Load all involved files as <Partition, filename> pairs from all partitions in the table.
    */
   @Override
-  List<Pair<String, BloomIndexFileInfo>> loadInvolvedFiles(List<String> partitions, final HoodieEngineContext context,
-                                                           final HoodieTable hoodieTable) {
+  List<Pair<String, BloomIndexFileInfo>> loadColumnRangesFromFiles(List<String> partitions, final HoodieEngineContext context,
+                                                                   final HoodieTable hoodieTable) {
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), metaClient.getBasePath());
-    return super.loadInvolvedFiles(allPartitionPaths, context, hoodieTable);
+    return super.loadColumnRangesFromFiles(allPartitionPaths, context, hoodieTable);
   }
 
   /**
