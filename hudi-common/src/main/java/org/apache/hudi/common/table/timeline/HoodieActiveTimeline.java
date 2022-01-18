@@ -19,11 +19,13 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -39,11 +41,14 @@ import java.io.Serializable;
 import java.text.ParseException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Represents the Active Timeline for the Hoodie table. Instants for the last 12 hours (configurable) is in the
@@ -252,6 +257,26 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     Path detailPath = new Path(metaClient.getMetaPath(), instant.getFileName());
     return readDataFromPath(detailPath);
+  }
+
+  /**
+   * Get the last instant with valid data, and convert this to HoodieCommitMetadata
+   */
+  public Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLastCommitMetadataWithValidData() {
+    List<HoodieInstant> completed = getCommitsTimeline().filterCompletedInstants().getInstants()
+        .sorted(Comparator.comparing(HoodieInstant::getTimestamp).reversed()).collect(Collectors.toList());
+    for (HoodieInstant instant : completed) {
+      try {
+        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
+            getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+        if (!commitMetadata.getFileIdAndRelativePaths().isEmpty()) {
+          return Option.of(Pair.of(instant, commitMetadata));
+        }
+      } catch (IOException e) {
+        LOG.warn("Failed to convert instant to HoodieCommitMetadata: " + instant.toString());
+      }
+    }
+    return Option.empty();
   }
 
   public Option<byte[]> readCleanerInfoAsBytes(HoodieInstant instant) {
