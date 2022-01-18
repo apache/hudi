@@ -104,7 +104,7 @@ object HoodieOptionConfig {
     SQL_VALUE_TABLE_TYPE_MOR -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL
   )
 
-  private lazy val reverseValueMapping = valueMapping.map(f => f._2 -> f._1)
+  lazy val reverseValueMapping = valueMapping.map(f => f._2 -> f._1)
 
   def withDefaultSqlOptions(options: Map[String, String]): Map[String, String] = defaultSqlOptions ++ options
 
