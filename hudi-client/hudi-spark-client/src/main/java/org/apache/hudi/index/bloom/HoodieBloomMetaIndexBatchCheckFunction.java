@@ -48,7 +48,11 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Function performing actual checking of RDD partition containing (fileId, hoodieKeys) against the actual files.
+ * Spark Function2 implementation for checking bloom filters for the
+ * requested keys from the metadata table index. The bloom filter
+ * checking for keys and the actual file verification for the
+ * candidate keys is done in a batch fashion for all the provided
+ * keys at once.
  */
 public class HoodieBloomMetaIndexBatchCheckFunction implements
     Function2<Integer, Iterator<Tuple2<String, HoodieKey>>, Iterator<List<HoodieKeyLookupResult>>> {
@@ -65,6 +69,7 @@ public class HoodieBloomMetaIndexBatchCheckFunction implements
   @Override
   public Iterator<List<HoodieKeyLookupResult>> call(Integer integer, Iterator<Tuple2<String, HoodieKey>> tuple2Iterator) throws Exception {
     List<List<HoodieKeyLookupResult>> resultList = new ArrayList<>();
+    // Partition path and file name pair to list of keys
     Map<Pair<String, String>, List<HoodieKey>> fileToKeysMap = new HashMap<>();
 
     final Map<String, HoodieBaseFile> fileIDBaseFileMap = new HashMap<>();
@@ -87,25 +92,21 @@ public class HoodieBloomMetaIndexBatchCheckFunction implements
       return Collections.emptyListIterator();
     }
 
-    List<Pair<String, String>> partitionNameFileNameList =
-        fileToKeysMap.keySet().stream().map(partitionNameFileNamePair -> {
-          return Pair.of(partitionNameFileNamePair.getLeft(), partitionNameFileNamePair.getRight());
-        }).collect(Collectors.toList());
-
+    List<Pair<String, String>> partitionNameFileNameList = fileToKeysMap.keySet()
+        .stream().collect(Collectors.toList());
     Map<Pair<String, String>, ByteBuffer> fileIDToBloomFilterByteBufferMap =
         hoodieTable.getMetadataTable().getBloomFilters(partitionNameFileNameList);
 
-    fileToKeysMap.forEach((partitionPathFileIdPair, hoodieKeyList) -> {
-      final String partitionPath = partitionPathFileIdPair.getLeft();
-      final String fileName = partitionPathFileIdPair.getRight();
-      final Pair<String, String> partitionFileNamePair = Pair.of(partitionPath, fileName);
+    fileToKeysMap.forEach((partitionPathFileNamePair, hoodieKeyList) -> {
+      final String partitionPath = partitionPathFileNamePair.getLeft();
+      final String fileName = partitionPathFileNamePair.getRight();
       final String fileId = FSUtils.getFileId(fileName);
       ValidationUtils.checkState(!fileId.isEmpty());
 
-      if (!fileIDToBloomFilterByteBufferMap.containsKey(partitionFileNamePair)) {
-        throw new HoodieIndexException("Failed to get the bloom filter for " + partitionPathFileIdPair);
+      if (!fileIDToBloomFilterByteBufferMap.containsKey(partitionPathFileNamePair)) {
+        throw new HoodieIndexException("Failed to get the bloom filter for " + partitionPathFileNamePair);
       }
-      final ByteBuffer fileBloomFilterByteBuffer = fileIDToBloomFilterByteBufferMap.get(partitionFileNamePair);
+      final ByteBuffer fileBloomFilterByteBuffer = fileIDToBloomFilterByteBufferMap.get(partitionPathFileNamePair);
 
       HoodieDynamicBoundedBloomFilter fileBloomFilter =
           new HoodieDynamicBoundedBloomFilter(StandardCharsets.UTF_8.decode(fileBloomFilterByteBuffer).toString(),

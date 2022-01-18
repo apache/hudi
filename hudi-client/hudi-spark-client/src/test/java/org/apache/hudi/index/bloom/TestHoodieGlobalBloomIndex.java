@@ -109,7 +109,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     // intentionally missed the partition "2015/03/12" to see if the GlobalBloomIndex can pick it up
     List<String> partitions = Arrays.asList("2016/01/21", "2016/04/01");
     // partitions will NOT be respected by this loadInvolvedFiles(...) call
-    List<Pair<String, BloomIndexFileInfo>> filesList = index.loadInvolvedFiles(partitions, context, hoodieTable);
+    List<Pair<String, BloomIndexFileInfo>> filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
     // Still 0, as no valid commit
     assertEquals(0, filesList.size());
 
@@ -118,7 +118,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
         .withInserts("2015/03/12", "3", record1)
         .withInserts("2015/03/12", "4", record2, record3, record4);
 
-    filesList = index.loadInvolvedFiles(partitions, context, hoodieTable);
+    filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
     assertEquals(4, filesList.size());
 
     Map<String, BloomIndexFileInfo> filesMap = toFileMap(filesList);

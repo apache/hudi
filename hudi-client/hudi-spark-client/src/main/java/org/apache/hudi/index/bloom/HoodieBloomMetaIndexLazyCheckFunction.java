@@ -42,7 +42,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Function performing actual checking of RDD partition containing (fileId, hoodieKeys) against the actual files.
+ * Spark Function2 implementation for checking bloom filters for the
+ * requested keys from the metadata table index. The bloom filter
+ * checking for keys and the actual file verification for the
+ * candidate keys is done in a lazy fashion of file by file.
  */
 public class HoodieBloomMetaIndexLazyCheckFunction implements Function2<Integer, Iterator<Tuple2<String, HoodieKey>>, Iterator<List<HoodieKeyLookupResult>>> {
 

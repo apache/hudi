@@ -226,16 +226,17 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     }
 
     Map<String, Pair<String, String>> columnStatKeyToFileNameMap = new HashMap<>();
-    List<String> columnStatKeys = new ArrayList<>();
+    TreeSet<String> sortedKeys = new TreeSet<>();
     final String columnIndexStr = new ColumnIndexID(columnName).asBase64EncodedString();
     for (Pair<String, String> partitionNameFileNamePair : partitionNameFileNameList) {
       final String columnStatIndexKey = columnIndexStr
           .concat(new PartitionIndexID(partitionNameFileNamePair.getLeft()).asBase64EncodedString())
           .concat(new FileIndexID(partitionNameFileNamePair.getRight()).asBase64EncodedString());
-      columnStatKeys.add(columnStatIndexKey);
+      sortedKeys.add(columnStatIndexKey);
       columnStatKeyToFileNameMap.put(columnStatIndexKey, partitionNameFileNamePair);
     }
 
+    List<String> columnStatKeys = new ArrayList<>(sortedKeys);
     HoodieTimer timer = new HoodieTimer().startTimer();
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> hoodieRecordList =
         getRecordsByKeys(columnStatKeys, MetadataPartitionType.COLUMN_STATS.partitionPath());
