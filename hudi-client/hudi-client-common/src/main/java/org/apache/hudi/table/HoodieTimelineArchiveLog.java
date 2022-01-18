@@ -90,7 +90,6 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
   private final int minInstantsToKeep;
   private final HoodieTable<T, I, K, O> table;
   private final HoodieTableMetaClient metaClient;
-  private final String mergeArchivePlanName = "mergeArchivePlan";
 
   public HoodieTimelineArchiveLog(HoodieWriteConfig config, HoodieTable<T, I, K, O> table) {
     this.config = config;
@@ -126,10 +125,6 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     } catch (IOException e) {
       throw new HoodieException("Unable to initialize HoodieLogFormat writer", e);
     }
-  }
-
-  public String getMergeArchivePlanName() {
-    return this.mergeArchivePlanName;
   }
 
   private void close() {
@@ -185,7 +180,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
    * @throws IOException
    */
   private void mergeArchiveFilesIfNecessary(HoodieEngineContext context) throws IOException {
-    Path planPath = new Path(metaClient.getArchivePath(), mergeArchivePlanName);
+    Path planPath = new Path(metaClient.getArchivePath(), HoodieArchivedTimeline.MERGE_ARCHIVE_PLAN_NAME);
     // Flush remained content if existed and open a new write
     reOpenWriter();
     // List all archive files
@@ -249,7 +244,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
    */
   private void verifyLastMergeArchiveFilesIfNecessary(HoodieEngineContext context) throws IOException {
     if (shouldMergeSmallArchiveFies()) {
-      Path planPath = new Path(metaClient.getArchivePath(), mergeArchivePlanName);
+      Path planPath = new Path(metaClient.getArchivePath(), HoodieArchivedTimeline.MERGE_ARCHIVE_PLAN_NAME);
       HoodieWrapperFileSystem fs = metaClient.getFs();
       // If plan exist, last merge small archive files was failed.
       // we need to revert or complete last action.

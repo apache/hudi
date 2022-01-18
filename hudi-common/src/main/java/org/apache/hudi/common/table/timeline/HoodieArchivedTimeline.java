@@ -79,6 +79,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   private static final String ACTION_STATE = "actionState";
   private HoodieTableMetaClient metaClient;
   private Map<String, byte[]> readCommits = new HashMap<>();
+  public static final String MERGE_ARCHIVE_PLAN_NAME = "mergeArchivePlan";
 
   private static final Logger LOG = LogManager.getLogger(HoodieArchivedTimeline.class);
 
@@ -257,7 +258,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
           // merge small archive files may left uncompleted archive file which will cause exception.
           // need to ignore this kind of exception here.
           try {
-            Path planPath = new Path(metaClient.getArchivePath(), "mergeArchivePlan");
+            Path planPath = new Path(metaClient.getArchivePath(), MERGE_ARCHIVE_PLAN_NAME);
             HoodieWrapperFileSystem fileSystem = metaClient.getFs();
             if (fileSystem.exists(planPath)) {
               HoodieMergeArchiveFilePlan plan = TimelineMetadataUtils.deserializeAvroMetadata(FileIOUtils.readDataFromPath(fileSystem, planPath).get(), HoodieMergeArchiveFilePlan.class);
