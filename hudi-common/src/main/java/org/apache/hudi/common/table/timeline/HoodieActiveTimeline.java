@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -36,7 +37,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.text.ParseException;
-import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
@@ -76,13 +76,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    */
   public static Date parseDateFromInstantTime(String timestamp) throws ParseException {
     return HoodieInstantTimeGenerator.parseDateFromInstantTime(timestamp);
-  }
-
-  /**
-   * Format the java.time.Instant to a String representing the timestamp of a Hoodie Instant.
-   */
-  public static String formatInstantTime(Instant timestamp) {
-    return HoodieInstantTimeGenerator.formatInstantTime(timestamp);
   }
 
   /**
@@ -164,6 +157,18 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     createFileInMetaPath(instant.getFileName(), Option.empty(), false);
   }
 
+  public void createRequestedReplaceCommit(String instantTime, String actionType) {
+    try {
+      HoodieInstant instant = new HoodieInstant(State.REQUESTED, actionType, instantTime);
+      LOG.info("Creating a new instant " + instant);
+      // Create the request replace file
+      createFileInMetaPath(instant.getFileName(),
+              TimelineMetadataUtils.serializeRequestedReplaceMetadata(new HoodieRequestedReplaceMetadata()), false);
+    } catch (IOException e) {
+      throw new HoodieIOException("Error create requested replace commit ", e);
+    }
+  }
+
   public void saveAsComplete(HoodieInstant instant, Option<byte[]> data) {
     LOG.info("Marking instant complete " + instant);
     ValidationUtils.checkArgument(instant.isInflight(),
@@ -198,9 +203,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     }
   }
 
-  public void deletePendingIfExists(HoodieInstant.State state, String action, String instantStr) {
-    HoodieInstant instant = new HoodieInstant(state, action, instantStr);
-    ValidationUtils.checkArgument(!instant.isCompleted());
+  public void deleteEmptyInstantIfExists(HoodieInstant instant) {
+    ValidationUtils.checkArgument(isEmpty(instant));
     deleteInstantFileIfExists(instant);
   }
 
@@ -390,14 +394,13 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * Transition Rollback State from requested to inflight.
    *
    * @param requestedInstant requested instant
-   * @param data Optional data to be stored
    * @return commit instant
    */
-  public HoodieInstant transitionRollbackRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data) {
+  public HoodieInstant transitionRollbackRequestedToInflight(HoodieInstant requestedInstant) {
     ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION));
     ValidationUtils.checkArgument(requestedInstant.isRequested());
     HoodieInstant inflight = new HoodieInstant(State.INFLIGHT, ROLLBACK_ACTION, requestedInstant.getTimestamp());
-    transitionState(requestedInstant, inflight, data);
+    transitionState(requestedInstant, inflight, Option.empty());
     return inflight;
   }
 

@@ -40,7 +40,6 @@ public class TestReflectUtil extends HoodieClientTestBase {
     InsertIntoStatement statement = (InsertIntoStatement) spark.sessionState().sqlParser().parsePlan(insertIntoSql);
 
     InsertIntoStatement newStatment = ReflectUtil.createInsertInto(
-        spark.version().startsWith("3.0"),
         statement.table(),
         statement.partitionSpec(),
         scala.collection.immutable.List.empty(),

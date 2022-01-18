@@ -20,16 +20,18 @@ package org.apache.hudi.sync.common;
 
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
@@ -98,6 +100,8 @@ public abstract class AbstractSyncHoodieClient {
 
   public abstract void updatePartitionsToTable(String tableName, List<String> changedPartitions);
 
+  public abstract void dropPartitionsToTable(String tableName, List<String> partitionsToDrop);
+
   public  void updateTableProperties(String tableName, Map<String, String> tableProperties) {}
 
   public abstract Map<String, String> getTableSchema(String tableName);
@@ -153,6 +157,25 @@ public abstract class AbstractSyncHoodieClient {
     } catch (Exception e) {
       throw new HoodieSyncException("Failed to read data schema", e);
     }
+  }
+
+  public boolean isDropPartition() {
+    try {
+      Option<HoodieCommitMetadata> hoodieCommitMetadata;
+      if (withOperationField) {
+        hoodieCommitMetadata = new TableSchemaResolver(metaClient, true).getLatestCommitMetadata();
+      } else {
+        hoodieCommitMetadata = new TableSchemaResolver(metaClient).getLatestCommitMetadata();
+      }
+
+      if (hoodieCommitMetadata.isPresent()
+          && WriteOperationType.DELETE_PARTITION.equals(hoodieCommitMetadata.get().getOperationType())) {
+        return true;
+      }
+    } catch (Exception e) {
+      throw new HoodieSyncException("Failed to get commit metadata", e);
+    }
+    return false;
   }
 
   @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
@@ -224,7 +247,7 @@ public abstract class AbstractSyncHoodieClient {
   public static class PartitionEvent {
 
     public enum PartitionEventType {
-      ADD, UPDATE
+      ADD, UPDATE, DROP
     }
 
     public PartitionEventType eventType;
@@ -241,6 +264,10 @@ public abstract class AbstractSyncHoodieClient {
 
     public static PartitionEvent newPartitionUpdateEvent(String storagePartition) {
       return new PartitionEvent(PartitionEventType.UPDATE, storagePartition);
+    }
+
+    public static PartitionEvent newPartitionDropEvent(String storagePartition) {
+      return new PartitionEvent(PartitionEventType.DROP, storagePartition);
     }
   }
 }

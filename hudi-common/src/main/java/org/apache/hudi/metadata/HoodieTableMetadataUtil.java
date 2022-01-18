@@ -52,6 +52,7 @@ import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 
 /**
@@ -89,7 +90,7 @@ public class HoodieTableMetadataUtil {
     List<HoodieRecord> records = new LinkedList<>();
     List<String> allPartitions = new LinkedList<>();
     commitMetadata.getPartitionToWriteStats().forEach((partitionStatName, writeStats) -> {
-      final String partition = partitionStatName.equals("") ? NON_PARTITIONED_NAME : partitionStatName;
+      final String partition = partitionStatName.equals(EMPTY_PARTITION_NAME) ? NON_PARTITIONED_NAME : partitionStatName;
       allPartitions.add(partition);
 
       Map<String, Long> newFiles = new HashMap<>(writeStats.size());
@@ -133,7 +134,8 @@ public class HoodieTableMetadataUtil {
   public static List<HoodieRecord> convertMetadataToRecords(HoodieCleanMetadata cleanMetadata, String instantTime) {
     List<HoodieRecord> records = new LinkedList<>();
     int[] fileDeleteCount = {0};
-    cleanMetadata.getPartitionMetadata().forEach((partition, partitionMetadata) -> {
+    cleanMetadata.getPartitionMetadata().forEach((partitionName, partitionMetadata) -> {
+      final String partition = partitionName.equals(EMPTY_PARTITION_NAME) ? NON_PARTITIONED_NAME : partitionName;
       // Files deleted from a partition
       List<String> deletedFiles = partitionMetadata.getDeletePathPatterns();
       HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.empty(),
@@ -157,7 +159,7 @@ public class HoodieTableMetadataUtil {
    * @return a list of metadata table records
    */
   public static List<HoodieRecord> convertMetadataToRecords(HoodieActiveTimeline metadataTableTimeline,
-      HoodieRestoreMetadata restoreMetadata, String instantTime, Option<String> lastSyncTs) {
+                                                            HoodieRestoreMetadata restoreMetadata, String instantTime, Option<String> lastSyncTs) {
     Map<String, Map<String, Long>> partitionToAppendedFiles = new HashMap<>();
     Map<String, List<String>> partitionToDeletedFiles = new HashMap<>();
     restoreMetadata.getHoodieRestoreMetadata().values().forEach(rms -> {
@@ -282,12 +284,13 @@ public class HoodieTableMetadataUtil {
     List<HoodieRecord> records = new LinkedList<>();
     int[] fileChangeCount = {0, 0}; // deletes, appends
 
-    partitionToDeletedFiles.forEach((partition, deletedFiles) -> {
+    partitionToDeletedFiles.forEach((partitionName, deletedFiles) -> {
       fileChangeCount[0] += deletedFiles.size();
+      final String partition = partitionName.equals(EMPTY_PARTITION_NAME) ? NON_PARTITIONED_NAME : partitionName;
 
       Option<Map<String, Long>> filesAdded = Option.empty();
-      if (partitionToAppendedFiles.containsKey(partition)) {
-        filesAdded = Option.of(partitionToAppendedFiles.remove(partition));
+      if (partitionToAppendedFiles.containsKey(partitionName)) {
+        filesAdded = Option.of(partitionToAppendedFiles.remove(partitionName));
       }
 
       HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, filesAdded,
@@ -295,7 +298,8 @@ public class HoodieTableMetadataUtil {
       records.add(record);
     });
 
-    partitionToAppendedFiles.forEach((partition, appendedFileMap) -> {
+    partitionToAppendedFiles.forEach((partitionName, appendedFileMap) -> {
+      final String partition = partitionName.equals(EMPTY_PARTITION_NAME) ? NON_PARTITIONED_NAME : partitionName;
       fileChangeCount[1] += appendedFileMap.size();
 
       // Validate that no appended file has been deleted
@@ -334,29 +338,65 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
-   * Loads the list of file groups for a partition of the Metadata Table with latest file slices.
+   * Get the latest file slices for a Metadata Table partition. If the file slice is
+   * because of pending compaction instant, then merge the file slice with the one
+   * just before the compaction instant time. The list of file slices returned is
+   * sorted in the correct order of file group name.
    *
-   * The list of file slices returned is sorted in the correct order of file group name.
-   * @param metaClient instance of {@link HoodieTableMetaClient}.
-   * @param partition The name of the partition whose file groups are to be loaded.
-   * @param isReader true if reader code path, false otherwise.
+   * @param metaClient - Instance of {@link HoodieTableMetaClient}.
+   * @param partition  - The name of the partition whose file groups are to be loaded.
    * @return List of latest file slices for all file groups in a given partition.
    */
-  public static List<FileSlice> loadPartitionFileGroupsWithLatestFileSlices(HoodieTableMetaClient metaClient, String partition, boolean isReader) {
-    LOG.info("Loading file groups for metadata table partition " + partition);
+  public static List<FileSlice> getPartitionLatestMergedFileSlices(HoodieTableMetaClient metaClient, String partition) {
+    LOG.info("Loading latest merged file slices for metadata table partition " + partition);
+    return getPartitionFileSlices(metaClient, partition, true);
+  }
 
-    // If there are no commits on the metadata table then the table's default FileSystemView will not return any file
-    // slices even though we may have initialized them.
+  /**
+   * Get the latest file slices for a Metadata Table partition. The list of file slices
+   * returned is sorted in the correct order of file group name.
+   *
+   * @param metaClient - Instance of {@link HoodieTableMetaClient}.
+   * @param partition  - The name of the partition whose file groups are to be loaded.
+   * @return List of latest file slices for all file groups in a given partition.
+   */
+  public static List<FileSlice> getPartitionLatestFileSlices(HoodieTableMetaClient metaClient, String partition) {
+    LOG.info("Loading latest file slices for metadata table partition " + partition);
+    return getPartitionFileSlices(metaClient, partition, false);
+  }
+
+  /**
+   * Get the latest file slices for a given partition.
+   *
+   * @param metaClient      - Instance of {@link HoodieTableMetaClient}.
+   * @param partition       - The name of the partition whose file groups are to be loaded.
+   * @param mergeFileSlices - When enabled, will merge the latest file slices with the last known
+   *                        completed instant. This is useful for readers when there are pending
+   *                        compactions. MergeFileSlices when disabled, will return the latest file
+   *                        slices without any merging, and this is needed for the writers.
+   * @return List of latest file slices for all file groups in a given partition.
+   */
+  private static List<FileSlice> getPartitionFileSlices(HoodieTableMetaClient metaClient, String partition,
+                                                        boolean mergeFileSlices) {
+    // If there are no commits on the metadata table then the table's
+    // default FileSystemView will not return any file slices even
+    // though we may have initialized them.
     HoodieTimeline timeline = metaClient.getActiveTimeline();
     if (timeline.empty()) {
-      final HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieActiveTimeline.createNewInstantTime());
+      final HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION,
+          HoodieActiveTimeline.createNewInstantTime());
       timeline = new HoodieDefaultTimeline(Arrays.asList(instant).stream(), metaClient.getActiveTimeline()::getInstantDetails);
     }
 
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, timeline);
-    Stream<FileSlice> fileSliceStream = isReader ? fsView.getLatestMergedFileSlicesBeforeOrOn(partition, timeline.filterCompletedInstants().lastInstant().get().getTimestamp()) :
-        fsView.getLatestFileSlices(partition);
-    return fileSliceStream.sorted((s1, s2) -> s1.getFileId().compareTo(s2.getFileId()))
-        .collect(Collectors.toList());
+    Stream<FileSlice> fileSliceStream;
+    if (mergeFileSlices) {
+      fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(
+          partition, timeline.filterCompletedInstants().lastInstant().get().getTimestamp());
+    } else {
+      fileSliceStream = fsView.getLatestFileSlices(partition);
+    }
+    return fileSliceStream.sorted((s1, s2) -> s1.getFileId().compareTo(s2.getFileId())).collect(Collectors.toList());
   }
+
 }

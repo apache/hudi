@@ -68,13 +68,13 @@ public class SparkSizeBasedClusteringPlanStrategy<T extends HoodieRecordPayload<
 
   @Override
   protected Stream<HoodieClusteringGroup> buildClusteringGroupsForPartition(String partitionPath, List<FileSlice> fileSlices) {
+    HoodieWriteConfig writeConfig = getWriteConfig();
+
     List<Pair<List<FileSlice>, Integer>> fileSliceGroups = new ArrayList<>();
     List<FileSlice> currentGroup = new ArrayList<>();
     long totalSizeSoFar = 0;
-    HoodieWriteConfig writeConfig = getWriteConfig();
+
     for (FileSlice currentSlice : fileSlices) {
-      // assume each filegroup size is ~= parquet.max.file.size
-      totalSizeSoFar += currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
       // check if max size is reached and create new group, if needed.
       if (totalSizeSoFar >= writeConfig.getClusteringMaxBytesInGroup() && !currentGroup.isEmpty()) {
         int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
@@ -84,13 +84,13 @@ public class SparkSizeBasedClusteringPlanStrategy<T extends HoodieRecordPayload<
         currentGroup = new ArrayList<>();
         totalSizeSoFar = 0;
       }
+
+      // Add to the current file-group
       currentGroup.add(currentSlice);
-      // totalSizeSoFar could be 0 when new group was created in the previous conditional block.
-      // reset to the size of current slice, otherwise the number of output file group will become 0 even though current slice is present.
-      if (totalSizeSoFar == 0) {
-        totalSizeSoFar += currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
-      }
+      // assume each filegroup size is ~= parquet.max.file.size
+      totalSizeSoFar += currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
     }
+
     if (!currentGroup.isEmpty()) {
       int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
       LOG.info("Adding final clustering group " + totalSizeSoFar + " max bytes: "
@@ -98,11 +98,12 @@ public class SparkSizeBasedClusteringPlanStrategy<T extends HoodieRecordPayload<
       fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
     }
 
-    return fileSliceGroups.stream().map(fileSliceGroup -> HoodieClusteringGroup.newBuilder()
-        .setSlices(getFileSliceInfo(fileSliceGroup.getLeft()))
-        .setNumOutputFileGroups(fileSliceGroup.getRight())
-        .setMetrics(buildMetrics(fileSliceGroup.getLeft()))
-        .build());
+    return fileSliceGroups.stream().map(fileSliceGroup ->
+        HoodieClusteringGroup.newBuilder()
+          .setSlices(getFileSliceInfo(fileSliceGroup.getLeft()))
+          .setNumOutputFileGroups(fileSliceGroup.getRight())
+          .setMetrics(buildMetrics(fileSliceGroup.getLeft()))
+          .build());
   }
 
   @Override
@@ -112,11 +113,6 @@ public class SparkSizeBasedClusteringPlanStrategy<T extends HoodieRecordPayload<
       params.put(PLAN_STRATEGY_SORT_COLUMNS.key(), getWriteConfig().getClusteringSortColumns());
     }
     return params;
-  }
-
-  @Override
-  protected List<String> filterPartitionPaths(List<String> partitionPaths) {
-    return partitionPaths;
   }
 
   @Override

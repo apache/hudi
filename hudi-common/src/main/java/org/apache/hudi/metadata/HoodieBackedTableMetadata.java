@@ -245,7 +245,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
         // Metadata is in sync till the latest completed instant on the dataset
         HoodieTimer timer = new HoodieTimer().startTimer();
-        List<FileSlice> latestFileSlices = HoodieTableMetadataUtil.loadPartitionFileGroupsWithLatestFileSlices(metadataMetaClient, partitionName, true);
+        List<FileSlice> latestFileSlices = HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, partitionName);
         if (latestFileSlices.size() == 0) {
           // empty partition
           return Pair.of(null, null);
@@ -440,5 +440,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       }
     }
     return Option.empty();
+  }
+
+  @Override
+  public void reset() {
+    initIfNeeded();
+    dataMetaClient.reloadActiveTimeline();
   }
 }

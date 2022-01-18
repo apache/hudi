@@ -245,12 +245,12 @@ class TestCOWDataSource extends HoodieClientTestBase {
     spark.sql(String.format("select count(*) from tmpTable")).show()
 
     // step4: Query the rows count from hoodie table for partition1 DEFAULT_FIRST_PARTITION_PATH
-    val recordCountForParititon1 = spark.sql(String.format("select count(*) from tmpTable where partition = '%s'", HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).collect()
-    assertEquals("6", recordCountForParititon1(0).get(0).toString)
+    val recordCountForPartition1 = spark.sql(String.format("select count(*) from tmpTable where partition = '%s'", HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).collect()
+    assertEquals("6", recordCountForPartition1(0).get(0).toString)
 
     // step5: Query the rows count from hoodie table for partition2 DEFAULT_SECOND_PARTITION_PATH
-    val recordCountForParititon2 = spark.sql(String.format("select count(*) from tmpTable where partition = '%s'", HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)).collect()
-    assertEquals("7", recordCountForParititon2(0).get(0).toString)
+    val recordCountForPartition2 = spark.sql(String.format("select count(*) from tmpTable where partition = '%s'", HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)).collect()
+    assertEquals("7", recordCountForPartition2(0).get(0).toString)
 
     // step6: Query the rows count from hoodie table for partition2 DEFAULT_SECOND_PARTITION_PATH using spark.collect and then filter mode
     val recordsForPartitionColumn = spark.sql(String.format("select partition from tmpTable")).collect()
@@ -292,12 +292,12 @@ class TestCOWDataSource extends HoodieClientTestBase {
     spark.sql(String.format("select count(*) from tmpTable")).show()
 
     // step3: Query the rows count from hoodie table for partition1 DEFAULT_FIRST_PARTITION_PATH
-    val recordCountForParititon1 = spark.sql(String.format("select count(*) from tmpTable where partition = '%s'", HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).collect()
-    assertEquals("0", recordCountForParititon1(0).get(0).toString)
+    val recordCountForPartition1 = spark.sql(String.format("select count(*) from tmpTable where partition = '%s'", HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).collect()
+    assertEquals("0", recordCountForPartition1(0).get(0).toString)
 
     // step4: Query the rows count from hoodie table for partition2 DEFAULT_SECOND_PARTITION_PATH
-    val recordCountForParititon2 = spark.sql(String.format("select count(*) from tmpTable where partition = '%s'", HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)).collect()
-    assertEquals("7", recordCountForParititon2(0).get(0).toString)
+    val recordCountForPartition2 = spark.sql(String.format("select count(*) from tmpTable where partition = '%s'", HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)).collect()
+    assertEquals("7", recordCountForPartition2(0).get(0).toString)
 
     // step5: Query the rows count from hoodie table
     val recordCount = spark.sql(String.format("select count(*) from tmpTable")).collect()
@@ -417,7 +417,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .mode(SaveMode.Overwrite)
   }
 
-  @Test def testSparkPartitonByWithCustomKeyGenerator(): Unit = {
+  @Test def testSparkPartitionByWithCustomKeyGenerator(): Unit = {
     // Without fieldType, the default is SIMPLE
     var writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName)
     writer.partitionBy("current_ts")
@@ -465,7 +465,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     }
   }
 
-  @Test def testSparkPartitonByWithSimpleKeyGenerator() {
+  @Test def testSparkPartitionByWithSimpleKeyGenerator() {
     // Use the `driver` field as the partition key
     var writer = getDataFrameWriter(classOf[SimpleKeyGenerator].getName)
     writer.partitionBy("driver")
@@ -484,7 +484,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("default")).count() == 0)
   }
 
-  @Test def testSparkPartitonByWithComplexKeyGenerator() {
+  @Test def testSparkPartitionByWithComplexKeyGenerator() {
     // Use the `driver` field as the partition key
     var writer = getDataFrameWriter(classOf[ComplexKeyGenerator].getName)
     writer.partitionBy("driver")
@@ -503,7 +503,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= concat(col("driver"), lit("/"), col("rider"))).count() == 0)
   }
 
-  @Test def testSparkPartitonByWithTimestampBasedKeyGenerator() {
+  @Test def testSparkPartitionByWithTimestampBasedKeyGenerator() {
     val writer = getDataFrameWriter(classOf[TimestampBasedKeyGenerator].getName)
     writer.partitionBy("current_ts")
       .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
@@ -517,7 +517,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= udf_date_format(col("current_ts"))).count() == 0)
   }
 
-  @Test def testSparkPartitonByWithGlobalDeleteKeyGenerator() {
+  @Test def testSparkPartitionByWithGlobalDeleteKeyGenerator() {
     val writer = getDataFrameWriter(classOf[GlobalDeleteKeyGenerator].getName)
     writer.partitionBy("driver")
       .mode(SaveMode.Overwrite)
@@ -528,7 +528,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("")).count() == 0)
   }
 
-  @Test def testSparkPartitonByWithNonpartitionedKeyGenerator() {
+  @Test def testSparkPartitionByWithNonpartitionedKeyGenerator() {
     // Empty string column
     var writer = getDataFrameWriter(classOf[NonpartitionedKeyGenerator].getName)
     writer.partitionBy("")
@@ -722,5 +722,30 @@ class TestCOWDataSource extends HoodieClientTestBase {
     snapshotDF1.registerTempTable("tmptable")
     val result = spark.sql("select * from tmptable limit 1").collect()(0)
     result.schema.contains(new StructField("partition", StringType, true))
+  }
+
+  @Test
+  def testWriteSmallPrecisionDecimalTable(): Unit = {
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 5)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+      .withColumn("shortDecimal", lit(new java.math.BigDecimal(s"2090.0000"))) // create decimalType(8, 4)
+    inputDF1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    // update the value of shortDecimal
+    val inputDF2 = inputDF1.withColumn("shortDecimal", lit(new java.math.BigDecimal(s"3090.0000")))
+    inputDF2.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val readResult = spark.read.format("hudi").load(basePath)
+    assert(readResult.count() == 5)
+    // compare the test result
+    assertEquals(inputDF2.sort("_row_key").select("shortDecimal").collect().map(_.getDecimal(0).toPlainString).mkString(","),
+      readResult.sort("_row_key").select("shortDecimal").collect().map(_.getDecimal(0).toPlainString).mkString(","))
   }
 }

@@ -239,6 +239,40 @@ public class TestTimestampBasedKeyGenerator {
   }
 
   @Test
+  public void testScalarWithLogicalType() throws IOException {
+    schema = SchemaTestUtil.getTimestampWithLogicalTypeSchema();
+    structType = AvroConversionUtils.convertAvroSchemaToStructType(schema);
+    baseRecord = SchemaTestUtil.generateAvroRecordFromJson(schema, 1, "001", "f1");
+    baseRecord.put("createTime", 1638513806000000L);
+
+    properties = getBaseKeyConfig("SCALAR", "yyyy/MM/dd", "GMT", "MICROSECONDS");
+    properties.setProperty(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "true");
+    TimestampBasedKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
+    HoodieKey hk1 = keyGen.getKey(baseRecord);
+    assertEquals("2021/12/03", hk1.getPartitionPath());
+
+    // test w/ Row
+    baseRow = genericRecordToRow(baseRecord);
+    assertEquals("2021/12/03", keyGen.getPartitionPath(baseRow));
+    internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow);
+    assertEquals("2021/12/03", keyGen.getPartitionPath(internalRow, baseRow.schema()));
+
+    // timezone is GMT, createTime is null
+    baseRecord.put("createTime", null);
+    properties = getBaseKeyConfig("SCALAR", "yyyy/MM/dd", "GMT", "MICROSECONDS");
+    properties.setProperty(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "true");
+    keyGen = new TimestampBasedKeyGenerator(properties);
+    HoodieKey hk2 = keyGen.getKey(baseRecord);
+    assertEquals("1970/01/01", hk2.getPartitionPath());
+
+    // test w/ Row
+    baseRow = genericRecordToRow(baseRecord);
+    assertEquals("1970/01/01", keyGen.getPartitionPath(baseRow));
+    internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow);
+    assertEquals("1970/01/01", keyGen.getPartitionPath(internalRow, baseRow.schema()));
+  }
+
+  @Test
   public void test_ExpectsMatch_SingleInputFormat_ISO8601WithMsZ_OutputTimezoneAsUTC() throws IOException {
     baseRecord.put("createTime", "2020-04-01T13:01:33.428Z");
     properties = this.getBaseKeyConfig(

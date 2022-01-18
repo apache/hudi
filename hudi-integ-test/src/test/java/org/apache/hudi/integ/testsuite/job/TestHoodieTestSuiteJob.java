@@ -35,7 +35,6 @@ import org.apache.hudi.integ.testsuite.schema.SchemaUtils;
 import org.apache.hudi.integ.testsuite.schema.TestSuiteFileBasedSchemaProvider;
 import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator;
-import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.AvroDFSSource;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 

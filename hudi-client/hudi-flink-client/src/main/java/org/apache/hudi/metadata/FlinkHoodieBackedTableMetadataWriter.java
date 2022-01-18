@@ -139,7 +139,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       metadataMetaClient.reloadActiveTimeline();
       if (canTriggerTableService) {
         compactIfNecessary(writeClient, instantTime);
-        doClean(writeClient, instantTime);
+        cleanIfNecessary(writeClient, instantTime);
         writeClient.archive();
       }
     }
@@ -154,7 +154,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
    * The record is tagged with respective file slice's location based on its record key.
    */
   private List<HoodieRecord> prepRecords(List<HoodieRecord> records, String partitionName, int numFileGroups) {
-    List<FileSlice> fileSlices = HoodieTableMetadataUtil.loadPartitionFileGroupsWithLatestFileSlices(metadataMetaClient, partitionName, false);
+    List<FileSlice> fileSlices = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, partitionName);
     ValidationUtils.checkArgument(fileSlices.size() == numFileGroups, String.format("Invalid number of file groups: found=%d, required=%d", fileSlices.size(), numFileGroups));
 
     return records.stream().map(r -> {

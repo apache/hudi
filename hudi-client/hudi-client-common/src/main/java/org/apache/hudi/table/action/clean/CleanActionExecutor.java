@@ -217,7 +217,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
       throw new HoodieIOException("Failed to clean up after commit", e);
     } finally {
       if (!skipLocking) {
-        this.txnManager.endTransaction();
+        this.txnManager.endTransaction(Option.empty());
       }
     }
   }
@@ -230,11 +230,15 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
         .filterInflightsAndRequested().getInstants().collect(Collectors.toList());
     if (pendingCleanInstants.size() > 0) {
       pendingCleanInstants.forEach(hoodieInstant -> {
-        LOG.info("Finishing previously unfinished cleaner instant=" + hoodieInstant);
-        try {
-          cleanMetadataList.add(runPendingClean(table, hoodieInstant));
-        } catch (Exception e) {
-          LOG.warn("Failed to perform previous clean operation, instant: " + hoodieInstant, e);
+        if (table.getCleanTimeline().isEmpty(hoodieInstant)) {
+          table.getActiveTimeline().deleteEmptyInstantIfExists(hoodieInstant);
+        } else {
+          LOG.info("Finishing previously unfinished cleaner instant=" + hoodieInstant);
+          try {
+            cleanMetadataList.add(runPendingClean(table, hoodieInstant));
+          } catch (Exception e) {
+            LOG.warn("Failed to perform previous clean operation, instant: " + hoodieInstant, e);
+          }
         }
       });
       table.getMetaClient().reloadActiveTimeline();

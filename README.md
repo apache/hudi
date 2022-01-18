@@ -78,12 +78,16 @@ The default Scala version supported is 2.11. To build for Scala 2.12 version, bu
 mvn clean package -DskipTests -Dscala-2.12
 ```
 
-### Build with Spark 3.0.0
+### Build with Spark 3
 
-The default Spark version supported is 2.4.4. To build for Spark 3.0.0 version, build using `spark3` profile
+The default Spark version supported is 2.4.4. To build for different Spark 3 versions, use the corresponding profile
 
 ```
+# Build against Spark 3.2.0 (the default build shipped with the public Spark 3 bundle)
 mvn clean package -DskipTests -Dspark3
+
+# Build against Spark 3.1.2
+mvn clean package -DskipTests -Dspark3.1.x
 ```
 
 ### Build without spark-avro module

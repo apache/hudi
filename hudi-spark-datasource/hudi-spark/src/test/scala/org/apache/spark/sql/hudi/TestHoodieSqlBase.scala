@@ -17,7 +17,8 @@
 
 package org.apache.spark.sql.hudi
 
-import java.io.File
+import org.apache.hadoop.fs.Path
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.log4j.Level
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.{Row, SparkSession}
@@ -25,6 +26,7 @@ import org.apache.spark.util.Utils
 import org.scalactic.source
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
 
+import java.io.File
 import java.util.TimeZone
 
 class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
@@ -59,14 +61,18 @@ class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
   }
 
   override protected def test(testName: String, testTags: Tag*)(testFun: => Any /* Assertion */)(implicit pos: source.Position): Unit = {
-    try super.test(testName, testTags: _*)(try testFun finally {
-      val catalog = spark.sessionState.catalog
-      catalog.listDatabases().foreach{db =>
-        catalog.listTables(db).foreach {table =>
-          catalog.dropTable(table, true, true)
+    super.test(testName, testTags: _*)(
+      try {
+        testFun
+      } finally {
+        val catalog = spark.sessionState.catalog
+        catalog.listDatabases().foreach{db =>
+          catalog.listTables(db).foreach {table =>
+            catalog.dropTable(table, true, true)
+          }
         }
       }
-    })
+    )
   }
 
   protected def generateTableName: String = {
@@ -114,5 +120,11 @@ class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
       case s: String => s.stripPrefix("'").stripSuffix("'")
       case _=> value
     }
+  }
+
+  protected def existsPath(filePath: String): Boolean = {
+    val path = new Path(filePath)
+    val fs = FSUtils.getFs(filePath, spark.sparkContext.hadoopConfiguration)
+    fs.exists(path)
   }
 }

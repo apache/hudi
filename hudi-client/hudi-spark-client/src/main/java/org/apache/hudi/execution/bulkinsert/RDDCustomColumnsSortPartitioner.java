@@ -22,6 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
@@ -38,15 +39,18 @@ public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload>
 
   private final String[] sortColumnNames;
   private final SerializableSchema serializableSchema;
+  private final boolean consistentLogicalTimestampEnabled;
 
   public RDDCustomColumnsSortPartitioner(HoodieWriteConfig config) {
     this.serializableSchema = new SerializableSchema(new Schema.Parser().parse(config.getSchema()));
     this.sortColumnNames = getSortColumnName(config);
+    this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
   }
 
-  public RDDCustomColumnsSortPartitioner(String[] columnNames, Schema schema) {
+  public RDDCustomColumnsSortPartitioner(String[] columnNames, Schema schema, boolean consistentLogicalTimestampEnabled) {
     this.sortColumnNames = columnNames;
     this.serializableSchema = new SerializableSchema(schema);
+    this.consistentLogicalTimestampEnabled = consistentLogicalTimestampEnabled;
   }
 
   @Override
@@ -54,8 +58,17 @@ public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload>
                                                      int outputSparkPartitions) {
     final String[] sortColumns = this.sortColumnNames;
     final SerializableSchema schema = this.serializableSchema;
+    final boolean consistentLogicalTimestampEnabled = this.consistentLogicalTimestampEnabled;
     return records.sortBy(
-        record -> HoodieAvroUtils.getRecordColumnValues(record, sortColumns, schema),
+        record -> {
+          Object recordValue = HoodieAvroUtils.getRecordColumnValues(record, sortColumns, schema, consistentLogicalTimestampEnabled);
+          // null values are replaced with empty string for null_first order
+          if (recordValue == null) {
+            return StringUtils.EMPTY_STRING;
+          } else {
+            return StringUtils.objToString(record);
+          }
+        },
         true, outputSparkPartitions);
   }
 

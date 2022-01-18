@@ -74,6 +74,8 @@ import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.table.storage.HoodieLayoutFactory;
+import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -106,6 +108,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   private SerializableConfiguration hadoopConfiguration;
   protected final TaskContextSupplier taskContextSupplier;
   private final HoodieTableMetadata metadata;
+  private final HoodieStorageLayout storageLayout;
 
   private transient FileSystemViewManager viewManager;
   protected final transient HoodieEngineContext context;
@@ -123,10 +126,15 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     this.viewManager = FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadata);
     this.metaClient = metaClient;
     this.index = getIndex(config, context);
+    this.storageLayout = getStorageLayout(config);
     this.taskContextSupplier = context.getTaskContextSupplier();
   }
 
   protected abstract HoodieIndex<T, ?, ?, ?> getIndex(HoodieWriteConfig config, HoodieEngineContext context);
+
+  protected HoodieStorageLayout getStorageLayout(HoodieWriteConfig config) {
+    return HoodieLayoutFactory.createLayout(config);
+  }
 
   private synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {
@@ -246,7 +254,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   public abstract HoodieWriteMetadata<O> insertOverwriteTable(HoodieEngineContext context, String instantTime, I records);
 
   /**
-   * Updates Metadata Indexes (like Z-Index)
+   * Updates Metadata Indexes (like Column Stats index)
    * TODO rebase onto metadata table (post RFC-27)
    *
    * @param context instance of {@link HoodieEngineContext}
@@ -363,6 +371,10 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    */
   public HoodieIndex<T, ?, ?, ?> getIndex() {
     return index;
+  }
+
+  public HoodieStorageLayout getStorageLayout() {
+    return storageLayout;
   }
 
   /**

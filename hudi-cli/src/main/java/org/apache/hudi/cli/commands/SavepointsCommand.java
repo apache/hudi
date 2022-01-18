@@ -78,11 +78,9 @@ public class SavepointsCommand implements CommandMarker {
       throws Exception {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    HoodieTimeline timeline = activeTimeline.getCommitTimeline().filterCompletedInstants();
-    HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime);
 
-    if (!timeline.containsInstant(commitInstant)) {
-      return "Commit " + commitTime + " not found in Commits " + timeline;
+    if (!activeTimeline.getCommitsTimeline().filterCompletedInstants().containsInstant(commitTime)) {
+      return "Commit " + commitTime + " not found in Commits " + activeTimeline;
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
@@ -112,10 +110,10 @@ public class SavepointsCommand implements CommandMarker {
       throw new HoodieException("There are no completed instants to run rollback");
     }
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    HoodieTimeline timeline = activeTimeline.getCommitTimeline().filterCompletedInstants();
-    HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, instantTime);
+    HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
+    List<HoodieInstant> instants = timeline.getInstants().filter(instant -> instant.getTimestamp().equals(instantTime)).collect(Collectors.toList());
 
-    if (!timeline.containsInstant(commitInstant)) {
+    if (instants.isEmpty()) {
       return "Commit " + instantTime + " not found in Commits " + timeline;
     }
 
