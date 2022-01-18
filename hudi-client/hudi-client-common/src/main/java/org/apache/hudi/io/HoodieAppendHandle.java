@@ -162,7 +162,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       deltaWriteStat.setLogFiles(logFiles);
 
       try {
-        //save hoodie partition meta in the partition path
+        // Save hoodie partition meta in the partition path
         HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, baseInstantTime,
             new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath));
         partitionMetadata.trySave(getPartitionId());

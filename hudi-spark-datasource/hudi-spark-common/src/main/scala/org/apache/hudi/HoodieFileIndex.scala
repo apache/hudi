@@ -66,14 +66,13 @@ case class HoodieFileIndex(spark: SparkSession,
     metaClient = metaClient,
     schemaSpec = schemaSpec,
     configProperties = getConfigProperties(spark, options),
+    queryPaths = Seq(HoodieFileIndex.getQueryPath(options)),
     specifiedQueryInstant = options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key).map(HoodieSqlCommonUtils.formatQueryInstant),
     fileStatusCache = fileStatusCache
   )
     with FileIndex {
 
-  @transient private val queryPath = new Path(options.getOrElse("path", "'path' option required"))
-
-  override def rootPaths: Seq[Path] = queryPath :: Nil
+  override def rootPaths: Seq[Path] = queryPaths
 
   def enableDataSkipping(): Boolean = {
     options.getOrElse(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(),
@@ -281,5 +280,9 @@ object HoodieFileIndex {
         HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS.toString))
     properties.putAll(options.asJava)
     properties
+  }
+
+  private def getQueryPath(options: Map[String, String]) = {
+    new Path(options.getOrElse("path", "'path' option required"))
   }
 }

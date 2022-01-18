@@ -18,17 +18,16 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, Path}
-import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ
+import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.{FileSystemViewStorageConfig, HoodieTableFileSystemView}
 
-import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
+import scala.collection.JavaConversions._
 import scala.collection.mutable
 
 /**
@@ -50,11 +49,14 @@ import scala.collection.mutable
  * @param shouldIncludePendingCommits flags whether file-index should exclude any pending operations
  * @param fileStatusCache transient cache of fetched [[FileStatus]]es
  */
-abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
-                                            metaClient: HoodieTableMetaClient,
-                                            configProperties: TypedProperties,
-                                            specifiedQueryInstant: Option[String] = None,
-                                            @transient fileStatusCache: FileStatusCacheTrait) {
+abstract class HoodieTableFileIndexBase(engineContext: HoodieEngineContext,
+                                        metaClient: HoodieTableMetaClient,
+                                        configProperties: TypedProperties,
+                                        queryType: HoodieTableQueryType,
+                                        protected val queryPaths: Seq[Path],
+                                        specifiedQueryInstant: Option[String] = None,
+                                        shouldIncludePendingCommits: Boolean = false,
+                                        @transient fileStatusCache: FileStatusCacheTrait) {
   /**
    * Get all completeCommits.
    */
@@ -70,12 +72,11 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
   private lazy val metadataConfig = HoodieMetadataConfig.newBuilder
     .fromProperties(configProperties)
     .build()
-  protected val basePath: String = metaClient.getBasePath
 
-  private val queryType = configProperties(QUERY_TYPE.key())
   private val tableType = metaClient.getTableType
 
-  @transient private val queryPath = new Path(configProperties.getOrElse("path", "'path' option required"))
+  protected val basePath: String = metaClient.getBasePath
+
   @transient
   @volatile protected var cachedFileSize: Long = 0L
   @transient
@@ -109,12 +110,13 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
       .getOrElse(Array.empty[FileStatus])
 
     metaClient.reloadActiveTimeline()
-    val activeInstants = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
-    val latestInstant = activeInstants.lastInstant()
+
+    val activeTimeline = getActiveTimeline
+    val latestInstant = activeTimeline.lastInstant()
     // TODO we can optimize the flow by:
     //  - First fetch list of files from instants of interest
     //  - Load FileStatus's
-    fileSystemView = new HoodieTableFileSystemView(metaClient, activeInstants, allFiles)
+    fileSystemView = new HoodieTableFileSystemView(metaClient, activeTimeline, allFiles)
     val queryInstant = if (specifiedQueryInstant.isDefined) {
       specifiedQueryInstant
     } else if (latestInstant.isPresent) {
@@ -124,7 +126,7 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
     }
 
     (tableType, queryType) match {
-      case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL) =>
+      case (MERGE_ON_READ, HoodieTableQueryType.QUERY_TYPE_SNAPSHOT) =>
         // Fetch and store latest base and log files, and their sizes
         cachedAllInputFileSlices = partitionFiles.map(p => {
           val latestSlices = if (queryInstant.isDefined) {
@@ -166,6 +168,15 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
   protected def refresh(): Unit = {
     fileStatusCache.invalidate()
     refresh0()
+  }
+
+  private def getActiveTimeline = {
+    val timeline = metaClient.getActiveTimeline.getCommitsTimeline
+    if (shouldIncludePendingCommits) {
+      timeline
+    } else {
+      timeline.filterCompletedInstants()
+    }
   }
 
   private def fileSliceSize(fileSlice: FileSlice): Long = {
@@ -216,11 +227,11 @@ abstract class AbstractHoodieTableFileIndex(engineContext: HoodieEngineContext,
   }
 
   def getAllQueryPartitionPaths: Seq[PartitionPath] = {
-    val queryPartitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), queryPath)
+    val queryRelativePartitionPaths = queryPaths.map(FSUtils.getRelativePartitionPath(new Path(basePath), _))
     // Load all the partition path from the basePath, and filter by the query partition path.
-    // TODO load files from the queryPartitionPath directly.
+    // TODO load files from the queryRelativePartitionPaths directly.
     val partitionPaths = FSUtils.getAllPartitionPaths(engineContext, metadataConfig, basePath).asScala
-      .filter(_.startsWith(queryPartitionPath))
+      .filter(path => queryRelativePartitionPaths.exists(path.startsWith))
 
     val partitionSchema = _partitionColumns
 

@@ -21,6 +21,7 @@ package org.apache.hudi.hadoop.utils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.Path;
@@ -75,6 +76,14 @@ public class HoodieHiveUtils {
   public static final int DEFAULT_LEVELS_TO_BASEPATH = 3;
   public static final Pattern HOODIE_CONSUME_MODE_PATTERN_STRING = Pattern.compile("hoodie\\.(.*)\\.consume\\.mode");
   public static final String GLOBALLY_CONSISTENT_READ_TIMESTAMP = "last_replication_timestamp";
+
+  public static boolean shouldIncludePendingCommits(JobConf job, String tableName) {
+    return job.getBoolean(String.format(HOODIE_CONSUME_PENDING_COMMITS, tableName), false);
+  }
+
+  public static Option<String> getMaxCommit(JobConf job, String tableName) {
+    return Option.ofNullable(job.get(String.format(HOODIE_CONSUME_COMMIT, tableName)));
+  }
 
   public static boolean stopAtCompaction(JobContext job, String tableName) {
     String compactionPropName = String.format(HOODIE_STOP_AT_COMPACTION_PATTERN, tableName);
@@ -149,23 +158,17 @@ public class HoodieHiveUtils {
    *      (false or notSet, notSet) -> returns completedTimeline unfiltered
    *
    *      validCommit is one which exists in the timeline being checked and vice versa
-   *
-   * @param tableName
-   * @param job
-   * @param metaClient
-   * @return
    */
   public static HoodieTimeline getTableTimeline(final String tableName, final JobConf job, final HoodieTableMetaClient metaClient) {
     HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline();
 
-    boolean includePendingCommits = job.getBoolean(String.format(HOODIE_CONSUME_PENDING_COMMITS, tableName), false);
-    String maxCommit = job.get(String.format(HOODIE_CONSUME_COMMIT, tableName));
+    boolean includePendingCommits = shouldIncludePendingCommits(job, tableName);
+    Option<String> maxCommit = getMaxCommit(job, tableName);
 
-    if (!includePendingCommits && maxCommit == null) {
-      return timeline.filterCompletedInstants();
-    }
+    HoodieTimeline finalizedTimeline = includePendingCommits ? timeline : timeline.filterCompletedInstants();
 
-    return filterIfInstantExists(tableName, includePendingCommits ? timeline : timeline.filterCompletedInstants(), maxCommit);
+    return !maxCommit.isPresent() ? finalizedTimeline : filterIfInstantExists(tableName, finalizedTimeline, maxCommit.get());
+
   }
 
   private static HoodieTimeline filterIfInstantExists(String tableName, HoodieTimeline timeline, String maxCommit) {

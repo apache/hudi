@@ -18,10 +18,11 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, Path}
-import org.apache.hudi.SparkHoodieTableFileIndex.generateFieldMap
+import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_INCREMENTAL_OPT_VAL, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
+import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, generateFieldMap}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.spark.api.java.JavaSparkContext
@@ -35,8 +36,10 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
+import scala.collection.JavaConversions._
+
 /**
- * Implementation of the [[AbstractHoodieTableFileIndex]] for Spark
+ * Implementation of the [[HoodieTableFileIndexBase]] for Spark
  *
  * @param spark spark session
  * @param metaClient Hudi table's meta-client
@@ -49,14 +52,17 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
                                 metaClient: HoodieTableMetaClient,
                                 schemaSpec: Option[StructType],
                                 configProperties: TypedProperties,
+                                queryPaths: Seq[Path],
                                 specifiedQueryInstant: Option[String] = None,
                                 @transient fileStatusCache: FileStatusCache = NoopCache)
-  extends AbstractHoodieTableFileIndex(
+  extends HoodieTableFileIndexBase(
     engineContext = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)),
     metaClient,
     configProperties,
+    queryType = deduceQueryType(configProperties),
+    queryPaths,
     specifiedQueryInstant,
-    SparkHoodieTableFileIndex.adapt(fileStatusCache)
+    fileStatusCache = SparkHoodieTableFileIndex.adapt(fileStatusCache)
   )
     with SparkAdapterSupport
     with Logging {
@@ -276,6 +282,15 @@ object SparkHoodieTableFileIndex {
     }
 
     traverse(Right(structType))
+  }
+
+  private def deduceQueryType(configProperties: TypedProperties): HoodieTableQueryType = {
+    configProperties(QUERY_TYPE.key()) match {
+      case QUERY_TYPE_SNAPSHOT_OPT_VAL => HoodieTableQueryType.QUERY_TYPE_SNAPSHOT
+      case QUERY_TYPE_INCREMENTAL_OPT_VAL => HoodieTableQueryType.QUERY_TYPE_INCREMENTAL
+      case QUERY_TYPE_READ_OPTIMIZED_OPT_VAL => HoodieTableQueryType.QUERY_TYPE_READ_OPTIMIZED
+      case _ @ qt => throw new IllegalArgumentException(s"query-type ($qt) not supported")
+    }
   }
 
   private def adapt(cache: FileStatusCache): FileStatusCacheTrait = {
