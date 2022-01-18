@@ -22,6 +22,61 @@ cd hudi-hive
  [hudi-hive]$ ./run_sync_tool.sh --help
 ```
 
+## Hive Sync Configuration
+
+Please take a look at the arguments that can be passed to `run_sync_tool` in [HiveSyncConfig](https://github.com/apache/hudi/blob/master/hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncConfig.java).
+Among them, following are the required arguments:
+```java
+@Parameter(names = {"--database"}, description = "name of the target database in Hive", required = true);
+@Parameter(names = {"--table"}, description = "name of the target table in Hive", required = true);
+@Parameter(names = {"--base-path"}, description = "Basepath of hoodie table to sync", required = true);## Sync modes
+```
+Corresponding datasource options for the most commonly used hive sync configs are as follows:
+
+| HiveSyncConfig | DataSourceWriteOption | Description |
+| -----------   | ----------- | ----------- |
+| --database       | hoodie.datasource.hive_sync.database       | name of the target database in Hive       |
+| --table   | hoodie.datasource.hive_sync.table        | name of the target table in Hive        |
+| --user   | hoodie.datasource.hive_sync.username        | username for hive metastore        | 
+| --pass   | hoodie.datasource.hive_sync.password        | password for hive metastore        | 
+| --use-jdbc   | hoodie.datasource.hive_sync.use_jdbc        | use JDBC to connect to metastore        | 
+| --jdbc-url   | hoodie.datasource.hive_sync.jdbcurl        | Hive metastore url        |
+| --sync-mode   | hoodie.datasource.hive_sync.mode        | Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql.        |
+| --partitioned-by   | hoodie.datasource.hive_sync.partition_fields        | Comma-separated column names in the table to use for determining hive partition.        |
+| --partition-value-extractor   | hoodie.datasource.hive_sync.partition_extractor_class        | Class which implements PartitionValueExtractor to extract the partition values. `SlashEncodedDayPartitionValueExtractor` by default.        |
+| --jdbc-url   | hoodie.datasource.hive_sync.jdbcurl        | Hive metastore url        |
+
+
+## Sync modes
+
+`HiveSyncTool` supports three modes, namely `HMS`, `HIVEQL`, `JDBC`, to connect to Hive metastore server. 
+These modes are just three different ways of executing DDL against Hive.
+
+> Note: All these modes assume that hive metastore has been configured and the corresponding properties set in 
+> hive-site.xml configuration file. Additionally, if you're using spark-shell/spark-sql to sync Hudi table to Hive then 
+> the hive-site.xml file also needs to be placed under `<SPARK_HOME>/conf` directory.
+
+### HMS
+
+HMS mode uses the hive metastore client to sync Hudi table using thrift APIs directly.
+To use this mode, pass `--sync-mode=hms` to `run_sync_tool` and set `--use-jdbc=false`. 
+Additionally, if you are using remote metastore, then `hive.metastore.uris` need to be set in hive-site.xml configuration file.
+Otherwise, the tool assumes that metastore is running locally on port 9083 by default. 
+Support for HMS mode with Spark datasource will be [enabled soon](https://issues.apache.org/jira/browse/HUDI-2491).
+
+### HIVEQL
+
+HQL is Hive's own SQL dialect. 
+This mode simply uses the Hive QL's [driver](https://github.com/apache/hive/blob/master/ql/src/java/org/apache/hadoop/hive/ql/Driver.java) to execute DDL as HQL command.
+To use this mode, pass `--sync-mode=hiveql` to `run_sync_tool` and set `--use-jdbc=false`.
+
+### JDBC
+
+This mode uses the JDBC specification to connect to the hive metastore. 
+To use this mode, just pass the jdbc url to the hive server (`--use-jdbc` is true by default).
+```java
+@Parameter(names = {"--jdbc-url"}, description = "Hive jdbc connect url");
+```
 
 ## Flink Setup
 
