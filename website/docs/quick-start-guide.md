@@ -157,6 +157,31 @@ The [DataGenerator](https://github.com/apache/hudi/blob/master/hudi-spark-dataso
 can generate sample inserts and updates based on the the sample trip schema [here](https://github.com/apache/hudi/blob/master/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)
 :::
 
+## Spark SQL Type Support
+
+| Spark           |     Hudi     |     Notes     |
+|-----------------|--------------|---------------|
+| boolean         |  boolean     |               |
+| byte            |  int         |               |
+| short           |  int         |               |
+| integer         |  int         |               |
+| long            |  long        |               |
+| date            |  date        |               |
+| timestamp       |  timestamp   |               |
+| float           |  float       |               |
+| double          |  double      |               |
+| string          |  string      |               |
+| decimal         |  decimal     |               |
+| binary          |  bytes       |               |
+| array           |  array       |               |
+| map             |  map         |               |
+| struct          |  struct      |               |
+| char            |              | not supported |
+| varchar         |              | not supported |
+| numeric         |              | not supported |
+| null            |              | not supported |
+| object          |              | not supported |
+
 ## Create Table
 
 <Tabs
