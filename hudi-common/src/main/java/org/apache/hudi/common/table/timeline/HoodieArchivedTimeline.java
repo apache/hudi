@@ -71,6 +71,7 @@ import java.util.stream.Collectors;
  * This class can be serialized and de-serialized and on de-serialization the FileSystem is re-initialized.
  */
 public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
+  public static final String MERGE_ARCHIVE_PLAN_NAME = "mergeArchivePlan";
   private static final Pattern ARCHIVE_FILE_PATTERN =
       Pattern.compile("^\\.commits_\\.archive\\.([0-9]+).*");
 
@@ -79,7 +80,6 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   private static final String ACTION_STATE = "actionState";
   private HoodieTableMetaClient metaClient;
   private Map<String, byte[]> readCommits = new HashMap<>();
-  public static final String MERGE_ARCHIVE_PLAN_NAME = "mergeArchivePlan";
 
   private static final Logger LOG = LogManager.getLogger(HoodieArchivedTimeline.class);
 
