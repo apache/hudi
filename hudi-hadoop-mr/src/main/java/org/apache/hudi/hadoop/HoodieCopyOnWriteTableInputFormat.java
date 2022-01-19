@@ -265,7 +265,7 @@ public class HoodieCopyOnWriteTableInputFormat extends FileInputFormat<NullWrita
               engineContext,
               tableMetaClient,
               props,
-              HoodieTableQueryType.QUERY_TYPE_SNAPSHOT,
+              HoodieTableQueryType.SNAPSHOT,
               partitionPaths,
               queryCommitInstant,
               shouldIncludePendingCommits);
