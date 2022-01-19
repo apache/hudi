@@ -253,6 +253,12 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
 
     // check instant number
     assertEquals(16 * 3, archivedTimeLine1.countInstants() + rawActiveTimeline1.countInstants());
+
+    // if there are damaged archive files and damaged plan, hoodie need throw ioe while loading archived timeline.
+    Path damagedFile = new Path(metaClient.getArchivePath(), ".commits_.archive.300_1-0-1");
+    FileIOUtils.createFileInPath(metaClient.getFs(), damagedFile, Option.of(s.getBytes()));
+
+    assertThrows(HoodieException.class, () -> metaClient.getArchivedTimeline().reload());
   }
 
   @ParameterizedTest
@@ -276,15 +282,16 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
 
     archiveLog.buildArchiveMergePlan(candidateFiles, new Path(metaClient.getArchivePath(), HoodieArchivedTimeline.MERGE_ARCHIVE_PLAN_NAME), ".commits_.archive.3_1-0-1");
     archiveLog.mergeArchiveFiles(Arrays.stream(fsStatuses).collect(Collectors.toList()));
-    archiveLog.reOpenWriter();
+    HoodieLogFormat.Writer writer = archiveLog.reOpenWriter();
 
     // check loading archived and active timeline success
     HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
     HoodieArchivedTimeline archivedTimeLine = metaClient.getArchivedTimeline().reload();
     assertEquals(7 * 3, rawActiveTimeline.countInstants() + archivedTimeLine.reload().countInstants());
 
-    // delete merged archive files to simulate merge failed.
-    metaClient.getFs().delete(new Path(metaClient.getArchivePath(), ".commits_.archive.3_1-0-1"));
+    String s = "Dummy Content";
+    // stain the current merged archive file.
+    FileIOUtils.createFileInPath(metaClient.getFs(), writer.getLogFile().getPath(), Option.of(s.getBytes()));
 
     // do another archive actions with merge small archive files.
     for (int i = 1; i < 10; i++) {
@@ -293,10 +300,18 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     }
 
     // check result.
+    // we need to load archived timeline successfully and ignore the parsing damage merged archive files exception.
     HoodieActiveTimeline rawActiveTimeline1 = new HoodieActiveTimeline(metaClient, false);
     HoodieArchivedTimeline archivedTimeLine1 = metaClient.getArchivedTimeline().reload();
 
     assertEquals(16 * 3, archivedTimeLine1.countInstants() + rawActiveTimeline1.countInstants());
+
+    // if there are a damaged merged archive files and other common damaged archive file.
+    // hoodie need throw ioe while loading archived timeline because of parsing the damaged archive file.
+    Path damagedFile = new Path(metaClient.getArchivePath(), ".commits_.archive.300_1-0-1");
+    FileIOUtils.createFileInPath(metaClient.getFs(), damagedFile, Option.of(s.getBytes()));
+
+    assertThrows(HoodieException.class, () -> metaClient.getArchivedTimeline().reload());
   }
 
   @ParameterizedTest
