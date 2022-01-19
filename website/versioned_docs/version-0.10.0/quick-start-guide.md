@@ -158,6 +158,7 @@ can generate sample inserts and updates based on the the sample trip schema [her
 :::
 
 ## Spark SQL Type Support
+
 | Spark           |     Hudi     |     Notes     |
 |-----------------|--------------|---------------|
 | boolean         |  boolean     |               |
