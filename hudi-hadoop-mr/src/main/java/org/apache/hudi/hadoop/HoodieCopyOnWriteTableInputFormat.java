@@ -307,7 +307,7 @@ public class HoodieCopyOnWriteTableInputFormat extends FileInputFormat<NullWrita
       );
     }
 
-    // TODO cleanup
+    // TODO(HUDI-3280) cleanup
     validate(targetFiles, listStatusForSnapshotModeLegacy(job, tableMetaClientMap, snapshotPaths));
 
     return targetFiles;
