@@ -299,18 +299,18 @@ public class TestDataSourceUtils {
     StructType structType = StructType$.MODULE$.apply(structFields);
     // create write options
     Map<String, String> options = new HashMap<>();
-    options.put("hoodie.parquet.writeLegacyFormat.enabled", String.valueOf(defaultWriteValue));
+    options.put("hoodie.parquet.writelegacyformat.enabled", String.valueOf(defaultWriteValue));
 
     // start test
     mayBeOverwriteParquetWriteLegacyFormatProp(options, structType);
 
     // check result
-    boolean res = Boolean.parseBoolean(options.get("hoodie.parquet.writeLegacyFormat.enabled"));
+    boolean res = Boolean.parseBoolean(options.get("hoodie.parquet.writelegacyformat.enabled"));
     if (smallDecimal) {
-      // should auto modify "hoodie.parquet.writeLegacyFormat.enabled" = "true".
+      // should auto modify "hoodie.parquet.writelegacyformat.enabled" = "true".
       assertEquals(true, res);
     } else {
-      // should not modify the value of "hoodie.parquet.writeLegacyFormat.enabled".
+      // should not modify the value of "hoodie.parquet.writelegacyformat.enabled".
       assertEquals(defaultWriteValue, res);
     }
   }

@@ -190,6 +190,9 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     Path basePath = new Path("/test/apache");
     Path partitionPath = new Path("/test/apache/hudi/sub");
     assertEquals("hudi/sub", FSUtils.getRelativePartitionPath(basePath, partitionPath));
+
+    Path nonPartitionPath = new Path("/test/something/else");
+    assertThrows(IllegalArgumentException.class, () -> FSUtils.getRelativePartitionPath(basePath, nonPartitionPath));
   }
 
   @Test

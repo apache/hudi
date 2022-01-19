@@ -30,6 +30,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile}
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
@@ -198,9 +199,9 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
 
       // If convert success to catalyst expression, use the partition prune
       val fileSlices = if (partitionFilterExpression.isDefined) {
-        hoodieFileIndex.listFileSlices(Seq(partitionFilterExpression.get), Seq.empty)
+        hoodieFileIndex.listFileSlices(Seq(partitionFilterExpression.get))
       } else {
-        hoodieFileIndex.listFileSlices(Seq.empty, Seq.empty)
+        hoodieFileIndex.listFileSlices(Seq.empty[Expression])
       }
 
       if (fileSlices.isEmpty) {
@@ -223,6 +224,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
           val logPaths = fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala
             .map(logFile => MergeOnReadSnapshotRelation.getFilePath(logFile.getPath)).toList
           val logPathsOptional = if (logPaths.isEmpty) Option.empty else Option(logPaths)
+
           HoodieMergeOnReadFileSplit(partitionedFile, logPathsOptional, queryInstant, metaClient.getBasePath,
             maxCompactionMemoryInBytes, mergeType)
         }).toList

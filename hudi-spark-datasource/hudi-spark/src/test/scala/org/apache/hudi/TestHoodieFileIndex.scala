@@ -273,7 +273,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     val fileIndex = HoodieFileIndex(spark, metaClient, None,
       queryOpts ++ Map(HoodieMetadataConfig.ENABLE.key -> useMetaFileList.toString))
     // test if table is partitioned on nested columns, getAllQueryPartitionPaths does not break
-    assert(fileIndex.getAllQueryPartitionPaths.get(0).partitionPath.equals("c"))
+    assert(fileIndex.getAllQueryPartitionPaths.get(0).path.equals("c"))
   }
 
   private def attribute(partition: String): AttributeReference = {
