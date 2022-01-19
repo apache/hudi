@@ -1082,6 +1082,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieCompactionConfig.MIN_COMMITS_TO_KEEP);
   }
 
+  public int getArchiveMergeFilesBatchSize() {
+    return getInt(HoodieCompactionConfig.ARCHIVE_MERGE_FILES_BATCH_SIZE);
+  }
+
   public int getParquetSmallFileLimit() {
     return getInt(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT);
   }
@@ -1108,6 +1112,14 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean isAutoClean() {
     return getBoolean(HoodieCompactionConfig.AUTO_CLEAN);
+  }
+
+  public boolean getArchiveMergeEnable() {
+    return getBoolean(HoodieCompactionConfig.ARCHIVE_MERGE_ENABLE);
+  }
+
+  public long getArchiveMergeSmallFileLimitBytes() {
+    return getLong(HoodieCompactionConfig.ARCHIVE_MERGE_SMALL_FILE_LIMIT_BYTES);
   }
 
   public boolean isAutoArchive() {
