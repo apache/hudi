@@ -20,7 +20,7 @@ package org.apache.hudi.hadoop;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.HoodieTableFileIndexBase;
+import org.apache.hudi.BaseHoodieTableFileIndex;
 import org.apache.hudi.FileStatusCacheTrait;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -35,9 +35,9 @@ import scala.collection.JavaConverters;
 import java.util.List;
 
 /**
- * Implementation of {@link HoodieTableFileIndexBase} for Hive-based query engines
+ * Implementation of {@link BaseHoodieTableFileIndex} for Hive-based query engines
  */
-public class HiveHoodieTableFileIndex extends HoodieTableFileIndexBase {
+public class HiveHoodieTableFileIndex extends BaseHoodieTableFileIndex {
 
   public static final Logger LOG = LoggerFactory.getLogger(HiveHoodieTableFileIndex.class);
 

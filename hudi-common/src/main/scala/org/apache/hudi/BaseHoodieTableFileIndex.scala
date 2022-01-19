@@ -51,7 +51,7 @@ import scala.language.implicitConversions
  * @param shouldIncludePendingCommits flags whether file-index should exclude any pending operations
  * @param fileStatusCache transient cache of fetched [[FileStatus]]es
  */
-abstract class HoodieTableFileIndexBase(engineContext: HoodieEngineContext,
+abstract class BaseHoodieTableFileIndex(engineContext: HoodieEngineContext,
                                         metaClient: HoodieTableMetaClient,
                                         configProperties: TypedProperties,
                                         queryType: HoodieTableQueryType,
@@ -134,7 +134,7 @@ abstract class HoodieTableFileIndexBase(engineContext: HoodieEngineContext,
     }
 
     (tableType, queryType) match {
-      case (MERGE_ON_READ, HoodieTableQueryType.QUERY_TYPE_SNAPSHOT) =>
+      case (MERGE_ON_READ, HoodieTableQueryType.SNAPSHOT) =>
         // Fetch and store latest base and log files, and their sizes
         cachedAllInputFileSlices = partitionFiles.map(p => {
           val latestSlices = if (queryInstant.isDefined) {
