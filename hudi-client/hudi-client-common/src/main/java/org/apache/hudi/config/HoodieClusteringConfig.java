@@ -213,7 +213,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
    */
   public static final ConfigProperty<String> LAYOUT_OPTIMIZE_STRATEGY = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "strategy")
-      .defaultValue("z-order")
+      .defaultValue("linear")
       .sinceVersion("0.10.0")
       .withDocumentation("Determines ordering strategy used in records layout optimization. "
           + "Currently supported strategies are \"linear\", \"z-order\" and \"hilbert\" values are supported.");
