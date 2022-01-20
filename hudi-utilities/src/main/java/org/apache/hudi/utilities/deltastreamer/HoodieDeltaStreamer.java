@@ -363,6 +363,9 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--run-bootstrap"}, description = "Run bootstrap if bootstrap index is not found")
     public Boolean runBootstrap = false;
 
+    @Parameter(names = {"--bootstrap-overwrite"}, description = "Overwrite existing target table, default false")
+    public Boolean bootstrapOverwrite = false;
+
     @Parameter(names = {"--bootstrap-index-class"}, description = "subclass of BootstrapIndex")
     public String bootstrapIndexClass = HFileBootstrapIndex.class.getName();
 
