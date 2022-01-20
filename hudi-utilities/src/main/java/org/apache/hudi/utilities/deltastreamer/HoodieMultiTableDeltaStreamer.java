@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import com.beust.jcommander.Parameter;
+
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.fs.FSUtils;
@@ -61,9 +62,14 @@ public class HoodieMultiTableDeltaStreamer {
   private static Logger logger = LogManager.getLogger(HoodieMultiTableDeltaStreamer.class);
 
   private List<TableExecutionContext> tableExecutionContexts;
+
   private transient JavaSparkContext jssc;
+
   private Set<String> successTables;
+
   private Set<String> failedTables;
+
+  public boolean isFetchFromMultiSources;
 
   public HoodieMultiTableDeltaStreamer(Config config, JavaSparkContext jssc) throws IOException {
     this.tableExecutionContexts = new ArrayList<>();
@@ -77,8 +83,10 @@ public class HoodieMultiTableDeltaStreamer {
     FileSystem fs = FSUtils.getFs(commonPropsFile, jssc.hadoopConfiguration());
     configFolder = configFolder.charAt(configFolder.length() - 1) == '/' ? configFolder.substring(0, configFolder.length() - 1) : configFolder;
     checkIfPropsFileAndConfigFolderExist(commonPropsFile, configFolder, fs);
-    TypedProperties commonProperties = UtilHelpers.readConfig(fs.getConf(), new Path(commonPropsFile), new ArrayList<String>()).getProps();
-    //get the tables to be ingested and their corresponding config files from this properties instance
+    TypedProperties commonProperties = UtilHelpers.readConfig(fs.getConf(), new Path(commonPropsFile), new ArrayList<>()).getProps();
+    // Parameter SOURCES_TO_BE_BOUND indicates that multiple sources update the same target.
+    this.isFetchFromMultiSources = StringUtils.isNullOrEmpty(commonProperties.getProperty(Constants.SOURCES_TO_FETCH_FROM));
+    // get the tables to be ingested and their corresponding config files from this properties instance
     populateTableExecutionContextList(commonProperties, configFolder, fs, config);
   }
 
@@ -104,41 +112,103 @@ public class HoodieMultiTableDeltaStreamer {
     }
   }
 
-  //commonProps are passed as parameter which contain table to config file mapping
+  // commonProps are passed as parameter which contain table to config file mapping
   private void populateTableExecutionContextList(TypedProperties properties, String configFolder, FileSystem fs, Config config) throws IOException {
-    List<String> tablesToBeIngested = getTablesToBeIngested(properties);
-    logger.info("tables to be ingested via MultiTableDeltaStreamer : " + tablesToBeIngested);
-    TableExecutionContext executionContext;
-    for (String table : tablesToBeIngested) {
-      String[] tableWithDatabase = table.split("\\.");
-      String database = tableWithDatabase.length > 1 ? tableWithDatabase[0] : "default";
-      String currentTable = tableWithDatabase.length > 1 ? tableWithDatabase[1] : table;
-      String configProp = Constants.INGESTION_PREFIX + database + Constants.DELIMITER + currentTable + Constants.INGESTION_CONFIG_SUFFIX;
-      String configFilePath = properties.getString(configProp, Helpers.getDefaultConfigFilePath(configFolder, database, currentTable));
-      checkIfTableConfigFileExists(configFolder, fs, configFilePath);
-      TypedProperties tableProperties = UtilHelpers.readConfig(fs.getConf(), new Path(configFilePath), new ArrayList<String>()).getProps();
-      properties.forEach((k, v) -> {
-        if (tableProperties.get(k) == null) {
-          tableProperties.setProperty(k.toString(), v.toString());
-        }
-      });
-      final HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
-      //copy all the values from config to cfg
-      String targetBasePath = resetTarget(config, database, currentTable);
-      Helpers.deepCopyConfigs(config, cfg);
-      String overriddenTargetBasePath = tableProperties.getString(Constants.TARGET_BASE_PATH_PROP, "");
-      cfg.targetBasePath = StringUtils.isNullOrEmpty(overriddenTargetBasePath) ? targetBasePath : overriddenTargetBasePath;
-      if (cfg.enableMetaSync && StringUtils.isNullOrEmpty(tableProperties.getString(DataSourceWriteOptions.HIVE_TABLE().key(), ""))) {
-        throw new HoodieException("Meta sync table field not provided!");
+    if (isFetchFromMultiSources) {
+      // populate the table execution context by traversing source tables
+      List<String> sourcesToFetchFrom = getSourcesToFetchFrom(properties);
+      logger.info("Source tables to be bound via MultiTableDeltaStreamer : " + sourcesToFetchFrom);
+      List<String> tableToBeIngested = getTablesToBeIngested(properties);
+      String[] targetTableWithDataBase = tableToBeIngested.size() > 0 ? tableToBeIngested.get(0).split("\\.") : new String[] {"dummyTable"};
+      String targetDataBase = targetTableWithDataBase.length > 1 ? targetTableWithDataBase[0] : "default";
+      String targetTable = targetTableWithDataBase.length > 1 ? targetTableWithDataBase[1] : targetTableWithDataBase[0];
+      String targetBasePath = resetTarget(config, targetDataBase, targetTable);
+      for (String source : sourcesToFetchFrom) {
+        getTableExecutionContext(properties, configFolder, fs, config, targetBasePath, source, Constants.SOURCE_PREFIX);
       }
-      populateSchemaProviderProps(cfg, tableProperties);
-      executionContext = new TableExecutionContext();
-      executionContext.setProperties(tableProperties);
-      executionContext.setConfig(cfg);
-      executionContext.setDatabase(database);
-      executionContext.setTableName(currentTable);
-      this.tableExecutionContexts.add(executionContext);
+    } else {
+      // populate the table execution context by traversing target tables
+      List<String> tablesToBeIngested = getTablesToBeIngested(properties);
+      logger.info("Tables to be ingested via MultiTableDeltaStreamer : " + tablesToBeIngested);
+      for (String sink : tablesToBeIngested) {
+        getTableExecutionContext(properties, configFolder, fs, config, null, sink, Constants.INGESTION_PREFIX);
+      }
     }
+  }
+
+  private void getTableExecutionContext(TypedProperties properties, String configFolder, FileSystem fs, Config config,
+      String targetBasePath, String source, String sourcePrefix) throws IOException {
+    String[] tableWithDatabase = source.split("\\.");
+    String currentSourceDataBase = tableWithDatabase.length > 1 ? tableWithDatabase[0] : "default";
+    String currentSourceTable = tableWithDatabase.length > 1 ? tableWithDatabase[1] : source;
+    String configProp = sourcePrefix + currentSourceDataBase + Constants.DELIMITER + currentSourceTable
+      + Constants.INGESTION_CONFIG_SUFFIX;
+    TableExecutionContext executionContext = populateTableExecutionContext(properties, configFolder, fs, config,
+      configProp, currentSourceDataBase, currentSourceTable, targetBasePath);
+    this.tableExecutionContexts.add(executionContext);
+  }
+
+  private TableExecutionContext populateTableExecutionContext(TypedProperties properties, String configFolder,
+      FileSystem fs, Config config, String configProp, String database, String currentTable, String targetBasePath) throws IOException {
+    // copy all common properties to current table properties
+    TypedProperties currentTableProperties = getCurrentTableProperties(properties, configFolder, fs, configProp, database,
+        currentTable);
+
+    // copy all the values from config to cfg
+    final HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
+    Helpers.deepCopyConfigs(config, cfg);
+
+    // calculate the value of targetBasePath which is a property of cfg
+    calculateTargetBasePath(config, database, currentTable, targetBasePath, currentTableProperties, cfg);
+
+    if (cfg.enableHiveSync && StringUtils.isNullOrEmpty(currentTableProperties.getString(DataSourceWriteOptions.HIVE_TABLE().key()))) {
+      throw new HoodieException("Hive sync table field not provided!");
+    }
+
+    populateSchemaProviderProps(cfg, currentTableProperties);
+    TableExecutionContext executionContext = new TableExecutionContext();
+    executionContext.setProperties(currentTableProperties);
+    executionContext.setConfig(cfg);
+    executionContext.setDatabase(database);
+    executionContext.setTableName(currentTable);
+    return executionContext;
+  }
+
+  private TypedProperties getCurrentTableProperties(TypedProperties properties, String configFolder, FileSystem fs,
+      String configProp, String database, String currentTable) throws IOException {
+
+    String configFilePath = properties.getString(configProp, Helpers.getDefaultConfigFilePath(configFolder, database, currentTable));
+    checkIfTableConfigFileExists(configFolder, fs, configFilePath);
+
+    TypedProperties tableProperties = UtilHelpers.readConfig(fs.getConf(), new Path(configFilePath), new ArrayList<>()).getProps();
+    properties.forEach((k, v) -> {
+      if (tableProperties.get(k) == null) {
+        tableProperties.setProperty(k.toString(), v.toString());
+      }
+    });
+
+    return tableProperties;
+  }
+
+  private void calculateTargetBasePath(Config config, String database, String currentTable, String targetBasePath,
+      TypedProperties currentTableProperties, HoodieDeltaStreamer.Config cfg) {
+
+    String overriddenTargetBasePath = currentTableProperties.getString(Constants.TARGET_BASE_PATH_PROP, "");
+
+    if (StringUtils.isNullOrEmpty(targetBasePath)) {
+      targetBasePath = resetTarget(config, database, currentTable);
+    }
+
+    cfg.targetBasePath = StringUtils.isNullOrEmpty(overriddenTargetBasePath)
+      ? targetBasePath
+      : overriddenTargetBasePath;
+  }
+
+  private List<String> getSourcesToFetchFrom(TypedProperties properties) {
+    String combinedSourcesString = properties.getString(Constants.SOURCES_TO_FETCH_FROM, null);
+    return StringUtils.isNullOrEmpty(combinedSourcesString)
+      ? new ArrayList<>()
+      : Arrays.asList(combinedSourcesString.split(Constants.COMMA_SEPARATOR));
   }
 
   private List<String> getTablesToBeIngested(TypedProperties properties) {
@@ -166,6 +236,7 @@ public class HoodieMultiTableDeltaStreamer {
       typedProperties.setProperty(Constants.SOURCE_SCHEMA_REGISTRY_URL_PROP, schemaRegistryBaseUrl + typedProperties.getString(Constants.KAFKA_TOPIC_PROP) + sourceSchemaRegistrySuffix);
       typedProperties.setProperty(Constants.TARGET_SCHEMA_REGISTRY_URL_PROP, schemaRegistryBaseUrl + typedProperties.getString(Constants.KAFKA_TOPIC_PROP) + targetSchemaRegistrySuffix);
     }
+
   }
 
   public static class Helpers {
@@ -208,11 +279,9 @@ public class HoodieMultiTableDeltaStreamer {
 
   public static void main(String[] args) throws IOException {
     final Config config = new Config();
-
     if (config.enableHiveSync) {
       logger.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");
     }
-
     JCommander cmd = new JCommander(config, null, args);
     if (config.help || args.length == 0) {
       cmd.usage();
@@ -250,7 +319,7 @@ public class HoodieMultiTableDeltaStreamer {
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
         + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
-            splitter = IdentitySplitter.class)
+        splitter = IdentitySplitter.class)
     public List<String> configs = new ArrayList<>();
 
     @Parameter(names = {"--source-class"},
@@ -308,7 +377,7 @@ public class HoodieMultiTableDeltaStreamer {
 
     @Parameter(names = {"--max-pending-clustering"},
         description = "Maximum number of outstanding inflight/requested clustering. Delta Sync will not happen unless"
-            + "outstanding clustering is less than this number")
+        + "outstanding clustering is less than this number")
     public Integer maxPendingClustering = 5;
 
     @Parameter(names = {"--continuous"}, description = "Delta Streamer runs in continuous mode running"
@@ -355,6 +424,12 @@ public class HoodieMultiTableDeltaStreamer {
     @Parameter(names = {"--checkpoint"}, description = "Resume Delta Streamer from this checkpoint.")
     public String checkpoint = null;
 
+    /**
+     * Ingestion from multiple sources to single target.
+     */
+    @Parameter(names = {"--multi-to-one"}, description = "Ingestion from multiple sources to single target.")
+    public Boolean multiSourcesToSingleTarget = false;
+
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
   }
@@ -379,16 +454,35 @@ public class HoodieMultiTableDeltaStreamer {
    * Creates actual HoodieDeltaStreamer objects for every table/topic and does incremental sync.
    */
   public void sync() {
-    for (TableExecutionContext context : tableExecutionContexts) {
-      try {
-        new HoodieDeltaStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties())).sync();
-        successTables.add(Helpers.getTableWithDatabase(context));
-      } catch (Exception e) {
-        logger.error("error while running MultiTableDeltaStreamer for table: " + context.getTableName(), e);
-        failedTables.add(Helpers.getTableWithDatabase(context));
+    if (isFetchFromMultiSources) {
+      while (true) {
+        for (TableExecutionContext context : tableExecutionContexts) {
+          try {
+            context.getConfig().continuousMode = false;
+            new HoodieDeltaStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties())).sync();
+            successTables.add(Helpers.getTableWithDatabase(context));
+          } catch (Exception e) {
+            logger.error("error while running MultiTableDeltaStreamer for table: " + context.getTableName(), e);
+            failedTables.add(Helpers.getTableWithDatabase(context));
+          }
+        }
+        if (!failedTables.isEmpty()) {
+          logger.info("Ingestion failed for topics: " + failedTables);
+          break;
+        }
+        successTables.clear();
+      }
+    } else {
+      for (TableExecutionContext context : tableExecutionContexts) {
+        try {
+          new HoodieDeltaStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties())).sync();
+          successTables.add(Helpers.getTableWithDatabase(context));
+        } catch (Exception e) {
+          logger.error("error while running MultiTableDeltaStreamer for table: " + context.getTableName(), e);
+          failedTables.add(Helpers.getTableWithDatabase(context));
+        }
       }
     }
-
     logger.info("Ingestion was successful for topics: " + successTables);
     if (!failedTables.isEmpty()) {
       logger.info("Ingestion failed for topics: " + failedTables);
@@ -396,6 +490,11 @@ public class HoodieMultiTableDeltaStreamer {
   }
 
   public static class Constants {
+    // When there are multiple sources, you can use this configuration item to set an independent checkpoint for the single source.
+    public static final String SOURCE_CHECKPOINT = "hoodie.deltastreamer.current.source.checkpoint";
+    // If there are multiple sources, you can use this configuration item to set an alias for the source to distinguish the source.
+    // In addition, the alias is used as a suffix to distinguish the CHECKPOINT_KEY and CHECKPOINT_RESET_KEY of each source.
+    public static final String SOURCE_NAME = "hoodie.deltastreamer.current.source.name";
     public static final String KAFKA_TOPIC_PROP = "hoodie.deltastreamer.source.kafka.topic";
     private static final String SOURCE_SCHEMA_REGISTRY_URL_PROP = "hoodie.deltastreamer.schemaprovider.registry.url";
     private static final String TARGET_SCHEMA_REGISTRY_URL_PROP = "hoodie.deltastreamer.schemaprovider.registry.targetUrl";
@@ -405,15 +504,19 @@ public class HoodieMultiTableDeltaStreamer {
     private static final String SCHEMA_REGISTRY_SOURCE_URL_SUFFIX = "hoodie.deltastreamer.schemaprovider.registry.sourceUrlSuffix";
     private static final String SCHEMA_REGISTRY_TARGET_URL_SUFFIX = "hoodie.deltastreamer.schemaprovider.registry.targetUrlSuffix";
     private static final String TABLES_TO_BE_INGESTED_PROP = "hoodie.deltastreamer.ingestion.tablesToBeIngested";
+    // This configuration item specifies the database name and table name of the source. The format is "database.table".
+    // It is recommended that table name be the same as the alias of the source. If there are multiple sources, separate them with commas.
+    public static final String SOURCES_TO_FETCH_FROM = "hoodie.deltastreamer.source.sourcesToFetchFrom";
+    private static final String SOURCE_PREFIX = "hoodie.deltastreamer.source.";
     private static final String INGESTION_PREFIX = "hoodie.deltastreamer.ingestion.";
     private static final String INGESTION_CONFIG_SUFFIX = ".configFile";
     private static final String DEFAULT_CONFIG_FILE_NAME_SUFFIX = "_config.properties";
     private static final String TARGET_BASE_PATH_PROP = "hoodie.deltastreamer.ingestion.targetBasePath";
     private static final String LOCAL_SPARK_MASTER = "local[2]";
-    private static final String FILE_DELIMITER = "/";
-    private static final String DELIMITER = ".";
+    public static final String FILE_DELIMITER = "/";
+    public static final String DELIMITER = ".";
     private static final String UNDERSCORE = "_";
-    private static final String COMMA_SEPARATOR = ",";
+    public static final String COMMA_SEPARATOR = ",";
   }
 
   public Set<String> getSuccessTables() {

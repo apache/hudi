@@ -64,6 +64,7 @@ import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackCo
 import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallback;
 import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Config;
+import org.apache.hudi.utilities.deltastreamer.HoodieMultiTableDeltaStreamer.Constants;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -329,7 +330,14 @@ public class DeltaSync implements Serializable {
     // Retrieve the previous round checkpoints, if any
     Option<String> resumeCheckpointStr = Option.empty();
     if (commitTimelineOpt.isPresent()) {
-      resumeCheckpointStr = getCheckpointToResume(commitTimelineOpt);
+      if (!StringUtils.isNullOrEmpty(props.getProperty(Constants.SOURCES_TO_FETCH_FROM))) {
+        resumeCheckpointStr = getCheckpointToResume(commitTimelineOpt,
+          props.getProperty(Constants.SOURCE_CHECKPOINT),
+          CHECKPOINT_KEY + Constants.DELIMITER + props.getProperty(Constants.SOURCE_NAME),
+          CHECKPOINT_RESET_KEY + Constants.DELIMITER + props.getProperty(Constants.SOURCE_NAME));
+      } else {
+        resumeCheckpointStr = getCheckpointToResume(commitTimelineOpt, cfg.checkpoint, CHECKPOINT_KEY, CHECKPOINT_RESET_KEY);
+      }
     } else {
       // initialize the table for the first time.
       String partitionColumns = HoodieSparkUtils.getPartitionColumns(keyGenerator, props);
@@ -440,20 +448,20 @@ public class DeltaSync implements Serializable {
    * @return the checkpoint to resume from if applicable.
    * @throws IOException
    */
-  private Option<String> getCheckpointToResume(Option<HoodieTimeline> commitTimelineOpt) throws IOException {
+  private Option<String> getCheckpointToResume(Option<HoodieTimeline> commitTimelineOpt, String checkPoint, String checkPointKey, String checkPointResetKey) throws IOException {
     Option<String> resumeCheckpointStr = Option.empty();
     Option<HoodieInstant> lastCommit = commitTimelineOpt.get().lastInstant();
     if (lastCommit.isPresent()) {
       // if previous commit metadata did not have the checkpoint key, try traversing previous commits until we find one.
-      Option<HoodieCommitMetadata> commitMetadataOption = getLatestCommitMetadataWithValidCheckpointInfo(commitTimelineOpt.get());
+      Option<HoodieCommitMetadata> commitMetadataOption = getLatestCommitMetadataWithValidCheckpointInfo(commitTimelineOpt.get(), checkPointKey, checkPointResetKey);
       if (commitMetadataOption.isPresent()) {
         HoodieCommitMetadata commitMetadata = commitMetadataOption.get();
-        if (cfg.checkpoint != null && (StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))
-            || !cfg.checkpoint.equals(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY)))) {
-          resumeCheckpointStr = Option.of(cfg.checkpoint);
-        } else if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
+        if (checkPoint != null && (StringUtils.isNullOrEmpty(commitMetadata.getMetadata(checkPointResetKey))
+            || !checkPoint.equals(commitMetadata.getMetadata(checkPointResetKey)))) {
+          resumeCheckpointStr = Option.of(checkPoint);
+        } else if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(checkPointKey))) {
           //if previous checkpoint is an empty string, skip resume use Option.empty()
-          resumeCheckpointStr = Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
+          resumeCheckpointStr = Option.of(commitMetadata.getMetadata(checkPointKey));
         } else if (HoodieTimeline.compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
             HoodieTimeline.LESSER_THAN, lastCommit.get().getTimestamp())) {
           throw new HoodieDeltaStreamerException(
@@ -463,22 +471,22 @@ public class DeltaSync implements Serializable {
                   + commitMetadata.toJsonString());
         }
         // KAFKA_CHECKPOINT_TYPE will be honored only for first batch.
-        if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
+        if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(checkPointResetKey))) {
           props.remove(KafkaOffsetGen.Config.KAFKA_CHECKPOINT_TYPE.key());
         }
-      } else if (cfg.checkpoint != null) { // getLatestCommitMetadataWithValidCheckpointInfo(commitTimelineOpt.get()) will never return a commit metadata w/o any checkpoint key set.
-        resumeCheckpointStr = Option.of(cfg.checkpoint);
+      } else if (checkPoint != null) { // getLatestCommitMetadataWithValidCheckpointInfo(commitTimelineOpt.get()) will never return a commit metadata w/o any checkpoint key set.
+        resumeCheckpointStr = Option.of(checkPoint);
       }
     }
     return resumeCheckpointStr;
   }
 
-  protected Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
+  protected Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline, String checkPointKey, String checkPointResetKey) throws IOException {
     return (Option<HoodieCommitMetadata>) timeline.getReverseOrderedInstants().map(instant -> {
       try {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
             .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-        if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY)) || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
+        if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(checkPointKey)) || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(checkPointResetKey))) {
           return Option.of(commitMetadata);
         } else {
           return Option.empty();
@@ -541,9 +549,18 @@ public class DeltaSync implements Serializable {
     long metaSyncTimeMs = 0;
     if (!hasErrors || cfg.commitOnErrors) {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
-      checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);
-      if (cfg.checkpoint != null) {
-        checkpointCommitMetadata.put(CHECKPOINT_RESET_KEY, cfg.checkpoint);
+      // when sources are multiple, the key and reset key of checkpoint of each source are different.
+      if (!StringUtils.isNullOrEmpty(props.getProperty(Constants.SOURCES_TO_FETCH_FROM))) {
+        checkpointCommitMetadata.put(CHECKPOINT_KEY + Constants.DELIMITER + props.getProperty(Constants.SOURCE_NAME), checkpointStr);
+        if (props.getProperty(Constants.SOURCE_CHECKPOINT) != null) {
+          checkpointCommitMetadata.put(CHECKPOINT_RESET_KEY + Constants.DELIMITER + props.getProperty(Constants.SOURCE_NAME),
+              props.getProperty(Constants.SOURCE_CHECKPOINT));
+        }
+      } else {
+        checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);
+        if (cfg.checkpoint != null) {
+          checkpointCommitMetadata.put(CHECKPOINT_RESET_KEY, cfg.checkpoint);
+        }
       }
 
       if (hasErrors) {

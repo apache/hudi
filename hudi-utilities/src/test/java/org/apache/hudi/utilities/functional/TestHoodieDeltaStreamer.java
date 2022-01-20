@@ -120,6 +120,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
+import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_RESET_KEY;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -1759,19 +1760,19 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     addCommitToTimeline(metaClient, extraMetadata);
     metaClient.reloadActiveTimeline();
     assertEquals(testDeltaSync.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
-        .getCommitsTimeline()).get().getMetadata(CHECKPOINT_KEY), "abc");
+        .getCommitsTimeline(), CHECKPOINT_KEY, CHECKPOINT_RESET_KEY).get().getMetadata(CHECKPOINT_KEY), "abc");
 
     extraMetadata.put(HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY, "def");
     addCommitToTimeline(metaClient, extraMetadata);
     metaClient.reloadActiveTimeline();
     assertEquals(testDeltaSync.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
-        .getCommitsTimeline()).get().getMetadata(CHECKPOINT_KEY), "def");
+        .getCommitsTimeline(), CHECKPOINT_KEY, CHECKPOINT_RESET_KEY).get().getMetadata(CHECKPOINT_KEY), "def");
 
     // add a replace commit which does not have CEHCKPOINT_KEY. Deltastreamer should be able to go back and pick the right checkpoint.
     addReplaceCommitToTimeline(metaClient, Collections.emptyMap());
     metaClient.reloadActiveTimeline();
     assertEquals(testDeltaSync.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
-        .getCommitsTimeline()).get().getMetadata(CHECKPOINT_KEY), "def");
+        .getCommitsTimeline(), CHECKPOINT_KEY, CHECKPOINT_RESET_KEY).get().getMetadata(CHECKPOINT_KEY), "def");
   }
 
   class TestDeltaSync extends DeltaSync {
@@ -1782,8 +1783,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       super(cfg, sparkSession, schemaProvider, props, jssc, fs, conf, onInitializingHoodieWriteClient);
     }
 
-    protected Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
-      return super.getLatestCommitMetadataWithValidCheckpointInfo(timeline);
+    protected Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline, String checkPointKey, String checkPointResetKey) throws IOException {
+      return super.getLatestCommitMetadataWithValidCheckpointInfo(timeline, checkPointKey, checkPointResetKey);
     }
   }
 
