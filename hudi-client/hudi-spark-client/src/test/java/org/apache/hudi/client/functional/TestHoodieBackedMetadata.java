@@ -684,7 +684,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
               assertNull(record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
             }
 
-            final String key = String.valueOf(record.get(HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY));
+            final String key = String.valueOf(record.get(HoodieMetadataPayload.SCHEMA_FIELD_NAME_KEY));
             assertFalse(key.isEmpty());
             if (enableMetaFields) {
               assertTrue(key.equals(String.valueOf(record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD))));
@@ -764,7 +764,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       }
 
       final String keyInPayload = (String) ((GenericRecord) entry.getSecond())
-          .get(HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY);
+          .get(HoodieMetadataPayload.SCHEMA_FIELD_NAME_KEY);
       assertFalse(keyInPayload.isEmpty());
     });
   }
@@ -1805,8 +1805,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // RecordKey properties are needed for the metadata table records
     final Properties properties = new Properties();
-    properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY);
-    properties.put("hoodie.datasource.write.recordkey.field", HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY);
+    properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), HoodieMetadataPayload.SCHEMA_FIELD_NAME_KEY);
+    properties.put("hoodie.datasource.write.recordkey.field", HoodieMetadataPayload.SCHEMA_FIELD_NAME_KEY);
     builder.withProperties(properties);
 
     if (writeConfig.isMetricsOn()) {

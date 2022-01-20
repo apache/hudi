@@ -53,7 +53,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.metadata.HoodieMetadataPayload;
 
 public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileReader {
   private Path path;
@@ -64,8 +63,8 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   // Scanner used to read individual keys. This is cached to prevent the overhead of opening the scanner for each
   // key retrieval.
   private HFileScanner keyScanner;
-  private final String keyField = HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY;
 
+  public static final String KEY_FIELD_NAME = "key";
   public static final String KEY_SCHEMA = "schema";
   public static final String KEY_BLOOM_FILTER_META_BLOCK = "bloomFilter";
   public static final String KEY_BLOOM_FILTER_TYPE_CODE = "bloomFilterTypeCode";
@@ -154,7 +153,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   }
 
   public List<Pair<String, R>> readAllRecords(Schema writerSchema, Schema readerSchema) throws IOException {
-    final Option<Schema.Field> keySchemaField = Option.ofNullable(readerSchema.getField(keyField));
+    final Option<Schema.Field> keySchemaField = Option.ofNullable(readerSchema.getField(KEY_FIELD_NAME));
     List<Pair<String, R>> recordList = new LinkedList<>();
     try {
       final HFileScanner scanner = reader.getScanner(false, false);
@@ -199,7 +198,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   @Override
   public Iterator getRecordIterator(Schema readerSchema) throws IOException {
     final HFileScanner scanner = reader.getScanner(false, false);
-    final Option<Schema.Field> keySchemaField = Option.ofNullable(readerSchema.getField(keyField));
+    final Option<Schema.Field> keySchemaField = Option.ofNullable(readerSchema.getField(KEY_FIELD_NAME));
     ValidationUtils.checkState(keySchemaField != null);
     return new Iterator<R>() {
       private R next = null;
@@ -249,7 +248,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   @Override
   public Option getRecordByKey(String key, Schema readerSchema) throws IOException {
     byte[] value = null;
-    final Option<Schema.Field> keySchemaField = Option.ofNullable(readerSchema.getField(keyField));
+    final Option<Schema.Field> keySchemaField = Option.ofNullable(readerSchema.getField(KEY_FIELD_NAME));
     ValidationUtils.checkState(keySchemaField != null);
     KeyValue kv = new KeyValue(key.getBytes(), null, null, null);
 

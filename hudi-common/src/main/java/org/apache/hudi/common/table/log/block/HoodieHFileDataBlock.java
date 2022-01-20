@@ -42,7 +42,6 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.hbase.util.Pair;
-import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -106,7 +105,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     boolean useIntegerKey = false;
     int key = 0;
     int keySize = 0;
-    final Field schemaKeyField = records.get(0).getSchema().getField(HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY);
+    final Field schemaKeyField = records.get(0).getSchema().getField(HoodieHFileReader.KEY_FIELD_NAME);
     if (schemaKeyField == null) {
       // Missing key metadata field so we should use an integer sequence key
       useIntegerKey = true;

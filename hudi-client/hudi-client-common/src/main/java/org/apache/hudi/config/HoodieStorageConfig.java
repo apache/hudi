@@ -22,7 +22,6 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.metadata.HoodieMetadataPayload;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -83,11 +82,6 @@ public class HoodieStorageConfig extends HoodieConfig {
       .defaultValue(String.valueOf(1024 * 1024))
       .withDocumentation("Lower values increase the size of metadata tracked within HFile, but can offer potentially "
           + "faster lookup times.");
-
-  public static final ConfigProperty<String> HFILE_SCHEMA_KEY_FIELD_ID = ConfigProperty
-      .key("hoodie.hfile.schema.key.field.id")
-      .defaultValue(HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY)
-      .withDocumentation("Key field name for the HFile schema. This key field is used for on-disk storage optimization");
 
   // used to size log files
   public static final ConfigProperty<String> LOGFILE_MAX_SIZE = ConfigProperty

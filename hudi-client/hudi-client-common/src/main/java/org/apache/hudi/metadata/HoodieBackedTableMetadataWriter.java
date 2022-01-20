@@ -96,7 +96,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
   // Virtual keys support for metadata table. This Field is
   // from the metadata payload schema.
-  private static final String RECORD_KEY_FIELD = HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY;
+  private static final String RECORD_KEY_FIELD = HoodieMetadataPayload.SCHEMA_FIELD_NAME_KEY;
 
   protected HoodieWriteConfig metadataWriteConfig;
   protected HoodieWriteConfig dataWriteConfig;
