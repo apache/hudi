@@ -255,6 +255,22 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + "record size estimate compute dynamically based on commit metadata. "
           + " This is critical in computing the insert parallelism and bin-packing inserts into small files.");
 
+  public static final ConfigProperty<Integer> ARCHIVE_MERGE_FILES_BATCH_SIZE = ConfigProperty
+      .key("hoodie.archive.merge.files.batch.size")
+      .defaultValue(10)
+      .withDocumentation("The number of small archive files to be merged at once.");
+
+  public static final ConfigProperty<Long> ARCHIVE_MERGE_SMALL_FILE_LIMIT_BYTES = ConfigProperty
+      .key("hoodie.archive.merge.small.file.limit.bytes")
+      .defaultValue(20L * 1024 * 1024)
+      .withDocumentation("This config sets the archive file size limit below which an archive file becomes a candidate to be selected as such a small file.");
+
+  public static final ConfigProperty<Boolean> ARCHIVE_MERGE_ENABLE = ConfigProperty
+      .key("hoodie.archive.merge.enable")
+      .defaultValue(false)
+      .withDocumentation("When enable, hoodie will auto merge several small archive files into larger one. It's"
+          + " useful when storage scheme doesn't support append operation.");
+
   /** @deprecated Use {@link #CLEANER_POLICY} and its methods instead */
   @Deprecated
   public static final String CLEANER_POLICY_PROP = CLEANER_POLICY.key();
@@ -544,6 +560,21 @@ public class HoodieCompactionConfig extends HoodieConfig {
     public Builder archiveCommitsWith(int minToKeep, int maxToKeep) {
       compactionConfig.setValue(MIN_COMMITS_TO_KEEP, String.valueOf(minToKeep));
       compactionConfig.setValue(MAX_COMMITS_TO_KEEP, String.valueOf(maxToKeep));
+      return this;
+    }
+
+    public Builder withArchiveMergeFilesBatchSize(int number) {
+      compactionConfig.setValue(ARCHIVE_MERGE_FILES_BATCH_SIZE, String.valueOf(number));
+      return this;
+    }
+
+    public Builder withArchiveMergeSmallFileLimit(long size) {
+      compactionConfig.setValue(ARCHIVE_MERGE_SMALL_FILE_LIMIT_BYTES, String.valueOf(size));
+      return this;
+    }
+
+    public Builder withArchiveMergeEnable(boolean enable) {
+      compactionConfig.setValue(ARCHIVE_MERGE_ENABLE, String.valueOf(enable));
       return this;
     }
 
