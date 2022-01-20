@@ -175,9 +175,11 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
 
       JavaRDD<WriteStatus> writeStatusJavaRDD = client.upsert(writeRecords, newCommitTime);
-      client.commit(newCommitTime, writeStatusJavaRDD);
+
       List<WriteStatus> statuses = writeStatusJavaRDD.collect();
       assertNoWriteErrors(statuses);
+
+      client.commit(newCommitTime, jsc().parallelize(statuses));
 
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
 
@@ -286,10 +288,12 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         thirdClient.startCommitWithTime(newCommitTime);
 
         writeStatusJavaRDD = thirdClient.upsert(writeRecords, newCommitTime);
+
         statuses = writeStatusJavaRDD.collect();
-        thirdClient.commit(newCommitTime, writeStatusJavaRDD);
         // Verify there are no errors
         assertNoWriteErrors(statuses);
+
+        thirdClient.commit(newCommitTime, jsc().parallelize(statuses));
 
         metaClient = HoodieTableMetaClient.reload(metaClient);
 
@@ -340,7 +344,11 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
 
       JavaRDD<WriteStatus> writeStatusJavaRDD = client.upsert(writeRecords, newCommitTime);
-      client.commit(newCommitTime, writeStatusJavaRDD);
+
+      List<WriteStatus> statuses = writeStatusJavaRDD.collect();
+      assertNoWriteErrors(statuses);
+
+      client.commit(newCommitTime, jsc().parallelize(statuses));
       client.close();
 
       Option<Pair<HoodieInstant, HoodieCommitMetadata>> instantCommitMetadataPairOpt =
@@ -392,8 +400,12 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
             basePath());
         assertEquals(200, recordsRead.size());
 
-        writeStatusJavaRDD = nClient.upsert(jsc().parallelize(copyOfRecords, 1), newCommitTime);
-        nClient.commit(newCommitTime, writeStatusJavaRDD);
+        statuses = nClient.upsert(jsc().parallelize(copyOfRecords, 1), newCommitTime).collect();
+        // Verify there are no errors
+        assertNoWriteErrors(statuses);
+
+        nClient.commit(newCommitTime, jsc().parallelize(statuses));
+
         copyOfRecords.clear();
       }
 
@@ -410,7 +422,11 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       writeRecords = jsc().parallelize(records, 1);
 
       writeStatusJavaRDD = client.upsert(writeRecords, newCommitTime);
-      client.commit(newCommitTime, writeStatusJavaRDD);
+      statuses = writeStatusJavaRDD.collect();
+      // Verify there are no errors
+      assertNoWriteErrors(statuses);
+
+      client.commit(newCommitTime, jsc().parallelize(statuses));
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
@@ -428,7 +444,11 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       writeRecords = jsc().parallelize(records, 1);
 
       writeStatusJavaRDD = client.upsert(writeRecords, newCommitTime);
-      client.commit(newCommitTime, writeStatusJavaRDD);
+      statuses = writeStatusJavaRDD.collect();
+      // Verify there are no errors
+      assertNoWriteErrors(statuses);
+
+      client.commit(newCommitTime, jsc().parallelize(statuses));
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
@@ -455,8 +475,12 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       copyOfRecords = dataGen.generateUpdates(newCommitTime, copyOfRecords);
       copyOfRecords.addAll(dataGen.generateInserts(newCommitTime, 200));
 
-      writeStatusJavaRDD = client.upsert(jsc().parallelize(copyOfRecords, 1), newCommitTime);
-      client.commit(newCommitTime, writeStatusJavaRDD);
+      statuses = client.upsert(jsc().parallelize(copyOfRecords, 1), newCommitTime).collect();
+      // Verify there are no errors
+      assertNoWriteErrors(statuses);
+
+      client.commit(newCommitTime, jsc().parallelize(statuses));
+
       copyOfRecords.clear();
 
       // Rollback latest commit first
@@ -619,9 +643,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc().parallelize(records, 1);
-      JavaRDD<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime);
       // trigger an action
-      List<WriteStatus> writeStatuses = statuses.collect();
+      List<WriteStatus> writeStatuses = ((JavaRDD<WriteStatus>) writeClient.insert(recordsRDD, newCommitTime)).collect();
 
       // Ensure that inserts are written to only log files
       assertEquals(0,
