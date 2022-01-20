@@ -107,8 +107,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       try {
         this.metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get()).setBasePath(metadataBasePath).build();
         this.metadataTableConfig = metadataMetaClient.getTableConfig();
-        this.isMetaIndexBloomFilterEnabled = metadataConfig.isMetaIndexBloomFilterEnabled();
-        this.isMetaIndexColumnStatsEnabled = metadataConfig.isMetaIndexColumnStatsEnabled();
+        this.isMetaIndexBloomFilterEnabled = metadataConfig.isMetadataIndexBloomFilterEnabled();
+        this.isMetaIndexColumnStatsEnabled = metadataConfig.isMetadataIndexColumnStatsEnabled();
       } catch (TableNotFoundException e) {
         LOG.warn("Metadata table was not found at path " + metadataBasePath);
         this.isMetadataTableEnabled = false;
@@ -260,11 +260,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Metadata is in sync till the latest completed instant on the dataset
     List<FileSlice> latestFileSlices =
         HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, partitionName);
-    Option<MetadataPartitionType> partitionType = HoodieTableMetadataUtil.fromPartitionPath(partitionName);
-    ValidationUtils.checkArgument(partitionType.isPresent());
-    ValidationUtils.checkArgument(latestFileSlices.size() == partitionType.get().getFileGroupCount(),
-        String.format("Invalid number of file slices: found=%d, required=%d", latestFileSlices.size(),
-            partitionType.get().getFileGroupCount()));
+
     final FileSlice slice = latestFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(key,
         latestFileSlices.size()));
     return Pair.of(partitionName, slice);
@@ -281,11 +277,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Metadata is in sync till the latest completed instant on the dataset
     List<FileSlice> latestFileSlices =
         HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, partitionName);
-    Option<MetadataPartitionType> partitionType = HoodieTableMetadataUtil.fromPartitionPath(partitionName);
-    ValidationUtils.checkArgument(partitionType.isPresent());
-    ValidationUtils.checkArgument(latestFileSlices.size() == partitionType.get().getFileGroupCount(),
-        String.format("Invalid number of file slices: found=%d, required=%d", latestFileSlices.size(),
-            partitionType.get().getFileGroupCount()));
 
     Map<Pair<String, FileSlice>, List<String>> partitionFileSliceToKeysMap = new HashMap<>();
     for (String key : keys) {

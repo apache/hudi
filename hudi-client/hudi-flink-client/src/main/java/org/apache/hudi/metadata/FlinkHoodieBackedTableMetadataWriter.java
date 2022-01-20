@@ -158,7 +158,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   private List<HoodieRecord> prepRecords(Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap) {
     List<HoodieRecord> allPartitionRecords = null;
     for (Map.Entry<MetadataPartitionType, HoodieData<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
-      final String partitionName = entry.getKey().partitionPath();
+      final String partitionName = entry.getKey().getPartitionPath();
       final int fileGroupCount = entry.getKey().getFileGroupCount();
       List<HoodieRecord> records = (List<HoodieRecord>) entry.getValue();
 

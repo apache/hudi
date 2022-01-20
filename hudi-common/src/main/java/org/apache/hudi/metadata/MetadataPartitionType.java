@@ -22,34 +22,32 @@ import java.util.Arrays;
 import java.util.List;
 
 public enum MetadataPartitionType {
-  // TODO: Make the file group count configurable or auto compute based on the scaling needs
-  FILES(HoodieTableMetadataUtil.PARTITION_NAME_FILES, "files-", 1),
-  COLUMN_STATS(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, "col-stats-", 1),
-  BLOOM_FILTERS(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS, "bloom-filters-", 1);
+  FILES(HoodieTableMetadataUtil.PARTITION_NAME_FILES, "files-"),
+  COLUMN_STATS(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, "col-stats-"),
+  BLOOM_FILTERS(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS, "bloom-filters-");
 
   // Partition path in metadata table.
   private final String partitionPath;
   // FileId prefix used for all file groups in this partition.
   private final String fileIdPrefix;
   // Total file groups
-  private final int fileGroupCount;
+  private int fileGroupCount = 1;
 
-  MetadataPartitionType(final String partitionPath, final String fileIdPrefix, final int fileGroupCount) {
+  MetadataPartitionType(final String partitionPath, final String fileIdPrefix) {
     this.partitionPath = partitionPath;
     this.fileIdPrefix = fileIdPrefix;
-    this.fileGroupCount = fileGroupCount;
-  }
-
-  public String partitionPath() {
-    return partitionPath;
   }
 
   public String getPartitionPath() {
-    return partitionPath();
+    return partitionPath;
   }
 
   public String getFileIdPrefix() {
     return fileIdPrefix;
+  }
+
+  void setFileGroupCount(final int fileGroupCount) {
+    this.fileGroupCount = fileGroupCount;
   }
 
   public int getFileGroupCount() {
@@ -58,9 +56,9 @@ public enum MetadataPartitionType {
 
   public static List<String> allPaths() {
     return Arrays.asList(
-        FILES.partitionPath(),
-        COLUMN_STATS.partitionPath(),
-        BLOOM_FILTERS.partitionPath()
+        FILES.getPartitionPath(),
+        COLUMN_STATS.getPartitionPath(),
+        BLOOM_FILTERS.getPartitionPath()
     );
   }
 

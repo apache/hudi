@@ -385,7 +385,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
-  public void testTableOperationsWithMetaIndexLazyLoad(HoodieTableType tableType) throws Exception {
+  public void testTableOperationsWithMetadataIndex(HoodieTableType tableType) throws Exception {
     initPath();
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
         .withIndexConfig(HoodieIndexConfig.newBuilder()
@@ -393,28 +393,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             .build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .withMetaIndexBloomFilter(true)
-            .withMetaIndexBloomFilterBatchLoad(false)
-            .withMetaIndexColumnStats(true)
-            .build())
-        .build();
-    init(tableType, writeConfig);
-    testTableOperationsForMetaIndexImpl(writeConfig);
-  }
-
-  @ParameterizedTest
-  @EnumSource(HoodieTableType.class)
-  public void testTableOperationsWithMetaIndexBatchLoad(HoodieTableType tableType) throws Exception {
-    initPath();
-    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
-        .withIndexConfig(HoodieIndexConfig.newBuilder()
-            .bloomIndexBucketizedChecking(false)
-            .build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .enable(true)
-            .withMetaIndexBloomFilter(true)
-            .withMetaIndexBloomFilterBatchLoad(true)
-            .withMetaIndexColumnStats(true)
+            .withMetadataIndexBloomFilter(true)
+            .withMetadataIndexColumnStats(true)
             .build())
         .build();
     init(tableType, writeConfig);
@@ -1794,7 +1774,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertTrue(metricsRegistry.getAllCounts().containsKey(HoodieMetadataMetrics.INITIALIZE_STR + ".count"));
       assertTrue(metricsRegistry.getAllCounts().containsKey(HoodieMetadataMetrics.INITIALIZE_STR + ".totalDuration"));
       assertTrue(metricsRegistry.getAllCounts().get(HoodieMetadataMetrics.INITIALIZE_STR + ".count") >= 1L);
-      final String prefix = MetadataPartitionType.FILES.partitionPath() + ".";
+      final String prefix = MetadataPartitionType.FILES.getPartitionPath() + ".";
       assertTrue(metricsRegistry.getAllCounts().containsKey(prefix + HoodieMetadataMetrics.STAT_COUNT_BASE_FILES));
       assertTrue(metricsRegistry.getAllCounts().containsKey(prefix + HoodieMetadataMetrics.STAT_COUNT_LOG_FILES));
       assertTrue(metricsRegistry.getAllCounts().containsKey(prefix + HoodieMetadataMetrics.STAT_TOTAL_BASE_FILE_SIZE));
@@ -1989,16 +1969,22 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         false, false);
     assertEquals(metadataWriter.getEnabledPartitionTypes().size(), metadataTablePartitions.size());
 
+    final Map<String, MetadataPartitionType> metadataEnabledPartitionTypes = new HashMap<>();
+    metadataWriter.getEnabledPartitionTypes().forEach(e -> metadataEnabledPartitionTypes.put(e.getPartitionPath(), e));
+
     // Metadata table should automatically compact and clean
     // versions are +1 as autoclean / compaction happens end of commits
     int numFileVersions = metadataWriteConfig.getCleanerFileVersionsRetained() + 1;
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metadataMetaClient, metadataMetaClient.getActiveTimeline());
     metadataTablePartitions.forEach(partition -> {
       List<FileSlice> latestSlices = fsView.getLatestFileSlices(partition).collect(Collectors.toList());
-      assertTrue(latestSlices.stream().map(FileSlice::getBaseFile).count() <= 1, "Should have a single latest base file");
-      assertTrue(latestSlices.size() <= 1, "Should have a single latest file slice");
-      assertTrue(latestSlices.size() <= numFileVersions, "Should limit file slice to "
-          + numFileVersions + " but was " + latestSlices.size());
+      assertTrue(latestSlices.stream().map(FileSlice::getBaseFile).count()
+          <= metadataEnabledPartitionTypes.get(partition).getFileGroupCount(), "Should have a single latest base file per file group");
+      assertTrue(latestSlices.size()
+          <= metadataEnabledPartitionTypes.get(partition).getFileGroupCount(), "Should have a single latest file slice per file group");
+      assertTrue(latestSlices.size()
+          <= (numFileVersions * metadataEnabledPartitionTypes.get(partition).getFileGroupCount()), "Should limit file slice to "
+          + numFileVersions + " per file group, but was " + latestSlices.size());
     });
 
     LOG.info("Validation time=" + timer.endTimer());

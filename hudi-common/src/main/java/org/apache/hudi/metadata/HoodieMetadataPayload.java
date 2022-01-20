@@ -194,7 +194,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>();
     partitions.forEach(partition -> fileInfo.put(partition, new HoodieMetadataFileInfo(0L, false)));
 
-    HoodieKey key = new HoodieKey(RECORDKEY_PARTITION_LIST, MetadataPartitionType.FILES.partitionPath());
+    HoodieKey key = new HoodieKey(RECORDKEY_PARTITION_LIST, MetadataPartitionType.FILES.getPartitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_PARTITION_LIST,
         fileInfo);
     return new HoodieRecord<>(key, payload);
@@ -216,7 +216,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     filesDeleted.ifPresent(
         m -> m.forEach(filename -> fileInfo.put(filename, new HoodieMetadataFileInfo(0L, true))));
 
-    HoodieKey key = new HoodieKey(partition, MetadataPartitionType.FILES.partitionPath());
+    HoodieKey key = new HoodieKey(partition, MetadataPartitionType.FILES.getPartitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_FILE_LIST, fileInfo);
     return new HoodieRecord<>(key, payload);
   }
@@ -241,7 +241,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         "Invalid base file '" + baseFileName + "' for MetaIndexBloomFilter!");
     final String bloomFilterKey = new PartitionIndexID(partitionName).asBase64EncodedString()
         .concat(new FileIndexID(baseFileName).asBase64EncodedString());
-    HoodieKey key = new HoodieKey(bloomFilterKey, MetadataPartitionType.BLOOM_FILTERS.partitionPath());
+    HoodieKey key = new HoodieKey(bloomFilterKey, MetadataPartitionType.BLOOM_FILTERS.getPartitionPath());
 
     // TODO: Get the bloom filter type from the file
     HoodieMetadataBloomFilter metadataBloomFilter =
@@ -426,7 +426,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       String partitionName, Collection<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList, boolean isDeleted) {
     return columnRangeMetadataList.stream().map(columnRangeMetadata -> {
       HoodieKey key = new HoodieKey(getColumnStatsIndexKey(partitionName, columnRangeMetadata),
-          MetadataPartitionType.COLUMN_STATS.partitionPath());
+          MetadataPartitionType.COLUMN_STATS.getPartitionPath());
 
       HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_COLUMN_STATS,
           HoodieColumnStats.newBuilder()
