@@ -15,7 +15,7 @@ The steps have been tested on a Mac laptop
 ### Prerequisites
 
   * Docker Setup :  For Mac, Please follow the steps as defined in [https://docs.docker.com/v17.12/docker-for-mac/install/]. For running Spark-SQL queries, please ensure atleast 6 GB and 4 CPUs are allocated to Docker (See Docker -> Preferences -> Advanced). Otherwise, spark-SQL queries could be killed because of memory issues.
-  * kafkacat : A command-line utility to publish/consume from kafka topics. Use `brew install kafkacat` to install kafkacat.
+  * kcat : A command-line utility to publish/consume from kafka topics. Use `brew install kcat` to install kcat.
   * /etc/hosts : The demo references many services running in container by the hostname. Add the following settings to /etc/hosts
 
     ```java
@@ -58,30 +58,55 @@ cd docker
 ....
 ....
 ....
-Stopping spark-worker-1            ... done
-Stopping hiveserver                ... done
-Stopping hivemetastore             ... done
-Stopping historyserver             ... done
+[+] Running 10/13
+⠿ Container zookeeper             Removed                 8.6s
+⠿ Container datanode1             Removed                18.3s
+⠿ Container trino-worker-1        Removed                50.7s
+⠿ Container spark-worker-1        Removed                16.7s
+⠿ Container adhoc-2               Removed                16.9s
+⠿ Container graphite              Removed                16.9s
+⠿ Container kafkabroker           Removed                14.1s
+⠿ Container adhoc-1               Removed                14.1s
+⠿ Container presto-worker-1       Removed                11.9s
+⠿ Container presto-coordinator-1  Removed                34.6s
 .......
 ......
-Creating network "compose_default" with the default driver
-Creating volume "compose_namenode" with default driver
-Creating volume "compose_historyserver" with default driver
-Creating volume "compose_hive-metastore-postgresql" with default driver
-Creating hive-metastore-postgresql ... done
-Creating namenode                  ... done
-Creating zookeeper                 ... done
-Creating kafkabroker               ... done
-Creating hivemetastore             ... done
-Creating historyserver             ... done
-Creating hiveserver                ... done
-Creating datanode1                 ... done
-Creating presto-coordinator-1      ... done
-Creating sparkmaster               ... done
-Creating presto-worker-1           ... done
-Creating adhoc-1                   ... done
-Creating adhoc-2                   ... done
-Creating spark-worker-1            ... done
+[+] Running 17/17
+⠿ adhoc-1 Pulled                                          2.9s
+⠿ graphite Pulled                                         2.8s
+⠿ spark-worker-1 Pulled                                   3.0s
+⠿ kafka Pulled                                            2.9s
+⠿ datanode1 Pulled                                        2.9s
+⠿ hivemetastore Pulled                                    2.9s
+⠿ hiveserver Pulled                                       3.0s
+⠿ hive-metastore-postgresql Pulled                        2.8s
+⠿ presto-coordinator-1 Pulled                             2.9s
+⠿ namenode Pulled                                         2.9s
+⠿ trino-worker-1 Pulled                                   2.9s
+⠿ sparkmaster Pulled                                      2.9s
+⠿ presto-worker-1 Pulled                                  2.9s
+⠿ zookeeper Pulled                                        2.8s
+⠿ adhoc-2 Pulled                                          2.9s
+⠿ historyserver Pulled                                    2.9s
+⠿ trino-coordinator-1 Pulled                              2.9s
+[+] Running 17/17
+⠿ Container zookeeper                  Started           41.0s
+⠿ Container kafkabroker                Started           41.7s
+⠿ Container graphite                   Started           41.5s
+⠿ Container hive-metastore-postgresql  Running            0.0s
+⠿ Container namenode                   Running            0.0s
+⠿ Container hivemetastore              Running            0.0s
+⠿ Container trino-coordinator-1        Runni...           0.0s
+⠿ Container presto-coordinator-1       Star...           42.1s
+⠿ Container historyserver              Started           41.0s
+⠿ Container datanode1                  Started           49.9s
+⠿ Container hiveserver                 Running            0.0s
+⠿ Container trino-worker-1             Started           42.1s
+⠿ Container sparkmaster                Started           41.9s
+⠿ Container spark-worker-1             Started           50.2s
+⠿ Container adhoc-2                    Started           38.5s
+⠿ Container adhoc-1                    Started           38.5s
+⠿ Container presto-worker-1            Started           38.4s
 Copying spark default config and setting up configs
 Copying spark default config and setting up configs
 $ docker ps
@@ -93,6 +118,8 @@ At this point, the docker cluster will be up and running. The demo cluster bring
    * Spark Master and Worker
    * Hive Services (Metastore, HiveServer2 along with PostgresDB)
    * Kafka Broker and a Zookeeper Node (Kafka will be used as upstream source for the demo)
+   * Containers for Presto setup (Presto coordinator and worker)
+   * Containers for Trino setup (Trino coordinator and worker)
    * Adhoc containers to run Hudi/Hive CLI commands
 
 ## Demo
@@ -107,11 +134,11 @@ The batches are windowed intentionally so that the second batch contains updates
 
 ### Step 1 : Publish the first batch to Kafka
 
-Upload the first batch to Kafka topic 'stock ticks' `cat docker/demo/data/batch_1.json | kafkacat -b kafkabroker -t stock_ticks -P`
+Upload the first batch to Kafka topic 'stock ticks' `cat docker/demo/data/batch_1.json | kcat -b kafkabroker -t stock_ticks -P`
 
 To check if the new topic shows up, use
 ```java
-kafkacat -b kafkabroker -L -J | jq .
+kcat -b kafkabroker -L -J | jq .
 {
   "originating_broker": {
     "id": 1001,
@@ -546,13 +573,98 @@ Splits: 17 total, 17 done (100.00%)
 presto:default> exit
 ```
 
+### Step 4 (d): Run Trino Queries
+
+Here are the similar queries with Trino. Currently, Trino does not support snapshot or incremental queries on Hudi tables.
+```java
+docker exec -it adhoc-2 trino --server trino-coordinator-1:8091
+trino> show catalogs;
+ Catalog 
+---------
+ hive    
+ system  
+(2 rows)
+
+Query 20220112_055038_00000_sac73, FINISHED, 1 node
+Splits: 19 total, 19 done (100.00%)
+3.74 [0 rows, 0B] [0 rows/s, 0B/s]
+
+trino> use hive.default;
+USE
+trino:default> show tables;
+       Table        
+--------------------
+ stock_ticks_cow    
+ stock_ticks_mor_ro 
+ stock_ticks_mor_rt 
+(3 rows)
+
+Query 20220112_055050_00003_sac73, FINISHED, 2 nodes
+Splits: 19 total, 19 done (100.00%)
+1.84 [3 rows, 102B] [1 rows/s, 55B/s]
+
+# COPY-ON-WRITE Queries:
+=========================
+    
+trino:default> select symbol, max(ts) from stock_ticks_cow group by symbol HAVING symbol = 'GOOG';
+ symbol |        _col1        
+--------+---------------------
+ GOOG   | 2018-08-31 10:29:00 
+(1 row)
+
+Query 20220112_055101_00005_sac73, FINISHED, 1 node
+Splits: 49 total, 49 done (100.00%)
+4.08 [197 rows, 442KB] [48 rows/s, 108KB/s]
+
+trino:default> select "_hoodie_commit_time", symbol, ts, volume, open, close from stock_ticks_cow where symbol = 'GOOG';
+ _hoodie_commit_time | symbol |         ts          | volume |   open    |  close   
+---------------------+--------+---------------------+--------+-----------+----------
+ 20220112054822108   | GOOG   | 2018-08-31 09:59:00 |   6330 |    1230.5 |  1230.02 
+ 20220112054822108   | GOOG   | 2018-08-31 10:29:00 |   3391 | 1230.1899 | 1230.085 
+(2 rows)
+
+Query 20220112_055113_00006_sac73, FINISHED, 1 node
+Splits: 17 total, 17 done (100.00%)
+0.40 [197 rows, 450KB] [487 rows/s, 1.09MB/s]
+
+# Merge-On-Read Queries:
+==========================
+
+Lets run similar queries against MOR table.
+
+# Run ReadOptimized Query. Notice that the latest timestamp is 10:29
+    
+trino:default> select symbol, max(ts) from stock_ticks_mor_ro group by symbol HAVING symbol = 'GOOG';
+ symbol |        _col1        
+--------+---------------------
+ GOOG   | 2018-08-31 10:29:00 
+(1 row)
+
+Query 20220112_055125_00007_sac73, FINISHED, 1 node
+Splits: 49 total, 49 done (100.00%)
+0.50 [197 rows, 442KB] [395 rows/s, 888KB/s]
+
+trino:default> select "_hoodie_commit_time", symbol, ts, volume, open, close  from stock_ticks_mor_ro where  symbol = 'GOOG';
+ _hoodie_commit_time | symbol |         ts          | volume |   open    |  close   
+---------------------+--------+---------------------+--------+-----------+----------
+ 20220112054844841   | GOOG   | 2018-08-31 09:59:00 |   6330 |    1230.5 |  1230.02 
+ 20220112054844841   | GOOG   | 2018-08-31 10:29:00 |   3391 | 1230.1899 | 1230.085 
+(2 rows)
+
+Query 20220112_055136_00008_sac73, FINISHED, 1 node
+Splits: 17 total, 17 done (100.00%)
+0.49 [197 rows, 450KB] [404 rows/s, 924KB/s]
+
+trino:default> exit
+```
+
 ### Step 5: Upload second batch to Kafka and run DeltaStreamer to ingest
 
 Upload the second batch of data and ingest this batch using delta-streamer. As this batch does not bring in any new
 partitions, there is no need to run hive-sync
 
 ```java
-cat docker/demo/data/batch_2.json | kafkacat -b kafkabroker -t stock_ticks -P
+cat docker/demo/data/batch_2.json | kcat -b kafkabroker -t stock_ticks -P
 
 # Within Docker container, run the ingestion command
 docker exec -it adhoc-2 /bin/bash
@@ -803,6 +915,67 @@ Splits: 17 total, 17 done (100.00%)
 0:01 [197 rows, 613B] [154 rows/s, 480B/s]
 
 presto:default> exit
+```
+
+### Step 6 (d): Run Trino Queries
+
+Running the same queries on Trino for Read-Optimized queries.
+
+```java
+docker exec -it adhoc-2 trino --server trino-coordinator-1:8091
+trino> use hive.default;
+USE
+    
+# Copy On Write Table:
+
+trino:default> select symbol, max(ts) from stock_ticks_cow group by symbol HAVING symbol = 'GOOG';
+ symbol |        _col1        
+--------+---------------------
+ GOOG   | 2018-08-31 10:59:00 
+(1 row)
+
+Query 20220112_055443_00012_sac73, FINISHED, 1 node
+Splits: 49 total, 49 done (100.00%)
+0.63 [197 rows, 442KB] [310 rows/s, 697KB/s]
+
+trino:default> select "_hoodie_commit_time", symbol, ts, volume, open, close  from stock_ticks_cow where  symbol = 'GOOG';
+ _hoodie_commit_time | symbol |         ts          | volume |   open    |  close   
+---------------------+--------+---------------------+--------+-----------+----------
+ 20220112054822108   | GOOG   | 2018-08-31 09:59:00 |   6330 |    1230.5 |  1230.02 
+ 20220112055352654   | GOOG   | 2018-08-31 10:59:00 |   9021 | 1227.1993 | 1227.215 
+(2 rows)
+
+Query 20220112_055450_00013_sac73, FINISHED, 1 node
+Splits: 17 total, 17 done (100.00%)
+0.65 [197 rows, 450KB] [303 rows/s, 692KB/s]
+
+As you can notice, the above queries now reflect the changes that came as part of ingesting second batch.
+
+# Merge On Read Table:
+# Read Optimized Query
+    
+trino:default> select symbol, max(ts) from stock_ticks_mor_ro group by symbol HAVING symbol = 'GOOG';
+ symbol |        _col1        
+--------+---------------------
+ GOOG   | 2018-08-31 10:29:00 
+(1 row)
+
+Query 20220112_055500_00014_sac73, FINISHED, 1 node
+Splits: 49 total, 49 done (100.00%)
+0.59 [197 rows, 442KB] [336 rows/s, 756KB/s]
+
+trino:default> select "_hoodie_commit_time", symbol, ts, volume, open, close  from stock_ticks_mor_ro where  symbol = 'GOOG';
+ _hoodie_commit_time | symbol |         ts          | volume |   open    |  close   
+---------------------+--------+---------------------+--------+-----------+----------
+ 20220112054844841   | GOOG   | 2018-08-31 09:59:00 |   6330 |    1230.5 |  1230.02 
+ 20220112054844841   | GOOG   | 2018-08-31 10:29:00 |   3391 | 1230.1899 | 1230.085 
+(2 rows)
+
+Query 20220112_055506_00015_sac73, FINISHED, 1 node
+Splits: 17 total, 17 done (100.00%)
+0.35 [197 rows, 450KB] [556 rows/s, 1.24MB/s]
+
+trino:default> exit
 ```
 
 ### Step 7 (a): Incremental Query for COPY-ON-WRITE Table
@@ -1183,7 +1356,7 @@ and compose scripts are carefully implemented so that they serve dual-purpose
 
 1. The docker images have inbuilt hudi jar files with environment variable pointing to those jars (HUDI_HADOOP_BUNDLE, ...)
 2. For running integration-tests, we need the jars generated locally to be used for running services within docker. The
-   docker-compose scripts (see `docker/compose/docker-compose_hadoop284_hive233_spark231.yml`) ensures local jars override
+   docker-compose scripts (see `docker/compose/docker-compose_hadoop284_hive233_spark244.yml`) ensures local jars override
    inbuilt jars by mounting local HUDI workspace over the docker location
 3. As these docker containers have mounted local HUDI workspace, any changes that happen in the workspace would automatically 
    reflect in the containers. This is a convenient way for developing and verifying Hudi for
@@ -1203,33 +1376,60 @@ cd docker
 
 [INFO] Reactor Summary:
 [INFO]
-[INFO] hoodie ............................................. SUCCESS [  1.709 s]
-[INFO] hudi-common ...................................... SUCCESS [  9.015 s]
-[INFO] hudi-hadoop-mr ................................... SUCCESS [  1.108 s]
-[INFO] hudi-client ...................................... SUCCESS [  4.409 s]
-[INFO] hudi-hive ........................................ SUCCESS [  0.976 s]
-[INFO] hudi-spark ....................................... SUCCESS [ 26.522 s]
-[INFO] hudi-utilities ................................... SUCCESS [ 16.256 s]
-[INFO] hudi-cli ......................................... SUCCESS [ 11.341 s]
-[INFO] hudi-hadoop-mr-bundle ............................ SUCCESS [  1.893 s]
-[INFO] hudi-hive-bundle ................................. SUCCESS [ 14.099 s]
-[INFO] hudi-spark-bundle ................................ SUCCESS [ 58.252 s]
-[INFO] hudi-hadoop-docker ............................... SUCCESS [  0.612 s]
-[INFO] hudi-hadoop-base-docker .......................... SUCCESS [04:04 min]
-[INFO] hudi-hadoop-namenode-docker ...................... SUCCESS [  6.142 s]
-[INFO] hudi-hadoop-datanode-docker ...................... SUCCESS [  7.763 s]
-[INFO] hudi-hadoop-history-docker ....................... SUCCESS [  5.922 s]
-[INFO] hudi-hadoop-hive-docker .......................... SUCCESS [ 56.152 s]
-[INFO] hudi-hadoop-sparkbase-docker ..................... SUCCESS [01:18 min]
-[INFO] hudi-hadoop-sparkmaster-docker ................... SUCCESS [  2.964 s]
-[INFO] hudi-hadoop-sparkworker-docker ................... SUCCESS [  3.032 s]
-[INFO] hudi-hadoop-sparkadhoc-docker .................... SUCCESS [  2.764 s]
-[INFO] hudi-integ-test .................................. SUCCESS [  1.785 s]
+[INFO] Hudi ............................................... SUCCESS [  2.507 s]
+[INFO] hudi-common ........................................ SUCCESS [ 15.181 s]
+[INFO] hudi-aws ........................................... SUCCESS [  2.621 s]
+[INFO] hudi-timeline-service .............................. SUCCESS [  1.811 s]
+[INFO] hudi-client ........................................ SUCCESS [  0.065 s]
+[INFO] hudi-client-common ................................. SUCCESS [  8.308 s]
+[INFO] hudi-hadoop-mr ..................................... SUCCESS [  3.733 s]
+[INFO] hudi-spark-client .................................. SUCCESS [ 18.567 s]
+[INFO] hudi-sync-common ................................... SUCCESS [  0.794 s]
+[INFO] hudi-hive-sync ..................................... SUCCESS [  3.691 s]
+[INFO] hudi-spark-datasource .............................. SUCCESS [  0.121 s]
+[INFO] hudi-spark-common_2.11 ............................. SUCCESS [ 12.979 s]
+[INFO] hudi-spark2_2.11 ................................... SUCCESS [ 12.516 s]
+[INFO] hudi-spark_2.11 .................................... SUCCESS [ 35.649 s]
+[INFO] hudi-utilities_2.11 ................................ SUCCESS [  5.881 s]
+[INFO] hudi-utilities-bundle_2.11 ......................... SUCCESS [ 12.661 s]
+[INFO] hudi-cli ........................................... SUCCESS [ 19.858 s]
+[INFO] hudi-java-client ................................... SUCCESS [  3.221 s]
+[INFO] hudi-flink-client .................................. SUCCESS [  5.731 s]
+[INFO] hudi-spark3_2.12 ................................... SUCCESS [  8.627 s]
+[INFO] hudi-dla-sync ...................................... SUCCESS [  1.459 s]
+[INFO] hudi-sync .......................................... SUCCESS [  0.053 s]
+[INFO] hudi-hadoop-mr-bundle .............................. SUCCESS [  5.652 s]
+[INFO] hudi-hive-sync-bundle .............................. SUCCESS [  1.623 s]
+[INFO] hudi-spark-bundle_2.11 ............................. SUCCESS [ 10.930 s]
+[INFO] hudi-presto-bundle ................................. SUCCESS [  3.652 s]
+[INFO] hudi-timeline-server-bundle ........................ SUCCESS [  4.804 s]
+[INFO] hudi-trino-bundle .................................. SUCCESS [  5.991 s]
+[INFO] hudi-hadoop-docker ................................. SUCCESS [  2.061 s]
+[INFO] hudi-hadoop-base-docker ............................ SUCCESS [ 53.372 s]
+[INFO] hudi-hadoop-base-java11-docker ..................... SUCCESS [ 48.545 s]
+[INFO] hudi-hadoop-namenode-docker ........................ SUCCESS [  6.098 s]
+[INFO] hudi-hadoop-datanode-docker ........................ SUCCESS [  4.825 s]
+[INFO] hudi-hadoop-history-docker ......................... SUCCESS [  3.829 s]
+[INFO] hudi-hadoop-hive-docker ............................ SUCCESS [ 52.660 s]
+[INFO] hudi-hadoop-sparkbase-docker ....................... SUCCESS [01:02 min]
+[INFO] hudi-hadoop-sparkmaster-docker ..................... SUCCESS [ 12.661 s]
+[INFO] hudi-hadoop-sparkworker-docker ..................... SUCCESS [  4.350 s]
+[INFO] hudi-hadoop-sparkadhoc-docker ...................... SUCCESS [ 59.083 s]
+[INFO] hudi-hadoop-presto-docker .......................... SUCCESS [01:31 min]
+[INFO] hudi-hadoop-trinobase-docker ....................... SUCCESS [02:40 min]
+[INFO] hudi-hadoop-trinocoordinator-docker ................ SUCCESS [ 14.003 s]
+[INFO] hudi-hadoop-trinoworker-docker ..................... SUCCESS [ 12.100 s]
+[INFO] hudi-integ-test .................................... SUCCESS [ 13.581 s]
+[INFO] hudi-integ-test-bundle ............................. SUCCESS [ 27.212 s]
+[INFO] hudi-examples ...................................... SUCCESS [  8.090 s]
+[INFO] hudi-flink_2.11 .................................... SUCCESS [  4.217 s]
+[INFO] hudi-kafka-connect ................................. SUCCESS [  2.966 s]
+[INFO] hudi-flink-bundle_2.11 ............................. SUCCESS [ 11.155 s]
+[INFO] hudi-kafka-connect-bundle .......................... SUCCESS [ 12.369 s]
 [INFO] ------------------------------------------------------------------------
 [INFO] BUILD SUCCESS
 [INFO] ------------------------------------------------------------------------
-[INFO] Total time: 09:15 min
-[INFO] Finished at: 2018-09-10T17:47:37-07:00
-[INFO] Final Memory: 236M/1848M
+[INFO] Total time:  14:35 min
+[INFO] Finished at: 2022-01-12T18:41:27-08:00
 [INFO] ------------------------------------------------------------------------
 ```
