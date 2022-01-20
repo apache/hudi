@@ -259,7 +259,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
     if (s instanceof BaseFileWithLogsSplit) {
       BaseFileWithLogsSplit bs = unsafeCast(s);
       return bs.getBelongsToIncrementalQuery();
-    } else if (s instanceof RealtimeBootstrapBaseFileSplit){
+    } else if (s instanceof RealtimeBootstrapBaseFileSplit) {
       RealtimeBootstrapBaseFileSplit bs = unsafeCast(s);
       return bs.getBelongsToIncrementalQuery();
     }

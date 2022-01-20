@@ -96,7 +96,9 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
     return Option.empty();
   }
 
-  public boolean getBelongsToIncrementalQuery() { return belongsToIncrementalSplit; }
+  public boolean getBelongsToIncrementalQuery() {
+    return belongsToIncrementalSplit;
+  }
 
   @Override
   public void setDeltaLogPaths(List<String> deltaLogPaths) {

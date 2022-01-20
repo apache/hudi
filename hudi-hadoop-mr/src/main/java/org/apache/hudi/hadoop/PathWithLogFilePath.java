@@ -72,7 +72,9 @@ public class PathWithLogFilePath extends Path {
     return basePath;
   }
 
-  public boolean getBelongsToIncrementalQuery() { return belongsToIncrementalPath; }
+  public boolean getBelongsToIncrementalQuery() {
+    return belongsToIncrementalPath;
+  }
 
   public void setBasePath(String basePath) {
     this.basePath = basePath;
