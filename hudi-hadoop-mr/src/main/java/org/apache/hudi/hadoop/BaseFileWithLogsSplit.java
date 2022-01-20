@@ -36,7 +36,7 @@ import java.util.List;
  */
 public class BaseFileWithLogsSplit extends FileSplit {
   // a flag to mark this split is produced by incremental query or not.
-  private boolean belongToIncrementalSplit = false;
+  private boolean belongsToIncrementalQuery = false;
   // the log file paths of this split.
   private List<HoodieLogFile> deltaLogFiles = new ArrayList<>();
   // max commit time of current split.
@@ -53,7 +53,7 @@ public class BaseFileWithLogsSplit extends FileSplit {
   @Override
   public void write(DataOutput out) throws IOException {
     super.write(out);
-    out.writeBoolean(belongToIncrementalSplit);
+    out.writeBoolean(belongsToIncrementalQuery);
     Text.writeString(out, maxCommitTime);
     Text.writeString(out, basePath);
     Text.writeString(out, baseFilePath);
@@ -67,7 +67,7 @@ public class BaseFileWithLogsSplit extends FileSplit {
   @Override
   public void readFields(DataInput in) throws IOException {
     super.readFields(in);
-    belongToIncrementalSplit = in.readBoolean();
+    belongsToIncrementalQuery = in.readBoolean();
     maxCommitTime = Text.readString(in);
     basePath = Text.readString(in);
     baseFilePath = Text.readString(in);
@@ -81,12 +81,12 @@ public class BaseFileWithLogsSplit extends FileSplit {
     deltaLogFiles = tempDeltaLogs;
   }
 
-  public boolean getBelongToIncrementalSplit() {
-    return belongToIncrementalSplit;
+  public boolean getBelongsToIncrementalQuery() {
+    return belongsToIncrementalQuery;
   }
 
-  public void setBelongToIncrementalSplit(boolean belongToIncrementalSplit) {
-    this.belongToIncrementalSplit = belongToIncrementalSplit;
+  public void setBelongsToIncrementalQuery(boolean belongsToIncrementalQuery) {
+    this.belongsToIncrementalQuery = belongsToIncrementalQuery;
   }
 
   public List<HoodieLogFile> getDeltaLogFiles() {

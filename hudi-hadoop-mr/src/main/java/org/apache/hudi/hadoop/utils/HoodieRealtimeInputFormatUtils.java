@@ -65,6 +65,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.TypeUtils.unsafeCast;
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
 
@@ -87,8 +88,12 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
       .map(split -> {
         if (split instanceof RealtimeBootstrapBaseFileSplit) {
           RealtimeBootstrapBaseFileSplit bootstrapBaseFileSplit = unsafeCast(split);
-          return createRealtimeBoostrapBaseFileSplit(bootstrapBaseFileSplit, metaClient.getBasePath(),
-              bootstrapBaseFileSplit.getDeltaLogFiles(), bootstrapBaseFileSplit.getMaxCommitTime());
+          return createRealtimeBoostrapBaseFileSplit(
+              bootstrapBaseFileSplit,
+              metaClient.getBasePath(),
+              bootstrapBaseFileSplit.getDeltaLogFiles(),
+              bootstrapBaseFileSplit.getMaxCommitTime(),
+              bootstrapBaseFileSplit.getBelongsToIncrementalQuery());
         } else if (split instanceof BaseFileWithLogsSplit) {
           BaseFileWithLogsSplit baseFileWithLogsSplit = unsafeCast(split);
           return createHoodieRealtimeSplitUnchecked(baseFileWithLogsSplit, hoodieVirtualKeyInfoOpt);
@@ -163,7 +168,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
                   .collect(Collectors.toList());
               if (split instanceof BootstrapBaseFileSplit) {
                 BootstrapBaseFileSplit eSplit = (BootstrapBaseFileSplit) split;
-                rtSplits.add(createRealtimeBoostrapBaseFileSplit(eSplit, metaClient.getBasePath(), logFiles, maxCommitTime));
+                rtSplits.add(createRealtimeBoostrapBaseFileSplit(eSplit, metaClient.getBasePath(), logFiles, maxCommitTime, false));
               } else {
                 rtSplits.add(new HoodieRealtimeFileSplit(split, metaClient.getBasePath(), logFiles, maxCommitTime, finalHoodieVirtualKeyInfo));
               }
@@ -183,11 +188,16 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
     return rtSplits.toArray(new InputSplit[0]);
   }
 
+  /**
+   * @deprecated will be replaced w/ {@link #getRealtimeSplits(Configuration, List)}
+   */
   // get IncrementalRealtimeSplits
-  public static InputSplit[] getIncrementalRealtimeSplits(Configuration conf, Stream<FileSplit> fileSplits) throws IOException {
+  public static InputSplit[] getIncrementalRealtimeSplits(Configuration conf, List<FileSplit> fileSplits) throws IOException {
+    checkState(fileSplits.stream().allMatch(HoodieRealtimeInputFormatUtils::doesBelongToIncrementalQuery),
+        "All splits have to belong to incremental query");
+
     List<InputSplit> rtSplits = new ArrayList<>();
-    List<FileSplit> fileSplitList = fileSplits.collect(Collectors.toList());
-    Set<Path> partitionSet = fileSplitList.stream().map(f -> f.getPath().getParent()).collect(Collectors.toSet());
+    Set<Path> partitionSet = fileSplits.stream().map(f -> f.getPath().getParent()).collect(Collectors.toSet());
     Map<Path, HoodieTableMetaClient> partitionsToMetaClient = getTableMetaClientByPartitionPath(conf, partitionSet);
     // Pre process tableConfig from first partition to fetch virtual key info
     Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo = Option.empty();
@@ -195,16 +205,15 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
       hoodieVirtualKeyInfo = getHoodieVirtualKeyInfo(partitionsToMetaClient.get(partitionSet.iterator().next()));
     }
     Option<HoodieVirtualKeyInfo> finalHoodieVirtualKeyInfo = hoodieVirtualKeyInfo;
-    fileSplitList.stream().forEach(s -> {
+    fileSplits.stream().forEach(s -> {
       // deal with incremental query.
       try {
         if (s instanceof BaseFileWithLogsSplit) {
-          BaseFileWithLogsSplit bs = (BaseFileWithLogsSplit)s;
-          if (bs.getBelongToIncrementalSplit()) {
-            rtSplits.add(new HoodieRealtimeFileSplit(bs, bs.getBasePath(), bs.getDeltaLogFiles(), bs.getMaxCommitTime(), finalHoodieVirtualKeyInfo));
-          }
+          BaseFileWithLogsSplit bs = unsafeCast(s);
+          rtSplits.add(new HoodieRealtimeFileSplit(bs, bs.getBasePath(), bs.getDeltaLogFiles(), bs.getMaxCommitTime(), finalHoodieVirtualKeyInfo));
         } else if (s instanceof RealtimeBootstrapBaseFileSplit) {
-          rtSplits.add(s);
+          RealtimeBootstrapBaseFileSplit bs = unsafeCast(s);
+          rtSplits.add(bs);
         }
       } catch (IOException e) {
         throw new HoodieIOException("Error creating hoodie real time split ", e);
@@ -230,22 +239,30 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
     return Option.empty();
   }
 
+  private static boolean doesBelongToIncrementalQuery(FileSplit s) {
+    if (s instanceof BaseFileWithLogsSplit) {
+      BaseFileWithLogsSplit bs = unsafeCast(s);
+      return bs.getBelongsToIncrementalQuery();
+    } else if (s instanceof RealtimeBootstrapBaseFileSplit){
+      RealtimeBootstrapBaseFileSplit bs = unsafeCast(s);
+      return bs.getBelongsToIncrementalQuery();
+    }
+
+    return false;
+  }
+
   public static boolean isIncrementalQuerySplits(List<FileSplit> fileSplits) {
     if (fileSplits == null || fileSplits.size() == 0) {
       return false;
     }
-    return fileSplits.stream().anyMatch(s -> {
-      if (s instanceof BaseFileWithLogsSplit) {
-        BaseFileWithLogsSplit bs = (BaseFileWithLogsSplit)s;
-        return bs.getBelongToIncrementalSplit();
-      } else {
-        return s instanceof RealtimeBootstrapBaseFileSplit;
-      }
-    });
+    return fileSplits.stream().anyMatch(HoodieRealtimeInputFormatUtils::doesBelongToIncrementalQuery);
   }
 
-  public static RealtimeBootstrapBaseFileSplit createRealtimeBoostrapBaseFileSplit(
-      BootstrapBaseFileSplit split, String basePath, List<HoodieLogFile> logFiles, String maxInstantTime) {
+  public static RealtimeBootstrapBaseFileSplit createRealtimeBoostrapBaseFileSplit(BootstrapBaseFileSplit split,
+                                                                                   String basePath,
+                                                                                   List<HoodieLogFile> logFiles,
+                                                                                   String maxInstantTime,
+                                                                                   boolean belongsToIncrementalQuery) {
     try {
       String[] hosts = split.getLocationInfo() != null ? Arrays.stream(split.getLocationInfo())
           .filter(x -> !x.isInMemory()).toArray(String[]::new) : new String[0];
@@ -253,7 +270,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
           .filter(SplitLocationInfo::isInMemory).toArray(String[]::new) : new String[0];
       FileSplit baseSplit = new FileSplit(split.getPath(), split.getStart(), split.getLength(),
           hosts, inMemoryHosts);
-      return new RealtimeBootstrapBaseFileSplit(baseSplit, basePath, logFiles, maxInstantTime, split.getBootstrapFileSplit());
+      return new RealtimeBootstrapBaseFileSplit(baseSplit, basePath, logFiles, maxInstantTime, split.getBootstrapFileSplit(), belongsToIncrementalQuery);
     } catch (IOException e) {
       throw new HoodieIOException("Error creating hoodie real time split ", e);
     }

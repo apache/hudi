@@ -43,13 +43,20 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
 
   private String basePath;
 
-  public RealtimeBootstrapBaseFileSplit(FileSplit baseSplit, String basePath, List<HoodieLogFile> deltaLogFiles,
-                                        String maxInstantTime, FileSplit externalFileSplit) throws IOException {
+  private final boolean belongsToIncrementalSplit;
+
+  public RealtimeBootstrapBaseFileSplit(FileSplit baseSplit,
+                                        String basePath,
+                                        List<HoodieLogFile> deltaLogFiles,
+                                        String maxInstantTime,
+                                        FileSplit externalFileSplit,
+                                        boolean belongsToIncrementalQuery) throws IOException {
     super(baseSplit, externalFileSplit);
     this.maxInstantTime = maxInstantTime;
     this.deltaLogFiles = deltaLogFiles;
     this.deltaLogPaths = deltaLogFiles.stream().map(entry -> entry.getPath().toString()).collect(Collectors.toList());
     this.basePath = basePath;
+    this.belongsToIncrementalSplit = belongsToIncrementalQuery;
   }
 
   @Override
@@ -88,6 +95,8 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
   public Option<HoodieVirtualKeyInfo> getHoodieVirtualKeyInfo() {
     return Option.empty();
   }
+
+  public boolean getBelongsToIncrementalQuery() { return belongsToIncrementalSplit; }
 
   @Override
   public void setDeltaLogPaths(List<String> deltaLogPaths) {
