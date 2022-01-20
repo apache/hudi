@@ -83,13 +83,10 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
 
   @Override
   public InputSplit[] getSplits(JobConf job, int numSplits) throws IOException {
-
     List<FileSplit> fileSplits = Arrays.stream(super.getSplits(job, numSplits)).map(is -> (FileSplit) is).collect(Collectors.toList());
 
-    boolean isIncrementalSplits = HoodieRealtimeInputFormatUtils.isIncrementalQuerySplits(fileSplits);
-
-    return isIncrementalSplits
-        ? HoodieRealtimeInputFormatUtils.getIncrementalRealtimeSplits(job, fileSplits.stream())
+    return HoodieRealtimeInputFormatUtils.isIncrementalQuerySplits(fileSplits)
+        ? HoodieRealtimeInputFormatUtils.getIncrementalRealtimeSplits(job, fileSplits)
         : HoodieRealtimeInputFormatUtils.getRealtimeSplits(job, fileSplits);
   }
 
@@ -251,14 +248,18 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
   private FileSplit doMakeSplitForPathWithLogFilePath(PathWithLogFilePath path, long start, long length, String[] hosts, String[] inMemoryHosts) {
     if (!path.includeBootstrapFilePath()) {
       return path.buildSplit(path, start, length, hosts);
-    } else {
-      FileSplit bf =
-          inMemoryHosts == null
-              ? super.makeSplit(path.getPathWithBootstrapFileStatus(), start, length, hosts)
-              : super.makeSplit(path.getPathWithBootstrapFileStatus(), start, length, hosts, inMemoryHosts);
-      return HoodieRealtimeInputFormatUtils
-          .createRealtimeBoostrapBaseFileSplit((BootstrapBaseFileSplit) bf, path.getBasePath(), path.getDeltaLogFiles(), path.getMaxCommitTime());
     }
+
+    FileSplit bf = inMemoryHosts == null
+        ? super.makeSplit(path.getPathWithBootstrapFileStatus(), start, length, hosts)
+        : super.makeSplit(path.getPathWithBootstrapFileStatus(), start, length, hosts, inMemoryHosts);
+
+    return HoodieRealtimeInputFormatUtils.createRealtimeBoostrapBaseFileSplit(
+        (BootstrapBaseFileSplit) bf,
+        path.getBasePath(),
+        path.getDeltaLogFiles(),
+        path.getMaxCommitTime(),
+        path.getBelongsToIncrementalQuery());
   }
 
   @Override
