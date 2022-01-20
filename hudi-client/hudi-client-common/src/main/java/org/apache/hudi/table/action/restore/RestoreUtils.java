@@ -39,7 +39,6 @@ public class RestoreUtils {
    */
   public static HoodieRestorePlan getRestorePlan(HoodieTableMetaClient metaClient, HoodieInstant restoreInstant)
       throws IOException {
-    // TODO: add upgrade step if required.
     final HoodieInstant requested = HoodieTimeline.getRollbackRequestedInstant(restoreInstant);
     return TimelineMetadataUtils.deserializeAvroMetadata(
         metaClient.getActiveTimeline().readRestoreInfoAsBytes(requested).get(), HoodieRestorePlan.class);

@@ -441,8 +441,9 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * @return commit instant
    */
   public HoodieInstant transitionRestoreRequestedToInflight(HoodieInstant requestedInstant) {
-    ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.RESTORE_ACTION));
-    ValidationUtils.checkArgument(requestedInstant.isRequested());
+    ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.RESTORE_ACTION), "Transition to inflight requested for a restore instant with diff action "
+        + requestedInstant.toString());
+    ValidationUtils.checkArgument(requestedInstant.isRequested(), "Transition to inflight requested for an instant not in requested state " + requestedInstant.toString());
     HoodieInstant inflight = new HoodieInstant(State.INFLIGHT, RESTORE_ACTION, requestedInstant.getTimestamp());
     transitionState(requestedInstant, inflight, Option.empty());
     return inflight;

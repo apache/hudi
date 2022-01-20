@@ -129,7 +129,7 @@ public abstract class BaseRestoreActionExecutor<T extends HoodieRecordPayload, I
     writeToMetadata(restoreMetadata);
     table.getActiveTimeline().saveAsComplete(new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, instantTime),
         TimelineMetadataUtils.serializeRestoreMetadata(restoreMetadata));
-    // get all rollbacks instants after restore instant time and delete them.
+    // get all pending rollbacks instants after restore instant time and delete them.
     // if not, rollbacks will be considered not completed and might hinder metadata table compaction.
     List<HoodieInstant> instantsToRollback = table.getActiveTimeline().getRollbackTimeline()
         .getReverseOrderedInstants()
