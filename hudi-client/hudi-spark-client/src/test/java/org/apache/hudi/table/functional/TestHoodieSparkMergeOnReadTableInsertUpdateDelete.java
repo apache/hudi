@@ -167,14 +167,6 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       records = dataGen.generateUpdates(newCommitTime, 100);
       updateRecordsInMORTable(metaClient, records, client, cfg, newCommitTime, true);
 
-      // validate compaction has been scheduled inline
-      /*HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
-      hoodieTable.getHoodieView().sync();
-      FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
-      HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
-      Stream<HoodieBaseFile> dataFilesToRead = tableView.getLatestBaseFiles();
-      assertTrue(dataFilesToRead.findAny().isPresent());*/
-
       // verify that there is a commit
       if (scheduleInlineCompaction) {
         assertEquals(metaClient.reloadActiveTimeline().getAllCommitsTimeline().filterPendingCompactionTimeline().countInstants(), 1);

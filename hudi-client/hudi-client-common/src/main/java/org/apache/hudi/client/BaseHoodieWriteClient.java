@@ -477,11 +477,11 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
         metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT.key(), "false");
       }
 
-      // if just inline schedule
-      if (config.scheduleInlineCompaction() && !table.getActiveTimeline().getWriteTimeline().filterPendingCompactionTimeline().getInstants().findAny().isPresent()) {
+      // if just inline schedule is enabled
+      if (!config.inlineCompactionEnabled() && config.scheduleInlineCompaction()
+          && !table.getActiveTimeline().getWriteTimeline().filterPendingCompactionTimeline().getInstants().findAny().isPresent()) {
         // proceed only if there are no pending compactions
-        // ?? what value to add for the metadata. true/false?
-        metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
+        metadata.addMetadata(HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT.key(), "true");
         inlineScheduleCompactAndOptionallyExecute(extraMetadata, false);
       }
 
@@ -494,11 +494,11 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
         metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "false");
       }
 
-      // if just inline schedule
-      if (config.scheduleInlineClustering() && !table.getActiveTimeline().filterPendingReplaceTimeline().getInstants().findAny().isPresent()) {
+      // if just inline schedule is enabled
+      if (!config.inlineClusteringEnabled() && config.scheduleInlineClustering()
+          && !table.getActiveTimeline().filterPendingReplaceTimeline().getInstants().findAny().isPresent()) {
         // proceed only if there are no pending clustering
-        // ?? what value to add for the metadata. true/false?
-        metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true");
+        metadata.addMetadata(HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING.key(), "true");
         inlineScheduleClusterAndOptionallyExecute(extraMetadata, false);
       }
     }
