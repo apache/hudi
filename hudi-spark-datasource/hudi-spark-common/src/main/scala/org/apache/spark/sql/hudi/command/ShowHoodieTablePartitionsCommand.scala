@@ -48,10 +48,10 @@ case class ShowHoodieTablePartitionsCommand(
 
     if (partitionColumnNamesOpt.isPresent && partitionColumnNamesOpt.get.nonEmpty && schemaOpt.nonEmpty) {
       if (specOpt.isEmpty) {
-        hoodieCatalogTable.getAllPartitionPaths.map(Row(_))
+        hoodieCatalogTable.getPartitionPaths.map(Row(_))
       } else {
         val spec = specOpt.get
-        hoodieCatalogTable.getAllPartitionPaths.filter { partitionPath =>
+        hoodieCatalogTable.getPartitionPaths.filter { partitionPath =>
           val part = PartitioningUtils.parsePathFragment(partitionPath)
           spec.forall { case (col, value) =>
             PartitionPathEncodeUtils.escapePartitionValue(value) == part.getOrElse(col, null)

@@ -148,7 +148,7 @@ case class AlterHoodieTableDropPartitionCommand(
       hoodieCatalogTable: HoodieCatalogTable,
       normalizedSpecs: Seq[Map[String, String]]): String = {
     val table = hoodieCatalogTable.table
-    val allPartitionPaths = hoodieCatalogTable.getAllPartitionPaths
+    val allPartitionPaths = hoodieCatalogTable.getPartitionPaths
     val enableHiveStylePartitioning = isHiveStyledPartitioning(allPartitionPaths, table)
     val enableEncodeUrl = isUrlEncodeEnabled(allPartitionPaths, table)
     val partitionsToDrop = normalizedSpecs.map { spec =>

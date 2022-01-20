@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -73,7 +74,6 @@ public class HoodieHiveUtils {
   public static final String SNAPSHOT_SCAN_MODE = "SNAPSHOT";
   public static final String DEFAULT_SCAN_MODE = SNAPSHOT_SCAN_MODE;
   public static final int DEFAULT_MAX_COMMITS = 1;
-  public static final boolean DEFAULT_INCREMENTAL_USE_DATABASE = false;
   public static final int MAX_COMMIT_ALL = -1;
   public static final int DEFAULT_LEVELS_TO_BASEPATH = 3;
   public static final Pattern HOODIE_CONSUME_MODE_PATTERN_STRING = Pattern.compile("hoodie\\.(.*)\\.consume\\.mode");
@@ -181,7 +181,7 @@ public class HoodieHiveUtils {
     return timeline.findInstantsBeforeOrEquals(maxCommit);
   }
 
-  public static boolean isIncrementalUseDatabase(JobContext job) {
-    return job.getConfiguration().getBoolean(HOODIE_INCREMENTAL_USE_DATABASE, false);
+  public static boolean isIncrementalUseDatabase(Configuration conf) {
+    return conf.getBoolean(HOODIE_INCREMENTAL_USE_DATABASE, false);
   }
 }

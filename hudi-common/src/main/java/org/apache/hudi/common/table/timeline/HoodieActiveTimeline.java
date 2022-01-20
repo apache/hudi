@@ -361,7 +361,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   private void createFileInAuxiliaryFolder(HoodieInstant instant, Option<byte[]> data) {
     // This will be removed in future release. See HUDI-546
     Path fullPath = new Path(metaClient.getMetaAuxiliaryPath(), instant.getFileName());
-    createFileInPath(fullPath, data);
+    FileIOUtils.createFileInPath(metaClient.getFs(), fullPath, data);
   }
 
   //-----------------------------------------------------------------
@@ -505,7 +505,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
             fromInstant.getFileName())));
         // Use Write Once to create Target File
         if (allowRedundantTransitions) {
-          createFileInPath(new Path(metaClient.getMetaPath(), toInstant.getFileName()), data);
+          FileIOUtils.createFileInPath(metaClient.getFs(), new Path(metaClient.getMetaPath(), toInstant.getFileName()), data);
         } else {
           createImmutableFileInPath(new Path(metaClient.getMetaPath(), toInstant.getFileName()), data);
         }
@@ -602,30 +602,9 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   private void createFileInMetaPath(String filename, Option<byte[]> content, boolean allowOverwrite) {
     Path fullPath = new Path(metaClient.getMetaPath(), filename);
     if (allowOverwrite || metaClient.getTimelineLayoutVersion().isNullVersion()) {
-      createFileInPath(fullPath, content);
+      FileIOUtils.createFileInPath(metaClient.getFs(), fullPath, content);
     } else {
       createImmutableFileInPath(fullPath, content);
-    }
-  }
-
-  private void createFileInPath(Path fullPath, Option<byte[]> content) {
-    try {
-      // If the path does not exist, create it first
-      if (!metaClient.getFs().exists(fullPath)) {
-        if (metaClient.getFs().createNewFile(fullPath)) {
-          LOG.info("Created a new file in meta path: " + fullPath);
-        } else {
-          throw new HoodieIOException("Failed to create file " + fullPath);
-        }
-      }
-
-      if (content.isPresent()) {
-        FSDataOutputStream fsout = metaClient.getFs().create(fullPath, true);
-        fsout.write(content.get());
-        fsout.close();
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to create file " + fullPath, e);
     }
   }
 
