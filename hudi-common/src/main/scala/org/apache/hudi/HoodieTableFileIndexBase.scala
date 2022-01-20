@@ -179,6 +179,7 @@ abstract class HoodieTableFileIndexBase(engineContext: HoodieEngineContext,
   }
 
   private def getActiveTimeline = {
+    // TODO re-evaluate whether we should not filter any commits in here
     val timeline = metaClient.getActiveTimeline.getCommitsTimeline
     if (shouldIncludePendingCommits) {
       timeline
