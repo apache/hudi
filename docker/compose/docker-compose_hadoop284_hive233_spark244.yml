@@ -184,7 +184,7 @@ services:
   presto-coordinator-1:
     container_name: presto-coordinator-1
     hostname: presto-coordinator-1
-    image: apachehudi/hudi-hadoop_2.8.4-prestobase_0.217:latest
+    image: apachehudi/hudi-hadoop_2.8.4-prestobase_0.268:latest
     ports:
       - '8090:8090'
     environment:
@@ -203,7 +203,7 @@ services:
   presto-worker-1:
       container_name: presto-worker-1
       hostname: presto-worker-1
-      image: apachehudi/hudi-hadoop_2.8.4-prestobase_0.217:latest
+      image: apachehudi/hudi-hadoop_2.8.4-prestobase_0.268:latest
       depends_on: ["presto-coordinator-1"]
       environment:
         - PRESTO_JVM_MAX_HEAP=512M
