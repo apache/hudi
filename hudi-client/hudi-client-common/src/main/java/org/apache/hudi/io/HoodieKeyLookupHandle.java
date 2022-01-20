@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndexUtils;
+import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.Path;
@@ -64,11 +65,12 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload, I, K, O> exten
   public HoodieKeyLookupHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
                                Pair<String, String> partitionPathFileIDPair, Option<String> fileName,
                                boolean useMetadataTableIndex) {
-    super(config, null, hoodieTable, partitionPathFileIDPair);
+    super(config, hoodieTable, partitionPathFileIDPair);
     this.candidateRecordKeys = new ArrayList<>();
     this.totalKeysChecked = 0;
     if (fileName.isPresent()) {
-      ValidationUtils.checkArgument(FSUtils.getFileId(fileName.get()).equals(getFileId()));
+      ValidationUtils.checkArgument(FSUtils.getFileId(fileName.get()).equals(getFileId()),
+          "File name '" + fileName.get() + "' doesn't match this lookup handle fileid '" + getFileId() + "'");
       this.fileName = fileName;
     }
     this.useMetadataTableIndex = useMetadataTableIndex;
@@ -80,7 +82,8 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload, I, K, O> exten
     HoodieTimer timer = new HoodieTimer().startTimer();
     try {
       if (this.useMetadataTableIndex) {
-        ValidationUtils.checkArgument(this.fileName.isPresent());
+        ValidationUtils.checkArgument(this.fileName.isPresent(),
+            "File name not available to fetch bloom filter from the metadata table index.");
         Option<ByteBuffer> bloomFilterByteBuffer =
             hoodieTable.getMetadataTable().getBloomFilter(partitionPathFileIDPair.getLeft(), fileName.get());
         if (!bloomFilterByteBuffer.isPresent()) {
@@ -90,7 +93,9 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload, I, K, O> exten
             new HoodieDynamicBoundedBloomFilter(StandardCharsets.UTF_8.decode(bloomFilterByteBuffer.get()).toString(),
                 BloomFilterTypeCode.DYNAMIC_V0);
       } else {
-        bloomFilter = createNewFileReader().readBloomFilter();
+        try (HoodieFileReader reader = createNewFileReader()) {
+          bloomFilter = reader.readBloomFilter();
+        }
       }
     } catch (IOException e) {
       throw new HoodieIndexException(String.format("Error reading bloom filter from %s/%s - %s",

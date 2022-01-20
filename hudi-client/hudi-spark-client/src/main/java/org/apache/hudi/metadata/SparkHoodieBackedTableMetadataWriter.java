@@ -177,10 +177,10 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
    */
   private JavaRDD<HoodieRecord> prepRecords(Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap) {
     // The result set
-    JavaRDD<HoodieRecord> rddAllPartitionRecords = null;
+    JavaRDD<HoodieRecord> rddAllPartitionRecords = ((HoodieSparkEngineContext) engineContext).getJavaSparkContext().emptyRDD();
 
     for (Map.Entry<MetadataPartitionType, HoodieData<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
-      final String partitionName = entry.getKey().partitionPath();
+      final String partitionName = entry.getKey().getPartitionPath();
       final int fileGroupCount = entry.getKey().getFileGroupCount();
       HoodieData<HoodieRecord> records = entry.getValue();
       JavaRDD<HoodieRecord> recordsRDD = (JavaRDD<HoodieRecord>) records.get();
@@ -188,7 +188,8 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       List<FileSlice> fileSlices =
           HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, partitionName);
       ValidationUtils.checkArgument(fileSlices.size() == fileGroupCount,
-          String.format("Invalid number of file groups: found=%d, required=%d", fileSlices.size(), fileGroupCount));
+          String.format("Invalid number of file groups for partition:%s, found=%d, required=%d",
+              partitionName, fileSlices.size(), fileGroupCount));
 
       JavaRDD<HoodieRecord> rddSinglePartitionRecords = recordsRDD.map(r -> {
         FileSlice slice = fileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(),
@@ -197,11 +198,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         return r;
       });
 
-      if (rddAllPartitionRecords == null) {
-        rddAllPartitionRecords = rddSinglePartitionRecords;
-      } else {
-        rddAllPartitionRecords = rddAllPartitionRecords.union(rddSinglePartitionRecords);
-      }
+      rddAllPartitionRecords = rddAllPartitionRecords.union(rddSinglePartitionRecords);
     }
     return rddAllPartitionRecords;
   }

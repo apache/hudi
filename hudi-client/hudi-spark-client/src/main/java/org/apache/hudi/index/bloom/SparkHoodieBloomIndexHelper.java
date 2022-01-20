@@ -76,20 +76,14 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
         + config.getBloomIndexParallelism() + "}");
 
     JavaRDD<List<HoodieKeyLookupResult>> keyLookupResultRDD;
-    if (config.isMetaIndexBloomFilterEnabled()) {
+    if (config.isMetadataIndexBloomFilterEnabled()) {
       // Step 1: Sort by file id
       JavaRDD<Tuple2<String, HoodieKey>> sortedFileIdAndKeyPairs =
           fileComparisonsRDD.sortBy(entry -> entry._1, true, joinParallelism);
 
       // Step 2: Use bloom filter to filter and the actual log file to get the record location
-      final boolean isBloomFiltersBatchLoadEnabled = config.isMetaIndexBloomFilterBatchLoadEnabled();
-      if (isBloomFiltersBatchLoadEnabled) {
-        keyLookupResultRDD = sortedFileIdAndKeyPairs.mapPartitionsWithIndex(
-            new HoodieBloomMetaIndexBatchCheckFunction(hoodieTable, config), true);
-      } else {
-        keyLookupResultRDD = sortedFileIdAndKeyPairs.mapPartitionsWithIndex(
-            new HoodieBloomMetaIndexLazyCheckFunction(hoodieTable, config), true);
-      }
+      keyLookupResultRDD = sortedFileIdAndKeyPairs.mapPartitionsWithIndex(
+          new HoodieMetadataBloomIndexCheckFunction(hoodieTable, config), true);
     } else if (config.useBloomIndexBucketizedChecking()) {
       Map<String, Long> comparisonsPerFileGroup = computeComparisonsPerFileGroup(
           config, recordsPerPartition, partitionToFileInfo, fileComparisonsRDD, context);

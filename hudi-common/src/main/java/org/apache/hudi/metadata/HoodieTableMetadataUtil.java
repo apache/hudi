@@ -81,26 +81,6 @@ public class HoodieTableMetadataUtil {
   protected static final String PARTITION_NAME_BLOOM_FILTERS = "bloom_filters";
 
   /**
-   * Get the metadata partition type from the partition path.
-   *
-   * @param partitionPath - Partition path to get the type for
-   * @return Partition type for the path
-   */
-  public static Option<MetadataPartitionType> fromPartitionPath(final String partitionPath) {
-    switch (partitionPath) {
-      case PARTITION_NAME_FILES:
-        return Option.of(MetadataPartitionType.FILES);
-      case PARTITION_NAME_COLUMN_STATS:
-        return Option.of(MetadataPartitionType.COLUMN_STATS);
-      case PARTITION_NAME_BLOOM_FILTERS:
-        return Option.of(MetadataPartitionType.BLOOM_FILTERS);
-      default:
-        LOG.error("Unexpected Partition path " + partitionPath);
-        return Option.empty();
-    }
-  }
-
-  /**
    * Delete the metadata table for the dataset. This will be invoked during upgrade/downgrade operation during which
    * no other
    * process should be running.

@@ -99,8 +99,8 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
             .bloomIndexTreebasedFilter(treeFiltering).bloomIndexBucketizedChecking(bucketizedChecking)
             .bloomIndexKeysPerBucket(2).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .withMetaIndexBloomFilter(false)
-            .withMetaIndexColumnStats(false)
+            .withMetadataIndexBloomFilter(false)
+            .withMetadataIndexColumnStats(false)
             .build())
         .build();
   }

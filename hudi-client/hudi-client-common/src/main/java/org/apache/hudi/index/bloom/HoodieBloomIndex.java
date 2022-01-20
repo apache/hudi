@@ -123,11 +123,11 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
     // Step 2: Load all involved files as <Partition, filename> pairs
     List<Pair<String, BloomIndexFileInfo>> fileInfoList;
     if (config.getBloomIndexPruneByRanges()) {
-      fileInfoList = (config.getMetadataConfig().isMetaIndexColumnStatsEnabled()
+      fileInfoList = (config.getMetadataConfig().isMetadataIndexColumnStatsEnabled()
           ? loadColumnRangesFromMetaIndex(affectedPartitionPathList, context, hoodieTable)
           : loadColumnRangesFromFiles(affectedPartitionPathList, context, hoodieTable));
     } else {
-      fileInfoList = getLatestBaseFilesForPartitions(affectedPartitionPathList, context, hoodieTable);
+      fileInfoList = getFileInfoForLatestBaseFiles(affectedPartitionPathList, context, hoodieTable);
     }
     final Map<String, List<BloomIndexFileInfo>> partitionToFileInfo =
         fileInfoList.stream().collect(groupingBy(Pair::getLeft, mapping(Pair::getRight, toList())));
@@ -165,14 +165,14 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
   }
 
   /**
-   * Get the latest base files for the requested partitions.
+   * Get BloomIndexFileInfo for all the latest base files for the requested partitions.
    *
    * @param partitions  - List of partitions to get the base files for
    * @param context     - Engine context
    * @param hoodieTable - Hoodie Table
    * @return List of partition and file column range info pairs
    */
-  List<Pair<String, BloomIndexFileInfo>> getLatestBaseFilesForPartitions(
+  private List<Pair<String, BloomIndexFileInfo>> getFileInfoForLatestBaseFiles(
       List<String> partitions, final HoodieEngineContext context, final HoodieTable hoodieTable) {
     List<Pair<String, String>> partitionPathFileIDList = getLatestBaseFilesForAllPartitions(partitions, context,
         hoodieTable).stream()
@@ -190,7 +190,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
    * @param hoodieTable - Hoodie table
    * @return List of partition and file column range info pairs
    */
-  List<Pair<String, BloomIndexFileInfo>> loadColumnRangesFromMetaIndex(
+  protected List<Pair<String, BloomIndexFileInfo>> loadColumnRangesFromMetaIndex(
       List<String> partitions, final HoodieEngineContext context, final HoodieTable hoodieTable) {
     // also obtain file ranges, if range pruning is enabled
     context.setJobStatus(this.getClass().getName(), "Load meta index key ranges for file slices");

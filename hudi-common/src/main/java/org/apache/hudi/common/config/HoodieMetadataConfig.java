@@ -124,7 +124,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.10.0")
       .withDocumentation("Enable full scanning of log files while reading log records. If disabled, hudi does look up of only interested entries.");
 
-  public static final ConfigProperty<Boolean> ENABLE_META_INDEX_BLOOM_FILTER = ConfigProperty
+  public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_BLOOM_FILTER = ConfigProperty
       .key(METADATA_PREFIX + ".index.bloom.filter.enable")
       .defaultValue(false)
       .sinceVersion("0.11.0")
@@ -132,7 +132,15 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "metadata table will have a partition to store the bloom filter index and will be "
           + "used during the index lookups.");
 
-  public static final ConfigProperty<Boolean> ENABLE_META_INDEX_COLUMN_STATS = ConfigProperty
+  public static final ConfigProperty<Integer> METADATA_INDEX_BLOOM_FILTER_FILE_GROUP_COUNT = ConfigProperty
+      .key(METADATA_PREFIX + ".index.bloom.filter.file.group.count")
+      .defaultValue(4)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Metadata bloom filter index partition file group count. This controls the size of the base and "
+          + "log files and read parallelism in the bloom filter index partition. The recommendation is to size the "
+          + "file group count such that the base files are under 1GB.");
+
+  public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_COLUMN_STATS = ConfigProperty
       .key(METADATA_PREFIX + ".index.column.stats.enable")
       .defaultValue(false)
       .sinceVersion("0.11.0")
@@ -140,20 +148,21 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "enabled, metadata table will have a partition to store the column ranges and will "
           + "used for pruning files during the index lookups.");
 
-  public static final ConfigProperty<Boolean> META_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS = ConfigProperty
+  public static final ConfigProperty<Integer> METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT = ConfigProperty
+      .key(METADATA_PREFIX + ".index.column.stats.file.group.count")
+      .defaultValue(2)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Metadata column stats partition file group count. This controls the size of the base and "
+          + "log files and read parallelism in the column stats index partition. The recommendation is to size the "
+          + "file group count such that the base files are under 1GB.");
+
+  public static final ConfigProperty<Boolean> METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS = ConfigProperty
       .key(METADATA_PREFIX + ".index.column.stats.all_columns")
       .defaultValue(false)
       .sinceVersion("0.11.0")
       .withDocumentation("Enable indexing user data files column ranges under metadata table key lookups. When "
           + "enabled, metadata table will have a partition to store the column ranges and will "
           + "used for pruning files during the index lookups.");
-
-  public static final ConfigProperty<Boolean> ENABLE_META_INDEX_BLOOM_FILTER_BATCH_LOAD_MODE = ConfigProperty
-      .key(METADATA_PREFIX + ".index.bloom.filter.batchload.enable")
-      .defaultValue(true)
-      .sinceVersion("0.11.0")
-      .withDocumentation("Enable batch/bulk loading of bloom filter index for the entire partition when looking "
-          + "up index. This is useful when upserting large set of records under the same partition.");
 
   public static final ConfigProperty<Boolean> POPULATE_META_FIELDS = ConfigProperty
       .key(METADATA_PREFIX + ".populate.meta.fields")
@@ -188,20 +197,24 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBoolean(ENABLE);
   }
 
-  public boolean isMetaIndexBloomFilterEnabled() {
-    return getBooleanOrDefault(ENABLE_META_INDEX_BLOOM_FILTER);
+  public boolean isMetadataIndexBloomFilterEnabled() {
+    return getBooleanOrDefault(ENABLE_METADATA_INDEX_BLOOM_FILTER);
   }
 
-  public boolean isMetaIndexColumnStatsEnabled() {
-    return getBooleanOrDefault(ENABLE_META_INDEX_COLUMN_STATS);
+  public boolean isMetadataIndexColumnStatsEnabled() {
+    return getBooleanOrDefault(ENABLE_METADATA_INDEX_COLUMN_STATS);
   }
 
-  public boolean isMetaIndexColumnStatsForAllColumns() {
-    return getBooleanOrDefault(META_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS);
+  public boolean isMetadataIndexColumnStatsForAllColumns() {
+    return getBooleanOrDefault(METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS);
   }
 
-  public boolean isMetaIndexBloomFilterBatchLoadEnabled() {
-    return getBooleanOrDefault(ENABLE_META_INDEX_BLOOM_FILTER_BATCH_LOAD_MODE);
+  public int getMetadataIndexBloomFilterFileGroupCount() {
+    return getIntOrDefault(METADATA_INDEX_BLOOM_FILTER_FILE_GROUP_COUNT);
+  }
+
+  public int getMetadataIndexColumnStatsFileGroupCount() {
+    return getIntOrDefault(METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT);
   }
 
   public boolean enableMetrics() {
@@ -246,18 +259,13 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withMetaIndexBloomFilter(boolean enable) {
-      metadataConfig.setValue(ENABLE_META_INDEX_BLOOM_FILTER, String.valueOf(enable));
+    public Builder withMetadataIndexBloomFilter(boolean enable) {
+      metadataConfig.setValue(ENABLE_METADATA_INDEX_BLOOM_FILTER, String.valueOf(enable));
       return this;
     }
 
-    public Builder withMetaIndexBloomFilterBatchLoad(boolean enable) {
-      metadataConfig.setValue(ENABLE_META_INDEX_BLOOM_FILTER_BATCH_LOAD_MODE, String.valueOf(enable));
-      return this;
-    }
-
-    public Builder withMetaIndexColumnStats(boolean enable) {
-      metadataConfig.setValue(ENABLE_META_INDEX_COLUMN_STATS, String.valueOf(enable));
+    public Builder withMetadataIndexColumnStats(boolean enable) {
+      metadataConfig.setValue(ENABLE_METADATA_INDEX_COLUMN_STATS, String.valueOf(enable));
       return this;
     }
 

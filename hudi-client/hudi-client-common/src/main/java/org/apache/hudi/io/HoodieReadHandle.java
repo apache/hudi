@@ -22,6 +22,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieFileReader;
@@ -37,9 +38,9 @@ public abstract class HoodieReadHandle<T extends HoodieRecordPayload, I, K, O> e
 
   protected final Pair<String, String> partitionPathFileIDPair;
 
-  public HoodieReadHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-      Pair<String, String> partitionPathFileIDPair) {
-    super(config, instantTime, hoodieTable);
+  public HoodieReadHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
+                          Pair<String, String> partitionPathFileIDPair) {
+    super(config, Option.empty(), hoodieTable);
     this.partitionPathFileIDPair = partitionPathFileIDPair;
   }
 

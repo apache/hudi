@@ -135,10 +135,14 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     if (writeConfig.isMetadataTableEnabled()) {
       this.enabledPartitionTypes.add(MetadataPartitionType.FILES);
-      if (writeConfig.getMetadataConfig().isMetaIndexBloomFilterEnabled()) {
+      if (writeConfig.getMetadataConfig().isMetadataIndexBloomFilterEnabled()) {
+        MetadataPartitionType.BLOOM_FILTERS.setFileGroupCount(
+            writeConfig.getMetadataConfig().getMetadataIndexBloomFilterFileGroupCount());
         this.enabledPartitionTypes.add(MetadataPartitionType.BLOOM_FILTERS);
       }
-      if (writeConfig.getMetadataConfig().isMetaIndexColumnStatsEnabled()) {
+      if (writeConfig.getMetadataConfig().isMetadataIndexColumnStatsEnabled()) {
+        MetadataPartitionType.COLUMN_STATS.setFileGroupCount(
+            writeConfig.getMetadataConfig().getMetadataIndexColumnStatsFileGroupCount());
         this.enabledPartitionTypes.add(MetadataPartitionType.COLUMN_STATS);
       }
       this.tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
@@ -578,12 +582,12 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     final HoodieDeleteBlock block = new HoodieDeleteBlock(new HoodieKey[0], blockHeader);
 
     LOG.info(String.format("Creating %d file groups for partition %s with base fileId %s at instant time %s",
-        fileGroupCount, metadataPartition.partitionPath(), metadataPartition.getFileIdPrefix(), instantTime));
+        fileGroupCount, metadataPartition.getPartitionPath(), metadataPartition.getFileIdPrefix(), instantTime));
     for (int i = 0; i < fileGroupCount; ++i) {
       final String fileGroupFileId = String.format("%s%04d", metadataPartition.getFileIdPrefix(), i);
       try {
         HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
-            .onParentPath(FSUtils.getPartitionPath(metadataWriteConfig.getBasePath(), metadataPartition.partitionPath()))
+            .onParentPath(FSUtils.getPartitionPath(metadataWriteConfig.getBasePath(), metadataPartition.getPartitionPath()))
             .withFileId(fileGroupFileId).overBaseCommit(instantTime)
             .withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
             .withFileSize(0L)
@@ -595,7 +599,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         writer.appendBlock(block);
         writer.close();
       } catch (InterruptedException e) {
-        throw new HoodieException("Failed to created fileGroup " + fileGroupFileId + " for partition " + metadataPartition.partitionPath(), e);
+        throw new HoodieException("Failed to created fileGroup " + fileGroupFileId + " for partition " + metadataPartition.getPartitionPath(), e);
       }
     }
   }
@@ -631,7 +635,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   @Override
   public void update(HoodieCommitMetadata commitMetadata, String instantTime, boolean isTableServiceAction) {
     processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, enabledPartitionTypes,
-        commitMetadata, dataMetaClient, getWriteConfig().isMetaIndexColumnStatsForAllColumns(), instantTime), !isTableServiceAction);
+        commitMetadata, dataMetaClient, getWriteConfig().isMetadataIndexColumnStatsForAllColumns(), instantTime), !isTableServiceAction);
   }
 
   /**
