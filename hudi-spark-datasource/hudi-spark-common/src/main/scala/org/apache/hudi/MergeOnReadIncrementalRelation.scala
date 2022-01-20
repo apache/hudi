@@ -17,16 +17,15 @@
 
 package org.apache.hudi
 
+import org.apache.hadoop.fs.{GlobPattern, Path}
+import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.util.TableSchemaResolverUtils
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.listAffectedFilesForCommits
-import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getCommitMetadata
-import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getWritePartitionPaths
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.{getCommitMetadata, getWritePartitionPaths, listAffectedFilesForCommits}
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
-import org.apache.hadoop.fs.{GlobPattern, Path}
-import org.apache.hadoop.mapred.JobConf
 import org.apache.log4j.LogManager
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
@@ -74,7 +73,8 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
     optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key, lastInstant.getTimestamp))
   log.debug(s"${commitsTimelineToReturn.getInstants.iterator().toList.map(f => f.toString).mkString(",")}")
   private val commitsToReturn = commitsTimelineToReturn.getInstants.iterator().toList
-  private val schemaUtil = new TableSchemaResolver(metaClient)
+  private val withOperationField: Boolean = TableSchemaResolverUtils.hasOperationField(metaClient)
+  private val schemaUtil = new TableSchemaResolver(metaClient, withOperationField)
   private val tableAvroSchema = schemaUtil.getTableAvroSchema
   private val tableStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
   private val maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(jobConf)
