@@ -455,7 +455,6 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
             .withAutoClean(false).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         // Timeline-server-based markers are not used for multi-writer tests
         .withMarkersType(MarkerType.DIRECT.name())
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
@@ -497,9 +496,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
           try {
             ingestBatch(writeFn, client1, newCommitTime1, writeRecords1, runCountDownLatch);
           } catch (IOException e) {
-            e.printStackTrace();
+            LOG.error("IOException thrown " + e.getMessage());
           } catch (InterruptedException e) {
-            e.printStackTrace();
+            LOG.error("Interrupted Exception thrown " + e.getMessage());
           } catch (Exception e) {
             client1Succeeded.set(false);
           }
@@ -510,9 +509,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
           try {
             ingestBatch(writeFn, client2, newCommitTime2, writeRecords2, runCountDownLatch);
           } catch (IOException e) {
-            e.printStackTrace();
+            LOG.error("IOException thrown " + e.getMessage());
           } catch (InterruptedException e) {
-            e.printStackTrace();
+            LOG.error("Interrupted Exception thrown " + e.getMessage());
           } catch (Exception e) {
             client2Succeeded.set(false);
           }
