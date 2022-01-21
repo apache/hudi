@@ -86,8 +86,10 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     val nameFieldMap = generateFieldMap(schema)
 
     if (partitionColumns.isPresent) {
-      if (tableConfig.getKeyGeneratorClassName.equalsIgnoreCase(classOf[TimestampBasedKeyGenerator].getName)
-        || tableConfig.getKeyGeneratorClassName.equalsIgnoreCase(classOf[TimestampBasedAvroKeyGenerator].getName)) {
+      // Note that key generator class name could be null
+      val keyGeneratorClassName = tableConfig.getKeyGeneratorClassName
+      if (classOf[TimestampBasedKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)
+        || classOf[TimestampBasedAvroKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)) {
         val partitionFields = partitionColumns.get().map(column => StructField(column, StringType))
         StructType(partitionFields)
       } else {
