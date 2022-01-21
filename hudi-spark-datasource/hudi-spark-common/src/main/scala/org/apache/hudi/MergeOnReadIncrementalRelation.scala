@@ -22,7 +22,6 @@ import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.TableSchemaResolverUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.{getCommitMetadata, getWritePartitionPaths, listAffectedFilesForCommits}
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
@@ -73,7 +72,7 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
     optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key, lastInstant.getTimestamp))
   log.debug(s"${commitsTimelineToReturn.getInstants.iterator().toList.map(f => f.toString).mkString(",")}")
   private val commitsToReturn = commitsTimelineToReturn.getInstants.iterator().toList
-  private val withOperationField: Boolean = TableSchemaResolverUtils.hasOperationField(metaClient)
+  private val withOperationField: Boolean = new TableSchemaResolver(metaClient).hasOperationField
   private val schemaUtil = new TableSchemaResolver(metaClient, withOperationField)
   private val tableAvroSchema = schemaUtil.getTableAvroSchema
   private val tableStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)

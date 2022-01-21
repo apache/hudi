@@ -24,7 +24,6 @@ import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.TableSchemaResolverUtils
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.spark.internal.Logging
@@ -65,7 +64,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
 
   private val conf = sqlContext.sparkContext.hadoopConfiguration
   private val jobConf = new JobConf(conf)
-  private val withOperationField: Boolean = TableSchemaResolverUtils.hasOperationField(metaClient)
+  private val withOperationField: Boolean = new TableSchemaResolver(metaClient).hasOperationField
   // use schema from latest metadata, if not present, read schema from the data file
   private val schemaUtil = new TableSchemaResolver(metaClient, withOperationField)
   private lazy val tableAvroSchema = {
