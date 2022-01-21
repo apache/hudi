@@ -39,7 +39,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
 import org.apache.hudi.hadoop.FileStatusWithBootstrapBaseFile;
-import org.apache.hudi.hadoop.HoodieFileInputFormatBase;
+import org.apache.hudi.hadoop.HoodieCopyOnWriteTableFileInputFormat;
 import org.apache.hudi.hadoop.LocatedFileStatusWithBootstrapBaseFile;
 import org.apache.hudi.hadoop.PathWithLogFilePath;
 import org.apache.hudi.hadoop.RealtimeFileStatus;
@@ -68,9 +68,7 @@ import java.util.stream.Collectors;
  *
  * NOTE: This class is invariant of the underlying file-format of the files being read
  */
-public abstract class HoodieRealtimeFileInputFormatBase extends HoodieFileInputFormatBase implements Configurable {
-
-  private static final Logger LOG = LogManager.getLogger(HoodieParquetRealtimeInputFormat.class);
+public class HoodieMergeOnReadTableFileInputFormat extends HoodieCopyOnWriteTableFileInputFormat implements Configurable {
 
   @Override
   public InputSplit[] getSplits(JobConf job, int numSplits) throws IOException {
