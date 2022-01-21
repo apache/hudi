@@ -17,14 +17,16 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.{GlobPattern, Path}
-import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.{getCommitMetadata, getWritePartitionPaths, listAffectedFilesForCommits}
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.listAffectedFilesForCommits
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getCommitMetadata
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getWritePartitionPaths
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
+import org.apache.hadoop.fs.{GlobPattern, Path}
+import org.apache.hadoop.mapred.JobConf
 import org.apache.log4j.LogManager
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
