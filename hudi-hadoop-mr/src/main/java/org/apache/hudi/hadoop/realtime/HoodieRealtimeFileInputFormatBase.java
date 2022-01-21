@@ -66,10 +66,8 @@ public abstract class HoodieRealtimeFileInputFormatBase extends HoodieFileInputF
   public InputSplit[] getSplits(JobConf job, int numSplits) throws IOException {
     List<FileSplit> fileSplits = Arrays.stream(super.getSplits(job, numSplits)).map(is -> (FileSplit) is).collect(Collectors.toList());
 
-    boolean isIncrementalSplits = HoodieRealtimeInputFormatUtils.isIncrementalQuerySplits(fileSplits);
-
-    return isIncrementalSplits
-        ? HoodieRealtimeInputFormatUtils.getIncrementalRealtimeSplits(job, fileSplits.stream())
+    return HoodieRealtimeInputFormatUtils.isIncrementalQuerySplits(fileSplits)
+        ? HoodieRealtimeInputFormatUtils.getIncrementalRealtimeSplits(job, fileSplits)
         : HoodieRealtimeInputFormatUtils.getRealtimeSplits(job, fileSplits);
   }
 
@@ -238,8 +236,12 @@ public abstract class HoodieRealtimeFileInputFormatBase extends HoodieFileInputF
           inMemoryHosts == null
               ? super.makeSplit(path.getPathWithBootstrapFileStatus(), start, length, hosts)
               : super.makeSplit(path.getPathWithBootstrapFileStatus(), start, length, hosts, inMemoryHosts);
-      return HoodieRealtimeInputFormatUtils
-          .createRealtimeBoostrapBaseFileSplit((BootstrapBaseFileSplit) bf, path.getBasePath(), path.getDeltaLogFiles(), path.getMaxCommitTime());
+      return HoodieRealtimeInputFormatUtils.createRealtimeBoostrapBaseFileSplit(
+          (BootstrapBaseFileSplit) bf,
+          path.getBasePath(),
+          path.getDeltaLogFiles(),
+          path.getMaxCommitTime(),
+          path.getBelongsToIncrementalQuery());
     }
   }
 }

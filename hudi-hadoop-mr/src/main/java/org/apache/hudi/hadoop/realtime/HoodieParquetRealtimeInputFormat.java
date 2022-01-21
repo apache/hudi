@@ -74,15 +74,6 @@ public class HoodieParquetRealtimeInputFormat extends HoodieRealtimeFileInputFor
         parquetInputFormat.getRecordReader(split, jobConf, reporter));
   }
 
-  @Override
-  public InputSplit[] getSplits(JobConf job, int numSplits) throws IOException {
-    List<FileSplit> fileSplits = Arrays.stream(super.getSplits(job, numSplits)).map(is -> (FileSplit) is).collect(Collectors.toList());
-
-    return HoodieRealtimeInputFormatUtils.isIncrementalQuerySplits(fileSplits)
-        ? HoodieRealtimeInputFormatUtils.getIncrementalRealtimeSplits(job, fileSplits)
-        : HoodieRealtimeInputFormatUtils.getRealtimeSplits(job, fileSplits);
-  }
-
   void addProjectionToJobConf(final RealtimeSplit realtimeSplit, final JobConf jobConf) {
     // Hive on Spark invokes multiple getRecordReaders from different threads in the same spark task (and hence the
     // same JVM) unlike Hive on MR. Due to this, accesses to JobConf, which is shared across all threads, is at the
