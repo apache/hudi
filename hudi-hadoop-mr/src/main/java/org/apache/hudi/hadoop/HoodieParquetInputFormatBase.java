@@ -9,7 +9,7 @@ import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
 import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.JobConf;
-import org.apache.hudi.hadoop.realtime.HoodieMergeOnReadTableFileInputFormat;
+import org.apache.hudi.hadoop.realtime.HoodieMergeOnReadTableInputFormat;
 
 import java.io.IOException;
 
@@ -23,14 +23,14 @@ import java.io.IOException;
  * serves as a base-class for every {@link FileInputFormat} implementations working with Parquet file-format.
  *
  * However, this class serves as a simple delegate to the actual implementation hierarchy: it expects
- * either {@link HoodieCopyOnWriteTableFileInputFormat} or {@link HoodieMergeOnReadTableFileInputFormat} to be supplied
+ * either {@link HoodieCopyOnWriteTableInputFormat} or {@link HoodieMergeOnReadTableInputFormat} to be supplied
  * to which it delegates all of its necessary methods.
  */
 public abstract class HoodieParquetInputFormatBase extends MapredParquetInputFormat implements Configurable {
 
-  private final HoodieCopyOnWriteTableFileInputFormat inputFormatDelegate;
+  private final HoodieCopyOnWriteTableInputFormat inputFormatDelegate;
 
-  protected HoodieParquetInputFormatBase(HoodieCopyOnWriteTableFileInputFormat inputFormatDelegate) {
+  protected HoodieParquetInputFormatBase(HoodieCopyOnWriteTableInputFormat inputFormatDelegate) {
     this.inputFormatDelegate = inputFormatDelegate;
   }
 

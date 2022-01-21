@@ -20,7 +20,7 @@ package org.apache.hudi.hadoop.hive;
 
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.hadoop.HoodieCopyOnWriteTableFileInputFormat;
+import org.apache.hudi.hadoop.HoodieCopyOnWriteTableInputFormat;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieCombineRealtimeRecordReader;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
@@ -877,7 +877,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
       LOG.info("Listing status in HoodieCombineHiveInputFormat.HoodieCombineFileInputFormatShim");
       List<FileStatus> result;
       if (hoodieFilter) {
-        HoodieCopyOnWriteTableFileInputFormat input;
+        HoodieCopyOnWriteTableInputFormat input;
         if (isRealTime) {
           LOG.info("Using HoodieRealtimeInputFormat");
           input = createParquetRealtimeInputFormat();

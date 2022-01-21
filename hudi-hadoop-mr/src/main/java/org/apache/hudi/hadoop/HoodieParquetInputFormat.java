@@ -50,10 +50,10 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
   private static final Logger LOG = LogManager.getLogger(HoodieParquetInputFormat.class);
 
   public HoodieParquetInputFormat() {
-    super(new HoodieCopyOnWriteTableFileInputFormat());
+    super(new HoodieCopyOnWriteTableInputFormat());
   }
 
-  protected HoodieParquetInputFormat(HoodieCopyOnWriteTableFileInputFormat delegate) {
+  protected HoodieParquetInputFormat(HoodieCopyOnWriteTableInputFormat delegate) {
     super(delegate);
   }
 

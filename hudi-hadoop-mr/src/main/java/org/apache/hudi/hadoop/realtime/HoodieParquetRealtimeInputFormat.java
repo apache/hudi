@@ -47,7 +47,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat {
   private static final Logger LOG = LogManager.getLogger(HoodieParquetRealtimeInputFormat.class);
 
   public HoodieParquetRealtimeInputFormat() {
-    super(new HoodieMergeOnReadTableFileInputFormat());
+    super(new HoodieMergeOnReadTableInputFormat());
   }
 
   // To make Hive on Spark queries work with RT tables. Our theory is that due to

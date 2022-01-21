@@ -74,7 +74,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  *
  * NOTE: This class is invariant of the underlying file-format of the files being read
  */
-public class HoodieCopyOnWriteTableFileInputFormat extends FileInputFormat<NullWritable, ArrayWritable>
+public class HoodieCopyOnWriteTableInputFormat extends FileInputFormat<NullWritable, ArrayWritable>
     implements Configurable {
 
   protected Configuration conf;
