@@ -17,17 +17,19 @@
 
 package org.apache.spark.sql.hudi.analysis
 
+import org.apache.hudi.DataSourceReadOptions
 import org.apache.hudi.DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
-import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedStar}
+import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedRelation, UnresolvedStar}
+import org.apache.spark.sql.catalyst.catalog.{CatalogUtils, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, Expression, Literal, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.Inner
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
-import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
+import org.apache.spark.sql.execution.datasources.{CreateTable, DataSource, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{getTableIdentifier, removeMetaFields}
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
 import org.apache.spark.sql.hudi.command._
@@ -110,6 +112,7 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
           case _ =>
             l
         }
+
       // Convert to CreateHoodieTableAsSelectCommand
       case CreateTable(table, mode, Some(query))
         if query.resolved && sparkAdapter.isHoodieTable(table) =>
@@ -133,7 +136,7 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
       // Convert to CompactionShowHoodiePathCommand
       case CompactionShowOnPath(path, limit) =>
         CompactionShowHoodiePathCommand(path, limit)
-      case _=> plan
+      case _ => plan
     }
   }
 }
@@ -348,6 +351,35 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
         sparkAdapter.createInsertInto(table, partition, newQuery, overwrite, ifPartitionNotExists)
       } else {
         l
+      }
+
+    case TimeTravelRelation(plan: UnresolvedRelation, timestamp, version) =>
+      // TODO: How to use version to perform time travel?
+      if (timestamp.isEmpty && version.nonEmpty) {
+        throw new AnalysisException(
+          "version expression is not support for time travel")
+      }
+
+      val tableIdentifier = sparkAdapter.toTableIdentifier(plan)
+      if (sparkAdapter.isHoodieTable(tableIdentifier, sparkSession)) {
+        val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableIdentifier)
+        val table = hoodieCatalogTable.table
+        val pathOption = table.storage.locationUri.map("path" -> CatalogUtils.URIToString(_))
+        val instantOption = Map(
+          DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key -> timestamp.get.toString())
+        val dataSource =
+          DataSource(
+            sparkSession,
+            userSpecifiedSchema = if (table.schema.isEmpty) None else Some(table.schema),
+            partitionColumns = table.partitionColumnNames,
+            bucketSpec = table.bucketSpec,
+            className = table.provider.get,
+            options = table.storage.properties ++ pathOption ++ instantOption,
+            catalogTable = Some(table))
+
+        LogicalRelation(dataSource.resolveRelation(checkFilesExist = false), table)
+      } else {
+        plan
       }
 
     case p => p

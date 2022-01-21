@@ -28,17 +28,16 @@ import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, Join, JoinHint, LogicalPlan}
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._
-import org.apache.spark.sql.connector.catalog.Table
-import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
-import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionedFile, Spark3ParsePartitionUtil, SparkParsePartitionUtil}
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.parser.HoodieSpark3_2ExtendedSqlParser
 import org.apache.spark.sql.{Row, SparkSession}
 
 /**
  * The adapter for spark3.
  */
-class Spark3Adapter extends SparkAdapter {
+class Spark3_2Adapter extends SparkAdapter {
 
   override def createSparkRowSerDe(encoder: ExpressionEncoder[Row]): SparkRowSerDe = {
     new Spark3RowSerDe(encoder)
@@ -95,23 +94,19 @@ class Spark3Adapter extends SparkAdapter {
     parser.parseMultipartIdentifier(sqlText)
   }
 
+  override def createExtendedSparkParser: Option[(SparkSession, ParserInterface) => ParserInterface] = {
+    Some(
+      (spark: SparkSession, delegate: ParserInterface) => new HoodieSpark3_2ExtendedSqlParser(spark, delegate)
+    )
+  }
+
   /**
    * Combine [[PartitionedFile]] to [[FilePartition]] according to `maxSplitBytes`.
    */
   override def getFilePartitions(
-      sparkSession: SparkSession,
-      partitionedFiles: Seq[PartitionedFile],
-      maxSplitBytes: Long): Seq[FilePartition] = {
+                                  sparkSession: SparkSession,
+                                  partitionedFiles: Seq[PartitionedFile],
+                                  maxSplitBytes: Long): Seq[FilePartition] = {
     FilePartition.getFilePartitions(sparkSession, partitionedFiles, maxSplitBytes)
-  }
-
-  override def isHoodieTable(table: LogicalPlan, spark: SparkSession): Boolean = {
-    tripAlias(table) match {
-      case LogicalRelation(_, _, Some(tbl), _) => isHoodieTable(tbl)
-      case relation: UnresolvedRelation =>
-        isHoodieTable(toTableIdentifier(relation), spark)
-      case DataSourceV2Relation(table: Table, _, _, _, _) => isHoodieTable(table.properties())
-      case _=> false
-    }
   }
 }

@@ -414,6 +414,11 @@ fromClause
     : FROM relation (',' relation)* lateralView* pivotClause?
     ;
 
+temporalClause
+    : FOR? (SYSTEM_TIME | TIMESTAMP) AS OF timestamp=valueExpression
+    | FOR? (SYSTEM_VERSION | VERSION) AS OF version=(INTEGER_VALUE | STRING)
+    ;
+
 aggregation
     : GROUP BY groupingExpressions+=expression (',' groupingExpressions+=expression)* (
       WITH kind=ROLLUP
@@ -510,7 +515,8 @@ identifierComment
     ;
 
 relationPrimary
-    : tableIdentifier sample? tableAlias      #tableName
+    : tableIdentifier temporalClause?
+      sample? tableAlias                      #tableName
     | '(' queryNoWith ')' sample? tableAlias  #aliasedQuery
     | '(' relation ')' sample? tableAlias     #aliasedRelation
     | inlineTable                             #inlineTableDefault2
@@ -778,6 +784,7 @@ nonReserved
     | DATABASE | SELECT | FROM | WHERE | HAVING | TO | TABLE | WITH | NOT
     | DIRECTORY
     | BOTH | LEADING | TRAILING
+    | SYSTEM_VERSION | VERSION | SYSTEM_TIME | TIMESTAMP
     ;
 
 SELECT: 'SELECT';
@@ -1014,6 +1021,11 @@ OPTION: 'OPTION';
 ANTI: 'ANTI';
 LOCAL: 'LOCAL';
 INPATH: 'INPATH';
+
+SYSTEM_VERSION: 'SYSTEM_VERSION';
+VERSION: 'VERSION';
+SYSTEM_TIME: 'SYSTEM_TIME';
+TIMESTAMP: 'TIMESTAMP';
 
 STRING
     : '\'' ( ~('\''|'\\') | ('\\' .) )* '\''

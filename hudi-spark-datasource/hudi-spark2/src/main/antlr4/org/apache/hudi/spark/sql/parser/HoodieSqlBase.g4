@@ -27,6 +27,32 @@ statement
     : mergeInto                                                        #mergeIntoTable
     | updateTableStmt                                                  #updateTable
     | deleteTableStmt                                                  #deleteTable
+    | query                                                            #queryStatement
+    | createTableHeader ('(' colTypeList ')')? tableProvider
+        ((OPTIONS options=tablePropertyList) |
+        (PARTITIONED BY partitionColumnNames=identifierList) |
+        bucketSpec |
+        locationSpec |
+        (COMMENT comment=STRING) |
+        (TBLPROPERTIES tableProps=tablePropertyList))*
+        (AS? query)?                                                   #createTable
+    | createTableHeader ('(' columns=colTypeList ')')?
+        ((COMMENT comment=STRING) |
+        (PARTITIONED BY '(' partitionColumns=colTypeList ')') |
+        bucketSpec |
+        skewSpec |
+        rowFormat |
+        createFileFormat |
+        locationSpec |
+        (TBLPROPERTIES tableProps=tablePropertyList))*
+        (AS? query)?                                                   #createHiveTable
+    | CREATE (OR REPLACE)? (GLOBAL? TEMPORARY)?
+        VIEW (IF NOT EXISTS)? tableIdentifier
+        identifierCommentList? (COMMENT STRING)?
+        (PARTITIONED ON identifierList)?
+        (TBLPROPERTIES tablePropertyList)? AS query                    #createView
+    | ALTER VIEW tableIdentifier AS? query                             #alterViewQuery
+    | CACHE LAZY? TABLE tableIdentifier (AS? query)?                   #cacheTable
     | .*?                                                              #passThrough
     ;
 
@@ -87,6 +113,7 @@ assignmentList
 assignment
     : key=qualifiedName EQ value=expression
     ;
+
 qualifiedNameList
     : qualifiedName (',' qualifiedName)*
     ;
