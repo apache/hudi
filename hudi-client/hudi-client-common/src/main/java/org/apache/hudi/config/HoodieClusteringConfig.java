@@ -190,14 +190,16 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .withDocumentation("When rewriting data, preserves existing hoodie_commit_time");
 
   /**
-   * @deprecated this setting has no effect
+   * @deprecated this setting has no effect. Please refer to clustering configuration, as well as
+   * {@link #LAYOUT_OPTIMIZE_STRATEGY} config to enable advanced record layout optimization strategies
    */
   public static final ConfigProperty LAYOUT_OPTIMIZE_ENABLE = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "enable")
       .defaultValue(false)
       .sinceVersion("0.10.0")
-      .withDocumentation("Enable use z-ordering/space-filling curves to optimize the layout of table to boost query performance. "
-          + "This parameter takes precedence over clustering strategy set using " + EXECUTION_STRATEGY_CLASS_NAME.key());
+      .deprecatedAfter("0.11.0")
+      .withDocumentation("This setting has no effect. Please refer to clustering configuration, as well as\n" +
+              "LAYOUT_OPTIMIZE_STRATEGY config to enable advanced record layout optimization strategies");
 
   /**
    * Determines ordering strategy in for records layout optimization.
@@ -269,6 +271,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "data.skipping.enable")
       .defaultValue(true)
       .sinceVersion("0.10.0")
+      .deprecatedAfter("0.11.0")
       .withDocumentation("Enable data skipping by collecting statistics once layout optimization is complete.");
 
   public static final ConfigProperty<Boolean> ROLLBACK_PENDING_CLUSTERING_ON_CONFLICT = ConfigProperty
