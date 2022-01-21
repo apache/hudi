@@ -36,6 +36,7 @@
 
   <modules>
     <module>hudi-common</module>
+    <module>hudi-io</module>
     <module>hudi-cli</module>
     <module>hudi-client</module>
     <module>hudi-aws</module>
@@ -243,7 +244,7 @@
           </sourceDirectories>
           <!-- NOTE: This property is only available in Maven >= 3.3.1 -->
           <propertyExpansion>basedir=${maven.multiModuleProjectDirectory}</propertyExpansion>
-          <excludes>**\/generated-sources\/</excludes>
+          <excludes>**\/generated-sources\/,**\/org\/apache\/hudi\/hbase\/</excludes>
         </configuration>
         <executions>
           <execution>
