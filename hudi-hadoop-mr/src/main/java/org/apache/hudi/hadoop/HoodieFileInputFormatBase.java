@@ -67,6 +67,8 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  *   <li>Incremental mode: reading table's state as of particular timestamp (or instant, in Hudi's terms)</li>
  *   <li>External mode: reading non-Hudi partitions</li>
  * </ul>
+ *
+ * NOTE: This class is invariant of the underlying file-format of the files being read
  */
 public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWritable, ArrayWritable>
     implements Configurable {
@@ -101,14 +103,7 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
     this.conf = conf;
   }
 
-  @Nonnull
-  private static FileStatus getFileStatusUnchecked(HoodieBaseFile baseFile) {
-    try {
-      return HoodieInputFormatUtils.getFileStatus(baseFile);
-    } catch (IOException ioe) {
-      throw new HoodieIOException("Failed to get file-status", ioe);
-    }
-  }
+  protected abstract boolean includeLogFilesForSnapshotView();
 
   @Override
   protected boolean isSplitable(FileSystem fs, Path filename) {
@@ -201,38 +196,6 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
     setInputPaths(job, incrementalInputPaths.get());
     FileStatus[] fileStatuses = doListStatus(job);
     return HoodieInputFormatUtils.filterIncrementalFileStatus(jobContext, tableMetaClient, timeline.get(), fileStatuses, commitsToCheck.get());
-  }
-
-  protected abstract boolean includeLogFilesForSnapshotView();
-
-  @Nonnull
-  private static RealtimeFileStatus createRealtimeFileStatusUnchecked(HoodieBaseFile baseFile,
-                                                                      Stream<HoodieLogFile> logFiles,
-                                                                      Option<HoodieInstant> latestCompletedInstantOpt,
-                                                                      HoodieTableMetaClient tableMetaClient) {
-    List<HoodieLogFile> sortedLogFiles = logFiles.sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
-    FileStatus baseFileStatus = getFileStatusUnchecked(baseFile);
-    try {
-      RealtimeFileStatus rtFileStatus = new RealtimeFileStatus(baseFileStatus);
-      rtFileStatus.setDeltaLogFiles(sortedLogFiles);
-      rtFileStatus.setBaseFilePath(baseFile.getPath());
-      rtFileStatus.setBasePath(tableMetaClient.getBasePath());
-
-      if (latestCompletedInstantOpt.isPresent()) {
-        HoodieInstant latestCompletedInstant = latestCompletedInstantOpt.get();
-        checkState(latestCompletedInstant.isCompleted());
-
-        rtFileStatus.setMaxCommitTime(latestCompletedInstant.getTimestamp());
-      }
-
-      if (baseFileStatus instanceof LocatedFileStatusWithBootstrapBaseFile || baseFileStatus instanceof FileStatusWithBootstrapBaseFile) {
-        rtFileStatus.setBootStrapFileStatus(baseFileStatus);
-      }
-
-      return rtFileStatus;
-    } catch (IOException e) {
-      throw new HoodieIOException(String.format("Failed to init %s", RealtimeFileStatus.class.getSimpleName()), e);
-    }
   }
 
   @Override
@@ -342,6 +305,45 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
   private void validate(List<FileStatus> targetFiles, List<FileStatus> legacyFileStatuses) {
     List<FileStatus> diff = CollectionUtils.diff(targetFiles, legacyFileStatuses);
     checkState(diff.isEmpty(), "Should be empty");
+  }
+
+  @Nonnull
+  private static FileStatus getFileStatusUnchecked(HoodieBaseFile baseFile) {
+    try {
+      return HoodieInputFormatUtils.getFileStatus(baseFile);
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Failed to get file-status", ioe);
+    }
+  }
+
+  @Nonnull
+  private static RealtimeFileStatus createRealtimeFileStatusUnchecked(HoodieBaseFile baseFile,
+                                                                      Stream<HoodieLogFile> logFiles,
+                                                                      Option<HoodieInstant> latestCompletedInstantOpt,
+                                                                      HoodieTableMetaClient tableMetaClient) {
+    List<HoodieLogFile> sortedLogFiles = logFiles.sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
+    FileStatus baseFileStatus = getFileStatusUnchecked(baseFile);
+    try {
+      RealtimeFileStatus rtFileStatus = new RealtimeFileStatus(baseFileStatus);
+      rtFileStatus.setDeltaLogFiles(sortedLogFiles);
+      rtFileStatus.setBaseFilePath(baseFile.getPath());
+      rtFileStatus.setBasePath(tableMetaClient.getBasePath());
+
+      if (latestCompletedInstantOpt.isPresent()) {
+        HoodieInstant latestCompletedInstant = latestCompletedInstantOpt.get();
+        checkState(latestCompletedInstant.isCompleted());
+
+        rtFileStatus.setMaxCommitTime(latestCompletedInstant.getTimestamp());
+      }
+
+      if (baseFileStatus instanceof LocatedFileStatusWithBootstrapBaseFile || baseFileStatus instanceof FileStatusWithBootstrapBaseFile) {
+        rtFileStatus.setBootStrapFileStatus(baseFileStatus);
+      }
+
+      return rtFileStatus;
+    } catch (IOException e) {
+      throw new HoodieIOException(String.format("Failed to init %s", RealtimeFileStatus.class.getSimpleName()), e);
+    }
   }
 
   @Nonnull

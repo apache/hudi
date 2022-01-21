@@ -22,6 +22,7 @@ import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
@@ -56,7 +57,16 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * TODO java-doc
+ * Base implementation of the Hive's {@link FileInputFormat} allowing for reading of Hudi's
+ * Merge-on-Read (COW) tables in various configurations:
+ *
+ * <ul>
+ *   <li>Snapshot mode: reading table's state as of particular timestamp (or instant, in Hudi's terms)</li>
+ *   <li>Incremental mode: reading table's state as of particular timestamp (or instant, in Hudi's terms)</li>
+ *   <li>External mode: reading non-Hudi partitions</li>
+ * </ul>
+ *
+ * NOTE: This class is invariant of the underlying file-format of the files being read
  */
 public abstract class HoodieRealtimeFileInputFormatBase extends HoodieFileInputFormatBase implements Configurable {
 
