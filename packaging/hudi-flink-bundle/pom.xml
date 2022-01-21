@@ -143,7 +143,6 @@
                   <include>org.datanucleus:datanucleus-api-jdo</include>
                   <include>org.apache.thrift:libfb303</include>
                   <include>org.apache.orc:orc-core</include>
-                  <include>org.apache.flink:flink-sql-connector-hive-2.3.6_${scala.binary.version}</include>
 
                   <include>org.apache.hbase:hbase-common</include>
                   <include>org.apache.hbase:hbase-client</include>
@@ -209,6 +208,10 @@
                 <relocation>
                   <pattern>org.apache.hadoop.hive.ql.optimizer.</pattern>
                   <shadedPattern>${flink.bundle.shade.prefix}org.apache.hadoop.hive.ql.optimizer.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.hive.ql.lockmgr.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hadoop.hive.ql.lockmgr.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.codahale.metrics.</pattern>
@@ -444,6 +447,7 @@
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-exec</artifactId>
       <version>${hive.version}</version>
+      <scope>${flink.bundle.hive.scope}</scope>
     </dependency>
     <dependency>
       <groupId>${hive.groupid}</groupId>
