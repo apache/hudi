@@ -581,9 +581,9 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
       boolean inlineCluster = clusteringConfig.getBoolean(HoodieClusteringConfig.INLINE_CLUSTERING);
       boolean inlineClusterSchedule = clusteringConfig.getBoolean(HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING);
-      ValidationUtils.checkArgument(inlineCluster && inlineClusterSchedule, String.format("Either of inline clustering (%s) or "
-              + "schedule inline clustering (%s) can be enabled. Both can't be set to true at the same time", HoodieClusteringConfig.INLINE_CLUSTERING.key(),
-          HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING.key()));
+      ValidationUtils.checkArgument(!(inlineCluster && inlineClusterSchedule), String.format("Either of inline clustering (%s) or "
+              + "schedule inline clustering (%s) can be enabled. Both can't be set to true at the same time. %s,%s", HoodieClusteringConfig.INLINE_CLUSTERING.key(),
+          HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING.key(), inlineCluster, inlineClusterSchedule));
       return clusteringConfig;
     }
 

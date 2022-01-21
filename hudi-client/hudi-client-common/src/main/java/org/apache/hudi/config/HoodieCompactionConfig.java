@@ -718,9 +718,9 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
       boolean inlineCompact = compactionConfig.getBoolean(HoodieCompactionConfig.INLINE_COMPACT);
       boolean inlineCompactSchedule = compactionConfig.getBoolean(HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT);
-      ValidationUtils.checkArgument(inlineCompact && inlineCompactSchedule, String.format("Either of inline compaction (%s) or "
-              + "schedule inline compaction (%s) can be enabled. Both can't be set to true at the same time", HoodieCompactionConfig.INLINE_COMPACT.key(),
-          HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT.key()));
+      ValidationUtils.checkArgument(!(inlineCompact && inlineCompactSchedule), String.format("Either of inline compaction (%s) or "
+              + "schedule inline compaction (%s) can be enabled. Both can't be set to true at the same time. %s, %s", HoodieCompactionConfig.INLINE_COMPACT.key(),
+          HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT.key(), inlineCompact, inlineCompactSchedule));
       return compactionConfig;
     }
   }
