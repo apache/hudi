@@ -258,7 +258,7 @@ create table hudi_mor_tbl (
   ts bigint
 ) using hudi
 tblproperties (
-  type = 'cow',
+  type = 'mor',
   primaryKey = 'id',
   preCombineField = 'ts'
 );
