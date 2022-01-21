@@ -179,12 +179,17 @@ abstract class HoodieTableFileIndexBase(engineContext: HoodieEngineContext,
   }
 
   private def getActiveTimeline = {
-    // TODO re-evaluate whether we should not filter any commits in here
-    val timeline = metaClient.getActiveTimeline.getCommitsTimeline
+    // NOTE: We have to use commits and compactions timeline, to make sure that we're properly
+    //       handling the following case: when records are inserted into the new log-file w/in the file-group
+    //       that is under the pending compaction process, new log-file will bear the compaction's instant (on the
+    //       timeline) in its name, as opposed to the base-file's commit instant. To make sure we're not filtering
+    //       such log-file we have to _always_ include pending compaction instants into consideration
+    // TODO(HUDI-3302) re-evaluate whether we should not filter any commits in here
+    val timeline = metaClient.getCommitsAndCompactionTimeline
     if (shouldIncludePendingCommits) {
       timeline
     } else {
-      timeline.filterCompletedInstants()
+      timeline.filterCompletedAndCompactionInstants()
     }
   }
 
