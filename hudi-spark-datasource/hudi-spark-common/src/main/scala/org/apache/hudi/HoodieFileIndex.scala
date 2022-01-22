@@ -72,7 +72,7 @@ case class HoodieFileIndex(spark: SparkSession,
   )
     with FileIndex {
 
-  override def rootPaths: Seq[Path] = queryPaths
+  override def rootPaths: Seq[Path] = queryPaths.asScala
 
   def enableDataSkipping(): Boolean = {
     options.getOrElse(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(),
@@ -88,7 +88,7 @@ case class HoodieFileIndex(spark: SparkSession,
    * @return List of FileStatus for base files
    */
   def allFiles: Seq[FileStatus] = {
-    cachedAllInputFileSlices.values.flatten
+    cachedAllInputFileSlices.values.asScala.flatMap(_.asScala)
       .filter(_.getBaseFile.isPresent)
       .map(_.getBaseFile.get().getFileStatus)
       .toSeq
@@ -137,13 +137,13 @@ case class HoodieFileIndex(spark: SparkSession,
       Seq(PartitionDirectory(InternalRow.empty, candidateFiles))
     } else {
       // Prune the partition path by the partition filters
-      val prunedPartitions = prunePartition(cachedAllInputFileSlices.keys.toSeq, partitionFilters)
+      val prunedPartitions = prunePartition(cachedAllInputFileSlices.keySet.asScala.toSeq, partitionFilters)
       var totalFileSize = 0
       var candidateFileSize = 0
 
       val result = prunedPartitions.map { partition =>
         val baseFileStatuses: Seq[FileStatus] =
-          cachedAllInputFileSlices(partition)
+          cachedAllInputFileSlices.get(partition).asScala
             .map(fs => fs.getBaseFile.orElse(null))
             .filter(_ != null)
             .map(_.getFileStatus)
