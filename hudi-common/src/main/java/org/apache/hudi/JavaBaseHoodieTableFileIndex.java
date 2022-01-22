@@ -63,7 +63,7 @@ public abstract class JavaBaseHoodieTableFileIndex {
   private final HoodieTableMetaClient metaClient;
   private final HoodieEngineContext engineContext;
 
-  private transient final FileStatusCacheTrait fileStatusCache;
+  private final transient FileStatusCacheTrait fileStatusCache;
 
   protected transient volatile long cachedFileSize = 0L;
   protected transient volatile Map<PartitionPath, List<FileSlice>> cachedAllInputFileSlices;
@@ -227,7 +227,6 @@ public abstract class JavaBaseHoodieTableFileIndex {
     return CollectionUtils.combine(cachedPartitionToFiles, fetchedPartitionToFiles);
   }
 
-
   private void refresh0() {
     long startTime = System.currentTimeMillis();
 
@@ -313,9 +312,9 @@ public abstract class JavaBaseHoodieTableFileIndex {
 
     @Override
     public boolean equals(Object other) {
-      return other instanceof PartitionPath &&
-          Objects.equals(path, ((PartitionPath) other).path) &&
-          Arrays.equals(values, ((PartitionPath) other).values);
+      return other instanceof PartitionPath
+          && Objects.equals(path, ((PartitionPath) other).path)
+          && Arrays.equals(values, ((PartitionPath) other).values);
     }
 
     @Override
@@ -326,7 +325,9 @@ public abstract class JavaBaseHoodieTableFileIndex {
 
   protected interface FileStatusCacheTrait {
     Option<FileStatus[]> get(Path path);
+
     void put(Path path, FileStatus[] leafFiles);
+
     void invalidate();
   }
 }
