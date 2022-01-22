@@ -181,7 +181,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     }
   }
 
-  protected def parsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Any] = {
+  protected def parsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Object] = {
     if (partitionColumns.length == 0) {
       // This is a non-partitioned table
       Array.empty
@@ -229,7 +229,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         val pathWithPartitionName = new Path(basePath, partitionWithName)
         val partitionValues = parsePartitionPath(pathWithPartitionName, partitionSchema)
 
-        partitionValues.toArray
+        partitionValues.map(_.asInstanceOf[Object]).toArray
       }
     }
   }
@@ -252,7 +252,11 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
 object SparkHoodieTableFileIndex {
 
   implicit def toJavaOption[T](opt: Option[T]): org.apache.hudi.common.util.Option[T] =
-    org.apache.hudi.common.util.Option.ofNullable(opt.orNull)
+    if (opt.isDefined) {
+      org.apache.hudi.common.util.Option.of(opt.get)
+    } else {
+      org.apache.hudi.common.util.Option.empty()
+    }
 
   /**
    * This method unravels [[StructType]] into a [[Map]] of pairs of dot-path notation with corresponding
@@ -304,7 +308,7 @@ object SparkHoodieTableFileIndex {
 
   private def adapt(cache: FileStatusCache): JavaBaseHoodieTableFileIndex.FileStatusCacheTrait = {
     new JavaBaseHoodieTableFileIndex.FileStatusCacheTrait {
-      override def get(path: Path): Option[Array[FileStatus]] = cache.getLeafFiles(path)
+      override def get(path: Path): org.apache.hudi.common.util.Option[Array[FileStatus]] = toJavaOption(cache.getLeafFiles(path))
       override def put(path: Path, leafFiles: Array[FileStatus]): Unit = cache.putLeafFiles(path, leafFiles)
       override def invalidate(): Unit = cache.invalidateAll()
     }
