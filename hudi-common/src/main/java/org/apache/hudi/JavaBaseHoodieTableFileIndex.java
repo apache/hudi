@@ -138,7 +138,7 @@ public abstract class JavaBaseHoodieTableFileIndex {
   /**
    * Returns latest completed instant as seen by this instance of the file-index
    */
-  protected Option<HoodieInstant> latestCompletedInstant() {
+  public Option<HoodieInstant> latestCompletedInstant() {
     return getActiveTimeline().filterCompletedInstants().lastInstant();
   }
 
@@ -147,7 +147,7 @@ public abstract class JavaBaseHoodieTableFileIndex {
    *
    * @return mapping from string partition paths to its base/log files
    */
-  protected Map<String, List<FileSlice>> listFileSlices() {
+  public Map<String, List<FileSlice>> listFileSlices() {
     return cachedAllInputFileSlices.entrySet()
         .stream()
         .collect(Collectors.toMap(e -> e.getKey().path, Map.Entry::getValue));

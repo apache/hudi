@@ -54,6 +54,7 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -270,20 +271,18 @@ public class HoodieCopyOnWriteTableInputFormat extends FileInputFormat<NullWrita
               queryCommitInstant,
               shouldIncludePendingCommits);
 
-      Map<String, Seq<FileSlice>> partitionedFileSlices =
-          JavaConverters.mapAsJavaMapConverter(fileIndex.listFileSlices()).asJava();
+      Map<String, List<FileSlice>> partitionedFileSlices = fileIndex.listFileSlices();
 
       targetFiles.addAll(
           partitionedFileSlices.values()
               .stream()
-              .flatMap(seq -> JavaConverters.seqAsJavaListConverter(seq).asJava().stream())
+              .flatMap(Collection::stream)
               .map(fileSlice -> {
                 Option<HoodieBaseFile> baseFileOpt = fileSlice.getBaseFile();
                 Option<HoodieLogFile> latestLogFileOpt = fileSlice.getLatestLogFile();
                 Stream<HoodieLogFile> logFiles = fileSlice.getLogFiles();
 
-                Option<HoodieInstant> latestCompletedInstantOpt =
-                    fromScala(fileIndex.latestCompletedInstant());
+                Option<HoodieInstant> latestCompletedInstantOpt = fileIndex.latestCompletedInstant();
 
                 // Check if we're reading a MOR table
                 if (includeLogFilesForSnapshotView()) {
