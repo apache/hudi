@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.DataSourceWriteOptions.{KEYGENERATOR_CLASS_NAME, MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
+import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieDuplicateKeyException
@@ -616,6 +616,17 @@ class TestInsertTable extends TestHoodieSqlBase {
           .build()
 
         assertResult(true)(new TableSchemaResolver(metaClient).hasOperationField)
+
+        spark.sql(
+          s"""
+             |create table $tableName using hudi
+             |location '${tablePath}'
+             |""".stripMargin)
+
+        // Note: spark sql batch write currently does not write actual content to the operation field
+        checkAnswer(s"select id, _hoodie_operation from $tableName")(
+          Seq(1, null)
+        )
       }
     }
   }
