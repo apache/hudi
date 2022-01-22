@@ -194,12 +194,14 @@ case class HoodieFileIndex(spark: SparkSession,
       // scalastyle:on return
     }
 
+    val completedCommits = getActiveTimeline.filterCompletedInstants().getInstants.iterator.asScala.toList.map(_.getTimestamp)
+
     // Collect all index tables present in `.zindex` folder
     val candidateIndexTables =
       fs.listStatus(new Path(indexPath))
         .filter(_.isDirectory)
         .map(_.getPath.getName)
-        .filter(f => completedCommits.contains(f))
+        .filter(completedCommits.contains(_))
         .sortBy(x => x)
 
     if (candidateIndexTables.isEmpty) {

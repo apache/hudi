@@ -59,11 +59,6 @@ abstract class BaseHoodieTableFileIndex(engineContext: HoodieEngineContext,
                                         specifiedQueryInstant: Option[String] = None,
                                         shouldIncludePendingCommits: Boolean = false,
                                         @transient fileStatusCache: FileStatusCacheTrait) {
-  /**
-   * Get all completeCommits.
-   */
-  lazy val completedCommits = metaClient.getCommitsTimeline
-    .filterCompletedInstants().getInstants.iterator().toList.map(_.getTimestamp)
 
   private lazy val _partitionColumns: Array[String] =
     metaClient.getTableConfig.getPartitionFields.orElse(Array[String]())
@@ -101,14 +96,7 @@ abstract class BaseHoodieTableFileIndex(engineContext: HoodieEngineContext,
    * @return mapping from string partition paths to its base/log files
    */
   def listFileSlices(): Map[String, Seq[FileSlice]] = {
-    if (queryAsNonePartitionedTable) {
-      // Read as Non-Partitioned table.
-      cachedAllInputFileSlices.map(entry => (entry._1.path, entry._2))
-    } else {
-      cachedAllInputFileSlices.keys.toSeq.map(partition => {
-        (partition.path, cachedAllInputFileSlices(partition))
-      }).toMap
-    }
+    cachedAllInputFileSlices.map(entry => (entry._1.path, entry._2))
   }
 
   private def refresh0(): Unit = {
@@ -145,13 +133,6 @@ abstract class BaseHoodieTableFileIndex(engineContext: HoodieEngineContext,
           }
           (p._1, latestSlices)
         })
-        cachedFileSize = cachedAllInputFileSlices.values.flatten.map(fileSlice => {
-          if (fileSlice.getBaseFile.isPresent) {
-            fileSlice.getBaseFile.get().getFileLen + fileSlice.getLogFiles.iterator().asScala.map(_.getFileSize).sum
-          } else {
-            fileSlice.getLogFiles.iterator().asScala.map(_.getFileSize).sum
-          }
-        }).sum
       case (_, _) =>
         // Fetch and store latest base files and its sizes
         cachedAllInputFileSlices = partitionFiles.map(p => {
@@ -162,8 +143,9 @@ abstract class BaseHoodieTableFileIndex(engineContext: HoodieEngineContext,
             .iterator().asScala.toSeq
           (p._1, fileSlices)
         })
-        cachedFileSize = cachedAllInputFileSlices.values.flatten.map(fileSliceSize).sum
     }
+
+    cachedFileSize = cachedAllInputFileSlices.values.flatten.map(fileSliceSize).sum
 
     // If the partition value contains InternalRow.empty, we query it as a non-partitioned table.
     queryAsNonePartitionedTable = partitionFiles.keys.exists(p => p.values.isEmpty)
@@ -178,7 +160,7 @@ abstract class BaseHoodieTableFileIndex(engineContext: HoodieEngineContext,
     refresh0()
   }
 
-  private def getActiveTimeline = {
+  protected def getActiveTimeline = {
     // NOTE: We have to use commits and compactions timeline, to make sure that we're properly
     //       handling the following case: when records are inserted into the new log-file w/in the file-group
     //       that is under the pending compaction process, new log-file will bear the compaction's instant (on the
