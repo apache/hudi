@@ -132,7 +132,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
         newCommitTime = "003";
         client.startCommitWithTime(newCommitTime);
         records = dataGen.generateUpdates(newCommitTime, 100);
-        updateRecordsInMORTable(metaClient, records, client, cfg, newCommitTime);
+        updateRecordsInMORTable(metaClient, records, client, cfg, newCommitTime, false);
       }
 
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
@@ -201,7 +201,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
         newCommitTime = "003";
         client.startCommitWithTime(newCommitTime);
         records = dataGen.generateUpdates(newCommitTime, 100);
-        updateRecordsInMORTable(metaClient, records, client, cfg, newCommitTime);
+        updateRecordsInMORTable(metaClient, records, client, cfg, newCommitTime, false);
       }
 
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);

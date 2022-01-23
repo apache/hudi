@@ -105,7 +105,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       newCommitTime = "004";
       client.startCommitWithTime(newCommitTime);
       records = dataGen.generateUpdates(newCommitTime, 100);
-      updateRecordsInMORTable(metaClient, records, client, cfg, newCommitTime);
+      updateRecordsInMORTable(metaClient, records, client, cfg, newCommitTime, false);
 
       String compactionCommitTime = client.scheduleCompaction(Option.empty()).get().toString();
       client.compact(compactionCommitTime);
