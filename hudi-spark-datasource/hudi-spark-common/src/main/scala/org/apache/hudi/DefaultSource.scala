@@ -110,29 +110,32 @@ class DefaultSource extends RelationProvider
     val queryType = parameters(QUERY_TYPE.key)
 
     log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
+    if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
+      new EmptyRelation(sqlContext, metaClient)
+    } else {
+      (tableType, queryType, isBootstrappedTable) match {
+        case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
+             (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
+             (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
+          getBaseFileOnlyView(useHoodieFileIndex, sqlContext, parameters, schema, tablePath,
+            readPaths, metaClient)
 
-    (tableType, queryType, isBootstrappedTable) match {
-      case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
-           (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
-           (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
-        getBaseFileOnlyView(useHoodieFileIndex, sqlContext, parameters, schema, tablePath,
-          readPaths, metaClient)
+        case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
+          new IncrementalRelation(sqlContext, parameters, schema, metaClient)
 
-      case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-        new IncrementalRelation(sqlContext, parameters, schema, metaClient)
+        case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
+          new MergeOnReadSnapshotRelation(sqlContext, parameters, schema, globPaths, metaClient)
 
-      case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
-        new MergeOnReadSnapshotRelation(sqlContext, parameters, schema, globPaths, metaClient)
+        case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
+          new MergeOnReadIncrementalRelation(sqlContext, parameters, schema, metaClient)
 
-      case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-        new MergeOnReadIncrementalRelation(sqlContext, parameters, schema, metaClient)
+        case (_, _, true) =>
+          new HoodieBootstrapRelation(sqlContext, schema, globPaths, metaClient, parameters)
 
-      case (_, _, true) =>
-        new HoodieBootstrapRelation(sqlContext, schema, globPaths, metaClient, parameters)
-
-      case (_, _, _) =>
-        throw new HoodieException(s"Invalid query type : $queryType for tableType: $tableType," +
-          s"isBootstrappedTable: $isBootstrappedTable ")
+        case (_, _, _) =>
+          throw new HoodieException(s"Invalid query type : $queryType for tableType: $tableType," +
+            s"isBootstrappedTable: $isBootstrappedTable ")
+      }
     }
   }
 
