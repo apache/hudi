@@ -59,34 +59,30 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
     this.extraMetadata = extraMetadata;
   }
 
-  private int getCommitInfo() {
+  private int getCommitsSinceLastCleaning() {
     Option<HoodieInstant> lastCleanInstant = table.getActiveTimeline().getCleanerTimeline().filterCompletedInstants().lastInstant();
     HoodieTimeline commitTimeline = table.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
 
     String latestCleanTs;
-    int commitsSinceLastCleaning = 0;
+    int numCommits = 0;
     if (lastCleanInstant.isPresent()) {
       latestCleanTs = lastCleanInstant.get().getTimestamp();
-      commitsSinceLastCleaning = commitTimeline.findInstantsAfter(latestCleanTs).countInstants();
+      numCommits = commitTimeline.findInstantsAfter(latestCleanTs).countInstants();
     } else {
-      String firstCommitTs = commitTimeline.firstInstant().get().getTimestamp();
-      commitsSinceLastCleaning = commitTimeline.findInstantsAfterOrEquals(firstCommitTs, Integer.MAX_VALUE).countInstants();
+      numCommits = commitTimeline.countInstants();
     }
 
-    return commitsSinceLastCleaning;
+    return numCommits;
   }
 
   private boolean needCleaning(CleaningTriggerStrategy strategy) {
-    boolean cleaningNeeded;
     if (strategy == CleaningTriggerStrategy.NUM_COMMITS) {
-      int numberOfCommits = getCommitInfo();
+      int numberOfCommits = getCommitsSinceLastCleaning();
       int maxInlineCommitsForNextClean = config.getInlineCleaningMaxCommits();
-      cleaningNeeded = numberOfCommits >= maxInlineCommitsForNextClean;
+      return numberOfCommits >= maxInlineCommitsForNextClean;
     } else {
       throw new HoodieException("Unsupported cleaning trigger strategy: " + config.getInlineCleaningTriggerStrategy());
     }
-
-    return cleaningNeeded;
   }
 
   /**

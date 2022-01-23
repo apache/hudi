@@ -574,6 +574,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder compactionRecordSizeEstimateThreshold(double threshold) {
+      compactionConfig.setValue(RECORD_SIZE_ESTIMATION_THRESHOLD, String.valueOf(threshold));
+      return this;
+    }
+
     public Builder insertSplitSize(int insertSplitSize) {
       compactionConfig.setValue(COPY_ON_WRITE_INSERT_SPLIT_SIZE, String.valueOf(insertSplitSize));
       return this;
@@ -581,6 +586,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder autoTuneInsertSplits(boolean autoTuneInsertSplits) {
       compactionConfig.setValue(COPY_ON_WRITE_AUTO_SPLIT_INSERTS, String.valueOf(autoTuneInsertSplits));
+      return this;
+    }
+
+    public Builder approxRecordSize(int recordSizeEstimate) {
+      compactionConfig.setValue(COPY_ON_WRITE_RECORD_SIZE_ESTIMATE, String.valueOf(recordSizeEstimate));
       return this;
     }
 
@@ -616,6 +626,16 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withMaxDeltaSecondsBeforeCompaction(int maxDeltaSecondsBeforeCompaction) {
       compactionConfig.setValue(INLINE_COMPACT_TIME_DELTA_SECONDS, String.valueOf(maxDeltaSecondsBeforeCompaction));
+      return this;
+    }
+
+    public Builder withCompactionLazyBlockReadEnabled(Boolean compactionLazyBlockReadEnabled) {
+      compactionConfig.setValue(COMPACTION_LAZY_BLOCK_READ_ENABLE, String.valueOf(compactionLazyBlockReadEnabled));
+      return this;
+    }
+
+    public Builder withCompactionReverseLogReadEnabled(Boolean compactionReverseLogReadEnabled) {
+      compactionConfig.setValue(COMPACTION_REVERSE_LOG_READ_ENABLE, String.valueOf(compactionReverseLogReadEnabled));
       return this;
     }
 
