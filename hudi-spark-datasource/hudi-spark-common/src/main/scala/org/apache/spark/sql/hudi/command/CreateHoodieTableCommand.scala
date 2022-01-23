@@ -123,12 +123,12 @@ object CreateHoodieTableCommand {
       table.storage.compressed,
       storageProperties + ("path" -> path))
 
-    val tablName = HoodieSqlCommonUtils.formatName(sparkSession, table.identifier.table)
+    val tableName = HoodieSqlCommonUtils.formatName(sparkSession, table.identifier.table)
     val newDatabaseName = HoodieSqlCommonUtils.formatName(sparkSession, table.identifier.database
       .getOrElse(catalog.getCurrentDatabase))
 
     val newTableIdentifier = table.identifier
-      .copy(table = tablName, database = Some(newDatabaseName))
+      .copy(table = tableName, database = Some(newDatabaseName))
 
     val partitionColumnNames = hoodieCatalogTable.partitionSchema.map(_.name)
     // append pk, preCombineKey, type to the properties of table

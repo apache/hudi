@@ -33,6 +33,10 @@ import scala.collection.JavaConverters._
 class TestCreateTable extends TestHoodieSqlBase {
 
   test("Test Create Managed Hoodie Table") {
+    val databaseName = "hudi_database"
+    spark.sql(s"create database if not exists $databaseName")
+    spark.sql(s"use $databaseName")
+
     val tableName = generateTableName
     // Create a managed table
     spark.sql(
@@ -60,6 +64,14 @@ class TestCreateTable extends TestHoodieSqlBase {
         StructField("price", DoubleType),
         StructField("ts", LongType))
     )(table.schema.fields)
+
+    val tablePath = table.storage.properties("path")
+    val metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(tablePath)
+      .setConf(spark.sessionState.newHadoopConf())
+      .build()
+    val tableConfig = metaClient.getTableConfig
+    assertResult(databaseName)(tableConfig.getDatabaseName)
   }
 
   test("Test Create Hoodie Table With Options") {
@@ -88,7 +100,7 @@ class TestCreateTable extends TestHoodieSqlBase {
     assertResult(CatalogTableType.MANAGED)(table.tableType)
     assertResult(
       HoodieRecord.HOODIE_META_COLUMNS.asScala.map(StructField(_, StringType))
-      ++ Seq(
+        ++ Seq(
         StructField("id", IntegerType),
         StructField("name", StringType),
         StructField("price", DoubleType),
@@ -192,7 +204,7 @@ class TestCreateTable extends TestHoodieSqlBase {
   }
 
   test("Test Table Column Validate") {
-    withTempDir {tmp =>
+    withTempDir { tmp =>
       val tableName = generateTableName
       assertThrows[IllegalArgumentException] {
         spark.sql(
@@ -277,7 +289,7 @@ class TestCreateTable extends TestHoodieSqlBase {
            | select 1 as id, 'a1' as name, 10 as price, '2021-04-01' as dt
          """.stripMargin
       )
-      checkAnswer(s"select id, name, price, dt from $tableName2") (
+      checkAnswer(s"select id, name, price, dt from $tableName2")(
         Seq(1, "a1", 10, "2021-04-01")
       )
 
@@ -360,6 +372,10 @@ class TestCreateTable extends TestHoodieSqlBase {
 
   test("Test Create Table From Existing Hoodie Table") {
     withTempDir { tmp =>
+      val databaseName = "hudi_database"
+      spark.sql(s"create database if not exists $databaseName")
+      spark.sql(s"use $databaseName")
+
       Seq("2021-08-02", "2021/08/02").foreach { partitionValue =>
         val tableName = generateTableName
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
@@ -367,7 +383,7 @@ class TestCreateTable extends TestHoodieSqlBase {
         val df = Seq((1, "a1", 10, 1000, partitionValue)).toDF("id", "name", "value", "ts", "dt")
         // Write a table by spark dataframe.
         df.write.format("hudi")
-          .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+          .option(HoodieWriteConfig.TBL_NAME.key, s"original_$tableName")
           .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
           .option(RECORDKEY_FIELD.key, "id")
           .option(PRECOMBINE_FIELD.key, "ts")
@@ -386,7 +402,7 @@ class TestCreateTable extends TestHoodieSqlBase {
              |partitioned by (dt)
              |location '$tablePath'
              |""".stripMargin
-        ) ("It is not allowed to specify partition columns when the table schema is not defined.")
+        )("It is not allowed to specify partition columns when the table schema is not defined.")
 
         spark.sql(
           s"""
@@ -405,6 +421,8 @@ class TestCreateTable extends TestHoodieSqlBase {
         assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
         assertResult("dt")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
         assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELD.key))
+        assertResult("")(metaClient.getTableConfig.getDatabaseName)
+        assertResult(s"original_$tableName")(metaClient.getTableConfig.getTableName)
 
         // Test insert into
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, '$partitionValue')")
@@ -512,7 +530,7 @@ class TestCreateTable extends TestHoodieSqlBase {
   }
 
   test("Test Create Table From Existing Hoodie Table For None Partitioned Table") {
-    withTempDir{tmp =>
+    withTempDir { tmp =>
       // Write a table by spark dataframe.
       val tableName = generateTableName
       import spark.implicits._

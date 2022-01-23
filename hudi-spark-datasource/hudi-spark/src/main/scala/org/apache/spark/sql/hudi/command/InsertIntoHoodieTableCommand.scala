@@ -146,7 +146,7 @@ object InsertIntoHoodieTableCommand extends Logging {
       queryOutputWithoutMetaFields
     }
     // Align for the data fields of the query
-    val dataProjectsWithputMetaFields = queryDataFieldsWithoutMetaFields.zip(
+    val dataProjectsWithoutMetaFields = queryDataFieldsWithoutMetaFields.zip(
       hoodieCatalogTable.dataSchemaWithoutMetaFields.fields).map { case (dataAttr, targetField) =>
         val castAttr = castIfNeeded(dataAttr.withNullability(targetField.nullable),
           targetField.dataType, conf)
@@ -171,7 +171,7 @@ object InsertIntoHoodieTableCommand extends Logging {
         Alias(castAttr, f.name)()
       })
     }
-    val alignedProjects = dataProjectsWithputMetaFields ++ partitionProjects
+    val alignedProjects = dataProjectsWithoutMetaFields ++ partitionProjects
     Project(alignedProjects, query)
   }
 
@@ -217,7 +217,7 @@ object InsertIntoHoodieTableCommand extends Logging {
       DataSourceWriteOptions.SQL_INSERT_MODE.defaultValue()))
     val isNonStrictMode = insertMode == InsertMode.NON_STRICT
     val isPartitionedTable = hoodieCatalogTable.partitionFields.nonEmpty
-    val hasPrecombineColumn = preCombineColumn.nonEmpty
+    val hasPreCombineColumn = preCombineColumn.nonEmpty
     val operation =
       (enableBulkInsert, isOverwrite, dropDuplicate, isNonStrictMode, isPartitionedTable) match {
         case (true, _, _, false, _) =>
@@ -234,7 +234,7 @@ object InsertIntoHoodieTableCommand extends Logging {
         // insert overwrite partition
         case (_, true, _, _, true) => INSERT_OVERWRITE_OPERATION_OPT_VAL
         // disable dropDuplicate, and provide preCombineKey, use the upsert operation for strict and upsert mode.
-        case (false, false, false, false, _) if hasPrecombineColumn => UPSERT_OPERATION_OPT_VAL
+        case (false, false, false, false, _) if hasPreCombineColumn => UPSERT_OPERATION_OPT_VAL
         // if table is pk table and has enableBulkInsert use bulk insert for non-strict mode.
         case (true, _, _, true, _) => BULK_INSERT_OPERATION_OPT_VAL
         // for the rest case, use the insert operation
@@ -267,7 +267,7 @@ object InsertIntoHoodieTableCommand extends Logging {
         PARTITIONPATH_FIELD.key -> partitionFields,
         PAYLOAD_CLASS_NAME.key -> payloadClassName,
         ENABLE_ROW_WRITER.key -> enableBulkInsert.toString,
-        HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(hasPrecombineColumn),
+        HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(hasPreCombineColumn),
         META_SYNC_ENABLED.key -> enableHive.toString,
         HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
         HIVE_USE_JDBC.key -> "false",

@@ -115,7 +115,7 @@ class ExpressionPayload(record: GenericRecord,
         if (targetRecord.isEmpty || needUpdatingPersistedRecord(targetRecord.get, resultRecord, properties)) {
           resultRecordOpt = HOption.of(resultRecord)
         } else {
-          // if the PreCombine field value of targetRecord is greate
+          // if the PreCombine field value of targetRecord is greater
           // than the new incoming record, just keep the old record value.
           resultRecordOpt = HOption.of(targetRecord.get)
         }
@@ -270,7 +270,7 @@ class ExpressionPayload(record: GenericRecord,
 object ExpressionPayload {
 
   /**
-   * Property for pass the merge-into delete clause condition expresssion.
+   * Property for pass the merge-into delete clause condition expression.
    */
   val PAYLOAD_DELETE_CONDITION = "hoodie.payload.delete.condition"
 

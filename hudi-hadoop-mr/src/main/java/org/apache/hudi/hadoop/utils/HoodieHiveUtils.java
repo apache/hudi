@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -43,6 +44,7 @@ public class HoodieHiveUtils {
 
   public static final Logger LOG = LogManager.getLogger(HoodieHiveUtils.class);
 
+  public static final String HOODIE_INCREMENTAL_USE_DATABASE = "hoodie.incremental.use.database";
   public static final String HOODIE_CONSUME_MODE_PATTERN = "hoodie.%s.consume.mode";
   public static final String HOODIE_START_COMMIT_PATTERN = "hoodie.%s.consume.start.timestamp";
   public static final String HOODIE_MAX_COMMIT_PATTERN = "hoodie.%s.consume.max.commits";
@@ -177,5 +179,9 @@ public class HoodieHiveUtils {
       throw new HoodieIOException("Valid timestamp is required for " + HOODIE_CONSUME_COMMIT + " in snapshot mode");
     }
     return timeline.findInstantsBeforeOrEquals(maxCommit);
+  }
+
+  public static boolean isIncrementalUseDatabase(Configuration conf) {
+    return conf.getBoolean(HOODIE_INCREMENTAL_USE_DATABASE, false);
   }
 }
