@@ -61,13 +61,13 @@ case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends Hoodie
     val tableSchema = hoodieCatalogTable.tableSchema
     val partitionColumns = tableConfig.getPartitionFieldProp.split(",").map(_.toLowerCase)
     val partitionSchema = StructType(tableSchema.filter(f => partitionColumns.contains(f.name)))
-    val primaryColumns = tableConfig.getRecordKeyFields.get()
 
-    assert(primaryColumns.nonEmpty,
+    assert(hoodieCatalogTable.primaryKeys.nonEmpty,
       s"There are no primary key defined in table $tableId, cannot execute delete operator")
     withSparkConf(sparkSession, hoodieCatalogTable.catalogProperties) {
       Map(
         "path" -> path,
+        RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
         TBL_NAME.key -> tableConfig.getTableName,
         HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
         URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
