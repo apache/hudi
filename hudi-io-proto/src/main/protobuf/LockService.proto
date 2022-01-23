@@ -1,0 +1,98 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+syntax = "proto2";
+
+package hbase.pb;
+
+option java_package = "org.apache.hudi.hbase.shaded.protobuf.generated";
+option java_outer_classname = "LockServiceProtos";
+option java_generic_services = true;
+option java_generate_equals_and_hash = true;
+option optimize_for = SPEED;
+
+import "HBase.proto";
+import "Procedure.proto";
+
+enum LockType {
+  EXCLUSIVE = 1;
+  SHARED = 2;
+}
+
+message LockRequest {
+  required LockType lock_type = 1;
+  optional string namespace = 2;
+  optional TableName table_name = 3;
+  repeated RegionInfo region_info = 4;
+  optional string description = 5;
+  optional uint64 nonce_group = 6 [default = 0];
+  optional uint64 nonce = 7 [default = 0];
+}
+
+message LockResponse {
+  required uint64 proc_id = 1;
+}
+
+message LockHeartbeatRequest {
+  required uint64 proc_id = 1;
+  optional bool keep_alive = 2 [default = true];
+}
+
+message LockHeartbeatResponse {
+  enum LockStatus {
+    UNLOCKED = 1;
+    LOCKED = 2;
+  }
+
+  required LockStatus lock_status = 1;
+  // Timeout of lock (if locked).
+  optional uint32 timeout_ms = 2;
+}
+
+message LockProcedureData {
+  required LockType lock_type = 1;
+  optional string namespace = 2;
+  optional TableName table_name = 3;
+  repeated RegionInfo region_info = 4;
+  optional string description = 5;
+  optional bool is_master_lock = 6 [default = false];
+}
+
+enum LockedResourceType {
+  SERVER = 1;
+  NAMESPACE = 2;
+  TABLE = 3;
+  REGION = 4;
+  PEER = 5;
+}
+
+message LockedResource {
+  required LockedResourceType resource_type = 1;
+  optional string resource_name = 2;
+  required LockType lock_type = 3;
+  optional Procedure exclusive_lock_owner_procedure = 4;
+  optional int32 shared_lock_count = 5;
+  repeated Procedure waitingProcedures = 6;
+}
+
+service LockService {
+  /** Acquire lock on namespace/table/region */
+  rpc RequestLock(LockRequest) returns(LockResponse);
+
+  /** Keep alive (or not) a previously acquired lock */
+  rpc LockHeartbeat(LockHeartbeatRequest) returns(LockHeartbeatResponse);
+}

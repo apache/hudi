@@ -1,0 +1,143 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+syntax = "proto2";
+package hbase.pb;
+
+option java_package = "org.apache.hudi.hbase.shaded.protobuf.generated";
+option java_outer_classname = "AccessControlProtos";
+option java_generic_services = true;
+option java_generate_equals_and_hash = true;
+option optimize_for = SPEED;
+
+import "HBase.proto";
+
+/**
+* Messages and services in shaded AccessControl.proto only use for serializing/deserializing permissions
+* in .snapshotinfo, and should not use for access control logic for coprocessor endpoints compatibility
+* (use AccessControl.proto under hbase-protocol module instead).
+*/
+
+message Permission {
+    enum Action {
+        READ = 0;
+        WRITE = 1;
+        EXEC = 2;
+        CREATE = 3;
+        ADMIN = 4;
+    }
+    enum Type {
+        Global = 1;
+        Namespace = 2;
+        Table = 3;
+    }
+    required Type type = 1;
+    optional GlobalPermission global_permission = 2;
+    optional NamespacePermission namespace_permission = 3;
+    optional TablePermission table_permission = 4;
+}
+
+message TablePermission {
+    optional TableName table_name = 1;
+    optional bytes family = 2;
+    optional bytes qualifier = 3;
+    repeated Permission.Action action = 4;
+}
+
+message NamespacePermission {
+    optional bytes namespace_name = 1;
+    repeated Permission.Action action = 2;
+}
+
+message GlobalPermission {
+    repeated Permission.Action action = 1;
+}
+
+message UserPermission {
+    required bytes user = 1;
+    required Permission permission = 3;
+}
+
+/**
+ * Content of the /hbase/acl/<table or namespace> znode.
+ */
+message UsersAndPermissions {
+  message UserPermissions {
+    required bytes user = 1;
+    repeated Permission permissions = 2;
+  }
+
+  repeated UserPermissions user_permissions = 1;
+}
+
+message GrantRequest {
+  required UserPermission user_permission = 1;
+  optional bool merge_existing_permissions = 2 [default = false];
+}
+
+message GrantResponse {
+}
+
+message RevokeRequest {
+  required UserPermission user_permission = 1;
+}
+
+message RevokeResponse {
+}
+
+message GetUserPermissionsRequest {
+  optional Permission.Type type = 1;
+  optional TableName table_name = 2;
+  optional bytes namespace_name = 3;
+  optional bytes column_family = 4;
+  optional bytes column_qualifier = 5;
+  optional bytes user_name = 6;
+}
+
+message GetUserPermissionsResponse {
+  repeated UserPermission user_permission = 1;
+}
+
+message CheckPermissionsRequest {
+  repeated Permission permission = 1;
+}
+
+message CheckPermissionsResponse {
+}
+
+message HasUserPermissionsRequest {
+  optional bytes user_name = 1;
+  repeated Permission permission = 2;
+}
+
+message HasUserPermissionsResponse {
+  repeated bool has_user_permission = 1;
+}
+
+service AccessControlService {
+    rpc Grant(GrantRequest)
+      returns (GrantResponse);
+
+    rpc Revoke(RevokeRequest)
+      returns (RevokeResponse);
+
+    rpc GetUserPermissions(GetUserPermissionsRequest)
+      returns (GetUserPermissionsResponse);
+
+    rpc CheckPermissions(CheckPermissionsRequest)
+      returns (CheckPermissionsResponse);
+}

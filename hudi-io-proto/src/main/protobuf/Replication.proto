@@ -1,0 +1,139 @@
+ /**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+syntax = "proto2";
+
+package hbase.pb;
+
+option java_package = "org.apache.hudi.hbase.shaded.protobuf.generated";
+option java_outer_classname = "ReplicationProtos";
+option java_generic_services = true;
+option java_generate_equals_and_hash = true;
+option optimize_for = SPEED;
+
+import "HBase.proto";
+
+message TableCF {
+  optional TableName table_name = 1;
+  repeated bytes families = 2;
+}
+
+/**
+ * Used by replication. Holds a replication peer key.
+ */
+message ReplicationPeer {
+  // clusterkey is the concatenation of the slave cluster's
+  // hbase.zookeeper.quorum:hbase.zookeeper.property.clientPort:zookeeper.znode.parent
+  optional string clusterkey = 1;
+  optional string replicationEndpointImpl = 2;
+  repeated BytesBytesPair data = 3;
+  repeated NameStringPair configuration = 4;
+  repeated TableCF table_cfs = 5;
+  repeated bytes namespaces = 6;
+  optional int64 bandwidth = 7;
+  optional bool replicate_all = 8;
+  repeated TableCF exclude_table_cfs = 9;
+  repeated bytes exclude_namespaces = 10;
+  optional bool serial = 11;
+}
+
+/**
+ * Used by replication. Holds whether enabled or disabled
+ */
+message ReplicationState {
+  enum State {
+    ENABLED = 0;
+    DISABLED = 1;
+  }
+  required State state = 1;
+}
+
+/**
+ * Used by replication. Description of the replication peer.
+ */
+message ReplicationPeerDescription {
+  required string id = 1;
+  required ReplicationState state = 2;
+  required ReplicationPeer config = 3;
+}
+
+/**
+ * Used by replication. Holds the current position in an WAL file.
+ */
+message ReplicationHLogPosition {
+  required int64 position = 1;
+}
+
+message AddReplicationPeerRequest {
+  required string peer_id = 1;
+  required ReplicationPeer peer_config = 2;
+  required ReplicationState peer_state = 3;
+}
+
+message AddReplicationPeerResponse {
+  optional uint64 proc_id = 1;
+}
+
+message RemoveReplicationPeerRequest {
+  required string peer_id = 1;
+}
+
+message RemoveReplicationPeerResponse {
+  optional uint64 proc_id = 1;
+}
+
+message EnableReplicationPeerRequest {
+  required string peer_id = 1;
+}
+
+message EnableReplicationPeerResponse {
+  optional uint64 proc_id = 1;
+}
+
+message DisableReplicationPeerRequest {
+  required string peer_id = 1;
+}
+
+message DisableReplicationPeerResponse {
+  optional uint64 proc_id = 1;
+}
+
+message GetReplicationPeerConfigRequest {
+  required string peer_id = 1;
+}
+
+message GetReplicationPeerConfigResponse {
+  required string peer_id = 1;
+  required ReplicationPeer peer_config = 2;
+}
+
+message UpdateReplicationPeerConfigRequest {
+  required string peer_id = 1;
+  required ReplicationPeer peer_config = 2;
+}
+
+message UpdateReplicationPeerConfigResponse {
+  optional uint64 proc_id = 1;
+}
+
+message ListReplicationPeersRequest {
+  optional string regex = 1;
+}
+
+message ListReplicationPeersResponse {
+  repeated ReplicationPeerDescription peer_desc = 1;
+}

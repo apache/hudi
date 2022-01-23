@@ -1,0 +1,80 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+syntax = "proto2";
+
+package hbase.pb;
+
+option java_package = "org.apache.hudi.hbase.shaded.protobuf.generated";
+option java_outer_classname = "BucketCacheProtos";
+option java_generic_services = true;
+option java_generate_equals_and_hash = true;
+option optimize_for = SPEED;
+
+message BucketCacheEntry {
+  required int64 cache_capacity = 1;
+  required string io_class = 2;
+  required string map_class = 3;
+  map<int32, string> deserializers = 4;
+  required BackingMap backing_map = 5;
+  optional bytes checksum = 6;
+}
+
+message BackingMap {
+  repeated BackingMapEntry entry = 1;
+}
+
+message BackingMapEntry {
+  required BlockCacheKey key = 1;
+  required BucketEntry value = 2;
+}
+
+message BlockCacheKey {
+  required string hfilename = 1;
+  required int64 offset = 2;
+  required BlockType block_type = 3;
+  required bool primary_replica_block = 4;
+}
+
+enum BlockType {
+  data = 0;
+  encoded_data = 1;
+  leaf_index = 2;
+  bloom_chunk = 3;
+  meta = 4;
+  intermediate_index = 5;
+  root_index = 6;
+  file_info = 7;
+  general_bloom_meta = 8;
+  delete_family_bloom_meta = 9;
+  trailer = 10;
+  index_v1 = 11;
+}
+
+message BucketEntry {
+  required int64 offset = 1;
+  required int32 length = 2;
+  required int64 access_counter = 3;
+  required int32 deserialiser_index = 4;
+  required BlockPriority priority = 5;
+}
+
+enum BlockPriority {
+  single = 0;
+  multi = 1;
+  memory = 2;
+}

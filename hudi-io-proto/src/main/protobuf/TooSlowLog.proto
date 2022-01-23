@@ -1,0 +1,56 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+syntax = "proto2";
+
+// This file contains protocol buffers that are used for Online TooSlowLogs
+// To be used as Ring Buffer payload
+package hbase.pb;
+
+option java_package = "org.apache.hudi.hbase.shaded.protobuf.generated";
+option java_outer_classname = "TooSlowLog";
+option java_generate_equals_and_hash = true;
+option optimize_for = SPEED;
+
+message SlowLogPayload {
+  required int64 start_time = 1;
+  required int32 processing_time = 2;
+  required int32 queue_time = 3;
+  required int64 response_size = 4;
+  required string client_address = 5;
+  required string server_class = 6;
+  required string method_name = 7;
+  required string call_details = 8;
+  optional string param = 9;
+  required string user_name = 10;
+  optional string region_name = 11;
+  optional int32 multi_gets = 12 [default = 0];
+  optional int32 multi_mutations = 13 [default = 0];
+  optional int32 multi_service_calls = 14 [default = 0];
+  required Type type = 15;
+
+  // SLOW_LOG is RPC call slow in nature whereas LARGE_LOG is RPC call quite large.
+  // Majority of times, slow logs are also large logs and hence, ALL is combination of
+  // both
+  enum Type {
+    SLOW_LOG = 0;
+    LARGE_LOG = 1;
+    ALL = 2;
+  }
+
+}

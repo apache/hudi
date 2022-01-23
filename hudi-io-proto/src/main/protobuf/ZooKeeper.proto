@@ -1,0 +1,109 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+syntax = "proto2";
+
+// ZNode data in hbase are serialized protobufs with a four byte
+// 'magic' 'PBUF' prefix.
+package hbase.pb;
+
+option java_package = "org.apache.hudi.hbase.shaded.protobuf.generated";
+option java_outer_classname = "ZooKeeperProtos";
+option java_generic_services = true;
+option java_generate_equals_and_hash = true;
+option optimize_for = SPEED;
+
+import "HBase.proto";
+import "ClusterStatus.proto";
+
+/**
+ * Content of the meta-region-server znode.
+ */
+message MetaRegionServer {
+  // The ServerName hosting the meta region currently, or destination server,
+  // if meta region is in transition.
+  required ServerName server = 1;
+  // The major version of the rpc the server speaks.  This is used so that
+  // clients connecting to the cluster can have prior knowledge of what version
+  // to send to a RegionServer.  AsyncHBase will use this to detect versions.
+  optional uint32 rpc_version = 2;
+
+  // State of the region transition. OPEN means fully operational 'hbase:meta'
+  optional RegionState.State state = 3;
+}
+
+/**
+ * Content of the master znode.
+ */
+message Master {
+  // The ServerName of the current Master
+  required ServerName master = 1;
+  // Major RPC version so that clients can know what version the master can accept.
+  optional uint32 rpc_version = 2;
+  optional uint32 info_port = 3;
+}
+
+/**
+ * Content of the '/hbase/running', cluster state, znode.
+ */
+message ClusterUp {
+  // If this znode is present, cluster is up.  Currently
+  // the data is cluster start_date.
+  required string start_date = 1;
+}
+
+/**
+ * WAL SplitLog directory znodes have this for content.  Used doing distributed
+ * WAL splitting.  Holds current state and name of server that originated split.
+ */
+message SplitLogTask {
+  enum State {
+    UNASSIGNED = 0;
+    OWNED = 1;
+    RESIGNED = 2;
+    DONE = 3;
+    ERR = 4;
+  }
+  required State state = 1;
+  required ServerName server_name = 2;
+  // optional RecoveryMode DEPRECATED_mode = 3 [default = UNKNOWN];
+}
+
+/**
+ * The znode that holds state of table.
+ * Deprected, table state is stored in hbase:meta since 2.0.0.
+ */
+message DeprecatedTableState {
+  // Table's current state
+  enum State {
+    ENABLED = 0;
+    DISABLED = 1;
+    DISABLING = 2;
+    ENABLING = 3;
+  }
+  // This is the table's state.  If no znode for a table,
+  // its state is presumed enabled.  See o.a.h.h.zookeeper.ZKTable class
+  // for more.
+  required State state = 1 [default = ENABLED];
+}
+
+/**
+ * State of the switch.
+ */
+message SwitchState {
+  optional bool enabled = 1;
+}

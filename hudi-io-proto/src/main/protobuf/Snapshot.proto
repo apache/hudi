@@ -1,0 +1,88 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+syntax = "proto2";
+package hbase.pb;
+
+option java_package = "org.apache.hudi.hbase.shaded.protobuf.generated";
+option java_outer_classname = "SnapshotProtos";
+option java_generic_services = true;
+option java_generate_equals_and_hash = true;
+option optimize_for = SPEED;
+
+import "AccessControl.proto";
+import "FS.proto";
+import "HBase.proto";
+
+/**
+ * Description of the snapshot to take
+ */
+message SnapshotDescription {
+  required string name = 1;
+  optional string table = 2; // not needed for delete, but checked for in taking snapshot
+  optional int64 creation_time = 3 [default = 0];
+  enum Type {
+    DISABLED = 0;
+    FLUSH = 1;
+    SKIPFLUSH = 2;
+  }
+  optional Type type = 4 [default = FLUSH];
+  optional int32 version = 5;
+  optional string owner = 6;
+  optional UsersAndPermissions users_and_permissions = 7;
+  optional int64 ttl = 8 [default = 0];
+  optional int64 max_file_size = 9 [default = 0];
+}
+
+message SnapshotFileInfo {
+  enum Type {
+    HFILE = 1;
+    WAL = 2;
+  }
+
+  required Type type = 1;
+
+  optional string hfile = 3;
+
+  optional string wal_server = 4;
+  optional string wal_name = 5;
+}
+
+message SnapshotRegionManifest {
+  optional int32 version = 1;
+
+  required RegionInfo region_info = 2;
+  repeated FamilyFiles family_files = 3;
+
+  message StoreFile {
+    required string name = 1;
+    optional Reference reference = 2;
+
+    // TODO: Add checksums or other fields to verify the file
+    optional uint64 file_size = 3;
+  }
+
+  message FamilyFiles {
+    required bytes family_name = 1;
+    repeated StoreFile store_files = 2;
+  }
+}
+
+message SnapshotDataManifest {
+  required TableSchema table_schema = 1;
+  repeated SnapshotRegionManifest region_manifests = 2;
+}

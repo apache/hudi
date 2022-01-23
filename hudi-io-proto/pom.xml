@@ -1,0 +1,262 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Licensed to the Apache Software Foundation (ASF) under one
+  ~ or more contributor license agreements.  See the NOTICE file
+  ~ distributed with this work for additional information
+  ~ regarding copyright ownership.  The ASF licenses this file
+  ~ to you under the Apache License, Version 2.0 (the
+  ~ "License"); you may not use this file except in compliance
+  ~ with the License.  You may obtain a copy of the License at
+  ~
+  ~   http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing,
+  ~ software distributed under the License is distributed on an
+  ~ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  ~ KIND, either express or implied.  See the License for the
+  ~ specific language governing permissions and limitations
+  ~ under the License.
+  -->
+
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>hudi</artifactId>
+        <groupId>org.apache.hudi</groupId>
+        <version>0.11.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>hudi-io-proto</artifactId>
+
+    <properties>
+        <maven.compiler.source>8</maven.compiler.source>
+        <maven.compiler.target>8</maven.compiler.target>
+        <os.maven.version>1.5.0.Final</os.maven.version>
+        <external.protobuf.groupid>com.google.protobuf</external.protobuf.groupid>
+        <external.protobuf.version>2.5.0</external.protobuf.version>
+        <internal.protobuf.version>3.17.3</internal.protobuf.version>
+        <external.protoc.version>${external.protobuf.version}</external.protoc.version>
+        <protobuf.plugin.version>0.6.1</protobuf.plugin.version>
+    </properties>
+
+    <build>
+        <extensions>
+            <extension>
+                <groupId>kr.motd.maven</groupId>
+                <artifactId>os-maven-plugin</artifactId>
+                <version>${os.maven.version}</version>
+            </extension>
+        </extensions>
+        <plugins>
+            <!-- Make a jar and put the sources in the jar -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <!--Make it so assembly:single does nothing in here-->
+                <artifactId>maven-assembly-plugin</artifactId>
+                <configuration>
+                    <skipAssembly>true</skipAssembly>
+                </configuration>
+            </plugin>
+            <plugin>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <!-- Always skip the second part executions, since we only run simple unit tests in this module -->
+                <executions>
+                    <execution>
+                        <id>secondPartTestsExecution</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>test</goal>
+                        </goals>
+                        <configuration>
+                            <skip>true</skip>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.xolstice.maven.plugins</groupId>
+                <artifactId>protobuf-maven-plugin</artifactId>
+                <version>${protobuf.plugin.version}</version>
+                <configuration>
+                    <protocArtifact>com.google.protobuf:protoc:${internal.protobuf.version}:exe:${os.detected.classifier}</protocArtifact>
+                    <protoSourceRoot>${basedir}/src/main/protobuf/</protoSourceRoot>
+                    <clearOutputDirectory>false</clearOutputDirectory>
+                    <checkStaleness>true</checkStaleness>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>compile-protoc</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>net.revelc.code</groupId>
+                <artifactId>warbucks-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>com.google.code.maven-replacer-plugin</groupId>
+                <artifactId>replacer</artifactId>
+                <version>1.5.3</version>
+                <executions>
+                    <execution>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>replace</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <basedir>${basedir}/target/generated-sources/</basedir>
+                    <includes>
+                        <include>**/*.java</include>
+                    </includes>
+                    <replacements>
+                        <replacement>
+                            <token>([^\.])com.google.protobuf</token>
+                            <value>$1org.apache.hbase.thirdparty.com.google.protobuf</value>
+                        </replacement>
+                        <replacement>
+                            <token>(public)(\W+static)?(\W+final)?(\W+class)</token>
+                            <value>@javax.annotation.Generated("proto") $1$2$3$4</value>
+                        </replacement>
+                        <!-- replacer doesn't support anchoring or negative lookbehind -->
+                        <replacement>
+                            <token>(@javax.annotation.Generated\("proto"\) ){2}</token>
+                            <value>$1</value>
+                        </replacement>
+                    </replacements>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+    <dependencies>
+        <!-- General dependencies -->
+        <dependency>
+            <groupId>org.apache.hbase.thirdparty</groupId>
+            <artifactId>hbase-shaded-protobuf</artifactId>
+            <version>4.0.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.htrace</groupId>
+            <artifactId>htrace-core4</artifactId>
+            <version>4.2.0-incubating</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+            <version>2.5.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.yetus</groupId>
+            <artifactId>audience-annotations</artifactId>
+            <version>0.13.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.30</version>
+        </dependency>
+    </dependencies>
+    <profiles>
+        <!-- Skip the tests in this module -->
+        <profile>
+            <id>skipProtocolTests</id>
+            <activation>
+                <property>
+                    <name>skipProtocolTests</name>
+                </property>
+            </activation>
+            <properties>
+                <surefire.skipFirstPart>true</surefire.skipFirstPart>
+                <surefire.skipSecondPart>true</surefire.skipSecondPart>
+            </properties>
+        </profile>
+        <profile>
+            <id>build-with-jdk11</id>
+            <activation>
+                <jdk>[1.11,)</jdk>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>javax.annotation</groupId>
+                    <artifactId>javax.annotation-api</artifactId>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>eclipse-specific</id>
+            <activation>
+                <property>
+                    <name>m2e.version</name>
+                </property>
+            </activation>
+            <build>
+                <pluginManagement>
+                    <plugins>
+                        <!--This plugin's configuration is used to store Eclipse m2e settings only. It has no influence on the Maven build itself.-->
+                        <plugin>
+                            <groupId>org.eclipse.m2e</groupId>
+                            <artifactId>lifecycle-mapping</artifactId>
+                            <version>1.0.0</version>
+                            <configuration>
+                                <lifecycleMappingMetadata>
+                                    <pluginExecutions>
+                                        <pluginExecution>
+                                            <pluginExecutionFilter>
+                                                <groupId>org.apache.hadoop</groupId>
+                                                <artifactId>hadoop-maven-plugins</artifactId>
+                                                <versionRange>[2.0.5-alpha,)</versionRange>
+                                                <goals>
+                                                    <goal>protoc</goal>
+                                                </goals>
+                                            </pluginExecutionFilter>
+                                            <action>
+                                                <ignore/>
+                                            </action>
+                                        </pluginExecution>
+                                        <pluginExecution>
+                                            <pluginExecutionFilter>
+                                                <groupId>
+                                                    com.google.code.maven-replacer-plugin
+                                                </groupId>
+                                                <artifactId>replacer</artifactId>
+                                                <versionRange>[1.5.3,)</versionRange>
+                                                <goals>
+                                                    <goal>replace</goal>
+                                                </goals>
+                                            </pluginExecutionFilter>
+                                            <action>
+                                                <ignore></ignore>
+                                            </action>
+                                        </pluginExecution>
+                                    </pluginExecutions>
+                                </lifecycleMappingMetadata>
+                            </configuration>
+                        </plugin>
+                    </plugins>
+                </pluginManagement>
+            </build>
+        </profile>
+    </profiles>
+</project>

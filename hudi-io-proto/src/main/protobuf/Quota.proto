@@ -1,0 +1,161 @@
+ /**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+syntax = "proto2";
+
+package hbase.pb;
+
+option java_package = "org.apache.hudi.hbase.shaded.protobuf.generated";
+option java_outer_classname = "QuotaProtos";
+option java_generic_services = true;
+option java_generate_equals_and_hash = true;
+option optimize_for = SPEED;
+
+import "HBase.proto";
+
+enum QuotaScope {
+  CLUSTER = 1;
+  MACHINE = 2;
+}
+
+message TimedQuota {
+  required TimeUnit time_unit = 1;
+  optional uint64 soft_limit  = 2;
+  optional float share = 3;
+  optional QuotaScope scope  = 4 [default = MACHINE];
+}
+
+enum ThrottleType {
+  REQUEST_NUMBER = 1;
+  REQUEST_SIZE   = 2;
+  WRITE_NUMBER   = 3;
+  WRITE_SIZE     = 4;
+  READ_NUMBER    = 5;
+  READ_SIZE      = 6;
+  REQUEST_CAPACITY_UNIT = 7;
+  WRITE_CAPACITY_UNIT   = 8;
+  READ_CAPACITY_UNIT    = 9;
+}
+
+message Throttle {
+  optional TimedQuota req_num  = 1;
+  optional TimedQuota req_size = 2;
+
+  optional TimedQuota write_num  = 3;
+  optional TimedQuota write_size = 4;
+
+  optional TimedQuota read_num  = 5;
+  optional TimedQuota read_size = 6;
+
+  optional TimedQuota req_capacity_unit   = 7;
+  optional TimedQuota write_capacity_unit = 8;
+  optional TimedQuota read_capacity_unit  = 9;
+}
+
+message ThrottleRequest {
+  optional ThrottleType type = 1;
+  optional TimedQuota timed_quota = 2;
+}
+
+enum QuotaType {
+  THROTTLE = 1;
+  SPACE = 2;
+}
+
+message Quotas {
+  optional bool bypass_globals = 1 [default = false];
+  optional Throttle throttle = 2;
+  optional SpaceQuota space = 3;
+}
+
+message QuotaUsage {
+}
+
+// Defines what action should be taken when the SpaceQuota is violated
+enum SpaceViolationPolicy {
+  DISABLE = 1; // Disable the table(s)
+  NO_WRITES_COMPACTIONS = 2; // No writes, bulk-loads, or compactions
+  NO_WRITES = 3; // No writes or bulk-loads
+  NO_INSERTS = 4; // No puts or bulk-loads, but deletes are allowed
+}
+
+// Defines a limit on the amount of filesystem space used by a table/namespace
+message SpaceQuota {
+  optional uint64 soft_limit = 1; // The limit of bytes for this quota
+  optional SpaceViolationPolicy violation_policy = 2; // The action to take when the quota is violated
+  optional bool remove = 3 [default = false]; // When true, remove the quota.
+}
+
+// The Request to limit space usage (to allow for schema evolution not tied to SpaceQuota).
+message SpaceLimitRequest {
+  optional SpaceQuota quota = 1;
+}
+
+// Represents the state of a quota on a table. Either the quota is not in violation
+// or it is in violation there is a violation policy which should be in effect.
+message SpaceQuotaStatus {
+  optional SpaceViolationPolicy violation_policy = 1;
+  optional bool in_violation = 2;
+}
+
+// Message stored in the value of hbase:quota table to denote the status of a table WRT
+// the quota applicable to it.
+message SpaceQuotaSnapshot {
+  optional SpaceQuotaStatus quota_status = 1;
+  optional uint64 quota_usage = 2;
+  optional uint64 quota_limit = 3;
+}
+
+message GetSpaceQuotaRegionSizesRequest {
+}
+
+message GetSpaceQuotaRegionSizesResponse {
+  message RegionSizes {
+    optional TableName table_name = 1;
+    optional uint64 size = 2;
+
+  }
+  repeated RegionSizes sizes = 1;
+}
+
+message GetSpaceQuotaSnapshotsRequest {
+}
+
+message GetSpaceQuotaSnapshotsResponse {
+  // Cannot use TableName as a map key, do the repeated nested message by hand.
+  message TableQuotaSnapshot {
+    optional TableName table_name = 1;
+    optional SpaceQuotaSnapshot snapshot = 2;
+  }
+  repeated TableQuotaSnapshot snapshots = 1;
+}
+
+message GetQuotaStatesRequest {
+}
+
+message GetQuotaStatesResponse {
+  message TableQuotaSnapshot {
+    optional TableName table_name = 1;
+    optional SpaceQuotaSnapshot snapshot = 2;
+  }
+  message NamespaceQuotaSnapshot {
+    optional string namespace = 1;
+    optional SpaceQuotaSnapshot snapshot = 2;
+  }
+  repeated TableQuotaSnapshot table_snapshots = 1;
+  repeated NamespaceQuotaSnapshot ns_snapshots = 2;
+}

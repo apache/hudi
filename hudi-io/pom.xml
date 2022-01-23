@@ -86,6 +86,12 @@
   </build>
 
   <dependencies>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-io-proto</artifactId>
+      <version>${project.parent.version}</version>
+    </dependency>
+
     <!-- Hadoop -->
     <dependency>
       <groupId>org.apache.hadoop</groupId>
@@ -118,6 +124,11 @@
 
     <dependency>
       <groupId>org.apache.hbase.thirdparty</groupId>
+      <artifactId>hbase-shaded-protobuf</artifactId>
+      <version>4.0.1</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hbase.thirdparty</groupId>
       <artifactId>hbase-shaded-miscellaneous</artifactId>
       <version>4.0.1</version>
     </dependency>
@@ -130,6 +141,11 @@
       <groupId>org.apache.hbase.thirdparty</groupId>
       <artifactId>hbase-shaded-netty</artifactId>
       <version>4.0.1</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.htrace</groupId>
+      <artifactId>htrace-core4</artifactId>
+      <version>4.2.0-incubating</version>
     </dependency>
     <dependency>
       <groupId>org.apache.commons</groupId>

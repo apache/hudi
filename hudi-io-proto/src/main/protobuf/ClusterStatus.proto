@@ -1,0 +1,336 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+syntax = "proto2";
+// This file contains protocol buffers that are used for ClustStatus
+package hbase.pb;
+
+option java_package = "org.apache.hudi.hbase.shaded.protobuf.generated";
+option java_outer_classname = "ClusterStatusProtos";
+option java_generate_equals_and_hash = true;
+option optimize_for = SPEED;
+
+import "HBase.proto";
+import "ClusterId.proto";
+import "FS.proto";
+
+message RegionState {
+  required RegionInfo region_info = 1;
+  required State state = 2;
+  optional uint64 stamp = 3;
+  enum State {
+    OFFLINE = 0;       // region is in an offline state
+    PENDING_OPEN = 1;  // sent rpc to server to open but has not begun
+    OPENING = 2;       // server has begun to open but not yet done
+    OPEN = 3;          // server opened region and updated meta
+    PENDING_CLOSE = 4; // sent rpc to server to close but has not begun
+    CLOSING = 5;       // server has begun to close but not yet done
+    CLOSED = 6;        // server closed region and updated meta
+    SPLITTING = 7;     // server started split of a region
+    SPLIT = 8;         // server completed split of a region
+    FAILED_OPEN = 9;   // failed to open, and won't retry any more
+    FAILED_CLOSE = 10; // failed to close, and won't retry any more
+    MERGING = 11;      // server started merge a region
+    MERGED = 12;       // server completed merge of a region
+    SPLITTING_NEW = 13;  // new region to be created when RS splits a parent
+                       // region but hasn't be created yet, or master doesn't
+                       // know it's already created
+    MERGING_NEW = 14;  // new region to be created when RS merges two
+                       // daughter regions but hasn't be created yet, or
+                       // master doesn't know it's already created
+    ABNORMALLY_CLOSED = 15;// the region is CLOSED because of a RS crash. Usually it is the same
+                       // with CLOSED, but for some operations such as merge/split, we can not
+                       // apply it to a region in this state, as it may lead to data loss as we
+                       // may have some data in recovered edits.
+  }
+}
+
+message RegionInTransition {
+  required RegionSpecifier spec = 1;
+  required RegionState region_state = 2;
+}
+
+/**
+ * sequence Id of a store
+ */
+message StoreSequenceId {
+  required bytes family_name = 1;
+  required uint64 sequence_id = 2;
+}
+
+/**
+ * contains a sequence id of a region which should be the minimum of its store sequence ids and
+ * list of sequence ids of the region's stores
+ */
+message RegionStoreSequenceIds {
+  required uint64 last_flushed_sequence_id = 1;
+  repeated StoreSequenceId store_sequence_id = 2;
+}
+
+message RegionLoad {
+  /** the region specifier */
+  required RegionSpecifier region_specifier = 1;
+
+  /** the number of stores for the region */
+  optional uint32 stores = 2;
+
+  /** the number of storefiles for the region */
+  optional uint32 storefiles = 3;
+
+  /** the total size of the store files for the region, uncompressed, in MB */
+  optional uint32 store_uncompressed_size_MB = 4;
+
+  /** the current total size of the store files for the region, in MB */
+  optional uint32 storefile_size_MB = 5;
+
+  /** the current size of the memstore for the region, in MB */
+  optional uint32 mem_store_size_MB = 6;
+
+  /**
+   * The current total size of root-level store file indexes for the region,
+   * in KB. The same as {@link #rootIndexSizeKB}.
+   */
+  optional uint64 storefile_index_size_KB = 7;
+
+  /** the current total read requests made to region */
+  optional uint64 read_requests_count = 8;
+
+  /** the current total write requests made to region */
+  optional uint64 write_requests_count = 9;
+
+  /** the total compacting key values in currently running compaction */
+  optional uint64 total_compacting_KVs = 10;
+
+  /** the completed count of key values in currently running compaction */
+  optional uint64 current_compacted_KVs = 11;
+
+   /** The current total size of root-level indexes for the region, in KB. */
+  optional uint32 root_index_size_KB = 12;
+
+  /** The total size of all index blocks, not just the root level, in KB. */
+  optional uint32 total_static_index_size_KB = 13;
+
+  /**
+   * The total size of all Bloom filter blocks, not just loaded into the
+   * block cache, in KB.
+   */
+  optional uint32 total_static_bloom_size_KB = 14;
+
+  /** the most recent sequence Id from cache flush */
+  optional uint64 complete_sequence_id = 15;
+
+  /** The current data locality for region in the regionserver */
+  optional float data_locality = 16;
+
+  optional uint64 last_major_compaction_ts = 17 [default = 0];
+
+  /** the most recent sequence Id of store from cache flush */
+  repeated StoreSequenceId store_complete_sequence_id = 18;
+
+  /** the current total filtered read requests made to region */
+  optional uint64 filtered_read_requests_count = 19;
+
+  /** master defines cp_requests_count = 20, the current total coprocessor
+      requests made to region */
+
+  /** the number of references active on the store */
+  optional int32 store_ref_count = 21 [default = 0];
+
+  /**
+   *  The max number of references active on single store file among all compacted store files
+   *  that belong to given region
+   */
+  optional int32 max_compacted_store_file_ref_count = 22 [default = 0];
+
+  /** The current data locality for ssd for region in the regionserver */
+  optional float data_locality_for_ssd = 23;
+
+  /** The current blocks local weight for region in the regionserver */
+  optional uint64 blocks_local_weight = 24;
+
+  /** The current blocks local weight with ssd for region in the regionserver */
+  optional uint64 blocks_local_with_ssd_weight = 25;
+
+  /** The current blocks total weight for region in the regionserver */
+  optional uint64 blocks_total_weight = 26;
+
+  /** The compaction state for region */
+  optional CompactionState compaction_state = 27;
+
+  enum CompactionState {
+    NONE = 0;
+    MINOR = 1;
+    MAJOR = 2;
+    MAJOR_AND_MINOR = 3;
+  }
+}
+
+message UserLoad {
+
+  /** short user name */
+  required string userName = 1;
+
+  /** Metrics for all clients of a user */
+  repeated ClientMetrics clientMetrics = 2;
+}
+
+message ClientMetrics {
+  /** client host name */
+  required string hostName = 1;
+
+  /** the current total read requests made from a client */
+  optional uint64 read_requests_count = 2;
+
+  /** the current total write requests made from a client */
+  optional uint64 write_requests_count = 3;
+
+  /** the current total filtered requests made from a client */
+  optional uint64 filtered_requests_count = 4;
+}
+
+/* Server-level protobufs */
+
+message ReplicationLoadSink {
+  required uint64 ageOfLastAppliedOp = 1;
+  required uint64 timeStampsOfLastAppliedOp = 2;
+  // The below two were added after hbase-2.0.0 went out. They have to be added as 'optional' else
+  // we break upgrades; old RegionServers reporting in w/ old forms of this message will fail to
+  // deserialize on the new Master. See HBASE-25234
+  optional uint64 timestampStarted = 3;
+  optional uint64 totalOpsProcessed = 4;
+}
+
+message ReplicationLoadSource {
+  required string peerID = 1;
+  required uint64 ageOfLastShippedOp = 2;
+  required uint32 sizeOfLogQueue = 3;
+  required uint64 timeStampOfLastShippedOp = 4;
+  required uint64 replicationLag = 5;
+  optional uint64 timeStampOfNextToReplicate=6;
+  optional string queueId = 7;
+  optional bool recovered = 8;
+  optional bool running = 9;
+  optional bool editsSinceRestart = 10;
+  optional uint64 editsRead = 11;
+  optional uint64 oPsShipped = 12;
+}
+
+message ServerLoad {
+  /** Number of requests since last report. */
+  optional uint64 number_of_requests = 1;
+
+  /** Total Number of requests from the start of the region server. */
+  optional uint64 total_number_of_requests = 2;
+
+  /** the amount of used heap, in MB. */
+  optional uint32 used_heap_MB = 3;
+
+  /** the maximum allowable size of the heap, in MB. */
+  optional uint32 max_heap_MB = 4;
+
+  /** Information on the load of individual regions. */
+  repeated RegionLoad region_loads = 5;
+
+  /**
+   * Regionserver-level coprocessors, e.g., WALObserver implementations.
+   * Region-level coprocessors, on the other hand, are stored inside RegionLoad
+   * objects.
+   */
+  repeated Coprocessor coprocessors = 6;
+
+  /**
+   * Time when incremental (non-total) counts began being calculated (e.g. number_of_requests)
+   * time is measured as the difference, measured in milliseconds, between the current time
+   * and midnight, January 1, 1970 UTC.
+   */
+  optional uint64 report_start_time = 7;
+
+  /**
+   * Time when report was generated.
+   * time is measured as the difference, measured in milliseconds, between the current time
+   * and midnight, January 1, 1970 UTC.
+   */
+  optional uint64 report_end_time = 8;
+
+  /**
+   * The port number that this region server is hosing an info server on.
+   */
+  optional uint32 info_server_port = 9;
+
+  /**
+   * The replicationLoadSource for the replication Source status of this region server.
+   */
+  repeated ReplicationLoadSource replLoadSource = 10;
+
+  /**
+   * The replicationLoadSink for the replication Sink status of this region server.
+   */
+  optional ReplicationLoadSink replLoadSink = 11;
+
+  /**
+   * The metrics for each user on this region server
+   */
+  repeated UserLoad userLoads = 12;
+}
+
+message LiveServerInfo {
+  required ServerName server = 1;
+  required ServerLoad server_load = 2;
+}
+
+message RegionStatesCount {
+  required uint32 open_regions = 1;
+  required uint32 split_regions = 2;
+  required uint32 closed_regions = 3;
+  required uint32 regions_in_transition = 4;
+  required uint32 total_regions = 5;
+}
+
+message TableRegionStatesCount {
+  required TableName table_name = 1;
+  required RegionStatesCount region_states_count = 2;
+}
+
+message ClusterStatus {
+  optional HBaseVersionFileContent hbase_version = 1;
+  repeated LiveServerInfo live_servers = 2;
+  repeated ServerName dead_servers = 3;
+  repeated RegionInTransition regions_in_transition = 4;
+  optional ClusterId cluster_id = 5;
+  repeated Coprocessor master_coprocessors = 6;
+  optional ServerName master = 7;
+  repeated ServerName backup_masters = 8;
+  optional bool balancer_on = 9;
+  optional int32 master_info_port = 10 [default = -1];
+  repeated ServerName servers_name = 11;
+  repeated TableRegionStatesCount table_region_states_count = 12;
+}
+
+enum Option {
+  HBASE_VERSION = 0;
+  CLUSTER_ID = 1;
+  LIVE_SERVERS = 2;
+  DEAD_SERVERS = 3;
+  MASTER = 4;
+  BACKUP_MASTERS = 5;
+  MASTER_COPROCESSORS = 6;
+  REGIONS_IN_TRANSITION = 7;
+  BALANCER_ON = 8;
+  MASTER_INFO_PORT = 9;
+  SERVERS_NAME = 10;
+  TABLE_TO_REGIONS_COUNT = 11;
+}
