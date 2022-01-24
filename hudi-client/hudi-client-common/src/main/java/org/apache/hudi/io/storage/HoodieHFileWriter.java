@@ -31,12 +31,11 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.HColumnDescriptor;
-import org.apache.hadoop.hbase.KeyValue;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
-import org.apache.hadoop.hbase.io.hfile.HFile;
-import org.apache.hadoop.hbase.io.hfile.HFileContext;
-import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
+import org.apache.hudi.hbase.KeyValue;
+import org.apache.hudi.hbase.io.hfile.CacheConfig;
+import org.apache.hudi.hbase.io.hfile.HFile;
+import org.apache.hudi.hbase.io.hfile.HFileContext;
+import org.apache.hudi.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.io.Writable;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -56,6 +55,8 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedRecord>
     implements HoodieFileWriter<R> {
+  // TODO(yihua): pulled from HColumnDescriptor
+  public static final String CACHE_DATA_IN_L1 = "CACHE_DATA_IN_L1";
   private static AtomicLong recordIndex = new AtomicLong(1);
 
   private final Path file;
@@ -95,16 +96,17 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
 
     HFileContext context = new HFileContextBuilder().withBlockSize(hfileConfig.getBlockSize())
         .withCompression(hfileConfig.getCompressionAlgorithm())
+        .withCellComparator(hfileConfig.getHFileComparator())
         .build();
 
     conf.set(CacheConfig.PREFETCH_BLOCKS_ON_OPEN_KEY, String.valueOf(hfileConfig.shouldPrefetchBlocksOnOpen()));
-    conf.set(HColumnDescriptor.CACHE_DATA_IN_L1, String.valueOf(hfileConfig.shouldCacheDataInL1()));
+    // HColumnDescriptor.CACHE_DATA_IN_L1
+    conf.set(CACHE_DATA_IN_L1, String.valueOf(hfileConfig.shouldCacheDataInL1()));
     conf.set(DROP_BEHIND_CACHE_COMPACTION_KEY, String.valueOf(hfileConfig.shouldDropBehindCacheCompaction()));
     CacheConfig cacheConfig = new CacheConfig(conf);
     this.writer = HFile.getWriterFactory(conf, cacheConfig)
         .withPath(this.fs, this.file)
         .withFileContext(context)
-        .withComparator(hfileConfig.getHfileComparator())
         .create();
 
     writer.appendFileInfo(HoodieHFileReader.KEY_SCHEMA.getBytes(), schema.toString().getBytes());
