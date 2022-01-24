@@ -142,7 +142,7 @@ WITH (
   'path' = 'oss://vvr-daily/hudi/t1',
   'table.type' = 'MERGE_ON_READ',
   'read.streaming.enabled' = 'true',  -- this option enable the streaming read
-  'read.streaming.start-commit' = '20210316134557' -- specifies the start commit instant time
+  'read.streaming.start-commit' = '20210316134557', -- specifies the start commit instant time
   'read.streaming.check-interval' = '4' -- specifies the check interval for finding new source commits, default 60s.
 );
 
