@@ -31,7 +31,6 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -152,17 +151,21 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
 
   protected void autoCommit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<O> result) {
     final Option<HoodieInstant> inflightInstant = Option.of(new HoodieInstant(State.INFLIGHT,
-        HoodieTimeline.COMMIT_ACTION, instantTime));
+        getCommitActionType(), instantTime));
     this.txnManager.beginTransaction(inflightInstant,
         lastCompletedTxn.isPresent() ? Option.of(lastCompletedTxn.get().getLeft()) : Option.empty());
     try {
+      setCommitMetadata(result);
+      // reload active timeline so as to get all updates after current transaction have started. hence setting last arg to true.
       TransactionUtils.resolveWriteConflictIfAny(table, this.txnManager.getCurrentTransactionOwner(),
-          result.getCommitMetadata(), config, this.txnManager.getLastCompletedTransactionOwner());
+          result.getCommitMetadata(), config, this.txnManager.getLastCompletedTransactionOwner(), true);
       commit(extraMetadata, result);
     } finally {
       this.txnManager.endTransaction(inflightInstant);
     }
   }
+
+  protected abstract void setCommitMetadata(HoodieWriteMetadata<O> result);
 
   protected abstract void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<O> result);
 

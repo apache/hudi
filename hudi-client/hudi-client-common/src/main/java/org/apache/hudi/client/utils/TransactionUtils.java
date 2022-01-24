@@ -60,9 +60,31 @@ public class TransactionUtils {
       final Option<HoodieCommitMetadata> thisCommitMetadata,
       final HoodieWriteConfig config,
       Option<HoodieInstant> lastCompletedTxnOwnerInstant) throws HoodieWriteConflictException {
+    return resolveWriteConflictIfAny(table, currentTxnOwnerInstant, thisCommitMetadata, config, lastCompletedTxnOwnerInstant, false);
+  }
+
+  /**
+   * Resolve any write conflicts when committing data.
+   *
+   * @param table
+   * @param currentTxnOwnerInstant
+   * @param thisCommitMetadata
+   * @param config
+   * @param lastCompletedTxnOwnerInstant
+   * @return
+   * @throws HoodieWriteConflictException
+   */
+  public static Option<HoodieCommitMetadata> resolveWriteConflictIfAny(
+      final HoodieTable table,
+      final Option<HoodieInstant> currentTxnOwnerInstant,
+      final Option<HoodieCommitMetadata> thisCommitMetadata,
+      final HoodieWriteConfig config,
+      Option<HoodieInstant> lastCompletedTxnOwnerInstant,
+      boolean reloadActiveTimeline) throws HoodieWriteConflictException {
     if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
       ConflictResolutionStrategy resolutionStrategy = config.getWriteConflictResolutionStrategy();
-      Stream<HoodieInstant> instantStream = resolutionStrategy.getCandidateInstants(table.getActiveTimeline(), currentTxnOwnerInstant.get(), lastCompletedTxnOwnerInstant);
+      Stream<HoodieInstant> instantStream = resolutionStrategy.getCandidateInstants(reloadActiveTimeline
+          ? table.getMetaClient().reloadActiveTimeline() : table.getActiveTimeline(), currentTxnOwnerInstant.get(), lastCompletedTxnOwnerInstant);
       final ConcurrentOperation thisOperation = new ConcurrentOperation(currentTxnOwnerInstant.get(), thisCommitMetadata.orElse(new HoodieCommitMetadata()));
       instantStream.forEach(instant -> {
         try {
