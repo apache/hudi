@@ -49,6 +49,13 @@ case class AlterHoodieTableChangeColumnCommand(
       throw new AnalysisException(s"Can't find column `$columnName` given table data columns " +
         s"${hoodieCatalogTable.dataSchema.fieldNames.mkString("[`", "`, `", "`]")}")
     )
+    // Throw an AnalysisException if the column name/dataType is changed.
+    if (!columnEqual(originColumn, newColumn, resolver)) {
+      throw new AnalysisException(
+        "ALTER TABLE CHANGE COLUMN is not supported for changing column " +
+          s"'${originColumn.name}' with type '${originColumn.dataType}' to " +
+          s"'${newColumn.name}' with type '${newColumn.dataType}'")
+    }
 
     // Get the new schema
     val newTableSchema = StructType(
