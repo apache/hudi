@@ -125,7 +125,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     if (!StringUtils.isNullOrEmpty(props.getString(Config.S3_KEY_PREFIX))) {
       filter = filter + " and s3.object.key like '" + props.getString(Config.S3_KEY_PREFIX) + "%'";
     }
-    if (!StringUtils.isNullOrEmpty(props.getString(Config.S3_IGNORE_KEY_PREFIX))) {
+    if (!StringUtils.isNullOrEmpty(props.getString(Config.S3_IGNORE_KEY_PREFIX, null))) {
       filter = filter + " and s3.object.key not like '" + props.getString(Config.S3_IGNORE_KEY_PREFIX) + "%'";
     }
     if (!StringUtils.isNullOrEmpty(props.getString(Config.S3_IGNORE_KEY_SUBSTRING))) {
