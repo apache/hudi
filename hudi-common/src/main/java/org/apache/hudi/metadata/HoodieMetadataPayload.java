@@ -288,6 +288,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return this.columnStatMetadata;
   }
 
+  // HoodieMetadataPayload is an internal payload. Hence not implementing newer apis with Properties as last argument.
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRecord, Schema schema) throws IOException {
     HoodieMetadataPayload anotherPayload = new HoodieMetadataPayload(Option.of((GenericRecord) oldRecord));

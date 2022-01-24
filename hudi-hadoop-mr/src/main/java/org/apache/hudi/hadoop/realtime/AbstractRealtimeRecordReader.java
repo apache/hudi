@@ -19,6 +19,7 @@
 package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.common.model.HoodieAvroPayload;
+import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.LogReaderUtils;
 import org.apache.hudi.exception.HoodieIOException;
@@ -39,6 +40,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
 /**
@@ -50,6 +52,7 @@ public abstract class AbstractRealtimeRecordReader {
   protected final RealtimeSplit split;
   protected final JobConf jobConf;
   protected final boolean usesCustomPayload;
+  protected Properties payloadProps = new Properties();
   // Schema handles
   private Schema readerSchema;
   private Schema writerSchema;
@@ -72,6 +75,7 @@ public abstract class AbstractRealtimeRecordReader {
 
   private boolean usesCustomPayload() {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jobConf).setBasePath(split.getBasePath()).build();
+    this.payloadProps.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, metaClient.getTableConfig().getPreCombineField());
     return !(metaClient.getTableConfig().getPayloadClass().contains(HoodieAvroPayload.class.getName())
         || metaClient.getTableConfig().getPayloadClass().contains("org.apache.hudi.OverwriteWithLatestAvroPayload"));
   }
