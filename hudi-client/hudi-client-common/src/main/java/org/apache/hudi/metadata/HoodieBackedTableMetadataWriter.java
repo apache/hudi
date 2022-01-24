@@ -535,7 +535,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * All FileGroups for a given metadata partition has a fixed prefix as per the {@link MetadataPartitionType#getFileIdPrefix()}.
    * Each file group is suffixed with 4 digits with increments of 1 starting with 0000.
    *
-   * Lets say we configure 10 file groups for record level index partittion, and prefix as "record-index-bucket-"
+   * Lets say we configure 10 file groups for record level index partition, and prefix as "record-index-bucket-"
    * File groups will be named as :
    *    record-index-bucket-0000, .... -> ..., record-index-bucket-0009
    */
