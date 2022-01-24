@@ -23,7 +23,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+import org.apache.hudi.hbase.io.hfile.CacheConfig;
 
 import java.io.IOException;
 

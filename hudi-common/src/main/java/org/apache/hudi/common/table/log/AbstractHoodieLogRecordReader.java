@@ -50,6 +50,7 @@ import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
@@ -424,6 +425,9 @@ public abstract class AbstractHoodieLogRecordReader {
           processDataBlock((HoodieAvroDataBlock) lastBlock, keys);
           break;
         case HFILE_DATA_BLOCK:
+          if (!keys.isPresent()) {
+            keys = Option.of(Collections.emptyList());
+          }
           processDataBlock((HoodieHFileDataBlock) lastBlock, keys);
           break;
         case DELETE_BLOCK:

@@ -36,13 +36,13 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.KeyValue;
-import org.apache.hadoop.hbase.io.compress.Compression;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
-import org.apache.hadoop.hbase.io.hfile.HFile;
-import org.apache.hadoop.hbase.io.hfile.HFileContext;
-import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
-import org.apache.hadoop.hbase.util.Pair;
+import org.apache.hudi.hbase.KeyValue;
+import org.apache.hudi.hbase.io.compress.Compression;
+import org.apache.hudi.hbase.io.hfile.CacheConfig;
+import org.apache.hudi.hbase.io.hfile.HFile;
+import org.apache.hudi.hbase.io.hfile.HFileContext;
+import org.apache.hudi.hbase.io.hfile.HFileContextBuilder;
+import org.apache.hudi.hbase.util.Pair;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -91,6 +91,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   @Override
   protected byte[] serializeRecords() throws IOException {
     HFileContext context = new HFileContextBuilder().withBlockSize(blockSize).withCompression(compressionAlgorithm)
+        .withCellComparator(new HoodieHBaseKVComparator())
         .build();
     Configuration conf = new Configuration();
     CacheConfig cacheConfig = new CacheConfig(conf);
@@ -98,7 +99,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     FSDataOutputStream ostream = new FSDataOutputStream(baos, null);
 
     HFile.Writer writer = HFile.getWriterFactory(conf, cacheConfig)
-        .withOutputStream(ostream).withFileContext(context).withComparator(new HoodieHBaseKVComparator()).create();
+        .withOutputStream(ostream).withFileContext(context).create();
 
     // Serialize records into bytes
     Map<String, byte[]> sortedRecordsMap = new TreeMap<>();
@@ -195,7 +196,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
       Collections.sort(keys);
     }
     HoodieHFileReader reader = new HoodieHFileReader(inlineConf, inlinePath, cacheConf, inlinePath.getFileSystem(inlineConf));
-    List<org.apache.hadoop.hbase.util.Pair<String, IndexedRecord>> logRecords = enableFullScan ? reader.readAllRecords(writerSchema, schema) :
+    List<org.apache.hudi.hbase.util.Pair<String, IndexedRecord>> logRecords = enableFullScan ? reader.readAllRecords(writerSchema, schema) :
         reader.readRecords(keys, schema);
     reader.close();
     this.records = logRecords.stream().map(t -> t.getSecond()).collect(Collectors.toList());
