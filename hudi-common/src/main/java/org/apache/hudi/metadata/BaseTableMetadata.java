@@ -231,18 +231,18 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   }
 
   /**
-   * May be handle spurious deletes. Depending on config, throw an exception or log a warn msg.
+   * Maybe handle spurious deletes. Depending on config, throw an exception or log a warn msg.
    * @param hoodieRecord instance of {@link HoodieRecord} of interest.
    * @param partitionName partition name of interest.
    */
   private void mayBeHandleSpuriousDeletes(Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord, String partitionName) {
     if (!hoodieRecord.get().getData().getDeletions().isEmpty()) {
-      if (!metadataConfig.ignoreSpuriousDeletes()) {
+      if (metadataConfig.ignoreSpuriousDeletes()) {
+        LOG.warn("Metadata record for " + partitionName + " encountered some files to be deleted which was not added before. "
+            + "Ignoring the spurious deletes as the `" + HoodieMetadataConfig.IGNORE_SPURIOUS_DELETES.key() + "` config is set to true");
+      } else {
         throw new HoodieMetadataException("Metadata record for " + partitionName + " is inconsistent: "
             + hoodieRecord.get().getData());
-      } else {
-        LOG.warn("Metadata record for " + partitionName + " encountered some files to be deleted which was not added before. "
-            + "Ignoring the spurious deletes as the `" + HoodieMetadataConfig.IGNORE_SPURIOUS_DELETES.key() + "` config is set to false");
       }
     }
   }
