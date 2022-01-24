@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -36,7 +37,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.UUID;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
@@ -74,6 +78,36 @@ public class TestHoodieMetadataBootstrap extends TestHoodieMetadataBase {
     }
     doPreBootstrapWriteOperation(testTable, "0000005");
     bootstrapAndVerify();
+  }
+
+  /**
+   * Validate that bootstrap considers only files part of completed commit and ignore any extra files.
+   */
+  @Test
+  public void testMetadataBootstrapWithExtraFiles() throws Exception {
+    HoodieTableType tableType = COPY_ON_WRITE;
+    init(tableType, false);
+    doPreBootstrapWriteOperation(testTable, INSERT, "0000001");
+    doPreBootstrapWriteOperation(testTable, "0000002");
+    doPreBootstrapClean(testTable, "0000003", Arrays.asList("0000001"));
+    doPreBootstrapWriteOperation(testTable, "0000005");
+    // add few extra files to table. bootstrap should include those files.
+    String fileName = UUID.randomUUID().toString();
+    Path baseFilePath = FileCreateUtils.getBaseFilePath(basePath, "p1", "0000006", fileName);
+    FileCreateUtils.createBaseFile(basePath, "p1", "0000006", fileName, 100);
+
+    writeConfig = getWriteConfig(true, true);
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+    syncTableMetadata(writeConfig);
+
+    // remove those files from table. and then validate.
+    Files.delete(baseFilePath);
+
+    // validate
+    validateMetadata(testTable);
+    // after bootstrap do two writes and validate its still functional.
+    doWriteInsertAndUpsert(testTable);
+    validateMetadata(testTable);
   }
 
   @ParameterizedTest

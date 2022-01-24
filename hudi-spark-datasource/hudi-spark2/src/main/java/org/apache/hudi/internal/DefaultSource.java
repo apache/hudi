@@ -68,7 +68,7 @@ public class DefaultSource extends BaseDefaultSource implements DataSourceV2,
     boolean populateMetaFields = options.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
         Boolean.parseBoolean(HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()));
     Map<String, String> properties = options.asMap();
-    // Auto set the value of "hoodie.parquet.writeLegacyFormat.enabled"
+    // Auto set the value of "hoodie.parquet.writelegacyformat.enabled"
     mayBeOverwriteParquetWriteLegacyFormatProp(properties, schema);
     // 1st arg to createHoodieConfig is not really required to be set. but passing it anyways.
     HoodieWriteConfig config = DataSourceUtils.createHoodieConfig(options.get(HoodieWriteConfig.AVRO_SCHEMA_STRING.key()).get(), path, tblName, properties);

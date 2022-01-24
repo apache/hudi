@@ -40,6 +40,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
@@ -83,10 +84,7 @@ public abstract class ITTestBase {
   protected DockerClient dockerClient;
   protected Map<String, Container> runningContainers;
 
-  static String[] getHiveConsoleCommand(String rawCommand) {
-    String jarCommand = "add jar " + HUDI_HADOOP_BUNDLE + ";";
-    String fullCommand = jarCommand + rawCommand;
-
+  static String[] getHiveConsoleCommand(String hiveExpr) {
     List<String> cmd = new ArrayList<>();
     cmd.add("hive");
     cmd.add("--hiveconf");
@@ -94,7 +92,7 @@ public abstract class ITTestBase {
     cmd.add("--hiveconf");
     cmd.add("hive.stats.autogather=false");
     cmd.add("-e");
-    cmd.add("\"" + fullCommand + "\"");
+    cmd.add("\"" + hiveExpr + "\"");
     return cmd.toArray(new String[0]);
   }
 
@@ -181,13 +179,32 @@ public abstract class ITTestBase {
 
   private TestExecStartResultCallback executeCommandInDocker(
       String containerName, String[] command, boolean expectedToSucceed) throws Exception {
-    return executeCommandInDocker(containerName, command, true, expectedToSucceed);
+    return executeCommandInDocker(containerName, command, true, expectedToSucceed, Collections.emptyMap());
   }
 
-  private TestExecStartResultCallback executeCommandInDocker(
-      String containerName, String[] command, boolean checkIfSucceed, boolean expectedToSucceed) throws Exception {
-    Container sparkWorkerContainer = runningContainers.get(containerName);
-    ExecCreateCmd cmd = dockerClient.execCreateCmd(sparkWorkerContainer.getId()).withCmd(command).withAttachStdout(true)
+  private TestExecStartResultCallback executeCommandInDocker(String containerName,
+                                                             String[] command,
+                                                             boolean checkIfSucceed,
+                                                             boolean expectedToSucceed) throws Exception {
+    return executeCommandInDocker(containerName, command, checkIfSucceed, expectedToSucceed, Collections.emptyMap());
+  }
+
+  private TestExecStartResultCallback executeCommandInDocker(String containerName,
+                                                             String[] command,
+                                                             boolean checkIfSucceed,
+                                                             boolean expectedToSucceed,
+                                                             Map<String, String> env) throws Exception {
+    Container targetContainer = runningContainers.get(containerName);
+
+    List<String> dockerEnv = env.entrySet()
+        .stream()
+        .map(e -> String.format("%s=%s", e.getKey(), e.getValue()))
+        .collect(Collectors.toList());
+
+    ExecCreateCmd cmd = dockerClient.execCreateCmd(targetContainer.getId())
+        .withEnv(dockerEnv)
+        .withCmd(command)
+        .withAttachStdout(true)
         .withAttachStderr(true);
 
     ExecCreateCmdResponse createCmdResponse = cmd.exec();
@@ -255,7 +272,9 @@ public abstract class ITTestBase {
     LOG.info("\n#################################################################################################");
 
     String[] hiveCmd = getHiveConsoleCommand(hiveCommand);
-    TestExecStartResultCallback callback = executeCommandInDocker(HIVESERVER, hiveCmd, true);
+    Map<String, String> env = Collections.singletonMap("AUX_CLASSPATH", "file://" + HUDI_HADOOP_BUNDLE);
+    TestExecStartResultCallback callback =
+        executeCommandInDocker(HIVESERVER, hiveCmd, true, true, env);
     return Pair.of(callback.getStdout().toString().trim(), callback.getStderr().toString().trim());
   }
 

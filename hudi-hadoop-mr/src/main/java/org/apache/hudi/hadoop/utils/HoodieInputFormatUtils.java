@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -268,7 +269,7 @@ public class HoodieInputFormatUtils {
    * @param tableMetaClient
    * @return
    */
-  public static Option<HoodieTimeline> getFilteredCommitsTimeline(Job job, HoodieTableMetaClient tableMetaClient) {
+  public static Option<HoodieTimeline> getFilteredCommitsTimeline(JobContext job, HoodieTableMetaClient tableMetaClient) {
     String tableName = tableMetaClient.getTableConfig().getTableName();
     HoodieDefaultTimeline baseTimeline;
     if (HoodieHiveUtils.stopAtCompaction(job, tableName)) {
@@ -299,7 +300,7 @@ public class HoodieInputFormatUtils {
    * @param timeline
    * @return
    */
-  public static HoodieTimeline getHoodieTimelineForIncrementalQuery(Job job, String tableName, HoodieTimeline timeline) {
+  public static HoodieTimeline getHoodieTimelineForIncrementalQuery(JobContext job, String tableName, HoodieTimeline timeline) {
     String lastIncrementalTs = HoodieHiveUtils.readStartCommitTime(job, tableName);
     // Total number of commits to return in this batch. Set this to -1 to get all the commits.
     Integer maxCommits = HoodieHiveUtils.readMaxCommits(job, tableName);
@@ -420,8 +421,8 @@ public class HoodieInputFormatUtils {
   }
 
   public static Map<HoodieTableMetaClient, List<Path>> groupSnapshotPathsByMetaClient(
-          Collection<HoodieTableMetaClient> metaClientList,
-          List<Path> snapshotPaths
+      Collection<HoodieTableMetaClient> metaClientList,
+      List<Path> snapshotPaths
   ) {
     Map<HoodieTableMetaClient, List<Path>> grouped = new HashMap<>();
     metaClientList.forEach(metaClient -> grouped.put(metaClient, new ArrayList<>()));
@@ -440,18 +441,15 @@ public class HoodieInputFormatUtils {
   }
 
   public static List<FileStatus> filterFileStatusForSnapshotMode(JobConf job, Map<String, HoodieTableMetaClient> tableMetaClientMap,
-                                                                 List<Path> snapshotPaths) throws IOException {
-    return filterFileStatusForSnapshotMode(job, tableMetaClientMap, snapshotPaths, false);
-  }
-
-  public static List<FileStatus> filterFileStatusForSnapshotMode(JobConf job, Map<String, HoodieTableMetaClient> tableMetaClientMap,
                                                                  List<Path> snapshotPaths, boolean includeLogFiles) throws IOException {
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(job);
     List<FileStatus> returns = new ArrayList<>();
 
-    Map<HoodieTableMetaClient, List<Path>> groupedPaths = HoodieInputFormatUtils
-        .groupSnapshotPathsByMetaClient(tableMetaClientMap.values(), snapshotPaths);
+    Map<HoodieTableMetaClient, List<Path>> groupedPaths =
+        HoodieInputFormatUtils.groupSnapshotPathsByMetaClient(tableMetaClientMap.values(), snapshotPaths);
+
     Map<HoodieTableMetaClient, HoodieTableFileSystemView> fsViewCache = new HashMap<>();
+
     LOG.info("Found a total of " + groupedPaths.size() + " groups");
 
     try {

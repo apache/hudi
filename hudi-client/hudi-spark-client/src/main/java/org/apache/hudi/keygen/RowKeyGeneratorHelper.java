@@ -27,6 +27,8 @@ import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -106,7 +108,8 @@ public class RowKeyGeneratorHelper {
         if (fieldPos == -1 || row.isNullAt(fieldPos)) {
           val = HUDI_DEFAULT_PARTITION_PATH;
         } else {
-          val = row.getAs(field).toString();
+          Object data = row.get(fieldPos);
+          val = convertToTimestampIfInstant(data).toString();
           if (val.isEmpty()) {
             val = HUDI_DEFAULT_PARTITION_PATH;
           }
@@ -115,11 +118,12 @@ public class RowKeyGeneratorHelper {
           val = field + "=" + val;
         }
       } else { // nested
-        Object nestedVal = getNestedFieldVal(row, partitionPathPositions.get(field));
-        if (nestedVal.toString().contains(NULL_RECORDKEY_PLACEHOLDER) || nestedVal.toString().contains(EMPTY_RECORDKEY_PLACEHOLDER)) {
+        Object data = getNestedFieldVal(row, partitionPathPositions.get(field));
+        data = convertToTimestampIfInstant(data);
+        if (data.toString().contains(NULL_RECORDKEY_PLACEHOLDER) || data.toString().contains(EMPTY_RECORDKEY_PLACEHOLDER)) {
           val = hiveStylePartitioning ? field + "=" + HUDI_DEFAULT_PARTITION_PATH : HUDI_DEFAULT_PARTITION_PATH;
         } else {
-          val = hiveStylePartitioning ? field + "=" + nestedVal.toString() : nestedVal.toString();
+          val = hiveStylePartitioning ? field + "=" + data.toString() : data.toString();
         }
       }
       return val;
@@ -265,5 +269,12 @@ public class RowKeyGeneratorHelper {
       index++;
     }
     return positions;
+  }
+
+  private static Object convertToTimestampIfInstant(Object data) {
+    if (data instanceof Instant) {
+      return Timestamp.from((Instant) data);
+    }
+    return data;
   }
 }

@@ -31,9 +31,12 @@ import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.table.types.logical.TimestampType;
 
 import java.io.Serializable;
 import java.nio.ByteBuffer;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -151,15 +154,30 @@ public class RowDataToAvroConverters {
             };
         break;
       case TIMESTAMP_WITHOUT_TIME_ZONE:
-        converter =
-            new RowDataToAvroConverter() {
-              private static final long serialVersionUID = 1L;
+        final int precision = ((TimestampType) type).getPrecision();
+        if (precision <= 3) {
+          converter =
+              new RowDataToAvroConverter() {
+                private static final long serialVersionUID = 1L;
 
-              @Override
-              public Object convert(Schema schema, Object object) {
-                return ((TimestampData) object).toInstant().toEpochMilli();
-              }
-            };
+                @Override
+                public Object convert(Schema schema, Object object) {
+                  return ((TimestampData) object).toInstant().toEpochMilli();
+                }
+              };
+        } else if (precision <= 6) {
+          converter =
+              new RowDataToAvroConverter() {
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                public Object convert(Schema schema, Object object) {
+                  return ChronoUnit.MICROS.between(Instant.EPOCH, ((TimestampData) object).toInstant());
+                }
+              };
+        } else {
+          throw new UnsupportedOperationException("Unsupported timestamp precision: " + precision);
+        }
         break;
       case DECIMAL:
         converter =

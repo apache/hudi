@@ -48,6 +48,7 @@ public class SparkSingleFileSortPlanStrategy<T extends HoodieRecordPayload<T>>
     super(table, engineContext, writeConfig);
   }
 
+  @Override
   protected Stream<HoodieClusteringGroup> buildClusteringGroupsForPartition(String partitionPath, List<FileSlice> fileSlices) {
     List<Pair<List<FileSlice>, Integer>> fileSliceGroups = fileSlices.stream()
         .map(fileSlice -> Pair.of(Collections.singletonList(fileSlice), 1)).collect(Collectors.toList());

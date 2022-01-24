@@ -49,8 +49,8 @@ public class HoodieBaseBloomIndexCheckFunction
   }
 
   @Override
-  public Iterator<List<KeyLookupResult>> apply(Iterator<Pair<String, HoodieKey>> fileParitionRecordKeyTripletItr) {
-    return new LazyKeyCheckIterator(fileParitionRecordKeyTripletItr);
+  public Iterator<List<KeyLookupResult>> apply(Iterator<Pair<String, HoodieKey>> filePartitionRecordKeyTripletItr) {
+    return new LazyKeyCheckIterator(filePartitionRecordKeyTripletItr);
   }
 
   class LazyKeyCheckIterator extends LazyIterableIterator<Pair<String, HoodieKey>, List<KeyLookupResult>> {

@@ -27,6 +27,7 @@ import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
@@ -623,6 +624,7 @@ public class HoodieTableMetaClient implements Serializable {
   public static class PropertyBuilder {
 
     private HoodieTableType tableType;
+    private String databaseName;
     private String tableName;
     private String tableCreateSchema;
     private String recordKeyFields;
@@ -639,6 +641,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String keyGeneratorClassProp;
     private Boolean hiveStylePartitioningEnable;
     private Boolean urlEncodePartitioning;
+    private HoodieTimelineTimeZone commitTimeZone;
 
     private PropertyBuilder() {
 
@@ -651,6 +654,11 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder setTableType(String tableType) {
       return setTableType(HoodieTableType.valueOf(tableType));
+    }
+
+    public PropertyBuilder setDatabaseName(String databaseName) {
+      this.databaseName = databaseName;
+      return this;
     }
 
     public PropertyBuilder setTableName(String tableName) {
@@ -737,6 +745,11 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public PropertyBuilder setCommitTimezone(HoodieTimelineTimeZone timelineTimeZone) {
+      this.commitTimeZone = timelineTimeZone;
+      return this;
+    }
+
     public PropertyBuilder fromMetaClient(HoodieTableMetaClient metaClient) {
       return setTableType(metaClient.getTableType())
         .setTableName(metaClient.getTableConfig().getTableName())
@@ -746,6 +759,9 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder fromProperties(Properties properties) {
       HoodieConfig hoodieConfig = new HoodieConfig(properties);
+      if (hoodieConfig.contains(HoodieTableConfig.DATABASE_NAME)) {
+        setDatabaseName(hoodieConfig.getString(HoodieTableConfig.DATABASE_NAME));
+      }
       if (hoodieConfig.contains(HoodieTableConfig.NAME)) {
         setTableName(hoodieConfig.getString(HoodieTableConfig.NAME));
       }
@@ -812,6 +828,9 @@ public class HoodieTableMetaClient implements Serializable {
       ValidationUtils.checkArgument(tableName != null, "tableName is null");
 
       HoodieTableConfig tableConfig = new HoodieTableConfig();
+      if (databaseName != null) {
+        tableConfig.setValue(HoodieTableConfig.DATABASE_NAME, databaseName);
+      }
       tableConfig.setValue(HoodieTableConfig.NAME, tableName);
       tableConfig.setValue(HoodieTableConfig.TYPE, tableType.name());
       tableConfig.setValue(HoodieTableConfig.VERSION,
@@ -873,6 +892,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (null != urlEncodePartitioning) {
         tableConfig.setValue(HoodieTableConfig.URL_ENCODE_PARTITIONING, Boolean.toString(urlEncodePartitioning));
       }
+      if (null != commitTimeZone) {
+        tableConfig.setValue(HoodieTableConfig.TIMELINE_TIMEZONE, commitTimeZone.toString());
+      }
       return tableConfig.getProps();
     }
 
@@ -886,5 +908,6 @@ public class HoodieTableMetaClient implements Serializable {
         throws IOException {
       return HoodieTableMetaClient.initTableAndGetMetaClient(configuration, basePath, build());
     }
+
   }
 }

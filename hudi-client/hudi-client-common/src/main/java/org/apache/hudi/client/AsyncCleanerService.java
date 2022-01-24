@@ -37,28 +37,26 @@ class AsyncCleanerService extends HoodieAsyncService {
   private static final Logger LOG = LogManager.getLogger(AsyncCleanerService.class);
 
   private final AbstractHoodieWriteClient writeClient;
-  private final String cleanInstantTime;
   private final transient ExecutorService executor = Executors.newSingleThreadExecutor();
 
-  protected AsyncCleanerService(AbstractHoodieWriteClient writeClient, String cleanInstantTime) {
+  protected AsyncCleanerService(AbstractHoodieWriteClient writeClient) {
     this.writeClient = writeClient;
-    this.cleanInstantTime = cleanInstantTime;
   }
 
   @Override
   protected Pair<CompletableFuture, ExecutorService> startService() {
+    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    LOG.info("Auto cleaning is enabled. Running cleaner async to write operation at instant time " + instantTime);
     return Pair.of(CompletableFuture.supplyAsync(() -> {
-      writeClient.clean(cleanInstantTime);
+      writeClient.clean(instantTime);
       return true;
-    }), executor);
+    }, executor), executor);
   }
 
   public static AsyncCleanerService startAsyncCleaningIfEnabled(AbstractHoodieWriteClient writeClient) {
     AsyncCleanerService asyncCleanerService = null;
     if (writeClient.getConfig().isAutoClean() && writeClient.getConfig().isAsyncClean()) {
-      String instantTime = HoodieActiveTimeline.createNewInstantTime();
-      LOG.info("Auto cleaning is enabled. Running cleaner async to write operation at instant time " + instantTime);
-      asyncCleanerService = new AsyncCleanerService(writeClient, instantTime);
+      asyncCleanerService = new AsyncCleanerService(writeClient);
       asyncCleanerService.start(null);
     } else {
       LOG.info("Async auto cleaning is not enabled. Not running cleaner now");

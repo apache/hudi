@@ -464,6 +464,100 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     }
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testMORTableRestore(boolean restoreAfterCompaction) throws Exception {
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false)
+        // Timeline-server-based markers are not used for multi-rollback tests
+        .withMarkersType(MarkerType.DIRECT.name())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build());
+    HoodieWriteConfig cfg = cfgBuilder.build();
+
+    Properties properties = new Properties();
+    properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
+
+    try (final SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+
+      HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+      List<HoodieRecord> records = insertAndGetRecords("001", client, dataGen, 200);
+      List<HoodieRecord> updates1 = updateAndGetRecords("002", client, dataGen, records);
+      List<HoodieRecord> updates2 = updateAndGetRecords("003", client, dataGen, records);
+      List<HoodieRecord> updates3 = updateAndGetRecords("004", client, dataGen, records);
+      validateRecords(cfg, metaClient, updates3);
+
+      if (!restoreAfterCompaction) {
+        // restore to 002 and validate records.
+        client.restoreToInstant("002");
+        validateRecords(cfg, metaClient, updates1);
+      } else {
+        // trigger compaction and then trigger couple of upserts followed by restore.
+        metaClient = HoodieTableMetaClient.reload(metaClient);
+        String compactionInstantTime = "005";
+        client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
+        JavaRDD<WriteStatus> ws = (JavaRDD<WriteStatus>) client.compact(compactionInstantTime);
+        client.commitCompaction(compactionInstantTime, ws, Option.empty());
+
+        validateRecords(cfg, metaClient, updates3);
+        List<HoodieRecord> updates4 = updateAndGetRecords("006", client, dataGen, records);
+        List<HoodieRecord> updates5 = updateAndGetRecords("007", client, dataGen, records);
+        validateRecords(cfg, metaClient, updates5);
+
+        // restore to 003 and validate records.
+        client.restoreToInstant("003");
+        validateRecords(cfg, metaClient, updates2);
+      }
+    }
+  }
+
+  private List<HoodieRecord> insertAndGetRecords(String newCommitTime, SparkRDDWriteClient client, HoodieTestDataGenerator dataGen, int count) {
+    client.startCommitWithTime(newCommitTime);
+    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, count);
+    JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
+    JavaRDD<WriteStatus> writeStatusJavaRDD = client.upsert(writeRecords, newCommitTime);
+    client.commit(newCommitTime, writeStatusJavaRDD);
+    List<WriteStatus> statuses = writeStatusJavaRDD.collect();
+    assertNoWriteErrors(statuses);
+    return records;
+  }
+
+  private List<HoodieRecord> updateAndGetRecords(String newCommitTime, SparkRDDWriteClient client, HoodieTestDataGenerator dataGen, List<HoodieRecord> records) throws IOException {
+    client.startCommitWithTime(newCommitTime);
+    List<HoodieRecord> updates = dataGen.generateUpdates(newCommitTime, records);
+    JavaRDD<WriteStatus> writeStatusJavaRDD = client.upsert(jsc().parallelize(updates, 1), newCommitTime);
+    client.commit(newCommitTime, writeStatusJavaRDD);
+    return updates;
+  }
+
+  private void validateRecords(HoodieWriteConfig cfg, HoodieTableMetaClient metaClient, List<HoodieRecord> expectedRecords) throws IOException {
+
+    HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+    FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
+    HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
+    List<String> dataFiles = tableView.getLatestBaseFiles().map(hf -> hf.getPath()).collect(Collectors.toList());
+    List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), dataFiles,
+        basePath());
+    assertRecords(expectedRecords, recordsRead);
+  }
+
+  private void assertRecords(List<HoodieRecord> inputRecords, List<GenericRecord> recordsRead) {
+    assertEquals(recordsRead.size(), inputRecords.size());
+    Map<String, GenericRecord> expectedRecords = new HashMap<>();
+    inputRecords.forEach(entry -> {
+      try {
+        expectedRecords.put(entry.getRecordKey(), ((GenericRecord) entry.getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA).get()));
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    });
+
+    Map<String, GenericRecord> actualRecords = new HashMap<>();
+    recordsRead.forEach(entry -> actualRecords.put(String.valueOf(entry.get("_row_key")), entry));
+    for (Map.Entry<String, GenericRecord> entry : expectedRecords.entrySet()) {
+      assertEquals(String.valueOf(entry.getValue().get("driver")), String.valueOf(actualRecords.get(entry.getKey()).get("driver")));
+    }
+  }
+
   private HoodieWriteConfig getHoodieWriteConfigWithSmallFileHandlingOff(boolean populateMetaFields) {
     return getHoodieWriteConfigWithSmallFileHandlingOffBuilder(populateMetaFields).build();
   }

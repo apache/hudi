@@ -25,9 +25,11 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.typeutils.MapTypeInfo;
 import org.apache.flink.api.java.typeutils.ObjectArrayTypeInfo;
 import org.apache.flink.api.java.typeutils.RowTypeInfo;
+import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.types.logical.MapType;
 import org.apache.flink.table.types.logical.RowType;
 
 import org.apache.flink.table.types.logical.TimestampType;
@@ -616,6 +618,45 @@ public class ParquetSchemaConverter {
           return Types.primitive(PrimitiveType.PrimitiveTypeName.INT96, repetition)
               .named(name);
         }
+      case ARRAY:
+        // <list-repetition> group <name> (LIST) {
+        //   repeated group list {
+        //     <element-repetition> <element-type> element;
+        //   }
+        // }
+        ArrayType arrayType = (ArrayType) type;
+        LogicalType elementType = arrayType.getElementType();
+        return Types
+            .buildGroup(repetition).as(OriginalType.LIST)
+            .addField(
+                Types.repeatedGroup()
+                    .addField(convertToParquetType("element", elementType, repetition))
+                    .named("list"))
+            .named(name);
+      case MAP:
+        // <map-repetition> group <name> (MAP) {
+        //   repeated group key_value {
+        //     required <key-type> key;
+        //     <value-repetition> <value-type> value;
+        //   }
+        // }
+        MapType mapType = (MapType) type;
+        LogicalType keyType = mapType.getKeyType();
+        LogicalType valueType = mapType.getValueType();
+        return Types
+            .buildGroup(repetition).as(OriginalType.MAP)
+            .addField(
+                Types
+                    .repeatedGroup()
+                    .addField(convertToParquetType("key", keyType, repetition))
+                    .addField(convertToParquetType("value", valueType, repetition))
+                    .named("key_value"))
+            .named(name);
+      case ROW:
+        RowType rowType = (RowType) type;
+        Types.GroupBuilder<GroupType> builder = Types.buildGroup(repetition);
+        rowType.getFields().forEach(field -> builder.addField(convertToParquetType(field.getName(), field.getType(), repetition)));
+        return builder.named(name);
       default:
         throw new UnsupportedOperationException("Unsupported type: " + type);
     }

@@ -74,8 +74,8 @@ public abstract class AbstractSparkDeltaCommitActionExecutor<T extends HoodieRec
   public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
       Iterator<HoodieRecord<T>> recordItr) throws IOException {
     LOG.info("Merging updates for commit " + instantTime + " for file " + fileId);
-
-    if (!table.getIndex().canIndexLogFiles() && mergeOnReadUpsertPartitioner.getSmallFileIds().contains(fileId)) {
+    if (!table.getIndex().canIndexLogFiles() && mergeOnReadUpsertPartitioner != null
+        && mergeOnReadUpsertPartitioner.getSmallFileIds().contains(fileId)) {
       LOG.info("Small file corrections for updates for commit " + instantTime + " for file " + fileId);
       return super.handleUpdate(partitionPath, fileId, recordItr);
     } else {

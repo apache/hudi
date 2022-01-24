@@ -53,8 +53,8 @@ public class HoodieBloomIndexCheckFunction
 
   @Override
   public Iterator<List<KeyLookupResult>> call(Integer partition,
-      Iterator<Tuple2<String, HoodieKey>> fileParitionRecordKeyTripletItr) {
-    return new LazyKeyCheckIterator(fileParitionRecordKeyTripletItr);
+      Iterator<Tuple2<String, HoodieKey>> filePartitionRecordKeyTripletItr) {
+    return new LazyKeyCheckIterator(filePartitionRecordKeyTripletItr);
   }
 
   class LazyKeyCheckIterator extends LazyIterableIterator<Tuple2<String, HoodieKey>, List<KeyLookupResult>> {

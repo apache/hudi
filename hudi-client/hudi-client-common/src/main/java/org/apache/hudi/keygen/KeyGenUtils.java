@@ -65,7 +65,7 @@ public class KeyGenUtils {
 
   /**
    * Extracts the record key fields in strings out of the given record key,
-   * this is the reverse operation of {@link #getRecordKey(GenericRecord, String)}.
+   * this is the reverse operation of {@link #getRecordKey(GenericRecord, String, boolean)}.
    *
    * @see SimpleAvroKeyGenerator
    * @see org.apache.hudi.keygen.ComplexAvroKeyGenerator
@@ -89,11 +89,11 @@ public class KeyGenUtils {
     }
   }
 
-  public static String getRecordKey(GenericRecord record, List<String> recordKeyFields) {
+  public static String getRecordKey(GenericRecord record, List<String> recordKeyFields, boolean consistentLogicalTimestampEnabled) {
     boolean keyIsNullEmpty = true;
     StringBuilder recordKey = new StringBuilder();
     for (String recordKeyField : recordKeyFields) {
-      String recordKeyValue = HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyField, true);
+      String recordKeyValue = HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyField, true, consistentLogicalTimestampEnabled);
       if (recordKeyValue == null) {
         recordKey.append(recordKeyField + ":" + NULL_RECORDKEY_PLACEHOLDER + ",");
       } else if (recordKeyValue.isEmpty()) {
@@ -112,14 +112,14 @@ public class KeyGenUtils {
   }
 
   public static String getRecordPartitionPath(GenericRecord record, List<String> partitionPathFields,
-      boolean hiveStylePartitioning, boolean encodePartitionPath) {
+      boolean hiveStylePartitioning, boolean encodePartitionPath, boolean consistentLogicalTimestampEnabled) {
     if (partitionPathFields.isEmpty()) {
       return "";
     }
 
     StringBuilder partitionPath = new StringBuilder();
     for (String partitionPathField : partitionPathFields) {
-      String fieldVal = HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathField, true);
+      String fieldVal = HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathField, true, consistentLogicalTimestampEnabled);
       if (fieldVal == null || fieldVal.isEmpty()) {
         partitionPath.append(hiveStylePartitioning ? partitionPathField + "=" + HUDI_DEFAULT_PARTITION_PATH
             : HUDI_DEFAULT_PARTITION_PATH);
@@ -135,8 +135,8 @@ public class KeyGenUtils {
     return partitionPath.toString();
   }
 
-  public static String getRecordKey(GenericRecord record, String recordKeyField) {
-    String recordKey = HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyField, true);
+  public static String getRecordKey(GenericRecord record, String recordKeyField, boolean consistentLogicalTimestampEnabled) {
+    String recordKey = HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyField, true, consistentLogicalTimestampEnabled);
     if (recordKey == null || recordKey.isEmpty()) {
       throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
     }
@@ -144,8 +144,8 @@ public class KeyGenUtils {
   }
 
   public static String getPartitionPath(GenericRecord record, String partitionPathField,
-      boolean hiveStylePartitioning, boolean encodePartitionPath) {
-    String partitionPath = HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathField, true);
+      boolean hiveStylePartitioning, boolean encodePartitionPath, boolean consistentLogicalTimestampEnabled) {
+    String partitionPath = HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathField, true, consistentLogicalTimestampEnabled);
     if (partitionPath == null || partitionPath.isEmpty()) {
       partitionPath = HUDI_DEFAULT_PARTITION_PATH;
     }

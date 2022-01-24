@@ -46,7 +46,7 @@ import static org.apache.hudi.hive.util.HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
 public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   private static final Logger LOG = LogManager.getLogger(QueryBasedDDLExecutor.class);
   private final HiveSyncConfig config;
-  private final PartitionValueExtractor partitionValueExtractor;
+  public final PartitionValueExtractor partitionValueExtractor;
   private final FileSystem fs;
 
   public QueryBasedDDLExecutor(HiveSyncConfig config, FileSystem fs) {
@@ -160,7 +160,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     return alterSQL;
   }
 
-  private String getPartitionClause(String partition) {
+  public String getPartitionClause(String partition) {
     List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
     ValidationUtils.checkArgument(config.partitionFields.size() == partitionValues.size(),
         "Partition key parts " + config.partitionFields + " does not match with partition values " + partitionValues

@@ -141,16 +141,16 @@ public class TestDataSourceUtils {
     record.put("event_cost3", genericFixed);
 
     assertEquals(LocalDate.ofEpochDay(18000).toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_date1",
-        true));
+        true, false));
     assertEquals(LocalDate.ofEpochDay(18001).toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_date2",
-        true));
+        true, false));
     assertEquals(LocalDate.ofEpochDay(18002).toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_date3",
-        true));
-    assertEquals("Hudi Meetup", HoodieAvroUtils.getNestedFieldValAsString(record, "event_name", true));
-    assertEquals("Hudi PMC", HoodieAvroUtils.getNestedFieldValAsString(record, "event_organizer", true));
-    assertEquals(bigDecimal.toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_cost1", true));
-    assertEquals(bigDecimal.toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_cost2", true));
-    assertEquals(bigDecimal.toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_cost3", true));
+        true, false));
+    assertEquals("Hudi Meetup", HoodieAvroUtils.getNestedFieldValAsString(record, "event_name", true, false));
+    assertEquals("Hudi PMC", HoodieAvroUtils.getNestedFieldValAsString(record, "event_organizer", true, false));
+    assertEquals(bigDecimal.toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_cost1", true, false));
+    assertEquals(bigDecimal.toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_cost2", true, false));
+    assertEquals(bigDecimal.toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_cost3", true, false));
   }
 
   @Test
@@ -299,18 +299,18 @@ public class TestDataSourceUtils {
     StructType structType = StructType$.MODULE$.apply(structFields);
     // create write options
     Map<String, String> options = new HashMap<>();
-    options.put("hoodie.parquet.writeLegacyFormat.enabled", String.valueOf(defaultWriteValue));
+    options.put("hoodie.parquet.writelegacyformat.enabled", String.valueOf(defaultWriteValue));
 
     // start test
     mayBeOverwriteParquetWriteLegacyFormatProp(options, structType);
 
     // check result
-    boolean res = Boolean.parseBoolean(options.get("hoodie.parquet.writeLegacyFormat.enabled"));
+    boolean res = Boolean.parseBoolean(options.get("hoodie.parquet.writelegacyformat.enabled"));
     if (smallDecimal) {
-      // should auto modify "hoodie.parquet.writeLegacyFormat.enabled" = "true".
+      // should auto modify "hoodie.parquet.writelegacyformat.enabled" = "true".
       assertEquals(true, res);
     } else {
-      // should not modify the value of "hoodie.parquet.writeLegacyFormat.enabled".
+      // should not modify the value of "hoodie.parquet.writelegacyformat.enabled".
       assertEquals(defaultWriteValue, res);
     }
   }

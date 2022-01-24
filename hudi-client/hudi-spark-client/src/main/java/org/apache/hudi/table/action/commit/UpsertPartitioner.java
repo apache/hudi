@@ -37,7 +37,6 @@ import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.PairFunction;
@@ -57,7 +56,7 @@ import scala.Tuple2;
 /**
  * Packs incoming records to be upserted, into buckets (1 bucket = 1 RDD partition).
  */
-public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partitioner {
+public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHoodiePartitioner<T> {
 
   private static final Logger LOG = LogManager.getLogger(UpsertPartitioner.class);
 
@@ -69,10 +68,6 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
    * Total number of RDD partitions, is determined by total buckets we want to pack the incoming workload into.
    */
   private int totalBuckets = 0;
-  /**
-   * Stat for the current workload. Helps in determining inserts, upserts etc.
-   */
-  private WorkloadProfile profile;
   /**
    * Helps decide which bucket an incoming update should go to.
    */
@@ -86,17 +81,14 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
    */
   private HashMap<Integer, BucketInfo> bucketInfoMap;
 
-  protected final HoodieTable table;
-
   protected final HoodieWriteConfig config;
 
   public UpsertPartitioner(WorkloadProfile profile, HoodieEngineContext context, HoodieTable table,
       HoodieWriteConfig config) {
+    super(profile, table);
     updateLocationToBucket = new HashMap<>();
     partitionPathToInsertBucketInfos = new HashMap<>();
     bucketInfoMap = new HashMap<>();
-    this.profile = profile;
-    this.table = table;
     this.config = config;
     assignUpdates(profile);
     assignInserts(profile, context);

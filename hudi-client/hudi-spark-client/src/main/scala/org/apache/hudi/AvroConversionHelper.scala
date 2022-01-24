@@ -20,6 +20,7 @@ package org.apache.hudi
 
 import java.nio.ByteBuffer
 import java.sql.{Date, Timestamp}
+import java.time.Instant
 
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.LogicalTypes.{TimestampMicros, TimestampMillis}
@@ -301,9 +302,17 @@ object AvroConversionHelper {
           }.orNull
         }
       case TimestampType => (item: Any) =>
-        // Convert time to microseconds since spark-avro by default converts TimestampType to
-        // Avro Logical TimestampMicros
-        Option(item).map(_.asInstanceOf[Timestamp].getTime * 1000).orNull
+        if (item == null) {
+          null
+        } else {
+          val timestamp = item match {
+            case i: Instant => Timestamp.from(i)
+            case t: Timestamp => t
+          }
+          // Convert time to microseconds since spark-avro by default converts TimestampType to
+          // Avro Logical TimestampMicros
+          timestamp.getTime * 1000
+        }
       case DateType => (item: Any) =>
         Option(item).map(_.asInstanceOf[Date].toLocalDate.toEpochDay.toInt).orNull
       case ArrayType(elementType, _) =>
