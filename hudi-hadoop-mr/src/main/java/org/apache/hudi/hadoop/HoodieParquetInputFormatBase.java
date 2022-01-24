@@ -26,6 +26,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
 import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.FileSplit;
+import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hudi.hadoop.realtime.HoodieMergeOnReadTableInputFormat;
 
@@ -60,6 +61,11 @@ public abstract class HoodieParquetInputFormatBase extends MapredParquetInputFor
   @Override
   public final Configuration getConf() {
     return inputFormatDelegate.getConf();
+  }
+
+  @Override
+  public final InputSplit[] getSplits(JobConf job, int numSplits) throws IOException {
+    return inputFormatDelegate.getSplits(job, numSplits);
   }
 
   @Override
