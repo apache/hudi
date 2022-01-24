@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.BaseFileUtils;
@@ -40,11 +41,14 @@ import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.testutils.HoodieJavaClientTestBase;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -54,13 +58,17 @@ public class TestHoodieConcatHandle extends HoodieJavaClientTestBase {
   private static final Schema SCHEMA = getSchemaFromResource(TestJavaCopyOnWriteActionExecutor.class, "/exampleSchema.avsc");
 
   private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() {
+    return makeHoodieClientConfigBuilder(SCHEMA.toString());
+  }
+
+  private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder(String schema) {
     // Prepare the AvroParquetIO
     return HoodieWriteConfig.newBuilder()
         .withEngineType(EngineType.JAVA)
         .withPath(basePath)
-        .withSchema(SCHEMA.toString());
+        .withSchema(schema);
   }
-  
+
   private FileStatus[] getIncrementalFiles(String partitionPath, String startCommitTime, int numCommitsToPull)
       throws Exception {
     // initialize parquet input format
@@ -91,13 +99,9 @@ public class TestHoodieConcatHandle extends HoodieJavaClientTestBase {
   public void testInsert() throws Exception {
     HoodieWriteConfig config = makeHoodieClientConfigBuilder().withMergeAllowDuplicateOnInserts(true).build();
 
-    int startInstant = 1;
-    String firstCommitTime = makeNewCommitTime(startInstant++);
     HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     BaseFileUtils fileUtils = BaseFileUtils.getInstance(metaClient);
-
-    String partitionPath = "2021/09/11";
 
     // Get some records belong to the same partition (2021/09/11)
     String insertRecordStr1 = "{\"_row_key\":\"1\","
@@ -110,10 +114,13 @@ public class TestHoodieConcatHandle extends HoodieJavaClientTestBase {
     records1.add(new HoodieRecord(new HoodieKey(insertRow1.getRowKey(), insertRow1.getPartitionPath()), insertRow1));
     records1.add(new HoodieRecord(new HoodieKey(insertRow2.getRowKey(), insertRow2.getPartitionPath()), insertRow2));
 
+    int startInstant = 1;
+    String firstCommitTime = makeNewCommitTime(startInstant++);
     // First insert
     writeClient.startCommitWithTime(firstCommitTime);
     writeClient.insert(records1, firstCommitTime);
 
+    String partitionPath = "2021/09/11";
     FileStatus[] allFiles = getIncrementalFiles(partitionPath, "0", -1);
     assertEquals(1, allFiles.length);
 
@@ -155,9 +162,64 @@ public class TestHoodieConcatHandle extends HoodieJavaClientTestBase {
     int index = 0;
     for (GenericRecord record : fileRecords) {
       assertEquals(records1.get(index).getRecordKey(), record.get("_row_key").toString());
-      if (index == 3) {
-        assertEquals("4", record.get("number").toString());
-      }
+      assertEquals(index + 1, record.get("number"));
+      index++;
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testInsertWithDataGenerator(boolean mergeAllowDuplicateOnInsertsEnable) throws Exception {
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder(TRIP_EXAMPLE_SCHEMA)
+        .withMergeAllowDuplicateOnInserts(mergeAllowDuplicateOnInsertsEnable).build();
+
+    HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    BaseFileUtils fileUtils = BaseFileUtils.getInstance(metaClient);
+
+    String partitionPath = "2021/09/11";
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[]{partitionPath});
+
+    int startInstant = 1;
+    String firstCommitTime = makeNewCommitTime(startInstant++);
+    List<HoodieRecord> records1 = dataGenerator.generateInserts(firstCommitTime, 100);
+
+    // First insert
+    writeClient.startCommitWithTime(firstCommitTime);
+    writeClient.insert(records1, firstCommitTime);
+
+    FileStatus[] allFiles = getIncrementalFiles(partitionPath, "0", -1);
+    assertEquals(1, allFiles.length);
+
+    // Read out the bloom filter and make sure filter can answer record exist or not
+    Path filePath = allFiles[0].getPath();
+    BloomFilter filter = fileUtils.readBloomFilterFromMetadata(hadoopConf, filePath);
+    for (HoodieRecord record : records1) {
+      assertTrue(filter.mightContain(record.getRecordKey()));
+    }
+
+    String newCommitTime = makeNewCommitTime(startInstant++);
+    List<HoodieRecord> records2 = dataGenerator.generateUpdates(newCommitTime, 100);
+    writeClient.startCommitWithTime(newCommitTime);
+    // Second insert is the same as the _row_key of the first one,test allowDuplicateInserts
+    writeClient.insert(records2, newCommitTime);
+
+    allFiles = getIncrementalFiles(partitionPath, firstCommitTime, -1);
+    assertEquals(1, allFiles.length);
+    // verify new incremental file group is same as the previous one
+    assertEquals(FSUtils.getFileId(filePath.getName()), FSUtils.getFileId(allFiles[0].getPath().getName()));
+
+    filePath = allFiles[0].getPath();
+    // If mergeAllowDuplicateOnInsertsEnable is true, the final result should be a collection of records1 and records2
+    records1.addAll(records2);
+
+    // Read the base file, check the record content
+    List<GenericRecord> fileRecords = fileUtils.readAvroRecords(hadoopConf, filePath);
+    assertEquals(fileRecords.size(), mergeAllowDuplicateOnInsertsEnable ? records1.size() : records2.size());
+
+    int index = 0;
+    for (GenericRecord record : fileRecords) {
+      assertEquals(records1.get(index).getRecordKey(), record.get("_row_key").toString());
       index++;
     }
   }
