@@ -735,10 +735,9 @@ object HoodieSparkSqlWriter {
       }
     }
 
-    // use preCombineField to fill in PAYLOAD_ORDERING_FIELD_PROP_KEY and PAYLOAD_EVENT_TIME_FIELD_PROP_KEY
+    // use preCombineField to fill in PAYLOAD_ORDERING_FIELD_PROP_KEY
     if (mergedParams.contains(PRECOMBINE_FIELD.key())) {
       mergedParams.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, mergedParams(PRECOMBINE_FIELD.key()))
-      mergedParams.put(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, mergedParams(PRECOMBINE_FIELD.key()))
     }
     val params = mergedParams.toMap
     (params, HoodieWriterUtils.convertMapToHoodieConfig(params))
