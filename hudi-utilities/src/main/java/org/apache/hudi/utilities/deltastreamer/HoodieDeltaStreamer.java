@@ -32,8 +32,8 @@ import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -260,7 +260,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
     @Parameter(names = {"--payload-class"}, description = "subclass of HoodieRecordPayload, that works off "
         + "a GenericRecord. Implement your own, if you want to do something other than overwriting existing value")
-    public String payloadClassName = OverwriteWithLatestAvroPayload.class.getName();
+    public String payloadClassName = DefaultHoodieRecordPayload.class.getName();
 
     @Parameter(names = {"--schemaprovider-class"}, description = "subclass of org.apache.hudi.utilities.schema"
         + ".SchemaProvider to attach schemas to input & target table data, built in options: "
