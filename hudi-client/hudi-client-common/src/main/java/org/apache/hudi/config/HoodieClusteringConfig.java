@@ -198,8 +198,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .defaultValue(false)
       .sinceVersion("0.10.0")
       .deprecatedAfter("0.11.0")
-      .withDocumentation("This setting has no effect. Please refer to clustering configuration, as well as\n" +
-              "LAYOUT_OPTIMIZE_STRATEGY config to enable advanced record layout optimization strategies");
+      .withDocumentation("This setting has no effect. Please refer to clustering configuration, as well as "
+          + "LAYOUT_OPTIMIZE_STRATEGY config to enable advanced record layout optimization strategies");
 
   /**
    * Determines ordering strategy in for records layout optimization.
