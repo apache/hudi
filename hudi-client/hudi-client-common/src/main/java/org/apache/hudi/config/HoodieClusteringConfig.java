@@ -59,7 +59,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
       "hoodie.clustering.plan.partition.filter.mode";
 
   // Any Space-filling curves optimize(z-order/hilbert) params can be saved with this prefix
-  public static final String LAYOUT_OPTIMIZE_PARAM_PREFIX = "hoodie.layout.optimize.";
+  private static final String LAYOUT_OPTIMIZE_PARAM_PREFIX = "hoodie.layout.optimize.";
 
   public static final ConfigProperty<String> DAYBASED_LOOKBACK_PARTITIONS = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "daybased.lookback.partitions")
@@ -190,63 +190,88 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .withDocumentation("When rewriting data, preserves existing hoodie_commit_time");
 
   /**
-   * Using space-filling curves to optimize the layout of table to boost query performance.
-   * The table data which sorted by space-filling curve has better aggregation;
-   * combine with min-max filtering, it can achieve good performance improvement.
-   *
-   * Notice:
-   * when we use this feature, we need specify the sort columns.
-   * The more columns involved in sorting, the worse the aggregation, and the smaller the query performance improvement.
-   * Choose the filter columns which commonly used in query sql as sort columns.
-   * It is recommend that 2 ~ 4 columns participate in sorting.
+   * @deprecated this setting has no effect. Please refer to clustering configuration, as well as
+   * {@link #LAYOUT_OPTIMIZE_STRATEGY} config to enable advanced record layout optimization strategies
    */
   public static final ConfigProperty LAYOUT_OPTIMIZE_ENABLE = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "enable")
       .defaultValue(false)
       .sinceVersion("0.10.0")
-      .withDocumentation("Enable use z-ordering/space-filling curves to optimize the layout of table to boost query performance. "
-          + "This parameter takes precedence over clustering strategy set using " + EXECUTION_STRATEGY_CLASS_NAME.key());
-
-  public static final ConfigProperty LAYOUT_OPTIMIZE_STRATEGY = ConfigProperty
-      .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "strategy")
-      .defaultValue("z-order")
-      .sinceVersion("0.10.0")
-      .withDocumentation("Type of layout optimization to be applied, current only supports `z-order` and `hilbert` curves.");
+      .deprecatedAfter("0.11.0")
+      .withDocumentation("This setting has no effect. Please refer to clustering configuration, as well as "
+          + "LAYOUT_OPTIMIZE_STRATEGY config to enable advanced record layout optimization strategies");
 
   /**
-   * There exists two method to build z-curve.
-   * one is directly mapping sort cols to z-value to build z-curve;
-   * we can find this method in Amazon DynamoDB https://aws.amazon.com/cn/blogs/database/tag/z-order/
-   * the other one is Boundary-based Interleaved Index method which we proposed. simply call it sample method.
-   * Refer to rfc-28 for specific algorithm flow.
-   * Boundary-based Interleaved Index method has better generalization, but the build speed is slower than direct method.
+   * Determines ordering strategy in for records layout optimization.
+   * Currently, following strategies are supported
+   * <ul>
+   *   <li>Linear: simply orders records lexicographically</li>
+   *   <li>Z-order: orders records along Z-order spatial-curve</li>
+   *   <li>Hilbert: orders records along Hilbert's spatial-curve</li>
+   * </ul>
+   *
+   * NOTE: "z-order", "hilbert" strategies may consume considerably more compute, than "linear".
+   *       Make sure to perform small-scale local testing for your dataset before applying globally.
    */
-  public static final ConfigProperty LAYOUT_OPTIMIZE_CURVE_BUILD_METHOD = ConfigProperty
+  public static final ConfigProperty<String> LAYOUT_OPTIMIZE_STRATEGY = ConfigProperty
+      .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "strategy")
+      .defaultValue("linear")
+      .sinceVersion("0.10.0")
+      .withDocumentation("Determines ordering strategy used in records layout optimization. "
+          + "Currently supported strategies are \"linear\", \"z-order\" and \"hilbert\" values are supported.");
+
+  /**
+   * NOTE: This setting only has effect if {@link #LAYOUT_OPTIMIZE_STRATEGY} value is set to
+   *       either "z-order" or "hilbert" (ie leveraging space-filling curves)
+   *
+   * Currently, two methods to order records along the curve are supported "build" and "sample":
+   *
+   * <ul>
+   *   <li>Direct: entails that spatial curve will be built in full, "filling in" all of the individual
+   *   points corresponding to each individual record</li>
+   *   <li>Sample: leverages boundary-base interleaved index method (described in more details in
+   *   Amazon DynamoDB blog [1])</li>
+   * </ul>
+   *
+   * NOTE: Boundary-based interleaved Index method has better generalization,
+   *       but is slower than direct method.
+   *
+   * Please refer to RFC-28 for specific elaboration on both flows.
+   *
+   * [1] https://aws.amazon.com/cn/blogs/database/tag/z-order/
+   */
+  public static final ConfigProperty<String> LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "curve.build.method")
       .defaultValue("direct")
       .sinceVersion("0.10.0")
-      .withDocumentation("Controls how data is sampled to build the space filling curves. two methods: `direct`,`sample`."
-          + "The direct method is faster than the sampling, however sample method would produce a better data layout.");
+      .withDocumentation("Controls how data is sampled to build the space-filling curves. "
+          + "Two methods: \"direct\", \"sample\". The direct method is faster than the sampling, "
+          + "however sample method would produce a better data layout.");
+
   /**
-   * Doing sample for table data is the first step in Boundary-based Interleaved Index method.
-   * larger sample number means better optimize result, but more memory consumption
+   * NOTE: This setting only has effect if {@link #LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD} value
+   *       is set to "sample"
+   *
+   * Determines target sample size used by the Boundary-based Interleaved Index method.
+   * Larger sample size entails better layout optimization outcomes, at the expense of higher memory
+   * footprint.
    */
-  public static final ConfigProperty LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE = ConfigProperty
+  public static final ConfigProperty<String> LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "build.curve.sample.size")
       .defaultValue("200000")
       .sinceVersion("0.10.0")
-      .withDocumentation("when setting" + LAYOUT_OPTIMIZE_CURVE_BUILD_METHOD.key() + " to `sample`, the amount of sampling to be done."
-          + "Large sample size leads to better results, at the expense of more memory usage.");
+      .withDocumentation("Determines target sample size used by the Boundary-based Interleaved Index method "
+          + "of building space-filling curve. Larger sample size entails better layout optimization outcomes, "
+          + "at the expense of higher memory footprint.");
 
   /**
-   * The best way to use Z-order/Space-filling curves is to cooperate with Data-Skipping
-   * with data-skipping query engine can greatly reduce the number of table files to be read.
-   * otherwise query engine can only do row-group skipping for files (parquet/orc)
+   * @deprecated this setting has no effect
    */
   public static final ConfigProperty LAYOUT_OPTIMIZE_DATA_SKIPPING_ENABLE = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "data.skipping.enable")
       .defaultValue(true)
       .sinceVersion("0.10.0")
+      .deprecatedAfter("0.11.0")
       .withDocumentation("Enable data skipping by collecting statistics once layout optimization is complete.");
 
   public static final ConfigProperty<Boolean> ROLLBACK_PENDING_CLUSTERING_ON_CONFLICT = ConfigProperty
@@ -516,28 +541,18 @@ public class HoodieClusteringConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withSpaceFillingCurveDataOptimizeEnable(Boolean enable) {
-      clusteringConfig.setValue(LAYOUT_OPTIMIZE_ENABLE, String.valueOf(enable));
-      return this;
-    }
-
     public Builder withDataOptimizeStrategy(String strategy) {
       clusteringConfig.setValue(LAYOUT_OPTIMIZE_STRATEGY, strategy);
       return this;
     }
 
     public Builder withDataOptimizeBuildCurveStrategy(String method) {
-      clusteringConfig.setValue(LAYOUT_OPTIMIZE_CURVE_BUILD_METHOD, method);
+      clusteringConfig.setValue(LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD, method);
       return this;
     }
 
     public Builder withDataOptimizeBuildCurveSampleNumber(int sampleNumber) {
       clusteringConfig.setValue(LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE, String.valueOf(sampleNumber));
-      return this;
-    }
-
-    public Builder withDataOptimizeDataSkippingEnable(boolean dataSkipping) {
-      clusteringConfig.setValue(LAYOUT_OPTIMIZE_DATA_SKIPPING_ENABLE, String.valueOf(dataSkipping));
       return this;
     }
 
@@ -578,21 +593,21 @@ public class HoodieClusteringConfig extends HoodieConfig {
   /**
    * Type of a strategy for building Z-order/Hilbert space-filling curves.
    */
-  public enum BuildCurveStrategyType {
+  public enum SpatialCurveCompositionStrategyType {
     DIRECT("direct"),
     SAMPLE("sample");
 
-    private static final Map<String, BuildCurveStrategyType> VALUE_TO_ENUM_MAP =
-        TypeUtils.getValueToEnumMap(BuildCurveStrategyType.class, e -> e.value);
+    private static final Map<String, SpatialCurveCompositionStrategyType> VALUE_TO_ENUM_MAP =
+        TypeUtils.getValueToEnumMap(SpatialCurveCompositionStrategyType.class, e -> e.value);
 
     private final String value;
 
-    BuildCurveStrategyType(String value) {
+    SpatialCurveCompositionStrategyType(String value) {
       this.value = value;
     }
 
-    public static BuildCurveStrategyType fromValue(String value) {
-      BuildCurveStrategyType enumValue = VALUE_TO_ENUM_MAP.get(value);
+    public static SpatialCurveCompositionStrategyType fromValue(String value) {
+      SpatialCurveCompositionStrategyType enumValue = VALUE_TO_ENUM_MAP.get(value);
       if (enumValue == null) {
         throw new HoodieException(String.format("Invalid value (%s)", value));
       }
@@ -605,6 +620,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
    * Layout optimization strategies such as Z-order/Hilbert space-curves, etc
    */
   public enum LayoutOptimizationStrategy {
+    LINEAR("linear"),
     ZORDER("z-order"),
     HILBERT("hilbert");
 

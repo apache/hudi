@@ -262,10 +262,10 @@ public class ColumnStatsIndexHelper {
       // │   │   ├── <part-...>.parquet
       // │   │   └── ...
       //
-      // If index is currently empty (no persisted tables), we simply create one
-      // using clustering operation's commit instance as it's name
       Path newIndexTablePath = new Path(indexFolderPath, commitTime);
 
+      // If index is currently empty (no persisted tables), we simply create one
+      // using clustering operation's commit instance as it's name
       if (!fs.exists(new Path(indexFolderPath))) {
         newColStatsIndexDf.repartition(1)
             .write()
@@ -326,6 +326,9 @@ public class ColumnStatsIndexHelper {
           .repartition(1)
           .write()
           .format("parquet")
+          // NOTE: We intend to potentially overwrite index-table from the previous Clustering
+          //       operation that has failed to commit
+          .mode("overwrite")
           .save(newIndexTablePath.toString());
 
       // Clean up residual col-stats-index tables that have might have been dangling since

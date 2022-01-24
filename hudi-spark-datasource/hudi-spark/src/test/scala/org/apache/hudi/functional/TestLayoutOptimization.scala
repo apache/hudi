@@ -37,7 +37,7 @@ import scala.collection.JavaConversions._
 import scala.util.Random
 
 @Tag("functional")
-class TestSpaceCurveLayoutOptimization extends HoodieClientTestBase {
+class TestLayoutOptimization extends HoodieClientTestBase {
   var spark: SparkSession = _
 
   val sourceTableSchema =
@@ -79,7 +79,13 @@ class TestSpaceCurveLayoutOptimization extends HoodieClientTestBase {
 
   @ParameterizedTest
   @MethodSource(Array("testLayoutOptimizationParameters"))
-  def testLayoutOptimizationFunctional(tableType: String): Unit = {
+  def testLayoutOptimizationFunctional(tableType: String,
+                                       layoutOptimizationStrategy: String,
+                                       spatialCurveCompositionStrategy: String): Unit = {
+    val curveCompositionStrategy =
+      Option(spatialCurveCompositionStrategy)
+        .getOrElse(HoodieClusteringConfig.LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD.defaultValue())
+
     val targetRecordsCount = 10000
     // Bulk Insert Operation
     val records = recordsToStrings(dataGen.generateInserts("001", targetRecordsCount)).toList
@@ -98,8 +104,9 @@ class TestSpaceCurveLayoutOptimization extends HoodieClientTestBase {
       .option("hoodie.clustering.plan.strategy.small.file.limit", "629145600")
       .option("hoodie.clustering.plan.strategy.max.bytes.per.group", Long.MaxValue.toString)
       .option("hoodie.clustering.plan.strategy.target.file.max.bytes", String.valueOf(64 * 1024 * 1024L))
-      .option(HoodieClusteringConfig.LAYOUT_OPTIMIZE_ENABLE.key, "true")
-      .option(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key, "begin_lat, begin_lon")
+      .option(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY.key(), layoutOptimizationStrategy)
+      .option(HoodieClusteringConfig.LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD.key(), curveCompositionStrategy)
+      .option(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key, "begin_lat,begin_lon")
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -162,14 +169,20 @@ class TestSpaceCurveLayoutOptimization extends HoodieClientTestBase {
   }
 }
 
-object TestSpaceCurveLayoutOptimization {
+object TestLayoutOptimization {
   def testLayoutOptimizationParameters(): java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
-      arguments("COPY_ON_WRITE", "hilbert"),
-      arguments("COPY_ON_WRITE", "z-order"),
-      arguments("MERGE_ON_READ", "hilbert"),
-      arguments("MERGE_ON_READ", "z-order")
+      arguments("COPY_ON_WRITE", "linear", null),
+      arguments("COPY_ON_WRITE", "z-order", "direct"),
+      arguments("COPY_ON_WRITE", "z-order", "sample"),
+      arguments("COPY_ON_WRITE", "hilbert", "direct"),
+      arguments("COPY_ON_WRITE", "hilbert", "sample"),
+
+      arguments("MERGE_ON_READ", "linear", null),
+      arguments("MERGE_ON_READ", "z-order", "direct"),
+      arguments("MERGE_ON_READ", "z-order", "sample"),
+      arguments("MERGE_ON_READ", "hilbert", "direct"),
+      arguments("MERGE_ON_READ", "hilbert", "sample")
     )
   }
 }
-

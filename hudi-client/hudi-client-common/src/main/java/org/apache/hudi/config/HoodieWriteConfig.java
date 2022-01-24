@@ -1288,28 +1288,19 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS);
   }
 
-  /**
-   * Data layout optimize properties.
-   */
-  public boolean isLayoutOptimizationEnabled() {
-    return getBoolean(HoodieClusteringConfig.LAYOUT_OPTIMIZE_ENABLE);
+  public HoodieClusteringConfig.LayoutOptimizationStrategy getLayoutOptimizationStrategy() {
+    return HoodieClusteringConfig.LayoutOptimizationStrategy.fromValue(
+        getStringOrDefault(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY)
+    );
   }
 
-  public String getLayoutOptimizationStrategy() {
-    return getString(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY);
-  }
-
-  public HoodieClusteringConfig.BuildCurveStrategyType getLayoutOptimizationCurveBuildMethod() {
-    return HoodieClusteringConfig.BuildCurveStrategyType.fromValue(
-        getString(HoodieClusteringConfig.LAYOUT_OPTIMIZE_CURVE_BUILD_METHOD));
+  public HoodieClusteringConfig.SpatialCurveCompositionStrategyType getLayoutOptimizationCurveBuildMethod() {
+    return HoodieClusteringConfig.SpatialCurveCompositionStrategyType.fromValue(
+        getString(HoodieClusteringConfig.LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD));
   }
 
   public int getLayoutOptimizationSampleSize() {
     return getInt(HoodieClusteringConfig.LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE);
-  }
-
-  public boolean isDataSkippingEnabled() {
-    return getBoolean(HoodieClusteringConfig.LAYOUT_OPTIMIZE_DATA_SKIPPING_ENABLE);
   }
 
   /**

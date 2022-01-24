@@ -18,6 +18,10 @@
 
 package org.apache.hudi.client.clustering.run.strategy;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -39,11 +43,12 @@ import org.apache.hudi.common.util.FutureUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
-import org.apache.hudi.execution.bulkinsert.RDDSpatialCurveOptimizationSortPartitioner;
+import org.apache.hudi.execution.bulkinsert.RDDSpatialCurveSortPartitioner;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
@@ -54,11 +59,6 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -134,16 +134,28 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
    * @return {@link RDDCustomColumnsSortPartitioner} if sort columns are provided, otherwise empty.
    */
   protected Option<BulkInsertPartitioner<T>> getPartitioner(Map<String, String> strategyParams, Schema schema) {
-    if (getWriteConfig().isLayoutOptimizationEnabled()) {
-      // sort input records by z-order/hilbert
-      return Option.of(new RDDSpatialCurveOptimizationSortPartitioner((HoodieSparkEngineContext) getEngineContext(),
-          getWriteConfig(), HoodieAvroUtils.addMetadataFields(schema)));
-    } else if (strategyParams.containsKey(PLAN_STRATEGY_SORT_COLUMNS.key())) {
-      return Option.of(new RDDCustomColumnsSortPartitioner(strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()).split(","),
-          HoodieAvroUtils.addMetadataFields(schema), getWriteConfig().isConsistentLogicalTimestampEnabled()));
-    } else {
-      return Option.empty();
-    }
+    Option<String[]> orderByColumnsOpt =
+        Option.ofNullable(strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()))
+            .map(listStr -> listStr.split(","));
+
+    return orderByColumnsOpt.map(orderByColumns -> {
+      HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy = getWriteConfig().getLayoutOptimizationStrategy();
+      switch (layoutOptStrategy) {
+        case ZORDER:
+        case HILBERT:
+          return new RDDSpatialCurveSortPartitioner(
+              (HoodieSparkEngineContext) getEngineContext(),
+              orderByColumns,
+              layoutOptStrategy,
+              getWriteConfig().getLayoutOptimizationCurveBuildMethod(),
+              HoodieAvroUtils.addMetadataFields(schema));
+        case LINEAR:
+          return new RDDCustomColumnsSortPartitioner(orderByColumns, HoodieAvroUtils.addMetadataFields(schema),
+              getWriteConfig().isConsistentLogicalTimestampEnabled());
+        default:
+          throw new UnsupportedOperationException(String.format("Layout optimization strategy '%s' is not supported", layoutOptStrategy));
+      }
+    });
   }
 
   /**
