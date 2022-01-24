@@ -66,7 +66,7 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
   private final Schema schema;
-  private final Option<Schema.Field> schemaRecordKeyField;
+  private final Option<Schema.Field> keyFieldSchema;
   private HFile.Writer writer;
   private String minRecordKey;
   private String maxRecordKey;
@@ -82,7 +82,7 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
     this.fs = (HoodieWrapperFileSystem) this.file.getFileSystem(conf);
     this.hfileConfig = hfileConfig;
     this.schema = schema;
-    this.schemaRecordKeyField = Option.ofNullable(schema.getField(hfileConfig.getKeyFieldName()));
+    this.keyFieldSchema = Option.ofNullable(schema.getField(hfileConfig.getKeyFieldName()));
 
     // TODO - compute this compression ratio dynamically by looking at the bytes written to the
     // stream and the actual file size reported by HDFS
@@ -127,18 +127,17 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   }
 
   @Override
-  public void writeAvro(String recordKey, IndexedRecord object) throws IOException {
-    byte[] value = HoodieAvroUtils.avroToBytes((GenericRecord) object);
-    if (schemaRecordKeyField.isPresent()) {
-      int keyFieldPos = this.schemaRecordKeyField.get().pos();
-      boolean isKeyAvailable = (object.get(keyFieldPos) != null && !(object.get(keyFieldPos).toString().isEmpty()));
+  public void writeAvro(String recordKey, IndexedRecord record) throws IOException {
+    GenericRecord keyExcludedRecord = (GenericRecord) record;
+    if (keyFieldSchema.isPresent()) {
+      int keyFieldPos = this.keyFieldSchema.get().pos();
+      boolean isKeyAvailable = (record.get(keyFieldPos) != null && !(record.get(keyFieldPos).toString().isEmpty()));
       if (isKeyAvailable) {
-        GenericRecord recordKeyExcludedRecord = HoodieAvroUtils.bytesToAvro(value, this.schema);
-        recordKeyExcludedRecord.put(this.schemaRecordKeyField.get().pos(), StringUtils.EMPTY_STRING);
-        value = HoodieAvroUtils.avroToBytes(recordKeyExcludedRecord);
+        keyExcludedRecord.put(this.keyFieldSchema.get().pos(), StringUtils.EMPTY_STRING);
       }
     }
 
+    byte[] value = HoodieAvroUtils.avroToBytes(keyExcludedRecord);
     KeyValue kv = new KeyValue(recordKey.getBytes(), null, null, value);
     writer.append(kv);
 

@@ -105,8 +105,8 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     boolean useIntegerKey = false;
     int key = 0;
     int keySize = 0;
-    final Field schemaKeyField = records.get(0).getSchema().getField(HoodieHFileReader.KEY_FIELD_NAME);
-    if (schemaKeyField == null) {
+    final Field keyFieldSchema = records.get(0).getSchema().getField(HoodieHFileReader.KEY_FIELD_NAME);
+    if (keyFieldSchema == null) {
       // Missing key metadata field so we should use an integer sequence key
       useIntegerKey = true;
       keySize = (int) Math.ceil(Math.log(records.size())) + 1;
@@ -117,9 +117,9 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
       if (useIntegerKey) {
         recordKey = String.format("%" + keySize + "s", key++);
       } else {
-        recordKey = record.get(schemaKeyField.pos()).toString();
+        recordKey = record.get(keyFieldSchema.pos()).toString();
       }
-      final byte[] recordBytes = serializeRecord(record, Option.ofNullable(schemaKeyField));
+      final byte[] recordBytes = serializeRecord(record, Option.ofNullable(keyFieldSchema));
       ValidationUtils.checkState(!sortedRecordsMap.containsKey(recordKey),
           "Writing multiple records with same key not supported for " + this.getClass().getName());
       sortedRecordsMap.put(recordKey, recordBytes);
@@ -161,12 +161,12 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
    * Serialize the record to byte buffer.
    *
    * @param record         - Record to serialize
-   * @param schemaKeyField - Key field in the schema
+   * @param keyField - Key field in the schema
    * @return Serialized byte buffer for the record
    */
-  private byte[] serializeRecord(final IndexedRecord record, final Option<Field> schemaKeyField) {
-    if (schemaKeyField.isPresent()) {
-      record.put(schemaKeyField.get().pos(), "");
+  private byte[] serializeRecord(final IndexedRecord record, final Option<Field> keyField) {
+    if (keyField.isPresent()) {
+      record.put(keyField.get().pos(), "");
     }
     return HoodieAvroUtils.indexedRecordToBytes(record);
   }

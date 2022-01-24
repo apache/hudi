@@ -64,7 +64,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_L
 public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadataPayload> {
 
   // HoodieMetadata schema field ids
-  public static final String SCHEMA_FIELD_NAME_KEY = HoodieHFileReader.KEY_FIELD_NAME;
+  public static final String KEY_FIELD_NAME = HoodieHFileReader.KEY_FIELD_NAME;
   public static final String SCHEMA_FIELD_NAME_TYPE = "type";
   public static final String SCHEMA_FIELD_NAME_METADATA = "filesystemMetadata";
 
@@ -85,7 +85,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     if (record.isPresent()) {
       // This can be simplified using SpecificData.deepcopy once this bug is fixed
       // https://issues.apache.org/jira/browse/AVRO-1811
-      key = record.get().get(SCHEMA_FIELD_NAME_KEY).toString();
+      key = record.get().get(KEY_FIELD_NAME).toString();
       type = (int) record.get().get(SCHEMA_FIELD_NAME_TYPE);
       if (record.get().get(SCHEMA_FIELD_NAME_METADATA) != null) {
         filesystemMetadata = (Map<String, HoodieMetadataFileInfo>) record.get().get("filesystemMetadata");
@@ -238,7 +238,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder("HoodieMetadataPayload {");
-    sb.append(SCHEMA_FIELD_NAME_KEY + "=").append(key).append(", ");
+    sb.append(KEY_FIELD_NAME + "=").append(key).append(", ");
     sb.append(SCHEMA_FIELD_NAME_TYPE + "=").append(type).append(", ");
     sb.append("creations=").append(Arrays.toString(getFilenames().toArray())).append(", ");
     sb.append("deletions=").append(Arrays.toString(getDeletions().toArray())).append(", ");
