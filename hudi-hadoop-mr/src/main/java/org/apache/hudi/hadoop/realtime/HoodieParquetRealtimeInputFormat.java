@@ -109,8 +109,10 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
    * TODO: unify the incremental view code between hive/spark-sql and spark datasource
    */
   @Override
-  protected List<FileStatus> listStatusForIncrementalMode(
-      JobConf job, HoodieTableMetaClient tableMetaClient, List<Path> inputPaths, String incrementalTable) throws IOException {
+  protected List<FileStatus> listStatusForIncrementalMode(JobConf job,
+                                                          HoodieTableMetaClient tableMetaClient,
+                                                          List<Path> inputPaths,
+                                                          String incrementalTable) throws IOException {
     List<FileStatus> result = new ArrayList<>();
     Job jobContext = Job.getInstance(job);
 
