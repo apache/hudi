@@ -98,11 +98,11 @@ import java.util.stream.Stream;
  * @param <K> Type of keys
  * @param <O> Type of outputs
  */
-public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I, K, O> extends AbstractHoodieClient {
+public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K, O> extends BaseHoodieClient {
 
   protected static final String LOOKUP_STR = "lookup";
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LogManager.getLogger(AbstractHoodieWriteClient.class);
+  private static final Logger LOG = LogManager.getLogger(BaseHoodieWriteClient.class);
 
   protected final transient HoodieMetrics metrics;
   private final transient HoodieIndex<T, ?, ?, ?> index;
@@ -123,7 +123,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * @param writeConfig instance of HoodieWriteConfig
    */
   @Deprecated
-  public AbstractHoodieWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
+  public BaseHoodieWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
     this(context, writeConfig, Option.empty());
   }
 
@@ -134,7 +134,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * @param timelineService Timeline Service that runs as part of write client.
    */
   @Deprecated
-  public AbstractHoodieWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
+  public BaseHoodieWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
                                    Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService);
     this.metrics = new HoodieMetrics(config);
@@ -359,7 +359,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * table for the very first time (e.g: converting an existing table to Hoodie).
    * <p>
    * This implementation uses sortBy (which does range partitioning based on reservoir sampling) and attempts to control
-   * the numbers of files with less memory compared to the {@link AbstractHoodieWriteClient#insert(I, String)}
+   * the numbers of files with less memory compared to the {@link BaseHoodieWriteClient#insert(I, String)}
    *
    * @param records HoodieRecords to insert
    * @param instantTime Instant time of the commit
@@ -372,7 +372,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * table for the very first time (e.g: converting an existing table to Hoodie).
    * <p>
    * This implementation uses sortBy (which does range partitioning based on reservoir sampling) and attempts to control
-   * the numbers of files with less memory compared to the {@link AbstractHoodieWriteClient#insert(I, String)}. Optionally
+   * the numbers of files with less memory compared to the {@link BaseHoodieWriteClient#insert(I, String)}. Optionally
    * it allows users to specify their own partitioner. If specified then it will be used for repartitioning records. See
    * {@link BulkInsertPartitioner}.
    *
@@ -392,7 +392,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * duplicates if needed.
    * <p>
    * This implementation uses sortBy (which does range partitioning based on reservoir sampling) and attempts to control
-   * the numbers of files with less memory compared to the {@link AbstractHoodieWriteClient#insert(I, String)}. Optionally
+   * the numbers of files with less memory compared to the {@link BaseHoodieWriteClient#insert(I, String)}. Optionally
    * it allows users to specify their own partitioner. If specified then it will be used for repartitioning records. See
    * {@link BulkInsertPartitioner}.
    *
@@ -606,7 +606,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   /**
    * @Deprecated
    * Rollback the inflight record changes with the given commit time. This
-   * will be removed in future in favor of {@link AbstractHoodieWriteClient#restoreToInstant(String)}
+   * will be removed in future in favor of {@link BaseHoodieWriteClient#restoreToInstant(String)}
    * Adding this api for backwards compatability.
    * @param commitInstantTime Instant time of the commit
    * @param skipLocking if this is triggered by another parent transaction, locking can be skipped.
@@ -620,7 +620,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   /**
    * @Deprecated
    * Rollback the inflight record changes with the given commit time. This
-   * will be removed in future in favor of {@link AbstractHoodieWriteClient#restoreToInstant(String)}
+   * will be removed in future in favor of {@link BaseHoodieWriteClient#restoreToInstant(String)}
    *
    * @param commitInstantTime Instant time of the commit
    * @param pendingRollbackInfo pending rollback instant and plan if rollback failed from previous attempt.
@@ -714,7 +714,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * Clean up any stale/old files/data lying around (either on file storage or index storage) based on the
    * configurations and CleaningPolicy used. (typically files that no longer can be used by a running query can be
    * cleaned). This API provides the flexibility to schedule clean instant asynchronously via
-   * {@link AbstractHoodieWriteClient#scheduleTableService(String, Option, TableServiceType)} and disable inline scheduling
+   * {@link BaseHoodieWriteClient#scheduleTableService(String, Option, TableServiceType)} and disable inline scheduling
    * of clean.
    * @param cleanInstantTime instant time for clean.
    * @param scheduleInline true if needs to be scheduled inline. false otherwise.

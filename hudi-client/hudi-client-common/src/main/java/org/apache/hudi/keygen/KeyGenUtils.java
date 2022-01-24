@@ -29,7 +29,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.keygen.parser.AbstractHoodieDateTimeParser;
+import org.apache.hudi.keygen.parser.BaseHoodieDateTimeParser;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -161,9 +161,9 @@ public class KeyGenUtils {
   /**
    * Create a date time parser class for TimestampBasedKeyGenerator, passing in any configs needed.
    */
-  public static AbstractHoodieDateTimeParser createDateTimeParser(TypedProperties props, String parserClass) throws IOException  {
+  public static BaseHoodieDateTimeParser createDateTimeParser(TypedProperties props, String parserClass) throws IOException  {
     try {
-      return (AbstractHoodieDateTimeParser) ReflectionUtils.loadClass(parserClass, props);
+      return (BaseHoodieDateTimeParser) ReflectionUtils.loadClass(parserClass, props);
     } catch (Throwable e) {
       throw new IOException("Could not load date time parser class " + parserClass, e);
     }

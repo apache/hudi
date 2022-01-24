@@ -40,9 +40,9 @@ import java.io.Serializable;
  * Abstract class taking care of holding common member variables (FileSystem, SparkContext, HoodieConfigs) Also, manages
  * embedded timeline-server if enabled.
  */
-public abstract class AbstractHoodieClient implements Serializable, AutoCloseable {
+public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
 
-  private static final Logger LOG = LogManager.getLogger(AbstractHoodieClient.class);
+  private static final Logger LOG = LogManager.getLogger(BaseHoodieClient.class);
 
   protected final transient FileSystem fs;
   protected final transient HoodieEngineContext context;
@@ -59,11 +59,11 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
   private transient Option<EmbeddedTimelineService> timelineServer;
   private final boolean shouldStopTimelineServer;
 
-  protected AbstractHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
+  protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
     this(context, clientConfig, Option.empty());
   }
 
-  protected AbstractHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
+  protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
       Option<EmbeddedTimelineService> timelineServer) {
     this.hadoopConf = context.getHadoopConf().get();
     this.fs = FSUtils.getFs(clientConfig.getBasePath(), hadoopConf);

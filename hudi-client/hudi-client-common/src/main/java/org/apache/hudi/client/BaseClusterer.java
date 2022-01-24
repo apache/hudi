@@ -28,13 +28,13 @@ import java.io.Serializable;
 /**
  * Client will run one round of clustering.
  */
-public abstract class AbstractClusteringClient<T extends HoodieRecordPayload, I, K, O> implements Serializable {
+public abstract class BaseClusterer<T extends HoodieRecordPayload, I, K, O> implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
-  protected transient AbstractHoodieWriteClient<T, I, K, O> clusteringClient;
+  protected transient BaseHoodieWriteClient<T, I, K, O> clusteringClient;
 
-  public AbstractClusteringClient(AbstractHoodieWriteClient<T, I, K, O> clusteringClient) {
+  public BaseClusterer(BaseHoodieWriteClient<T, I, K, O> clusteringClient) {
     this.clusteringClient = clusteringClient;
   }
 
@@ -49,7 +49,7 @@ public abstract class AbstractClusteringClient<T extends HoodieRecordPayload, I,
    * Update the write client used by async clustering.
    * @param writeClient
    */
-  public void updateWriteClient(AbstractHoodieWriteClient<T, I, K, O> writeClient) {
+  public void updateWriteClient(BaseHoodieWriteClient<T, I, K, O> writeClient) {
     this.clusteringClient = writeClient;
   }
 }

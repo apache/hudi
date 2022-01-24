@@ -16,27 +16,31 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.async;
+package org.apache.hudi.client;
 
-import org.apache.hudi.client.BaseCompactor;
-import org.apache.hudi.client.BaseHoodieWriteClient;
-import org.apache.hudi.client.HoodieSparkCompactor;
-import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+
+import java.io.IOException;
+import java.io.Serializable;
 
 /**
- * Async Compaction Service used by Structured Streaming. Here, async compaction is run in daemon mode to prevent
- * blocking shutting down the Spark application.
+ * Run one round of compaction.
  */
-public class SparkStreamingAsyncCompactService extends AsyncCompactService {
+public abstract class BaseCompactor<T extends HoodieRecordPayload, I, K, O> implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
-  public SparkStreamingAsyncCompactService(HoodieEngineContext context, BaseHoodieWriteClient client) {
-    super(context, client, true);
+  protected transient BaseHoodieWriteClient<T, I, K, O> compactionClient;
+
+  public BaseCompactor(BaseHoodieWriteClient<T, I, K, O> compactionClient) {
+    this.compactionClient = compactionClient;
   }
 
-  @Override
-  protected BaseCompactor createCompactor(BaseHoodieWriteClient client) {
-    return new HoodieSparkCompactor(client, this.context);
+  public abstract void compact(HoodieInstant instant) throws IOException;
+
+  public void updateWriteClient(BaseHoodieWriteClient<T, I, K, O> writeClient) {
+    this.compactionClient = writeClient;
   }
+
 }

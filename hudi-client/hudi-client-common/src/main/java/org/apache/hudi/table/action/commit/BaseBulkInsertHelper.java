@@ -26,7 +26,7 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-public abstract class AbstractBulkInsertHelper<T extends HoodieRecordPayload, I, K, O, R> {
+public abstract class BaseBulkInsertHelper<T extends HoodieRecordPayload, I, K, O, R> {
 
   /**
    * Mark instant as inflight, write input records, update index and return result.

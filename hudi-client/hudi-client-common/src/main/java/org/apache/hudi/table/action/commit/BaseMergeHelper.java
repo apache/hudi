@@ -47,7 +47,7 @@ import java.util.Iterator;
 /**
  * Helper to read records from previous version of base file and run Merge.
  */
-public abstract class AbstractMergeHelper<T extends HoodieRecordPayload, I, K, O> {
+public abstract class BaseMergeHelper<T extends HoodieRecordPayload, I, K, O> {
 
   /**
    * Read records from previous version of base file and merge.

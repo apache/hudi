@@ -25,12 +25,12 @@ import org.joda.time.format.DateTimeFormatter;
 
 import java.io.Serializable;
 
-public abstract class AbstractHoodieDateTimeParser implements Serializable {
+public abstract class BaseHoodieDateTimeParser implements Serializable {
 
   protected final TypedProperties config;
   protected final String configInputDateFormatDelimiter;
 
-  public AbstractHoodieDateTimeParser(TypedProperties config) {
+  public BaseHoodieDateTimeParser(TypedProperties config) {
     this.config = config;
     this.configInputDateFormatDelimiter = initInputDateFormatDelimiter();
   }

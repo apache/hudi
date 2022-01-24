@@ -54,7 +54,7 @@ public class TwoToOneDowngradeHandler implements DowngradeHandler {
   @Override
   public Map<ConfigProperty, String> downgrade(
       HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
-      BaseUpgradeDowngradeHelper upgradeDowngradeHelper) {
+      SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTableMetaClient metaClient = table.getMetaClient();
 
