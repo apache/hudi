@@ -57,6 +57,13 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + " to delete older file slices. It's recommended to enable this, to ensure metadata and data storage"
           + " growth is bounded.");
 
+  public static final ConfigProperty<String> AUTO_ARCHIVE = ConfigProperty
+      .key("hoodie.archive.automatic")
+      .defaultValue("true")
+      .withDocumentation("When enabled, the archival table service is invoked immediately after each commit,"
+          + " to archive commits if we cross a maximum value of commits."
+          + " It's recommended to enable this, to ensure number of active commits is bounded.");
+
   public static final ConfigProperty<String> ASYNC_CLEAN = ConfigProperty
       .key("hoodie.clean.async")
       .defaultValue("false")
@@ -119,6 +126,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + " keep the metadata overhead constant, even as the table size grows."
           + "This config controls the maximum number of instants to retain in the active timeline. ");
 
+  public static final ConfigProperty<Integer> DELETE_ARCHIVED_INSTANT_PARALLELISM_VALUE = ConfigProperty
+      .key("hoodie.archive.delete.parallelism")
+      .defaultValue(100)
+      .withDocumentation("Parallelism for deleting archived hoodie commits.");
+
   public static final ConfigProperty<String> MIN_COMMITS_TO_KEEP = ConfigProperty
       .key("hoodie.keep.min.commits")
       .defaultValue("20")
@@ -166,6 +178,12 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("Amount of MBs to spend during compaction run for the LogFileSizeBasedCompactionStrategy. "
           + "This value helps bound ingestion latency while compaction is run inline mode.");
 
+  public static final ConfigProperty<Long> COMPACTION_LOG_FILE_SIZE_THRESHOLD = ConfigProperty
+      .key("hoodie.compaction.logfile.size.threshold")
+      .defaultValue(0L)
+      .withDocumentation("Only if the log file size is greater than the threshold in bytes,"
+          + " the file group will be compacted.");
+
   public static final ConfigProperty<String> COMPACTION_STRATEGY = ConfigProperty
       .key("hoodie.compaction.strategy")
       .defaultValue(LogFileSizeBasedCompactionStrategy.class.getName())
@@ -206,6 +224,12 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("Used by org.apache.hudi.io.compact.strategy.DayBasedCompactionStrategy to denote the number of "
           + "latest partitions to compact during a compaction run.");
 
+  public static final ConfigProperty<Boolean> PRESERVE_COMMIT_METADATA = ConfigProperty
+      .key("hoodie.compaction.preserve.commit.metadata")
+      .defaultValue(false)
+      .sinceVersion("0.11.0")
+      .withDocumentation("When rewriting data, preserves existing hoodie_commit_time");
+
   /**
    * Configs related to specific table types.
    */
@@ -230,6 +254,22 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("The average record size. If not explicitly specified, hudi will compute the "
           + "record size estimate compute dynamically based on commit metadata. "
           + " This is critical in computing the insert parallelism and bin-packing inserts into small files.");
+
+  public static final ConfigProperty<Integer> ARCHIVE_MERGE_FILES_BATCH_SIZE = ConfigProperty
+      .key("hoodie.archive.merge.files.batch.size")
+      .defaultValue(10)
+      .withDocumentation("The number of small archive files to be merged at once.");
+
+  public static final ConfigProperty<Long> ARCHIVE_MERGE_SMALL_FILE_LIMIT_BYTES = ConfigProperty
+      .key("hoodie.archive.merge.small.file.limit.bytes")
+      .defaultValue(20L * 1024 * 1024)
+      .withDocumentation("This config sets the archive file size limit below which an archive file becomes a candidate to be selected as such a small file.");
+
+  public static final ConfigProperty<Boolean> ARCHIVE_MERGE_ENABLE = ConfigProperty
+      .key("hoodie.archive.merge.enable")
+      .defaultValue(false)
+      .withDocumentation("When enable, hoodie will auto merge several small archive files into larger one. It's"
+          + " useful when storage scheme doesn't support append operation.");
 
   /** @deprecated Use {@link #CLEANER_POLICY} and its methods instead */
   @Deprecated
@@ -482,6 +522,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withAutoArchive(Boolean autoArchive) {
+      compactionConfig.setValue(AUTO_ARCHIVE, String.valueOf(autoArchive));
+      return this;
+    }
+
     public Builder withIncrementalCleaningMode(Boolean incrementalCleaningMode) {
       compactionConfig.setValue(CLEANER_INCREMENTAL_MODE_ENABLE, String.valueOf(incrementalCleaningMode));
       return this;
@@ -515,6 +560,21 @@ public class HoodieCompactionConfig extends HoodieConfig {
     public Builder archiveCommitsWith(int minToKeep, int maxToKeep) {
       compactionConfig.setValue(MIN_COMMITS_TO_KEEP, String.valueOf(minToKeep));
       compactionConfig.setValue(MAX_COMMITS_TO_KEEP, String.valueOf(maxToKeep));
+      return this;
+    }
+
+    public Builder withArchiveMergeFilesBatchSize(int number) {
+      compactionConfig.setValue(ARCHIVE_MERGE_FILES_BATCH_SIZE, String.valueOf(number));
+      return this;
+    }
+
+    public Builder withArchiveMergeSmallFileLimit(long size) {
+      compactionConfig.setValue(ARCHIVE_MERGE_SMALL_FILE_LIMIT_BYTES, String.valueOf(size));
+      return this;
+    }
+
+    public Builder withArchiveMergeEnable(boolean enable) {
+      compactionConfig.setValue(ARCHIVE_MERGE_ENABLE, String.valueOf(enable));
       return this;
     }
 
@@ -568,6 +628,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withArchiveDeleteParallelism(int archiveDeleteParallelism) {
+      compactionConfig.setValue(DELETE_ARCHIVED_INSTANT_PARALLELISM_VALUE, String.valueOf(archiveDeleteParallelism));
+      return this;
+    }
+
     public Builder withMaxDeltaSecondsBeforeCompaction(int maxDeltaSecondsBeforeCompaction) {
       compactionConfig.setValue(INLINE_COMPACT_TIME_DELTA_SECONDS, String.valueOf(maxDeltaSecondsBeforeCompaction));
       return this;
@@ -585,6 +650,16 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withTargetPartitionsPerDayBasedCompaction(int targetPartitionsPerCompaction) {
       compactionConfig.setValue(TARGET_PARTITIONS_PER_DAYBASED_COMPACTION, String.valueOf(targetPartitionsPerCompaction));
+      return this;
+    }
+
+    public Builder withLogFileSizeThresholdBasedCompaction(long logFileSizeThreshold) {
+      compactionConfig.setValue(COMPACTION_LOG_FILE_SIZE_THRESHOLD, String.valueOf(logFileSizeThreshold));
+      return this;
+    }
+
+    public Builder withPreserveCommitMetadata(boolean preserveCommitMetadata) {
+      compactionConfig.setValue(PRESERVE_COMMIT_METADATA, String.valueOf(preserveCommitMetadata));
       return this;
     }
 

@@ -39,9 +39,7 @@ public class InputBatch<T> {
   }
 
   public InputBatch(Option<T> batch, String checkpointForNextBatch) {
-    this.batch = batch;
-    this.checkpointForNextBatch = checkpointForNextBatch;
-    this.schemaProvider = null;
+    this(batch, checkpointForNextBatch, null);
   }
 
   public Option<T> getBatch() {

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.hive.ddl;
 
+import static org.apache.hudi.hive.util.HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
+
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 
@@ -31,7 +33,9 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -139,6 +143,53 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
     } finally {
       closeQuietly(result, null);
     }
+  }
+
+  @Override
+  public void dropPartitionsToTable(String tableName, List<String> partitionsToDrop) {
+    if (partitionsToDrop.isEmpty()) {
+      LOG.info("No partitions to add for " + tableName);
+      return;
+    }
+    LOG.info("Adding partitions " + partitionsToDrop.size() + " to table " + tableName);
+    List<String> sqls = constructDropPartitions(tableName, partitionsToDrop);
+    sqls.stream().forEach(sql -> runSQL(sql));
+  }
+
+  private List<String> constructDropPartitions(String tableName, List<String> partitions) {
+    if (config.batchSyncNum <= 0) {
+      throw new HoodieHiveSyncException("batch-sync-num for sync hive table must be greater than 0, pls check your parameter");
+    }
+    List<String> result = new ArrayList<>();
+    int batchSyncPartitionNum = config.batchSyncNum;
+    StringBuilder alterSQL = getAlterTableDropPrefix(tableName);
+
+    for (int i = 0; i < partitions.size(); i++) {
+      String partitionClause = getPartitionClause(partitions.get(i));
+      if (i == 0) {
+        alterSQL.append(" PARTITION (").append(partitionClause).append(")");
+      } else {
+        alterSQL.append(", PARTITION (").append(partitionClause).append(")");
+      }
+
+      if ((i + 1) % batchSyncPartitionNum == 0) {
+        result.add(alterSQL.toString());
+        alterSQL = getAlterTableDropPrefix(tableName);
+      }
+    }
+    // add left partitions to result
+    if (partitions.size() % batchSyncPartitionNum != 0) {
+      result.add(alterSQL.toString());
+    }
+    return result;
+  }
+
+  public StringBuilder getAlterTableDropPrefix(String tableName) {
+    StringBuilder alterSQL = new StringBuilder("ALTER TABLE ");
+    alterSQL.append(HIVE_ESCAPE_CHARACTER).append(config.databaseName)
+        .append(HIVE_ESCAPE_CHARACTER).append(".").append(HIVE_ESCAPE_CHARACTER)
+        .append(tableName).append(HIVE_ESCAPE_CHARACTER).append(" DROP IF EXISTS ");
+    return alterSQL;
   }
 
   @Override

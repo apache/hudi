@@ -18,18 +18,19 @@
 
 package org.apache.spark.sql.hudi.execution
 
-import java.util
-
+import org.apache.hudi.common.util.BinaryUtil
 import org.apache.hudi.config.HoodieClusteringConfig
+import org.apache.hudi.config.HoodieClusteringConfig.LayoutOptimizationStrategy
+import org.apache.hudi.optimize.HilbertCurveUtils
 import org.apache.spark.rdd.{PartitionPruningRDD, RDD}
-import org.apache.spark.sql.catalyst.expressions.{Ascending, Attribute, BoundReference, SortOrder, UnsafeProjection, UnsafeRow}
-import org.apache.hudi.optimize.ZOrderingUtil
-import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.codegen.LazilyGeneratedOrdering
+import org.apache.spark.sql.catalyst.expressions.{Ascending, Attribute, BoundReference, SortOrder, UnsafeProjection, UnsafeRow}
 import org.apache.spark.sql.types._
+import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.util.MutablePair
 import org.apache.spark.util.random.SamplingUtils
+import org.davidmoten.hilbert.HilbertCurve
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -37,10 +38,10 @@ import scala.reflect.{ClassTag, classTag}
 import scala.util.hashing.byteswap32
 
 class RangeSample[K: ClassTag, V](
-     zEncodeNum: Int,
-     rdd: RDD[_ <: Product2[K, V]],
-     private var ascend: Boolean = true,
-     val samplePointsPerPartitionHint: Int = 20) extends Serializable {
+                                   zEncodeNum: Int,
+                                   rdd: RDD[_ <: Product2[K, V]],
+                                   private var ascend: Boolean = true,
+                                   val samplePointsPerPartitionHint: Int = 20) extends Serializable {
 
   // We allow zEncodeNum = 0, which happens when sorting an empty RDD under the default settings.
   require(zEncodeNum >= 0, s"Number of zEncodeNum cannot be negative but found $zEncodeNum.")
@@ -197,22 +198,22 @@ class RawDecisionBound[K : Ordering : ClassTag](ordering: Ordering[K]) extends S
     // For primitive keys, we can use the natural ordering. Otherwise, use the Ordering comparator.
     classTag[K] match {
       case ClassTag.Float =>
-        (l, x) => util.Arrays.binarySearch(l.asInstanceOf[Array[Float]], x.asInstanceOf[Float])
+        (l, x) => java.util.Arrays.binarySearch(l.asInstanceOf[Array[Float]], x.asInstanceOf[Float])
       case ClassTag.Double =>
-        (l, x) => util.Arrays.binarySearch(l.asInstanceOf[Array[Double]], x.asInstanceOf[Double])
+        (l, x) => java.util.Arrays.binarySearch(l.asInstanceOf[Array[Double]], x.asInstanceOf[Double])
       case ClassTag.Byte =>
-        (l, x) => util.Arrays.binarySearch(l.asInstanceOf[Array[Byte]], x.asInstanceOf[Byte])
+        (l, x) => java.util.Arrays.binarySearch(l.asInstanceOf[Array[Byte]], x.asInstanceOf[Byte])
       case ClassTag.Char =>
-        (l, x) => util.Arrays.binarySearch(l.asInstanceOf[Array[Char]], x.asInstanceOf[Char])
+        (l, x) => java.util.Arrays.binarySearch(l.asInstanceOf[Array[Char]], x.asInstanceOf[Char])
       case ClassTag.Short =>
-        (l, x) => util.Arrays.binarySearch(l.asInstanceOf[Array[Short]], x.asInstanceOf[Short])
+        (l, x) => java.util.Arrays.binarySearch(l.asInstanceOf[Array[Short]], x.asInstanceOf[Short])
       case ClassTag.Int =>
-        (l, x) => util.Arrays.binarySearch(l.asInstanceOf[Array[Int]], x.asInstanceOf[Int])
+        (l, x) => java.util.Arrays.binarySearch(l.asInstanceOf[Array[Int]], x.asInstanceOf[Int])
       case ClassTag.Long =>
-        (l, x) => util.Arrays.binarySearch(l.asInstanceOf[Array[Long]], x.asInstanceOf[Long])
+        (l, x) => java.util.Arrays.binarySearch(l.asInstanceOf[Array[Long]], x.asInstanceOf[Long])
       case _ =>
         val comparator = ordering.asInstanceOf[java.util.Comparator[Any]]
-        (l, x) => util.Arrays.binarySearch(l.asInstanceOf[Array[AnyRef]], x, comparator)
+        (l, x) => java.util.Arrays.binarySearch(l.asInstanceOf[Array[AnyRef]], x, comparator)
     }
   }
 
@@ -236,122 +237,31 @@ class RawDecisionBound[K : Ordering : ClassTag](ordering: Ordering[K]) extends S
   }
 }
 
-case class ZorderingBinarySort(b: Array[Byte]) extends Ordered[ZorderingBinarySort] with Serializable {
-  override def compare(that: ZorderingBinarySort): Int = {
+case class ByteArraySorting(b: Array[Byte]) extends Ordered[ByteArraySorting] with Serializable {
+  override def compare(that: ByteArraySorting): Int = {
     val len = this.b.length
-    ZOrderingUtil.compareTo(this.b, 0, len, that.b, 0, len)
+    BinaryUtil.compareTo(this.b, 0, len, that.b, 0, len)
   }
 }
 
 object RangeSampleSort {
 
   /**
-    * create z-order DataFrame by sample
-    * support all col types
-    */
-  def sortDataFrameBySampleSupportAllTypes(df: DataFrame, zCols: Seq[String], fileNum: Int): DataFrame = {
-    val spark = df.sparkSession
-    val internalRdd = df.queryExecution.toRdd
-    val schema = df.schema
-    val outputAttributes = df.queryExecution.analyzed.output
-    val sortingExpressions = outputAttributes.filter(p => zCols.contains(p.name))
-    if (sortingExpressions.length == 0 || sortingExpressions.length != zCols.size) {
-      df
-    } else {
-      val zOrderBounds = df.sparkSession.sessionState.conf.getConfString(
-        HoodieClusteringConfig.LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE.key,
-        HoodieClusteringConfig.LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE.defaultValue.toString).toInt
-
-      val sampleRdd = internalRdd.mapPartitionsInternal { iter =>
-        val projection = UnsafeProjection.create(sortingExpressions, outputAttributes)
-        val mutablePair = new MutablePair[InternalRow, Null]()
-        // Internally, RangePartitioner runs a job on the RDD that samples keys to compute
-        // partition bounds. To get accurate samples, we need to copy the mutable keys.
-        iter.map(row => mutablePair.update(projection(row).copy(), null))
-      }
-
-      val orderings = sortingExpressions.map(SortOrder(_, Ascending)).zipWithIndex.map { case (ord, i) =>
-        ord.copy(child = BoundReference(i, ord.dataType, ord.nullable))
-      }
-
-      val lazyGeneratedOrderings = orderings.map(ord => new LazilyGeneratedOrdering(Seq(ord)))
-
-      val sample = new RangeSample(zOrderBounds, sampleRdd)
-
-      val rangeBounds = sample.getRangeBounds()
-
-      implicit val ordering1 = lazyGeneratedOrderings(0)
-
-      val sampleBounds = sample.determineRowBounds(rangeBounds, math.min(zOrderBounds, rangeBounds.length), lazyGeneratedOrderings, sortingExpressions)
-
-      val origin_orderings = sortingExpressions.map(SortOrder(_, Ascending)).map { ord =>
-        ord.copy(child = BoundReference(0, ord.dataType, ord.nullable))
-      }
-
-      val origin_lazyGeneratedOrderings = origin_orderings.map(ord => new LazilyGeneratedOrdering(Seq(ord)))
-
-      // expand bounds.
-      // maybe it's better to use the value of "spark.zorder.bounds.number" as maxLength,
-      // however this will lead to extra time costs when all zorder cols distinct count values are less then "spark.zorder.bounds.number"
-      val maxLength = sampleBounds.map(_.length).max
-      val expandSampleBoundsWithFactor = sampleBounds.map { bound =>
-        val fillFactor = maxLength / bound.size.toDouble
-        (bound, fillFactor)
-      }
-
-      val boundBroadCast = spark.sparkContext.broadcast(expandSampleBoundsWithFactor)
-
-      val indexRdd = internalRdd.mapPartitionsInternal { iter =>
-        val boundsWithFactor = boundBroadCast.value
-        import java.util.concurrent.ThreadLocalRandom
-        val threadLocalRandom = ThreadLocalRandom.current
-        val maxBoundNum = boundsWithFactor.map(_._1.length).max
-        val origin_Projections = sortingExpressions.map { se =>
-          UnsafeProjection.create(Seq(se), outputAttributes)
-        }
-
-        iter.map { unsafeRow =>
-          val interleaveValues = origin_Projections.zip(origin_lazyGeneratedOrderings).zipWithIndex.map { case ((rowProject, lazyOrdering), index) =>
-            val row = rowProject(unsafeRow)
-            val decisionBound = new RawDecisionBound(lazyOrdering)
-            if (row.isNullAt(0)) {
-              maxBoundNum + 1
-            } else {
-              val (bound, factor) = boundsWithFactor(index)
-              if (factor > 1) {
-                val currentRank = decisionBound.getBound(row, bound.asInstanceOf[Array[InternalRow]])
-                currentRank*factor.toInt + threadLocalRandom.nextInt(factor.toInt)
-              } else {
-                decisionBound.getBound(row, bound.asInstanceOf[Array[InternalRow]])
-              }
-            }
-          }.toArray.map(ZOrderingUtil.intTo8Byte(_))
-          val zValues = ZOrderingUtil.interleaving(interleaveValues, 8)
-          val mutablePair = new MutablePair[InternalRow, Array[Byte]]()
-
-          mutablePair.update(unsafeRow, zValues)
-        }
-      }.sortBy(x => ZorderingBinarySort(x._2), numPartitions = fileNum).map(_._1)
-      spark.internalCreateDataFrame(indexRdd, schema)
-    }
-  }
-
-  /**
-    * create z-order DataFrame by sample
-    * first, sample origin data to get z-cols bounds, then create z-order DataFrame
+    * create optimize DataFrame by sample
+    * first, sample origin data to get order-cols bounds, then apply sort to produce DataFrame
     * support all type data.
-    * this method need more resource and cost more time than createZIndexedDataFrameByMapValue
+    * this method need more resource and cost more time than createOptimizedDataFrameByMapValue
     */
-  def sortDataFrameBySample(df: DataFrame, zCols: Seq[String], fileNum: Int): DataFrame = {
+  def sortDataFrameBySample(df: DataFrame, layoutOptStrategy: LayoutOptimizationStrategy, orderByCols: Seq[String], targetPartitionsCount: Int): DataFrame = {
     val spark = df.sparkSession
     val columnsMap = df.schema.fields.map(item => (item.name, item)).toMap
     val fieldNum = df.schema.fields.length
-    val checkCols = zCols.filter(col => columnsMap(col) != null)
+    val checkCols = orderByCols.filter(col => columnsMap(col) != null)
 
-    if (zCols.isEmpty || checkCols.isEmpty) {
+    if (orderByCols.isEmpty || checkCols.isEmpty) {
       df
     } else {
-      val zFields = zCols.map { col =>
+      val zFields = orderByCols.map { col =>
         val newCol = columnsMap(col)
         if (newCol == null) {
           (-1, null)
@@ -367,8 +277,8 @@ object RangeSampleSort {
         }
       }.filter(_._1 != -1)
       // Complex type found, use createZIndexedDataFrameByRange
-      if (zFields.length != zCols.length) {
-        return sortDataFrameBySampleSupportAllTypes(df, zCols, fieldNum)
+      if (zFields.length != orderByCols.length) {
+        return sortDataFrameBySampleSupportAllTypes(df, orderByCols, targetPartitionsCount)
       }
 
       val rawRdd = df.rdd
@@ -464,6 +374,11 @@ object RangeSampleSort {
           }
         }
 
+        val hilbertCurve = if (layoutOptStrategy == LayoutOptimizationStrategy.HILBERT)
+          Some(HilbertCurve.bits(32).dimensions(zFields.length))
+        else
+          None
+
         iter.map { row =>
           val values = zFields.zipWithIndex.map { case ((index, field), rawIndex) =>
             field.dataType match {
@@ -509,17 +424,115 @@ object RangeSampleSort {
               case _ =>
                 -1
             }
-          }.filter(v => v != -1).map(ZOrderingUtil.intTo8Byte(_)).toArray
-          val zValues = ZOrderingUtil.interleaving(values, 8)
-          Row.fromSeq(row.toSeq ++ Seq(zValues))
+          }.filter(v => v != -1)
+
+          val mapValues = layoutOptStrategy match {
+            case LayoutOptimizationStrategy.HILBERT =>
+              HilbertCurveUtils.indexBytes(hilbertCurve.get, values.map(_.toLong).toArray, 32)
+            case LayoutOptimizationStrategy.ZORDER =>
+              BinaryUtil.interleaving(values.map(BinaryUtil.intTo8Byte(_)).toArray, 8)
+          }
+
+          Row.fromSeq(row.toSeq ++ Seq(mapValues))
         }
-      }.sortBy(x => ZorderingBinarySort(x.getAs[Array[Byte]](fieldNum)), numPartitions = fileNum)
+      }.sortBy(x => ByteArraySorting(x.getAs[Array[Byte]](fieldNum)), numPartitions = targetPartitionsCount)
       val newDF = df.sparkSession.createDataFrame(indexRdd, StructType(
         df.schema.fields ++ Seq(
-          StructField(s"zindex",
+          StructField(s"index",
             BinaryType, false))
       ))
-      newDF.drop("zindex")
+      newDF.drop("index")
+    }
+  }
+
+  /**
+    * create z-order DataFrame by sample
+    * support all col types
+    */
+  def sortDataFrameBySampleSupportAllTypes(df: DataFrame, zCols: Seq[String], fileNum: Int): DataFrame = {
+    val spark = df.sparkSession
+    val internalRdd = df.queryExecution.toRdd
+    val schema = df.schema
+    val outputAttributes = df.queryExecution.analyzed.output
+    val sortingExpressions = outputAttributes.filter(p => zCols.contains(p.name))
+    if (sortingExpressions.length == 0 || sortingExpressions.length != zCols.size) {
+      df
+    } else {
+      val zOrderBounds = df.sparkSession.sessionState.conf.getConfString(
+        HoodieClusteringConfig.LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE.key,
+        HoodieClusteringConfig.LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE.defaultValue.toString).toInt
+
+      val sampleRdd = internalRdd.mapPartitionsInternal { iter =>
+        val projection = UnsafeProjection.create(sortingExpressions, outputAttributes)
+        val mutablePair = new MutablePair[InternalRow, Null]()
+        // Internally, RangePartitioner runs a job on the RDD that samples keys to compute
+        // partition bounds. To get accurate samples, we need to copy the mutable keys.
+        iter.map(row => mutablePair.update(projection(row).copy(), null))
+      }
+
+      val orderings = sortingExpressions.map(SortOrder(_, Ascending)).zipWithIndex.map { case (ord, i) =>
+        ord.copy(child = BoundReference(i, ord.dataType, ord.nullable))
+      }
+
+      val lazyGeneratedOrderings = orderings.map(ord => new LazilyGeneratedOrdering(Seq(ord)))
+
+      val sample = new RangeSample(zOrderBounds, sampleRdd)
+
+      val rangeBounds = sample.getRangeBounds()
+
+      implicit val ordering1 = lazyGeneratedOrderings(0)
+
+      val sampleBounds = sample.determineRowBounds(rangeBounds, math.min(zOrderBounds, rangeBounds.length), lazyGeneratedOrderings, sortingExpressions)
+
+      val origin_orderings = sortingExpressions.map(SortOrder(_, Ascending)).map { ord =>
+        ord.copy(child = BoundReference(0, ord.dataType, ord.nullable))
+      }
+
+      val origin_lazyGeneratedOrderings = origin_orderings.map(ord => new LazilyGeneratedOrdering(Seq(ord)))
+
+      // expand bounds.
+      // maybe it's better to use the value of "spark.zorder.bounds.number" as maxLength,
+      // however this will lead to extra time costs when all zorder cols distinct count values are less then "spark.zorder.bounds.number"
+      val maxLength = sampleBounds.map(_.length).max
+      val expandSampleBoundsWithFactor = sampleBounds.map { bound =>
+        val fillFactor = maxLength / bound.size.toDouble
+        (bound, fillFactor)
+      }
+
+      val boundBroadCast = spark.sparkContext.broadcast(expandSampleBoundsWithFactor)
+
+      val indexRdd = internalRdd.mapPartitionsInternal { iter =>
+        val boundsWithFactor = boundBroadCast.value
+        import java.util.concurrent.ThreadLocalRandom
+        val threadLocalRandom = ThreadLocalRandom.current
+        val maxBoundNum = boundsWithFactor.map(_._1.length).max
+        val origin_Projections = sortingExpressions.map { se =>
+          UnsafeProjection.create(Seq(se), outputAttributes)
+        }
+
+        iter.map { unsafeRow =>
+          val interleaveValues = origin_Projections.zip(origin_lazyGeneratedOrderings).zipWithIndex.map { case ((rowProject, lazyOrdering), index) =>
+            val row = rowProject(unsafeRow)
+            val decisionBound = new RawDecisionBound(lazyOrdering)
+            if (row.isNullAt(0)) {
+              maxBoundNum + 1
+            } else {
+              val (bound, factor) = boundsWithFactor(index)
+              if (factor > 1) {
+                val currentRank = decisionBound.getBound(row, bound.asInstanceOf[Array[InternalRow]])
+                currentRank*factor.toInt + threadLocalRandom.nextInt(factor.toInt)
+              } else {
+                decisionBound.getBound(row, bound.asInstanceOf[Array[InternalRow]])
+              }
+            }
+          }.toArray.map(BinaryUtil.intTo8Byte(_))
+          val zValues = BinaryUtil.interleaving(interleaveValues, 8)
+          val mutablePair = new MutablePair[InternalRow, Array[Byte]]()
+
+          mutablePair.update(unsafeRow, zValues)
+        }
+      }.sortBy(x => ByteArraySorting(x._2), numPartitions = fileNum).map(_._1)
+      spark.internalCreateDataFrame(indexRdd, schema)
     }
   }
 }

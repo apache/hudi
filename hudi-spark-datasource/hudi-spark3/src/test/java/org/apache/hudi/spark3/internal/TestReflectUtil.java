@@ -40,7 +40,6 @@ public class TestReflectUtil extends HoodieClientTestBase {
     InsertIntoStatement statement = (InsertIntoStatement) spark.sessionState().sqlParser().parsePlan(insertIntoSql);
 
     InsertIntoStatement newStatment = ReflectUtil.createInsertInto(
-        spark.version().startsWith("3.0"),
         statement.table(),
         statement.partitionSpec(),
         scala.collection.immutable.List.empty(),
@@ -50,9 +49,5 @@ public class TestReflectUtil extends HoodieClientTestBase {
 
     Assertions.assertTrue(
         ((UnresolvedRelation)newStatment.table()).multipartIdentifier().contains("test_reflect_util"));
-
-    if (!spark.version().startsWith("3.0")) {
-      Assertions.assertTrue(newStatment.userSpecifiedCols().isEmpty());
-    }
   }
 }

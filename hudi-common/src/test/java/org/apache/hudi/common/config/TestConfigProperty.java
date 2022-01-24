@@ -40,6 +40,11 @@ public class TestConfigProperty extends HoodieConfig {
       .defaultValue("false")
       .withDocumentation("Fake config only for testing");
 
+  public static ConfigProperty<String> FAKE_BOOLEAN_CONFIG_NO_DEFAULT = ConfigProperty
+      .key("test.fake.boolean.config")
+      .noDefaultValue()
+      .withDocumentation("Fake config only for testing");
+
   public static ConfigProperty<Integer> FAKE_INTEGER_CONFIG = ConfigProperty
       .key("test.fake.integer.config")
       .defaultValue(0)
@@ -58,9 +63,21 @@ public class TestConfigProperty extends HoodieConfig {
     hoodieConfig.setValue(FAKE_STRING_CONFIG, "5");
     assertEquals(5, hoodieConfig.getInt(FAKE_STRING_CONFIG));
 
-    assertNull(hoodieConfig.getBoolean(FAKE_BOOLEAN_CONFIG));
+    assertEquals(false, hoodieConfig.getBoolean(FAKE_BOOLEAN_CONFIG));
     hoodieConfig.setValue(FAKE_BOOLEAN_CONFIG, "true");
     assertEquals(true, hoodieConfig.getBoolean(FAKE_BOOLEAN_CONFIG));
+  }
+
+  @Test
+  public void testGetBooleanShouldReturnFalseWhenDefaultValueFalseButNotSet() {
+    HoodieConfig hoodieConfig = new HoodieConfig();
+    assertEquals(false, hoodieConfig.getBoolean(FAKE_BOOLEAN_CONFIG));
+  }
+
+  @Test
+  public void testGetBooleanShouldReturnNullWhenNoDefaultValuePresent() {
+    HoodieConfig hoodieConfig = new HoodieConfig();
+    assertNull(hoodieConfig.getBoolean(FAKE_BOOLEAN_CONFIG_NO_DEFAULT));
   }
 
   @Test

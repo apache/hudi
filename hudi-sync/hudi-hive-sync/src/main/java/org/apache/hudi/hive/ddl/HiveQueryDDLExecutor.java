@@ -34,6 +34,7 @@ import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hudi.hive.util.HivePartitionUtil;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -123,6 +124,26 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       return schema;
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to get table schema for : " + tableName, e);
+    }
+  }
+
+  @Override
+  public void dropPartitionsToTable(String tableName, List<String> partitionsToDrop) {
+    if (partitionsToDrop.isEmpty()) {
+      LOG.info("No partitions to drop for " + tableName);
+      return;
+    }
+
+    LOG.info("Drop partitions " + partitionsToDrop.size() + " on " + tableName);
+    try {
+      for (String dropPartition : partitionsToDrop) {
+        String partitionClause = HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, config);
+        metaStoreClient.dropPartition(config.databaseName, tableName, partitionClause, false);
+        LOG.info("Drop partition " + dropPartition + " on " + tableName);
+      }
+    } catch (Exception e) {
+      LOG.error(config.databaseName + "." + tableName + " drop partition failed", e);
+      throw new HoodieHiveSyncException(config.databaseName + "." + tableName + " drop partition failed", e);
     }
   }
 

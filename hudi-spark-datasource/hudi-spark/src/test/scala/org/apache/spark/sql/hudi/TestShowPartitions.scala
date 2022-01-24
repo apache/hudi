@@ -32,7 +32,7 @@ class TestShowPartitions extends TestHoodieSqlBase {
          |  price double,
          |  ts long
          |) using hudi
-         |options (
+         |tblproperties (
          |  primaryKey = 'id',
          |  preCombineField = 'ts'
          )
@@ -59,7 +59,7 @@ class TestShowPartitions extends TestHoodieSqlBase {
          |  dt string
          ) using hudi
          | partitioned by (dt)
-         | options (
+         | tblproperties (
          |   primaryKey = 'id',
          |   preCombineField = 'ts'
          | )
@@ -109,7 +109,7 @@ class TestShowPartitions extends TestHoodieSqlBase {
          |   day string
          | ) using hudi
          | partitioned by (year, month, day)
-         | options (
+         | tblproperties (
          |   primaryKey = 'id',
          |   preCombineField = 'ts'
          | )
@@ -154,7 +154,7 @@ class TestShowPartitions extends TestHoodieSqlBase {
       Seq("year=2021/month=02/day=default"),
       Seq("year=2021/month=02/day=01")
     )
-    checkAnswer(s"show partitions $tableName partition(day=01)")(
+    checkAnswer(s"show partitions $tableName partition(day='01')")(
       Seq("year=2021/month=02/day=01"),
       Seq("year=2021/month=default/day=01"),
       Seq("year=2021/month=01/day=01"),

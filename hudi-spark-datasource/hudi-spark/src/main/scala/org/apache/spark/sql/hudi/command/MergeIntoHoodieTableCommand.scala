@@ -19,24 +19,27 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.avro.Schema
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.MultiPartKeysValueExtractor
 import org.apache.hudi.hive.ddl.HiveSyncMode
-import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, HoodieWriterUtils, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.Resolver
+import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, Cast, EqualTo, Expression, Literal}
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.execution.command.RunnableCommand
-import org.apache.spark.sql.hudi.HoodieSqlUtils._
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
+import org.apache.spark.sql.hudi.HoodieSqlUtils.{castIfNeeded, getMergeIntoTargetTableId}
+import org.apache.spark.sql.hudi.SerDeUtils
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
-import org.apache.spark.sql.hudi.{HoodieOptionConfig, SerDeUtils}
 import org.apache.spark.sql.types.{BooleanType, StructType}
+
 import java.util.Base64
+
 
 /**
  * The Command for hoodie MergeIntoTable.
@@ -56,7 +59,7 @@ import java.util.Base64
  * ExpressionPayload#getInsertValue.
  *
  */
-case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends RunnableCommand
+case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends HoodieLeafRunnableCommand
   with SparkAdapterSupport {
 
   private var sparkSession: SparkSession = _
@@ -77,11 +80,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
   private lazy val targetTableSchemaWithoutMetaFields =
     removeMetaFields(mergeInto.targetTable.schema).fields
 
-  private lazy val targetTable =
-    sparkSession.sessionState.catalog.getTableMetadata(targetTableIdentify)
+  private lazy val hoodieCatalogTable = HoodieCatalogTable(sparkSession, targetTableIdentify)
 
-  private lazy val targetTableType =
-    HoodieOptionConfig.getTableType(targetTable.storage.properties)
+  private lazy val targetTableType = hoodieCatalogTable.tableTypeName
 
   /**
    *
@@ -124,7 +125,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     assert(updateActions.size <= 1, s"Only support one updateAction currently, current update action count is: ${updateActions.size}")
 
     val updateAction = updateActions.headOption
-    HoodieOptionConfig.getPreCombineField(targetTable.storage.properties).map(preCombineField => {
+    hoodieCatalogTable.preCombineKey.map(preCombineField => {
       val sourcePreCombineField =
         updateAction.map(u => u.assignments.filter {
             case Assignment(key: AttributeReference, _) => key.name.equalsIgnoreCase(preCombineField)
@@ -147,9 +148,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     this.sparkSession = sparkSession
 
     // Create the write parameters
-    val parameters = buildMergeIntoConfig(mergeInto)
-
-    val sourceDF = buildSourceDF(sparkSession)
+    val parameters = buildMergeIntoConfig(hoodieCatalogTable)
 
     if (mergeInto.matchedActions.nonEmpty) { // Do the upsert
       executeUpsert(sourceDF, parameters)
@@ -178,7 +177,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
    * row key and pre-combine field.
    *
    */
-  private def buildSourceDF(sparkSession: SparkSession): DataFrame = {
+  private lazy val sourceDF: DataFrame = {
     var sourceDF = Dataset.ofRows(sparkSession, mergeInto.sourceTable)
     targetKey2SourceExpression.foreach {
       case (targetColumn, sourceExpression)
@@ -203,7 +202,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
 
     sourceExpression match {
       case attr: AttributeReference if sourceColumnName.find(resolver(_, attr.name)).get.equals(targetColumnName) => true
-      case Cast(attr: AttributeReference, _, _) if sourceColumnName.find(resolver(_, attr.name)).get.equals(targetColumnName) => true
+      // SPARK-35857: the definition of Cast has been changed in Spark3.2.
+      // Match the class type instead of call the `unapply` method.
+      case cast: Cast =>
+        cast.child match {
+          case attr: AttributeReference if sourceColumnName.find(resolver(_, attr.name)).get.equals(targetColumnName) => true
+          case _ => false
+        }
       case _=> false
     }
   }
@@ -242,8 +247,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     // Append the table schema to the parameters. In the case of merge into, the schema of sourceDF
     // may be different from the target table, because the are transform logical in the update or
     // insert actions.
+    val operation = if (StringUtils.isNullOrEmpty(parameters.getOrElse(PRECOMBINE_FIELD.key, ""))) {
+      INSERT_OPERATION_OPT_VAL
+    } else {
+      UPSERT_OPERATION_OPT_VAL
+    }
     var writeParams = parameters +
-      (OPERATION.key -> UPSERT_OPERATION_OPT_VAL) +
+      (OPERATION.key -> operation) +
       (HoodieWriteConfig.WRITE_SCHEMA.key -> getTableSchema.toString) +
       (DataSourceWriteOptions.TABLE_TYPE.key -> targetTableType)
 
@@ -422,52 +432,43 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
 
   /**
    * Create the config for hoodie writer.
-   * @param mergeInto
-   * @return
    */
-  private def buildMergeIntoConfig(mergeInto: MergeIntoTable): Map[String, String] = {
+  private def buildMergeIntoConfig(hoodieCatalogTable: HoodieCatalogTable): Map[String, String] = {
 
     val targetTableDb = targetTableIdentify.database.getOrElse("default")
     val targetTableName = targetTableIdentify.identifier
-    val path = getTableLocation(targetTable, sparkSession)
-    val conf = sparkSession.sessionState.newHadoopConf()
-    val metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(path)
-      .setConf(conf)
-      .build()
-    val tableConfig = metaClient.getTableConfig
-    val options = targetTable.storage.properties
-    val definedPk = HoodieOptionConfig.getPrimaryColumns(options)
-    // TODO Currently the mergeEqualConditionKeys must be the same the primary key.
-    if (targetKey2SourceExpression.keySet != definedPk.toSet) {
-      throw new IllegalArgumentException(s"Merge Key[${targetKey2SourceExpression.keySet.mkString(",")}] is not" +
-        s" Equal to the defined primary key[${definedPk.mkString(",")}] in table $targetTableName")
-    }
+    val path = hoodieCatalogTable.tableLocation
+    val tableConfig = hoodieCatalogTable.tableConfig
+    val tableSchema = hoodieCatalogTable.tableSchema
+    val partitionColumns = tableConfig.getPartitionFieldProp.split(",").map(_.toLowerCase)
+    val partitionSchema = StructType(tableSchema.filter(f => partitionColumns.contains(f.name)))
+
     // Enable the hive sync by default if spark have enable the hive metastore.
     val enableHive = isEnableHive(sparkSession)
-    withSparkConf(sparkSession, options) {
+    withSparkConf(sparkSession, hoodieCatalogTable.catalogProperties) {
       Map(
         "path" -> path,
-        RECORDKEY_FIELD.key -> targetKey2SourceExpression.keySet.mkString(","),
-        PRECOMBINE_FIELD.key -> targetKey2SourceExpression.keySet.head, // set a default preCombine field
-        TBL_NAME.key -> targetTableName,
-        PARTITIONPATH_FIELD.key -> targetTable.partitionColumnNames.mkString(","),
+        RECORDKEY_FIELD.key -> tableConfig.getRecordKeyFieldProp,
+        PRECOMBINE_FIELD.key -> hoodieCatalogTable.preCombineKey.getOrElse(""),
+        TBL_NAME.key -> hoodieCatalogTable.tableName,
+        PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp,
         PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
         HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
-        URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitoning,
-        KEYGENERATOR_CLASS_NAME.key -> tableConfig.getKeyGeneratorClassName,
+        URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
+        KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
+        SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME -> tableConfig.getKeyGeneratorClassName,
         META_SYNC_ENABLED.key -> enableHive.toString,
         HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
         HIVE_USE_JDBC.key -> "false",
         HIVE_DATABASE.key -> targetTableDb,
         HIVE_TABLE.key -> targetTableName,
         HIVE_SUPPORT_TIMESTAMP_TYPE.key -> "true",
-        HIVE_PARTITION_FIELDS.key -> targetTable.partitionColumnNames.mkString(","),
+        HIVE_PARTITION_FIELDS.key -> tableConfig.getPartitionFieldProp,
         HIVE_PARTITION_EXTRACTOR_CLASS.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
         HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "200", // set the default parallelism to 200 for sql
         HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "200",
         HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> "200",
-        SqlKeyGenerator.PARTITION_SCHEMA -> targetTable.partitionSchema.toDDL
+        SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL
       )
     }
   }

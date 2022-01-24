@@ -18,13 +18,21 @@
 
 package org.apache.hudi.table.format.cow;
 
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.table.format.cow.vector.HeapArrayVector;
+import org.apache.hudi.table.format.cow.vector.HeapMapColumnVector;
+import org.apache.hudi.table.format.cow.vector.HeapRowColumnVector;
+import org.apache.hudi.table.format.cow.vector.VectorizedColumnBatch;
+import org.apache.hudi.table.format.cow.vector.reader.ArrayColumnReader;
+import org.apache.hudi.table.format.cow.vector.reader.MapColumnReader;
+import org.apache.hudi.table.format.cow.vector.reader.RowColumnReader;
+
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.formats.parquet.vector.reader.BooleanColumnReader;
 import org.apache.flink.formats.parquet.vector.reader.ByteColumnReader;
 import org.apache.flink.formats.parquet.vector.reader.BytesColumnReader;
 import org.apache.flink.formats.parquet.vector.reader.ColumnReader;
 import org.apache.flink.formats.parquet.vector.reader.DoubleColumnReader;
-import org.apache.flink.formats.parquet.vector.reader.FixedLenBytesColumnReader;
 import org.apache.flink.formats.parquet.vector.reader.FloatColumnReader;
 import org.apache.flink.formats.parquet.vector.reader.IntColumnReader;
 import org.apache.flink.formats.parquet.vector.reader.LongColumnReader;
@@ -33,7 +41,6 @@ import org.apache.flink.formats.parquet.vector.reader.TimestampColumnReader;
 import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.data.vector.ColumnVector;
-import org.apache.flink.table.data.vector.VectorizedColumnBatch;
 import org.apache.flink.table.data.vector.heap.HeapBooleanVector;
 import org.apache.flink.table.data.vector.heap.HeapByteVector;
 import org.apache.flink.table.data.vector.heap.HeapBytesVector;
@@ -45,16 +52,25 @@ import org.apache.flink.table.data.vector.heap.HeapShortVector;
 import org.apache.flink.table.data.vector.heap.HeapTimestampVector;
 import org.apache.flink.table.data.vector.writable.WritableColumnVector;
 import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.IntType;
 import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.types.logical.MapType;
+import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.table.types.logical.TimestampType;
 import org.apache.flink.table.types.logical.VarBinaryType;
 import org.apache.flink.util.Preconditions;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.parquet.ParquetRuntimeException;
 import org.apache.parquet.column.ColumnDescriptor;
+import org.apache.parquet.column.page.PageReadStore;
 import org.apache.parquet.column.page.PageReader;
+import org.apache.parquet.schema.GroupType;
+import org.apache.parquet.schema.InvalidSchemaException;
 import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
+import org.apache.parquet.schema.Type;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -62,6 +78,7 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -253,11 +270,40 @@ public class ParquetSplitReaderUtil {
     }
   }
 
+  private static List<ColumnDescriptor> filterDescriptors(int depth, Type type, List<ColumnDescriptor> columns) throws ParquetRuntimeException {
+    List<ColumnDescriptor> filtered = new ArrayList<>();
+    for (ColumnDescriptor descriptor : columns) {
+      if (depth >= descriptor.getPath().length) {
+        throw new InvalidSchemaException("Expect depth " + depth + " for schema: " + descriptor);
+      }
+      if (type.getName().equals(descriptor.getPath()[depth])) {
+        filtered.add(descriptor);
+      }
+    }
+    ValidationUtils.checkState(filtered.size() > 0, "Corrupted Parquet schema");
+    return filtered;
+  }
+
   public static ColumnReader createColumnReader(
       boolean utcTimestamp,
       LogicalType fieldType,
-      ColumnDescriptor descriptor,
-      PageReader pageReader) throws IOException {
+      Type physicalType,
+      List<ColumnDescriptor> descriptors,
+      PageReadStore pages) throws IOException {
+    return createColumnReader(utcTimestamp, fieldType, physicalType, descriptors,
+        pages, 0);
+  }
+
+  private static ColumnReader createColumnReader(
+      boolean utcTimestamp,
+      LogicalType fieldType,
+      Type physicalType,
+      List<ColumnDescriptor> columns,
+      PageReadStore pages,
+      int depth) throws IOException {
+    List<ColumnDescriptor> descriptors = filterDescriptors(depth, physicalType, columns);
+    ColumnDescriptor descriptor = descriptors.get(0);
+    PageReader pageReader = pages.getPageReader(descriptor);
     switch (fieldType.getTypeRoot()) {
       case BOOLEAN:
         return new BooleanColumnReader(descriptor, pageReader);
@@ -284,7 +330,7 @@ public class ParquetSplitReaderUtil {
       case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
         switch (descriptor.getPrimitiveType().getPrimitiveTypeName()) {
           case INT64:
-            return new Int64TimestampColumnReader(utcTimestamp, descriptor, pageReader);
+            return new Int64TimestampColumnReader(utcTimestamp, descriptor, pageReader, ((TimestampType)fieldType).getPrecision());
           case INT96:
             return new TimestampColumnReader(utcTimestamp, descriptor, pageReader);
           default:
@@ -304,6 +350,45 @@ public class ParquetSplitReaderUtil {
           default:
             throw new AssertionError();
         }
+      case ARRAY:
+        return new ArrayColumnReader(
+            descriptor,
+            pageReader,
+            utcTimestamp,
+            descriptor.getPrimitiveType(),
+            fieldType);
+      case MAP:
+        MapType mapType = (MapType) fieldType;
+        ArrayColumnReader keyReader =
+            new ArrayColumnReader(
+                descriptor,
+                pageReader,
+                utcTimestamp,
+                descriptor.getPrimitiveType(),
+                new ArrayType(mapType.getKeyType()));
+        ArrayColumnReader valueReader =
+            new ArrayColumnReader(
+                descriptors.get(1),
+                pages.getPageReader(descriptors.get(1)),
+                utcTimestamp,
+                descriptors.get(1).getPrimitiveType(),
+                new ArrayType(mapType.getValueType()));
+        return new MapColumnReader(keyReader, valueReader, fieldType);
+      case ROW:
+        RowType rowType = (RowType) fieldType;
+        GroupType groupType = physicalType.asGroupType();
+        List<ColumnReader> fieldReaders = new ArrayList<>();
+        for (int i = 0; i < rowType.getFieldCount(); i++) {
+          fieldReaders.add(
+              createColumnReader(
+                  utcTimestamp,
+                  rowType.getTypeAt(i),
+                  groupType.getType(i),
+                  descriptors,
+                  pages,
+                  depth + 1));
+        }
+        return new RowColumnReader(fieldReaders);
       default:
         throw new UnsupportedOperationException(fieldType + " is not supported now.");
     }
@@ -312,7 +397,19 @@ public class ParquetSplitReaderUtil {
   public static WritableColumnVector createWritableColumnVector(
       int batchSize,
       LogicalType fieldType,
-      PrimitiveType primitiveType) {
+      Type physicalType,
+      List<ColumnDescriptor> descriptors) {
+    return createWritableColumnVector(batchSize, fieldType, physicalType, descriptors, 0);
+  }
+
+  private static WritableColumnVector createWritableColumnVector(
+      int batchSize,
+      LogicalType fieldType,
+      Type physicalType,
+      List<ColumnDescriptor> columns,
+      int depth) {
+    List<ColumnDescriptor> descriptors = filterDescriptors(depth, physicalType, columns);
+    PrimitiveType primitiveType = descriptors.get(0).getPrimitiveType();
     PrimitiveType.PrimitiveTypeName typeName = primitiveType.getPrimitiveTypeName();
     switch (fieldType.getTypeRoot()) {
       case BOOLEAN:
@@ -366,10 +463,55 @@ public class ParquetSplitReaderUtil {
             "TIME_MICROS original type is not ");
         return new HeapTimestampVector(batchSize);
       case DECIMAL:
-        checkArgument(typeName == PrimitiveType.PrimitiveTypeName.BINARY
+        checkArgument(
+            (typeName == PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY
+                || typeName == PrimitiveType.PrimitiveTypeName.BINARY)
                 && primitiveType.getOriginalType() == OriginalType.DECIMAL,
             "Unexpected type: %s", typeName);
         return new HeapBytesVector(batchSize);
+      case ARRAY:
+        ArrayType arrayType = (ArrayType) fieldType;
+        return new HeapArrayVector(
+            batchSize,
+            createWritableColumnVector(
+                batchSize,
+                arrayType.getElementType(),
+                physicalType,
+                descriptors,
+                depth));
+      case MAP:
+        MapType mapType = (MapType) fieldType;
+        GroupType repeatedType = physicalType.asGroupType().getType(0).asGroupType();
+        // the map column has three level paths.
+        return new HeapMapColumnVector(
+            batchSize,
+            createWritableColumnVector(
+                batchSize,
+                mapType.getKeyType(),
+                repeatedType.getType(0),
+                descriptors,
+                depth + 2),
+            createWritableColumnVector(
+                batchSize,
+                mapType.getValueType(),
+                repeatedType.getType(1),
+                descriptors,
+                depth + 2));
+      case ROW:
+        RowType rowType = (RowType) fieldType;
+        GroupType groupType = physicalType.asGroupType();
+        WritableColumnVector[] columnVectors =
+            new WritableColumnVector[rowType.getFieldCount()];
+        for (int i = 0; i < columnVectors.length; i++) {
+          columnVectors[i] =
+              createWritableColumnVector(
+                  batchSize,
+                  rowType.getTypeAt(i),
+                  groupType.getType(i),
+                  descriptors,
+                  depth + 1);
+        }
+        return new HeapRowColumnVector(batchSize, columnVectors);
       default:
         throw new UnsupportedOperationException(fieldType + " is not supported now.");
     }

@@ -75,6 +75,11 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
   }
 
   @Override
+  public boolean canWrite(HoodieRecord record) {
+    return true;
+  }
+
+  @Override
   protected boolean needsUpdateLocation() {
     return false;
   }

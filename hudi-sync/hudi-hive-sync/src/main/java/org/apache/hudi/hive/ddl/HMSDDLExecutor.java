@@ -24,6 +24,7 @@ import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.PartitionValueExtractor;
+import org.apache.hudi.hive.util.HivePartitionUtil;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -223,6 +224,26 @@ public class HMSDDLExecutor implements DDLExecutor {
     } catch (TException e) {
       LOG.error(syncConfig.databaseName + "." + tableName + " update partition failed", e);
       throw new HoodieHiveSyncException(syncConfig.databaseName + "." + tableName + " update partition failed", e);
+    }
+  }
+
+  @Override
+  public void dropPartitionsToTable(String tableName, List<String> partitionsToDrop) {
+    if (partitionsToDrop.isEmpty()) {
+      LOG.info("No partitions to drop for " + tableName);
+      return;
+    }
+
+    LOG.info("Drop partitions " + partitionsToDrop.size() + " on " + tableName);
+    try {
+      for (String dropPartition : partitionsToDrop) {
+        String partitionClause = HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, syncConfig);
+        client.dropPartition(syncConfig.databaseName, tableName, partitionClause, false);
+        LOG.info("Drop partition " + dropPartition + " on " + tableName);
+      }
+    } catch (TException e) {
+      LOG.error(syncConfig.databaseName + "." + tableName + " drop partition failed", e);
+      throw new HoodieHiveSyncException(syncConfig.databaseName + "." + tableName + " drop partition failed", e);
     }
   }
 

@@ -22,7 +22,9 @@ import java.util.Properties
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
+
 import org.apache.hadoop.fs.{FileSystem, Path}
+
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.HoodieRecord
@@ -30,9 +32,9 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenerator}
+
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Literal}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, InMemoryFileIndex}
@@ -45,7 +47,13 @@ import scala.collection.JavaConverters.asScalaBufferConverter
 
 object HoodieSparkUtils extends SparkAdapterSupport {
 
+  def isSpark2: Boolean = SPARK_VERSION.startsWith("2.")
+
   def isSpark3: Boolean = SPARK_VERSION.startsWith("3.")
+
+  def isSpark3_0: Boolean = SPARK_VERSION.startsWith("3.0")
+
+  def isSpark3_2: Boolean = SPARK_VERSION.startsWith("3.2")
 
   def getMetaSchema: StructType = {
     StructType(HoodieRecord.HOODIE_META_COLUMNS.asScala.map(col => {
@@ -137,13 +145,13 @@ object HoodieSparkUtils extends SparkAdapterSupport {
   def createRddInternal(df: DataFrame, writeSchema: Schema, latestTableSchema: Schema, structName: String, recordNamespace: String)
   : RDD[GenericRecord] = {
     // Use the write avro schema to derive the StructType which has the correct nullability information
-    val writeDataType = SchemaConverters.toSqlType(writeSchema).dataType.asInstanceOf[StructType]
+    val writeDataType = AvroConversionUtils.convertAvroSchemaToStructType(writeSchema)
     val encoder = RowEncoder.apply(writeDataType).resolveAndBind()
     val deserializer = sparkAdapter.createSparkRowSerDe(encoder)
     // if records were serialized with old schema, but an evolved schema was passed in with latestTableSchema, we need
     // latestTableSchema equivalent datatype to be passed in to AvroConversionHelper.createConverterToAvro()
     val reconciledDataType =
-      if (latestTableSchema != null) SchemaConverters.toSqlType(latestTableSchema).dataType.asInstanceOf[StructType] else writeDataType
+      if (latestTableSchema != null) AvroConversionUtils.convertAvroSchemaToStructType(latestTableSchema) else writeDataType
     // Note: deserializer.deserializeRow(row) is not capable of handling evolved schema. i.e. if Row was serialized in
     // old schema, but deserializer was created with an encoder with evolved schema, deserialization fails.
     // Hence we always need to deserialize in the same schema as serialized schema.
@@ -284,44 +292,5 @@ object HoodieSparkUtils extends SparkAdapterSupport {
     assert(field.isDefined, s"Cannot find column: $columnName, Table Columns are: " +
       s"${tableSchema.fieldNames.mkString(",")}")
     AttributeReference(columnName, field.get.dataType, field.get.nullable)()
-  }
-
-  /**
-    * Create merge sql to merge leftTable and right table.
-    *
-    * @param leftTable table name.
-    * @param rightTable table name.
-    * @param cols merged cols.
-    * @return merge sql.
-    */
-  def createMergeSql(leftTable: String, rightTable: String, cols: Seq[String]): String = {
-    var selectsql = ""
-    for (i <- (0 to cols.size-1)) {
-      selectsql = selectsql + s" if (${leftTable}.${cols(0)} is null, ${rightTable}.${cols(i)}, ${leftTable}.${cols(i)}) as ${cols(i)} ,"
-    }
-    "select " + selectsql.dropRight(1) + s" from ${leftTable} full join ${rightTable} on ${leftTable}.${cols(0)} = ${rightTable}.${cols(0)}"
-  }
-
-  /**
-    * Collect min/max statistics for candidate cols.
-    * support all col types.
-    *
-    * @param df dataFrame holds read files.
-    * @param cols candidate cols to collect statistics.
-    * @return
-    */
-  def getMinMaxValueSpark(df: DataFrame, cols: Seq[String]): DataFrame = {
-    val sqlContext = df.sparkSession.sqlContext
-    import sqlContext.implicits._
-
-    val values = cols.flatMap(c => Seq( min(col(c)).as(c + "_minValue"), max(col(c)).as(c + "_maxValue"), count(c).as(c + "_noNullCount")))
-    val valueCounts = count("*").as("totalNum")
-    val projectValues = Seq(col("file")) ++ cols.flatMap(c =>
-      Seq(col(c + "_minValue"), col(c + "_maxValue"), expr(s"totalNum - ${c + "_noNullCount"}").as(c + "_num_nulls")))
-
-    val result = df.select(input_file_name() as "file", col("*"))
-      .groupBy($"file")
-      .agg(valueCounts,  values: _*).select(projectValues:_*)
-    result
   }
 }

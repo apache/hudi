@@ -195,6 +195,10 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
     return false;
   }
 
+  boolean layoutControlsNumFiles() {
+    return hoodieTable.getStorageLayout().determinesNumFileGroups();
+  }
+
   /**
    * Perform the actual writing of the given record into the backing file.
    */

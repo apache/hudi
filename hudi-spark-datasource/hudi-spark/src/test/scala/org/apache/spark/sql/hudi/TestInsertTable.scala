@@ -17,9 +17,10 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.exception.HoodieDuplicateKeyException
+
+import java.io.File
 
 class TestInsertTable extends TestHoodieSqlBase {
 
@@ -36,6 +37,7 @@ class TestInsertTable extends TestHoodieSqlBase {
            |  ts long,
            |  dt string
            |) using hudi
+           | tblproperties (primaryKey = 'id')
            | partitioned by (dt)
            | location '${tmp.getCanonicalPath}'
        """.stripMargin)
@@ -75,7 +77,7 @@ class TestInsertTable extends TestHoodieSqlBase {
            |  ts long
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName'
-           | options (
+           | tblproperties (
            |  type = 'cow',
            |  primaryKey = 'id',
            |  preCombineField = 'ts'
@@ -115,7 +117,7 @@ class TestInsertTable extends TestHoodieSqlBase {
            |  ts long
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName2'
-           | options (
+           | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
            |  preCombineField = 'ts'
@@ -146,6 +148,7 @@ class TestInsertTable extends TestHoodieSqlBase {
            |  ts long,
            |  dt string
            |) using hudi
+           | tblproperties (primaryKey = 'id')
            | partitioned by (dt)
            | location '${tmp.getCanonicalPath}/$tableName'
        """.stripMargin)
@@ -191,6 +194,7 @@ class TestInsertTable extends TestHoodieSqlBase {
            |  price double,
            |  ts long
            | ) using hudi
+           | tblproperties (primaryKey = 'id')
            | location '${tmp.getCanonicalPath}/$tblNonPartition'
          """.stripMargin)
       spark.sql(s"insert into $tblNonPartition select 1, 'a1', 10, 1000")
@@ -236,35 +240,49 @@ class TestInsertTable extends TestHoodieSqlBase {
       )
       typeAndValue.foreach { case (partitionType, partitionValue) =>
         val tableName = generateTableName
-        // Create table
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  dt $partitionType
-             |) using hudi
-             | partitioned by (dt)
-             | location '${tmp.getCanonicalPath}/$tableName'
-       """.stripMargin)
-        spark.sql(s"insert into $tableName partition(dt = $partitionValue) select 1, 'a1', 10")
-        spark.sql(s"insert into $tableName select 2, 'a2', 10, $partitionValue")
-        checkAnswer(s"select id, name, price, cast(dt as string) from $tableName order by id")(
-          Seq(1, "a1", 10, removeQuotes(partitionValue).toString),
-          Seq(2, "a2", 10, removeQuotes(partitionValue).toString)
-        )
+        validateDifferentTypesOfPartitionColumn(tmp, partitionType, partitionValue, tableName)
       }
     }
+  }
+
+  test("Test TimestampType Partition Column With Consistent Logical Timestamp Enabled") {
+    withTempDir { tmp =>
+      val typeAndValue = Seq(
+        ("timestamp", "'2021-05-20 00:00:00'"),
+        ("date", "'2021-05-20'")
+      )
+      typeAndValue.foreach { case (partitionType, partitionValue) =>
+        val tableName = generateTableName
+        spark.sql(s"set hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled=true")
+        validateDifferentTypesOfPartitionColumn(tmp, partitionType, partitionValue, tableName)
+      }
+    }
+  }
+
+  private def validateDifferentTypesOfPartitionColumn(tmp: File, partitionType: String, partitionValue: Any, tableName: String) = {
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  dt $partitionType
+         |) using hudi
+         | tblproperties (primaryKey = 'id')
+         | partitioned by (dt)
+         | location '${tmp.getCanonicalPath}/$tableName'
+       """.stripMargin)
+    spark.sql(s"insert into $tableName partition(dt = $partitionValue) select 1, 'a1', 10")
+    spark.sql(s"insert into $tableName select 2, 'a2', 10, $partitionValue")
+    checkAnswer(s"select id, name, price, cast(dt as string) from $tableName order by id")(
+      Seq(1, "a1", 10, removeQuotes(partitionValue).toString),
+      Seq(2, "a2", 10, removeQuotes(partitionValue).toString)
+    )
   }
 
   test("Test insert for uppercase table name") {
     withTempDir{ tmp =>
       val tableName = s"H_$generateTableName"
-      HoodieTableMetaClient.withPropertyBuilder()
-        .setTableName(tableName)
-        .setTableType(HoodieTableType.COPY_ON_WRITE.name())
-        .initTable(spark.sessionState.newHadoopConf(), tmp.getCanonicalPath)
 
       spark.sql(
         s"""
@@ -273,6 +291,7 @@ class TestInsertTable extends TestHoodieSqlBase {
            |  name string,
            |  price double
            |) using hudi
+           | tblproperties (primaryKey = 'id')
            | location '${tmp.getCanonicalPath}'
        """.stripMargin)
 
@@ -280,6 +299,11 @@ class TestInsertTable extends TestHoodieSqlBase {
       checkAnswer(s"select id, name, price from $tableName")(
         Seq(1, "a1", 10.0)
       )
+      val metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(tmp.getCanonicalPath)
+        .setConf(spark.sessionState.newHadoopConf())
+        .build()
+      assertResult(metaClient.getTableConfig.getTableName)(tableName)
     }
   }
 
@@ -293,6 +317,7 @@ class TestInsertTable extends TestHoodieSqlBase {
          |  price double,
          |  dt string
          |) using hudi
+         | tblproperties (primaryKey = 'id')
          | partitioned by (dt)
        """.stripMargin)
     checkException(s"insert into $tableName partition(dt = '2021-06-20')" +
@@ -305,7 +330,7 @@ class TestInsertTable extends TestHoodieSqlBase {
         " count: 3，columns: (1,a1,10)"
     )
     spark.sql("set hoodie.sql.bulk.insert.enable = true")
-    spark.sql("set hoodie.sql.insert.mode= strict")
+    spark.sql("set hoodie.sql.insert.mode = strict")
 
     val tableName2 = generateTableName
     spark.sql(
@@ -316,7 +341,7 @@ class TestInsertTable extends TestHoodieSqlBase {
          |  price double,
          |  ts long
          |) using hudi
-         | options (
+         | tblproperties (
          |   primaryKey = 'id',
          |   preCombineField = 'ts'
          | )
@@ -325,6 +350,7 @@ class TestInsertTable extends TestHoodieSqlBase {
       "Table with primaryKey can not use bulk insert in strict mode."
     )
 
+    spark.sql("set hoodie.sql.insert.mode = non-strict")
     val tableName3 = generateTableName
     spark.sql(
       s"""
@@ -334,16 +360,50 @@ class TestInsertTable extends TestHoodieSqlBase {
          |  price double,
          |  dt string
          |) using hudi
+         | tblproperties (primaryKey = 'id')
          | partitioned by (dt)
        """.stripMargin)
     checkException(s"insert overwrite table $tableName3 values(1, 'a1', 10, '2021-07-18')")(
       "Insert Overwrite Partition can not use bulk insert."
     )
     spark.sql("set hoodie.sql.bulk.insert.enable = false")
-    spark.sql("set hoodie.sql.insert.mode= upsert")
+    spark.sql("set hoodie.sql.insert.mode = upsert")
+  }
+
+
+  test("Test Insert timestamp when 'spark.sql.datetime.java8API.enabled' enables") {
+    try {
+      // enable spark.sql.datetime.java8API.enabled
+      // and use java.time.Instant to replace java.sql.Timestamp to represent TimestampType.
+      spark.conf.set("spark.sql.datetime.java8API.enabled", value = true)
+
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  dt timestamp
+           |)
+           |using hudi
+           |partitioned by(dt)
+           |options(type = 'cow', primaryKey = 'id')
+           |""".stripMargin
+      )
+
+      spark.sql(s"insert into $tableName values (1, 'a1', 10, cast('2021-05-07 00:00:00' as timestamp))")
+      checkAnswer(s"select id, name, price, cast(dt as string) from $tableName")(
+        Seq(1, "a1", 10, "2021-05-07 00:00:00")
+      )
+
+    } finally {
+      spark.conf.set("spark.sql.datetime.java8API.enabled", value = false)
+    }
   }
 
   test("Test bulk insert") {
+    spark.sql("set hoodie.sql.insert.mode = non-strict")
     withTempDir { tmp =>
       Seq("cow", "mor").foreach {tableType =>
         // Test bulk insert for single partition
@@ -356,8 +416,9 @@ class TestInsertTable extends TestHoodieSqlBase {
              |  price double,
              |  dt string
              |) using hudi
-             | options (
-             |  type = '$tableType'
+             | tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id'
              | )
              | partitioned by (dt)
              | location '${tmp.getCanonicalPath}/$tableName'
@@ -391,8 +452,9 @@ class TestInsertTable extends TestHoodieSqlBase {
              |  dt string,
              |  hh string
              |) using hudi
-             | options (
-             |  type = '$tableType'
+             | tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id'
              | )
              | partitioned by (dt, hh)
              | location '${tmp.getCanonicalPath}/$tableMultiPartition'
@@ -423,8 +485,9 @@ class TestInsertTable extends TestHoodieSqlBase {
              |  name string,
              |  price double
              |) using hudi
-             | options (
-             |  type = '$tableType'
+             | tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id'
              | )
              | location '${tmp.getCanonicalPath}/$nonPartitionedTable'
        """.stripMargin)
@@ -445,7 +508,7 @@ class TestInsertTable extends TestHoodieSqlBase {
           s"""
              |create table $tableName2
              |using hudi
-             |options(
+             |tblproperties(
              | type = '$tableType',
              | primaryKey = 'id'
              |)
@@ -459,9 +522,11 @@ class TestInsertTable extends TestHoodieSqlBase {
         )
       }
     }
+    spark.sql("set hoodie.sql.insert.mode = upsert")
   }
 
   test("Test combine before insert") {
+    spark.sql("set hoodie.sql.bulk.insert.enable = false")
     withTempDir{tmp =>
       val tableName = generateTableName
       spark.sql(
@@ -473,7 +538,7 @@ class TestInsertTable extends TestHoodieSqlBase {
            |  ts long
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName'
-           | options (
+           | tblproperties (
            |  primaryKey = 'id',
            |  preCombineField = 'ts'
            | )
@@ -495,6 +560,7 @@ class TestInsertTable extends TestHoodieSqlBase {
   }
 
   test("Test insert pk-table") {
+    spark.sql("set hoodie.sql.bulk.insert.enable = false")
     withTempDir{tmp =>
       val tableName = generateTableName
       spark.sql(
@@ -506,7 +572,7 @@ class TestInsertTable extends TestHoodieSqlBase {
            |  ts long
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName'
-           | options (
+           | tblproperties (
            |  primaryKey = 'id',
            |  preCombineField = 'ts'
            | )

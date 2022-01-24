@@ -18,20 +18,14 @@
 
 package org.apache.hudi.table.action.cluster;
 
-import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.cluster.strategy.ClusteringPlanStrategy;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 
 import java.util.Map;
@@ -40,8 +34,6 @@ import java.util.Map;
 public class SparkClusteringPlanActionExecutor<T extends HoodieRecordPayload> extends
     BaseClusteringPlanActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
-  private static final Logger LOG = LogManager.getLogger(SparkClusteringPlanActionExecutor.class);
-
   public SparkClusteringPlanActionExecutor(HoodieEngineContext context,
                                            HoodieWriteConfig config,
                                            HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
@@ -49,33 +41,4 @@ public class SparkClusteringPlanActionExecutor<T extends HoodieRecordPayload> ex
                                            Option<Map<String, String>> extraMetadata) {
     super(context, config, table, instantTime, extraMetadata);
   }
-
-  @Override
-  protected Option<HoodieClusteringPlan> createClusteringPlan() {
-    LOG.info("Checking if clustering needs to be run on " + config.getBasePath());
-    Option<HoodieInstant> lastClusteringInstant = table.getActiveTimeline().getCompletedReplaceTimeline().lastInstant();
-
-    int commitsSinceLastClustering = table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
-        .findInstantsAfter(lastClusteringInstant.map(HoodieInstant::getTimestamp).orElse("0"), Integer.MAX_VALUE)
-        .countInstants();
-    if (config.inlineClusteringEnabled() && config.getInlineClusterMaxCommits() > commitsSinceLastClustering) {
-      LOG.info("Not scheduling inline clustering as only " + commitsSinceLastClustering
-          + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
-          + config.getInlineClusterMaxCommits());
-      return Option.empty();
-    }
-
-    if (config.isAsyncClusteringEnabled() && config.getAsyncClusterMaxCommits() > commitsSinceLastClustering) {
-      LOG.info("Not scheduling async clustering as only " + commitsSinceLastClustering
-          + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
-          + config.getAsyncClusterMaxCommits());
-      return Option.empty();
-    }
-
-    LOG.info("Generating clustering plan for table " + config.getBasePath());
-    ClusteringPlanStrategy strategy = (ClusteringPlanStrategy)
-        ReflectionUtils.loadClass(config.getClusteringPlanStrategyClass(), table, context, config);
-    return strategy.generateClusteringPlan();
-  }
-
 }

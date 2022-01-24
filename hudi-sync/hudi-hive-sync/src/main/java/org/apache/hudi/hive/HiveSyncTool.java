@@ -18,6 +18,11 @@
 
 package org.apache.hudi.hive;
 
+import com.beust.jcommander.JCommander;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -28,16 +33,9 @@ import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.util.ConfigUtils;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
 import org.apache.hudi.hive.util.Parquet2SparkSchemaUtils;
-
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent.PartitionEventType;
 import org.apache.hudi.sync.common.AbstractSyncTool;
-
-import com.beust.jcommander.JCommander;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.GroupType;
@@ -166,6 +164,9 @@ public class HiveSyncTool extends AbstractSyncTool {
     // Check if the necessary table exists
     boolean tableExists = hoodieHiveClient.doesTableExist(tableName);
 
+    // check if isDropPartition
+    boolean isDropPartition = hoodieHiveClient.isDropPartition();
+
     // Get the parquet schema for this table looking at the latest commit
     MessageType schema = hoodieHiveClient.getDataSchema();
 
@@ -178,8 +179,9 @@ public class HiveSyncTool extends AbstractSyncTool {
             && !readAsOptimized) {
       cfg.syncAsSparkDataSourceTable = false;
     }
+
     // Sync schema if needed
-    syncSchema(tableName, tableExists, useRealtimeInputFormat, readAsOptimized, schema);
+    boolean schemaChanged = syncSchema(tableName, tableExists, useRealtimeInputFormat, readAsOptimized, schema);
 
     LOG.info("Schema sync complete. Syncing partitions for " + tableName);
     // Get the last time we successfully synced partitions
@@ -192,8 +194,11 @@ public class HiveSyncTool extends AbstractSyncTool {
     LOG.info("Storage partitions scan complete. Found " + writtenPartitionsSince.size());
 
     // Sync the partitions if needed
-    syncPartitions(tableName, writtenPartitionsSince);
-    hoodieHiveClient.updateLastCommitTimeSynced(tableName);
+    boolean partitionsChanged = syncPartitions(tableName, writtenPartitionsSince, isDropPartition);
+    boolean meetSyncConditions = schemaChanged || partitionsChanged;
+    if (!cfg.isConditionalSync || meetSyncConditions) {
+      hoodieHiveClient.updateLastCommitTimeSynced(tableName);
+    }
     LOG.info("Sync complete for " + tableName);
   }
 
@@ -204,7 +209,7 @@ public class HiveSyncTool extends AbstractSyncTool {
    * @param tableExists - does table exist
    * @param schema - extracted schema
    */
-  private void syncSchema(String tableName, boolean tableExists, boolean useRealTimeInputFormat,
+  private boolean syncSchema(String tableName, boolean tableExists, boolean useRealTimeInputFormat,
                           boolean readAsOptimized, MessageType schema) {
     // Append spark table properties & serde properties
     Map<String, String> tableProperties = ConfigUtils.toMap(cfg.tableProperties);
@@ -215,6 +220,7 @@ public class HiveSyncTool extends AbstractSyncTool {
       tableProperties.putAll(sparkTableProperties);
       serdeProperties.putAll(sparkSerdeProperties);
     }
+    boolean schemaChanged = false;
     // Check and sync schema
     if (!tableExists) {
       LOG.info("Hive table " + tableName + " is not found. Creating it");
@@ -236,6 +242,7 @@ public class HiveSyncTool extends AbstractSyncTool {
       // /ql/exec/DDLTask.java#L3488
       hoodieHiveClient.createTable(tableName, schema, inputFormatClassName,
           outputFormatClassName, serDeFormatClassName, serdeProperties, tableProperties);
+      schemaChanged = true;
     } else {
       // Check if the table schema has evolved
       Map<String, String> tableSchema = hoodieHiveClient.getTableSchema(tableName);
@@ -244,14 +251,16 @@ public class HiveSyncTool extends AbstractSyncTool {
         LOG.info("Schema difference found for " + tableName);
         hoodieHiveClient.updateTableDefinition(tableName, schema);
         // Sync the table properties if the schema has changed
-        if (cfg.tableProperties != null) {
+        if (cfg.tableProperties != null || cfg.syncAsSparkDataSourceTable) {
           hoodieHiveClient.updateTableProperties(tableName, tableProperties);
-          LOG.info("Sync table properties for " + tableName + ", table properties is: " + cfg.tableProperties);
+          LOG.info("Sync table properties for " + tableName + ", table properties is: " + tableProperties);
         }
+        schemaChanged = true;
       } else {
         LOG.info("No Schema difference for " + tableName);
       }
     }
+    return schemaChanged;
   }
 
   /**
@@ -324,20 +333,36 @@ public class HiveSyncTool extends AbstractSyncTool {
    * Syncs the list of storage partitions passed in (checks if the partition is in hive, if not adds it or if the
    * partition path does not match, it updates the partition path).
    */
-  private void syncPartitions(String tableName, List<String> writtenPartitionsSince) {
+  private boolean syncPartitions(String tableName, List<String> writtenPartitionsSince, boolean isDropPartition) {
+    boolean partitionsChanged;
     try {
       List<Partition> hivePartitions = hoodieHiveClient.scanTablePartitions(tableName);
       List<PartitionEvent> partitionEvents =
-          hoodieHiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince);
+          hoodieHiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, isDropPartition);
+
       List<String> newPartitions = filterPartitions(partitionEvents, PartitionEventType.ADD);
-      LOG.info("New Partitions " + newPartitions);
-      hoodieHiveClient.addPartitionsToTable(tableName, newPartitions);
+      if (!newPartitions.isEmpty()) {
+        LOG.info("New Partitions " + newPartitions);
+        hoodieHiveClient.addPartitionsToTable(tableName, newPartitions);
+      }
+
       List<String> updatePartitions = filterPartitions(partitionEvents, PartitionEventType.UPDATE);
-      LOG.info("Changed Partitions " + updatePartitions);
-      hoodieHiveClient.updatePartitionsToTable(tableName, updatePartitions);
+      if (!updatePartitions.isEmpty()) {
+        LOG.info("Changed Partitions " + updatePartitions);
+        hoodieHiveClient.updatePartitionsToTable(tableName, updatePartitions);
+      }
+
+      List<String> dropPartitions = filterPartitions(partitionEvents, PartitionEventType.DROP);
+      if (!dropPartitions.isEmpty()) {
+        LOG.info("Drop Partitions " + dropPartitions);
+        hoodieHiveClient.dropPartitionsToTable(tableName, dropPartitions);
+      }
+
+      partitionsChanged = !updatePartitions.isEmpty() || !newPartitions.isEmpty() || !dropPartitions.isEmpty();
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to sync partitions for table " + tableName, e);
     }
+    return partitionsChanged;
   }
 
   private List<String> filterPartitions(List<PartitionEvent> events, PartitionEventType eventType) {

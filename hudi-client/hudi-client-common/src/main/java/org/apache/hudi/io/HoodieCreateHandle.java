@@ -119,7 +119,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
 
   @Override
   public boolean canWrite(HoodieRecord record) {
-    return fileWriter.canWrite() && record.getPartitionPath().equals(writeStatus.getPartitionPath());
+    return (fileWriter.canWrite() && record.getPartitionPath().equals(writeStatus.getPartitionPath()))
+        || layoutControlsNumFiles();
   }
 
   /**
@@ -139,6 +140,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
         IndexedRecord recordWithMetadataInSchema = rewriteRecord((GenericRecord) avroRecord.get());
         if (preserveHoodieMetadata) {
+          // do not preserve FILENAME_METADATA_FIELD
+          recordWithMetadataInSchema.put(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.FILENAME_METADATA_FIELD), path.getName());
           fileWriter.writeAvro(record.getRecordKey(), recordWithMetadataInSchema);
         } else {
           fileWriter.writeAvroWithMetadata(recordWithMetadataInSchema, record);

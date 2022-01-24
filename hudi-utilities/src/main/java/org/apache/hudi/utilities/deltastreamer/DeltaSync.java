@@ -50,15 +50,19 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.sync.common.AbstractSyncTool;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig;
+import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallback;
+import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Config;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
@@ -171,6 +175,8 @@ public class DeltaSync implements Serializable {
 
   /**
    * Bag of properties with source, hoodie client, key generator etc.
+   *
+   * NOTE: These properties are already consolidated w/ CLI provided config-overrides
    */
   private final TypedProperties props;
 
@@ -323,32 +329,7 @@ public class DeltaSync implements Serializable {
     // Retrieve the previous round checkpoints, if any
     Option<String> resumeCheckpointStr = Option.empty();
     if (commitTimelineOpt.isPresent()) {
-      Option<HoodieInstant> lastCommit = commitTimelineOpt.get().lastInstant();
-      if (lastCommit.isPresent()) {
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-            .fromBytes(commitTimelineOpt.get().getInstantDetails(lastCommit.get()).get(), HoodieCommitMetadata.class);
-        if (cfg.checkpoint != null && (StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))
-                || !cfg.checkpoint.equals(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY)))) {
-          resumeCheckpointStr = Option.of(cfg.checkpoint);
-        } else if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
-          //if previous checkpoint is an empty string, skip resume use Option.empty()
-          resumeCheckpointStr = Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
-        } else if (commitMetadata.getOperationType() == WriteOperationType.CLUSTER) {
-          // incase of CLUSTER commit, no checkpoint will be available in metadata.
-          resumeCheckpointStr = Option.empty();
-        } else if (HoodieTimeline.compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
-            HoodieTimeline.LESSER_THAN, lastCommit.get().getTimestamp())) {
-          throw new HoodieDeltaStreamerException(
-              "Unable to find previous checkpoint. Please double check if this table "
-                  + "was indeed built via delta streamer. Last Commit :" + lastCommit + ", Instants :"
-                  + commitTimelineOpt.get().getInstants().collect(Collectors.toList()) + ", CommitMetadata="
-                  + commitMetadata.toJsonString());
-        }
-        // KAFKA_CHECKPOINT_TYPE will be honored only for first batch.
-        if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
-          props.remove(KafkaOffsetGen.Config.KAFKA_CHECKPOINT_TYPE.key());
-        }
-      }
+      resumeCheckpointStr = getCheckpointToResume(commitTimelineOpt);
     } else {
       // initialize the table for the first time.
       String partitionColumns = HoodieSparkUtils.getPartitionColumns(keyGenerator, props);
@@ -433,6 +414,7 @@ public class DeltaSync implements Serializable {
       return null;
     }
 
+    jssc.setJobGroup(this.getClass().getSimpleName(), "Checking if input is empty");
     if ((!avroRDDOptional.isPresent()) || (avroRDDOptional.get().isEmpty())) {
       LOG.info("No new data, perform empty commit.");
       return Pair.of(schemaProvider, Pair.of(checkpointStr, jssc.emptyRDD()));
@@ -442,12 +424,69 @@ public class DeltaSync implements Serializable {
     JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
     JavaRDD<HoodieRecord> records = avroRDD.map(gr -> {
       HoodieRecordPayload payload = shouldCombine ? DataSourceUtils.createPayload(cfg.payloadClassName, gr,
-          (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false))
+          (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false, props.getBoolean(
+              KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+              Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()))))
           : DataSourceUtils.createPayload(cfg.payloadClassName, gr);
       return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
     });
 
     return Pair.of(schemaProvider, Pair.of(checkpointStr, records));
+  }
+
+  /**
+   * Process previous commit metadata and checkpoint configs set by user to determine the checkpoint to resume from.
+   * @param commitTimelineOpt commit timeline of interest.
+   * @return the checkpoint to resume from if applicable.
+   * @throws IOException
+   */
+  private Option<String> getCheckpointToResume(Option<HoodieTimeline> commitTimelineOpt) throws IOException {
+    Option<String> resumeCheckpointStr = Option.empty();
+    Option<HoodieInstant> lastCommit = commitTimelineOpt.get().lastInstant();
+    if (lastCommit.isPresent()) {
+      // if previous commit metadata did not have the checkpoint key, try traversing previous commits until we find one.
+      Option<HoodieCommitMetadata> commitMetadataOption = getLatestCommitMetadataWithValidCheckpointInfo(commitTimelineOpt.get());
+      if (commitMetadataOption.isPresent()) {
+        HoodieCommitMetadata commitMetadata = commitMetadataOption.get();
+        if (cfg.checkpoint != null && (StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))
+            || !cfg.checkpoint.equals(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY)))) {
+          resumeCheckpointStr = Option.of(cfg.checkpoint);
+        } else if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
+          //if previous checkpoint is an empty string, skip resume use Option.empty()
+          resumeCheckpointStr = Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
+        } else if (HoodieTimeline.compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
+            HoodieTimeline.LESSER_THAN, lastCommit.get().getTimestamp())) {
+          throw new HoodieDeltaStreamerException(
+              "Unable to find previous checkpoint. Please double check if this table "
+                  + "was indeed built via delta streamer. Last Commit :" + lastCommit + ", Instants :"
+                  + commitTimelineOpt.get().getInstants().collect(Collectors.toList()) + ", CommitMetadata="
+                  + commitMetadata.toJsonString());
+        }
+        // KAFKA_CHECKPOINT_TYPE will be honored only for first batch.
+        if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
+          props.remove(KafkaOffsetGen.Config.KAFKA_CHECKPOINT_TYPE.key());
+        }
+      } else if (cfg.checkpoint != null) { // getLatestCommitMetadataWithValidCheckpointInfo(commitTimelineOpt.get()) will never return a commit metadata w/o any checkpoint key set.
+        resumeCheckpointStr = Option.of(cfg.checkpoint);
+      }
+    }
+    return resumeCheckpointStr;
+  }
+
+  protected Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
+    return (Option<HoodieCommitMetadata>) timeline.getReverseOrderedInstants().map(instant -> {
+      try {
+        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+            .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+        if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY)) || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
+          return Option.of(commitMetadata);
+        } else {
+          return Option.empty();
+        }
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
+      }
+    }).filter(Option::isPresent).findFirst().orElse(Option.empty());
   }
 
   /**
@@ -679,43 +718,62 @@ public class DeltaSync implements Serializable {
   private HoodieWriteConfig getHoodieClientConfig(Schema schema) {
     final boolean combineBeforeUpsert = true;
     final boolean autoCommit = false;
-    HoodieWriteConfig.Builder builder =
-        HoodieWriteConfig.newBuilder().withPath(cfg.targetBasePath).combineInput(cfg.filterDupes, combineBeforeUpsert)
-            .withCompactionConfig(HoodieCompactionConfig.newBuilder().withPayloadClass(cfg.payloadClassName)
-                // Inline compaction is disabled for continuous mode. otherwise enabled for MOR
-                .withInlineCompaction(cfg.isInlineCompactionEnabled()).build())
-            .withClusteringConfig(HoodieClusteringConfig.newBuilder()
-                .withInlineClustering(cfg.isInlineClusteringEnabled())
-                .withAsyncClustering(cfg.isAsyncClusteringEnabled()).build())
-            .withPayloadConfig(HoodiePayloadConfig.newBuilder().withPayloadOrderingField(cfg.sourceOrderingField)
-                .build())
-            .forTable(cfg.targetTableName)
-            .withAutoCommit(autoCommit).withProps(props);
 
-    if (null != schema) {
-      builder = builder.withSchema(schema.toString());
+    // NOTE: Provided that we're injecting combined properties
+    //       (from {@code props}, including CLI overrides), there's no
+    //       need to explicitly set up some configuration aspects that
+    //       are based on these (for ex Clustering configuration)
+    HoodieWriteConfig.Builder builder =
+        HoodieWriteConfig.newBuilder()
+            .withPath(cfg.targetBasePath)
+            .combineInput(cfg.filterDupes, combineBeforeUpsert)
+            .withCompactionConfig(
+                HoodieCompactionConfig.newBuilder()
+                    .withPayloadClass(cfg.payloadClassName)
+                    .withInlineCompaction(cfg.isInlineCompactionEnabled())
+                    .build()
+            )
+            .withPayloadConfig(
+                HoodiePayloadConfig.newBuilder()
+                    .withPayloadOrderingField(cfg.sourceOrderingField)
+                    .build())
+            .forTable(cfg.targetTableName)
+            .withAutoCommit(autoCommit)
+            .withProps(props);
+
+    if (schema != null) {
+      builder.withSchema(schema.toString());
     }
+
     HoodieWriteConfig config = builder.build();
 
-    // set default value for {@link HoodieWriteCommitKafkaCallbackConfig} if needed.
-    if (config.writeCommitCallbackOn() && HoodieWriteCommitKafkaCallback.class.getName().equals(config.getCallbackClass())) {
-      HoodieWriteCommitKafkaCallbackConfig.setCallbackKafkaConfigIfNeeded(config);
+    if (config.writeCommitCallbackOn()) {
+      // set default value for {@link HoodieWriteCommitKafkaCallbackConfig} if needed.
+      if (HoodieWriteCommitKafkaCallback.class.getName().equals(config.getCallbackClass())) {
+        HoodieWriteCommitKafkaCallbackConfig.setCallbackKafkaConfigIfNeeded(config);
+      }
+
+      // set default value for {@link HoodieWriteCommitPulsarCallbackConfig} if needed.
+      if (HoodieWriteCommitPulsarCallback.class.getName().equals(config.getCallbackClass())) {
+        HoodieWriteCommitPulsarCallbackConfig.setCallbackPulsarConfigIfNeeded(config);
+      }
     }
+
+    HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.from(props);
 
     // Validate what deltastreamer assumes of write-config to be really safe
     ValidationUtils.checkArgument(config.inlineCompactionEnabled() == cfg.isInlineCompactionEnabled(),
         String.format("%s should be set to %s", INLINE_COMPACT.key(), cfg.isInlineCompactionEnabled()));
-    ValidationUtils.checkArgument(config.inlineClusteringEnabled() == cfg.isInlineClusteringEnabled(),
-        String.format("%s should be set to %s", INLINE_CLUSTERING.key(), cfg.isInlineClusteringEnabled()));
-    ValidationUtils.checkArgument(config.isAsyncClusteringEnabled() == cfg.isAsyncClusteringEnabled(),
-        String.format("%s should be set to %s", ASYNC_CLUSTERING_ENABLE.key(), cfg.isAsyncClusteringEnabled()));
+    ValidationUtils.checkArgument(config.inlineClusteringEnabled() == clusteringConfig.isInlineClusteringEnabled(),
+        String.format("%s should be set to %s", INLINE_CLUSTERING.key(), clusteringConfig.isInlineClusteringEnabled()));
+    ValidationUtils.checkArgument(config.isAsyncClusteringEnabled() == clusteringConfig.isAsyncClusteringEnabled(),
+        String.format("%s should be set to %s", ASYNC_CLUSTERING_ENABLE.key(), clusteringConfig.isAsyncClusteringEnabled()));
     ValidationUtils.checkArgument(!config.shouldAutoCommit(),
         String.format("%s should be set to %s", AUTO_COMMIT_ENABLE.key(), autoCommit));
     ValidationUtils.checkArgument(config.shouldCombineBeforeInsert() == cfg.filterDupes,
         String.format("%s should be set to %s", COMBINE_BEFORE_INSERT.key(), cfg.filterDupes));
     ValidationUtils.checkArgument(config.shouldCombineBeforeUpsert(),
         String.format("%s should be set to %s", COMBINE_BEFORE_UPSERT.key(), combineBeforeUpsert));
-
     return config;
   }
 

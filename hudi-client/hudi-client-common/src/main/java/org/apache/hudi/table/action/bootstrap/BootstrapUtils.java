@@ -70,7 +70,7 @@ public class BootstrapUtils {
         Integer level = (int) relativePath.chars().filter(ch -> ch == '/').count();
         HoodieFileStatus hoodieFileStatus = FileStatusUtils.fromFileStatus(topLevelStatus);
         result.add(Pair.of(hoodieFileStatus, Pair.of(level, relativePath)));
-      } else if (metaPathFilter.accept(topLevelStatus.getPath())) {
+      } else if (topLevelStatus.isDirectory() && metaPathFilter.accept(topLevelStatus.getPath())) {
         subDirectories.add(topLevelStatus.getPath().toString());
       }
     }

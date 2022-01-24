@@ -19,12 +19,12 @@
   <parent>
     <artifactId>hudi-spark-datasource</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.10.0-SNAPSHOT</version>
+    <version>0.11.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
   <artifactId>hudi-spark_${scala.binary.version}</artifactId>
-  <version>0.10.0-SNAPSHOT</version>
+  <version>0.11.0-SNAPSHOT</version>
 
   <name>hudi-spark_${scala.binary.version}</name>
   <packaging>jar</packaging>
@@ -48,6 +48,7 @@
           <configuration>
             <args>
               <arg>-nobootcp</arg>
+              <arg>-target:jvm-1.8</arg>
             </args>
             <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
           </configuration>
@@ -232,6 +233,18 @@
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>${hudi.spark.module}_${scala.binary.version}</artifactId>
+      <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.hudi</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>${hudi.spark.common.module}</artifactId>
       <version>${project.version}</version>
       <exclusions>
         <exclusion>
@@ -451,6 +464,12 @@
       <version>${project.version}</version>
       <classifier>tests</classifier>
       <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-java-client</artifactId>
+      <version>${project.version}</version>
       <scope>test</scope>
     </dependency>
 

@@ -18,17 +18,17 @@
 
 package org.apache.hudi.table;
 
-import java.util.Properties;
+import org.apache.hudi.common.config.TypedProperties;
 
 public abstract class FileIdPrefixProvider {
 
-  private final Properties props;
+  private final TypedProperties props;
 
-  public FileIdPrefixProvider(Properties props) {
+  public FileIdPrefixProvider(TypedProperties props) {
     this.props = props;
   }
 
-  public Properties getProps() {
+  public TypedProperties getProps() {
     return props;
   }
 

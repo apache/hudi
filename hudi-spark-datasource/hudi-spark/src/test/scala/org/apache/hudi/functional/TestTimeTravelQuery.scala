@@ -218,13 +218,13 @@ class TestTimeTravelQuery extends HoodieClientTestBase {
   }
 
   private def defaultDateTimeFormat(queryInstant: String): String = {
-    val date = HoodieActiveTimeline.parseInstantTime(queryInstant)
-    val format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+    val date = HoodieActiveTimeline.parseDateFromInstantTime(queryInstant)
+    val format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS")
     format.format(date)
   }
 
   private def defaultDateFormat(queryInstant: String): String = {
-    val date = HoodieActiveTimeline.parseInstantTime(queryInstant)
+    val date = HoodieActiveTimeline.parseDateFromInstantTime(queryInstant)
     val format = new SimpleDateFormat("yyyy-MM-dd")
     format.format(date)
   }

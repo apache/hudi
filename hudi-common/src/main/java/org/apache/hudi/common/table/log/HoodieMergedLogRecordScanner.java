@@ -76,10 +76,13 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
                                          String latestInstantTime, Long maxMemorySizeInBytes, boolean readBlocksLazily,
                                          boolean reverseReader, int bufferSize, String spillableMapBasePath,
                                          Option<InstantRange> instantRange, boolean autoScan,
-                                         ExternalSpillableMap.DiskMapType diskMapType, boolean isBitCaskDiskMapCompressionEnabled,
-                                         boolean withOperationField, boolean enableFullScan) {
-    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize, instantRange, withOperationField,
-        enableFullScan);
+                                         ExternalSpillableMap.DiskMapType diskMapType,
+                                         boolean isBitCaskDiskMapCompressionEnabled,
+                                         boolean withOperationField, boolean enableFullScan,
+                                         Option<String> partitionName) {
+    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
+        instantRange, withOperationField,
+        enableFullScan, partitionName);
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
@@ -187,6 +190,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     private boolean autoScan = true;
     // operation field default false
     private boolean withOperationField = false;
+    protected String partitionName;
 
     @Override
     public Builder withFileSystem(FileSystem fs) {
@@ -273,11 +277,18 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     }
 
     @Override
+    public Builder withPartition(String partitionName) {
+      this.partitionName = partitionName;
+      return this;
+    }
+
+    @Override
     public HoodieMergedLogRecordScanner build() {
       return new HoodieMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
           latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
           bufferSize, spillableMapBasePath, instantRange, autoScan,
-          diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, true);
+          diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, true,
+          Option.ofNullable(partitionName));
     }
   }
 }

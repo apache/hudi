@@ -98,7 +98,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   }
 
   private void scheduleCompaction(HoodieFlinkTable<?> table, long checkpointId) throws IOException {
-    // the last instant takes the highest priority.
+    // the first instant takes the highest priority.
     Option<HoodieInstant> firstRequested = table.getActiveTimeline().filterPendingCompactionTimeline()
         .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED).firstInstant();
     if (!firstRequested.isPresent()) {

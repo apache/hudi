@@ -18,6 +18,8 @@
 
 package org.apache.hudi.streamer;
 
+import org.apache.hudi.common.config.DFSPropertiesConfiguration;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -37,8 +39,6 @@ import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
-
-import java.util.Properties;
 
 /**
  * A utility which can incrementally consume data from Kafka and apply it to the target table.
@@ -65,7 +65,8 @@ public class HoodieFlinkStreamer {
       env.setStateBackend(new FsStateBackend(cfg.flinkCheckPointPath));
     }
 
-    Properties kafkaProps = StreamerUtil.appendKafkaProps(cfg);
+    TypedProperties kafkaProps = DFSPropertiesConfiguration.getGlobalProps();
+    kafkaProps.putAll(StreamerUtil.appendKafkaProps(cfg));
 
     // Read from kafka source
     RowType rowType =
@@ -96,7 +97,7 @@ public class HoodieFlinkStreamer {
       }
     }
 
-    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, parallelism, dataStream, false);
+    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, parallelism, dataStream);
     DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream);
     if (StreamerUtil.needsAsyncCompaction(conf)) {
       Pipelines.compact(conf, pipeline);

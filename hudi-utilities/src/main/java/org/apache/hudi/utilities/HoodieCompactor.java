@@ -21,9 +21,15 @@ package org.apache.hudi.utilities;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.exception.HoodieCompactionException;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -41,6 +47,7 @@ import java.util.List;
 public class HoodieCompactor {
 
   private static final Logger LOG = LogManager.getLogger(HoodieCompactor.class);
+  private static ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
   private final Config cfg;
   private transient FileSystem fs;
   private TypedProperties props;
@@ -55,11 +62,8 @@ public class HoodieCompactor {
   }
 
   private TypedProperties readConfigFromFileSystem(JavaSparkContext jsc, Config cfg) {
-    final FileSystem fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
-
-    return UtilHelpers
-        .readConfig(fs, new Path(cfg.propsFilePath), cfg.configs)
-        .getConfig();
+    return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new Path(cfg.propsFilePath), cfg.configs)
+        .getProps(true);
   }
 
   public static class Config implements Serializable {
@@ -67,7 +71,7 @@ public class HoodieCompactor {
     public String basePath = null;
     @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)
     public String tableName = null;
-    @Parameter(names = {"--instant-time", "-it"}, description = "Compaction Instant time", required = true)
+    @Parameter(names = {"--instant-time", "-it"}, description = "Compaction Instant time", required = false)
     public String compactionInstantTime = null;
     @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert", required = true)
     public int parallelism = 1;
@@ -134,6 +138,21 @@ public class HoodieCompactor {
     String schemaStr = UtilHelpers.parseSchema(fs, cfg.schemaFile);
     SparkRDDWriteClient<HoodieRecordPayload> client =
         UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props);
+    // If no compaction instant is provided by --instant-time, find the earliest scheduled compaction
+    // instant from the active timeline
+    if (StringUtils.isNullOrEmpty(cfg.compactionInstantTime)) {
+      HoodieTableMetaClient metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
+      Option<HoodieInstant> firstCompactionInstant =
+          metaClient.getActiveTimeline().firstInstant(
+              HoodieTimeline.COMPACTION_ACTION, HoodieInstant.State.REQUESTED);
+      if (firstCompactionInstant.isPresent()) {
+        cfg.compactionInstantTime = firstCompactionInstant.get().getTimestamp();
+        LOG.info("Found the earliest scheduled compaction instant which will be executed: "
+            + cfg.compactionInstantTime);
+      } else {
+        throw new HoodieCompactionException("There is no scheduled compaction in the table.");
+      }
+    }
     JavaRDD<WriteStatus> writeResponse = client.compact(cfg.compactionInstantTime);
     return UtilHelpers.handleErrors(jsc, cfg.compactionInstantTime, writeResponse);
   }
@@ -142,6 +161,10 @@ public class HoodieCompactor {
     // Get schema.
     SparkRDDWriteClient client =
         UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.of(cfg.strategyClassName), props);
+    if (StringUtils.isNullOrEmpty(cfg.compactionInstantTime)) {
+      throw new IllegalArgumentException("No instant time is provided for scheduling compaction. "
+          + "Please specify the compaction instant time by using --instant-time.");
+    }
     client.scheduleCompactionAtInstant(cfg.compactionInstantTime, Option.empty());
     return 0;
   }

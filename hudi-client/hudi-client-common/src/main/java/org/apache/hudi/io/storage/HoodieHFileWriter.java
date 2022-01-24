@@ -25,6 +25,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -61,6 +62,7 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   private final long maxFileSize;
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
+  private final boolean populateMetaFields;
   private HFile.Writer writer;
   private String minRecordKey;
   private String maxRecordKey;
@@ -69,7 +71,7 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   private static String DROP_BEHIND_CACHE_COMPACTION_KEY = "hbase.hfile.drop.behind.compaction";
 
   public HoodieHFileWriter(String instantTime, Path file, HoodieHFileConfig hfileConfig, Schema schema,
-                           TaskContextSupplier taskContextSupplier) throws IOException {
+                           TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
 
     Configuration conf = FSUtils.registerFileSystem(file, hfileConfig.getHadoopConf());
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
@@ -83,25 +85,34 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
     this.maxFileSize = hfileConfig.getMaxFileSize();
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;
+    this.populateMetaFields = populateMetaFields;
 
     HFileContext context = new HFileContextBuilder().withBlockSize(hfileConfig.getBlockSize())
-          .withCompression(hfileConfig.getCompressionAlgorithm())
-          .build();
+        .withCompression(hfileConfig.getCompressionAlgorithm())
+        .build();
 
     conf.set(CacheConfig.PREFETCH_BLOCKS_ON_OPEN_KEY, String.valueOf(hfileConfig.shouldPrefetchBlocksOnOpen()));
     conf.set(HColumnDescriptor.CACHE_DATA_IN_L1, String.valueOf(hfileConfig.shouldCacheDataInL1()));
     conf.set(DROP_BEHIND_CACHE_COMPACTION_KEY, String.valueOf(hfileConfig.shouldDropBehindCacheCompaction()));
     CacheConfig cacheConfig = new CacheConfig(conf);
-    this.writer = HFile.getWriterFactory(conf, cacheConfig).withPath(this.fs, this.file).withFileContext(context).create();
+    this.writer = HFile.getWriterFactory(conf, cacheConfig)
+        .withPath(this.fs, this.file)
+        .withFileContext(context)
+        .withComparator(hfileConfig.getHfileComparator())
+        .create();
 
     writer.appendFileInfo(HoodieHFileReader.KEY_SCHEMA.getBytes(), schema.toString().getBytes());
   }
 
   @Override
   public void writeAvroWithMetadata(R avroRecord, HoodieRecord record) throws IOException {
-    prepRecordWithMetadata(avroRecord, record, instantTime,
-        taskContextSupplier.getPartitionIdSupplier().get(), recordIndex, file.getName());
-    writeAvro(record.getRecordKey(), (IndexedRecord) avroRecord);
+    if (populateMetaFields) {
+      prepRecordWithMetadata(avroRecord, record, instantTime,
+          taskContextSupplier.getPartitionIdSupplier().get(), recordIndex, file.getName());
+      writeAvro(record.getRecordKey(), (IndexedRecord) avroRecord);
+    } else {
+      writeAvro(record.getRecordKey(), (IndexedRecord) avroRecord);
+    }
   }
 
   @Override
@@ -145,7 +156,8 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
         }
 
         @Override
-        public void readFields(DataInput in) throws IOException { }
+        public void readFields(DataInput in) throws IOException {
+        }
       });
     }
 

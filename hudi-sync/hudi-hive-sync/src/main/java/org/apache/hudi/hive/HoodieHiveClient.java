@@ -19,6 +19,7 @@
 package org.apache.hudi.hive;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -123,6 +124,14 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   }
 
   /**
+   * Partition path has changed - drop the following partitions.
+   */
+  @Override
+  public void dropPartitionsToTable(String tableName, List<String> partitionsToDrop) {
+    ddlExecutor.dropPartitionsToTable(tableName, partitionsToDrop);
+  }
+
+  /**
    * Update the table properties to the table.
    */
   @Override
@@ -147,6 +156,14 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
    * Generate a list of PartitionEvent based on the changes required.
    */
   List<PartitionEvent> getPartitionEvents(List<Partition> tablePartitions, List<String> partitionStoragePartitions) {
+    return getPartitionEvents(tablePartitions, partitionStoragePartitions, false);
+  }
+
+  /**
+   * Iterate over the storage partitions and find if there are any new partitions that need to be added or updated.
+   * Generate a list of PartitionEvent based on the changes required.
+   */
+  List<PartitionEvent> getPartitionEvents(List<Partition> tablePartitions, List<String> partitionStoragePartitions, boolean isDropPartition) {
     Map<String, String> paths = new HashMap<>();
     for (Partition tablePartition : tablePartitions) {
       List<String> hivePartitionValues = tablePartition.getValues();
@@ -161,12 +178,17 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       String fullStoragePartitionPath = Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
       // Check if the partition values or if hdfs path is the same
       List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
-      if (!storagePartitionValues.isEmpty()) {
-        String storageValue = String.join(", ", storagePartitionValues);
-        if (!paths.containsKey(storageValue)) {
-          events.add(PartitionEvent.newPartitionAddEvent(storagePartition));
-        } else if (!paths.get(storageValue).equals(fullStoragePartitionPath)) {
-          events.add(PartitionEvent.newPartitionUpdateEvent(storagePartition));
+
+      if (isDropPartition) {
+        events.add(PartitionEvent.newPartitionDropEvent(storagePartition));
+      } else {
+        if (!storagePartitionValues.isEmpty()) {
+          String storageValue = String.join(", ", storagePartitionValues);
+          if (!paths.containsKey(storageValue)) {
+            events.add(PartitionEvent.newPartitionAddEvent(storagePartition));
+          } else if (!paths.get(storageValue).equals(fullStoragePartitionPath)) {
+            events.add(PartitionEvent.newPartitionUpdateEvent(storagePartition));
+          }
         }
       }
     }
@@ -239,23 +261,23 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   public Option<String> getLastCommitTimeSynced(String tableName) {
     // Get the last commit time from the TBLproperties
     try {
-      Table database = client.getTable(syncConfig.databaseName, tableName);
-      return Option.ofNullable(database.getParameters().getOrDefault(HOODIE_LAST_COMMIT_TIME_SYNC, null));
+      Table table = client.getTable(syncConfig.databaseName, tableName);
+      return Option.ofNullable(table.getParameters().getOrDefault(HOODIE_LAST_COMMIT_TIME_SYNC, null));
     } catch (Exception e) {
-      throw new HoodieHiveSyncException("Failed to get the last commit time synced from the database", e);
+      throw new HoodieHiveSyncException("Failed to get the last commit time synced from the table " + tableName, e);
     }
   }
 
   public Option<String> getLastReplicatedTime(String tableName) {
     // Get the last replicated time from the TBLproperties
     try {
-      Table database = client.getTable(syncConfig.databaseName, tableName);
-      return Option.ofNullable(database.getParameters().getOrDefault(GLOBALLY_CONSISTENT_READ_TIMESTAMP, null));
+      Table table = client.getTable(syncConfig.databaseName, tableName);
+      return Option.ofNullable(table.getParameters().getOrDefault(GLOBALLY_CONSISTENT_READ_TIMESTAMP, null));
     } catch (NoSuchObjectException e) {
       LOG.warn("the said table not found in hms " + syncConfig.databaseName + "." + tableName);
       return Option.empty();
     } catch (Exception e) {
-      throw new HoodieHiveSyncException("Failed to get the last replicated time from the database", e);
+      throw new HoodieHiveSyncException("Failed to get the last replicated time from the table " + tableName, e);
     }
   }
 
@@ -310,13 +332,15 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   @Override
   public void updateLastCommitTimeSynced(String tableName) {
     // Set the last commit time from the TBLproperties
-    String lastCommitSynced = activeTimeline.lastInstant().get().getTimestamp();
-    try {
-      Table table = client.getTable(syncConfig.databaseName, tableName);
-      table.putToParameters(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced);
-      client.alter_table(syncConfig.databaseName, tableName, table);
-    } catch (Exception e) {
-      throw new HoodieHiveSyncException("Failed to get update last commit time synced to " + lastCommitSynced, e);
+    Option<String> lastCommitSynced = activeTimeline.lastInstant().map(HoodieInstant::getTimestamp);
+    if (lastCommitSynced.isPresent()) {
+      try {
+        Table table = client.getTable(syncConfig.databaseName, tableName);
+        table.putToParameters(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced.get());
+        client.alter_table(syncConfig.databaseName, tableName, table);
+      } catch (Exception e) {
+        throw new HoodieHiveSyncException("Failed to get update last commit time synced to " + lastCommitSynced, e);
+      }
     }
   }
 }

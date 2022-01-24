@@ -24,9 +24,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * DDLExceutor is the interface which defines the ddl functions for Hive.
+ * DDLExecutor is the interface which defines the ddl functions for Hive.
  * There are two main implementations one is QueryBased other is based on HiveMetaStore
- * QueryBasedDDLExecutor also has two impls namely HiveQL based and other JDBC based.
+ * QueryBasedDDLExecutor also has two implementations namely HiveQL based and other JDBC based.
  */
 public interface DDLExecutor {
   /**
@@ -80,6 +80,14 @@ public interface DDLExecutor {
    * @param changedPartitions
    */
   public void updatePartitionsToTable(String tableName, List<String> changedPartitions);
+
+  /**
+   * Drop partitions for a given table.
+   *
+   * @param tableName
+   * @param partitionsToDrop
+   */
+  public void dropPartitionsToTable(String tableName, List<String> partitionsToDrop);
 
   public void close();
 }

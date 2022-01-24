@@ -20,7 +20,7 @@ package org.apache.hudi
 
 import java.nio.ByteBuffer
 import java.sql.{Date, Timestamp}
-import java.util
+import java.time.Instant
 
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.LogicalTypes.{TimestampMicros, TimestampMillis}
@@ -302,9 +302,17 @@ object AvroConversionHelper {
           }.orNull
         }
       case TimestampType => (item: Any) =>
-        // Convert time to microseconds since spark-avro by default converts TimestampType to
-        // Avro Logical TimestampMicros
-        Option(item).map(_.asInstanceOf[Timestamp].getTime * 1000).orNull
+        if (item == null) {
+          null
+        } else {
+          val timestamp = item match {
+            case i: Instant => Timestamp.from(i)
+            case t: Timestamp => t
+          }
+          // Convert time to microseconds since spark-avro by default converts TimestampType to
+          // Avro Logical TimestampMicros
+          timestamp.getTime * 1000
+        }
       case DateType => (item: Any) =>
         Option(item).map(_.asInstanceOf[Date].toLocalDate.toEpochDay.toInt).orNull
       case ArrayType(elementType, _) =>
@@ -318,7 +326,7 @@ object AvroConversionHelper {
           } else {
             val sourceArray = item.asInstanceOf[Seq[Any]]
             val sourceArraySize = sourceArray.size
-            val targetList = new util.ArrayList[Any](sourceArraySize)
+            val targetList = new java.util.ArrayList[Any](sourceArraySize)
             var idx = 0
             while (idx < sourceArraySize) {
               targetList.add(elementConverter(sourceArray(idx)))
@@ -336,7 +344,7 @@ object AvroConversionHelper {
           if (item == null) {
             null
           } else {
-            val javaMap = new util.HashMap[String, Any]()
+            val javaMap = new java.util.HashMap[String, Any]()
             item.asInstanceOf[Map[String, Any]].foreach { case (key, value) =>
               javaMap.put(key, valueConverter(value))
             }

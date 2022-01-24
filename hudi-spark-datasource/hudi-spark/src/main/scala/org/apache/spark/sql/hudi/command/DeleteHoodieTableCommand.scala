@@ -18,23 +18,22 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, _}
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.spark.sql._
+import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.plans.logical.DeleteFromTable
-import org.apache.spark.sql.execution.command.RunnableCommand
-import org.apache.spark.sql.hudi.HoodieOptionConfig
-import org.apache.spark.sql.hudi.HoodieSqlUtils._
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
+import org.apache.spark.sql.types.StructType
 
-case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends RunnableCommand
+case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends HoodieLeafRunnableCommand
   with SparkAdapterSupport {
 
   private val table = deleteTable.table
 
-  private val tableId = getTableIdentify(table)
+  private val tableId = getTableIdentifier(table)
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     logInfo(s"start execute delete command for $tableId")
@@ -56,32 +55,30 @@ case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends Runnab
   }
 
   private def buildHoodieConfig(sparkSession: SparkSession): Map[String, String] = {
-    val targetTable = sparkSession.sessionState.catalog
-      .getTableMetadata(tableId)
-    val path = getTableLocation(targetTable, sparkSession)
-    val conf = sparkSession.sessionState.newHadoopConf()
-    val metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(path)
-      .setConf(conf)
-      .build()
-    val tableConfig = metaClient.getTableConfig
-    val primaryColumns = HoodieOptionConfig.getPrimaryColumns(targetTable.storage.properties)
+    val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableId)
+    val path = hoodieCatalogTable.tableLocation
+    val tableConfig = hoodieCatalogTable.tableConfig
+    val tableSchema = hoodieCatalogTable.tableSchema
+    val partitionColumns = tableConfig.getPartitionFieldProp.split(",").map(_.toLowerCase)
+    val partitionSchema = StructType(tableSchema.filter(f => partitionColumns.contains(f.name)))
 
-    assert(primaryColumns.nonEmpty,
+    assert(hoodieCatalogTable.primaryKeys.nonEmpty,
       s"There are no primary key defined in table $tableId, cannot execute delete operator")
-    withSparkConf(sparkSession, targetTable.storage.properties) {
+    withSparkConf(sparkSession, hoodieCatalogTable.catalogProperties) {
       Map(
         "path" -> path,
-        TBL_NAME.key -> tableId.table,
+        RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
+        TBL_NAME.key -> tableConfig.getTableName,
         HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
-        URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitoning,
-        KEYGENERATOR_CLASS_NAME.key -> tableConfig.getKeyGeneratorClassName,
+        URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
+        KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
+        SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME -> tableConfig.getKeyGeneratorClassName,
         OPERATION.key -> DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,
-        PARTITIONPATH_FIELD.key -> targetTable.partitionColumnNames.mkString(","),
+        PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp,
         HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
         HIVE_SUPPORT_TIMESTAMP_TYPE.key -> "true",
         HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> "200",
-        SqlKeyGenerator.PARTITION_SCHEMA -> targetTable.partitionSchema.toDDL
+        SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL
       )
     }
   }

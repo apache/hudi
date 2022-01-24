@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 
 import org.apache.avro.generic.GenericRecord;
@@ -68,7 +69,9 @@ public abstract class SparkFullBootstrapDataProviderBase extends FullRecordBoots
           Option.empty());
       return genericRecords.toJavaRDD().map(gr -> {
         String orderingVal = HoodieAvroUtils.getNestedFieldValAsString(
-            gr, props.getString("hoodie.datasource.write.precombine.field"), false);
+            gr, props.getString("hoodie.datasource.write.precombine.field"), false, props.getBoolean(
+                KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+                Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue())));
         try {
           return DataSourceUtils.createHoodieRecord(gr, orderingVal, keyGenerator.getKey(gr),
               props.getString("hoodie.datasource.write.payload.class"));

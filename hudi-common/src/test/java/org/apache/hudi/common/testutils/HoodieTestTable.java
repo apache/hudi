@@ -28,6 +28,7 @@ import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointPartitionMetadata;
 import org.apache.hudi.common.HoodieCleanStat;
@@ -104,6 +105,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCo
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCompaction;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedDeltaCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedReplaceCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedRollbackFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRestoreFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRollbackFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
@@ -131,6 +133,7 @@ public class HoodieTestTable {
     this.basePath = basePath;
     this.fs = fs;
     this.metaClient = metaClient;
+    testTableState = HoodieTestTableState.of();
   }
 
   public static HoodieTestTable of(HoodieTableMetaClient metaClient) {
@@ -147,7 +150,7 @@ public class HoodieTestTable {
   }
 
   public static String makeNewCommitTime(Instant dateTime) {
-    return HoodieActiveTimeline.formatInstantTime(Date.from(dateTime));
+    return HoodieActiveTimeline.formatDate(Date.from(dateTime));
   }
 
   public static List<String> makeIncrementalCommitTimes(int num) {
@@ -276,9 +279,13 @@ public class HoodieTestTable {
   }
 
   public HoodieTestTable addClean(String instantTime, HoodieCleanerPlan cleanerPlan, HoodieCleanMetadata metadata) throws IOException {
-    createRequestedCleanFile(basePath, instantTime, cleanerPlan);
-    createInflightCleanFile(basePath, instantTime, cleanerPlan);
-    createCleanFile(basePath, instantTime, metadata);
+    return addClean(instantTime, cleanerPlan, metadata, false);
+  }
+
+  public HoodieTestTable addClean(String instantTime, HoodieCleanerPlan cleanerPlan, HoodieCleanMetadata metadata, boolean isEmpty) throws IOException {
+    createRequestedCleanFile(basePath, instantTime, cleanerPlan, isEmpty);
+    createInflightCleanFile(basePath, instantTime, cleanerPlan, isEmpty);
+    createCleanFile(basePath, instantTime, metadata, isEmpty);
     currentInstantTime = instantTime;
     return this;
   }
@@ -308,6 +315,12 @@ public class HoodieTestTable {
     return Pair.of(cleanerPlan, convertCleanMetadata(commitTime, Option.of(0L), cleanStats));
   }
 
+  public HoodieTestTable addRequestedRollback(String instantTime, HoodieRollbackPlan plan) throws IOException {
+    createRequestedRollbackFile(basePath, instantTime, plan);
+    currentInstantTime = instantTime;
+    return this;
+  }
+
   public HoodieTestTable addInflightRollback(String instantTime) throws IOException {
     createInflightRollbackFile(basePath, instantTime);
     currentInstantTime = instantTime;
@@ -315,8 +328,12 @@ public class HoodieTestTable {
   }
 
   public HoodieTestTable addRollback(String instantTime, HoodieRollbackMetadata rollbackMetadata) throws IOException {
+    return addRollback(instantTime, rollbackMetadata, false);
+  }
+
+  public HoodieTestTable addRollback(String instantTime, HoodieRollbackMetadata rollbackMetadata, boolean isEmpty) throws IOException {
     createInflightRollbackFile(basePath, instantTime);
-    createRollbackFile(basePath, instantTime, rollbackMetadata);
+    createRollbackFile(basePath, instantTime, rollbackMetadata, isEmpty);
     currentInstantTime = instantTime;
     return this;
   }
@@ -601,7 +618,7 @@ public class HoodieTestTable {
   }
 
   public List<java.nio.file.Path> getAllPartitionPaths() throws IOException {
-    java.nio.file.Path basePathPath = Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME).getParent().getParent();
+    java.nio.file.Path basePathPath = Paths.get(basePath);
     return FileCreateUtils.getPartitionPaths(basePathPath);
   }
 
@@ -659,8 +676,10 @@ public class HoodieTestTable {
     return FileSystemTestUtils.listRecursive(fs, new Path(Paths.get(basePath, partitionPath).toString())).stream()
         .filter(entry -> {
           boolean toReturn = true;
+          String filePath = entry.getPath().toString();
           String fileName = entry.getPath().getName();
-          if (fileName.equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE)) {
+          if (fileName.equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE) || (!fileName.contains("log") && !fileName.contains("parquet"))
+              || filePath.contains("metadata")) {
             toReturn = false;
           } else {
             for (String inflight : inflightCommits) {
@@ -700,6 +719,25 @@ public class HoodieTestTable {
     for (Map.Entry<String, List<String>> entry : partitionFiles.entrySet()) {
       deleteFilesInPartition(entry.getKey(), entry.getValue());
     }
+    return addRollback(commitTime, rollbackMetadata);
+  }
+
+  public HoodieTestTable doRollbackWithExtraFiles(String commitTimeToRollback, String commitTime, Map<String, List<String>> extraFiles) throws Exception {
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    Option<HoodieCommitMetadata> commitMetadata = getMetadataForInstant(commitTimeToRollback);
+    if (!commitMetadata.isPresent()) {
+      throw new IllegalArgumentException("Instant to rollback not present in timeline: " + commitTimeToRollback);
+    }
+    Map<String, List<String>> partitionFiles = getPartitionFiles(commitMetadata.get());
+    for (Map.Entry<String, List<String>> entry : partitionFiles.entrySet()) {
+      deleteFilesInPartition(entry.getKey(), entry.getValue());
+    }
+    for (Map.Entry<String, List<String>> entry: extraFiles.entrySet()) {
+      if (partitionFiles.containsKey(entry.getKey())) {
+        partitionFiles.get(entry.getKey()).addAll(entry.getValue());
+      }
+    }
+    HoodieRollbackMetadata rollbackMetadata = getRollbackMetadata(commitTimeToRollback, partitionFiles);
     return addRollback(commitTime, rollbackMetadata);
   }
 
@@ -985,7 +1023,7 @@ public class HoodieTestTable {
    * @param tableType                     - Hudi table type
    * @param commitTime                    - Write commit time
    * @param partitionToFilesNameLengthMap - Map of partition names to its list of files and their lengths
-   * @return Test tabke state for the requested partitions and files
+   * @return Test table state for the requested partitions and files
    */
   private static HoodieTestTableState getTestTableStateWithPartitionFileInfo(WriteOperationType operationType,
                                                                              HoodieTableType tableType,
