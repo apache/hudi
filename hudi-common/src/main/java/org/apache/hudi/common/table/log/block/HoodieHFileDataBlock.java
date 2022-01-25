@@ -23,6 +23,7 @@ import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
@@ -166,7 +167,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
    */
   private byte[] serializeRecord(final IndexedRecord record, final Option<Field> keyField) {
     if (keyField.isPresent()) {
-      record.put(keyField.get().pos(), "");
+      record.put(keyField.get().pos(), StringUtils.EMPTY_STRING);
     }
     return HoodieAvroUtils.indexedRecordToBytes(record);
   }

@@ -128,16 +128,24 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
 
   @Override
   public void writeAvro(String recordKey, IndexedRecord record) throws IOException {
-    GenericRecord keyExcludedRecord = (GenericRecord) record;
+    byte[] value = null;
+    boolean isRecordSerialized = false;
     if (keyFieldSchema.isPresent()) {
+      GenericRecord keyExcludedRecord = (GenericRecord) record;
       int keyFieldPos = this.keyFieldSchema.get().pos();
       boolean isKeyAvailable = (record.get(keyFieldPos) != null && !(record.get(keyFieldPos).toString().isEmpty()));
       if (isKeyAvailable) {
-        keyExcludedRecord.put(this.keyFieldSchema.get().pos(), StringUtils.EMPTY_STRING);
+        Object originalKey = keyExcludedRecord.get(keyFieldPos);
+        keyExcludedRecord.put(keyFieldPos, StringUtils.EMPTY_STRING);
+        value = HoodieAvroUtils.avroToBytes(keyExcludedRecord);
+        keyExcludedRecord.put(keyFieldPos, originalKey);
+        isRecordSerialized = true;
       }
     }
+    if (!isRecordSerialized) {
+      value = HoodieAvroUtils.avroToBytes((GenericRecord) record);
+    }
 
-    byte[] value = HoodieAvroUtils.avroToBytes(keyExcludedRecord);
     KeyValue kv = new KeyValue(recordKey.getBytes(), null, null, value);
     writer.append(kv);
 

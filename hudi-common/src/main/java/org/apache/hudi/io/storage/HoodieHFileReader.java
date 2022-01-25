@@ -153,14 +153,14 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   }
 
   public List<Pair<String, R>> readAllRecords(Schema writerSchema, Schema readerSchema) throws IOException {
-    final Option<Schema.Field> keySchemaField = Option.ofNullable(readerSchema.getField(KEY_FIELD_NAME));
+    final Option<Schema.Field> keyFieldSchema = Option.ofNullable(readerSchema.getField(KEY_FIELD_NAME));
     List<Pair<String, R>> recordList = new LinkedList<>();
     try {
       final HFileScanner scanner = reader.getScanner(false, false);
       if (scanner.seekTo()) {
         do {
           Cell c = scanner.getKeyValue();
-          final Pair<String, R> keyAndRecordPair = getRecordFromCell(c, writerSchema, readerSchema, keySchemaField);
+          final Pair<String, R> keyAndRecordPair = getRecordFromCell(c, writerSchema, readerSchema, keyFieldSchema);
           recordList.add(keyAndRecordPair);
         } while (scanner.next());
       }
@@ -198,8 +198,9 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   @Override
   public Iterator getRecordIterator(Schema readerSchema) throws IOException {
     final HFileScanner scanner = reader.getScanner(false, false);
-    final Option<Schema.Field> keySchemaField = Option.ofNullable(readerSchema.getField(KEY_FIELD_NAME));
-    ValidationUtils.checkState(keySchemaField != null);
+    final Option<Schema.Field> keyFieldSchema = Option.ofNullable(readerSchema.getField(KEY_FIELD_NAME));
+    ValidationUtils.checkState(keyFieldSchema != null,
+        "Missing key field '" + KEY_FIELD_NAME + "' in the schema!");
     return new Iterator<R>() {
       private R next = null;
       private boolean eof = false;
@@ -210,7 +211,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
           // To handle when hasNext() is called multiple times for idempotency and/or the first time
           if (this.next == null && !this.eof) {
             if (!scanner.isSeeked() && scanner.seekTo()) {
-              final Pair<String, R> keyAndRecordPair = getRecordFromCell(scanner.getKeyValue(), getSchema(), readerSchema, keySchemaField);
+              final Pair<String, R> keyAndRecordPair = getRecordFromCell(scanner.getKeyValue(), getSchema(), readerSchema, keyFieldSchema);
               this.next = keyAndRecordPair.getSecond();
             }
           }
@@ -231,7 +232,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
           }
           R retVal = this.next;
           if (scanner.next()) {
-            final Pair<String, R> keyAndRecordPair = getRecordFromCell(scanner.getKeyValue(), getSchema(), readerSchema, keySchemaField);
+            final Pair<String, R> keyAndRecordPair = getRecordFromCell(scanner.getKeyValue(), getSchema(), readerSchema, keyFieldSchema);
             this.next = keyAndRecordPair.getSecond();
           } else {
             this.next = null;
@@ -248,8 +249,8 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   @Override
   public Option getRecordByKey(String key, Schema readerSchema) throws IOException {
     byte[] value = null;
-    final Option<Schema.Field> keySchemaField = Option.ofNullable(readerSchema.getField(KEY_FIELD_NAME));
-    ValidationUtils.checkState(keySchemaField != null);
+    final Option<Schema.Field> keyFieldSchema = Option.ofNullable(readerSchema.getField(KEY_FIELD_NAME));
+    ValidationUtils.checkState(keyFieldSchema != null);
     KeyValue kv = new KeyValue(key.getBytes(), null, null, null);
 
     synchronized (this) {
@@ -265,26 +266,17 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     }
 
     if (value != null) {
-      R record = deserialize(key.getBytes(), value, getSchema(), readerSchema, keySchemaField);
+      R record = deserialize(key.getBytes(), value, getSchema(), readerSchema, keyFieldSchema);
       return Option.of(record);
     }
 
     return Option.empty();
   }
 
-  /**
-   * Get the record from HBase cell.
-   *
-   * @param cell         - HBase Cell
-   * @param writerSchema - Writer schema
-   * @param readerSchema - Reader schema
-   * @return Record key and record object pair
-   * @throws IOException
-   */
-  private Pair<String, R> getRecordFromCell(Cell cell, Schema writerSchema, Schema readerSchema, Option<Schema.Field> keySchemaField) throws IOException {
+  private Pair<String, R> getRecordFromCell(Cell cell, Schema writerSchema, Schema readerSchema, Option<Schema.Field> keyFieldSchema) throws IOException {
     final byte[] keyBytes = Arrays.copyOfRange(cell.getRowArray(), cell.getRowOffset(), cell.getRowOffset() + cell.getRowLength());
     final byte[] valueBytes = Arrays.copyOfRange(cell.getValueArray(), cell.getValueOffset(), cell.getValueOffset() + cell.getValueLength());
-    R record = deserialize(keyBytes, valueBytes, writerSchema, readerSchema, keySchemaField);
+    R record = deserialize(keyBytes, valueBytes, writerSchema, readerSchema, keyFieldSchema);
     return new Pair<>(new String(keyBytes), record);
   }
 
@@ -295,13 +287,13 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
    * @param valueBytes     - Record content as byte array
    * @param writerSchema   - Writer schema
    * @param readerSchema   - Reader schema
-   * @param keySchemaField - Key field id in the schema
+   * @param keyFieldSchema - Key field id in the schema
    * @return Deserialized record object
    */
   private R deserialize(final byte[] keyBytes, final byte[] valueBytes, Schema writerSchema, Schema readerSchema,
-                        Option<Schema.Field> keySchemaField) throws IOException {
+                        Option<Schema.Field> keyFieldSchema) throws IOException {
     R record = (R) HoodieAvroUtils.bytesToAvro(valueBytes, writerSchema, readerSchema);
-    materializeRecordIfNeeded(keyBytes, record, keySchemaField);
+    materializeRecordIfNeeded(keyBytes, record, keyFieldSchema);
     return record;
   }
 
@@ -310,13 +302,13 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
    *
    * @param keyBytes       - Key byte array
    * @param record         - Record object to materialize
-   * @param keySchemaField - Key field id in the schema
+   * @param keyFieldSchema - Key field id in the schema
    */
-  private void materializeRecordIfNeeded(final byte[] keyBytes, R record, Option<Schema.Field> keySchemaField) {
-    if (keySchemaField.isPresent()) {
-      final Object keyObject = record.get(keySchemaField.get().pos());
+  private void materializeRecordIfNeeded(final byte[] keyBytes, R record, Option<Schema.Field> keyFieldSchema) {
+    if (keyFieldSchema.isPresent()) {
+      final Object keyObject = record.get(keyFieldSchema.get().pos());
       if (keyObject != null && keyObject.toString().isEmpty()) {
-        record.put(keySchemaField.get().pos(), new String(keyBytes));
+        record.put(keyFieldSchema.get().pos(), new String(keyBytes));
       }
     }
   }
