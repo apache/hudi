@@ -18,7 +18,6 @@
 
 package org.apache.hudi.spark3.crypto;
 
-import org.apache.hudi.crypot.kms.InMemoryKMS;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.parquet.crypto.keytools.PropertiesDrivenCryptoFactory;
 import org.apache.spark.api.java.JavaSparkContext;

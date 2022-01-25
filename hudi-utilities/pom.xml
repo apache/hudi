@@ -220,10 +220,10 @@
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-sql_${scala.binary.version}</artifactId>
       <exclusions>
-          <exclusion>
-              <groupId>javax.servlet</groupId>
-              <artifactId>*</artifactId>
-      </exclusion>
+        <exclusion>
+          <groupId>javax.servlet</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
     </exclusions>
     </dependency>
 

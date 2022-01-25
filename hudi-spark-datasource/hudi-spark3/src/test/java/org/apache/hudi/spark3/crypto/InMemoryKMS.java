@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.crypot.kms;
+package org.apache.hudi.spark3.crypto;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.config.ConfigProperty;
