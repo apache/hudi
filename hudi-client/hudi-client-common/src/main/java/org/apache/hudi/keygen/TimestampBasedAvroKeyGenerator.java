@@ -36,6 +36,7 @@ import org.joda.time.format.DateTimeFormatter;
 import java.io.IOException;
 import java.io.Serializable;
 import java.math.BigDecimal;
+import java.sql.Timestamp;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
@@ -125,7 +126,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
 
   @Override
   public String getPartitionPath(GenericRecord record) {
-    Object partitionVal = HoodieAvroUtils.getNestedFieldVal(record, getPartitionPathFields().get(0), true);
+    Object partitionVal = HoodieAvroUtils.getNestedFieldVal(record, getPartitionPathFields().get(0), true, isConsistentLogicalTimestampEnabled());
     if (partitionVal == null) {
       partitionVal = getDefaultPartitionVal();
     }
@@ -191,6 +192,8 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
       timeMs = convertLongTimeToMillis(((Float) partitionVal).longValue());
     } else if (partitionVal instanceof Long) {
       timeMs = convertLongTimeToMillis((Long) partitionVal);
+    } else if (partitionVal instanceof Timestamp && isConsistentLogicalTimestampEnabled()) {
+      timeMs = ((Timestamp) partitionVal).getTime();
     } else if (partitionVal instanceof Integer) {
       timeMs = convertLongTimeToMillis(((Integer) partitionVal).longValue());
     } else if (partitionVal instanceof BigDecimal) {
@@ -225,5 +228,4 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
     }
     return MILLISECONDS.convert(partitionVal, timeUnit);
   }
-
 }

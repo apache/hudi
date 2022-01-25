@@ -29,7 +29,7 @@ import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, Ho
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DataWritingCommand
-import org.apache.spark.sql.hudi.HoodieSqlUtils
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 
 import scala.collection.JavaConverters._
 
@@ -39,13 +39,9 @@ import scala.collection.JavaConverters._
 case class CreateHoodieTableAsSelectCommand(
    table: CatalogTable,
    mode: SaveMode,
-   query: LogicalPlan) extends DataWritingCommand {
+   query: LogicalPlan) extends HoodieLeafRunnableCommand {
 
-  def withNewChildInternal(newChild: LogicalPlan): CreateHoodieTableAsSelectCommand = {
-    this
-  }
-
-  override def run(sparkSession: SparkSession, child: SparkPlan): Seq[Row] = {
+  override def run(sparkSession: SparkSession): Seq[Row] = {
     assert(table.tableType != CatalogTableType.VIEW)
     assert(table.provider.isDefined)
 
@@ -76,7 +72,7 @@ case class CreateHoodieTableAsSelectCommand(
     val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableWithSchema)
     val tablePath = hoodieCatalogTable.tableLocation
     val hadoopConf = sparkSession.sessionState.newHadoopConf()
-    assert(HoodieSqlUtils.isEmptyPath(tablePath, hadoopConf),
+    assert(HoodieSqlCommonUtils.isEmptyPath(tablePath, hadoopConf),
       s"Path '$tablePath' should be empty for CTAS")
 
     // Execute the insert query
@@ -117,8 +113,6 @@ case class CreateHoodieTableAsSelectCommand(
     val fs = path.getFileSystem(conf)
     fs.delete(path, true)
   }
-
-  override def outputColumnNames: Seq[String] = query.output.map(_.name)
 
   private def reOrderPartitionColumn(query: LogicalPlan,
     partitionColumns: Seq[String]): LogicalPlan = {

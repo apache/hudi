@@ -100,11 +100,6 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
         spark.sql(
           s"""
              |create table $tableName using hudi
-             |tblproperties (
-             | primaryKey = 'id',
-             | preCombineField = 'ts'
-             |)
-             |partitioned by (dt)
              |location '$tablePath'
              |""".stripMargin)
 
@@ -149,11 +144,6 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
         spark.sql(
           s"""
              |create table $tableName using hudi
-             |tblproperties (
-             | primaryKey = 'id',
-             | preCombineField = 'ts'
-             |)
-             |partitioned by (dt)
              |location '$tablePath'
              |""".stripMargin)
 
@@ -210,7 +200,7 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
 
         import spark.implicits._
         val df = Seq((1, "z3", "v1", "2021", "10", "01"), (2, "l4", "v1", "2021", "10","02"))
-        .toDF("id", "name", "ts", "year", "month", "day")
+          .toDF("id", "name", "ts", "year", "month", "day")
 
         df.write.format("hudi")
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
@@ -229,11 +219,6 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
         spark.sql(
           s"""
              |create table $tableName using hudi
-             |tblproperties (
-             | primaryKey = 'id',
-             | preCombineField = 'ts'
-             |)
-             |partitioned by (year, month, day)
              |location '$tablePath'
              |""".stripMargin)
 
@@ -278,11 +263,6 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
         spark.sql(
           s"""
              |create table $tableName using hudi
-             |tblproperties (
-             | primaryKey = 'id',
-             | preCombineField = 'ts'
-             |)
-             |partitioned by (year, month, day)
              |location '$tablePath'
              |""".stripMargin)
 

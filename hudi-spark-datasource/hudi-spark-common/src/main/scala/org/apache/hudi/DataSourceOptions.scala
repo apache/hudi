@@ -119,7 +119,8 @@ object DataSourceReadOptions {
     .key("hoodie.enable.data.skipping")
     .defaultValue(true)
     .sinceVersion("0.10.0")
-    .withDocumentation("enable data skipping to boost query after doing z-order optimize for current table")
+    .withDocumentation("Enables data-skipping allowing queries to leverage indexes to reduce the search space by " +
+      "skipping over files")
 
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
@@ -299,6 +300,8 @@ object DataSourceWriteOptions {
     .defaultValue(classOf[SimpleKeyGenerator].getName)
     .withInferFunction(keyGeneraterInferFunc)
     .withDocumentation("Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator`")
+
+  val KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED: ConfigProperty[String] = KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED
 
   val ENABLE_ROW_WRITER: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.row.writer.enable")
@@ -494,6 +497,16 @@ object DataSourceWriteOptions {
     .defaultValue("false")
     .withDocumentation("‘INT64’ with original type TIMESTAMP_MICROS is converted to hive ‘timestamp’ type. " +
       "Disabled by default for backward compatibility.")
+
+  /**
+   * Flag to indicate whether to use conditional syncing in HiveSync.
+   * If set true, the Hive sync procedure will only run if partition or schema changes are detected.
+   * By default true.
+   */
+  val HIVE_CONDITIONAL_SYNC: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.hive_sync.conditional_sync")
+    .defaultValue("false")
+    .withDocumentation("Enables conditional hive sync, where partition or schema change must exist to perform sync to hive.")
 
   val HIVE_TABLE_PROPERTIES: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.table_properties")

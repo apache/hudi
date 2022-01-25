@@ -20,13 +20,17 @@ package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
+import org.apache.hudi.avro.model.HoodieMergeArchiveFilePlan;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.generic.GenericRecord;
@@ -46,6 +50,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -66,8 +71,9 @@ import java.util.stream.Collectors;
  * This class can be serialized and de-serialized and on de-serialization the FileSystem is re-initialized.
  */
 public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
+  public static final String MERGE_ARCHIVE_PLAN_NAME = "mergeArchivePlan";
   private static final Pattern ARCHIVE_FILE_PATTERN =
-      Pattern.compile("^\\.commits_\\.archive\\.([0-9]*)$");
+      Pattern.compile("^\\.commits_\\.archive\\.([0-9]+).*");
 
   private static final String HOODIE_COMMIT_ARCHIVE_LOG_FILE_PREFIX = "commits";
   private static final String ACTION_TYPE_KEY = "actionType";
@@ -218,7 +224,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
       // Sort files by version suffix in reverse (implies reverse chronological order)
       Arrays.sort(fsStatuses, new ArchiveFileVersionComparator());
 
-      List<HoodieInstant> instantsInRange = new ArrayList<>();
+      Set<HoodieInstant> instantsInRange = new HashSet<>();
       for (FileStatus fs : fsStatuses) {
         // Read the archived file
         try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient.getFs(),
@@ -248,11 +254,32 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
               break;
             }
           }
+        } catch (Exception originalException) {
+          // merge small archive files may left uncompleted archive file which will cause exception.
+          // need to ignore this kind of exception here.
+          try {
+            Path planPath = new Path(metaClient.getArchivePath(), MERGE_ARCHIVE_PLAN_NAME);
+            HoodieWrapperFileSystem fileSystem = metaClient.getFs();
+            if (fileSystem.exists(planPath)) {
+              HoodieMergeArchiveFilePlan plan = TimelineMetadataUtils.deserializeAvroMetadata(FileIOUtils.readDataFromPath(fileSystem, planPath).get(), HoodieMergeArchiveFilePlan.class);
+              String mergedArchiveFileName = plan.getMergedArchiveFileName();
+              if (!StringUtils.isNullOrEmpty(mergedArchiveFileName) && fs.getPath().getName().equalsIgnoreCase(mergedArchiveFileName)) {
+                LOG.warn("Catch exception because of reading uncompleted merging archive file " + mergedArchiveFileName + ". Ignore it here.");
+                continue;
+              }
+            }
+            throw originalException;
+          } catch (Exception e) {
+            // If anything wrong during parsing merge archive plan, we need to throw the original exception.
+            // For example corrupted archive file and corrupted plan are both existed.
+            throw originalException;
+          }
         }
       }
 
-      Collections.sort(instantsInRange);
-      return instantsInRange;
+      ArrayList<HoodieInstant> result = new ArrayList<>(instantsInRange);
+      Collections.sort(result);
+      return result;
     } catch (IOException e) {
       throw new HoodieIOException(
               "Could not load archived commit timeline from path " + metaClient.getArchivePath(), e);

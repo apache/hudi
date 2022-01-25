@@ -124,8 +124,8 @@ public abstract class SingleSparkJobExecutionStrategy<T extends HoodieRecordPayl
     Iterator<List<WriteStatus>> writeStatuses = performClusteringWithRecordsIterator(inputRecords, clusteringOps.getNumOutputGroups(), instantTime,
         strategyParams, schema.get(), inputFileIds, preserveHoodieMetadata, taskContextSupplier);
 
-    Iterable<List<WriteStatus>> writestatusIterable = () -> writeStatuses;
-    return StreamSupport.stream(writestatusIterable.spliterator(), false)
+    Iterable<List<WriteStatus>> writeStatusIterable = () -> writeStatuses;
+    return StreamSupport.stream(writeStatusIterable.spliterator(), false)
         .flatMap(writeStatusList -> writeStatusList.stream());
   }
 

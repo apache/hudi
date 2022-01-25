@@ -46,7 +46,6 @@ import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.conf.Configurable;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.io.ArrayWritable;
@@ -89,7 +88,9 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
 
     boolean isIncrementalSplits = HoodieRealtimeInputFormatUtils.isIncrementalQuerySplits(fileSplits);
 
-    return isIncrementalSplits ? HoodieRealtimeInputFormatUtils.getIncrementalRealtimeSplits(job, fileSplits.stream()) : HoodieRealtimeInputFormatUtils.getRealtimeSplits(job, fileSplits.stream());
+    return isIncrementalSplits
+        ? HoodieRealtimeInputFormatUtils.getIncrementalRealtimeSplits(job, fileSplits.stream())
+        : HoodieRealtimeInputFormatUtils.getRealtimeSplits(job, fileSplits.stream());
   }
 
   /**
@@ -112,9 +113,8 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
    */
   @Override
   protected List<FileStatus> listStatusForIncrementalMode(
-      JobConf job, HoodieTableMetaClient tableMetaClient, List<Path> inputPaths) throws IOException {
+      JobConf job, HoodieTableMetaClient tableMetaClient, List<Path> inputPaths, String incrementalTable) throws IOException {
     List<FileStatus> result = new ArrayList<>();
-    String tableName = tableMetaClient.getTableConfig().getTableName();
     Job jobContext = Job.getInstance(job);
 
     // step1
@@ -122,7 +122,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
     if (!timeline.isPresent()) {
       return result;
     }
-    HoodieTimeline commitsTimelineToReturn = HoodieInputFormatUtils.getHoodieTimelineForIncrementalQuery(jobContext, tableName, timeline.get());
+    HoodieTimeline commitsTimelineToReturn = HoodieInputFormatUtils.getHoodieTimelineForIncrementalQuery(jobContext, incrementalTable, timeline.get());
     Option<List<HoodieInstant>> commitsToCheck = Option.of(commitsTimelineToReturn.getInstants().collect(Collectors.toList()));
     if (!commitsToCheck.isPresent()) {
       return result;
@@ -159,7 +159,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
 
     // step5
     // find all file status in partitionPaths.
-    FileStatus[] fileStatuses = getStatus(job);
+    FileStatus[] fileStatuses = doListStatus(job);
     Map<String, FileStatus> candidateFileStatus = new HashMap<>();
     for (int i = 0; i < fileStatuses.length; i++) {
       String key = fileStatuses[i].getPath().toString();
@@ -262,13 +262,6 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
   }
 
   @Override
-  public FileStatus[] listStatus(JobConf job) throws IOException {
-    // Call the HoodieInputFormat::listStatus to obtain all latest parquet files, based on commit
-    // timeline.
-    return super.listStatus(job);
-  }
-
-  @Override
   protected HoodieDefaultTimeline filterInstantsTimeline(HoodieDefaultTimeline timeline) {
     // no specific filtering for Realtime format
     return timeline;
@@ -321,10 +314,5 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
     }
     return new HoodieRealtimeRecordReader(realtimeSplit, jobConf,
         super.getRecordReader(split, jobConf, reporter));
-  }
-
-  @Override
-  public Configuration getConf() {
-    return conf;
   }
 }

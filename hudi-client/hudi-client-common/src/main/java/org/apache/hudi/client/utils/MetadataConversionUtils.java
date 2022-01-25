@@ -134,7 +134,7 @@ public class MetadataConversionUtils {
     return Option.of(HoodieCommitMetadata.fromBytes(inflightContent.get(), HoodieCommitMetadata.class));
   }
 
-  public static Option<HoodieRequestedReplaceMetadata> getRequestedReplaceMetadata(HoodieTableMetaClient metaClient, HoodieInstant instant) throws IOException {
+  private static Option<HoodieRequestedReplaceMetadata> getRequestedReplaceMetadata(HoodieTableMetaClient metaClient, HoodieInstant instant) throws IOException {
     Option<byte[]> requestedContent = metaClient.getActiveTimeline().getInstantDetails(instant);
     if (!requestedContent.isPresent() || requestedContent.get().length == 0) {
       // requested commit files can be empty in some certain cases, e.g. insert_overwrite or insert_overwrite_table.

@@ -39,18 +39,20 @@ public class JavaCustomColumnsSortPartitioner<T extends HoodieRecordPayload>
 
   private final String[] sortColumnNames;
   private final Schema schema;
+  private final boolean consistentLogicalTimestampEnabled;
 
-  public JavaCustomColumnsSortPartitioner(String[] columnNames, Schema schema) {
+  public JavaCustomColumnsSortPartitioner(String[] columnNames, Schema schema, boolean consistentLogicalTimestampEnabled) {
     this.sortColumnNames = columnNames;
     this.schema = schema;
+    this.consistentLogicalTimestampEnabled = consistentLogicalTimestampEnabled;
   }
 
   @Override
   public List<HoodieRecord<T>> repartitionRecords(
       List<HoodieRecord<T>> records, int outputSparkPartitions) {
     return records.stream().sorted((o1, o2) -> {
-      Object values1 = HoodieAvroUtils.getRecordColumnValues(o1, sortColumnNames, schema);
-      Object values2 = HoodieAvroUtils.getRecordColumnValues(o2, sortColumnNames, schema);
+      Object values1 = HoodieAvroUtils.getRecordColumnValues(o1, sortColumnNames, schema, consistentLogicalTimestampEnabled);
+      Object values2 = HoodieAvroUtils.getRecordColumnValues(o2, sortColumnNames, schema, consistentLogicalTimestampEnabled);
       return values1.toString().compareTo(values2.toString());
     }).collect(Collectors.toList());
   }

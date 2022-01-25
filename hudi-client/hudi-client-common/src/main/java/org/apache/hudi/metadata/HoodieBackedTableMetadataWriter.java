@@ -535,7 +535,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * All FileGroups for a given metadata partition has a fixed prefix as per the {@link MetadataPartitionType#getFileIdPrefix()}.
    * Each file group is suffixed with 4 digits with increments of 1 starting with 0000.
    *
-   * Lets say we configure 10 file groups for record level index partittion, and prefix as "record-index-bucket-"
+   * Lets say we configure 10 file groups for record level index partition, and prefix as "record-index-bucket-"
    * File groups will be named as :
    *    record-index-bucket-0000, .... -> ..., record-index-bucket-0009
    */
@@ -689,7 +689,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     String latestDeltacommitTime = metadataMetaClient.reloadActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant()
         .get().getTimestamp();
     List<HoodieInstant> pendingInstants = dataMetaClient.reloadActiveTimeline().filterInflightsAndRequested()
-        .findInstantsBefore(latestDeltacommitTime).getInstants().collect(Collectors.toList());
+        .findInstantsBefore(instantTime).getInstants().collect(Collectors.toList());
 
     if (!pendingInstants.isEmpty()) {
       LOG.info(String.format("Cannot compact metadata table as there are %d inflight instants before latest deltacommit %s: %s",
@@ -746,9 +746,16 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     HoodieData<HoodieRecord> partitionRecords = engineContext.parallelize(Arrays.asList(allPartitionRecord), 1);
     if (!partitionInfoList.isEmpty()) {
       HoodieData<HoodieRecord> fileListRecords = engineContext.parallelize(partitionInfoList, partitionInfoList.size()).map(partitionInfo -> {
+        Map<String, Long> fileNameToSizeMap = partitionInfo.getFileNameToSizeMap();
+        // filter for files that are part of the completed commits
+        Map<String, Long> validFileNameToSizeMap = fileNameToSizeMap.entrySet().stream().filter(fileSizePair -> {
+          String commitTime = FSUtils.getCommitTime(fileSizePair.getKey());
+          return HoodieTimeline.compareTimestamps(commitTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, createInstantTime);
+        }).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
         // Record which saves files within a partition
         return HoodieMetadataPayload.createPartitionFilesRecord(
-            partitionInfo.getRelativePath().isEmpty() ? NON_PARTITIONED_NAME : partitionInfo.getRelativePath(), Option.of(partitionInfo.getFileNameToSizeMap()), Option.empty());
+            partitionInfo.getRelativePath().isEmpty() ? NON_PARTITIONED_NAME : partitionInfo.getRelativePath(), Option.of(validFileNameToSizeMap), Option.empty());
       });
       partitionRecords = partitionRecords.union(fileListRecords);
     }

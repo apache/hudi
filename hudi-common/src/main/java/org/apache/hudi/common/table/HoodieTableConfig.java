@@ -76,6 +76,12 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
   public static final String HOODIE_PROPERTIES_FILE_BACKUP = "hoodie.properties.backup";
 
+  public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
+      .key("hoodie.database.name")
+      .noDefaultValue()
+      .withDocumentation("Database name that will be used for incremental query.If different databases have the same table name during incremental query, "
+          + "we can set it to limit the table name under a specific database");
+
   public static final ConfigProperty<String> NAME = ConfigProperty
       .key("hoodie.table.name")
       .noDefaultValue()
@@ -420,6 +426,13 @@ public class HoodieTableConfig extends HoodieConfig {
     } else {
       return Option.empty();
     }
+  }
+
+  /**
+   * Read the database name.
+   */
+  public String getDatabaseName() {
+    return getString(DATABASE_NAME);
   }
 
   /**

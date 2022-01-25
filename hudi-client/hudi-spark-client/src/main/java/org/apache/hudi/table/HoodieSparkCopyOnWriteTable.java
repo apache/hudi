@@ -184,13 +184,6 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
     String basePath = metaClient.getBasePath();
     String indexPath = metaClient.getColumnStatsIndexPath();
 
-    List<String> completedCommits =
-        metaClient.getCommitsTimeline()
-            .filterCompletedInstants()
-            .getInstants()
-            .map(HoodieInstant::getTimestamp)
-            .collect(Collectors.toList());
-
     List<String> touchedFiles =
         updatedFilesStats.stream()
             .map(s -> new Path(basePath, s.getPath()).toString())
@@ -213,6 +206,13 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
         HoodieAvroUtils.createHoodieWriteSchema(
             new TableSchemaResolver(metaClient).getTableAvroSchemaWithoutMetadataFields()
         );
+
+    List<String> completedCommits =
+        metaClient.getCommitsTimeline()
+            .filterCompletedInstants()
+            .getInstants()
+            .map(HoodieInstant::getTimestamp)
+            .collect(Collectors.toList());
 
     ColumnStatsIndexHelper.updateColumnStatsIndexFor(
         sparkEngineContext.getSqlContext().sparkSession(),
