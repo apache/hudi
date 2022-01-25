@@ -65,6 +65,9 @@
       <artifactId>parquet-avro</artifactId>
     </dependency>
 
+    <!-- HBase -->
+    
+
     <!-- Hoodie - Test -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
