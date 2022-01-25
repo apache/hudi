@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.crypot;
+package org.apache.hudi.spark3.crypto;
 
 import org.apache.hudi.crypot.kms.InMemoryKMS;
 import org.apache.hudi.testutils.HoodieClientTestBase;

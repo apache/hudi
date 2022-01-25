@@ -112,7 +112,6 @@
                   <include>org.apache.httpcomponents:fluent-hc</include>
                   <include>org.antlr:stringtemplate</include>
                   <include>org.apache.parquet:parquet-avro</include>
-                  <include>org.apache.parquet:parquet-column</include>
 
                   <include>com.amazonaws:dynamodb-lock-client</include>
                   <include>com.amazonaws:aws-java-sdk-dynamodb</include>
@@ -290,12 +289,6 @@
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
-      <scope>compile</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.parquet</groupId>
-      <artifactId>parquet-column</artifactId>
       <scope>compile</scope>
     </dependency>
 

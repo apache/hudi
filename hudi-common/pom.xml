@@ -119,11 +119,6 @@
       <artifactId>parquet-avro</artifactId>
     </dependency>
 
-    <dependency>
-      <groupId>org.apache.parquet</groupId>
-      <artifactId>parquet-column</artifactId>
-    </dependency>
-
     <!-- ORC -->
     <dependency>
       <groupId>org.apache.orc</groupId>

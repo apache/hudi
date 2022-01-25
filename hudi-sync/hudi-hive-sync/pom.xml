@@ -65,11 +65,6 @@
     </dependency>
 
     <dependency>
-      <groupId>org.apache.parquet</groupId>
-      <artifactId>parquet-column</artifactId>
-    </dependency>
-
-    <dependency>
       <groupId>com.beust</groupId>
       <artifactId>jcommander</artifactId>
     </dependency>
@@ -147,16 +142,6 @@
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-sql_${scala.binary.version}</artifactId>
       <scope>test</scope>
-      <exclusions>
-        <exclusion>
-          <artifactId>parquet-column</artifactId>
-          <groupId>org.apache.parquet</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>parquet-hadoop</artifactId>
-          <groupId>org.apache.parquet</groupId>
-        </exclusion>
-      </exclusions>
     </dependency>
 
     <dependency>

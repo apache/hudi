@@ -68,7 +68,6 @@
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
 
                   <include>org.apache.parquet:parquet-avro</include>
-                  <include>org.apache.parquet:parquet-column</include>
                   <include>com.esotericsoftware:kryo-shaded</include>
                   <include>org.objenesis:objenesis</include>
                   <include>com.esotericsoftware:minlog</include>
@@ -150,18 +149,6 @@
     </dependency>
 
     <!-- Parquet -->
-    <dependency>
-      <groupId>org.apache.parquet</groupId>
-      <artifactId>parquet-avro</artifactId>
-      <scope>compile</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.parquet</groupId>
-      <artifactId>parquet-column</artifactId>
-      <scope>compile</scope>
-    </dependency>
-
     <dependency>
       <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>

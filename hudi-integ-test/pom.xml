@@ -85,30 +85,7 @@
           <groupId>org.apache.curator</groupId>
           <artifactId>*</artifactId>
         </exclusion>
-        <exclusion>
-          <artifactId>parquet-hadoop</artifactId>
-          <groupId>org.apache.parquet</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>parquet-column</artifactId>
-          <groupId>org.apache.parquet</groupId>
-        </exclusion>
       </exclusions>
-    </dependency>
-
-    <!-- Parquet -->
-    <dependency>
-      <groupId>org.apache.parquet</groupId>
-      <artifactId>parquet-avro</artifactId>
-      <version>${parquet.version}</version>
-      <scope>compile</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.parquet</groupId>
-      <artifactId>parquet-column</artifactId>
-      <version>${parquet.version}</version>
-      <scope>compile</scope>
     </dependency>
 
     <!-- Hoodie -->
