@@ -23,7 +23,7 @@ import org.apache.spark.sql.connector.expressions.{BucketTransform, FieldReferen
 
 import scala.collection.mutable
 
-object HudiSpark3SqlUtils {
+object HoodieSpark3SqlUtils {
   def convertTransforms(partitions: Seq[Transform]): (Seq[String], Option[BucketSpec]) = {
     val identityCols = new mutable.ArrayBuffer[String]
     var bucketSpec = Option.empty[BucketSpec]

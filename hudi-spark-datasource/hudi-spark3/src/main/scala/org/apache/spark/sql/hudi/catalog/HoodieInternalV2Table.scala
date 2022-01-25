@@ -64,14 +64,11 @@ case class HoodieInternalV2Table(spark: SparkSession,
   ).asJava
 
   override def properties(): util.Map[String, String] = {
-    val map = new util.HashMap[String, String]()
-    map.put("provider", "hudi")
-    map.putAll(hoodieCatalogTable.catalogProperties.asJava)
-    map
+    hoodieCatalogTable.catalogProperties.asJava
   }
 
   override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder = {
-    new WriteIntoHoodieBuilder(info.options, hoodieCatalogTable, spark)
+    new HoodieV1WriteBuilder(info.options, hoodieCatalogTable, spark)
   }
 
   override def v1Table: CatalogTable = hoodieCatalogTable.table
@@ -84,14 +81,14 @@ case class HoodieInternalV2Table(spark: SparkSession,
 
 }
 
-private class WriteIntoHoodieBuilder(writeOptions: CaseInsensitiveStringMap,
+private class HoodieV1WriteBuilder(writeOptions: CaseInsensitiveStringMap,
                                      hoodieCatalogTable: HoodieCatalogTable,
                                      spark: SparkSession)
-  extends SupportsTruncate with SupportsOverwrite with HoodieConfigHelper {
+  extends SupportsTruncate with SupportsOverwrite with ProvidesHoodieConfig {
 
   private var forceOverwrite = false
 
-  override def truncate(): WriteIntoHoodieBuilder = {
+  override def truncate(): HoodieV1WriteBuilder = {
     forceOverwrite = true
     this
   }

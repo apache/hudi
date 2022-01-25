@@ -19,22 +19,21 @@
 package org.apache.spark.sql.hudi.catalog
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.util.ConfigUtils
 import org.apache.hudi.sql.InsertMode
-import org.apache.spark.sql.HudiSpark3SqlUtils.convertTransforms
+import org.apache.spark.sql.HoodieSpark3SqlUtils.convertTransforms
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.{NoSuchTableException, TableAlreadyExistsException}
+import org.apache.spark.sql.catalyst.analysis.{NoSuchTableException, TableAlreadyExistsException, UnresolvedAttribute}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, CatalogUtils, HoodieCatalogTable}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
-import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, ColumnChange, UpdateColumnType}
+import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, ColumnChange, UpdateColumnComment, UpdateColumnType}
 import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.execution.datasources.DataSource
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isHoodieTable
 import org.apache.spark.sql.hudi.command.{AlterHoodieTableAddColumnsCommand, AlterHoodieTableChangeColumnCommand, AlterHoodieTableRenameCommand, CreateHoodieTableCommand}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.types.{StructField, StructType}
@@ -43,12 +42,15 @@ import org.apache.spark.sql.{Dataset, SaveMode, SparkSession, _}
 import java.util
 import scala.collection.JavaConverters.{mapAsJavaMapConverter, mapAsScalaMapConverter}
 
-class HoodieCatalog extends DelegatingCatalogExtension with StagingTableCatalog with HoodieConfigHelper {
+class HoodieCatalog extends DelegatingCatalogExtension
+  with StagingTableCatalog
+  with SparkAdapterSupport
+  with ProvidesHoodieConfig {
 
   val spark: SparkSession = SparkSession.active
 
   override def stageCreate(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
-    if (isHoodieTable(properties.asScala.toMap)) {
+    if (sparkAdapter.isHoodieTable(properties)) {
       HoodieStagedTable(ident, this, schema, partitions, properties, TableCreationMode.STAGE_CREATE)
     } else {
       BaseStagedTable(
@@ -59,7 +61,7 @@ class HoodieCatalog extends DelegatingCatalogExtension with StagingTableCatalog 
   }
 
   override def stageReplace(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
-    if (isHoodieTable(properties.asScala.toMap)) {
+    if (sparkAdapter.isHoodieTable(properties)) {
       HoodieStagedTable(ident, this, schema, partitions, properties, TableCreationMode.STAGE_REPLACE)
     } else {
       super.dropTable(ident)
@@ -74,7 +76,7 @@ class HoodieCatalog extends DelegatingCatalogExtension with StagingTableCatalog 
                                     schema: StructType,
                                     partitions: Array[Transform],
                                     properties: util.Map[String, String]): StagedTable = {
-    if (isHoodieTable(properties.asScala.toMap)) {
+    if (sparkAdapter.isHoodieTable(properties)) {
       HoodieStagedTable(
         ident, this, schema, partitions, properties, TableCreationMode.CREATE_OR_REPLACE)
     } else {
@@ -91,7 +93,7 @@ class HoodieCatalog extends DelegatingCatalogExtension with StagingTableCatalog 
   override def loadTable(ident: Identifier): Table = {
     try {
       super.loadTable(ident) match {
-        case v1: V1Table if HoodieSqlCommonUtils.isHoodieTable(v1.catalogTable) =>
+        case v1: V1Table if sparkAdapter.isHoodieTable(v1.catalogTable) =>
           HoodieInternalV2Table(
             spark,
             v1.catalogTable.location.toString,
@@ -165,10 +167,20 @@ class HoodieCatalog extends DelegatingCatalogExtension with StagingTableCatalog 
       case (t, columnChanges) if classOf[ColumnChange].isAssignableFrom(t) =>
         columnChanges.foreach {
           case dataType: UpdateColumnType =>
-            val fieldName = dataType.fieldNames()(0)
+            val colName = UnresolvedAttribute(dataType.fieldNames()).name
             val newDataType = dataType.newDataType()
-            val structField = StructField(fieldName, newDataType)
-            AlterHoodieTableChangeColumnCommand(tableIdent, fieldName, structField).run(spark)
+            val structField = StructField(colName, newDataType)
+            AlterHoodieTableChangeColumnCommand(tableIdent, colName, structField).run(spark)
+          case dataType: UpdateColumnComment =>
+            val newComment = dataType.newComment()
+            val colName = UnresolvedAttribute(dataType.fieldNames()).name
+            val fieldOpt = table.schema().findNestedField(dataType.fieldNames(), includeCollections = true,
+              spark.sessionState.conf.resolver).map(_._2)
+            val field = fieldOpt.getOrElse {
+              throw new AnalysisException(
+                s"Couldn't find column $colName in:\n${table.schema().treeString}")
+            }
+            AlterHoodieTableChangeColumnCommand(tableIdent, colName, field.withComment(newComment)).run(spark)
         }
       case (t, _) =>
         throw new UnsupportedOperationException(s"not supported table change: ${t.getClass}")
@@ -258,7 +270,7 @@ class HoodieCatalog extends DelegatingCatalogExtension with StagingTableCatalog 
   }
 
   protected def isPathIdentifier(tableIdentifier: TableIdentifier): Boolean = {
-    isPathIdentifier(HoodieIdentifierHelper.of(tableIdentifier.database.toArray, tableIdentifier.table))
+    isPathIdentifier(HoodieIdentifier(tableIdentifier.database.toArray, tableIdentifier.table))
   }
 
   private def getExistingTableIfExists(table: TableIdentifier): Option[CatalogTable] = {
@@ -273,7 +285,7 @@ class HoodieCatalog extends DelegatingCatalogExtension with StagingTableCatalog 
       val oldTable = catalog.getTableMetadata(table)
       if (oldTable.tableType == CatalogTableType.VIEW) throw new HoodieException(
         s"$table is a view. You may not write data into a view.")
-      if (!HoodieSqlCommonUtils.isHoodieTable(oldTable)) throw new HoodieException(s"$table is not a Hoodie table.")
+      if (!sparkAdapter.isHoodieTable(oldTable)) throw new HoodieException(s"$table is not a Hoodie table.")
       Some(oldTable)
     } else None
   }

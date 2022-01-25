@@ -21,12 +21,6 @@ package org.apache.spark.sql.connector.catalog
 import java.util
 import java.util.Objects
 
-object HoodieIdentifierHelper {
-  def of(namespace: Array[String], name: String): Identifier = {
-    HoodieIdentifier(namespace, name)
-  }
-}
-
 /**
  * This class is to make scala-2.11 compilable.
  * Using Identifier.of(namespace, name) to get a IdentifierImpl will throw

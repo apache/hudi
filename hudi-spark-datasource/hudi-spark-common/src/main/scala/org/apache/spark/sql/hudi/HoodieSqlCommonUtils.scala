@@ -54,28 +54,6 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     override def get() = new SimpleDateFormat("yyyy-MM-dd")
   })
 
-  def isHoodieTable(properties: Map[String, String]): Boolean = {
-    properties.getOrElse("provider", "").toLowerCase(Locale.ROOT) == "hudi"
-  }
-
-  def isHoodieTable(table: CatalogTable): Boolean = {
-    table.provider.map(_.toLowerCase(Locale.ROOT)).orNull == "hudi"
-  }
-
-  def isHoodieTable(tableId: TableIdentifier, spark: SparkSession): Boolean = {
-    val table = spark.sessionState.catalog.getTableMetadata(tableId)
-    isHoodieTable(table)
-  }
-
-  def isHoodieTable(table: LogicalPlan, spark: SparkSession): Boolean = {
-    tripAlias(table) match {
-      case LogicalRelation(_, _, Some(tbl), _) => isHoodieTable(tbl)
-      case relation: UnresolvedRelation =>
-        isHoodieTable(sparkAdapter.toTableIdentifier(relation), spark)
-      case _=> false
-    }
-  }
-
   def getTableIdentifier(table: LogicalPlan): TableIdentifier = {
     table match {
       case SubqueryAlias(name, _) => sparkAdapter.toTableIdentifier(name)

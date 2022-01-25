@@ -30,15 +30,12 @@ import org.apache.hudi.sql.InsertMode
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{castIfNeeded, isEnableHive, withSparkConf}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isEnableHive, withSparkConf}
 import org.apache.spark.sql.hudi.command.{SqlKeyGenerator, ValidateDuplicateKeyPayload}
-import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.StructField
 
 import scala.collection.JavaConverters.propertiesAsScalaMapConverter
 
-trait HoodieConfigHelper extends Logging {
+trait ProvidesHoodieConfig extends Logging {
 
   def buildHoodieConfig(hoodieCatalogTable: HoodieCatalogTable): Map[String, String] = {
     val sparkSession: SparkSession = hoodieCatalogTable.spark
@@ -46,8 +43,8 @@ trait HoodieConfigHelper extends Logging {
     val tableConfig = hoodieCatalogTable.tableConfig
     val tableId = hoodieCatalogTable.table.identifier
 
-    val preCombineColumn = Option(tableConfig.getPreCombineField).getOrElse("")
-    assert(hoodieCatalogTable.primaryKeys.nonEmpty,
+    val preCombineField = Option(tableConfig.getPreCombineField).getOrElse("")
+    require(hoodieCatalogTable.primaryKeys.nonEmpty,
       s"There are no primary key in table ${hoodieCatalogTable.table.identifier}, cannot execute update operator")
     val enableHive = isEnableHive(sparkSession)
 
@@ -55,7 +52,7 @@ trait HoodieConfigHelper extends Logging {
       Map(
         "path" -> hoodieCatalogTable.tableLocation,
         RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
-        PRECOMBINE_FIELD.key -> preCombineColumn,
+        PRECOMBINE_FIELD.key -> preCombineField,
         TBL_NAME.key -> hoodieCatalogTable.tableName,
         HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
         URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
@@ -75,10 +72,6 @@ trait HoodieConfigHelper extends Logging {
         SqlKeyGenerator.PARTITION_SCHEMA -> hoodieCatalogTable.partitionSchema.toDDL
       )
     }
-  }
-
-  def cast(exp: Expression, field: StructField, sqlConf: SQLConf): Expression = {
-    castIfNeeded(exp, field.dataType, sqlConf)
   }
 
   /**

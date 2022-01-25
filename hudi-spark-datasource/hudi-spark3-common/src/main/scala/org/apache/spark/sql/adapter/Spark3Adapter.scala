@@ -35,6 +35,8 @@ import org.apache.spark.sql.execution.datasources.{FilePartition, LogicalRelatio
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.internal.SQLConf
 
+import scala.collection.JavaConverters.mapAsScalaMapConverter
+
 /**
  * The adapter for spark3.
  */
@@ -113,9 +115,5 @@ class Spark3Adapter extends SparkAdapter {
       case DataSourceV2Relation(table: Table, _, _, _, _) => isHoodieTable(table.properties())
       case _=> false
     }
-  }
-
-  def isHoodieTable(map: java.util.Map[String, String]): Boolean = {
-    map.getOrDefault("provider", "").equals("hudi")
   }
 }

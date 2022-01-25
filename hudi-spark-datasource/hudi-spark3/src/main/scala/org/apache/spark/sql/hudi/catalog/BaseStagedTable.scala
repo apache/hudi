@@ -25,6 +25,12 @@ import org.apache.spark.sql.types.StructType
 
 import java.util
 
+/**
+ * Basic implementation that represents a table which is staged for being committed.
+ * @param ident table ident
+ * @param table table
+ * @param catalog table catalog
+ */
 case class BaseStagedTable(ident: Identifier,
                            table: Table,
                            catalog: TableCatalog) extends SupportsWrite with StagedTable {

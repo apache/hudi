@@ -18,6 +18,7 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
@@ -111,13 +112,8 @@ trait SparkAdapter extends Serializable {
     }
   }
 
-  def tripAlias(plan: LogicalPlan): LogicalPlan = {
-    plan match {
-      case SubqueryAlias(_, relation: LogicalPlan) =>
-        tripAlias(relation)
-      case other =>
-        other
-    }
+  def isHoodieTable(map: java.util.Map[String, String]): Boolean = {
+    map.getOrDefault("provider", "").equals("hudi")
   }
 
   def isHoodieTable(table: CatalogTable): Boolean = {
@@ -127,5 +123,14 @@ trait SparkAdapter extends Serializable {
   def isHoodieTable(tableId: TableIdentifier, spark: SparkSession): Boolean = {
     val table = spark.sessionState.catalog.getTableMetadata(tableId)
     isHoodieTable(table)
+  }
+
+  def tripAlias(plan: LogicalPlan): LogicalPlan = {
+    plan match {
+      case SubqueryAlias(_, relation: LogicalPlan) =>
+        tripAlias(relation)
+      case other =>
+        other
+    }
   }
 }

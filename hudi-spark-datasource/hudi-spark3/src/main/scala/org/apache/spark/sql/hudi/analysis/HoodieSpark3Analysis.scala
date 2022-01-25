@@ -26,20 +26,23 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.execution.datasources.LogicalRelation
+import org.apache.spark.sql.execution.datasources.PreWriteCheck.failAnalysis
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, V2SessionCatalog}
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{castIfNeeded, getTableLocation, isHoodieTable, removeMetaFields, tableExistsInPath}
-import org.apache.spark.sql.hudi.catalog.{HoodieCatalog, HoodieConfigHelper, HoodieInternalV2Table}
-import org.apache.spark.sql.hudi.command.{AlterHoodieTableDropPartitionCommand, ShowHoodieTablePartitionsCommand, TruncateHoodieTableCommand}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{castIfNeeded, getTableLocation, removeMetaFields, tableExistsInPath}
+import org.apache.spark.sql.hudi.catalog.{HoodieCatalog, HoodieInternalV2Table, ProvidesHoodieConfig}
+import org.apache.spark.sql.hudi.command.{AlterHoodieTableDropPartitionCommand, ShowHoodieTablePartitionsCommand, TruncateHoodieTableCommand}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{AnalysisException, SQLContext, SparkSession}
+
+import scala.collection.JavaConverters.mapAsJavaMapConverter
 
 /**
  * Rule for convert the logical plan to command.
  * @param sparkSession
  */
 case class HoodieSpark3Analysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
-  with SparkAdapterSupport with HoodieConfigHelper {
+  with SparkAdapterSupport with ProvidesHoodieConfig {
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsDown {
     case dsv2 @ DataSourceV2Relation(d: HoodieInternalV2Table, _, _, _, _) =>
@@ -63,6 +66,15 @@ case class HoodieSpark3Analysis(sparkSession: SparkSession) extends Rule[Logical
       }
   }
 
+  /**
+   * Need to adjust schema based on the query and relation schema, for example,
+   * if using insert into xx select 1, 2 here need to map to column names
+   * @param query
+   * @param hoodieTable
+   * @param partitionSpec
+   * @param schema
+   * @return
+   */
   private def needsSchemaAdjustment(query: LogicalPlan,
                                     hoodieTable: HoodieInternalV2Table,
                                     partitionSpec: Map[String, Option[String]],
@@ -117,13 +129,18 @@ case class HoodieSpark3Analysis(sparkSession: SparkSession) extends Rule[Logical
  * @param sparkSession
  */
 case class HoodieSpark3ResolveReferences(sparkSession: SparkSession) extends Rule[LogicalPlan]
-  with SparkAdapterSupport with HoodieConfigHelper {
+  with SparkAdapterSupport with ProvidesHoodieConfig {
 
   def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp {
     // Fill schema for Create Table without specify schema info
-    case c @ CreateV2Table(tableCatalog, tableName, schema, _, properties, _)
-      if isHoodieTable(properties) =>
+    case c @ CreateV2Table(tableCatalog, tableName, schema, partitioning, properties, _)
+      if sparkAdapter.isHoodieTable(properties.asJava) =>
 
+      if (schema.isEmpty && partitioning.nonEmpty) {
+        failAnalysis("It is not allowed to specify partition columns when the table schema is " +
+          "not defined. When the table schema is not provided, schema and partition columns " +
+          "will be inferred.")
+      }
       val hoodieCatalog = tableCatalog match {
         case catalog: HoodieCatalog => catalog
         case _ => tableCatalog.asInstanceOf[V2SessionCatalog]
@@ -151,15 +168,6 @@ case class HoodieSpark3ResolveReferences(sparkSession: SparkSession) extends Rul
       } else {
         c
       }
-    case DropPartitions(child, specs, ifExists, purge)
-      if child.resolved && child.isInstanceOf[ResolvedTable] && child.asInstanceOf[ResolvedTable].table.isInstanceOf[HoodieInternalV2Table] =>
-      AlterHoodieTableDropPartitionCommand(
-        child.asInstanceOf[ResolvedTable].identifier.asTableIdentifier,
-        specs.seq.map(f => f.asInstanceOf[UnresolvedPartitionSpec]).map(s => s.spec),
-        ifExists,
-        purge,
-        retainData = true
-      )
     case p => p
   }
 }
@@ -181,6 +189,17 @@ case class HoodieSpark3PostAnalysisRule(sparkSession: SparkSession) extends Rule
         if child.isInstanceOf[ResolvedTable] &&
           child.asInstanceOf[ResolvedTable].table.isInstanceOf[HoodieInternalV2Table] =>
         new TruncateHoodieTableCommand(child.asInstanceOf[ResolvedTable].identifier.asTableIdentifier, None)
+
+      case DropPartitions(child, specs, ifExists, purge)
+        if child.resolved && child.isInstanceOf[ResolvedTable] && child.asInstanceOf[ResolvedTable].table.isInstanceOf[HoodieInternalV2Table] =>
+        AlterHoodieTableDropPartitionCommand(
+          child.asInstanceOf[ResolvedTable].identifier.asTableIdentifier,
+          specs.seq.map(f => f.asInstanceOf[UnresolvedPartitionSpec]).map(s => s.spec),
+          ifExists,
+          purge,
+          retainData = true
+        )
+
       case _ => plan
     }
   }
