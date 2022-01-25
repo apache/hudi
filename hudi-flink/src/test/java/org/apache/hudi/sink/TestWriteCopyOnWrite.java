@@ -397,6 +397,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
 
   @Test
   public void testReuseEmbeddedServer() throws IOException {
+    conf.setInteger("hoodie.filesystem.view.remote.timeout.secs", 500);
     HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf);
     FileSystemViewStorageConfig viewStorageConfig = writeClient.getConfig().getViewStorageConfig();
 
@@ -406,6 +407,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     writeClient = StreamerUtil.createWriteClient(conf);
     assertSame(writeClient.getConfig().getViewStorageConfig().getStorageType(), FileSystemViewStorageType.REMOTE_FIRST);
     assertEquals(viewStorageConfig.getRemoteViewServerPort(), writeClient.getConfig().getViewStorageConfig().getRemoteViewServerPort());
+    assertEquals(viewStorageConfig.getRemoteTimelineClientTimeoutSecs(), 500);
   }
 
   // -------------------------------------------------------------------------
