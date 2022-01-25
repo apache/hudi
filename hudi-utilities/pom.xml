@@ -224,7 +224,7 @@
           <groupId>javax.servlet</groupId>
           <artifactId>*</artifactId>
         </exclusion>
-    </exclusions>
+      </exclusions>
     </dependency>
 
     <dependency>
