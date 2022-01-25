@@ -103,8 +103,6 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
 
     CompactionTestUtils.setupAndValidateCompactionOperations(HoodieCLI.getTableMetaClient(), false, 3, 4, 3, 3);
 
-    HoodieCLI.getTableMetaClient().reloadActiveTimeline();
-
     CommandResult cr = shell().executeCommand("compactions show all");
     System.out.println(cr.getResult().toString());
 
@@ -135,8 +133,6 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
 
     CompactionTestUtils.setupAndValidateCompactionOperations(HoodieCLI.getTableMetaClient(), false, 3, 4, 3, 3);
 
-    HoodieCLI.getTableMetaClient().reloadActiveTimeline();
-
     CommandResult cr = shell().executeCommand("compaction show --instant 001");
     System.out.println(cr.getResult().toString());
   }
@@ -149,7 +145,7 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
 
     CompactionTestUtils.setupAndValidateCompactionOperations(HoodieCLI.getTableMetaClient(), true, 1, 2, 3, 4);
 
-    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().reloadActiveTimeline();
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     // Create six commits
     Arrays.asList("001", "003", "005", "007").forEach(timestamp -> {
       activeTimeline.transitionCompactionInflightToComplete(
@@ -215,7 +211,7 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
     String instance = "001";
     // get compaction plan before compaction
     HoodieCompactionPlan plan = TimelineMetadataUtils.deserializeCompactionPlan(
-        HoodieCLI.getTableMetaClient().reloadActiveTimeline().readCompactionPlanAsBytes(
+        HoodieCLI.getTableMetaClient().getActiveTimeline().readCompactionPlanAsBytes(
             HoodieTimeline.getCompactionRequestedInstant(instance)).get());
 
     generateArchive();

@@ -128,7 +128,6 @@ public class IncrementalInputSplits implements Serializable {
       HoodieTableMetaClient metaClient,
       org.apache.hadoop.conf.Configuration hadoopConf,
       String issuedInstant) {
-    metaClient.reloadActiveTimeline();
     HoodieTimeline commitTimeline = metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants();
     if (commitTimeline.empty()) {
       LOG.warn("No splits found for the table under path " + path);

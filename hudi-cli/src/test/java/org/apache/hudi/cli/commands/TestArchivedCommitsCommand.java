@@ -96,7 +96,7 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     // reload the timeline and get all the commits before archive
-    metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
+    metaClient.getActiveTimeline().getAllCommitsTimeline().filterCompletedInstants();
 
     // archive
     HoodieSparkTable table = HoodieSparkTable.create(cfg, context(), metaClient);

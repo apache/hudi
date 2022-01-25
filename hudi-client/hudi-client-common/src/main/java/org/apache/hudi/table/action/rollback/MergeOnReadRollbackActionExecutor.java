@@ -73,7 +73,6 @@ public class MergeOnReadRollbackActionExecutor<T extends HoodieRecordPayload, I,
       LOG.info("Un-publishing instant " + instantToRollback + ", deleteInstants=" + deleteInstants);
       resolvedInstant = table.getActiveTimeline().revertToInflight(instantToRollback);
       // reload meta-client to reflect latest timeline status
-      table.getMetaClient().reloadActiveTimeline();
     }
 
     List<HoodieRollbackStat> allRollbackStats = new ArrayList<>();

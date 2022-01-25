@@ -144,7 +144,7 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
     if (commitSecondInsertOverwrite) {
       client.commit(newCommitTime, statuses, Option.empty(), commitActionType, result.getPartitionToReplaceFileIds());
     }
-    metaClient.reloadActiveTimeline();
+
     // get new fileIds written as part of insert_overwrite
     fsView = getFileSystemViewWithUnCommittedSlices(metaClient);
     List<HoodieFileGroup> firstPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH)

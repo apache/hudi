@@ -47,7 +47,6 @@ public class HoodieFlinkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
     HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(compactionInstantTime);
     if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
       table.rollbackInflightCompaction(inflightInstant);
-      table.getMetaClient().reloadActiveTimeline();
     }
   }
 

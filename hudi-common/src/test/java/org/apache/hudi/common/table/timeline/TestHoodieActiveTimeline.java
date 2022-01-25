@@ -98,7 +98,6 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     timeline.saveAsComplete(new HoodieInstant(true, instant4.getAction(), instant4.getTimestamp()),
         Option.empty());
     timeline.createNewInstant(instant5);
-    timeline = timeline.reload();
 
     assertEquals(5, timeline.countInstants(), "Total instants should be 5");
     assertStreamEquals(
@@ -130,8 +129,6 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(VERSION_0))).build());
     // Old Timeline writes both to aux and timeline folder
     oldTimeline.saveToCompactionRequested(instant6, Option.of(dummy));
-    // Now use latest timeline version
-    timeline = timeline.reload();
     // Ensure aux file is present
     assertTrue(metaClient.getFs().exists(new Path(metaClient.getMetaAuxiliaryPath(), instant6.getFileName())));
     // Read 5 bytes
@@ -248,19 +245,16 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     // revertToInflight
     HoodieInstant commit = new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "1");
     timeline.createNewInstant(commit);
-    timeline = timeline.reload();
     assertEquals(1, timeline.countInstants());
     assertTrue(timeline.containsInstant(commit));
     HoodieInstant inflight = timeline.revertToInflight(commit);
     // revert creates the .requested file
-    timeline = timeline.reload();
     assertEquals(1, timeline.countInstants());
     assertTrue(timeline.containsInstant(inflight));
     assertFalse(timeline.containsInstant(commit));
 
     // deleteInflight
     timeline.deleteInflight(inflight);
-    timeline = timeline.reload();
     assertEquals(1, timeline.countInstants());
     assertFalse(timeline.containsInstant(inflight));
     assertFalse(timeline.containsInstant(commit));
@@ -268,10 +262,8 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     // deletePending
     timeline.createNewInstant(commit);
     timeline.createNewInstant(inflight);
-    timeline = timeline.reload();
     assertEquals(1, timeline.countInstants());
     timeline.deletePending(inflight);
-    timeline = timeline.reload();
     assertEquals(1, timeline.countInstants());
     assertFalse(timeline.containsInstant(inflight));
     assertTrue(timeline.containsInstant(commit));
@@ -279,10 +271,8 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     // deleteCompactionRequested
     HoodieInstant compaction = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "2");
     timeline.createNewInstant(compaction);
-    timeline = timeline.reload();
     assertEquals(2, timeline.countInstants());
     timeline.deleteCompactionRequested(compaction);
-    timeline = timeline.reload();
     assertEquals(1, timeline.countInstants());
     assertFalse(timeline.containsInstant(inflight));
     assertFalse(timeline.containsInstant(compaction));
@@ -291,33 +281,26 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     // transitionCompactionXXXtoYYY and revertCompactionXXXtoYYY
     compaction = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "3");
     timeline.createNewInstant(compaction);
-    timeline = timeline.reload();
     assertTrue(timeline.containsInstant(compaction));
     inflight = timeline.transitionCompactionRequestedToInflight(compaction);
-    timeline = timeline.reload();
     assertFalse(timeline.containsInstant(compaction));
     assertTrue(timeline.containsInstant(inflight));
     compaction = timeline.revertCompactionInflightToRequested(inflight);
-    timeline = timeline.reload();
     assertTrue(timeline.containsInstant(compaction));
     assertFalse(timeline.containsInstant(inflight));
     inflight = timeline.transitionCompactionRequestedToInflight(compaction);
     compaction = timeline.transitionCompactionInflightToComplete(inflight, Option.empty());
-    timeline = timeline.reload();
     assertTrue(timeline.containsInstant(compaction));
     assertFalse(timeline.containsInstant(inflight));
 
     // transitionCleanXXXtoYYY
     HoodieInstant clean = new HoodieInstant(State.REQUESTED, HoodieTimeline.CLEAN_ACTION, "4");
     timeline.saveToCleanRequested(clean, Option.empty());
-    timeline = timeline.reload();
     assertTrue(timeline.containsInstant(clean));
     inflight = timeline.transitionCleanRequestedToInflight(clean, Option.empty());
-    timeline = timeline.reload();
     assertFalse(timeline.containsInstant(clean));
     assertTrue(timeline.containsInstant(inflight));
     clean = timeline.transitionCleanInflightToComplete(inflight, Option.empty());
-    timeline = timeline.reload();
     assertTrue(timeline.containsInstant(clean));
     assertFalse(timeline.containsInstant(inflight));
 
@@ -354,7 +337,6 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
       timeline.createNewInstant(instant);
     }
 
-    timeline = timeline.reload();
     for (HoodieInstant instant : allInstants) {
       assertTrue(timeline.containsInstant(instant));
     }

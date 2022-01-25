@@ -108,7 +108,6 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
     HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
     // Mark instant as compaction inflight
     timeline.transitionCompactionRequestedToInflight(instant);
-    table.getMetaClient().reloadActiveTimeline();
 
     HoodieTableMetaClient metaClient = table.getMetaClient();
     TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);

@@ -19,12 +19,14 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hadoop.fs.FileStatus;
 
 import java.io.Serializable;
 import java.util.Comparator;
+import java.util.Set;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * A Hoodie Instant represents a action done on a hoodie table. All actions start with a inflight instant and then
@@ -33,6 +35,8 @@ import java.util.Objects;
  * @see HoodieTimeline
  */
 public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
+
+  private static Pattern INSTANT_PATTERN = Pattern.compile("\\d+(\\.\\w+($|\\.(requested|inflight|invalid)))");
 
   /**
    * A COMPACTION action eventually becomes COMMIT when completed. So, when grouping instants
@@ -57,6 +61,19 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     return dotIndex == -1 ? "" : fileName.substring(dotIndex);
   }
 
+  public static boolean latestValidInstantFile(String fileName, HoodieInstant baseInstanst, Set<String> extensions) {
+    Objects.requireNonNull(fileName);
+    Matcher matcher = INSTANT_PATTERN.matcher(fileName);
+    if (matcher.matches() && matcher.find()) {
+      if (baseInstanst == null) {
+        return extensions.contains(matcher.group(1));
+      } else {
+        return extensions.contains(matcher.group(1)) && baseInstanst.compareTo(new HoodieInstant(fileName)) < 0;
+      }
+    }
+    return false;
+  }
+
   /**
    * Instant State.
    */
@@ -76,11 +93,10 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   private String timestamp;
 
   /**
-   * Load the instant from the meta FileStatus.
+   * Load the instant from the file name
    */
-  public HoodieInstant(FileStatus fileStatus) {
+  public HoodieInstant(String fileName) {
     // First read the instant timestamp. [==>20170101193025<==].commit
-    String fileName = fileStatus.getPath().getName();
     String fileExtension = getTimelineFileExtension(fileName);
     timestamp = fileName.replace(fileExtension, "");
 

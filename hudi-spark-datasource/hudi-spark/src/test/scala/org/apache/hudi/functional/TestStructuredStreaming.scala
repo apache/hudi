@@ -211,7 +211,6 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     def checkClusteringResult(destPath: String):Unit = {
       // check have schedule clustering and clustering file group to one
       waitTillHasCompletedReplaceInstant(destPath, 120, 1)
-      metaClient.reloadActiveTimeline()
       assertEquals(1, getLatestFileGroupsFileId(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).size)
     }
     structuredStreamingForTestClusteringRunner(sourcePath, destPath, true, false, false,
@@ -225,7 +224,6 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     def checkClusteringResult(destPath: String):Unit = {
       // check have schedule clustering and clustering file group to one
       waitTillHasCompletedReplaceInstant(destPath, 120, 1)
-      metaClient.reloadActiveTimeline()
       assertEquals(1, getLatestFileGroupsFileId(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).size)
     }
     structuredStreamingForTestClusteringRunner(sourcePath, destPath, false, true, false,
@@ -239,7 +237,6 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     def checkClusteringResult(destPath: String):Unit = {
       // check have schedule clustering and clustering file group to one
       waitTillHasCompletedReplaceInstant(destPath, 120, 1)
-      metaClient.reloadActiveTimeline()
       assertEquals(1, getLatestFileGroupsFileId(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).size)
     }
     structuredStreamingForTestClusteringRunner(sourcePath, destPath, false, true, true,
@@ -311,7 +308,6 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     val timeoutMsecs = timeoutSecs * 1000
     var success = false
     while ({!success && (currTime - beginTime) < timeoutMsecs}) try {
-      this.metaClient.reloadActiveTimeline()
       val completeReplaceSize = this.metaClient.getActiveTimeline.getCompletedReplaceTimeline().getInstants.toArray.size
       println("completeReplaceSize:" + completeReplaceSize)
       if (completeReplaceSize > 0) {

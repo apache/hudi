@@ -106,7 +106,6 @@ public class TestHoodieDataSourceInternalWriter extends
     commitMessages.add(commitMetadata);
     dataSourceInternalWriter.commit(commitMessages.toArray(new HoodieWriterCommitMessage[0]));
 
-    metaClient.reloadActiveTimeline();
     Dataset<Row> result = HoodieClientTestUtils.read(jsc, basePath, sqlContext, metaClient.getFs(), partitionPathsAbs.toArray(new String[0]));
     // verify output
     assertOutput(totalInputRows, result, instantTime, Option.empty(), populateMetaFields);
@@ -185,7 +184,6 @@ public class TestHoodieDataSourceInternalWriter extends
       HoodieWriterCommitMessage commitMetadata = (HoodieWriterCommitMessage) writer.commit();
       commitMessages.add(commitMetadata);
       dataSourceInternalWriter.commit(commitMessages.toArray(new HoodieWriterCommitMessage[0]));
-      metaClient.reloadActiveTimeline();
 
       Dataset<Row> result = HoodieClientTestUtils.readCommit(basePath, sqlContext, metaClient.getCommitTimeline(), instantTime,
           populateMetaFields);
@@ -232,7 +230,6 @@ public class TestHoodieDataSourceInternalWriter extends
       HoodieWriterCommitMessage commitMetadata = (HoodieWriterCommitMessage) writer.commit();
       commitMessages.add(commitMetadata);
       dataSourceInternalWriter.commit(commitMessages.toArray(new HoodieWriterCommitMessage[0]));
-      metaClient.reloadActiveTimeline();
 
       Dataset<Row> result = HoodieClientTestUtils.readCommit(basePath, sqlContext, metaClient.getCommitTimeline(), instantTime,
           populateMetaFields);
@@ -287,7 +284,6 @@ public class TestHoodieDataSourceInternalWriter extends
     commitMessages.add(commitMetadata);
     // commit 1st batch
     dataSourceInternalWriter.commit(commitMessages.toArray(new HoodieWriterCommitMessage[0]));
-    metaClient.reloadActiveTimeline();
     Dataset<Row> result = HoodieClientTestUtils.read(jsc, basePath, sqlContext, metaClient.getFs(), partitionPathsAbs.toArray(new String[0]));
     // verify rows
     assertOutput(totalInputRows, result, instantTime0, Option.empty(), populateMetaFields);
@@ -310,7 +306,6 @@ public class TestHoodieDataSourceInternalWriter extends
     commitMessages.add(commitMetadata);
     // commit 1st batch
     dataSourceInternalWriter.abort(commitMessages.toArray(new HoodieWriterCommitMessage[0]));
-    metaClient.reloadActiveTimeline();
     result = HoodieClientTestUtils.read(jsc, basePath, sqlContext, metaClient.getFs(), partitionPathsAbs.toArray(new String[0]));
     // verify rows
     // only rows from first batch should be present

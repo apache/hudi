@@ -115,7 +115,6 @@ public class BaseRollbackPlanActionExecutor<T extends HoodieRecordPayload, I, K,
           LOG.warn("Request Rollback found with instant time " + rollbackInstant + ", hence skipping scheduling rollback");
         } else {
           table.getActiveTimeline().saveToRollbackRequested(rollbackInstant, TimelineMetadataUtils.serializeRollbackPlan(rollbackPlan));
-          table.getMetaClient().reloadActiveTimeline();
           LOG.info("Requesting Rollback with instant time " + rollbackInstant);
         }
       }

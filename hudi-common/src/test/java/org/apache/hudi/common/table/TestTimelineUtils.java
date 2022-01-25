@@ -76,7 +76,6 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     activeTimeline.saveAsComplete(instant1,
         Option.of(getReplaceCommitMetadata(basePath, ts1, replacePartition, 2, 
             newFilePartition, 0, Collections.emptyMap(), WriteOperationType.CLUSTER)));
-    metaClient.reloadActiveTimeline();
 
     List<String> partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsAfter("0", 10));
     assertEquals(1, partitions.size());
@@ -89,7 +88,6 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     activeTimeline.saveAsComplete(instant2,
         Option.of(getReplaceCommitMetadata(basePath, ts2, replacePartition, 0,
             newFilePartition, 3, Collections.emptyMap(), WriteOperationType.CLUSTER)));
-    metaClient.reloadActiveTimeline();
     partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
     assertEquals(1, partitions.size());
     assertEquals(newFilePartition, partitions.get(0));
@@ -117,8 +115,6 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
       activeTimeline.createNewInstant(cleanInstant);
       activeTimeline.saveAsComplete(cleanInstant, getCleanMetadata(olderPartition, ts));
     }
-
-    metaClient.reloadActiveTimeline();
 
     // verify modified partitions included cleaned data
     List<String> partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
@@ -157,8 +153,6 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
       activeTimeline.saveAsComplete(cleanInstant, getCleanMetadata(partitionPath, ts));
     }
 
-    metaClient.reloadActiveTimeline();
-
     // verify modified partitions included cleaned data
     List<String> partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
     assertTrue(partitions.isEmpty());
@@ -179,8 +173,6 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
       activeTimeline.createNewInstant(instant);
       activeTimeline.saveAsComplete(instant, Option.of(getRestoreMetadata(basePath, ts, ts, 2, HoodieTimeline.COMMIT_ACTION)));
     }
-
-    metaClient.reloadActiveTimeline();
 
     // verify modified partitions included cleaned data
     List<String> partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
@@ -211,8 +203,6 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     extraMetadata.put(extraMetadataKey, extraMetadataValue1);
     activeTimeline.saveAsComplete(instant, Option.of(getCommitMetadata(basePath, ts, ts, 2, extraMetadata)));
 
-    metaClient.reloadActiveTimeline();
-
     // verify modified partitions included cleaned data
     verifyExtraMetadataLatestValue(extraMetadataKey, extraMetadataValue1, false);
     assertFalse(TimelineUtils.getExtraMetadataFromLatest(metaClient, "unknownKey").isPresent());
@@ -226,8 +216,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     activeTimeline.saveAsComplete(instant2,
         Option.of(getReplaceCommitMetadata(basePath, ts2, "p2", 0,
             "p2", 3, extraMetadata, WriteOperationType.CLUSTER)));
-    metaClient.reloadActiveTimeline();
-    
+
     verifyExtraMetadataLatestValue(extraMetadataKey, extraMetadataValue1, false);
     verifyExtraMetadataLatestValue(extraMetadataKey, newValueForMetadata, true);
     assertFalse(TimelineUtils.getExtraMetadataFromLatest(metaClient, "unknownKey").isPresent());

@@ -479,13 +479,6 @@ public class StreamerUtil {
   }
 
   public static String getLastPendingInstant(HoodieTableMetaClient metaClient) {
-    return getLastPendingInstant(metaClient, true);
-  }
-
-  public static String getLastPendingInstant(HoodieTableMetaClient metaClient, boolean reloadTimeline) {
-    if (reloadTimeline) {
-      metaClient.reloadActiveTimeline();
-    }
     return metaClient.getCommitsTimeline().filterInflights()
         .lastInstant()
         .map(HoodieInstant::getTimestamp)

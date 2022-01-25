@@ -50,7 +50,6 @@ public class SavepointHelpers {
 
   public static void validateSavepointRestore(HoodieTable table, String savepointTime) {
     // Make sure the restore was successful
-    table.getMetaClient().reloadActiveTimeline();
     Option<HoodieInstant> lastInstant = table.getActiveTimeline()
         .getWriteTimeline()
         .filterCompletedAndCompactionInstants()

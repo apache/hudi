@@ -128,7 +128,6 @@ class HoodieStreamSource(
     * @return
     */
   override def getOffset: Option[Offset] = {
-    metaClient.reloadActiveTimeline()
     val activeInstants = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
     if (!activeInstants.empty()) {
       val currentLatestCommitTime = activeInstants.lastInstant().get().getTimestamp

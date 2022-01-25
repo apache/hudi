@@ -289,7 +289,7 @@ public class TestCleaner extends HoodieClientTestBase {
     HoodieTable table = HoodieSparkTable.create(writeConfig, context);
     Option<HoodieCleanerPlan> cleanPlan = table.scheduleCleaning(context, cleanInstantTime, Option.empty());
     assertEquals(cleanPlan.get().getFilePathsToBeDeletedPerPartition().get(partition).size(), 1);
-    assertEquals(metaClient.reloadActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().countInstants(), 1);
+    assertEquals(metaClient.getActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().countInstants(), 1);
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(context, writeConfig)) {
       // Next commit. This is required so that there is an additional file version to clean.
@@ -613,7 +613,7 @@ public class TestCleaner extends HoodieClientTestBase {
         .isHeartbeatExpired(ret.getLeft()));
     List<HoodieCleanStat> cleanStats = runCleaner(cfg);
     assertEquals(0, cleanStats.size(), "Must not clean any files");
-    HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     assertTrue(timeline.getTimelineOfActions(
         CollectionUtils.createSet(HoodieTimeline.ROLLBACK_ACTION)).filterCompletedInstants().countInstants() == 3);
     Option<HoodieInstant> rollBackInstantForFailedCommit = timeline.getTimelineOfActions(
@@ -668,7 +668,7 @@ public class TestCleaner extends HoodieClientTestBase {
           }
         });
       });
-      metaClient.reloadActiveTimeline().revertToInflight(completedCleanInstant);
+      metaClient.getActiveTimeline().revertToInflight(completedCleanInstant);
       // retry clean operation again
       writeClient.clean();
       final HoodieCleanMetadata retriedCleanMetadata = CleanerUtils.getCleanerMetadata(HoodieTableMetaClient.reload(metaClient), completedCleanInstant);
@@ -842,7 +842,7 @@ public class TestCleaner extends HoodieClientTestBase {
     }
 
     List<HoodieCleanStat> cleanStats = runCleaner(config);
-    HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
 
     assertEquals(0, cleanStats.size(), "Must not clean any files");
     assertEquals(1, timeline.getTimelineOfActions(
@@ -855,7 +855,6 @@ public class TestCleaner extends HoodieClientTestBase {
             CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().containsInstant(makeNewCommitTime(--startInstant)));
 
     cleanStats = runCleaner(config);
-    timeline = metaClient.reloadActiveTimeline();
 
     assertEquals(0, cleanStats.size(), "Must not clean any files");
     assertEquals(1, timeline.getTimelineOfActions(
@@ -1435,7 +1434,7 @@ public class TestCleaner extends HoodieClientTestBase {
     HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
     table.getActiveTimeline().transitionRequestedToInflight(
         new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "001"), Option.empty());
-    metaClient.reloadActiveTimeline();
+
     HoodieInstant rollbackInstant = new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001");
     table.scheduleRollback(context, "002", rollbackInstant, false, config.shouldRollbackUsingMarkers());
     table.rollback(context, "002", rollbackInstant, true, false);
@@ -1595,7 +1594,7 @@ public class TestCleaner extends HoodieClientTestBase {
 
       List<HoodieCleanStat> cleanStats = runCleaner(cfg);
       assertEquals(0, cleanStats.size(), "Must not clean any files");
-      HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
+      HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
       assertTrue(timeline.getTimelineOfActions(
           CollectionUtils.createSet(HoodieTimeline.ROLLBACK_ACTION)).filterCompletedInstants().countInstants() == 3);
       Option<HoodieInstant> rollBackInstantForFailedCommit = timeline.getTimelineOfActions(

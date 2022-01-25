@@ -104,7 +104,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
-    timeline = timeline.reload();
+
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(timeline, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // writer 1 conflicts with writer 2
@@ -136,7 +136,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
-    timeline = timeline.reload();
+
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(timeline, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // writer 1 conflicts with scheduled compaction plan 1
@@ -168,7 +168,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
-    timeline = timeline.reload();
+
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(timeline, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // writer 1 conflicts with compaction 1
@@ -200,7 +200,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
-    timeline = timeline.reload();
+
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(timeline, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // writer 1 should not conflict with an earlier scheduled compaction 1 with the same file ids
@@ -223,7 +223,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
-    timeline = timeline.reload();
+
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(timeline, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // writer 1 conflicts with scheduled compaction plan 1
@@ -255,7 +255,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
-    timeline = timeline.reload();
+
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(timeline, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // writer 1 conflicts with cluster 1
@@ -287,7 +287,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
-    timeline = timeline.reload();
+
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(timeline, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // writer 1 conflicts with replace 1

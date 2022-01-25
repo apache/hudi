@@ -146,8 +146,6 @@ public class ITTestSavepointsCommand extends AbstractShellIntegrationTest {
         () -> assertEquals(
             String.format("Savepoint \"%s\" deleted.", savepoint1), cr.getResult().toString()));
 
-    // reload timeline
-    timeline = timeline.reload();
     assertEquals(1, timeline.getSavePointTimeline().countInstants(), "There should 1 instants.");
 
     // after delete, 100 instant should not exist.

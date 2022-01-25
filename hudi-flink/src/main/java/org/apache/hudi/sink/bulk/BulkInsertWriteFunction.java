@@ -114,7 +114,7 @@ public class BulkInsertWriteFunction<I>
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.metaClient = StreamerUtil.createMetaClient(this.config);
     this.writeClient = StreamerUtil.createWriteClient(this.config, getRuntimeContext());
-    this.initInstant = StreamerUtil.getLastPendingInstant(this.metaClient, false);
+    this.initInstant = StreamerUtil.getLastPendingInstant(this.metaClient);
     sendBootstrapEvent();
     initWriterHelper();
   }

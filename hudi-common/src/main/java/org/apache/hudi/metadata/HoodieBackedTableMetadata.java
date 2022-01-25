@@ -18,9 +18,12 @@
 
 package org.apache.hudi.metadata;
 
+import com.google.common.util.concurrent.UncheckedExecutionException;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
+
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -109,7 +112,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         this.metadataTableConfig = metadataMetaClient.getTableConfig();
         this.isBloomFilterIndexEnabled = metadataConfig.isBloomFilterIndexEnabled();
         this.isColumnStatsIndexEnabled = metadataConfig.isColumnStatsIndexEnabled();
-      } catch (TableNotFoundException e) {
+      } catch (TableNotFoundException | UncheckedExecutionException e) {
         LOG.warn("Metadata table was not found at path " + metadataBasePath);
         this.isMetadataTableEnabled = false;
         this.metadataMetaClient = null;
@@ -482,6 +485,5 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   @Override
   public void reset() {
     initIfNeeded();
-    dataMetaClient.reloadActiveTimeline();
   }
 }

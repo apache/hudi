@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * A helper class used to diff timeline.
@@ -37,13 +38,12 @@ public class TimelineDiffHelper {
 
   private static final Logger LOG = LogManager.getLogger(TimelineDiffHelper.class);
 
-  public static TimelineDiffResult getNewInstantsForIncrementalSync(HoodieTimeline oldTimeline,
-      HoodieTimeline newTimeline) {
+  public static TimelineDiffResult getNewInstantsForIncrementalSync(Option<HoodieInstant> lastSeenInstant,
+      HoodieActiveTimeline newTimeline) {
 
-    HoodieTimeline oldT = oldTimeline.filterCompletedAndCompactionInstants();
-    HoodieTimeline newT = newTimeline.filterCompletedAndCompactionInstants();
+    HoodieActiveTimeline newT = new HoodieActiveTimeline(newTimeline.getMetaClient(),
+        newTimeline.filterCompletedAndCompactionInstants().getInstantsAsList());
 
-    Option<HoodieInstant> lastSeenInstant = oldT.lastInstant();
     Option<HoodieInstant> firstInstantInNewTimeline = newT.firstInstant();
 
     if (lastSeenInstant.isPresent() && firstInstantInNewTimeline.isPresent()) {
@@ -52,12 +52,17 @@ public class TimelineDiffHelper {
         // The last seen instant is no longer in the timeline. Do not incrementally Sync.
         return TimelineDiffResult.UNSAFE_SYNC_RESULT;
       }
-      Set<HoodieInstant> oldTimelineInstants = oldT.getInstants().collect(Collectors.toSet());
+
+      Stream<HoodieInstant> oldTimelineInstants = Stream.empty();
+      if (lastSeenInstant.isPresent()) {
+        oldTimelineInstants = newT.findInstantsBeforeOrEquals(lastSeenInstant.get()).getInstants();
+      }
 
       List<HoodieInstant> newInstants = new ArrayList<>();
 
       // Check If any pending compaction is lost. If so, do not allow incremental timeline sync
-      List<Pair<HoodieInstant, HoodieInstant>> compactionInstants = getPendingCompactionTransitions(oldT, newT);
+      List<Pair<HoodieInstant, HoodieInstant>> compactionInstants =
+          getPendingCompactionTransitions(oldTimelineInstants, newT);
       List<HoodieInstant> lostPendingCompactions = compactionInstants.stream()
           .filter(instantPair -> instantPair.getValue() == null).map(Pair::getKey).collect(Collectors.toList());
       if (!lostPendingCompactions.isEmpty()) {
@@ -72,7 +77,8 @@ public class TimelineDiffHelper {
               && instantPair.getValue().isCompleted())
           .map(Pair::getKey).collect(Collectors.toList());
 
-      newT.getInstants().filter(instant -> !oldTimelineInstants.contains(instant)).forEach(newInstants::add);
+      Set<HoodieInstant> oldInstantSet = oldTimelineInstants.collect(Collectors.toSet());
+      newT.getInstants().filter(instant -> !oldInstantSet.contains(instant)).forEach(newInstants::add);
       return new TimelineDiffResult(newInstants, finishedCompactionInstants, true);
     } else {
       // One or more timelines is empty
@@ -81,11 +87,11 @@ public class TimelineDiffHelper {
     }
   }
 
-  private static List<Pair<HoodieInstant, HoodieInstant>> getPendingCompactionTransitions(HoodieTimeline oldTimeline,
+  private static List<Pair<HoodieInstant, HoodieInstant>> getPendingCompactionTransitions(Stream<HoodieInstant> oldInstants,
       HoodieTimeline newTimeline) {
     Set<HoodieInstant> newTimelineInstants = newTimeline.getInstants().collect(Collectors.toSet());
 
-    return oldTimeline.filterPendingCompactionTimeline().getInstants().map(instant -> {
+    return oldInstants.map(instant -> {
       if (newTimelineInstants.contains(instant)) {
         return Pair.of(instant, instant);
       } else {

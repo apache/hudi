@@ -305,7 +305,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
         metaClient = HoodieTableMetaClient.reload(metaClient);
 
-        final String compactedCommitTime = metaClient.getActiveTimeline().reload().lastInstant().get().getTimestamp();
+        final String compactedCommitTime = metaClient.getActiveTimeline().lastInstant().get().getTimestamp();
         assertTrue(Arrays.stream(listAllBaseFilesInPath(hoodieTable))
             .anyMatch(file -> compactedCommitTime.equals(new HoodieBaseFile(file).getCommitTime())));
         hoodieTable.rollbackInflightCompaction(new HoodieInstant(
@@ -463,7 +463,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       tableView = getHoodieTableFileSystemView(metaClient, metaClient.getCommitsTimeline(), allFiles);
 
       final String compactedCommitTime =
-          metaClient.getActiveTimeline().reload().getCommitsTimeline().lastInstant().get().getTimestamp();
+          metaClient.getActiveTimeline().getCommitsTimeline().lastInstant().get().getTimestamp();
 
       assertTrue(tableView.getLatestBaseFiles().anyMatch(file -> compactedCommitTime.equals(file.getCommitTime())));
 
@@ -764,7 +764,6 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
       //writeClient.commitCompaction(newCommitTime, statuses, Option.empty());
       // Trigger a rollback of compaction
-      table.getActiveTimeline().reload();
       table.rollbackInflightCompaction(new HoodieInstant(
           HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, newCommitTime));
 
@@ -866,7 +865,6 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     String instantTime = client.scheduleCompaction(Option.empty()).get().toString();
     HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(instantTime);
 
-    metaClient.reloadActiveTimeline();
     HoodieTable table = HoodieSparkTable.create(cfg, context(), metaClient);
     String extension = table.getBaseFileExtension();
     Collection<List<HoodieWriteStat>> stats = compactionMetadata.getCommitMetadata().get().getPartitionToWriteStats().values();
@@ -877,7 +875,6 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
   }
 
   private long getNumLogFilesInLatestFileSlice(HoodieTableMetaClient metaClient, HoodieWriteConfig cfg, HoodieTestDataGenerator dataGen) {
-    metaClient.reloadActiveTimeline();
     HoodieTable table = HoodieSparkTable.create(cfg, context(), metaClient);
     table.getHoodieView().sync();
     TableFileSystemView.SliceView tableRTFileSystemView = table.getSliceView();

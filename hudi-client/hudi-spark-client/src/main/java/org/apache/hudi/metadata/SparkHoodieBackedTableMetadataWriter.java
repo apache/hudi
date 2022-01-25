@@ -18,6 +18,8 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.avro.specific.SpecificRecordBase;
+
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -25,7 +27,6 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -34,7 +35,6 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metrics.DistributedRegistry;
 
-import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -148,8 +148,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         // already part of completed commit. So, we have to manually remove the completed instant and proceed.
         // and it is for the same reason we enabled withAllowMultiWriteOnSameInstant for metadata table.
         HoodieInstant alreadyCompletedInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.getTimestamp().equals(instantTime)).lastInstant().get();
-        HoodieActiveTimeline.deleteInstantFile(metadataMetaClient.getFs(), metadataMetaClient.getMetaPath(), alreadyCompletedInstant);
-        metadataMetaClient.reloadActiveTimeline();
+        metadataMetaClient.getActiveTimeline().deleteInstantFile(alreadyCompletedInstant);
       }
       List<WriteStatus> statuses = writeClient.upsertPreppedRecords(preppedRecordRDD, instantTime).collect();
       statuses.forEach(writeStatus -> {
@@ -158,8 +157,6 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         }
       });
 
-      // reload timeline
-      metadataMetaClient.reloadActiveTimeline();
       if (canTriggerTableService) {
         cleanIfNecessary(writeClient, instantTime);
         writeClient.archive();

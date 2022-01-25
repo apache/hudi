@@ -106,7 +106,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     }
 
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
-    assertEquals(3, metaClient.reloadActiveTimeline().getCommitsTimeline().countInstants(),
+    assertEquals(3, metaClient.getActiveTimeline().getCommitsTimeline().countInstants(),
         "There should have 3 commits");
     return data;
   }
@@ -138,7 +138,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     }
 
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
-    assertEquals(3, metaClient.reloadActiveTimeline().getCommitsTimeline().countInstants(),
+    assertEquals(3, metaClient.getActiveTimeline().getCommitsTimeline().countInstants(),
         "There should be 3 commits");
 
     LinkedHashMap<HoodieInstant, Integer[]> data = replaceCommitData;
@@ -248,7 +248,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     assertTrue(cr.isSuccess());
 
     // archived 101 and 102 instant, generate expect data
-    assertEquals(2, metaClient.reloadActiveTimeline().getCommitsTimeline().countInstants(),
+    assertEquals(2, metaClient.getActiveTimeline().getCommitsTimeline().countInstants(),
         "There should 2 instants not be archived!");
 
     // archived 101 and 102 instants, remove 103 and 104 instant
@@ -301,7 +301,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
 
     CommandResult cr = shell().executeCommand(String.format("commits showarchived --startTs %s --endTs %s", "160", "174"));
     assertTrue(cr.isSuccess());
-    assertEquals(3, metaClient.reloadActiveTimeline().getCommitsTimeline().countInstants(),
+    assertEquals(3, metaClient.getActiveTimeline().getCommitsTimeline().countInstants(),
         "There should 3 instants not be archived!");
 
     Map<String, Integer[]> data2 = new LinkedHashMap<>();

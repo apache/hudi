@@ -185,7 +185,6 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     assertEquals(HoodieTimeline.COMMIT_ACTION, view.getLastInstant().get().getAction());
     partitions.forEach(p -> assertEquals(0, view.getLatestFileSlices(p).count()));
 
-    metaClient.reloadActiveTimeline();
     SyncableFileSystemView newView = getFileSystemView(metaClient);
 
     areViewsConsistent(view, newView, 0L);
@@ -225,7 +224,6 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     assertEquals(HoodieTimeline.COMMIT_ACTION, view.getLastInstant().get().getAction());
     partitions.forEach(p -> assertEquals(0, view.getLatestFileSlices(p).count()));
 
-    metaClient.reloadActiveTimeline();
     SyncableFileSystemView newView = getFileSystemView(metaClient);
 
     areViewsConsistent(view, newView, 0L);
@@ -260,7 +258,6 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         generateReplaceInstant(instants.get(i), instantsToFiles);
         view.sync();
 
-        metaClient.reloadActiveTimeline();
         SyncableFileSystemView newView = getFileSystemView(metaClient);
         // 1 fileId is replaced for every partition, so subtract partitions.size()
         expectedSlicesPerPartition = expectedSlicesPerPartition + fileIdsPerPartition.size()  -  1;
@@ -460,7 +457,6 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         partitions.forEach(p -> assertEquals(fileIdsPerPartition.size() + instantIdx * netFilesAddedPerInstant, view.getLatestFileSlices(p).count()));
         partitions.forEach(p -> assertEquals(expTotalFileSlicesPerPartition, view.getAllFileSlices(p).count()));
 
-        metaClient.reloadActiveTimeline();
         SyncableFileSystemView newView = getFileSystemView(metaClient);
         areViewsConsistent(view, newView, expTotalFileSlicesPerPartition * partitions.size());
       } catch (IOException e) {
@@ -515,7 +511,6 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         }
         partitions.forEach(p -> assertEquals(expTotalFileSlicesPerPartition, view.getAllFileSlices(p).count()));
 
-        metaClient.reloadActiveTimeline();
         SyncableFileSystemView newView = getFileSystemView(metaClient);
         areViewsConsistent(view, newView, expTotalFileSlicesPerPartition * partitions.size());
       } catch (IOException e) {
@@ -637,7 +632,6 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
       });
     });
 
-    metaClient.reloadActiveTimeline();
     SyncableFileSystemView newView = getFileSystemView(metaClient);
     areViewsConsistent(view, newView, initialExpTotalFileSlices + partitions.size() * fileIdsPerPartition.size());
   }
@@ -748,7 +742,6 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         partitions.forEach(p -> view.getLatestBaseFiles(p).forEach(f -> assertEquals(instant, f.getCommitTime())));
       }
 
-      metaClient.reloadActiveTimeline();
       SyncableFileSystemView newView = getFileSystemView(metaClient);
       areViewsConsistent(view, newView, fileIdsPerPartition.size() * partitions.size() * multiple);
       instantToFiles.put(instant, filePaths);
@@ -866,7 +859,6 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     metaClient.getActiveTimeline().saveToPendingReplaceCommit(newRequestedInstant,
         TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
     
-    metaClient.reloadActiveTimeline();
     // transition to inflight
     HoodieInstant inflightInstant = metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(newRequestedInstant, Option.empty());
     // transition to replacecommit

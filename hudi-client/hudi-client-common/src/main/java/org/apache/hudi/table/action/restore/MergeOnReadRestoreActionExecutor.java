@@ -50,10 +50,10 @@ public class MergeOnReadRestoreActionExecutor<T extends HoodieRecordPayload, I, 
       default:
         throw new IllegalArgumentException("invalid action name " + instantToRollback.getAction());
     }
-    table.getMetaClient().reloadActiveTimeline();
+
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
     table.scheduleRollback(context, instantTime, instantToRollback, false, false);
-    table.getMetaClient().reloadActiveTimeline();
+
     MergeOnReadRollbackActionExecutor rollbackActionExecutor = new MergeOnReadRollbackActionExecutor(
         context,
         config,

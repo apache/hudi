@@ -152,7 +152,6 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     List<FileSlice> secondPartitionCommit2FileSlices = new ArrayList<>();
     HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(isUsingMarkers).withAutoCommit(false).build();
     this.twoUpsertCommitDataWithTwoPartitions(firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, cfg, !isUsingMarkers);
-    metaClient.reloadActiveTimeline();
     HoodieTable table = this.getHoodieTable(metaClient, cfg);
     performRollbackAndValidate(isUsingMarkers, cfg, table, firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices);
   }

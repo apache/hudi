@@ -384,9 +384,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     future3.get();
 
     validInstants.addAll(
-        metaClient.reloadActiveTimeline().getCompletedReplaceTimeline()
+        metaClient.getActiveTimeline().getCompletedReplaceTimeline()
             .filterCompletedInstants().getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toSet()));
-    Set<String> completedInstants = metaClient.reloadActiveTimeline().getCommitsTimeline()
+    Set<String> completedInstants = metaClient.getActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants().getInstants().map(HoodieInstant::getTimestamp)
         .collect(Collectors.toSet());
     assertTrue(validInstants.containsAll(completedInstants));

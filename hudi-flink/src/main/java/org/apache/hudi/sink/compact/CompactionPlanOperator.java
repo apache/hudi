@@ -81,7 +81,6 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   @Override
   public void notifyCheckpointComplete(long checkpointId) {
     try {
-      table.getMetaClient().reloadActiveTimeline();
       // There is no good way to infer when the compaction task for an instant crushed
       // or is still undergoing. So we use a configured timeout threshold to control the rollback:
       // {@code FlinkOptions.COMPACTION_TIMEOUT_SECONDS},
@@ -122,7 +121,6 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
       HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
       // Mark instant as compaction inflight
       table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
-      table.getMetaClient().reloadActiveTimeline();
 
       List<CompactionOperation> operations = compactionPlan.getOperations().stream()
           .map(CompactionOperation::convertFromAvroRecordInstance).collect(toList());

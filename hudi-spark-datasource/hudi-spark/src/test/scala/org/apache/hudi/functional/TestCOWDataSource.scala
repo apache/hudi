@@ -137,7 +137,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
-    val commit2Time = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+    val commit2Time = metaClient.getActiveTimeline.lastInstant().get().getTimestamp
 
     // snapshot query
     val snapshotQueryRes = spark.read.format("hudi").load(basePath)

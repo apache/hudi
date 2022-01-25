@@ -18,6 +18,9 @@
 
 package org.apache.hudi.common.table;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
@@ -60,6 +63,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -90,6 +97,11 @@ public class HoodieTableMetaClient implements Serializable {
       + ".fileids";
 
   public static final String MARKER_EXTN = ".marker";
+
+  private static Cache<String, HoodieTableMetaClient> HTMC_CACHE = CacheBuilder.newBuilder()
+      .expireAfterAccess(10, TimeUnit.MINUTES)
+      .maximumSize(5)
+      .build();
 
   private String basePath;
   private transient HoodieWrapperFileSystem fs;
@@ -308,16 +320,6 @@ public class HoodieTableMetaClient implements Serializable {
     return activeTimeline;
   }
 
-  /**
-   * Reload ActiveTimeline and cache.
-   *
-   * @return Active instants timeline
-   */
-  public synchronized HoodieActiveTimeline reloadActiveTimeline() {
-    activeTimeline = new HoodieActiveTimeline(this);
-    return activeTimeline;
-  }
-
   public ConsistencyGuardConfig getConsistencyGuardConfig() {
     return consistencyGuardConfig;
   }
@@ -517,6 +519,18 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
+   * Helper method to get the list of HoodieInstant whose extension is contained in `includedExtensions`
+   * and which is greater then `baseInstant`.
+   */
+  public List<HoodieInstant> scanHoodieInstantsFromFileSystem(HoodieInstant baseInstant, Set<String> includedExtensions)
+      throws IOException {
+    Function<String, Boolean> pathFilter = s -> {
+      return HoodieInstant.latestValidInstantFile(s, baseInstant, includedExtensions);
+    };
+    return scanHoodieInstantsFromFileSystem(new Path(metaPath), pathFilter, true);
+  }
+
+  /**
    * Helper method to scan all hoodie-instant metafiles and construct HoodieInstant objects.
    *
    * @param includedExtensions Included hoodie extensions
@@ -542,13 +556,32 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public List<HoodieInstant> scanHoodieInstantsFromFileSystem(Path timelinePath, Set<String> includedExtensions,
       boolean applyLayoutVersionFilters) throws IOException {
+    Function<String, Boolean> pathFilter = s -> {
+      // Include only the meta files with extensions that needs to be included
+      String extension = HoodieInstant.getTimelineFileExtension(s);
+      return includedExtensions.contains(extension);
+    };
+    return scanHoodieInstantsFromFileSystem(timelinePath, pathFilter, applyLayoutVersionFilters);
+  }
+
+  /**
+   *
+   * @param timelinePath the directory of Hoodie Timeline
+   * @param pathFilter apply this to filter out instants we need
+   * @param applyLayoutVersionFilters
+   * @return ths list of satisfied instants
+   * @throws IOException
+   */
+  public List<HoodieInstant> scanHoodieInstantsFromFileSystem(Path timelinePath,
+      Function<String, Boolean> pathFilter,
+      boolean applyLayoutVersionFilters) throws IOException {
     Stream<HoodieInstant> instantStream = Arrays.stream(
-        HoodieTableMetaClient
-            .scanFiles(getFs(), timelinePath, path -> {
-              // Include only the meta files with extensions that needs to be included
-              String extension = HoodieInstant.getTimelineFileExtension(path.getName());
-              return includedExtensions.contains(extension);
-            })).map(HoodieInstant::new);
+        HoodieTableMetaClient.scanFiles(
+            getFs(),
+            timelinePath,
+            path -> pathFilter.apply(path.getName())
+        )
+    ).map(fileStatus -> new HoodieInstant(fileStatus.getPath().getName()));
 
     if (applyLayoutVersionFilters) {
       instantStream = TimelineLayout.getLayout(getTimelineLayoutVersion()).filterHoodieInstants(instantStream);
@@ -654,8 +687,18 @@ public class HoodieTableMetaClient implements Serializable {
     public HoodieTableMetaClient build() {
       ValidationUtils.checkArgument(conf != null, "Configuration needs to be set to init HoodieTableMetaClient");
       ValidationUtils.checkArgument(basePath != null, "basePath needs to be set to init HoodieTableMetaClient");
-      return new HoodieTableMetaClient(conf, basePath,
-          loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, payloadClassName, fileSystemRetryConfig);
+      try {
+        HoodieTableMetaClient metaClient = HTMC_CACHE.get(basePath, new Callable<HoodieTableMetaClient>() {
+          @Override
+          public HoodieTableMetaClient call() throws Exception {
+            return new HoodieTableMetaClient(conf, basePath,
+                loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, payloadClassName, fileSystemRetryConfig);
+          }
+        });
+        return metaClient;
+      } catch (ExecutionException e) {
+        throw new HoodieException("Fail to create HoodieTableMetaClient");
+      }
     }
   }
 

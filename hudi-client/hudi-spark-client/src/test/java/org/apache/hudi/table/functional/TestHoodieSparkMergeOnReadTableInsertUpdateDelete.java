@@ -173,9 +173,9 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
 
       // verify that there is a commit
       if (scheduleInlineCompaction) {
-        assertEquals(metaClient.reloadActiveTimeline().getAllCommitsTimeline().filterPendingCompactionTimeline().countInstants(), 1);
+        assertEquals(metaClient.getActiveTimeline().getAllCommitsTimeline().filterPendingCompactionTimeline().countInstants(), 1);
       } else {
-        assertEquals(metaClient.reloadActiveTimeline().getAllCommitsTimeline().filterPendingCompactionTimeline().countInstants(), 0);
+        assertEquals(metaClient.getActiveTimeline().getAllCommitsTimeline().filterPendingCompactionTimeline().countInstants(), 0);
       }
     }
   }

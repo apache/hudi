@@ -31,8 +31,8 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -41,8 +41,8 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.text.ParseException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Comparator;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
@@ -75,7 +75,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       ROLLBACK_EXTENSION, REQUESTED_ROLLBACK_EXTENSION, INFLIGHT_ROLLBACK_EXTENSION,
       REQUESTED_REPLACE_COMMIT_EXTENSION, INFLIGHT_REPLACE_COMMIT_EXTENSION, REPLACE_COMMIT_EXTENSION));
   private static final Logger LOG = LogManager.getLogger(HoodieActiveTimeline.class);
-  protected HoodieTableMetaClient metaClient;
 
   /**
    * Parse the timestamp of an Instant and return a {@code Date}.
@@ -110,6 +109,14 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     return HoodieInstantTimeGenerator.createNewInstantTime(milliseconds);
   }
 
+  public HoodieActiveTimeline(HoodieTableMetaClient metaClient) {
+    this(metaClient, Collections.unmodifiableSet(VALID_EXTENSIONS_IN_ACTIVE_TIMELINE));
+  }
+
+  public HoodieActiveTimeline(HoodieTableMetaClient metaClient, boolean applyLayoutFilter) {
+    this(metaClient, Collections.unmodifiableSet(VALID_EXTENSIONS_IN_ACTIVE_TIMELINE), applyLayoutFilter);
+  }
+
   protected HoodieActiveTimeline(HoodieTableMetaClient metaClient, Set<String> includedExtensions) {
     this(metaClient, includedExtensions, true);
   }
@@ -124,18 +131,19 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       throw new HoodieIOException("Failed to scan metadata", e);
     }
     this.metaClient = metaClient;
+    this.latestInstant = getInstants().max(HoodieInstant.COMPARATOR).orElse(null);
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
     this.details = (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
     LOG.info("Loaded instants upto : " + lastInstant());
   }
 
-  public HoodieActiveTimeline(HoodieTableMetaClient metaClient) {
-    this(metaClient, Collections.unmodifiableSet(VALID_EXTENSIONS_IN_ACTIVE_TIMELINE));
-  }
-
-  public HoodieActiveTimeline(HoodieTableMetaClient metaClient, boolean applyLayoutFilter) {
-    this(metaClient, Collections.unmodifiableSet(VALID_EXTENSIONS_IN_ACTIVE_TIMELINE), applyLayoutFilter);
+  public HoodieActiveTimeline(HoodieTableMetaClient metaClient, List<HoodieInstant> instants) {
+    this.metaClient = metaClient;
+    setInstants(instants);
+    this.latestInstant = getInstants().max(HoodieInstant.COMPARATOR).orElse(null);
+    this.details = (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
+    LOG.info("Loaded instants upto : " + lastInstant());
   }
 
   /**
@@ -145,6 +153,91 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    */
   @Deprecated
   public HoodieActiveTimeline() {
+  }
+
+  private HoodieTableMetaClient metaClient;
+
+  /**
+   * the latest instant
+   */
+  private HoodieInstant latestInstant;
+
+  public HoodieTableMetaClient getMetaClient() {
+    return this.metaClient;
+  }
+
+  /**
+   * Call this method for each of operation
+   */
+  @Override
+  protected void loadIncrementally() {
+    try {
+      if (latestInstant == null
+          || !metaClient.getFs().exists(new Path(metaClient.getMetaPath(), latestInstant.getFileName()))) {
+        loadFully();
+        return;
+      }
+
+      List<HoodieInstant> increment =
+          metaClient.scanHoodieInstantsFromFileSystem(latestInstant, VALID_EXTENSIONS_IN_ACTIVE_TIMELINE);
+      if (!increment.isEmpty()) {
+        synchronized (this) {
+          if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
+            loadFully();
+          } else {
+            List<HoodieInstant> hoodieInstants = getInstants().collect(Collectors.toList());
+            hoodieInstants.addAll(increment);
+            setInstants(hoodieInstants);
+            latestInstant = increment.stream().max(HoodieInstant::compareTo).get();
+          }
+        }
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Fail to load active timeline incrementally", e);
+    }
+  }
+
+  /**
+   * Create a new file, then append the new instant to the timeline or reload for the old layout version.
+   */
+  private synchronized void postCommit(HoodieInstant instant) {
+    postCommit(instant, false);
+  }
+
+  /**
+   * if renameOrDelete is true, always reload the all timeline.
+   *
+   * Every operation will modify the meta path should call it.
+   */
+  private synchronized void postCommit(HoodieInstant instant, boolean renameOrDelete) {
+    try {
+      if (renameOrDelete) {
+        loadFully();
+      } else {
+        if (latestInstant == null || instant.compareTo(latestInstant) > 0) {
+          if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
+            loadFully();
+          } else {
+            List<HoodieInstant> hoodieInstants = getInstants().collect(Collectors.toList());
+            hoodieInstants.add(instant);
+            setInstants(hoodieInstants);
+            latestInstant = instant;
+          }
+        }
+      }
+    } catch (IOException e) {
+      LOG.warn("Fail to execute postCommit", e);
+    }
+  }
+
+  /**
+   * load the whole time line fully.
+   */
+  private synchronized void loadFully() throws IOException {
+    List<HoodieInstant> instants =
+        metaClient.scanHoodieInstantsFromFileSystem(null, VALID_EXTENSIONS_IN_ACTIVE_TIMELINE);
+    setInstants(instants);
+    latestInstant = instants.stream().max(HoodieInstant.COMPARATOR).orElse(null);
   }
 
   /**
@@ -161,6 +254,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     LOG.info("Creating a new instant " + instant);
     // Create the in-flight file
     createFileInMetaPath(instant.getFileName(), Option.empty(), false);
+    postCommit(instant);
   }
 
   public void createRequestedReplaceCommit(String instantTime, String actionType) {
@@ -170,6 +264,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       // Create the request replace file
       createFileInMetaPath(instant.getFileName(),
               TimelineMetadataUtils.serializeRequestedReplaceMetadata(new HoodieRequestedReplaceMetadata()), false);
+      postCommit(instant);
     } catch (IOException e) {
       throw new HoodieIOException("Error create requested replace commit ", e);
     }
@@ -201,14 +296,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     deleteInstantFile(instant);
   }
 
-  public static void deleteInstantFile(FileSystem fs, String metaPath, HoodieInstant instant) {
-    try {
-      fs.delete(new Path(metaPath, instant.getFileName()), false);
-    } catch (IOException e) {
-      throw new HoodieIOException("Could not delete instant file" + instant.getFileName(), e);
-    }
-  }
-
   public void deleteEmptyInstantIfExists(HoodieInstant instant) {
     ValidationUtils.checkArgument(isEmpty(instant));
     deleteInstantFileIfExists(instant);
@@ -221,6 +308,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   private void deleteInstantFileIfExists(HoodieInstant instant) {
+    loadIncrementally();
     LOG.info("Deleting instant " + instant);
     Path inFlightCommitFilePath = new Path(metaClient.getMetaPath(), instant.getFileName());
     try {
@@ -228,6 +316,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         boolean result = metaClient.getFs().delete(inFlightCommitFilePath, false);
         if (result) {
           LOG.info("Removed instant " + instant);
+          postCommit(instant, true);
         } else {
           throw new HoodieIOException("Could not delete instant " + instant);
         }
@@ -239,13 +328,15 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     }
   }
 
-  private void deleteInstantFile(HoodieInstant instant) {
+  public void deleteInstantFile(HoodieInstant instant) {
+    loadIncrementally();
     LOG.info("Deleting instant " + instant);
     Path inFlightCommitFilePath = new Path(metaClient.getMetaPath(), instant.getFileName());
     try {
       boolean result = metaClient.getFs().delete(inFlightCommitFilePath, false);
       if (result) {
         LOG.info("Removed instant " + instant);
+        postCommit(instant, true);
       } else {
         throw new HoodieIOException("Could not delete instant " + instant);
       }
@@ -284,6 +375,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * Get the last instant with valid data, and convert this to HoodieCommitMetadata
    */
   public Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLastCommitMetadataWithValidData() {
+    loadIncrementally();
     List<HoodieInstant> completed = getCommitsTimeline().filterCompletedInstants().getInstants()
         .sorted(Comparator.comparing(HoodieInstant::getTimestamp).reversed()).collect(Collectors.toList());
     for (HoodieInstant instant : completed) {
@@ -528,6 +620,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   private void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data,
        boolean allowRedundantTransitions) {
+    loadIncrementally();
     ValidationUtils.checkArgument(fromInstant.getTimestamp().equals(toInstant.getTimestamp()));
     try {
       if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
@@ -539,6 +632,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         if (!success) {
           throw new HoodieIOException("Could not rename " + fromInstantPath + " to " + toInstantPath);
         }
+        postCommit(toInstant, true);
       } else {
         // Ensures old state exists in timeline
         LOG.info("Checking for file exists ?" + new Path(metaClient.getMetaPath(), fromInstant.getFileName()));
@@ -551,6 +645,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
           createImmutableFileInPath(new Path(metaClient.getMetaPath(), toInstant.getFileName()), data);
         }
         LOG.info("Create new file for toInstant ?" + new Path(metaClient.getMetaPath(), toInstant.getFileName()));
+        postCommit(toInstant);
       }
     } catch (IOException e) {
       throw new HoodieIOException("Could not complete " + fromInstant, e);
@@ -558,6 +653,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   private void revertCompleteToInflight(HoodieInstant completed, HoodieInstant inflight) {
+    loadIncrementally();
     ValidationUtils.checkArgument(completed.getTimestamp().equals(inflight.getTimestamp()));
     Path inFlightCommitFilePath = new Path(metaClient.getMetaPath(), inflight.getFileName());
     Path commitFilePath = new Path(metaClient.getMetaPath(), completed.getFileName());
@@ -570,6 +666,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
                 "Could not rename " + commitFilePath + " to " + inFlightCommitFilePath);
           }
         }
+        postCommit(inflight, true);
       } else {
         Path requestedInstantFilePath = new Path(metaClient.getMetaPath(),
             new HoodieInstant(State.REQUESTED, inflight.getAction(), inflight.getTimestamp()).getFileName());
@@ -585,6 +682,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
         boolean success = metaClient.getFs().delete(commitFilePath, false);
         ValidationUtils.checkArgument(success, "State Reverting failed");
+
+        postCommit(inflight, true);
       }
     } catch (IOException e) {
       throw new HoodieIOException("Could not complete revert " + completed, e);
@@ -616,6 +715,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     // Write workload to auxiliary folder
     createFileInAuxiliaryFolder(instant, content);
     createFileInMetaPath(instant.getFileName(), content, overwrite);
+    postCommit(instant);
   }
 
   /**
@@ -624,6 +724,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   public void saveToPendingReplaceCommit(HoodieInstant instant, Option<byte[]> content) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
     createFileInMetaPath(instant.getFileName(), content, false);
+    postCommit(instant);
   }
 
   public void saveToCleanRequested(HoodieInstant instant, Option<byte[]> content) {
@@ -631,6 +732,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     ValidationUtils.checkArgument(instant.getState().equals(State.REQUESTED));
     // Plan is stored in meta path
     createFileInMetaPath(instant.getFileName(), content, false);
+    postCommit(instant);
   }
 
   public void saveToRollbackRequested(HoodieInstant instant, Option<byte[]> content) {
@@ -638,6 +740,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     ValidationUtils.checkArgument(instant.getState().equals(State.REQUESTED));
     // Plan is stored in meta path
     createFileInMetaPath(instant.getFileName(), content, false);
+    postCommit(instant);
   }
 
   public void saveToRestoreRequested(HoodieInstant instant, Option<byte[]> content) {
@@ -648,6 +751,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   private void createFileInMetaPath(String filename, Option<byte[]> content, boolean allowOverwrite) {
+    loadIncrementally();
     Path fullPath = new Path(metaClient.getMetaPath(), filename);
     if (allowOverwrite || metaClient.getTimelineLayoutVersion().isNullVersion()) {
       FileIOUtils.createFileInPath(metaClient.getFs(), fullPath, content);
@@ -688,9 +792,5 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     } catch (IOException e) {
       throw new HoodieIOException("Could not read commit details from " + detailPath, e);
     }
-  }
-
-  public HoodieActiveTimeline reload() {
-    return new HoodieActiveTimeline(metaClient);
   }
 }

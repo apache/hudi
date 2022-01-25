@@ -72,8 +72,6 @@ public class CopyOnWriteRollbackActionExecutor<T extends HoodieRecordPayload, I,
     if (instantToRollback.isCompleted()) {
       LOG.info("Unpublishing instant " + instantToRollback);
       resolvedInstant = activeTimeline.revertToInflight(instantToRollback);
-      // reload meta-client to reflect latest timeline status
-      table.getMetaClient().reloadActiveTimeline();
     }
 
     // For Requested State (like failure during index lookup), there is nothing to do rollback other than

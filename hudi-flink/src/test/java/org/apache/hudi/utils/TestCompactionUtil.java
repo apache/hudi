@@ -136,7 +136,7 @@ public class TestCompactionUtil {
     HoodieFlinkWriteClient<?> writeClient = StreamerUtil.createWriteClient(conf);
     CompactionUtil.scheduleCompaction(metaClient, writeClient, true, true);
 
-    Option<HoodieInstant> pendingCompactionInstant = metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().lastInstant();
+    Option<HoodieInstant> pendingCompactionInstant = metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant();
     assertTrue(pendingCompactionInstant.isPresent(), "A compaction plan expects to be scheduled");
 
     // write another commit with data and start a new instant
@@ -145,7 +145,7 @@ public class TestCompactionUtil {
     writeClient.startCommit();
 
     CompactionUtil.scheduleCompaction(metaClient, writeClient, true, false);
-    int numCompactionCommits = metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().countInstants();
+    int numCompactionCommits = metaClient.getActiveTimeline().filterPendingCompactionTimeline().countInstants();
     assertThat("Two compaction plan expects to be scheduled", numCompactionCommits, is(2));
   }
 
@@ -165,7 +165,6 @@ public class TestCompactionUtil {
     } catch (IOException ioe) {
       throw new HoodieIOException("Exception scheduling compaction", ioe);
     }
-    metaClient.reloadActiveTimeline();
     return instantTime;
   }
 }

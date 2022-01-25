@@ -581,7 +581,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     client.restoreToInstant("004");
 
-    assertFalse(metaClient.reloadActiveTimeline().getRollbackTimeline().lastInstant().isPresent());
+    assertFalse(metaClient.getActiveTimeline().getRollbackTimeline().lastInstant().isPresent());
 
     // Check the entire dataset has all records still
     String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
@@ -1464,7 +1464,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertThrows(HoodieUpsertException.class, () -> writeAndVerifyBatch(client, allRecords, commitTime, populateMetaFields));
     // verify pending clustering can be rolled back (even though there is a completed commit greater than pending clustering)
     client.rollback(pendingClusteringInstant.getTimestamp());
-    metaClient.reloadActiveTimeline();
     // verify there are no pending clustering instants
     assertEquals(0, ClusteringUtils.getAllPendingClusteringPlans(metaClient).count());
   }
@@ -1499,7 +1498,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     writeAndVerifyBatch(client, allRecords, commitTime, true);
 
     // verify inflight clustering was rolled back
-    metaClient.reloadActiveTimeline();
     pendingClusteringPlans = ClusteringUtils.getAllPendingClusteringPlans(metaClient).collect(Collectors.toList());
     assertEquals(config.isRollbackPendingClustering() ? 0 : 1, pendingClusteringPlans.size());
   }
@@ -1614,7 +1612,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       assertEquals(insertedFileIds, replacedFileIds);
     }
     if (completeClustering) {
-      String clusteringCommitTime = metaClient.reloadActiveTimeline().getCompletedReplaceTimeline()
+      String clusteringCommitTime = metaClient.getActiveTimeline().getCompletedReplaceTimeline()
           .getReverseOrderedInstants().findFirst().get().getTimestamp();
       verifyRecordsWritten(clusteringCommitTime, populateMetaFields, allRecords.getLeft().getLeft(), clusterMetadata.getWriteStatuses().collect(), config);
     }
@@ -2232,7 +2230,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
             100, dataGen::generateInserts, SparkRDDWriteClient::bulkInsert, false, 100, 300,
             0, true);
     client.clean();
-    HoodieActiveTimeline timeline = metaClient.getActiveTimeline().reload();
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     if (cleaningPolicy.isLazy()) {
       assertTrue(
           timeline
@@ -2298,7 +2296,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       Thread.sleep(2000);
     }
     client.clean();
-    HoodieActiveTimeline timeline = metaClient.getActiveTimeline().reload();
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     assertTrue(timeline.getTimelineOfActions(
             CollectionUtils.createSet(ROLLBACK_ACTION)).countInstants() == 3);
     // Perform 2 failed commits
@@ -2316,7 +2314,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     cleaningPolicy = EAGER;
     client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
     client.startCommit();
-    timeline = metaClient.getActiveTimeline().reload();
+
     assertTrue(timeline.getTimelineOfActions(
             CollectionUtils.createSet(ROLLBACK_ACTION)).countInstants() == 5);
     assertTrue(timeline.getCommitsTimeline().filterCompletedInstants().countInstants() == 1);
@@ -2369,7 +2367,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     Future<HoodieCleanMetadata> clean1 = service.submit(() -> new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true)).clean());
     commit4.get();
     clean1.get();
-    HoodieActiveTimeline timeline = metaClient.getActiveTimeline().reload();
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     assertTrue(timeline.getTimelineOfActions(
         CollectionUtils.createSet(ROLLBACK_ACTION)).countInstants() == 2);
     // Since we write rollbacks not clean, there should be no clean action on the timeline

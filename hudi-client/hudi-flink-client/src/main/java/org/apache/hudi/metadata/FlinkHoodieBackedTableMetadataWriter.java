@@ -122,8 +122,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         // and it is for the same reason we enabled withAllowMultiWriteOnSameInstant for metadata table.
         HoodieInstant alreadyCompletedInstant =
             metadataMetaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.getTimestamp().equals(instantTime)).lastInstant().get();
-        HoodieActiveTimeline.deleteInstantFile(metadataMetaClient.getFs(), metadataMetaClient.getMetaPath(), alreadyCompletedInstant);
-        metadataMetaClient.reloadActiveTimeline();
+        metadataMetaClient.getActiveTimeline().deleteInstantFile(alreadyCompletedInstant);
       }
 
       List<WriteStatus> statuses = preppedRecordList.size() > 0
@@ -137,8 +136,6 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       // flink does not support auto-commit yet, also the auto commit logic is not complete as BaseHoodieWriteClient now.
       writeClient.commit(instantTime, statuses, Option.empty(), HoodieActiveTimeline.DELTA_COMMIT_ACTION, Collections.emptyMap());
 
-      // reload timeline
-      metadataMetaClient.reloadActiveTimeline();
       if (canTriggerTableService) {
         compactIfNecessary(writeClient, instantTime);
         cleanIfNecessary(writeClient, instantTime);

@@ -134,7 +134,7 @@ public class ITTestCompactionCommand extends AbstractShellIntegrationTest {
             cr2.getResult().toString().startsWith("Compaction successfully completed for")));
 
     // assert compaction complete
-    assertTrue(HoodieCLI.getTableMetaClient().getActiveTimeline().reload()
+    assertTrue(HoodieCLI.getTableMetaClient().getActiveTimeline()
         .filterCompletedInstants().getInstants()
         .map(HoodieInstant::getTimestamp).collect(Collectors.toList()).contains(instance),
         "Pending compaction must be completed");
@@ -161,7 +161,7 @@ public class ITTestCompactionCommand extends AbstractShellIntegrationTest {
             cr2.getResult().toString().startsWith("Schedule and execute compaction successfully completed")));
 
     // assert compaction complete
-    assertTrue(HoodieCLI.getTableMetaClient().getActiveTimeline().reload()
+    assertTrue(HoodieCLI.getTableMetaClient().getActiveTimeline()
             .filterCompletedInstants().getInstants()
             .map(HoodieInstant::getTimestamp).count() > 0,
         "Completed compaction couldn't be 0");
@@ -245,7 +245,6 @@ public class ITTestCompactionCommand extends AbstractShellIntegrationTest {
     CompactionTestUtils.setupAndValidateCompactionOperations(metaClient, false, numEntriesPerInstant,
         numEntriesPerInstant, numEntriesPerInstant, numEntriesPerInstant);
 
-    metaClient.reloadActiveTimeline();
     CompactionAdminClient client = new CompactionAdminClient(new HoodieSparkEngineContext(jsc), metaClient.getBasePath());
     List<Pair<HoodieLogFile, HoodieLogFile>> renameFiles =
         client.getRenamingActionsForUnschedulingCompactionPlan(metaClient, compactionInstant, 1, Option.empty(), false);

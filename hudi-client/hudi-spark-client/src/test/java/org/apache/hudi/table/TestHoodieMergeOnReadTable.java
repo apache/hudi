@@ -182,7 +182,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
 
       allFiles = listAllBaseFilesInPath(hoodieTable);
       roView = getHoodieTableFileSystemView(metaClient,
-          hoodieTable.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants(), allFiles);
+          hoodieTable.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), allFiles);
       dataFilesToRead = roView.getLatestBaseFiles();
       List<HoodieBaseFile> newDataFilesList = dataFilesToRead.collect(Collectors.toList());
       Map<String, Long> fileIdToNewSize =
@@ -534,7 +534,6 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
        */
       newCommitTime = "002";
       client.startCommitWithTime(newCommitTime);
-      metaClient.reloadActiveTimeline();
       records = dataGen.generateUpdates(newCommitTime, records);
       writeRecords = jsc().parallelize(records, 1);
       statuses = client.upsert(writeRecords, newCommitTime).collect();
@@ -547,7 +546,6 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       final String partitionPath = records.get(0).getPartitionPath();
       final String fileId = statuses.get(0).getFileId();
       client.startCommitWithTime(newDeleteTime);
-      metaClient.reloadActiveTimeline();
 
       List<HoodieRecord> fewRecordsForDelete = dataGen.generateDeletesFromExistingRecords(records);
       JavaRDD<HoodieRecord> deleteRDD = jsc().parallelize(fewRecordsForDelete, 1);

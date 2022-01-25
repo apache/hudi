@@ -98,7 +98,7 @@ public class ITTestCommitsCommand extends AbstractShellIntegrationTest {
     HoodieActiveTimeline rollbackTimeline = new RollbacksCommand.RollbackTimeline(metaClient);
     assertEquals(1, rollbackTimeline.getRollbackTimeline().countInstants(), "There should have 1 rollback instant.");
 
-    HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     assertEquals(2, timeline.getCommitsTimeline().countInstants(), "There should have 2 instants.");
 
     // rollback complete commit
@@ -106,12 +106,8 @@ public class ITTestCommitsCommand extends AbstractShellIntegrationTest {
             "101", "local", "4G"));
     assertTrue(cr2.isSuccess());
 
-    metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
+    assertEquals(1, timeline.getRollbackTimeline().countInstants(), "There should have 2 rollback instant.");
 
-    HoodieActiveTimeline rollbackTimeline2 = new RollbacksCommand.RollbackTimeline(metaClient);
-    assertEquals(1, rollbackTimeline2.getRollbackTimeline().countInstants(), "There should have 2 rollback instant.");
-
-    HoodieActiveTimeline timeline2 = metaClient.reloadActiveTimeline();
-    assertEquals(2, timeline2.getCommitsTimeline().countInstants(), "There should have 1 instants.");
+    assertEquals(2, timeline.getCommitsTimeline().countInstants(), "There should have 1 instants.");
   }
 }

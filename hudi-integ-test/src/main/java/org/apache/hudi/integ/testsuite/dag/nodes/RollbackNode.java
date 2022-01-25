@@ -54,7 +54,6 @@ public class RollbackNode extends DagNode<Option<HoodieInstant>> {
         HoodieTableMetaClient.builder().setConf(executionContext.getHoodieTestSuiteWriter().getConfiguration()).setBasePath(executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath)
             .build();
     for (int i = 0; i < numRollbacks; i++) {
-      metaClient.reloadActiveTimeline();
       Option<HoodieInstant> lastInstant = metaClient.getActiveTimeline().getCommitsTimeline().lastInstant();
       if (lastInstant.isPresent()) {
         log.info("Rolling back last instant {}", lastInstant.get());

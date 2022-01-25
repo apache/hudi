@@ -331,7 +331,6 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(compactionInstantTime);
     if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
       table.rollbackInflightCompaction(inflightInstant);
-      table.getMetaClient().reloadActiveTimeline();
     }
     compactionTimer = metrics.getCompactionCtx();
     HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata =
@@ -350,7 +349,6 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     HoodieInstant inflightInstant = HoodieTimeline.getReplaceCommitInflightInstant(clusteringInstant);
     if (pendingClusteringTimeline.containsInstant(inflightInstant)) {
       rollbackInflightClustering(inflightInstant, table);
-      table.getMetaClient().reloadActiveTimeline();
     }
     clusteringTimer = metrics.getClusteringCtx();
     LOG.info("Starting clustering at " + clusteringInstant);
@@ -437,7 +435,6 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
         new UpgradeDowngrade(
             metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
             .run(HoodieTableVersion.current(), instantTime);
-        metaClient.reloadActiveTimeline();
       }
       // Initialize Metadata Table to make sure it's bootstrapped _before_ the operation,
       // if it didn't exist before

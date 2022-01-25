@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
@@ -1116,11 +1117,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   @Override
   public void sync() {
-    HoodieTimeline oldTimeline = getTimeline();
-    HoodieTimeline newTimeline = metaClient.reloadActiveTimeline().filterCompletedAndCompactionInstants();
+    HoodieActiveTimeline newTimeline = new HoodieActiveTimeline(metaClient,
+        metaClient.getActiveTimeline().filterCompletedAndCompactionInstants().getInstantsAsList());
     try {
       writeLock.lock();
-      runSync(oldTimeline, newTimeline);
+      runSync(newTimeline);
     } finally {
       writeLock.unlock();
     }
@@ -1130,14 +1131,12 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * Performs complete reset of file-system view. Subsequent partition view calls will load file slices against latest
    * timeline
    *
-   * @param oldTimeline Old Hoodie Timeline
    * @param newTimeline New Hoodie Timeline
    */
-  protected void runSync(HoodieTimeline oldTimeline, HoodieTimeline newTimeline) {
+  protected void runSync(HoodieActiveTimeline newTimeline) {
     refreshTimeline(newTimeline);
+    resetFileGroupsReplaced(visibleCommitsAndCompactionTimeline);
     clear();
-    // Initialize with new Hoodie timeline.
-    init(metaClient, newTimeline);
   }
 
   /**

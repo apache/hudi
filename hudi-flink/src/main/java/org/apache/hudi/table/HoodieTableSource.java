@@ -476,7 +476,6 @@ public class HoodieTableSource implements
    */
   @VisibleForTesting
   public void reset() {
-    this.metaClient.reloadActiveTimeline();
     this.requiredPartitions = null;
     this.fileIndex.reset();
   }

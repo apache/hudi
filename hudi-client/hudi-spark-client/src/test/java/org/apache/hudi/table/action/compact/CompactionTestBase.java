@@ -154,7 +154,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
     HoodieInstant compactionInstant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
     metaClient.getActiveTimeline().transitionCompactionRequestedToInflight(compactionInstant);
-    HoodieInstant instant = metaClient.getActiveTimeline().reload().filterPendingCompactionTimeline().getInstants()
+    HoodieInstant instant = metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstants()
         .filter(in -> in.getTimestamp().equals(compactionInstantTime)).findAny().get();
     assertTrue(instant.isInflight(), "Instant must be marked inflight");
   }
@@ -244,7 +244,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
     }
 
     Option<HoodieInstant> deltaCommit =
-        metaClient.getActiveTimeline().reload().getDeltaCommitTimeline().filterCompletedInstants().lastInstant();
+        metaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant();
     if (skipCommit && !cfg.shouldAutoCommit()) {
       assertTrue(deltaCommit.get().getTimestamp().compareTo(instantTime) < 0,
           "Delta commit should not be latest instant");
@@ -264,7 +264,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
 
   protected List<FileSlice> getCurrentLatestFileSlices(HoodieTable table) {
     HoodieTableFileSystemView view = new HoodieTableFileSystemView(table.getMetaClient(),
-        table.getMetaClient().getActiveTimeline().reload().getWriteTimeline());
+        table.getMetaClient().getActiveTimeline().getWriteTimeline());
     return Arrays.stream(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS)
         .flatMap(view::getLatestFileSlices).collect(Collectors.toList());
   }

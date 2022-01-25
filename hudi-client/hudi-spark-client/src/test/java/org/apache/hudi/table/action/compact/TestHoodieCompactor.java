@@ -178,7 +178,6 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
 
       writeClient.startCommitWithTime(newCommitTime);
       writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, newCommitTime).collect();
-      metaClient.reloadActiveTimeline();
 
       // Verify that all data file has one log file
       table = HoodieSparkTable.create(config, context);
@@ -194,7 +193,6 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       table = HoodieSparkTable.create(config, context);
       String compactionInstantTime = "102";
       table.scheduleCompaction(context, compactionInstantTime, Option.empty());
-      table.getMetaClient().reloadActiveTimeline();
       JavaRDD<WriteStatus> result = (JavaRDD<WriteStatus>) table.compact(
           context, compactionInstantTime).getWriteStatuses();
 

@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineDiffHelper;
@@ -66,6 +67,9 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   // This is the visible active timeline used only for incremental view syncing
   private HoodieTimeline visibleActiveTimeline;
 
+  // The latest instant from visibleActiveTimeline, used to compute the diff of timeline
+  private Option<HoodieInstant> latestInstant;
+
   protected IncrementalTimelineSyncFileSystemView(boolean enableIncrementalTimelineSync) {
     this.incrementalTimelineSyncEnabled = enableIncrementalTimelineSync;
   }
@@ -73,14 +77,15 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   @Override
   protected void refreshTimeline(HoodieTimeline visibleActiveTimeline) {
     this.visibleActiveTimeline = visibleActiveTimeline;
+    this.latestInstant = visibleActiveTimeline.lastInstant();
     super.refreshTimeline(visibleActiveTimeline);
   }
 
   @Override
-  protected void runSync(HoodieTimeline oldTimeline, HoodieTimeline newTimeline) {
+  protected void runSync(HoodieActiveTimeline newTimeline) {
     try {
       if (incrementalTimelineSyncEnabled) {
-        TimelineDiffResult diffResult = TimelineDiffHelper.getNewInstantsForIncrementalSync(oldTimeline, newTimeline);
+        TimelineDiffResult diffResult = TimelineDiffHelper.getNewInstantsForIncrementalSync(latestInstant, newTimeline);
         if (diffResult.canSyncIncrementally()) {
           LOG.info("Doing incremental sync");
           runIncrementalSync(newTimeline, diffResult);
@@ -94,7 +99,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
       LOG.error("Got exception trying to perform incremental sync. Reverting to complete sync", ioe);
     }
 
-    super.runSync(oldTimeline, newTimeline);
+    super.runSync(newTimeline);
   }
 
   /**

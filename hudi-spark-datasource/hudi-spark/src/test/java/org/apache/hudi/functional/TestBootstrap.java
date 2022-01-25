@@ -36,7 +36,6 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -260,12 +259,12 @@ public class TestBootstrap extends HoodieClientTestBase {
         numInstantsAfterBootstrap, timestamp, timestamp, deltaCommit, bootstrapInstants);
 
     // Rollback Bootstrap
-    HoodieActiveTimeline.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), new HoodieInstant(State.COMPLETED,
-        deltaCommit ? HoodieTimeline.DELTA_COMMIT_ACTION : HoodieTimeline.COMMIT_ACTION, bootstrapCommitInstantTs));
-    metaClient.reloadActiveTimeline();
+    metaClient.getActiveTimeline().deleteInstantFile(
+        new HoodieInstant(State.COMPLETED,
+            deltaCommit ? HoodieTimeline.DELTA_COMMIT_ACTION : HoodieTimeline.COMMIT_ACTION,
+            bootstrapCommitInstantTs)
+    );
     client.rollbackFailedBootstrap();
-    metaClient.reloadActiveTimeline();
-    assertEquals(0, metaClient.getCommitsTimeline().countInstants());
     assertEquals(0L, BootstrapUtils.getAllLeafFoldersWithFiles(metaClient, metaClient.getFs(), basePath, context)
             .stream().flatMap(f -> f.getValue().stream()).count());
 
@@ -276,7 +275,6 @@ public class TestBootstrap extends HoodieClientTestBase {
     client = new SparkRDDWriteClient(context, config);
     client.bootstrap(Option.empty());
 
-    metaClient.reloadActiveTimeline();
     index = BootstrapIndex.getBootstrapIndex(metaClient);
     if (isBootstrapIndexCreated) {
       assertTrue(index.useIndex());
@@ -343,7 +341,6 @@ public class TestBootstrap extends HoodieClientTestBase {
   private void checkBootstrapResults(int totalRecords, Schema schema, String instant, boolean checkNumRawFiles,
       int expNumInstants, int numVersions, long expTimestamp, long expROTimestamp, boolean isDeltaCommit,
       List<String> instantsWithValidRecords) throws Exception {
-    metaClient.reloadActiveTimeline();
     assertEquals(expNumInstants, metaClient.getCommitsTimeline().filterCompletedInstants().countInstants());
     assertEquals(instant, metaClient.getActiveTimeline()
         .getCommitsTimeline().filterCompletedInstants().lastInstant().get().getTimestamp());

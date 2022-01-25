@@ -263,8 +263,6 @@ public abstract class BaseHoodieTableFileIndex {
     Map<PartitionPath, FileStatus[]> partitionFiles = loadPartitionPathFiles();
     FileStatus[] allFiles = partitionFiles.values().stream().flatMap(Arrays::stream).toArray(FileStatus[]::new);
 
-    metaClient.reloadActiveTimeline();
-
     HoodieTimeline activeTimeline = getActiveTimeline();
     Option<HoodieInstant> latestInstant = activeTimeline.lastInstant();
 

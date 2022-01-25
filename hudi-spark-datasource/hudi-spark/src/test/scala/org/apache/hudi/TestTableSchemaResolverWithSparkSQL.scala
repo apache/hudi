@@ -220,7 +220,6 @@ class TestTableSchemaResolverWithSparkSQL {
    * @param schemaString
    */
   def schemaValuationBasedOnDataFile(metaClient: HoodieTableMetaClient, schemaString: String): Unit = {
-    metaClient.reloadActiveTimeline()
     var tableSchemaResolverParsingException: Exception = null
     try {
       val schemaFromData = new TableSchemaResolver(metaClient).getTableAvroSchemaFromDataFile

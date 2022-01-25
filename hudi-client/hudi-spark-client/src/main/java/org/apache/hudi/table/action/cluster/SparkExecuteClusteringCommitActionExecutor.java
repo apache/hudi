@@ -73,7 +73,6 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
     HoodieInstant instant = HoodieTimeline.getReplaceCommitRequestedInstant(instantTime);
     // Mark instant as clustering inflight
     table.getActiveTimeline().transitionReplaceRequestedToInflight(instant, Option.empty());
-    table.getMetaClient().reloadActiveTimeline();
 
     final Schema schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
     HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = ((ClusteringExecutionStrategy<T, JavaRDD<HoodieRecord<? extends HoodieRecordPayload>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>>)

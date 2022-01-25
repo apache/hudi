@@ -358,7 +358,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
       HoodieTable hoodieTable = getHoodieTable(metaClient, cfg);
       scheduleCompaction(compactionInstantTime, client, cfg);
-      metaClient.reloadActiveTimeline();
+
       HoodieInstant pendingCompactionInstant =
           metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant().get();
       assertEquals(compactionInstantTime, pendingCompactionInstant.getTimestamp(), "Pending Compaction instant has expected instant time");
@@ -369,7 +369,6 @@ public class TestAsyncCompaction extends CompactionTestBase {
       client.startCommitWithTime(replaceInstantTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
       client.insertOverwrite(replaceRecords, replaceInstantTime);
 
-      metaClient.reloadActiveTimeline();
       hoodieTable = getHoodieTable(metaClient, cfg);
       Set<HoodieFileGroupId> newFileGroups = getAllFileGroups(hoodieTable, dataGen.getPartitionPaths());
       // make sure earlier file groups are not visible

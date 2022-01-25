@@ -341,7 +341,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     static void assertAtleastNDeltaCommitsAfterCommit(int minExpected, String lastSuccessfulCommit, String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
-      HoodieTimeline timeline = meta.reloadActiveTimeline().getDeltaCommitTimeline().findInstantsAfter(lastSuccessfulCommit).filterCompletedInstants();
+      HoodieTimeline timeline = meta.getActiveTimeline().getDeltaCommitTimeline().findInstantsAfter(lastSuccessfulCommit).filterCompletedInstants();
       LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
       int numDeltaCommits = (int) timeline.getInstants().count();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
@@ -808,7 +808,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.retryLastPendingInlineClusteringJob = true;
     HoodieDeltaStreamer ds2 = new HoodieDeltaStreamer(cfg, jsc);
     ds2.sync();
-    String completeClusteringTimeStamp = meta.reloadActiveTimeline().getCompletedReplaceTimeline().lastInstant().get().getTimestamp();
+    String completeClusteringTimeStamp = meta.getActiveTimeline().getCompletedReplaceTimeline().lastInstant().get().getTimestamp();
     assertEquals(clusteringRequest.getTimestamp(), completeClusteringTimeStamp);
     TestHelpers.assertAtLeastNCommits(2, tableBasePath, dfs);
     TestHelpers.assertAtLeastNReplaceCommits(1, tableBasePath, dfs);
@@ -840,7 +840,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // Step 2 : Get the first replacecommit and extract the corresponding replaced file IDs.
     HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(dfs.getConf()).setBasePath(tableBasePath).build();
-    HoodieTimeline replacedTimeline = meta.reloadActiveTimeline().getCompletedReplaceTimeline();
+    HoodieTimeline replacedTimeline = meta.getActiveTimeline().getCompletedReplaceTimeline();
     Option<HoodieInstant> firstReplaceHoodieInstant = replacedTimeline.nthFromLastInstant(1);
     assertTrue(firstReplaceHoodieInstant.isPresent());
 
@@ -895,7 +895,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     ds.sync();
 
     // Step 5 : Make sure that firstReplaceHoodieInstant is archived.
-    long count = meta.reloadActiveTimeline().getCompletedReplaceTimeline().getInstants().filter(instant -> firstReplaceHoodieInstant.get().equals(instant)).count();
+    long count = meta.getActiveTimeline().getCompletedReplaceTimeline().getInstants().filter(instant -> firstReplaceHoodieInstant.get().equals(instant)).count();
     assertEquals(0, count);
 
     // Step 6 : All the replaced files in firstReplaceHoodieInstant should be deleted through sync/async cleaner.
@@ -1100,7 +1100,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieClusteringJob scheduleAndExecute = initialHoodieClusteringJob(tableBasePath, null, false, "scheduleAndExecute", retryLastFailedClusteringJob);
     scheduleAndExecute.cluster(0);
 
-    String completeClusteringTimeStamp = meta.getActiveTimeline().reload().getCompletedReplaceTimeline().lastInstant().get().getTimestamp();
+    String completeClusteringTimeStamp = meta.getActiveTimeline().getCompletedReplaceTimeline().lastInstant().get().getTimestamp();
 
     if (retryLastFailedClusteringJob) {
       assertEquals(clusteringRequest.getTimestamp(), completeClusteringTimeStamp);
@@ -1940,19 +1940,19 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     Map<String, String> extraMetadata = new HashMap<>();
     extraMetadata.put(HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY, "abc");
     addCommitToTimeline(metaClient, extraMetadata);
-    metaClient.reloadActiveTimeline();
+
     assertEquals(testDeltaSync.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
         .getCommitsTimeline()).get().getMetadata(CHECKPOINT_KEY), "abc");
 
     extraMetadata.put(HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY, "def");
     addCommitToTimeline(metaClient, extraMetadata);
-    metaClient.reloadActiveTimeline();
+
     assertEquals(testDeltaSync.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
         .getCommitsTimeline()).get().getMetadata(CHECKPOINT_KEY), "def");
 
     // add a replace commit which does not have CEHCKPOINT_KEY. Deltastreamer should be able to go back and pick the right checkpoint.
     addReplaceCommitToTimeline(metaClient, Collections.emptyMap());
-    metaClient.reloadActiveTimeline();
+
     assertEquals(testDeltaSync.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
         .getCommitsTimeline()).get().getMetadata(CHECKPOINT_KEY), "def");
   }

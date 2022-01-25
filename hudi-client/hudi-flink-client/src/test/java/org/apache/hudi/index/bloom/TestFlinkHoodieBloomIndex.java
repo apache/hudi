@@ -139,7 +139,6 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     testTable.addCommit("20150312101010").withInserts("2015/03/12", "1")
         .withInserts("2015/03/12", "3", record1)
         .withInserts("2015/03/12", "4", record2, record3, record4);
-    metaClient.reloadActiveTimeline();
 
     filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
     assertEquals(4, filesList.size());
@@ -317,8 +316,6 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     String fileId1 = testTable.addCommit("001").getFileIdWithInserts("2016/01/31", record1);
     String fileId2 = testTable.addCommit("002").getFileIdWithInserts("2016/01/31", record2);
     String fileId3 = testTable.addCommit("003").getFileIdWithInserts("2015/01/31", record4);
-
-    metaClient.reloadActiveTimeline();
 
     // We do the tag again
     taggedRecords = tagLocation(bloomIndex, records, HoodieFlinkTable.create(config, context, metaClient));

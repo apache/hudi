@@ -122,7 +122,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
         propsFilePath, Collections.singletonList(TestHoodieDeltaStreamer.TripsWithDistanceTransformer.class.getName()));
     cfgBackfillJob.continuousMode = false;
     HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(hadoopConf()).setBasePath(tableBasePath).build();
-    HoodieTimeline timeline = meta.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
         .fromBytes(timeline.getInstantDetails(timeline.firstInstant().get()).get(), HoodieCommitMetadata.class);
     cfgBackfillJob.checkpoint = commitMetadata.getMetadata(CHECKPOINT_KEY);
@@ -267,17 +267,14 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     HoodieDeltaStreamer backfillJob = new HoodieDeltaStreamer(cfgBackfillJob, jsc());
     backfillJob.sync();
 
-    meta.reloadActiveTimeline();
     int totalCommits = meta.getCommitsTimeline().filterCompletedInstants().countInstants();
 
     // add a new commit to timeline which may not have the checkpoint in extra metadata
     addCommitToTimeline(meta);
-    meta.reloadActiveTimeline();
     verifyCommitMetadataCheckpoint(meta, null);
 
     cfgBackfillJob.checkpoint = null;
     new HoodieDeltaStreamer(cfgBackfillJob, jsc()).sync(); // if deltastreamer checkpoint fetch does not walk back to older commits, this sync will fail
-    meta.reloadActiveTimeline();
     Assertions.assertEquals(totalCommits + 2, meta.getCommitsTimeline().filterCompletedInstants().countInstants());
     verifyCommitMetadataCheckpoint(meta, "00008");
   }
@@ -292,7 +289,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
   }
 
   private static HoodieCommitMetadata getLatestMetadata(HoodieTableMetaClient meta) throws IOException {
-    HoodieTimeline timeline = meta.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
+    HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     return HoodieCommitMetadata
             .fromBytes(timeline.getInstantDetails(timeline.lastInstant().get()).get(), HoodieCommitMetadata.class);
   }
@@ -427,7 +424,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     }
 
     long getCommitsAfterInstant() {
-      HoodieTimeline timeline1 = meta.reloadActiveTimeline().getAllCommitsTimeline().findInstantsAfter(lastSuccessfulCommit);
+      HoodieTimeline timeline1 = meta.getActiveTimeline().getAllCommitsTimeline().findInstantsAfter(lastSuccessfulCommit);
       // LOG.info("Timeline Instants=" + meta1.getActiveTimeline().getInstants().collect(Collectors.toList()));
       return timeline1.getInstants().count();
     }

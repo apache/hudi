@@ -65,7 +65,6 @@ public class CompactionUtil {
     } else if (deltaTimeCompaction) {
       // if there are no new commits and the compaction trigger strategy is based on elapsed delta time,
       // schedules the compaction anyway.
-      metaClient.reloadActiveTimeline();
       Option<String> compactionInstantTime = CompactionUtil.getCompactionInstantTime(metaClient);
       if (compactionInstantTime.isPresent()) {
         writeClient.scheduleCompactionAtInstant(compactionInstantTime.get(), Option.empty());
@@ -142,7 +141,7 @@ public class CompactionUtil {
 
   public static void rollbackCompaction(HoodieFlinkTable<?> table, String instantTime) {
     HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(instantTime);
-    if (table.getMetaClient().reloadActiveTimeline().filterPendingCompactionTimeline().containsInstant(inflightInstant)) {
+    if (table.getMetaClient().getActiveTimeline().filterPendingCompactionTimeline().containsInstant(inflightInstant)) {
       LOG.warn("Rollback failed compaction instant: [" + instantTime + "]");
       table.rollbackInflightCompaction(inflightInstant);
     }
@@ -161,7 +160,6 @@ public class CompactionUtil {
     inflightCompactionTimeline.getInstants().forEach(inflightInstant -> {
       LOG.info("Rollback the inflight compaction instant: " + inflightInstant + " for failover");
       table.rollbackInflightCompaction(inflightInstant);
-      table.getMetaClient().reloadActiveTimeline();
     });
   }
 
@@ -184,7 +182,6 @@ public class CompactionUtil {
       if (StreamerUtil.instantTimeDiffSeconds(currentTime, instant.getTimestamp()) >= timeout) {
         LOG.info("Rollback the inflight compaction instant: " + instant + " for timeout(" + timeout + "s)");
         table.rollbackInflightCompaction(instant);
-        table.getMetaClient().reloadActiveTimeline();
       }
     }
   }

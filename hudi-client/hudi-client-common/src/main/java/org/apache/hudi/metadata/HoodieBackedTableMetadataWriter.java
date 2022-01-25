@@ -795,9 +795,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // finish off any pending compactions if any from previous attempt.
     writeClient.runAnyPendingCompactions();
 
-    String latestDeltacommitTime = metadataMetaClient.reloadActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant()
+    String latestDeltacommitTime = metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant()
         .get().getTimestamp();
-    List<HoodieInstant> pendingInstants = dataMetaClient.reloadActiveTimeline().filterInflightsAndRequested()
+    List<HoodieInstant> pendingInstants = dataMetaClient.getActiveTimeline().filterInflightsAndRequested()
         .findInstantsBefore(instantTime).getInstants().collect(Collectors.toList());
 
     if (!pendingInstants.isEmpty()) {
@@ -816,7 +816,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   }
 
   protected void cleanIfNecessary(BaseHoodieWriteClient writeClient, String instantTime) {
-    Option<HoodieInstant> lastCompletedCompactionInstant = metadataMetaClient.reloadActiveTimeline()
+    Option<HoodieInstant> lastCompletedCompactionInstant = metadataMetaClient.getActiveTimeline()
         .getCommitTimeline().filterCompletedInstants().lastInstant();
     if (lastCompletedCompactionInstant.isPresent()
         && metadataMetaClient.getActiveTimeline().filterCompletedInstants()

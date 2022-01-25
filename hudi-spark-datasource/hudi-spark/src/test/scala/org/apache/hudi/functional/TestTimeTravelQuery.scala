@@ -92,7 +92,6 @@ class TestTimeTravelQuery extends HoodieClientTestBase {
       .option(KEYGENERATOR_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getName)
       .mode(SaveMode.Append)
       .save(basePath)
-    metaClient.reloadActiveTimeline()
     val secondCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
 
     // Third write
@@ -106,7 +105,6 @@ class TestTimeTravelQuery extends HoodieClientTestBase {
       .option(KEYGENERATOR_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getName)
       .mode(SaveMode.Append)
       .save(basePath)
-    metaClient.reloadActiveTimeline()
     val thirdCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
 
     // Query as of firstCommitTime
@@ -166,7 +164,6 @@ class TestTimeTravelQuery extends HoodieClientTestBase {
       .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
       .mode(SaveMode.Append)
       .save(basePath)
-    metaClient.reloadActiveTimeline()
     val secondCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
 
     // Third write
@@ -180,7 +177,6 @@ class TestTimeTravelQuery extends HoodieClientTestBase {
       .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
       .mode(SaveMode.Append)
       .save(basePath)
-    metaClient.reloadActiveTimeline()
     val thirdCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
 
     // query as of firstCommitTime (using 'yyyy-MM-dd HH:mm:ss' format)

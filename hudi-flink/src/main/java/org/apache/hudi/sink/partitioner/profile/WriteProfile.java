@@ -255,7 +255,6 @@ public class WriteProfile {
       // already reloaded
       return;
     }
-    this.metaClient.reloadActiveTimeline();
     this.fsView.sync();
     recordProfile();
     cleanMetadataCache(this.metaClient.getCommitsTimeline().filterCompletedInstants().getInstants());

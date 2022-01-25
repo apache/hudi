@@ -140,7 +140,6 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
         table.scheduleRollback(context, commitTime, instant, false, config.shouldRollbackUsingMarkers());
         table.rollback(context, commitTime, instant, true, true);
       });
-      table.getMetaClient().reloadActiveTimeline();
     }
     return recordsAndPendingClusteringFileGroups.getLeft();
   }

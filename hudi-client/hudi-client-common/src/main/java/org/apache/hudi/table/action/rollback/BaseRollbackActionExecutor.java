@@ -131,7 +131,6 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
 
   @Override
   public HoodieRollbackMetadata execute() {
-    table.getMetaClient().reloadActiveTimeline();
     Option<HoodieInstant> rollbackInstant = table.getRollbackTimeline()
         .filterInflightsAndRequested()
         .filter(instant -> instant.getTimestamp().equals(instantTime))

@@ -180,7 +180,6 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
         .asInstanceOf[java.util.List[HoodieRecord[Nothing]]]
     writeClient.startCommitWithTime(instantTime)
     writeClient.insert(records, instantTime)
-    metaClient.reloadActiveTimeline()
 
     val fileIndex = HoodieFileIndex(spark, metaClient, None, queryOpts)
     assertEquals("partition_path", fileIndex.partitionSchema.fields.map(_.name).mkString(","))
@@ -342,7 +341,6 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
   }
 
   private def getFileCountInPartitionPath(partitionPath: String): Int = {
-    metaClient.reloadActiveTimeline()
     val activeInstants = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
     val fileSystemView = new HoodieTableFileSystemView(metaClient, activeInstants)
     fileSystemView.getAllBaseFiles(partitionPath).iterator().asScala.toSeq.length

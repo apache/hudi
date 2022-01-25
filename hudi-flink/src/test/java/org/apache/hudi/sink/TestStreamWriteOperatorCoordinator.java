@@ -210,14 +210,12 @@ public class TestStreamWriteOperatorCoordinator {
     // write another 3 commits
     for (int i = 1; i < 4; i++) {
       instant = mockWriteWithMetadata();
-      metadataTableMetaClient.reloadActiveTimeline();
       completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
       assertThat("One instant need to sync to metadata table", completedTimeline.getInstants().count(), is(i + 1L));
       assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(instant));
     }
     // the 5th commit triggers the compaction
     instant = mockWriteWithMetadata();
-    metadataTableMetaClient.reloadActiveTimeline();
     completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     assertThat("One instant need to sync to metadata table", completedTimeline.getInstants().count(), is(6L));
     assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(instant + "001"));
@@ -225,7 +223,6 @@ public class TestStreamWriteOperatorCoordinator {
     // write another 2 commits
     for (int i = 6; i < 8; i++) {
       instant = mockWriteWithMetadata();
-      metadataTableMetaClient.reloadActiveTimeline();
       completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
       assertThat("One instant need to sync to metadata table", completedTimeline.getInstants().count(), is(i + 1L));
       assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(instant));
@@ -233,7 +230,6 @@ public class TestStreamWriteOperatorCoordinator {
 
     // write another commit to trigger clean
     instant = mockWriteWithMetadata();
-    metadataTableMetaClient.reloadActiveTimeline();
     completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     assertThat("One instant need to sync to metadata table", completedTimeline.getInstants().count(), is(10L));
     assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(instant + "002"));
@@ -243,7 +239,6 @@ public class TestStreamWriteOperatorCoordinator {
     mockWriteWithMetadata();
     // write another commit to trigger compaction
     instant = mockWriteWithMetadata();
-    metadataTableMetaClient.reloadActiveTimeline();
     completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     assertThat("One instant need to sync to metadata table", completedTimeline.getInstants().count(), is(13L));
     assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(instant + "001"));

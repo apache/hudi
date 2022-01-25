@@ -36,7 +36,7 @@ public class CommitUtil {
 
   public static long countNewRecords(HoodieTableMetaClient target, List<String> commitsToCatchup) throws IOException {
     long totalNew = 0;
-    HoodieTimeline timeline = target.reloadActiveTimeline().getCommitTimeline().filterCompletedInstants();
+    HoodieTimeline timeline = target.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
     for (String commit : commitsToCatchup) {
       HoodieCommitMetadata c = HoodieCommitMetadata.fromBytes(
           timeline.getInstantDetails(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commit)).get(),

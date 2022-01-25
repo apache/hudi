@@ -310,7 +310,6 @@ public class HoodieMetadataTableValidator implements Serializable {
 
   public void doMetadataTableValidation() {
     boolean finalResult = true;
-    metaClient.reloadActiveTimeline();
     String basePath = metaClient.getBasePath();
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     List<String> allPartitions = validatePartitions(engineContext, basePath);

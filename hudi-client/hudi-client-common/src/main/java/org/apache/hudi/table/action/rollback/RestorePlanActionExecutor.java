@@ -90,7 +90,6 @@ public class RestorePlanActionExecutor<T extends HoodieRecordPayload, I, K, O> e
 
       HoodieRestorePlan restorePlan = new HoodieRestorePlan(instantsToRollback, LATEST_RESTORE_PLAN_VERSION);
       table.getActiveTimeline().saveToRestoreRequested(restoreInstant, TimelineMetadataUtils.serializeRestorePlan(restorePlan));
-      table.getMetaClient().reloadActiveTimeline();
       LOG.info("Requesting Restore with instant time " + restoreInstant);
       return Option.of(restorePlan);
     } catch (IOException e) {

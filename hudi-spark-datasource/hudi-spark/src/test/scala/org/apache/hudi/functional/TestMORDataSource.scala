@@ -819,7 +819,7 @@ class TestMORDataSource extends HoodieClientTestBase {
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
-    val commit2Time = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+    val commit2Time = metaClient.getActiveTimeline.lastInstant().get().getTimestamp
 
     val records3 = recordsToStrings(dataGen2.generateUniqueUpdates("003", 20)).toList
     val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
@@ -827,7 +827,7 @@ class TestMORDataSource extends HoodieClientTestBase {
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
-    val commit3Time = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+    val commit3Time = metaClient.getActiveTimeline.lastInstant().get().getTimestamp
 
     // snapshot query
     val snapshotQueryRes = spark.read.format("hudi").load(basePath)

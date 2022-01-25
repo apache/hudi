@@ -199,7 +199,6 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
         return HoodieCleanMetadata.newBuilder().build();
       }
 
-      table.getMetaClient().reloadActiveTimeline();
       HoodieCleanMetadata metadata = CleanerUtils.convertCleanMetadata(
           inflightInstant.getTimestamp(),
           Option.of(timer.endTimer()),
@@ -240,7 +239,6 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
             LOG.warn("Failed to perform previous clean operation, instant: " + hoodieInstant, e);
           }
         }
-        table.getMetaClient().reloadActiveTimeline();
         if (config.isMetadataTableEnabled()) {
           table.getHoodieView().sync();
         }

@@ -258,7 +258,6 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
       FileCreateUtils.deleteCommit(metaClient.getBasePath(), bootstrapCommitInstantTs);
     }
     client.rollbackFailedBootstrap();
-    metaClient.reloadActiveTimeline();
     assertEquals(0, metaClient.getCommitsTimeline().countInstants());
     assertEquals(0L, BootstrapUtils.getAllLeafFoldersWithFiles(metaClient, metaClient.getFs(), basePath, context)
         .stream().flatMap(f -> f.getValue().stream()).count());
@@ -270,7 +269,6 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
     client = new SparkRDDWriteClient(context, config);
     client.bootstrap(Option.empty());
 
-    metaClient.reloadActiveTimeline();
     index = BootstrapIndex.getBootstrapIndex(metaClient);
     if (isBootstrapIndexCreated) {
       assertTrue(index.useIndex());
@@ -337,7 +335,6 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
   private void checkBootstrapResults(int totalRecords, Schema schema, String instant, boolean checkNumRawFiles,
                                      int expNumInstants, int numVersions, long expTimestamp, long expROTimestamp, boolean isDeltaCommit,
                                      List<String> instantsWithValidRecords) throws Exception {
-    metaClient.reloadActiveTimeline();
     assertEquals(expNumInstants, metaClient.getCommitsTimeline().filterCompletedInstants().countInstants());
     assertEquals(instant, metaClient.getActiveTimeline()
         .getCommitsTimeline().filterCompletedInstants().lastInstant().get().getTimestamp());

@@ -201,8 +201,6 @@ public class HoodieFlinkCompactor {
     }
 
     private void compact() throws Exception {
-      table.getMetaClient().reloadActiveTimeline();
-
       // checks the compaction plan and do compaction.
       if (cfg.schedule) {
         Option<String> compactionInstantTimeOption = CompactionUtil.getCompactionInstantTime(metaClient);
@@ -213,7 +211,6 @@ public class HoodieFlinkCompactor {
             LOG.info("No compaction plan for this job ");
             return;
           }
-          table.getMetaClient().reloadActiveTimeline();
         }
       }
 
@@ -232,7 +229,6 @@ public class HoodieFlinkCompactor {
       if (timeline.containsInstant(inflightInstant)) {
         LOG.info("Rollback inflight compaction instant: [" + compactionInstantTime + "]");
         table.rollbackInflightCompaction(inflightInstant);
-        table.getMetaClient().reloadActiveTimeline();
       }
 
       // generate compaction plan
@@ -270,7 +266,6 @@ public class HoodieFlinkCompactor {
 
       // Mark instant as compaction inflight
       table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
-      table.getMetaClient().reloadActiveTimeline();
 
       env.addSource(new CompactionPlanSourceFunction(compactionPlan, compactionInstantTime))
           .name("compaction_source")

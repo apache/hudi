@@ -240,7 +240,7 @@ public class CompactionCommand implements CommandMarker {
     if (null == compactionInstantTime) {
       // pick outstanding one with lowest timestamp
       Option<String> firstPendingInstant =
-          client.reloadActiveTimeline().filterCompletedAndCompactionInstants()
+          client.getActiveTimeline().filterCompletedAndCompactionInstants()
               .filter(instant -> instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION)).firstInstant()
               .map(HoodieInstant::getTimestamp);
       if (!firstPendingInstant.isPresent()) {

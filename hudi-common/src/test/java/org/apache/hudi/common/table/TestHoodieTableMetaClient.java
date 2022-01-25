@@ -68,7 +68,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
     commitTimeline.createNewInstant(instant);
     commitTimeline.saveAsComplete(instant, Option.of("test-detail".getBytes()));
-    commitTimeline = commitTimeline.reload();
+
     HoodieInstant completedInstant = HoodieTimeline.getCompletedInstant(instant);
     assertEquals(completedInstant, commitTimeline.getInstants().findFirst().get(),
         "Commit should be 1 and completed");
@@ -92,7 +92,6 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     assertTrue(activeCommitTimeline.empty(), "Should be empty commit timeline");
 
     HoodieInstant completedInstant = HoodieTimeline.getCompletedInstant(instant);
-    activeTimeline = activeTimeline.reload();
     activeCommitTimeline = activeTimeline.getCommitTimeline();
     assertFalse(activeCommitTimeline.empty(), "Should be the 1 commit we made");
     assertEquals(completedInstant, activeCommitTimeline.getInstants().findFirst().get(),

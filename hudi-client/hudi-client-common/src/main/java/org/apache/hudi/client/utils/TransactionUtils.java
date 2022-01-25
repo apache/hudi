@@ -23,6 +23,7 @@ import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
@@ -82,9 +83,16 @@ public class TransactionUtils {
       Option<HoodieInstant> lastCompletedTxnOwnerInstant,
       boolean reloadActiveTimeline) throws HoodieWriteConflictException {
     if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+      HoodieActiveTimeline activeTimeline;
+      if (reloadActiveTimeline || !lastCompletedTxnOwnerInstant.isPresent()) {
+        activeTimeline = table.getActiveTimeline();
+      } else {
+        activeTimeline = (HoodieActiveTimeline) table.getActiveTimeline()
+          .findInstantsBeforeOrEquals(lastCompletedTxnOwnerInstant.get().getTimestamp());
+      }
       ConflictResolutionStrategy resolutionStrategy = config.getWriteConflictResolutionStrategy();
-      Stream<HoodieInstant> instantStream = resolutionStrategy.getCandidateInstants(reloadActiveTimeline
-          ? table.getMetaClient().reloadActiveTimeline() : table.getActiveTimeline(), currentTxnOwnerInstant.get(), lastCompletedTxnOwnerInstant);
+      Stream<HoodieInstant> instantStream = resolutionStrategy.getCandidateInstants(activeTimeline,
+          currentTxnOwnerInstant.get(), lastCompletedTxnOwnerInstant);
       final ConcurrentOperation thisOperation = new ConcurrentOperation(currentTxnOwnerInstant.get(), thisCommitMetadata.orElse(new HoodieCommitMetadata()));
       instantStream.forEach(instant -> {
         try {

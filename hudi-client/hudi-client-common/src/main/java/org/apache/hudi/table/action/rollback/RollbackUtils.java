@@ -132,7 +132,7 @@ public class RollbackUtils {
     int sparkPartitions = Math.max(Math.min(partitions.size(), config.getRollbackParallelism()), 1);
     context.setJobStatus(RollbackUtils.class.getSimpleName(), "Generate all rollback requests");
     return context.flatMap(partitions, partitionPath -> {
-      HoodieActiveTimeline activeTimeline = table.getMetaClient().reloadActiveTimeline();
+      HoodieActiveTimeline activeTimeline = table.getMetaClient().getActiveTimeline();
       List<ListingBasedRollbackRequest> partitionRollbackRequests = new ArrayList<>();
       switch (instantToRollback.getAction()) {
         case HoodieTimeline.COMMIT_ACTION:

@@ -325,7 +325,6 @@ public class TestClientRollback extends HoodieClientTestBase {
       assertFalse(testTable.baseFilesExist(partitionAndFileId3, commitTime3));
       assertTrue(testTable.baseFilesExist(partitionAndFileId2, commitTime2));
 
-      metaClient.reloadActiveTimeline();
       List<HoodieInstant> rollbackInstants = metaClient.getActiveTimeline().getRollbackTimeline().getInstants().collect(Collectors.toList());
       assertEquals(rollbackInstants.size(), 1);
       HoodieInstant rollbackInstant = rollbackInstants.get(0);
@@ -340,7 +339,6 @@ public class TestClientRollback extends HoodieClientTestBase {
       client.rollback(commitTime3);
 
       // verify there are no extra rollback instants
-      metaClient.reloadActiveTimeline();
       rollbackInstants = metaClient.getActiveTimeline().getRollbackTimeline().getInstants().collect(Collectors.toList());
       assertEquals(rollbackInstants.size(), 1);
       assertEquals(rollbackInstants.get(0), rollbackInstant);
@@ -356,14 +354,12 @@ public class TestClientRollback extends HoodieClientTestBase {
       testTable.addRequestedRollback(commitTime5, rollbackPlan);
 
       // the compaction instants should be excluded
-      metaClient.reloadActiveTimeline();
       assertEquals(0, client.getPendingRollbackInfos(metaClient).size());
 
       // verify there is no extra rollback instants
       client.rollback(commitTime4);
 
-      metaClient.reloadActiveTimeline();
-      rollbackInstants = metaClient.reloadActiveTimeline().getRollbackTimeline().getInstants().collect(Collectors.toList());
+      rollbackInstants = metaClient.getActiveTimeline().getRollbackTimeline().getInstants().collect(Collectors.toList());
       assertEquals(2, rollbackInstants.size());
     }
   }

@@ -267,7 +267,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     }
 
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
-    assertEquals(3, metaClient.reloadActiveTimeline().getCommitsTimeline().countInstants(),
+    assertEquals(3, metaClient.getActiveTimeline().getCommitsTimeline().countInstants(),
         "There should have 3 commits");
     return data;
   }

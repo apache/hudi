@@ -185,7 +185,6 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
         .setBasePath(metadataTableBasePath)
         .build();
     HoodieWriteConfig metadataTableWriteConfig = getMetadataWriteConfig(writeConfig);
-    metadataMetaClient.reloadActiveTimeline();
     final HoodieTable table = HoodieSparkTable.create(metadataTableWriteConfig, context, metadataMetaClient);
 
     // Compaction has not yet kicked in. Verify all the log files

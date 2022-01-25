@@ -67,7 +67,6 @@ public class HoodieMetadataMetrics implements Serializable {
 
   public Map<String, String> getStats(boolean detailed, HoodieTableMetaClient metaClient, HoodieTableMetadata metadata) {
     try {
-      metaClient.reloadActiveTimeline();
       HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline());
       return getStats(fsView, detailed, metadata);
     } catch (IOException ioe) {

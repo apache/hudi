@@ -87,7 +87,6 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     // create replace.requested without any metadata content. This instant should be ignored by ClusteringUtils
     metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "4"));
 
-    metaClient.reloadActiveTimeline();
     assertEquals(4, metaClient.getActiveTimeline().filterPendingReplaceTimeline().countInstants());
 
     Map<HoodieFileGroupId, HoodieInstant> fileGroupToInstantMap =

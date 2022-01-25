@@ -352,7 +352,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
       fail("Insert with devolved scheme should fail");
     } catch (HoodieInsertException ex) {
       // no new commit
-      HoodieTimeline curTimeline = metaClient.reloadActiveTimeline().getCommitTimeline().filterCompletedInstants();
+      HoodieTimeline curTimeline = metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
       assertTrue(curTimeline.lastInstant().get().getTimestamp().equals("003"));
       client.rollback("004");
     }
@@ -365,7 +365,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
       fail("Update with devolved scheme should fail");
     } catch (HoodieUpsertException ex) {
       // no new commit
-      HoodieTimeline curTimeline = metaClient.reloadActiveTimeline().getCommitTimeline().filterCompletedInstants();
+      HoodieTimeline curTimeline = metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
       assertTrue(curTimeline.lastInstant().get().getTimestamp().equals("003"));
       client.rollback("004");
     }
@@ -379,7 +379,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     writeBatch(client, "004", "003", Option.empty(), initCommitTime, numRecords,
         (String s, Integer a) -> evolvedRecords, SparkRDDWriteClient::insert, true, numRecords, 2 * numRecords, 4, false);
     // new commit
-    HoodieTimeline curTimeline = metaClient.reloadActiveTimeline().getCommitTimeline().filterCompletedInstants();
+    HoodieTimeline curTimeline = metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
     assertTrue(curTimeline.lastInstant().get().getTimestamp().equals("004"));
     checkReadRecords("000", 2 * numRecords);
 
@@ -399,7 +399,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
       fail("Update with original scheme should fail");
     } catch (HoodieUpsertException ex) {
       // no new commit
-      curTimeline = metaClient.reloadActiveTimeline().getCommitTimeline().filterCompletedInstants();
+      curTimeline = metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
       assertTrue(curTimeline.lastInstant().get().getTimestamp().equals("005"));
       client.rollback("006");
     }
@@ -417,7 +417,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
       fail("Insert with original scheme should fail");
     } catch (HoodieInsertException ex) {
       // no new commit
-      curTimeline = metaClient.reloadActiveTimeline().getCommitTimeline().filterCompletedInstants();
+      curTimeline = metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
       assertTrue(curTimeline.lastInstant().get().getTimestamp().equals("005"));
       client.rollback("006");
 
@@ -433,7 +433,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     // Revert to the older commit and ensure that the original schema can now
     // be used for inserts and inserts.
     client.restoreToInstant("003");
-    curTimeline = metaClient.reloadActiveTimeline().getCommitTimeline().filterCompletedInstants();
+    curTimeline = metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
     assertTrue(curTimeline.lastInstant().get().getTimestamp().equals("003"));
     checkReadRecords("000", numRecords);
 
@@ -451,7 +451,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
 
   private void checkReadRecords(String instantTime, int numExpectedRecords) throws IOException {
     if (tableType == HoodieTableType.COPY_ON_WRITE) {
-      HoodieTimeline timeline = metaClient.reloadActiveTimeline().getCommitTimeline();
+      HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitTimeline();
       assertEquals(numExpectedRecords, HoodieClientTestUtils.countRecordsOptionallySince(jsc, basePath, sqlContext, timeline, Option.of(instantTime)));
     } else {
       // TODO: This code fails to read records under the following conditions:
@@ -459,7 +459,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
       // 2. Log file but no base file with the same FileID
       /*
       FileStatus[] allFiles = HoodieTestUtils.listAllDataAndLogFilesInPath(metaClient.getFs(), basePath);
-      HoodieTimeline timeline = metaClient.reloadActiveTimeline().getCommitsTimeline();
+      HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline();
       HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, timeline, allFiles);
       List<String> dataFiles = fsView.getLatestBaseFiles().map(hf -> hf.getPath()).collect(Collectors.toList());
 
@@ -475,7 +475,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
   }
 
   private void checkLatestDeltaCommit(String instantTime) {
-    HoodieTimeline timeline = metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     assertTrue(timeline.lastInstant().get().getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION));
     assertTrue(timeline.lastInstant().get().getTimestamp().equals(instantTime));
   }
