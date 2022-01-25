@@ -312,4 +312,10 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
       case field if resolver(field.name, name) => field
     }
   }
+
+  // Compare a [[StructField]] to another, return true if they have the same column
+  // name(by resolver) and dataType.
+  def columnEqual(field: StructField, other: StructField, resolver: Resolver): Boolean = {
+    resolver(field.name, other.name) && field.dataType == other.dataType
+  }
 }
