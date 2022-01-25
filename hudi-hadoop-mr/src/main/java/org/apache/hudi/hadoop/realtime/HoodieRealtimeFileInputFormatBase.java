@@ -100,10 +100,11 @@ public abstract class HoodieRealtimeFileInputFormatBase extends HoodieFileInputF
    * TODO: unify the incremental view code between hive/spark-sql and spark datasource
    */
   @Override
-  protected List<FileStatus> listStatusForIncrementalMode(
-      JobConf job, HoodieTableMetaClient tableMetaClient, List<Path> inputPaths) throws IOException {
+  protected List<FileStatus> listStatusForIncrementalMode(JobConf job,
+                                                          HoodieTableMetaClient tableMetaClient,
+                                                          List<Path> inputPaths,
+                                                          String incrementalTableName) throws IOException {
     List<FileStatus> result = new ArrayList<>();
-    String tableName = tableMetaClient.getTableConfig().getTableName();
     Job jobContext = Job.getInstance(job);
 
     // step1
@@ -111,7 +112,7 @@ public abstract class HoodieRealtimeFileInputFormatBase extends HoodieFileInputF
     if (!timeline.isPresent()) {
       return result;
     }
-    HoodieTimeline commitsTimelineToReturn = HoodieInputFormatUtils.getHoodieTimelineForIncrementalQuery(jobContext, tableName, timeline.get());
+    HoodieTimeline commitsTimelineToReturn = HoodieInputFormatUtils.getHoodieTimelineForIncrementalQuery(jobContext, incrementalTableName, timeline.get());
     Option<List<HoodieInstant>> commitsToCheck = Option.of(commitsTimelineToReturn.getInstants().collect(Collectors.toList()));
     if (!commitsToCheck.isPresent()) {
       return result;
