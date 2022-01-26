@@ -608,11 +608,13 @@ public class FixedFileTrailer {
     // for BC
     if (comparatorClassName.equals(KeyValue.COMPARATOR.getLegacyKeyComparatorName())
         || comparatorClassName.equals(KeyValue.COMPARATOR.getClass().getName())
-        || (comparatorClassName.equals("org.apache.hudi.hbase.CellComparator"))) {
+        || (comparatorClassName.equals("org.apache.hudi.hbase.CellComparator"))
+        || comparatorClassName.equals("org.apache.hadoop.hbase.KeyValue$KeyComparator")) {
       comparatorKlass = CellComparatorImpl.class;
     } else if (comparatorClassName.equals(KeyValue.META_COMPARATOR.getLegacyKeyComparatorName())
         || comparatorClassName.equals(KeyValue.META_COMPARATOR.getClass().getName())
-        || (comparatorClassName.equals("org.apache.hudi.hbase.MetaCellComparator"))) {
+        || (comparatorClassName.equals("org.apache.hudi.hbase.MetaCellComparator"))
+        || comparatorClassName.equals("org.apache.hadoop.hbase.KeyValue$MetaKeyComparator")) {
       comparatorKlass = MetaCellComparator.class;
     } else if (comparatorClassName.equals("org.apache.hudi.hbase.KeyValue$RawBytesComparator")
         || comparatorClassName.equals("org.apache.hudi.hbase.util.Bytes$ByteArrayComparator")) {
