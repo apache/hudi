@@ -27,10 +27,13 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.internal.schema.action.TableChanges;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Assertions;
 
+import java.math.BigDecimal;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -72,10 +75,6 @@ public class TestAvroSchemaUtil {
         Types.BinaryType.get(),
         Types.DecimalType.get(9, 4)
     };
-
-    List<Integer> cc = new ArrayList<>();
-    cc.add(9);
-    cc.add(10);
 
     for (int i = 0; i < primitiveTypes.length; i++) {
       Type convertPrimitiveResult = AvroInternalSchemaConverter.convertToField(avroPrimitives[i]);
@@ -199,8 +198,97 @@ public class TestAvroSchemaUtil {
     Assertions.assertEquals(newRecord, recordWithNewId);
   }
 
+  /**
+   * test record data type changes.
+   * int => long/float/double/string
+   * long => float/double/string
+   * float => double/String
+   * double => String/Decimal
+   * Decimal => Decimal/String
+   * String => date/decimal
+   * date => String
+   */
   @Test
-  public void testReWriteRecord() {
+  public void testReWriteRecordWithTypeChanged() {
+    Schema avroSchema = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"h0_record\",\"namespace\":\"hoodie.h0\",\"fields\""
+        + ":[{\"name\":\"id\",\"type\":[\"null\",\"int\"],\"default\":null},"
+        + "{\"name\":\"comb\",\"type\":[\"null\",\"int\"],\"default\":null},"
+        + "{\"name\":\"com1\",\"type\":[\"null\",\"int\"],\"default\":null},"
+        + "{\"name\":\"col0\",\"type\":[\"null\",\"int\"],\"default\":null},"
+        + "{\"name\":\"col1\",\"type\":[\"null\",\"long\"],\"default\":null},"
+        + "{\"name\":\"col11\",\"type\":[\"null\",\"long\"],\"default\":null},"
+        + "{\"name\":\"col12\",\"type\":[\"null\",\"long\"],\"default\":null},"
+        + "{\"name\":\"col2\",\"type\":[\"null\",\"float\"],\"default\":null},"
+        + "{\"name\":\"col21\",\"type\":[\"null\",\"float\"],\"default\":null},"
+        + "{\"name\":\"col3\",\"type\":[\"null\",\"double\"],\"default\":null},"
+        + "{\"name\":\"col31\",\"type\":[\"null\",\"double\"],\"default\":null},"
+        + "{\"name\":\"col4\",\"type\":[\"null\",{\"type\":\"fixed\",\"name\":\"fixed\",\"namespace\":\"hoodie.h0.h0_record.col4\","
+        + "\"size\":5,\"logicalType\":\"decimal\",\"precision\":10,\"scale\":4}],\"default\":null},"
+        + "{\"name\":\"col41\",\"type\":[\"null\",{\"type\":\"fixed\",\"name\":\"fixed\",\"namespace\":\"hoodie.h0.h0_record.col41\","
+        + "\"size\":5,\"logicalType\":\"decimal\",\"precision\":10,\"scale\":4}],\"default\":null},"
+        + "{\"name\":\"col5\",\"type\":[\"null\",\"string\"],\"default\":null},"
+        + "{\"name\":\"col51\",\"type\":[\"null\",\"string\"],\"default\":null},"
+        + "{\"name\":\"col6\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null},"
+        + "{\"name\":\"col7\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}],\"default\":null},"
+        + "{\"name\":\"col8\",\"type\":[\"null\",\"boolean\"],\"default\":null},"
+        + "{\"name\":\"col9\",\"type\":[\"null\",\"bytes\"],\"default\":null},{\"name\":\"par\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null}]}");
+    // create a test record with avroSchema
+    GenericData.Record avroRecord = new GenericData.Record(avroSchema);
+    avroRecord.put("id", 1);
+    avroRecord.put("comb", 100);
+    avroRecord.put("com1", -100);
+    avroRecord.put("col0", 256);
+    avroRecord.put("col1", 1000L);
+    avroRecord.put("col11", -100L);
+    avroRecord.put("col12", 2000L);
+    avroRecord.put("col2", -5.001f);
+    avroRecord.put("col21", 5.001f);
+    avroRecord.put("col3", 12.999d);
+    avroRecord.put("col31", 9999.999d);
+    Schema currentDecimalType = avroSchema.getField("col4").schema().getTypes().get(1);
+    BigDecimal bd = new BigDecimal("123.456").setScale(((LogicalTypes.Decimal) currentDecimalType.getLogicalType()).getScale());
+    avroRecord.put("col4", AvroSchemaUtil.DECIMAL_CONVERSION.toFixed(bd, currentDecimalType, currentDecimalType.getLogicalType()));
+    Schema currentDecimalType1 = avroSchema.getField("col41").schema().getTypes().get(1);
+    BigDecimal bd1 = new BigDecimal("7890.456").setScale(((LogicalTypes.Decimal) currentDecimalType1.getLogicalType()).getScale());
+    avroRecord.put("col41", AvroSchemaUtil.DECIMAL_CONVERSION.toFixed(bd1, currentDecimalType1, currentDecimalType1.getLogicalType()));
+
+    avroRecord.put("col5", "2011-01-01");
+    avroRecord.put("col51", "199.342");
+    avroRecord.put("col6", 18987);
+    avroRecord.put("col7", 1640491505000000L);
+    avroRecord.put("col8", false);
+    ByteBuffer bb = ByteBuffer.wrap(new byte[] {97, 48, 53});
+    avroRecord.put("col9", bb);
+    Assertions.assertEquals(GenericData.get().validate(avroSchema, avroRecord), true);
+    InternalSchema internalSchema = AvroInternalSchemaConverter.convert(avroSchema);
+    // do change type operation
+    TableChanges.ColumnUpdateChange updateChange = TableChanges.ColumnUpdateChange.get(internalSchema);
+    updateChange
+        .updateColumnType("id", Types.LongType.get())
+        .updateColumnType("comb", Types.FloatType.get())
+        .updateColumnType("com1", Types.DoubleType.get())
+        .updateColumnType("col0", Types.StringType.get())
+        .updateColumnType("col1", Types.FloatType.get())
+        .updateColumnType("col11", Types.DoubleType.get())
+        .updateColumnType("col12", Types.StringType.get())
+        .updateColumnType("col2", Types.DoubleType.get())
+        .updateColumnType("col21", Types.StringType.get())
+        .updateColumnType("col3", Types.StringType.get())
+        .updateColumnType("col31", Types.DecimalType.get(18, 9))
+        .updateColumnType("col4", Types.DecimalType.get(18, 9))
+        .updateColumnType("col41", Types.StringType.get())
+        .updateColumnType("col5", Types.DateType.get())
+        .updateColumnType("col51", Types.DecimalType.get(18, 9))
+        .updateColumnType("col6", Types.StringType.get());
+    InternalSchema newSchema = SchemaChangeUtils.applyTableChanges2Schema(internalSchema, updateChange);
+    Schema newAvroSchema = AvroInternalSchemaConverter.convert(newSchema, avroSchema.getName());
+    GenericRecord newRecord = AvroSchemaUtil.rewriteRecord(avroRecord, newAvroSchema);
+
+    Assertions.assertEquals(GenericData.get().validate(newAvroSchema, newRecord), true);
+  }
+
+  @Test
+  public void testReWriteNestRecord() {
     Types.RecordType record = Types.RecordType.get(Types.Field.get(0, false, "id", Types.IntType.get()),
         Types.Field.get(1, true, "data", Types.StringType.get()),
         Types.Field.get(2, true, "preferences",
@@ -212,31 +300,35 @@ public class TestAvroSchemaUtil {
     );
     Schema schema = AvroInternalSchemaConverter.convert(record, "test1");
     GenericData.Record avroRecord = new GenericData.Record(schema);
+    GenericData.get().validate(schema, avroRecord);
     avroRecord.put("id", 2);
     avroRecord.put("data", "xs");
     // fill record type
-    GenericData.Record preferencesRecord = new GenericData.Record(AvroInternalSchemaConverter.convert(record.fieldType("preferences"), "px"));
+    GenericData.Record preferencesRecord = new GenericData.Record(AvroInternalSchemaConverter.convert(record.fieldType("preferences"), "test1_preferences"));
     preferencesRecord.put("feature1", false);
     preferencesRecord.put("feature2", true);
+    Assertions.assertEquals(GenericData.get().validate(AvroInternalSchemaConverter.convert(record.fieldType("preferences"), "test1_preferences"), preferencesRecord), true);
     avroRecord.put("preferences", preferencesRecord);
     // fill mapType
     Map<String, GenericData.Record> locations = new HashMap<>();
-    GenericData.Record locationsValue = new GenericData.Record(AvroInternalSchemaConverter.convert(((Types.MapType)record.field("locations").type()).valueType(), "pxx"));
+    Schema mapSchema = AvroInternalSchemaConverter.convert(((Types.MapType)record.field("locations").type()).valueType(), "test1_locations");
+    GenericData.Record locationsValue = new GenericData.Record(mapSchema);
     locationsValue.put("lat", 1.2f);
     locationsValue.put("long", 1.4f);
-    GenericData.Record locationsValue1 = new GenericData.Record(AvroInternalSchemaConverter.convert(((Types.MapType)record.field("locations").type()).valueType(), "pxx"));
+    GenericData.Record locationsValue1 = new GenericData.Record(mapSchema);
     locationsValue1.put("lat", 2.2f);
     locationsValue1.put("long", 2.4f);
     locations.put("key1", locationsValue);
     locations.put("key2", locationsValue1);
     avroRecord.put("locations", locations);
 
-    // fill array
     List<Double> doubles = new ArrayList<>();
     doubles.add(2.0d);
     doubles.add(3.0d);
     avroRecord.put("doubles", doubles);
 
+    // do check
+    Assertions.assertEquals(GenericData.get().validate(schema, avroRecord), true);
     // create newSchema
     Types.RecordType newRecord = Types.RecordType.get(
         Types.Field.get(0, false, "id", Types.IntType.get()),
@@ -249,18 +341,23 @@ public class TestAvroSchemaUtil {
         Types.Field.get(3, false,"doubles", Types.ArrayType.get(7, false, Types.DoubleType.get())),
         Types.Field.get(4, false, "locations", Types.MapType.get(8, 9, Types.StringType.get(),
             Types.RecordType.get(
-                Types.Field.get(10, false, "laty", Types.FloatType.get()),
+                Types.Field.get(10, true, "laty", Types.FloatType.get()),
                 Types.Field.get(11, false, "long", Types.FloatType.get())), false)
         )
     );
 
-    GenericRecord newAvroRecord = AvroSchemaUtil.rewriteRecord(avroRecord, AvroInternalSchemaConverter.convert(newRecord, "namx"));
+    Schema newAvroSchema = AvroInternalSchemaConverter.convert(newRecord, schema.getName());
+    GenericRecord newAvroRecord = AvroSchemaUtil.rewriteRecord(avroRecord, newAvroSchema);
+    // test the correctly of rewrite
+    Assertions.assertEquals(GenericData.get().validate(newAvroSchema, newAvroRecord), true);
 
+    // test union type
     Schema union = Schema.createUnion(Schema.create(Schema.Type.BOOLEAN), Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.FLOAT));
-    Schema schemax = create("t1", new Schema.Field("ux", union, null, JsonProperties.NULL_VALUE));
-    GenericData.Record xx = new GenericData.Record(schemax);
-    xx.put(0, "ggsb");
-    GenericData.get().validate(schemax, xx);
+    Schema schemaUnion = create("t1", new Schema.Field("ux", union, null, JsonProperties.NULL_VALUE));
+    GenericData.Record unionRecord = new GenericData.Record(schemaUnion);
+    unionRecord.put(0, "ss");
+    // test the correctly of rewrite
+    Assertions.assertEquals(GenericData.get().validate(schemaUnion, unionRecord), true);
   }
 
   @Test

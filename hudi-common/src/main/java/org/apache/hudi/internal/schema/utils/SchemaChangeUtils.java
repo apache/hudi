@@ -35,11 +35,18 @@ public class SchemaChangeUtils {
 
   /**
    * whether to allow the column type to be updated.
-   * now only support int to long, float to double, decimal to decimal
-   * to do support more type update.
+   * now only support:
+   * int => long/float/double/string
+   * long => float/double/string
+   * float => double/String
+   * double => String/Decimal
+   * Decimal => Decimal/String
+   * String => date/decimal
+   * date => String
+   * TODO: support more type update.
    *
-   * @param src origin column type
-   * @param dsr new column type
+   * @param src origin column type.
+   * @param dsr new column type.
    * @return whether to allow the column type to be updated.
    */
   public static boolean isTypeUpdateAllow(Type src, Type dsr) {
@@ -51,13 +58,15 @@ public class SchemaChangeUtils {
     }
     switch (src.typeId()) {
       case INT:
-        return dsr == Types.LongType.get();
+        return dsr == Types.LongType.get() || dsr == Types.FloatType.get() || dsr == Types.DoubleType.get() || dsr == Types.StringType.get();
       case LONG:
-        break;
+        return dsr == Types.FloatType.get() || dsr == Types.DoubleType.get() || dsr == Types.StringType.get();
       case FLOAT:
-        return dsr == Types.DoubleType.get();
+        return dsr == Types.DoubleType.get() || dsr == Types.StringType.get();
       case DOUBLE:
-        break;
+        return dsr == Types.StringType.get() || dsr.typeId() == Type.TypeID.DECIMAL;
+      case DATE:
+        return dsr == Types.StringType.get();
       case DECIMAL:
         if (dsr.typeId() == Type.TypeID.DECIMAL) {
           Types.DecimalType decimalSrc = (Types.DecimalType)src;
@@ -65,8 +74,12 @@ public class SchemaChangeUtils {
           if (decimalDsr.isWiderThan(decimalSrc)) {
             return true;
           }
+        } else if (dsr.typeId() == Type.TypeID.STRING) {
+          return true;
         }
         break;
+      case STRING:
+        return dsr == Types.DateType.get() || dsr.typeId() == Type.TypeID.DECIMAL;
       default:
         return false;
     }
