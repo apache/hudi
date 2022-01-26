@@ -827,7 +827,8 @@ public class HoodieTableMetadataUtil {
    * @param isMetaIndexColumnStatsForAllColumns - Is column stats indexing enabled for all columns
    */
   private static List<String> getLatestColumns(HoodieTableMetaClient datasetMetaClient, boolean isMetaIndexColumnStatsForAllColumns) {
-    if (!isMetaIndexColumnStatsForAllColumns) {
+    if (!isMetaIndexColumnStatsForAllColumns
+        || datasetMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants() < 1) {
       return Collections.singletonList(datasetMetaClient.getTableConfig().getRecordKeyFieldProp());
     }
 
