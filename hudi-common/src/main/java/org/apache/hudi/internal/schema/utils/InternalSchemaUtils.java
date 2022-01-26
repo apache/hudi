@@ -22,6 +22,7 @@ import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
@@ -38,8 +39,8 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -256,16 +257,13 @@ public class InternalSchemaUtils {
       case RECORD:
         RecordType record = (RecordType) type;
         List<Field> oldFields = record.fields();
-        List<Type> fieldTypes = new ArrayList<>();
         int currentId = nextId.get();
         nextId.set(currentId + record.fields().size());
-        for (Types.Field f : oldFields) {
-          fieldTypes.add(refreshNewId(f.type(), nextId));
-        }
         List<Types.Field> internalFields = new ArrayList<>();
         for (int i = 0; i < oldFields.size(); i++) {
           Field oldField = oldFields.get(i);
-          internalFields.add(Types.Field.get(currentId++, oldField.isOptional(), oldField.name(), fieldTypes.get(i), oldField.doc()));
+          Type fieldType = refreshNewId(oldField.type(), nextId);
+          internalFields.add(Types.Field.get(currentId++, oldField.isOptional(), oldField.name(), fieldType, oldField.doc()));
         }
         return Types.RecordType.get(internalFields);
       case ARRAY:
@@ -622,7 +620,7 @@ public class InternalSchemaUtils {
    * @return read schema to read avro/parquet file.
    */
   public static InternalSchema mergeSchema(InternalSchema fileSchema, InternalSchema querySchema) {
-    return mergeSchema(fileSchema, querySchema, true);
+    return mergeSchema(fileSchema, querySchema, true, true);
   }
 
   /**
@@ -633,10 +631,13 @@ public class InternalSchemaUtils {
    * @param mergeRequiredFiledForce now sparksql will change col nullability attribute from optional to required which is a bug.
    *                                if this situation occur and mergeRequiredFiledForce is set to be true,
    *                                just ignore the nullability changes, and merge force.
+   * @param useColumnTypeFromFileSchema Whether to use column Type from file schema to read files when we find some column type changed.
+   *                                    when read parquet/orc file this value should be set to true,
+   *                                    when read log file this value should be set to false.
    * @return read schema to read avro/parquet file.
    */
-  public static InternalSchema mergeSchema(InternalSchema fileSchema, InternalSchema querySchema, Boolean mergeRequiredFiledForce) {
-    SchemaMerger schemaMerger = new SchemaMerger(fileSchema, querySchema, mergeRequiredFiledForce);
+  public static InternalSchema mergeSchema(InternalSchema fileSchema, InternalSchema querySchema, boolean mergeRequiredFiledForce, boolean useColumnTypeFromFileSchema) {
+    SchemaMerger schemaMerger = new SchemaMerger(fileSchema, querySchema, mergeRequiredFiledForce, useColumnTypeFromFileSchema);
     Types.RecordType record = (Types.RecordType) mergeType(schemaMerger, querySchema.getRecord());
     return new InternalSchema(record.fields());
   }
@@ -681,15 +682,17 @@ public class InternalSchemaUtils {
    */
   public static InternalSchema pruneInternalSchema(InternalSchema schema, List<String> names) {
     // do check
-    List<Integer> prunedIds = names.stream().map(name -> schema.findIdByName(name.toLowerCase(Locale.ROOT)))
-        .collect(Collectors.toList());
-    if (prunedIds.contains(-1)) {
-      throw new IllegalArgumentException("cannot prune col which not exisit in hudi table");
-    }
+    List<Integer> prunedIds = names.stream().map(name -> {
+      int id = schema.findIdByName(name);
+      if (id == -1) {
+        throw new IllegalArgumentException(String.format("cannot prune col: %s which not exisit in hudi table", name));
+      }
+      return id;
+    }).collect(Collectors.toList());
     // find top parent field ID. eg: a.b.c, f.g.h, only collect id of a and f ignore all child field.
     List<Integer> topParentFieldIds = new ArrayList<>();
     names.stream().forEach(f -> {
-      int id = schema.findIdByName(f.split("\\.")[0].toLowerCase(Locale.ROOT));
+      int id = schema.findIdByName(f.split("\\.")[0]);
       if (!topParentFieldIds.contains(id)) {
         topParentFieldIds.add(id);
       }
@@ -818,5 +821,36 @@ public class InternalSchemaUtils {
         return fileSchema.findfullName(nameId);
       }
     }
+  }
+
+  /**
+   * collect all type changed cols to build a colPosition -> (newColType, oldColType) map.
+   * only collect top level col changed. eg: a is a nest field(record(b int, d long), now a.b is changed from int to long,
+   * only a will be collected, a.b will excluded.
+   *
+   * @param schema a type changed internalSchema
+   * @param oldSchema an old internalSchema.
+   * @return a map.
+   */
+  public static Map<Integer, Pair<Type, Type>> collectTypeChangedCols(InternalSchema schema, InternalSchema oldSchema) {
+    Set<Integer> ids = schema.getAllIds();
+    Set<Integer> otherIds = oldSchema.getAllIds();
+    Map<Integer, Pair<Type, Type>> result = new HashMap<>();
+    ids.stream().filter(f -> otherIds.contains(f)).forEach(f -> {
+      if (!schema.findType(f).equals(oldSchema.findType(f))) {
+        String[] fieldNameParts = schema.findfullName(f).split("\\.");
+        String[] otherFieldNameParts = oldSchema.findfullName(f).split("\\.");
+        String parentName = fieldNameParts[0];
+        String otherParentName = otherFieldNameParts[0];
+        if (fieldNameParts.length == otherFieldNameParts.length && schema.findIdByName(parentName) == oldSchema.findIdByName(otherParentName)) {
+          int index = schema.findIdByName(parentName);
+          int position = schema.getRecord().fields().stream().map(s -> s.fieldId()).collect(Collectors.toList()).indexOf(index);
+          if (!result.containsKey(position)) {
+            result.put(position, Pair.of(schema.findType(parentName), oldSchema.findType(otherParentName)));
+          }
+        }
+      }
+    });
+    return result;
   }
 }

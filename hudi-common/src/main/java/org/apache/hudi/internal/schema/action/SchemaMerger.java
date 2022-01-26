@@ -37,11 +37,15 @@ public class SchemaMerger {
   // those operation will change col nullability from optional to required which is wrong.
   // Before that bug is fixed, we need to do adapt.
   // if mergeRequiredFiledForce is true, we will ignore the col's required attribute.
-  private final Boolean mergeRequiredFiledForce;
-  public SchemaMerger(InternalSchema fileSchema, InternalSchema querySchema, Boolean mergeRequiredFiledForce) {
+  private final boolean mergeRequiredFiledForce;
+  // Whether to use column Type from file schema to read files when we find some column type has changed.
+  private boolean useColumnTypeFromFileSchema = true;
+
+  public SchemaMerger(InternalSchema fileSchema, InternalSchema querySchema, boolean mergeRequiredFiledForce, boolean useColumnTypeFromFileSchema) {
     this.fileSchema = fileSchema;
     this.querySchema = querySchema;
     this.mergeRequiredFiledForce = mergeRequiredFiledForce;
+    this.useColumnTypeFromFileSchema = useColumnTypeFromFileSchema;
   }
 
   public List<Types.Field> buildRecordType(List<Types.Field> oldFields, List<Type> newTypes) {
@@ -53,19 +57,11 @@ public class SchemaMerger {
       String fullName = querySchema.findfullName(fieldId);
       if (fileSchema.findField(fieldId) != null) {
         if (fileSchema.findfullName(fieldId).equals(fullName)) {
-          if (newType != oldField.type()) {
-            newFields.add(Types.Field.get(oldField.fieldId(), oldField.isOptional(), oldField.name(), newType, oldField.doc()));
-          } else {
-            newFields.add(oldField);
-          }
+          // maybe col type changed, deal with it.
+          newFields.add(dealWithColTypeChanged(fieldId, newType, oldField));
         } else {
-          // find rename
-          String newName = fileSchema.findField(fieldId).name();
-          if (newType != oldField.type()) {
-            newFields.add(Types.Field.get(oldField.fieldId(), oldField.isOptional(), newName, newType, oldField.doc()));
-          } else {
-            newFields.add(Types.Field.get(oldField.fieldId(), oldField.isOptional(), newName, oldField.type(), oldField.doc()));
-          }
+          // find rename, deal with it.
+          newFields.add(dealWithRename(fieldId, newType, oldField));
         }
       } else {
         // buildFullName
@@ -86,8 +82,31 @@ public class SchemaMerger {
     return newFields;
   }
 
+  private Types.Field dealWithColTypeChanged(int fieldId, Type newType, Types.Field oldField) {
+    Type typeFromFileSchema = fileSchema.findField(fieldId).type();
+    // Current design mechanism guarantees nestedType change is not allowed, so no need to consider.
+    if (newType.isNestedType()) {
+      return Types.Field.get(oldField.fieldId(), oldField.isOptional(), oldField.name(), newType, oldField.doc());
+    } else {
+      return Types.Field.get(oldField.fieldId(), oldField.isOptional(), oldField.name(), useColumnTypeFromFileSchema ? typeFromFileSchema : newType, oldField.doc());
+    }
+  }
+
+  private Types.Field dealWithRename(int fieldId, Type newType, Types.Field oldField) {
+    Types.Field fieldFromFileSchema = fileSchema.findField(fieldId);
+    String nameFromFileSchema = fieldFromFileSchema.name();
+    Type typeFromFileSchema = fieldFromFileSchema.type();
+    // Current design mechanism guarantees nestedType change is not allowed, so no need to consider.
+    if (newType.isNestedType()) {
+      return Types.Field.get(oldField.fieldId(), oldField.isOptional(), nameFromFileSchema, newType, oldField.doc());
+    } else {
+      return Types.Field.get(oldField.fieldId(), oldField.isOptional(), nameFromFileSchema, useColumnTypeFromFileSchema ? typeFromFileSchema : newType, oldField.doc());
+    }
+  }
+
   private String normalizeFullName(String fullName) {
-    // find parent rename, and normalize fullName eg: we renamed a nest field struct(c, d) to aa, the we delete a.d and add it back later.
+    // find parent rename, and normalize fullName
+    // eg: we renamed a nest field struct(c, d) to aa, the we delete a.d and add it back later.
     String[] nameParts = fullName.split("\\.");
     String[] normalizedNameParts = new String[nameParts.length];
     System.arraycopy(nameParts, 0, normalizedNameParts, 0, nameParts.length);

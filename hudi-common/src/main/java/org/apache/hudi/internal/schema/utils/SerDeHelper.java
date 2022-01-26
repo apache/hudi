@@ -22,27 +22,21 @@ import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.util.TokenBuffer;
 
-import org.apache.avro.JsonProperties;
 import org.apache.hadoop.hbase.exceptions.IllegalArgumentIOException;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
 
 import java.io.IOException;
 import java.io.StringWriter;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
@@ -77,183 +71,6 @@ public class SerDeHelper {
 
   private static final Pattern FIXED = Pattern.compile("fixed\\[(\\d+)\\]");
   private static final Pattern DECIMAL = Pattern.compile("decimal\\((\\d+),\\s+(\\d+)\\)");
-
-  /**
-   * convert a java object to JsonNode.
-   * refer to avro schema convert.
-   *
-   * @param datum a java object.
-   * @return convert result.
-   */
-  public static JsonNode toJsonNode(Object datum) {
-    if (datum == null) {
-      return null;
-    }
-    try {
-      TokenBuffer generator = new TokenBuffer(new ObjectMapper(), false);
-      toJson(datum, generator);
-      return new ObjectMapper().readTree(generator.asParser());
-    } catch (IOException e) {
-      throw new HoodieSchemaException(e);
-    }
-  }
-
-  private static void toJson(Object datum, JsonGenerator generator) throws IOException {
-    if (datum == JsonProperties.NULL_VALUE) { // null
-      generator.writeNull();
-    } else if (datum instanceof Map) { // record, map
-      generator.writeStartObject();
-      for (Map.Entry<Object, Object> entry : ((Map<Object, Object>) datum).entrySet()) {
-        generator.writeFieldName(entry.getKey().toString());
-        toJson(entry.getValue(), generator);
-      }
-      generator.writeEndObject();
-    } else if (datum instanceof Collection) { // array
-      generator.writeStartArray();
-      for (Object element : (Collection) datum) {
-        toJson(element, generator);
-      }
-      generator.writeEndArray();
-    } else if (datum instanceof byte[]) { // bytes, fixed
-      generator.writeString(new String((byte[]) datum, StandardCharsets.ISO_8859_1));
-    } else if (datum instanceof CharSequence || datum instanceof Enum) { // string, enum
-      generator.writeString(datum.toString());
-    } else if (datum instanceof Double) { // double
-      generator.writeNumber((Double) datum);
-    } else if (datum instanceof Float) { // float
-      generator.writeNumber((Float) datum);
-    } else if (datum instanceof Long) { // long
-      generator.writeNumber((Long) datum);
-    } else if (datum instanceof Integer) { // int
-      generator.writeNumber((Integer) datum);
-    } else if (datum instanceof Boolean) { // boolean
-      generator.writeBoolean((Boolean) datum);
-    } else {
-      throw new HoodieSchemaException("Unknown datum class: " + datum.getClass());
-    }
-  }
-
-  /**
-   * check whether current JsonNode meet the requirements of the internal hudi type.
-   *
-   * @param type a internal hudi type.
-   * @param defaultValue jsonNode.
-   * @return check result.
-   */
-  public boolean isValidDefaultValue(Type type, JsonNode defaultValue) {
-    if (defaultValue == null) {
-      return true;
-    }
-    switch (type.typeId()) {
-      case STRING:
-      case BINARY:
-      case FIXED:
-        return defaultValue.isTextual();
-      case INT:
-      case LONG:
-      case FLOAT:
-      case DOUBLE:
-        return defaultValue.isNumber();
-      case BOOLEAN:
-        return defaultValue.isBoolean();
-      case ARRAY:
-        Types.ArrayType array = (Types.ArrayType)type;
-        if (!defaultValue.isArray()) {
-          return false;
-        }
-        for (JsonNode element : defaultValue) {
-          if (!isValidDefaultValue(array.elementType(), element)) {
-            return false;
-          }
-        }
-        return true;
-      case MAP:
-        Types.MapType map = (Types.MapType)type;
-        if (!defaultValue.isObject()) {
-          return false;
-        }
-        for (JsonNode value : defaultValue) {
-          if (!isValidDefaultValue(map.valueType(), value)) {
-            return false;
-          }
-        }
-        return true;
-      case RECORD:
-        Types.RecordType record = (Types.RecordType)type;
-        if (!defaultValue.isObject()) {
-          return false;
-        }
-        for (Types.Field f : record.fields()) {
-          if (!isValidDefaultValue(f.type(), defaultValue.has(f.name()) ? defaultValue.get(f.name()) : toJsonNode(f.getDefaultValue()))) {
-            return false;
-          }
-        }
-        return true;
-      default:
-        return false;
-    }
-  }
-
-  /**
-   * convert jsonNode to a java object to meet the requirement of internal hudi type.
-   * refer to avro schema convert code.
-   *
-   * @param jsonNode a jsonNode.
-   * @param type a internal hudi type..
-   * @return convert value.
-   */
-  public static Object toObject(JsonNode jsonNode, Type type) {
-    if (jsonNode == null) {
-      return null;
-    } else if (jsonNode.isNull()) {
-      return null;
-    } else if (jsonNode.isBoolean()) {
-      return jsonNode.asBoolean();
-    } else if (jsonNode.isInt()) {
-      if (type == null || type.typeId().equals(Type.TypeID.INT)) {
-        return jsonNode.asInt();
-      } else if (type.typeId().equals(Type.TypeID.LONG)) {
-        return jsonNode.asLong();
-      }
-    } else if (jsonNode.isLong()) {
-      return jsonNode.asLong();
-    } else if (jsonNode.isDouble() || jsonNode.isFloat()) {
-      if (type == null || type.typeId().equals(Type.TypeID.DOUBLE)) {
-        return jsonNode.asDouble();
-      } else if (type.typeId().equals(Type.TypeID.FLOAT)) {
-        return (float) jsonNode.asDouble();
-      }
-    } else if (jsonNode.isTextual()) {
-      if (type == null || type.typeId().equals(Type.TypeID.STRING)) {
-        return jsonNode.asText();
-      } else if (type.typeId().equals(Type.TypeID.BINARY) || type.typeId().equals(Type.TypeID.FIXED)) {
-        return jsonNode.textValue().getBytes(StandardCharsets.ISO_8859_1);
-      }
-    } else if (jsonNode.isArray()) {
-      List<Object> l = new ArrayList<>();
-      for (JsonNode node : jsonNode) {
-        l.add(toObject(node, type == null ? null : ((Types.ArrayType)type).elementType()));
-      }
-      return l;
-    } else if (jsonNode.isObject()) {
-      Map<Object, Object> m = new LinkedHashMap<>();
-      for (Iterator<String> it = jsonNode.fieldNames(); it.hasNext();) {
-        String key = it.next();
-        final Type s;
-        if (type != null && type.typeId().equals(Type.TypeID.MAP)) {
-          s = ((Types.MapType)type).valueType();
-        } else if (type != null && type.typeId().equals(Type.TypeID.RECORD)) {
-          s = ((Types.RecordType)type).field(key).type();
-        } else {
-          s = null;
-        }
-        Object value = toObject(jsonNode.get(key), s);
-        m.put(key, value);
-      }
-      return m;
-    }
-    return null;
-  }
 
   /**
    * convert history internalSchemas to json.
@@ -504,7 +321,7 @@ public class SerDeHelper {
         result.put(current.schemaId(), current);
       }
     } catch (IOException e) {
-      throw new RuntimeException(e);
+      throw new HoodieException(e);
     }
     return result;
   }

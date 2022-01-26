@@ -70,12 +70,15 @@ public class SchemaChangePersistHelper {
         default:
           throw new IllegalArgumentException(String.format("only support first/before/after but found: %s", positionType));
       }
+    } else {
+      throw new IllegalArgumentException(String.format("positionType should be specified"));
     }
     return SchemaChangeUtils.applyTableChanges2Schema(latestSchema, add);
   }
 
   /**
    * delete columns to table.
+   *
    * @param latestSchema latest internal schema.
    * @param colNames col name to be deleted. if we want to delete col from a nested filed, the fullName should be specify
    */
@@ -86,7 +89,7 @@ public class SchemaChangePersistHelper {
   }
 
   /**
-   *rename col name for hudi table.
+   * rename col name for hudi table.
    *
    * @param latestSchema latest internal schema.
    * @param colName col name to be renamed. if we want to rename col from a nested filed, the fullName should be specify

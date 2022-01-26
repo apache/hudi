@@ -83,6 +83,7 @@ public class TableChanges {
      * @throws IllegalArgumentException
      */
     public ColumnUpdateChange updateColumnType(String name, Type newType) {
+      checkColModifyIsLegal(name);
       if (newType.isNestedType()) {
         throw new IllegalArgumentException(String.format("only support update primitive type but find nest column: %s", name));
       }
@@ -118,6 +119,7 @@ public class TableChanges {
      * @throws IllegalArgumentException
      */
     public ColumnUpdateChange updateColumnComment(String name, String newDoc) {
+      checkColModifyIsLegal(name);
       Types.Field field = internalSchema.findField(name);
       if (field == null) {
         throw new IllegalArgumentException(String.format("cannot update a missing column: %s", name));
@@ -146,6 +148,7 @@ public class TableChanges {
      * @throws IllegalArgumentException
      */
     public ColumnUpdateChange renameColumn(String name, String newName) {
+      checkColModifyIsLegal(name);
       Types.Field field = internalSchema.findField(name);
       if (field == null) {
         throw new IllegalArgumentException(String.format("cannot update a missing column: %s", name));
@@ -177,6 +180,7 @@ public class TableChanges {
     }
 
     public ColumnUpdateChange updateColumnNullability(String name, boolean nullable, boolean force) {
+      checkColModifyIsLegal(name);
       Types.Field field = internalSchema.findField(name);
       if (field == null) {
         throw new IllegalArgumentException(String.format("cannot update a missing column: %s", name));
@@ -247,6 +251,7 @@ public class TableChanges {
     }
 
     public ColumnDeleteChange deleteColumn(String name) {
+      checkColModifyIsLegal(name);
       Types.Field field = internalSchema.findField(name);
       if (field == null) {
         throw new IllegalArgumentException(String.format("cannot delete missing columns: %s", name));
@@ -296,10 +301,12 @@ public class TableChanges {
     }
 
     public ColumnAddChange addColumns(String name, Type type, String doc) {
+      checkColModifyIsLegal(name);
       return addColumns("", name, type, doc);
     }
 
     public ColumnAddChange addColumns(String parent, String name, Type type, String doc) {
+      checkColModifyIsLegal(name);
       addColumnsInternal(parent, name, type, doc);
       return this;
     }

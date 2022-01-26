@@ -70,7 +70,7 @@ public class AvroSchemaUtil {
    * @param newSchema newSchema used to rewrite oldRecord
    * @return newRecord for new Schema
    */
-  public static GenericRecord rewriteRecord(GenericRecord oldRecord, Schema newSchema) {
+  public static GenericRecord rewriteRecord(IndexedRecord oldRecord, Schema newSchema) {
     Object newRecord = rewriteRecord(oldRecord, oldRecord.getSchema(), newSchema);
     return (GenericData.Record) newRecord;
   }
