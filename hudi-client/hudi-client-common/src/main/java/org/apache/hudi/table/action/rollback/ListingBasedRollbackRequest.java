@@ -20,10 +20,12 @@ package org.apache.hudi.table.action.rollback;
 
 import org.apache.hudi.common.util.Option;
 
+import java.io.Serializable;
+
 /**
  * Request for performing one rollback action.
  */
-public class ListingBasedRollbackRequest {
+public class ListingBasedRollbackRequest implements Serializable {
 
   /**
    * Rollback commands, that trigger a specific handling for rollback.
