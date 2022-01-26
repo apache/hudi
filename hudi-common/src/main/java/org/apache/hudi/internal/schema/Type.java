@@ -42,41 +42,10 @@ public interface Type extends Serializable {
   }
 
   static TypeID fromValue(String value) {
-    switch (value.toLowerCase(Locale.ROOT)) {
-      case "record":
-        return TypeID.RECORD;
-      case "array":
-        return TypeID.ARRAY;
-      case "map":
-        return TypeID.MAP;
-      case "fixed":
-        return TypeID.FIXED;
-      case "string":
-        return TypeID.STRING;
-      case "binary":
-        return TypeID.BINARY;
-      case "int":
-        return TypeID.INT;
-      case "long":
-        return TypeID.LONG;
-      case "float":
-        return TypeID.FLOAT;
-      case "double":
-        return TypeID.DOUBLE;
-      case "date":
-        return TypeID.DATE;
-      case "boolean":
-        return TypeID.BOOLEAN;
-      case "time":
-        return TypeID.TIME;
-      case "timestamp":
-        return TypeID.TIMESTAMP;
-      case "decimal":
-        return TypeID.DECIMAL;
-      case "uuid":
-        return TypeID.UUID;
-      default:
-        throw new IllegalArgumentException("Invalid value of Type.");
+    try {
+      return TypeID.valueOf(value.toLowerCase(Locale.ROOT));
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException(String.format("Invalid value of Type: %s", value));
     }
   }
 

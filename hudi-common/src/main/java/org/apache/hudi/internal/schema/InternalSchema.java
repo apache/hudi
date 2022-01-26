@@ -28,6 +28,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -43,7 +44,7 @@ public class InternalSchema implements Serializable {
   private int maxColumnId;
   private long versionId;
 
-  private Map<Integer, Field> idToField = null;
+  private transient Map<Integer, Field> idToField = null;
   private transient Map<String, Integer> nameToId = null;
   private transient Map<Integer, String> idToName = null;
 
@@ -150,6 +151,7 @@ public class InternalSchema implements Serializable {
 
   /**
    * Returns the {@link Type} of a sub-field identified by the field name.
+   *
    * @param id a field id
    * @return fullName of field of
    */
@@ -163,6 +165,7 @@ public class InternalSchema implements Serializable {
 
   /**
    * Returns the {@link Type} of a sub-field identified by the field name.
+   *
    * @param name a field name
    * @return a Type for the sub-field or null if it is not found
    */
@@ -179,6 +182,7 @@ public class InternalSchema implements Serializable {
 
   /**
    * Returns the {@link Type} of a sub-field identified by the field id.
+   *
    * @param id a field id
    * @return a Type for the sub-field or null if it is not found
    */
@@ -191,7 +195,18 @@ public class InternalSchema implements Serializable {
   }
 
   /**
+   * Returns all field ids
+   */
+  public Set<Integer> getAllIds() {
+    if (idToName == null) {
+      buildIdToName();
+    }
+    return idToName.keySet();
+  }
+
+  /**
    * Returns the sub-field identified by the field id.
+   *
    * @param id a field id
    * @return the sub-field or null if it is not found
    */
@@ -202,6 +217,7 @@ public class InternalSchema implements Serializable {
   /**
    * Returns a sub-field by name as a {@link Field}.
    * The result may be a top-level or a nested field.
+   *
    * @param name a String name
    * @return a Type for the sub-field or null if it is not found
    */

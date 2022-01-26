@@ -18,6 +18,8 @@
 
 package org.apache.hudi.internal.schema.action;
 
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
@@ -25,6 +27,7 @@ import org.apache.hudi.internal.schema.Types;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -89,26 +92,46 @@ public interface TableChange {
      */
     public BaseColumnChange addPositionChange(String srcName, String dsrName, ColumnPositionChange.ColumnPositionType orderType) {
       Integer srcId = findIdByFullName(srcName);
-      Integer dsrId = findIdByFullName(dsrName);
+      Option<Integer> dsrIdOpt = dsrName.isEmpty() ? Option.empty() : Option.of(findIdByFullName(dsrName));
       Integer srcParentId = id2parent.get(srcId);
-      Integer dsrParentId = id2parent.get(dsrId);
+      Option<Integer>  dsrParentIdOpt = dsrIdOpt.map(id2parent::get);
+      // forbid adjust hoodie metadata columns.
+      switch (orderType) {
+        case BEFORE:
+          checkColModifyIsLegal(dsrName);
+          break;
+        case FIRST:
+          if (srcId == null || srcId == -1 || srcParentId == null || srcParentId == -1) {
+            throw new HoodieSchemaException("forbid adjust top-level columns position by using through first syntax");
+          }
+          break;
+        case AFTER:
+          List<String> checkColumns = HoodieRecord.HOODIE_META_COLUMNS.subList(0, HoodieRecord.HOODIE_META_COLUMNS.size() - 2);
+          if (checkColumns.stream().anyMatch(f -> f.equalsIgnoreCase(dsrName))) {
+            throw new HoodieSchemaException("forbid adjust the position of ordinary columns between meta columns");
+          }
+          break;
+        case NO_OPERATION:
+        default:
+          break;
+      }
       int parentId;
-      if (srcParentId != null && dsrParentId != null && srcParentId.equals(dsrParentId)) {
+      if (srcParentId != null && dsrParentIdOpt.isPresent() && srcParentId.equals(dsrParentIdOpt.get())) {
         Types.Field parentField = internalSchema.findField(srcParentId);
         if (!(parentField.type() instanceof Types.RecordType)) {
           throw new HoodieSchemaException(String.format("only support reorder fields in struct type, but find: %s", parentField.type()));
         }
         parentId = parentField.fieldId();
-      } else if (srcParentId == null &&  dsrParentId == null) {
+      } else if (srcParentId == null &&  !dsrParentIdOpt.isPresent()) {
         parentId = -1;
-      } else if (srcParentId != null && dsrParentId == null && orderType.equals(ColumnPositionChange.ColumnPositionType.FIRST)) {
+      } else if (srcParentId != null && !dsrParentIdOpt.isPresent() && orderType.equals(ColumnPositionChange.ColumnPositionType.FIRST)) {
         parentId = srcParentId;
       } else {
         throw new HoodieSchemaException("cannot order position from different parent");
       }
 
       ArrayList<ColumnPositionChange> changes = positionChangeMap.getOrDefault(parentId, new ArrayList<>());
-      changes.add(ColumnPositionChange.get(srcId, dsrId, orderType));
+      changes.add(ColumnPositionChange.get(srcId, dsrIdOpt.orElse(-1), orderType));
       positionChangeMap.put(parentId, changes);
       return this;
     }
@@ -125,6 +148,13 @@ public interface TableChange {
      * @return field id of current column
      */
     protected abstract Integer findIdByFullName(String fullName);
+
+    // Modify hudi meta columns is prohibited
+    protected void checkColModifyIsLegal(String colNeedToModfiy) {
+      if (HoodieRecord.HOODIE_META_COLUMNS.stream().anyMatch(f -> f.equalsIgnoreCase(colNeedToModfiy))) {
+        throw new IllegalArgumentException(String.format("cannot modify hudi meta col: %s", colNeedToModfiy));
+      }
+    }
 
     @Override
     public boolean withPositionChange() {

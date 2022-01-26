@@ -31,7 +31,9 @@ import java.util.List;
  * Helper methods for schema Change.
  */
 public class SchemaChangeUtils {
-  private SchemaChangeUtils() {}
+  private SchemaChangeUtils() {
+
+  }
 
   /**
    * whether to allow the column type to be updated.
