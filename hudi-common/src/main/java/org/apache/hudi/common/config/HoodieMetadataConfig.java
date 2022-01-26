@@ -158,7 +158,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS = ConfigProperty
       .key(METADATA_PREFIX + ".index.column.stats.all_columns")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("0.11.0")
       .withDocumentation("Enable indexing user data files column ranges under metadata table key lookups. When "
           + "enabled, metadata table will have a partition to store the column ranges and will "
@@ -266,6 +266,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withMetadataIndexColumnStats(boolean enable) {
       metadataConfig.setValue(ENABLE_METADATA_INDEX_COLUMN_STATS, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withMetadataIndexForAllColumns(boolean enable) {
+      metadataConfig.setValue(METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS, String.valueOf(enable));
       return this;
     }
 

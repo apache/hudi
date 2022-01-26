@@ -427,19 +427,21 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return columnRangeMetadataList.stream().map(columnRangeMetadata -> {
       HoodieKey key = new HoodieKey(getColumnStatsIndexKey(partitionName, columnRangeMetadata),
           MetadataPartitionType.COLUMN_STATS.getPartitionPath());
-
-      HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_COLUMN_STATS,
-          HoodieColumnStats.newBuilder()
-              .setMinValue(columnRangeMetadata.getMinValue() == null ? null :
-                  new String(((Binary) columnRangeMetadata.getMinValue()).getBytes()))
-              .setMaxValue(columnRangeMetadata.getMaxValue() == null ? null :
-                  new String(((Binary) columnRangeMetadata.getMaxValue()).getBytes()))
-              .setNullCount(columnRangeMetadata.getNumNulls())
-              .setIsDeleted(isDeleted)
-              .build());
-
-      return new HoodieRecord<>(key, payload);
-    });
+      try {
+        HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_COLUMN_STATS,
+            HoodieColumnStats.newBuilder()
+                .setMinValue(columnRangeMetadata.getMinValue() == null ? null :
+                    new String(((Binary) columnRangeMetadata.getMinValue()).getBytes()))
+                .setMaxValue(columnRangeMetadata.getMaxValue() == null ? null :
+                    new String(((Binary) columnRangeMetadata.getMaxValue()).getBytes()))
+                .setNullCount(columnRangeMetadata.getNumNulls())
+                .setIsDeleted(isDeleted)
+                .build());
+        return new HoodieRecord<>(key, payload);
+      } catch (Exception e) {
+        return new HoodieRecord<>(null, null);
+      }
+    }).filter(record -> record.getKey() != null).map(e -> e);
   }
 
   @Override

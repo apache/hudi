@@ -395,6 +395,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             .enable(true)
             .withMetadataIndexBloomFilter(true)
             .withMetadataIndexColumnStats(true)
+            .withMetadataIndexForAllColumns(true)
             .build())
         .build();
     init(tableType, writeConfig);
