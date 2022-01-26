@@ -66,6 +66,12 @@
               </transformers>
               <artifactSet>
                 <includes>
+                  <include>org.apache.hudi:hudi-io-proto</include>
+                  <include>org.apache.hudi:hudi-io</include>
+                  <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
+                  <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
+                  <include>org.apache.hbase.thirdparty:hbase-shaded-gson</include>
+                  <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-client-common</include>
                   <include>org.apache.hudi:hudi-spark-client</include>

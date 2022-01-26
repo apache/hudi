@@ -65,6 +65,12 @@
               </transformers>
               <artifactSet>
                 <includes>
+                  <include>org.apache.hudi:hudi-io-proto</include>
+                  <include>org.apache.hudi:hudi-io</include>
+                  <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
+                  <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
+                  <include>org.apache.hbase.thirdparty:hbase-shaded-gson</include>
+                  <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
 
@@ -80,7 +86,6 @@
                   <include>org.apache.hbase:hbase-common</include>
                   <include>org.apache.hbase:hbase-client</include>
                   <include>org.apache.hbase:hbase-protocol</include>
-                  <include>org.apache.hbase:hbase-server</include>
                   <include>org.apache.hbase:hbase-annotations</include>
                   <include>org.apache.htrace:htrace-core</include>
                   <include>com.yammer.metrics:metrics-core</include>

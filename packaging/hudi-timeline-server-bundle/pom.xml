@@ -164,6 +164,12 @@
                          Include hudi-timeline-server with javalin dependencies. 
                          hadoop deps are to be provided at runtime. see run_server.sh 
                       -->
+                      <include>org.apache.hudi:hudi-io-proto</include>
+                      <include>org.apache.hudi:hudi-io</include>
+                      <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
+                      <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
+                      <include>org.apache.hbase.thirdparty:hbase-shaded-gson</include>
+                      <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
                       <include>org.apache.hudi:hudi-common</include>
                       <include>org.apache.hudi:hudi-timeline-service</include>
                       <include>org.apache.httpcomponents:httpclient</include>
