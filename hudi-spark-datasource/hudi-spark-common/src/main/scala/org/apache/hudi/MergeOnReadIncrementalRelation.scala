@@ -145,7 +145,7 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
         sparkSession = sqlContext.sparkSession,
         dataSchema = tableStructSchema,
         partitionSchema = StructType(Nil),
-        requiredSchema = requiredStructSchema,
+        requiredSchema = tableStructSchema,
         filters = pushDownFilter,
         options = optParams,
         hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()

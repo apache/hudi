@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -29,9 +30,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-
-import static org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro;
-import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldVal;
 
 /**
  * {@link HoodieRecordPayload} impl that honors ordering field in both preCombine and combineAndGetUpdateValue.
@@ -57,7 +55,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
       return Option.empty();
     }
 
-    GenericRecord incomingRecord = bytesToAvro(recordBytes, schema);
+    GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
 
     // Null check is needed here to support schema evolution. The record in storage may be from old schema where
     // the new ordering column might not be present and hence returns null.
@@ -81,7 +79,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     if (recordBytes.length == 0) {
       return Option.empty();
     }
-    GenericRecord incomingRecord = bytesToAvro(recordBytes, schema);
+    GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
     eventTime = updateEventTime(incomingRecord, properties);
 
     return isDeleteRecord(incomingRecord) ? Option.empty() : Option.of(incomingRecord);
@@ -122,5 +120,25 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     Comparable incomingOrderingVal = (Comparable) getNestedFieldVal((GenericRecord) incomingRecord,
         properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY), true, consistentLogicalTimestampEnabled);
     return persistedOrderingVal == null || ((Comparable) persistedOrderingVal).compareTo(incomingOrderingVal) <= 0;
+  }
+
+  /**
+   * a wrapper of HoodieAvroUtils.getNestedFieldVal.
+   * Within it, catch exceptions and return null when "returnNullIfNotFound" is true and can't take effect.
+   */
+  private static Object getNestedFieldVal(
+      GenericRecord record,
+      String fieldName,
+      boolean returnNullIfNotFound,
+      boolean consistentLogicalTimestampEnabled) {
+    try {
+      return HoodieAvroUtils.getNestedFieldVal(record, fieldName, returnNullIfNotFound, consistentLogicalTimestampEnabled);
+    } catch (Exception e) {
+      if (returnNullIfNotFound) {
+        return null;
+      } else {
+        throw e;
+      }
+    }
   }
 }
