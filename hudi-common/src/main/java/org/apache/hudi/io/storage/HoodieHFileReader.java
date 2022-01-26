@@ -38,6 +38,7 @@ import org.apache.hadoop.fs.PositionedReadable;
 import org.apache.hadoop.fs.Seekable;
 import org.apache.hudi.hbase.Cell;
 import org.apache.hudi.hbase.KeyValue;
+import org.apache.hudi.hbase.fs.HFileSystem;
 import org.apache.hudi.hbase.io.FSDataInputStreamWrapper;
 import org.apache.hudi.hbase.io.hfile.CacheConfig;
 import org.apache.hudi.hbase.io.hfile.HFile;
@@ -91,12 +92,26 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     Path path = new Path("hoodie");
     SeekableByteArrayInputStream bis = new SeekableByteArrayInputStream(content);
     FSDataInputStream fsdis = new FSDataInputStream(bis);
+    //this.reader = HFile.createReader(FSUtils.getFs("hoodie", conf), path, new FSDataInputStreamWrapper(fsdis),
+    //    content.length, new CacheConfig(conf), conf);
     FSDataInputStreamWrapper stream = new FSDataInputStreamWrapper(fsdis);
+    FileSystem fs = FSUtils.getFs("hoodie", conf);
+    HFileSystem hFileSystem = null;
+
+    // If the fs is not an instance of HFileSystem, then create an
+    // instance of HFileSystem that wraps over the specified fs.
+    // In this case, we will not be able to avoid checksumming inside
+    // the filesystem.
+    if (!(fs instanceof HFileSystem)) {
+      hFileSystem = new HFileSystem(fs);
+    } else {
+      hFileSystem = (HFileSystem)fs;
+    }
     ReaderContext context = new ReaderContextBuilder()
         .withFilePath(path)
         .withInputStreamWrapper(stream)
-        .withFileSize(FSUtils.getFs("hoodie", conf).getFileStatus(path).getLen())
-        .withFileSystem(stream.getHfs())
+        .withFileSize(content.length)
+        .withFileSystem(hFileSystem)
         .withPrimaryReplicaReader(true)
         .withReaderType(ReaderContext.ReaderType.STREAM)
         .build();
