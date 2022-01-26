@@ -37,13 +37,13 @@ public enum DataBlockEncoding {
   /** Disable data block encoding. */
   NONE(0, null),
   // id 1 is reserved for the BITSET algorithm to be added later
-  PREFIX(2, "org.apache.hadoop.hbase.io.encoding.PrefixKeyDeltaEncoder"),
-  DIFF(3, "org.apache.hadoop.hbase.io.encoding.DiffKeyDeltaEncoder"),
-  FAST_DIFF(4, "org.apache.hadoop.hbase.io.encoding.FastDiffDeltaEncoder"),
+  PREFIX(2, "org.apache.hudi.hbase.io.encoding.PrefixKeyDeltaEncoder"),
+  DIFF(3, "org.apache.hudi.hbase.io.encoding.DiffKeyDeltaEncoder"),
+  FAST_DIFF(4, "org.apache.hudi.hbase.io.encoding.FastDiffDeltaEncoder"),
   // id 5 is reserved for the COPY_KEY algorithm for benchmarking
-  // COPY_KEY(5, "org.apache.hadoop.hbase.io.encoding.CopyKeyDataBlockEncoder"),
-  // PREFIX_TREE(6, "org.apache.hadoop.hbase.codec.prefixtree.PrefixTreeCodec"),
-  ROW_INDEX_V1(7, "org.apache.hadoop.hbase.io.encoding.RowIndexCodecV1");
+  // COPY_KEY(5, "org.apache.hudi.hbase.io.encoding.CopyKeyDataBlockEncoder"),
+  // PREFIX_TREE(6, "org.apache.hudi.hbase.codec.prefixtree.PrefixTreeCodec"),
+  ROW_INDEX_V1(7, "org.apache.hudi.hbase.io.encoding.RowIndexCodecV1");
 
   private final short id;
   private final byte[] idInBytes;

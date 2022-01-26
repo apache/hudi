@@ -231,7 +231,7 @@ public abstract class ScheduledChore implements Runnable {
   }
 
   @RestrictedApi(explanation = "Should only be called in ChoreService", link = "",
-      allowedOnPath = ".*/org/apache/hadoop/hbase/ChoreService.java")
+      allowedOnPath = ".*/org/apache/hudi/hbase/ChoreService.java")
   synchronized void setChoreService(ChoreService service) {
     choreService = service;
     timeOfThisRun = -1;

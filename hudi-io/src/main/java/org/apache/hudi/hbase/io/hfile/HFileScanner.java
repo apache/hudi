@@ -125,7 +125,7 @@ public interface HFileScanner extends Shipper, Closeable {
   ByteBuffer getValue();
 
   /**
-   * @return Instance of {@link org.apache.hadoop.hbase.Cell}.
+   * @return Instance of {@link org.apache.hudi.hbase.Cell}.
    */
   Cell getCell();
 

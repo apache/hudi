@@ -36,7 +36,7 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hudi.hbase.ByteBufferKeyOnlyKeyValue;
 import org.apache.hudi.hbase.Cell;
 import org.apache.hudi.hbase.CellComparator;
-//import org.apache.hadoop.hbase.CellComparatorImpl;
+//import org.apache.hudi.hbase.CellComparatorImpl;
 import org.apache.hudi.hbase.CellUtil;
 import org.apache.hudi.hbase.PrivateCellUtil;
 import org.apache.hudi.hbase.KeyValue;
@@ -61,10 +61,10 @@ import org.apache.hadoop.util.StringUtils;
  * single-level and multi-level block indexes.
  *
  * Examples of how to use the block index writer can be found in
- * {@link org.apache.hadoop.hbase.io.hfile.CompoundBloomFilterWriter} and
+ * {@link org.apache.hudi.hbase.io.hfile.CompoundBloomFilterWriter} and
  *  {@link HFileWriterImpl}. Examples of how to use the reader can be
  *  found in {@link HFileReaderImpl} and
- *  org.apache.hadoop.hbase.io.hfile.TestHFileBlockIndex.
+ *  org.apache.hudi.hbase.io.hfile.TestHFileBlockIndex.
  */
 @InterfaceAudience.Private
 public class HFileBlockIndex {

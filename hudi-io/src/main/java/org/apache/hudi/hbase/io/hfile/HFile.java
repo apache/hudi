@@ -532,7 +532,7 @@ public final class HFile {
    * @param fs filesystem
    * @param path Path to file to read
    * @param cacheConf This must not be null. @see
-   *          {@link org.apache.hadoop.hbase.io.hfile.CacheConfig#CacheConfig(Configuration)}
+   *          {@link org.apache.hudi.hbase.io.hfile.CacheConfig#CacheConfig(Configuration)}
    * @param primaryReplicaReader true if this is a reader for primary replica
    * @param conf Configuration
    * @return an active Reader instance

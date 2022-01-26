@@ -212,7 +212,7 @@ public final class HConstants {
 
   /** Full class name of the Zookeeper based connection registry implementation */
   public static final String ZK_CONNECTION_REGISTRY_CLASS =
-      "org.apache.hadoop.hbase.client.ZKConnectionRegistry";
+      "org.apache.hudi.hbase.client.ZKConnectionRegistry";
 
   /** Parameter name for the master type being backup (waits for primary to go inactive). */
   public static final String MASTER_TYPE_BACKUP = "hbase.master.backup";
@@ -948,9 +948,9 @@ public final class HConstants {
    * Parameter name for unique identifier for this {@link org.apache.hadoop.conf.Configuration}
    * instance. If there are two or more {@link org.apache.hadoop.conf.Configuration} instances that,
    * for all intents and purposes, are the same except for their instance ids, then they will not be
-   * able to share the same org.apache.hadoop.hbase.client.HConnection instance. On the other hand,
+   * able to share the same org.apache.hudi.hbase.client.HConnection instance. On the other hand,
    * even if the instance ids are the same, it could result in non-shared
-   * org.apache.hadoop.hbase.client.HConnection instances if some of the other connection parameters
+   * org.apache.hudi.hbase.client.HConnection instances if some of the other connection parameters
    * differ.
    */
   public static final String HBASE_CLIENT_INSTANCE_ID = "hbase.client.instance.id";
@@ -1024,7 +1024,7 @@ public final class HConstants {
   public static final String
       REPLICATION_SINK_SERVICE_CLASSNAME = "hbase.replication.sink.service";
   public static final String REPLICATION_SERVICE_CLASSNAME_DEFAULT =
-      "org.apache.hadoop.hbase.replication.regionserver.Replication";
+      "org.apache.hudi.hbase.replication.regionserver.Replication";
   public static final String REPLICATION_BULKLOAD_ENABLE_KEY = "hbase.replication.bulkload.enabled";
   public static final boolean REPLICATION_BULKLOAD_ENABLE_DEFAULT = false;
   /** Replication cluster id of source cluster which uniquely identifies itself with peer cluster */

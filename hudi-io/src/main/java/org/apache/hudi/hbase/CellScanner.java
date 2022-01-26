@@ -44,8 +44,8 @@ import org.apache.yetus.audience.InterfaceAudience;
  *   // do something
  * }
  * </pre>
- * <p>Often used reading {@link org.apache.hadoop.hbase.Cell}s written by
- * {@link org.apache.hadoop.hbase.io.CellOutputStream}.
+ * <p>Often used reading {@link org.apache.hudi.hbase.Cell}s written by
+ * {@link org.apache.hudi.hbase.io.CellOutputStream}.
  */
 @InterfaceAudience.Public
 public interface CellScanner {

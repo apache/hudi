@@ -49,13 +49,13 @@ public class IndividualBytesFieldCell implements ExtendedCell, Cloneable {
   private final byte[] value;
   private final int vOffset;
   private final int vLength;
-  private final byte[] tags;  // A byte array, rather than an array of org.apache.hadoop.hbase.Tag
+  private final byte[] tags;  // A byte array, rather than an array of org.apache.hudi.hbase.Tag
   private final int tagsOffset;
   private final int tagsLength;
 
   // Other fields
   private long timestamp;
-  private final byte type;  // A byte, rather than org.apache.hadoop.hbase.KeyValue.Type
+  private final byte type;  // A byte, rather than org.apache.hudi.hbase.KeyValue.Type
   private long seqId;
 
   public IndividualBytesFieldCell(byte[] row, byte[] family, byte[] qualifier, long timestamp,

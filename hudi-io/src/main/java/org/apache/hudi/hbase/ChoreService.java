@@ -199,7 +199,7 @@ public class ChoreService {
    * {@link ScheduledChore} from this {@link ChoreService}.
    */
   @RestrictedApi(explanation = "Should only be called in ScheduledChore", link = "",
-      allowedOnPath = ".*/org/apache/hadoop/hbase/(ScheduledChore|ChoreService).java")
+      allowedOnPath = ".*/org/apache/hudi/hbase/(ScheduledChore|ChoreService).java")
   synchronized void cancelChore(ScheduledChore chore) {
     cancelChore(chore, true);
   }
@@ -212,7 +212,7 @@ public class ChoreService {
    * {@link ScheduledChore} from this {@link ChoreService}.
    */
   @RestrictedApi(explanation = "Should only be called in ScheduledChore", link = "",
-      allowedOnPath = ".*/org/apache/hadoop/hbase/(ScheduledChore|ChoreService).java")
+      allowedOnPath = ".*/org/apache/hudi/hbase/(ScheduledChore|ChoreService).java")
   synchronized void cancelChore(ScheduledChore chore, boolean mayInterruptIfRunning) {
     if (scheduledChores.containsKey(chore)) {
       ScheduledFuture<?> future = scheduledChores.get(chore);
@@ -242,7 +242,7 @@ public class ChoreService {
    * this call, the chore will begin another execution as soon as the current execution finishes
    */
   @RestrictedApi(explanation = "Should only be called in ScheduledChore", link = "",
-      allowedOnPath = ".*/org/apache/hadoop/hbase/ScheduledChore.java")
+      allowedOnPath = ".*/org/apache/hudi/hbase/ScheduledChore.java")
   synchronized void triggerNow(ScheduledChore chore) {
     assert chore.getChoreService() == this;
     rescheduleChore(chore);
@@ -334,7 +334,7 @@ public class ChoreService {
    * @param chore The chore that missed its start time
    */
   @RestrictedApi(explanation = "Should only be called in ScheduledChore", link = "",
-      allowedOnPath = ".*/org/apache/hadoop/hbase/ScheduledChore.java")
+      allowedOnPath = ".*/org/apache/hudi/hbase/ScheduledChore.java")
   synchronized void onChoreMissedStartTime(ScheduledChore chore) {
     if (!scheduledChores.containsKey(chore)) {
       return;

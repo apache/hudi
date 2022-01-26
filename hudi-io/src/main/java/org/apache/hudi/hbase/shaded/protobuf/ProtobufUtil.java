@@ -63,7 +63,7 @@ import org.apache.yetus.audience.InterfaceAudience;
 
 /**
  * Protobufs utility.
- * Be aware that a class named org.apache.hadoop.hbase.protobuf.ProtobufUtil (i.e. no 'shaded' in
+ * Be aware that a class named org.apache.hudi.hbase.protobuf.ProtobufUtil (i.e. no 'shaded' in
  * the package name) carries a COPY of a subset of this class for non-shaded
  * users; e.g. Coprocessor Endpoints. If you make change in here, be sure to make change in
  * the companion class too (not the end of the world, especially if you are adding new functionality

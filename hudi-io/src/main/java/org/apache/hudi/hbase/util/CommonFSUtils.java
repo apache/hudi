@@ -453,7 +453,7 @@ public final class CommonFSUtils {
   }
 
   /**
-   * Returns the {@link org.apache.hadoop.hbase.TableName} object representing
+   * Returns the {@link org.apache.hudi.hbase.TableName} object representing
    * the table directory under
    * path rootdir
    *

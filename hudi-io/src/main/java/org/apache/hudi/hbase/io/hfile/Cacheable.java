@@ -81,8 +81,8 @@ public interface Cacheable extends HeapSize, HBaseReferenceCounted {
 
   /**
    * Decrease its reference count, and if no reference then free the memory of this object, its
-   * backend is usually a {@link org.apache.hadoop.hbase.nio.ByteBuff}, and we will put its NIO
-   * ByteBuffers back to {@link org.apache.hadoop.hbase.io.ByteBuffAllocator}
+   * backend is usually a {@link org.apache.hudi.hbase.nio.ByteBuff}, and we will put its NIO
+   * ByteBuffers back to {@link org.apache.hudi.hbase.io.ByteBuffAllocator}
    */
   default boolean release() {
     return false;

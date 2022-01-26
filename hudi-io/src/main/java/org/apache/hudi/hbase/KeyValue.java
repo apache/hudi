@@ -1718,7 +1718,7 @@ public class KeyValue implements ExtendedCell, Cloneable {
      */
     @Override
     public String getLegacyKeyComparatorName() {
-      return "org.apache.hadoop.hbase.KeyValue$MetaKeyComparator";
+      return "org.apache.hudi.hbase.KeyValue$MetaKeyComparator";
     }
 
     @Override
@@ -1757,7 +1757,7 @@ public class KeyValue implements ExtendedCell, Cloneable {
      * @return legacy class name for FileFileTrailer#comparatorClassName
      */
     public String getLegacyKeyComparatorName() {
-      return "org.apache.hadoop.hbase.KeyValue$KeyComparator";
+      return "org.apache.hudi.hbase.KeyValue$KeyComparator";
     }
 
     @Override // RawComparator

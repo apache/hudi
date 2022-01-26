@@ -33,7 +33,7 @@ import org.apache.yetus.audience.InterfaceAudience;
  * its memory will be garbage collected by JVM, even if its reference count decrease to zero, we can
  * do nothing for the de-allocating.
  * <p>
- * @see org.apache.hadoop.hbase.io.hfile.SharedMemHFileBlock
+ * @see org.apache.hudi.hbase.io.hfile.SharedMemHFileBlock
  */
 @InterfaceAudience.Private
 public class ExclusiveMemHFileBlock extends HFileBlock {

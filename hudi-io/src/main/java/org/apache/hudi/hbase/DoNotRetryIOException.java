@@ -23,7 +23,7 @@ import org.apache.yetus.audience.InterfaceAudience;
 
 /**
  * Subclass if exception is not meant to be retried: e.g.
- * {@link org.apache.hadoop.hbase.UnknownScannerException}
+ * {@link org.apache.hudi.hbase.UnknownScannerException}
  */
 @InterfaceAudience.Public
 public class DoNotRetryIOException extends HBaseIOException {

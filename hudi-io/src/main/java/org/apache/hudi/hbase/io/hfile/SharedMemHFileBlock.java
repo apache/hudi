@@ -28,7 +28,7 @@ import org.apache.yetus.audience.InterfaceAudience;
  * if allocate an off-heap {@link ByteBuff} from allocator, then it must be a pooled one. That's to
  * say, an exclusive memory HFileBlock would must be an heap block and a shared memory HFileBlock
  * would must be an off-heap block.
- * @see org.apache.hadoop.hbase.io.hfile.ExclusiveMemHFileBlock
+ * @see org.apache.hudi.hbase.io.hfile.ExclusiveMemHFileBlock
  **/
 @InterfaceAudience.Private
 public class SharedMemHFileBlock extends HFileBlock {

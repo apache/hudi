@@ -111,7 +111,7 @@ public final class BlockCacheFactory {
    * This is used for config.
    */
   private static enum ExternalBlockCaches {
-    memcached("org.apache.hadoop.hbase.io.hfile.MemcachedBlockCache");
+    memcached("org.apache.hudi.hbase.io.hfile.MemcachedBlockCache");
     // TODO(eclark): Consider more. Redis, etc.
     Class<? extends BlockCache> clazz;
     ExternalBlockCaches(String clazzName) {
@@ -139,7 +139,7 @@ public final class BlockCacheFactory {
     } catch (IllegalArgumentException exception) {
       try {
         klass = c.getClass(EXTERNAL_BLOCKCACHE_CLASS_KEY, Class.forName(
-            "org.apache.hadoop.hbase.io.hfile.MemcachedBlockCache"));
+            "org.apache.hudi.hbase.io.hfile.MemcachedBlockCache"));
       } catch (ClassNotFoundException e) {
         return null;
       }

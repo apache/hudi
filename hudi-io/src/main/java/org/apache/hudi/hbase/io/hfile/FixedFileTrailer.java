@@ -608,14 +608,14 @@ public class FixedFileTrailer {
     // for BC
     if (comparatorClassName.equals(KeyValue.COMPARATOR.getLegacyKeyComparatorName())
         || comparatorClassName.equals(KeyValue.COMPARATOR.getClass().getName())
-        || (comparatorClassName.equals("org.apache.hadoop.hbase.CellComparator"))) {
+        || (comparatorClassName.equals("org.apache.hudi.hbase.CellComparator"))) {
       comparatorKlass = CellComparatorImpl.class;
     } else if (comparatorClassName.equals(KeyValue.META_COMPARATOR.getLegacyKeyComparatorName())
         || comparatorClassName.equals(KeyValue.META_COMPARATOR.getClass().getName())
-        || (comparatorClassName.equals("org.apache.hadoop.hbase.MetaCellComparator"))) {
+        || (comparatorClassName.equals("org.apache.hudi.hbase.MetaCellComparator"))) {
       comparatorKlass = MetaCellComparator.class;
-    } else if (comparatorClassName.equals("org.apache.hadoop.hbase.KeyValue$RawBytesComparator")
-        || comparatorClassName.equals("org.apache.hadoop.hbase.util.Bytes$ByteArrayComparator")) {
+    } else if (comparatorClassName.equals("org.apache.hudi.hbase.KeyValue$RawBytesComparator")
+        || comparatorClassName.equals("org.apache.hudi.hbase.util.Bytes$ByteArrayComparator")) {
       // When the comparator to be used is Bytes.BYTES_RAWCOMPARATOR, we just return null from here
       // Bytes.BYTES_RAWCOMPARATOR is not a CellComparator
       comparatorKlass = null;

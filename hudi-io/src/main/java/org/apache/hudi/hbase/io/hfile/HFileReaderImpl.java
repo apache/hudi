@@ -1242,9 +1242,9 @@ public abstract class HFileReaderImpl implements HFile.Reader, Configurable {
 
   /**
    * If expected block is data block, we'll allocate the ByteBuff of block from
-   * {@link org.apache.hadoop.hbase.io.ByteBuffAllocator} and it's usually an off-heap one,
+   * {@link org.apache.hudi.hbase.io.ByteBuffAllocator} and it's usually an off-heap one,
    * otherwise it will allocate from heap.
-   * @see org.apache.hadoop.hbase.io.hfile.HFileBlock.FSReader#readBlockData(long, long, boolean,
+   * @see org.apache.hudi.hbase.io.hfile.HFileBlock.FSReader#readBlockData(long, long, boolean,
    *      boolean, boolean)
    */
   private boolean shouldUseHeap(BlockType expectedBlockType) {

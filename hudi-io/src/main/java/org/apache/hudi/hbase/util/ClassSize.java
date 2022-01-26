@@ -488,9 +488,9 @@ public class ClassSize {
    * including the array header and the part of the backing byte array.
    *
    * This function is used when the byte array backs multiple objects.
-   * For example, in {@link org.apache.hadoop.hbase.KeyValue},
-   * multiple KeyValue objects share a same backing byte array ({@link org.apache.hadoop.hbase.KeyValue#bytes}).
-   * Also see {@link org.apache.hadoop.hbase.KeyValue#heapSize()}.
+   * For example, in {@link org.apache.hudi.hbase.KeyValue},
+   * multiple KeyValue objects share a same backing byte array ({@link org.apache.hudi.hbase.KeyValue#bytes}).
+   * Also see {@link org.apache.hudi.hbase.KeyValue#heapSize()}.
    *
    * @param len the length (in byte) used partially in the backing byte array
    * @return the memory consumption (in byte) of the part of the byte array

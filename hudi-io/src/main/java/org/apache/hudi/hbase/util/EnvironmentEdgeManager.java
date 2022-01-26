@@ -30,13 +30,13 @@ import org.apache.yetus.audience.InterfaceAudience;
  * The main purpose of the Environment Edge Manager was to have better control
  * over the tests so that they behave the same when run in any system.
  * (Refer: <a href="https://issues.apache.org/jira/browse/HBASE-2578">HBASE-2578</a> - The issue
- * which added the {@link org.apache.hadoop.hbase.util.EnvironmentEdgeManager}).
+ * which added the {@link org.apache.hudi.hbase.util.EnvironmentEdgeManager}).
  * The idea is to have a central place where time can be assigned in HBase. That makes
  * it easier to inject different implementations of time. The default environment edge is the Java
  * Current Time in millis. The environment edge manager class is designed to be able
  * to plug in a new implementation of time by simply injecting an implementation
- * of {@link org.apache.hadoop.hbase.util.EnvironmentEdge} interface to
- * {@link org.apache.hadoop.hbase.util.EnvironmentEdgeManager}
+ * of {@link org.apache.hudi.hbase.util.EnvironmentEdge} interface to
+ * {@link org.apache.hudi.hbase.util.EnvironmentEdgeManager}
  <p>
  <b>Problems with Environment Edge:</b><br>
  1. One of the major problems is the side effects of injecting an Environment Edge into
@@ -56,9 +56,9 @@ import org.apache.yetus.audience.InterfaceAudience;
  sleep time or timeouts that any change of time unit or making it fast or slow can potentially
  trigger unexpected failures due to timeout or unintended flow of execution.<br>
  </p>
- Because of the above issues, only {@link org.apache.hadoop.hbase.util.DefaultEnvironmentEdge}
+ Because of the above issues, only {@link org.apache.hudi.hbase.util.DefaultEnvironmentEdge}
  is being used, whose implementation of time returns the {@link System#currentTimeMillis()}. It
- is advised not to inject any other {@link org.apache.hadoop.hbase.util.EnvironmentEdge}.
+ is advised not to inject any other {@link org.apache.hudi.hbase.util.EnvironmentEdge}.
  */
 @InterfaceAudience.Private
 public class EnvironmentEdgeManager {

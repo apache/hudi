@@ -71,7 +71,7 @@ public final class PrettyPrinter {
 
   /**
    * Convert a human readable string to its value.
-   * @see org.apache.hadoop.hbase.util.PrettyPrinter#format(String, Unit)
+   * @see org.apache.hudi.hbase.util.PrettyPrinter#format(String, Unit)
    * @param pretty
    * @param unit
    * @return the value corresponding to the human readable string

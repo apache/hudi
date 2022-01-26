@@ -424,7 +424,7 @@ public class HFileBlock implements Cacheable {
 
   /**
    * Call {@link ByteBuff#release()} to decrease the reference count, if no other reference, it will
-   * return back the {@link ByteBuffer} to {@link org.apache.hadoop.hbase.io.ByteBuffAllocator}
+   * return back the {@link ByteBuffer} to {@link org.apache.hudi.hbase.io.ByteBuffAllocator}
    */
   @Override
   public boolean release() {

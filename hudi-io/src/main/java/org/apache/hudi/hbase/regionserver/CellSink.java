@@ -27,7 +27,7 @@ import org.apache.hudi.hbase.util.BloomFilterWriter;
 
 /**
  * A sink of cells that allows appending cells to the Writers that implement it.
- * {@link org.apache.hadoop.hbase.io.hfile.HFile.Writer},
+ * {@link org.apache.hudi.hbase.io.hfile.HFile.Writer},
  * {@link StoreFileWriter}, {@link AbstractMultiFileWriter},
  * {@link BloomFilterWriter} are some implementors of this.
  */

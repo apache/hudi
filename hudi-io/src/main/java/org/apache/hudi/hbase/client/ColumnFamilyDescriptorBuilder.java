@@ -931,7 +931,7 @@ public class ColumnFamilyDescriptorBuilder {
     /**
      * @param timeToLive Time-to-live of cell contents, in seconds.
      * @return this (for chained invocation)
-     * @throws org.apache.hadoop.hbase.exceptions.HBaseException
+     * @throws org.apache.hudi.hbase.exceptions.HBaseException
      */
     public ModifyableColumnFamilyDescriptor setTimeToLive(String timeToLive) throws HBaseException {
       return setTimeToLive(Integer.parseInt(PrettyPrinter.valueOf(timeToLive, Unit.TIME_INTERVAL)));

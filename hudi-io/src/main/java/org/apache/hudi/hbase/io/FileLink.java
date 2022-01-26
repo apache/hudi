@@ -63,7 +63,7 @@ import org.slf4j.LoggerFactory;
  * {@link HFileLink} is a more concrete implementation of the {@code FileLink}.
  *
  * <p><b>Back-references:</b>
- * To help the {@link org.apache.hadoop.hbase.master.cleaner.CleanerChore} to keep track of
+ * To help the {@link org.apache.hudi.hbase.master.cleaner.CleanerChore} (not used) to keep track of
  * the links to a particular file, during the {@code FileLink} creation, a new file is placed
  * inside a back-reference directory. There's one back-reference directory for each file that
  * has links, and in the directory there's one file per link.
@@ -94,6 +94,7 @@ import org.slf4j.LoggerFactory;
  */
 @InterfaceAudience.Private
 public class FileLink {
+  // TODO(yihua): clean up docs
   private static final Logger LOG = LoggerFactory.getLogger(FileLink.class);
 
   /** Define the Back-reference directory name prefix: .links-&lt;hfile&gt;/ */
@@ -423,7 +424,8 @@ public class FileLink {
    * @return return AccessControlException if access one of the locations caught, otherwise return
    *         FileNotFoundException. The AccessControlException is threw if user scan snapshot
    *         feature is enabled, see
-   *         {@link org.apache.hadoop.hbase.security.access.SnapshotScannerHDFSAclController}.
+   *         {@link org.apache.hudi.hbase.security.access.SnapshotScannerHDFSAclController}
+   *         (not used).
    * @throws IOException if the exception is neither AccessControlException nor
    *           FileNotFoundException
    */
