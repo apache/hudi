@@ -104,23 +104,23 @@
       </exclusions>
       <scope>provided</scope>
     </dependency>
-    <dependency>
+    <!--<dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-common</artifactId>
       <classifier>tests</classifier>
       <scope>test</scope>
-    </dependency>
+    </dependency>-->
     <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-hdfs</artifactId>
       <scope>provided</scope>
     </dependency>
-    <dependency>
+    <!--<dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-hdfs</artifactId>
       <classifier>tests</classifier>
       <scope>test</scope>
-    </dependency>
+    </dependency>-->
 
     <dependency>
       <groupId>org.apache.hbase.thirdparty</groupId>
@@ -159,7 +159,7 @@
       <version>0.13.0</version>
     </dependency>
 
-    <dependency>
+    <!--<dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-api</artifactId>
       <scope>test</scope>
@@ -187,7 +187,7 @@
       <groupId>org.mockito</groupId>
       <artifactId>mockito-junit-jupiter</artifactId>
       <scope>test</scope>
-    </dependency>
+    </dependency>-->
 
     <dependency>
       <groupId>com.esotericsoftware</groupId>
@@ -195,12 +195,12 @@
       <version>4.0.2</version>
     </dependency>
 
-    <dependency>
+    <!--<dependency>
       <groupId>com.github.stefanbirkner</groupId>
       <artifactId>system-rules</artifactId>
       <version>1.17.2</version>
       <scope>test</scope>
-    </dependency>
+    </dependency>-->
 
   </dependencies>
 </project>
