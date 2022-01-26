@@ -363,7 +363,8 @@ public class InputFormatTestUtil {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, newCommit);
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writeSchema.toString());
-    HoodieDataBlock dataBlock = (logBlockType == HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK) ? new HoodieHFileDataBlock(records, header) :
+    HoodieDataBlock dataBlock = (logBlockType == HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK)
+        ? new HoodieHFileDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD) :
         new HoodieAvroDataBlock(records, header);
     writer.appendBlock(dataBlock);
     return writer;

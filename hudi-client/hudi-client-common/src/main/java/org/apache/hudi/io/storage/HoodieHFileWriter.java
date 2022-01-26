@@ -38,6 +38,8 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.io.Writable;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -63,6 +65,8 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
+  private final Schema schema;
+  private final Option<Schema.Field> keyFieldSchema;
   private HFile.Writer writer;
   private String minRecordKey;
   private String maxRecordKey;
@@ -77,6 +81,8 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
     this.fs = (HoodieWrapperFileSystem) this.file.getFileSystem(conf);
     this.hfileConfig = hfileConfig;
+    this.schema = schema;
+    this.keyFieldSchema = Option.ofNullable(schema.getField(hfileConfig.getKeyFieldName()));
 
     // TODO - compute this compression ratio dynamically by looking at the bytes written to the
     // stream and the actual file size reported by HDFS
@@ -121,8 +127,25 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   }
 
   @Override
-  public void writeAvro(String recordKey, IndexedRecord object) throws IOException {
-    byte[] value = HoodieAvroUtils.avroToBytes((GenericRecord)object);
+  public void writeAvro(String recordKey, IndexedRecord record) throws IOException {
+    byte[] value = null;
+    boolean isRecordSerialized = false;
+    if (keyFieldSchema.isPresent()) {
+      GenericRecord keyExcludedRecord = (GenericRecord) record;
+      int keyFieldPos = this.keyFieldSchema.get().pos();
+      boolean isKeyAvailable = (record.get(keyFieldPos) != null && !(record.get(keyFieldPos).toString().isEmpty()));
+      if (isKeyAvailable) {
+        Object originalKey = keyExcludedRecord.get(keyFieldPos);
+        keyExcludedRecord.put(keyFieldPos, StringUtils.EMPTY_STRING);
+        value = HoodieAvroUtils.avroToBytes(keyExcludedRecord);
+        keyExcludedRecord.put(keyFieldPos, originalKey);
+        isRecordSerialized = true;
+      }
+    }
+    if (!isRecordSerialized) {
+      value = HoodieAvroUtils.avroToBytes((GenericRecord) record);
+    }
+
     KeyValue kv = new KeyValue(recordKey.getBytes(), null, null, value);
     writer.append(kv);
 
