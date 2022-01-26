@@ -18,10 +18,10 @@
 
 package org.apache.hudi.integ;
 
-import org.apache.hadoop.hbase.TableExistsException;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -67,7 +67,7 @@ public class HoodieTestHiveBase extends ITTestBase {
       // Ensure table does not exist
       stdOutErr = executeHiveCommand("show tables like '" + hiveTableName + "'");
       if (!stdOutErr.getLeft().isEmpty()) {
-        throw new TableExistsException("Dropped table " + hiveTableName + " exists!");
+        throw new HoodieException("Dropped table " + hiveTableName + " exists!");
       }
     }
 
