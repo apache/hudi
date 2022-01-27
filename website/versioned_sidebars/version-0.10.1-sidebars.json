@@ -1,0 +1,250 @@
+{
+  "version-0.10.1/docs": [
+    {
+      "type": "doc",
+      "id": "version-0.10.1/overview"
+    },
+    {
+      "collapsed": false,
+      "type": "category",
+      "label": "Quick Start",
+      "items": [
+        {
+          "type": "doc",
+          "id": "version-0.10.1/quick-start-guide"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/flink-quick-start-guide"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/docker_demo"
+        }
+      ]
+    },
+    {
+      "collapsed": true,
+      "type": "category",
+      "label": "Concepts",
+      "items": [
+        {
+          "type": "doc",
+          "id": "version-0.10.1/timeline"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/table_types"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/indexing"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/file_layouts"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/metadata"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/write_operations"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/schema_evolution"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/key_generation"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/concurrency_control"
+        }
+      ]
+    },
+    {
+      "collapsed": true,
+      "type": "category",
+      "label": "How To",
+      "items": [
+        {
+          "type": "doc",
+          "id": "version-0.10.1/table_management"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/writing_data"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/hoodie_deltastreamer"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/querying_data"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/flink_configuration"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/syncing_metastore"
+        }
+      ]
+    },
+    {
+      "collapsed": true,
+      "type": "category",
+      "label": "Services",
+      "items": [
+        {
+          "type": "doc",
+          "id": "version-0.10.1/migration_guide"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/compaction"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/clustering"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/hoodie_cleaner"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/transforms"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/markers"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/file_sizing"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/snapshot_exporter"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/precommit_validator"
+        }
+      ]
+    },
+    {
+      "type": "doc",
+      "id": "version-0.10.1/configurations"
+    },
+    {
+      "collapsed": true,
+      "type": "category",
+      "label": "Guides",
+      "items": [
+        {
+          "type": "doc",
+          "id": "version-0.10.1/query_engine_setup"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/performance"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/deployment"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/cli"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/metrics"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/troubleshooting"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.10.1/tuning-guide"
+        },
+        {
+          "collapsed": true,
+          "type": "category",
+          "label": "Storage Configurations",
+          "items": [
+            {
+              "type": "doc",
+              "id": "version-0.10.1/cloud"
+            },
+            {
+              "type": "doc",
+              "id": "version-0.10.1/s3_hoodie"
+            },
+            {
+              "type": "doc",
+              "id": "version-0.10.1/gcs_hoodie"
+            },
+            {
+              "type": "doc",
+              "id": "version-0.10.1/oss_hoodie"
+            },
+            {
+              "type": "doc",
+              "id": "version-0.10.1/azure_hoodie"
+            },
+            {
+              "type": "doc",
+              "id": "version-0.10.1/cos_hoodie"
+            },
+            {
+              "type": "doc",
+              "id": "version-0.10.1/ibm_cos_hoodie"
+            },
+            {
+              "type": "doc",
+              "id": "version-0.10.1/bos_hoodie"
+            },
+            {
+              "type": "doc",
+              "id": "version-0.10.1/jfs_hoodie"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "doc",
+      "id": "version-0.10.1/use_cases"
+    },
+    {
+      "type": "doc",
+      "id": "version-0.10.1/faq"
+    },
+    {
+      "type": "doc",
+      "id": "version-0.10.1/privacy"
+    }
+  ],
+  "version-0.10.1/quick_links": [
+    {
+      "type": "link",
+      "label": "Powered By",
+      "href": "powered-by"
+    },
+    {
+      "type": "link",
+      "label": "Chat with us on Slack",
+      "href": "https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE"
+    }
+  ]
+}
