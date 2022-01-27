@@ -310,8 +310,7 @@ public class ParquetUtils extends BaseFileUtils {
                             convertToNativeJavaType(
                                 columnChunkMetaData.getPrimitiveType(),
                                 columnChunkMetaData.getStatistics().genericGetMax()),
-                            columnChunkMetaData.getStatistics().getNumNulls(),
-                            columnChunkMetaData.getPrimitiveType().stringifier())))
+                            columnChunkMetaData.getStatistics().getNumNulls())))
             .collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName));
 
     // Combine those into file-level statistics
@@ -362,7 +361,7 @@ public class ParquetUtils extends BaseFileUtils {
 
     return new HoodieColumnRangeMetadata<T>(
         one.getFilePath(),
-        one.getColumnName(), minValue, maxValue, one.getNumNulls() + another.getNumNulls(), one.getStringifier());
+        one.getColumnName(), minValue, maxValue, one.getNumNulls() + another.getNumNulls());
   }
 
   private static Comparable<?> convertToNativeJavaType(PrimitiveType primitiveType, Comparable val) {
@@ -399,7 +398,9 @@ public class ParquetUtils extends BaseFileUtils {
     //    4. BINARY (precision is not limited)
     // REF: https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#DECIMAL
     int scale = decimalMetadata.getScale();
-    if (val instanceof Integer) {
+    if (val == null) {
+      return null;
+    } else if (val instanceof Integer) {
       return BigDecimal.valueOf((Integer) val, scale);
     } else if (val instanceof Long) {
       return BigDecimal.valueOf((Long) val, scale);
