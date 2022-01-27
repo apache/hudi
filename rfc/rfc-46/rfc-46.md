@@ -22,6 +22,8 @@
 
 ## Approvers
  - @vinothchandar
+ - @nsivabalan
+ - @xushiyan
 
 ## Status
 
@@ -36,18 +38,21 @@ when dealing with records (during merge, column value extractions, writing into 
 
 While having a single format of the record representation is certainly making implementation of some components simpler, 
 it bears unavoidable performance penalty of de-/serialization loop: every record handled by Hudi has to be converted
-from (low-level) engine-specific representation (`Row` for Spark, `DataRow` for Flink, `ArrayWritable` for Hive) into intermediate 
+from (low-level) engine-specific representation (`Row` for Spark, `RowData` for Flink, `ArrayWritable` for Hive) into intermediate 
 one (Avro), with some operations (like clustering, compaction) potentially incurring this penalty multiple times (on read- 
 and write-paths). 
 
 As such, goal of this effort is to remove the need of conversion from engine-specific internal representations to Avro 
 while handling records. 
 
-Non-goals:
-    - ???
-
 ## Background
-TODO Introduce any much background context which is relevant or necessary to understand the feature and design choices.
+
+Historically, Avro has settled in as de-facto intermediate representation of the record's payload since the early days of Hudi.
+As project matured and the scale of the installations grew, necessity to convert into an intermediate representation quickly 
+become a noticeable bottleneck in terms of performance of critical Hudi flows. 
+
+At the center of it is the hierarchy of `HoodieRecordPayload`s, which is used to hold individual record's payload 
+providing an APIs like `preCombine`, `combineAndGetUpdateValue` to combine it with other record using some user-defined semantic. 
 
 ## Implementation
 
