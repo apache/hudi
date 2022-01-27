@@ -43,7 +43,7 @@ public interface Type extends Serializable {
 
   static TypeID fromValue(String value) {
     try {
-      return TypeID.valueOf(value.toLowerCase(Locale.ROOT));
+      return TypeID.valueOf(value.toUpperCase(Locale.ROOT));
     } catch (IllegalArgumentException e) {
       throw new IllegalArgumentException(String.format("Invalid value of Type: %s", value));
     }
