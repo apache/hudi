@@ -646,7 +646,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // Compaction should not be triggered yet. Let's verify no base file
     // and few log files available.
     List<FileSlice> fileSlices = table.getSliceView()
-        .getLatestFileSlices(MetadataPartitionType.FILES.partitionPath()).collect(Collectors.toList());
+        .getLatestFileSlices(MetadataPartitionType.FILES.getPartitionPath()).collect(Collectors.toList());
     if (fileSlices.isEmpty()) {
       throw new IllegalStateException("LogFile slices are not available!");
     }
@@ -736,7 +736,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withBasePath(metadataMetaClient.getBasePath())
         .withLogFilePaths(logFilePaths)
         .withLatestInstantTime(latestCommitTimestamp)
-        .withPartition(MetadataPartitionType.FILES.partitionPath())
+        .withPartition(MetadataPartitionType.FILES.getPartitionPath())
         .withReaderSchema(schema)
         .withMaxMemorySizeInBytes(100000L)
         .withBufferSize(4096)
@@ -766,7 +766,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   private void verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(HoodieTable table, boolean enableMetaFields) throws IOException {
     table.getHoodieView().sync();
     List<FileSlice> fileSlices = table.getSliceView()
-        .getLatestFileSlices(MetadataPartitionType.FILES.partitionPath()).collect(Collectors.toList());
+        .getLatestFileSlices(MetadataPartitionType.FILES.getPartitionPath()).collect(Collectors.toList());
     if (!fileSlices.get(0).getBaseFile().isPresent()) {
       throw new IllegalStateException("Base file not available!");
     }

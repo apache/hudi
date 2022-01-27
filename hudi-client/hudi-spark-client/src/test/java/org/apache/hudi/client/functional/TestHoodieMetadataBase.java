@@ -118,20 +118,6 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
     initWriteConfigAndMetatableWriter(this.writeConfig, enableMetadataTable);
   }
 
-  public void init(HoodieTableType tableType, HoodieWriteConfig writeConfig) throws IOException {
-    this.tableType = tableType;
-    initPath();
-    initSparkContexts("TestHoodieMetadata");
-    initFileSystem();
-    fs.mkdirs(new Path(basePath));
-    initTimelineService();
-    initMetaClient(tableType);
-    initTestDataGenerator();
-    metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
-    this.writeConfig = writeConfig;
-    initWriteConfigAndMetatableWriter(writeConfig, writeConfig.isMetadataTableEnabled());
-  }
-
   protected void initWriteConfigAndMetatableWriter(HoodieWriteConfig writeConfig, boolean enableMetadataTable) {
     this.writeConfig = writeConfig;
     if (enableMetadataTable) {
