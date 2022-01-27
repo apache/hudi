@@ -365,8 +365,7 @@ public class ParquetUtils extends BaseFileUtils {
 
   private static Comparable<?> convertToNativeJavaType(PrimitiveType primitiveType, Comparable val) {
     if (primitiveType.getOriginalType() == OriginalType.DECIMAL) {
-      DecimalMetadata decimalMetadata = primitiveType.getDecimalMetadata();
-      return BigDecimal.valueOf((Integer) val, decimalMetadata.getScale());
+      return extractDecimal(val, primitiveType.getDecimalMetadata());
     } else if (primitiveType.getOriginalType() == OriginalType.DATE) {
       // NOTE: This is a workaround to address race-condition in using
       //       {@code SimpleDataFormat} concurrently (w/in {@code DateStringifier})
@@ -379,5 +378,26 @@ public class ParquetUtils extends BaseFileUtils {
     }
 
     return val;
+  }
+
+  @Nonnull
+  private static BigDecimal extractDecimal(Object val, DecimalMetadata decimalMetadata) {
+    // In Parquet, Decimal could be represented as either of
+    //    1. INT32 (for 1 <= precision <= 9)
+    //    2. INT64 (for 1 <= precision <= 18)
+    //    3. FIXED_LEN_BYTE_ARRAY (precision is limited by the array size. Length n can store <= floor(log_10(2^(8*n - 1) - 1)) base-10 digits)
+    //    4. BINARY (precision is not limited)
+    // REF: https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#DECIMAL
+    int scale = decimalMetadata.getScale();
+    if (val instanceof Integer) {
+      return BigDecimal.valueOf((Integer) val, scale);
+    } else if (val instanceof Long) {
+      return BigDecimal.valueOf((Long) val, scale);
+    } else if (val instanceof Binary) {
+      // NOTE: Unscaled number is stored in BE format (most significant byte is 0th)
+      return new BigDecimal(new BigInteger(((Binary)val).getBytesUnsafe()), scale);
+    } else {
+      throw new UnsupportedOperationException("not supported");
+    }
   }
 }
