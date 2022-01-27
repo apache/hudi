@@ -4,7 +4,7 @@ keywords: [ configurations, default, flink options, spark, configs, parameters ]
 permalink: /docs/configurations.html
 summary: This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.
 toc: true
-last_modified_at: 2021-12-08T17:24:42.348
+last_modified_at: 2022-01-27T12:11:53.356
 ---
 
 This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.
@@ -16,12 +16,6 @@ This page covers the different ways of configuring your job to write/read Hudi t
 - [**Record Payload Config**](#RECORD_PAYLOAD): This is the lowest level of customization offered by Hudi. Record payloads define how to produce new values to upsert based on incoming new record and stored old record. Hudi provides default implementations such as OverwriteWithLatestAvroPayload which simply update table with the latest/last-written record. This can be overridden to a custom class extending HoodieRecordPayload class, on both datasource and WriteClient levels.
 - [**Kafka Connect Configs**](#KAFKA_CONNECT): These set of configs are used for Kafka Connect Sink Connector for writing Hudi Tables
 - [**Amazon Web Services Configs**](#AWS): Please fill in the description for Config Group Name: Amazon Web Services Configs
-
-## Externalized Config File
-Instead of directly passing configuration settings to every Hudi job, you can also centrally set them in a configuration 
-file `hudi-default.conf`. By default, Hudi would load the configuration file under `/etc/hudi/conf` directory. You can 
-specify a different configuration directory location by setting the `HUDI_CONF_DIR` environment variable. This can be 
-useful for uniformly enforcing repeated configs (like Hive sync or write/index tuning), across your entire data lake. 
 
 ## Spark Datasource Configs {#SPARK_DATASOURCE}
 These configs control the Hudi Spark Datasource, providing ability to define keys/partitioning, pick out the write operation, specify how to merge records or choosing query type to read.
@@ -89,7 +83,7 @@ Options useful for reading tables via `read.format.option(...)`
 ---
 
 > #### hoodie.enable.data.skipping
-> enable data skipping to boost query after doing z-order optimize for current table<br></br>
+> Enables data-skipping allowing queries to leverage indexes to reduce the search space by skipping over files<br></br>
 > **Default Value**: true (Optional)<br></br>
 > `Config Param: ENABLE_DATA_SKIPPING`<br></br>
 > `Since Version: 0.10.0`<br></br>
@@ -200,6 +194,13 @@ the dot notation eg: `a.b.c`<br></br>
 > hive password to use<br></br>
 > **Default Value**: hive (Optional)<br></br>
 > `Config Param: HIVE_PASS`<br></br>
+
+---
+
+> #### hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled
+> When set to true, consistent value will be generated for a logical timestamp type column, like timestamp-millis and timestamp-micros, irrespective of whether row-writer is enabled. Disabled by default so as not to break the pipeline that deploy either fully row-writer path or non row-writer path. For example, if it is kept disabled then record key of timestamp type with value `2016-12-29 09:54:00` will be written as timestamp `2016-12-29 09:54:00.0` in row-writer path, while it will be written as long value `1483023240000000` in non row-writer path. If enabled, then the timestamp value will be written in both the cases.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED`<br></br>
 
 ---
 
@@ -352,6 +353,13 @@ the dot notation eg: `a.b.c`<br></br>
 
 ---
 
+> #### hoodie.datasource.hive_sync.bucket_sync
+> Whether sync hive metastore bucket specification when using bucket index.The specification is 'CLUSTERED BY (trace_id) SORTED BY (trace_id ASC) INTO 65536 BUCKETS'<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: HIVE_SYNC_BUCKET_SYNC`<br></br>
+
+---
+
 > #### hoodie.datasource.hive_sync.auto_create_database
 > Auto create hive database if does not exists<br></br>
 > **Default Value**: true (Optional)<br></br>
@@ -442,6 +450,13 @@ If set true, the names of partition folders follow <partition_column_name>=<part
 By default false (the names of partition folders are only partition values)<br></br>
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: HIVE_STYLE_PARTITIONING`<br></br>
+
+---
+
+> #### hoodie.datasource.hive_sync.conditional_sync
+> Enables conditional hive sync, where partition or schema change must exist to perform sync to hive.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: HIVE_CONDITIONAL_SYNC`<br></br>
 
 ---
 
@@ -1153,6 +1168,25 @@ Actual value will be obtained by invoking .toString() on the field value. Nested
 ## Write Client Configs {#WRITE_CLIENT}
 Internally, the Hudi datasource uses a RDD based HoodieWriteClient API to actually perform writes to storage. These configs provide deep control over lower level aspects like file sizing, compression, parallelism, compaction, write schema, cleaning etc. Although Hudi provides sane defaults, from time-time these configs may need to be tweaked to optimize for specific workloads.
 
+### Layout Configs {#Layout-Configs}
+
+Configurations that control storage layout and data distribution, which defines how the files are organized within a table.
+
+`Config Class`: org.apache.hudi.config.HoodieLayoutConfig<br></br>
+> #### hoodie.storage.layout.type
+> Type of storage layout. Possible options are [DEFAULT | BUCKET]<br></br>
+> **Default Value**: DEFAULT (Optional)<br></br>
+> `Config Param: LAYOUT_TYPE`<br></br>
+
+---
+
+> #### hoodie.storage.layout.partitioner.class
+> Partitioner class, it is used to distribute data in a specific way.<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: LAYOUT_PARTITIONER_CLASS_NAME`<br></br>
+
+---
+
 ### Write commit callback configs {#Write-commit-callback-configs}
 
 Controls callback behavior into HTTP endpoints, to push  notifications on commits on hudi tables.
@@ -1282,6 +1316,13 @@ By default false (the names of partition folders are only partition values)<br><
 
 ---
 
+> #### hoodie.table.timeline.timezone
+> User can set hoodie commit timeline timezone, such as utc, local and so on. local is default<br></br>
+> **Default Value**: LOCAL (Optional)<br></br>
+> `Config Param: TIMELINE_TIMEZONE`<br></br>
+
+---
+
 > #### hoodie.table.version
 > Version of table, used for running upgrade/downgrade steps between releases with potentially breaking/backwards compatible changes.<br></br>
 > **Default Value**: ZERO (Optional)<br></br>
@@ -1300,6 +1341,13 @@ By default false (the names of partition folders are only partition values)<br><
 > Base path of the dataset that needs to be bootstrapped as a Hudi table<br></br>
 > **Default Value**: N/A (Required)<br></br>
 > `Config Param: BOOTSTRAP_BASE_PATH`<br></br>
+
+---
+
+> #### hoodie.database.name
+> Database name that will be used for incremental query.If different databases have the same table name during incremental query, we can set it to limit the table name under a specific database<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: DATABASE_NAME`<br></br>
 
 ---
 
@@ -1404,7 +1452,7 @@ Configurations that control aspects around writing, sizing, reading base and log
 
 ---
 
-> #### hoodie.parquet.outputTimestampType
+> #### hoodie.parquet.outputtimestamptype
 > Sets spark.sql.parquet.outputTimestampType. Parquet timestamp type to use when Spark writes data to Parquet files.<br></br>
 > **Default Value**: TIMESTAMP_MILLIS (Optional)<br></br>
 > `Config Param: PARQUET_OUTPUT_TIMESTAMP_TYPE`<br></br>
@@ -1446,7 +1494,7 @@ Configurations that control aspects around writing, sizing, reading base and log
 
 ---
 
-> #### hoodie.parquet.writeLegacyFormat.enabled
+> #### hoodie.parquet.writelegacyformat.enabled
 > Sets spark.sql.parquet.writeLegacyFormat. If true, data will be written in a way of Spark 1.4 and earlier. For example, decimal values will be written in Parquet's fixed-length byte array format which other systems such as Apache Hive and Apache Impala use. If false, the newer format in Parquet will be used. For example, decimals will be written in int-based format.<br></br>
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: PARQUET_WRITE_LEGACY_FORMAT_ENABLED`<br></br>
@@ -1584,6 +1632,14 @@ Configs that control DynamoDB based locking mechanisms required for concurrency 
 
 ---
 
+> #### hoodie.write.lock.dynamodb.endpoint_url
+> For DynamoDB based lock provider, the url endpoint used for Amazon DynamoDB service. Useful for development with a local dynamodb instance.<br></br>
+> **Default Value**: us-east-1 (Optional)<br></br>
+> `Config Param: DYNAMODB_ENDPOINT_URL`<br></br>
+> `Since Version: 0.11.0`<br></br>
+
+---
+
 ### Metadata Configs {#Metadata-Configs}
 
 Configurations used by the Hudi Metadata Table. This table maintains the metadata about a given Hudi table (e.g file listings)  to avoid overhead of accessing cloud storage, during queries.
@@ -1655,7 +1711,7 @@ Configurations used by the Hudi Metadata Table. This table maintains the metadat
 
 > #### hoodie.metadata.enable
 > Enable the internal metadata table which serves table metadata like level file listings<br></br>
-> **Default Value**: false (Optional)<br></br>
+> **Default Value**: true (Optional)<br></br>
 > `Config Param: ENABLE`<br></br>
 > `Since Version: 0.7.0`<br></br>
 
@@ -2006,7 +2062,7 @@ Configurations that control write behavior on Hudi tables. These can be directly
 ---
 
 > #### hoodie.bulkinsert.sort.mode
-> Sorting modes to use for sorting records for bulk insert. This is user when user hoodie.bulkinsert.user.defined.partitioner.classis not configured. Available values are - GLOBAL_SORT: this ensures best file sizes, with lowest memory overhead at cost of sorting. PARTITION_SORT: Strikes a balance by only sorting within a partition, still keeping the memory overhead of writing lowest and best effort file sizing. NONE: No sorting. Fastest and matches `spark.write.parquet()` in terms of number of files, overheads<br></br>
+> Sorting modes to use for sorting records for bulk insert. This is use when user hoodie.bulkinsert.user.defined.partitioner.classis not configured. Available values are - GLOBAL_SORT: this ensures best file sizes, with lowest memory overhead at cost of sorting. PARTITION_SORT: Strikes a balance by only sorting within a partition, still keeping the memory overhead of writing lowest and best effort file sizing. NONE: No sorting. Fastest and matches `spark.write.parquet()` in terms of number of files, overheads<br></br>
 > **Default Value**: GLOBAL_SORT (Optional)<br></br>
 > `Config Param: BULK_INSERT_SORT_MODE`<br></br>
 
@@ -2158,6 +2214,13 @@ If set true, the names of partition folders follow <partition_column_name>=<part
 By default false (the names of partition folders are only partition values)<br></br>
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: HIVE_STYLE_PARTITIONING_ENABLE`<br></br>
+
+---
+
+> #### hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled
+> When set to true, consistent value will be generated for a logical timestamp type column, like timestamp-millis and timestamp-micros, irrespective of whether row-writer is enabled. Disabled by default so as not to break the pipeline that deploy either fully row-writer path or non row-writer path. For example, if it is kept disabled then record key of timestamp type with value `2016-12-29 09:54:00` will be written as timestamp `2016-12-29 09:54:00.0` in row-writer path, while it will be written as long value `1483023240000000` in non row-writer path. If enabled, then the timestamp value will be written in both the cases.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED`<br></br>
 
 ---
 
@@ -2332,99 +2395,6 @@ Configurations that control indexing behavior (when HBase based indexing is enab
 
 ---
 
-### Write commit pulsar callback configs {#Write-commit-pulsar-callback-configs}
-
-Controls notifications sent to pulsar, on events happening to a hudi table.
-
-`Config Class`: org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig<br></br>
-> #### hoodie.write.commit.callback.pulsar.operation-timeout
-> Duration of waiting for completing an operation.<br></br>
-> **Default Value**: 30s (Optional)<br></br>
-> `Config Param: OPERATION_TIMEOUT`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.pulsar.topic
-> pulsar topic name to publish timeline activity into.<br></br>
-> **Default Value**: N/A (Required)<br></br>
-> `Config Param: TOPIC`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.pulsar.producer.block-if-queue-full
-> When the queue is full, the method is blocked instead of an exception is thrown.<br></br>
-> **Default Value**: true (Optional)<br></br>
-> `Config Param: PRODUCER_BLOCK_QUEUE_FULL`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.pulsar.producer.send-timeout
-> The timeout in each sending to pulsar.<br></br>
-> **Default Value**: 30s (Optional)<br></br>
-> `Config Param: PRODUCER_SEND_TIMEOUT`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.pulsar.broker.service.url
-> Server's url of pulsar cluster, to be used for publishing commit metadata.<br></br>
-> **Default Value**: N/A (Required)<br></br>
-> `Config Param: BROKER_SERVICE_URL`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.pulsar.keepalive-interval
-> Duration of keeping alive interval for each client broker connection.<br></br>
-> **Default Value**: 30s (Optional)<br></br>
-> `Config Param: KEEPALIVE_INTERVAL`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.pulsar.producer.pending-total-size
-> The maximum number of pending messages across partitions.<br></br>
-> **Default Value**: 50000 (Optional)<br></br>
-> `Config Param: PRODUCER_PENDING_SIZE`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.pulsar.request-timeout
-> Duration of waiting for completing a request.<br></br>
-> **Default Value**: 60s (Optional)<br></br>
-> `Config Param: REQUEST_TIMEOUT`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.pulsar.producer.pending-queue-size
-> The maximum size of a queue holding pending messages.<br></br>
-> **Default Value**: 1000 (Optional)<br></br>
-> `Config Param: PRODUCER_PENDING_QUEUE_SIZE`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.pulsar.producer.route-mode
-> Message routing logic for producers on partitioned topics.<br></br>
-> **Default Value**: RoundRobinPartition (Optional)<br></br>
-> `Config Param: PRODUCER_ROUTE_MODE`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.write.commit.callback.pulsar.connection-timeout
-> Duration of waiting for a connection to a broker to be established.<br></br>
-> **Default Value**: 10s (Optional)<br></br>
-> `Config Param: CONNECTION_TIMEOUT`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
 ### Write commit Kafka callback configs {#Write-commit-Kafka-callback-configs}
 
 Controls notifications sent to Kafka, on events happening to a hudi table.
@@ -2501,7 +2471,7 @@ Configs that control locking mechanisms required for concurrency control  betwee
 
 > #### hoodie.write.lock.wait_time_ms_between_retry
 > Initial amount of time to wait between retries to acquire locks,  subsequent retries will exponentially backoff.<br></br>
-> **Default Value**: 5000 (Optional)<br></br>
+> **Default Value**: 1000 (Optional)<br></br>
 > `Config Param: LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS`<br></br>
 > `Since Version: 0.8.0`<br></br>
 
@@ -2509,7 +2479,7 @@ Configs that control locking mechanisms required for concurrency control  betwee
 
 > #### hoodie.write.lock.num_retries
 > Maximum number of times to retry lock acquire, at each lock provider<br></br>
-> **Default Value**: 3 (Optional)<br></br>
+> **Default Value**: 15 (Optional)<br></br>
 > `Config Param: LOCK_ACQUIRE_NUM_RETRIES`<br></br>
 > `Since Version: 0.8.0`<br></br>
 
@@ -2659,6 +2629,13 @@ Configurations that control compaction (merging of log files onto a new base fil
 
 ---
 
+> #### hoodie.archive.merge.enable
+> When enable, hoodie will auto merge several small archive files into larger one. It's useful when storage scheme doesn't support append operation.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: ARCHIVE_MERGE_ENABLE`<br></br>
+
+---
+
 > #### hoodie.cleaner.commits.retained
 > Number of commits to retain, without cleaning. This will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much data retention the table supports for incremental queries.<br></br>
 > **Default Value**: 10 (Optional)<br></br>
@@ -2708,6 +2685,13 @@ Configurations that control compaction (merging of log files onto a new base fil
 
 ---
 
+> #### hoodie.archive.merge.small.file.limit.bytes
+> This config sets the archive file size limit below which an archive file becomes a candidate to be selected as such a small file.<br></br>
+> **Default Value**: 20971520 (Optional)<br></br>
+> `Config Param: ARCHIVE_MERGE_SMALL_FILE_LIMIT_BYTES`<br></br>
+
+---
+
 > #### hoodie.cleaner.fileversions.retained
 > When KEEP_LATEST_FILE_VERSIONS cleaning policy is used,  the minimum number of file slices to retain in each file group, during cleaning.<br></br>
 > **Default Value**: 3 (Optional)<br></br>
@@ -2726,6 +2710,13 @@ Configurations that control compaction (merging of log files onto a new base fil
 > When merging the delta log files, this config helps to choose whether the log blocks should be read lazily or not. Choose true to use lazy block reading (low memory usage, but incurs seeks to each block header) or false for immediate block read (higher memory usage)<br></br>
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: COMPACTION_LAZY_BLOCK_READ_ENABLE`<br></br>
+
+---
+
+> #### hoodie.archive.merge.files.batch.size
+> The number of small archive files to be merged at once.<br></br>
+> **Default Value**: 10 (Optional)<br></br>
+> `Config Param: ARCHIVE_MERGE_FILES_BATCH_SIZE`<br></br>
 
 ---
 
@@ -2754,6 +2745,14 @@ Configurations that control compaction (merging of log files onto a new base fil
 > When enabled, the archival table service is invoked immediately after each commit, to archive commits if we cross a maximum value of commits. It's recommended to enable this, to ensure number of active commits is bounded.<br></br>
 > **Default Value**: true (Optional)<br></br>
 > `Config Param: AUTO_ARCHIVE`<br></br>
+
+---
+
+> #### hoodie.compaction.preserve.commit.metadata
+> When rewriting data, preserves existing hoodie_commit_time<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: PRESERVE_COMMIT_METADATA`<br></br>
+> `Since Version: 0.11.0`<br></br>
 
 ---
 
@@ -2984,6 +2983,20 @@ Configurations that control indexing behavior, which tags incoming records as ei
 
 ---
 
+> #### hoodie.bucket.index.num.buckets
+> Only applies if index type is BUCKET_INDEX. Determine the number of buckets in the hudi table, and each partition is divided to N buckets.<br></br>
+> **Default Value**: 256 (Optional)<br></br>
+> `Config Param: BUCKET_INDEX_NUM_BUCKETS`<br></br>
+
+---
+
+> #### hoodie.bucket.index.hash.field
+> Index key. It is used to index the record and find its file group. If not set, use record key field as default<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: BUCKET_INDEX_HASH_FIELD`<br></br>
+
+---
+
 > #### hoodie.bloom.index.bucketized.checking
 > Only applies if index type is BLOOM. When true, bucketized bloom filtering is enabled. This reduces skew seen in sort based bloom index lookup<br></br>
 > **Default Value**: true (Optional)<br></br>
@@ -2992,7 +3005,7 @@ Configurations that control indexing behavior, which tags incoming records as ei
 ---
 
 > #### hoodie.index.type
-> Type of index to use. Default is Bloom filter. Possible options are [BLOOM | GLOBAL_BLOOM |SIMPLE | GLOBAL_SIMPLE | INMEMORY | HBASE]. Bloom filters removes the dependency on a external system and is stored in the footer of the Parquet Data Files<br></br>
+> Type of index to use. Default is Bloom filter. Possible options are [BLOOM | GLOBAL_BLOOM |SIMPLE | GLOBAL_SIMPLE | INMEMORY | HBASE | BUCKET]. Bloom filters removes the dependency on a external system and is stored in the footer of the Parquet Data Files<br></br>
 > **Default Value**: N/A (Required)<br></br>
 > `Config Param: INDEX_TYPE`<br></br>
 
@@ -3080,27 +3093,11 @@ Configurations that control indexing behavior, which tags incoming records as ei
 Configurations that control the clustering table service in hudi, which optimizes the storage layout for better query performance by sorting and sizing data files.
 
 `Config Class`: org.apache.hudi.config.HoodieClusteringConfig<br></br>
-> #### hoodie.clustering.preserve.commit.metadata
-> When rewriting data, preserves existing hoodie_commit_time<br></br>
-> **Default Value**: true (Optional)<br></br>
-> `Config Param: PRESERVE_COMMIT_METADATA`<br></br>
-> `Since Version: 0.9.0`<br></br>
-
----
-
-> #### hoodie.clustering.plan.strategy.max.num.groups
-> Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism<br></br>
-> **Default Value**: 30 (Optional)<br></br>
-> `Config Param: PLAN_STRATEGY_MAX_GROUPS`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> #### hoodie.layout.optimize.curve.build.method
-> Controls how data is sampled to build the space filling curves. two methods: `direct`,`sample`.The direct method is faster than the sampling, however sample method would produce a better data layout.<br></br>
-> **Default Value**: direct (Optional)<br></br>
-> `Config Param: LAYOUT_OPTIMIZE_CURVE_BUILD_METHOD`<br></br>
-> `Since Version: 0.10.0`<br></br>
+> #### hoodie.clustering.plan.strategy.cluster.end.partition
+> End partition used to filter partition (inclusive), only effective when the filter mode 'hoodie.clustering.plan.partition.filter.mode' is SELECTED_PARTITIONS<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: PARTITION_FILTER_END_PARTITION`<br></br>
+> `Since Version: 0.11.0`<br></br>
 
 ---
 
@@ -3120,14 +3117,6 @@ Configurations that control the clustering table service in hudi, which optimize
 
 ---
 
-> #### hoodie.layout.optimize.data.skipping.enable
-> Enable data skipping by collecting statistics once layout optimization is complete.<br></br>
-> **Default Value**: true (Optional)<br></br>
-> `Config Param: LAYOUT_OPTIMIZE_DATA_SKIPPING_ENABLE`<br></br>
-> `Since Version: 0.10.0`<br></br>
-
----
-
 > #### hoodie.clustering.inline.max.commits
 > Config to control frequency of clustering planning<br></br>
 > **Default Value**: 4 (Optional)<br></br>
@@ -3137,10 +3126,11 @@ Configurations that control the clustering table service in hudi, which optimize
 ---
 
 > #### hoodie.layout.optimize.enable
-> Enable use z-ordering/space-filling curves to optimize the layout of table to boost query performance. This parameter takes precedence over clustering strategy set using hoodie.clustering.execution.strategy.class<br></br>
+> This setting has no effect. Please refer to clustering configuration, as well as LAYOUT_OPTIMIZE_STRATEGY config to enable advanced record layout optimization strategies<br></br>
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: LAYOUT_OPTIMIZE_ENABLE`<br></br>
 > `Since Version: 0.10.0`<br></br>
+> `Deprecated Version: 0.11.0`<br></br>
 
 ---
 
@@ -3168,22 +3158,6 @@ Configurations that control the clustering table service in hudi, which optimize
 
 ---
 
-> #### hoodie.clustering.plan.strategy.max.bytes.per.group
-> Each clustering operation can create multiple output file groups. Total amount of data processed by clustering operation is defined by below two properties (CLUSTERING_MAX_BYTES_PER_GROUP * CLUSTERING_MAX_NUM_GROUPS). Max amount of data to be included in one group<br></br>
-> **Default Value**: 2147483648 (Optional)<br></br>
-> `Config Param: PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> #### hoodie.clustering.plan.strategy.small.file.limit
-> Files smaller than the size specified here are candidates for clustering<br></br>
-> **Default Value**: 629145600 (Optional)<br></br>
-> `Config Param: PLAN_STRATEGY_SMALL_FILE_LIMIT`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
 > #### hoodie.clustering.async.enabled
 > Enable running of clustering service, asynchronously as inserts happen on the table.<br></br>
 > **Default Value**: false (Optional)<br></br>
@@ -3201,7 +3175,7 @@ Configurations that control the clustering table service in hudi, which optimize
 ---
 
 > #### hoodie.layout.optimize.build.curve.sample.size
-> when settinghoodie.layout.optimize.curve.build.method to `sample`, the amount of sampling to be done.Large sample size leads to better results, at the expense of more memory usage.<br></br>
+> Determines target sample size used by the Boundary-based Interleaved Index method of building space-filling curve. Larger sample size entails better layout optimization outcomes, at the expense of higher memory footprint.<br></br>
 > **Default Value**: 200000 (Optional)<br></br>
 > `Config Param: LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE`<br></br>
 > `Since Version: 0.10.0`<br></br>
@@ -3217,8 +3191,8 @@ Configurations that control the clustering table service in hudi, which optimize
 ---
 
 > #### hoodie.layout.optimize.strategy
-> Type of layout optimization to be applied, current only supports `z-order` and `hilbert` curves.<br></br>
-> **Default Value**: z-order (Optional)<br></br>
+> Determines ordering strategy used in records layout optimization. Currently supported strategies are "linear", "z-order" and "hilbert" values are supported.<br></br>
+> **Default Value**: linear (Optional)<br></br>
 > `Config Param: LAYOUT_OPTIMIZE_STRATEGY`<br></br>
 > `Since Version: 0.10.0`<br></br>
 
@@ -3232,11 +3206,84 @@ Configurations that control the clustering table service in hudi, which optimize
 
 ---
 
+> #### hoodie.clustering.plan.strategy.cluster.begin.partition
+> Begin partition used to filter partition (inclusive), only effective when the filter mode 'hoodie.clustering.plan.partition.filter.mode' is SELECTED_PARTITIONS<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: PARTITION_FILTER_BEGIN_PARTITION`<br></br>
+> `Since Version: 0.11.0`<br></br>
+
+---
+
 > #### hoodie.clustering.plan.strategy.sort.columns
 > Columns to sort the data by when clustering<br></br>
 > **Default Value**: N/A (Required)<br></br>
 > `Config Param: PLAN_STRATEGY_SORT_COLUMNS`<br></br>
 > `Since Version: 0.7.0`<br></br>
+
+---
+
+> #### hoodie.clustering.preserve.commit.metadata
+> When rewriting data, preserves existing hoodie_commit_time<br></br>
+> **Default Value**: true (Optional)<br></br>
+> `Config Param: PRESERVE_COMMIT_METADATA`<br></br>
+> `Since Version: 0.9.0`<br></br>
+
+---
+
+> #### hoodie.clustering.plan.strategy.max.num.groups
+> Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism<br></br>
+> **Default Value**: 30 (Optional)<br></br>
+> `Config Param: PLAN_STRATEGY_MAX_GROUPS`<br></br>
+> `Since Version: 0.7.0`<br></br>
+
+---
+
+> #### hoodie.clustering.plan.partition.filter.mode
+> Partition filter mode used in the creation of clustering plan. Available values are - NONE: do not filter table partition and thus the clustering plan will include all partitions that have clustering candidate.RECENT_DAYS: keep a continuous range of partitions, worked together with configs 'hoodie.clustering.plan.strategy.daybased.lookback.partitions' and 'hoodie.clustering.plan.strategy.daybased.skipfromlatest.partitions.SELECTED_PARTITIONS: keep partitions that are in the specified range ['hoodie.clustering.plan.strategy.cluster.begin.partition', 'hoodie.clustering.plan.strategy.cluster.end.partition'].<br></br>
+> **Default Value**: NONE (Optional)<br></br>
+> `Config Param: PLAN_PARTITION_FILTER_MODE_NAME`<br></br>
+> `Since Version: 0.11.0`<br></br>
+
+---
+
+> #### hoodie.layout.optimize.data.skipping.enable
+> Enable data skipping by collecting statistics once layout optimization is complete.<br></br>
+> **Default Value**: true (Optional)<br></br>
+> `Config Param: LAYOUT_OPTIMIZE_DATA_SKIPPING_ENABLE`<br></br>
+> `Since Version: 0.10.0`<br></br>
+> `Deprecated Version: 0.11.0`<br></br>
+
+---
+
+> #### hoodie.clustering.plan.strategy.max.bytes.per.group
+> Each clustering operation can create multiple output file groups. Total amount of data processed by clustering operation is defined by below two properties (CLUSTERING_MAX_BYTES_PER_GROUP * CLUSTERING_MAX_NUM_GROUPS). Max amount of data to be included in one group<br></br>
+> **Default Value**: 2147483648 (Optional)<br></br>
+> `Config Param: PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP`<br></br>
+> `Since Version: 0.7.0`<br></br>
+
+---
+
+> #### hoodie.clustering.plan.strategy.small.file.limit
+> Files smaller than the size specified here are candidates for clustering<br></br>
+> **Default Value**: 629145600 (Optional)<br></br>
+> `Config Param: PLAN_STRATEGY_SMALL_FILE_LIMIT`<br></br>
+> `Since Version: 0.7.0`<br></br>
+
+---
+
+> #### hoodie.layout.optimize.curve.build.method
+> Controls how data is sampled to build the space-filling curves. Two methods: "direct", "sample". The direct method is faster than the sampling, however sample method would produce a better data layout.<br></br>
+> **Default Value**: direct (Optional)<br></br>
+> `Config Param: LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD`<br></br>
+> `Since Version: 0.10.0`<br></br>
+
+---
+
+> #### hoodie.clustering.plan.strategy.partition.regex.pattern
+> Filter clustering partitions that matched regex pattern<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: PARTITION_REGEX_PATTERN`<br></br>
+> `Since Version: 0.11.0`<br></br>
 
 ---
 
@@ -3442,6 +3489,14 @@ Enables reporting on Hudi metrics. Hudi publishes metrics on every commit, clean
 > **Default Value**: N/A (Required)<br></br>
 > `Config Param: EXECUTOR_METRICS_ENABLE`<br></br>
 > `Since Version: 0.7.0`<br></br>
+
+---
+
+> #### hoodie.metrics.reporter.metricsname.prefix
+> The prefix given to the metrics names.<br></br>
+> **Default Value**:  (Optional)<br></br>
+> `Config Param: METRICS_REPORTER_PREFIX`<br></br>
+> `Since Version: 0.11.0`<br></br>
 
 ---
 
@@ -3676,6 +3731,13 @@ Configurations for Kafka Connect Sink Connector for Hudi.
 
 ---
 
+> #### hadoop.home
+> The Hadoop home directory.<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: HADOOP_HOME`<br></br>
+
+---
+
 > #### hoodie.meta.sync.enable
 > Enable Meta Sync such as Hive<br></br>
 > **Default Value**: false (Optional)<br></br>
@@ -3708,6 +3770,13 @@ Configurations for Kafka Connect Sink Connector for Hudi.
 > subclass of org.apache.hudi.schema.SchemaProvider to attach schemas to input & target table data, built in options: org.apache.hudi.schema.FilebasedSchemaProvider.<br></br>
 > **Default Value**: org.apache.hudi.schema.FilebasedSchemaProvider (Optional)<br></br>
 > `Config Param: SCHEMA_PROVIDER_CLASS`<br></br>
+
+---
+
+> #### hadoop.conf.dir
+> The Hadoop configuration directory.<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: HADOOP_CONF_DIR`<br></br>
 
 ---
 
