@@ -1285,7 +1285,8 @@ public abstract class HFileReaderImpl implements HFile.Reader, Configurable {
 
     boolean useLock = false;
     IdLock.Entry lockEntry = null;
-    try (TraceScope traceScope = TraceUtil.createTrace("HFileReaderImpl.readBlock")) {
+    //try (TraceScope traceScope = TraceUtil.createTrace("HFileReaderImpl.readBlock")) {
+    try (TraceScope traceScope = null) {
       while (true) {
         // Check cache for block. If found return.
         if (cacheConf.shouldReadBlockFromCache(expectedBlockType)) {
@@ -1300,7 +1301,7 @@ public abstract class HFileReaderImpl implements HFile.Reader, Configurable {
             if (LOG.isTraceEnabled()) {
               LOG.trace("From Cache " + cachedBlock);
             }
-            TraceUtil.addTimelineAnnotation("blockCacheHit");
+            //TraceUtil.addTimelineAnnotation("blockCacheHit");
             assert cachedBlock.isUnpacked() : "Packed block leak.";
             if (cachedBlock.getBlockType().isData()) {
               if (updateCacheMetrics) {
@@ -1330,7 +1331,7 @@ public abstract class HFileReaderImpl implements HFile.Reader, Configurable {
           // Carry on, please load.
         }
 
-        TraceUtil.addTimelineAnnotation("blockCacheMiss");
+        //TraceUtil.addTimelineAnnotation("blockCacheMiss");
         // Load block from filesystem.
         HFileBlock hfileBlock = fsBlockReader.readBlockData(dataBlockOffset, onDiskBlockSize, pread,
             !isCompaction, shouldUseHeap(expectedBlockType));

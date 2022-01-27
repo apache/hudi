@@ -316,8 +316,8 @@ public abstract class ITTestBase {
           executeCommandStringInDocker(HIVESERVER, "cat /tmp/root/hive.log |  grep -i exception -A 10 -B 5", false).getStdout().toString();
       String filePath = System.getProperty("java.io.tmpdir") + "/" + System.currentTimeMillis() + "-hive.log";
       FileIOUtils.writeStringToFile(hiveLogStr, filePath);
-      LOG.info("Hive log saved up at  : " + filePath);
-      LOG.info("<===========  Full hive log ===============>\n"
+      LOG.error("Hive log saved up at  : " + filePath);
+      LOG.error("<===========  Full hive log ===============>\n"
           + "\n" + hiveLogStr
           + "\n <==========================================>");
     } catch (Exception e) {
@@ -333,6 +333,11 @@ public abstract class ITTestBase {
     // this is so that changes in padding don't affect comparison
     String stdOutSingleSpaced = singleSpace(stdOutErr.getLeft()).replaceAll(" ", "");
     expectedOutput = singleSpace(expectedOutput).replaceAll(" ", "");
+
+    LOG.error("stdOutErr : " + stdOutErr.getLeft());
+    LOG.error("stdOutErr.getRight : " + stdOutErr.getRight());
+    LOG.error("stdOutSingleSpaced : " + stdOutSingleSpaced);
+    LOG.error("expectedOutput : " + expectedOutput);
 
     int lastIndex = 0;
     int count = 0;
