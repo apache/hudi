@@ -8,8 +8,9 @@ last_modified_at: 2022-01-26T22:07:00+08:00
 # [Release 0.10.1](https://github.com/apache/hudi/releases/tag/release-0.10.1) ([docs](/docs/quick-start-guide))
 
 ## Migration Guide
-- If migrating from an older release, please also check the upgrade instructions for each subsequent release below.
-  Specifically check upgrade instructions for 0.6.0, 0.9.0 and 0.10.0. 0.10.1 does not introduce any new table versions.
+
+* If migrating from an older release, please also check the upgrade instructions for each subsequent release below. Specifically check upgrade instructions for 0.6.0, 0.9.0 and 0.10.0.
+* This release (0.10.1) does not introduce any new table versions.
 
 ## Release Highlights
 0.10.1 comes 1 month after 0.10.0 and is purely stability and bug fix release. These bug fixes span all layers. 
