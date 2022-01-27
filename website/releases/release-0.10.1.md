@@ -45,14 +45,14 @@ $HUDI_DIR/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-0.11
 
 Check out the javadoc in `HoodieRepairTool` for more instructions and examples.
 
-
 ### Bug fixes
 
 0.10.1 is mainly intended for bug fixes and stability. The fixes span across many components, including
 
-* checkpointing and timeline in HoodieDeltaStreamer
-* table services
-* metadata table
+* HoodieDeltaStreamer
+* Timeline related fixes
+* Table services
+* Metadata table
 * Spark SQL support
 * Timestamp-based key generator
 * Hive Sync
