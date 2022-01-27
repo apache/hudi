@@ -18,16 +18,21 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{LocatedFileStatus, Path}
+import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.util.ParquetUtils
 import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql.functions.typedLit
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.sql.{DataFrame, RowFactory, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 
-import scala.collection.JavaConversions._
+import java.sql.{Date, Timestamp}
+import scala.collection.JavaConverters._
+import scala.util.Random
 
 class TestColumnStatsIndex extends HoodieClientTestBase {
   var spark: SparkSession = _
@@ -75,13 +80,13 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
     val newZIndexTableDf =
       ColumnStatsIndexHelper.buildColumnStatsTableFor(
         inputDf.sparkSession,
-        inputDf.inputFiles.toSeq,
-        zorderedColsSchemaFields
+        inputDf.inputFiles.toSeq.asJava,
+        zorderedColsSchemaFields.asJava
       )
 
     val indexSchema =
       ColumnStatsIndexHelper.composeIndexSchema(
-        sourceTableSchema.fields.filter(f => zorderedCols.contains(f.name)).toSeq
+        sourceTableSchema.fields.filter(f => zorderedCols.contains(f.name)).toSeq.asJava
       )
 
     // Collect Z-index stats manually (reading individual Parquet files)
@@ -118,7 +123,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
     val zorderedCols = Seq("c1", "c2", "c3", "c5", "c6", "c7", "c8")
     val indexSchema =
       ColumnStatsIndexHelper.composeIndexSchema(
-        sourceTableSchema.fields.filter(f => zorderedCols.contains(f.name)).toSeq
+        sourceTableSchema.fields.filter(f => zorderedCols.contains(f.name)).toSeq.asJava
       )
 
     //
@@ -134,11 +139,11 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
     ColumnStatsIndexHelper.updateColumnStatsIndexFor(
       firstInputDf.sparkSession,
       sourceTableSchema,
-      firstInputDf.inputFiles.toSeq,
-      zorderedCols.toSeq,
+      firstInputDf.inputFiles.toSeq.asJava,
+      zorderedCols.asJava,
       testZIndexPath.toString,
       firstCommitInstance,
-      Seq()
+      Seq().asJava
     )
 
     // NOTE: We don't need to provide schema upon reading from Parquet, since Spark will be able
@@ -169,11 +174,11 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
     ColumnStatsIndexHelper.updateColumnStatsIndexFor(
       secondInputDf.sparkSession,
       sourceTableSchema,
-      secondInputDf.inputFiles.toSeq,
-      zorderedCols.toSeq,
+      secondInputDf.inputFiles.toSeq.asJava,
+      zorderedCols.asJava,
       testZIndexPath.toString,
       secondCommitInstance,
-      Seq(firstCommitInstance)
+      Seq(firstCommitInstance).asJava
     )
 
     // NOTE: We don't need to provide schema upon reading from Parquet, since Spark will be able
@@ -205,33 +210,33 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
     ColumnStatsIndexHelper.updateColumnStatsIndexFor(
       inputDf.sparkSession,
       sourceTableSchema,
-      inputDf.inputFiles.toSeq,
-      Seq("c1","c2","c3","c5","c6","c7","c8"),
+      inputDf.inputFiles.toSeq.asJava,
+      Seq("c1","c2","c3","c5","c6","c7","c8").asJava,
       testZIndexPath.toString,
       "2",
-      Seq("0", "1")
+      Seq("0", "1").asJava
     )
 
     // Save again
     ColumnStatsIndexHelper.updateColumnStatsIndexFor(
       inputDf.sparkSession,
       sourceTableSchema,
-      inputDf.inputFiles.toSeq,
-      Seq("c1","c2","c3","c5","c6","c7","c8"),
+      inputDf.inputFiles.toSeq.asJava,
+      Seq("c1","c2","c3","c5","c6","c7","c8").asJava,
       testZIndexPath.toString,
       "3",
-      Seq("0", "1", "2")
+      Seq("0", "1", "2").asJava
     )
 
     // Test old index table being cleaned up
     ColumnStatsIndexHelper.updateColumnStatsIndexFor(
       inputDf.sparkSession,
       sourceTableSchema,
-      inputDf.inputFiles.toSeq,
-      Seq("c1","c2","c3","c5","c6","c7","c8"),
+      inputDf.inputFiles.toSeq.asJava,
+      Seq("c1","c2","c3","c5","c6","c7","c8").asJava,
       testZIndexPath.toString,
       "4",
-      Seq("0", "1", "3")
+      Seq("0", "1", "3").asJava
     )
 
     assertEquals(!fs.exists(new Path(testZIndexPath, "2")), true)
@@ -268,9 +273,52 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
         df.selectExpr(exprs: _*)
           .collect()
-      }),
+      }).asJava,
       indexSchema
     )
+  }
+
+  @Test
+  def test(): Unit = {
+    val conf = new Configuration()
+
+    val df = createComplexDataFrame(spark)
+
+    val pathStr = tempDir.resolve("min-max").toAbsolutePath.toString
+
+    df.write.format("parquet")
+      .mode(SaveMode.Overwrite)
+      .save(pathStr)
+
+    val utils = new ParquetUtils
+
+
+    val path = new Path(pathStr)
+    val fs = path.getFileSystem(conf)
+
+    val parquetFilePath = fs.listStatus(path).filter(fs => fs.getPath.getName.endsWith(".parquet")).toSeq.head.getPath
+
+    val ranges = utils.readRangeFromParquetMetadata(
+      conf,
+      parquetFilePath,
+      Seq("c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8").asJava)
+  }
+
+  private def createComplexDataFrame(spark: SparkSession): DataFrame = {
+    val rdd = spark.sparkContext.parallelize(0 to 1000, 1).map { item =>
+      val c1 = Integer.valueOf(item)
+      val c2 = s" ${item}sdc"
+      //val c3 = new java.math.BigDecimal(s"${Random.nextInt(10000000)}.${Random.nextInt(10000000)}")
+      val c3 = new java.math.BigDecimal(s"10000000000000000.10000000000000001")
+      val c4 = new Timestamp(System.currentTimeMillis())
+      val c5 = java.lang.Short.valueOf(s"${(item + 16) /10}")
+      val c6 = Date.valueOf(s"${2020}-${item % 11  +  1}-${item % 28  + 1}")
+      val c7 = Array(item).map(_.toByte)
+      val c8 = java.lang.Byte.valueOf("9")
+
+      RowFactory.create(c1, c2, c3, c4, c5, c6, c7, c8)
+    }
+    spark.createDataFrame(rdd, sourceTableSchema)
   }
 
   private def asJson(df: DataFrame) =
