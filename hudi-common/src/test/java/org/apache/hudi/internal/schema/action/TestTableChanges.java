@@ -77,7 +77,7 @@ public class TestTableChanges {
     TableChanges.ColumnAddChange addChange = TableChanges.ColumnAddChange.get(oldSchema);
     // add c1 first
     addChange.addColumns("c1", Types.StringType.get(), "add c1 first");
-    addChange.addPositionChange("c1", "", "first");
+    addChange.addPositionChange("c1", "id", "before");
     //add preferences.cx before preferences.feature2
     addChange.addColumns("preferences", "cx", Types.BooleanType.get(), "add preferences.cx before preferences.feature2");
     // check repeated add.
