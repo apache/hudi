@@ -31,7 +31,7 @@ jobs:
         run: |
           pushd ${{ env.DOCS_ROOT }}
           npm install
-          npm run build
+          npm run build --verbose
           popd
       - name: Publish website
         if: ${{ github.event_name != 'pull_request' }}
