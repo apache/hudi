@@ -372,6 +372,8 @@ public class ParquetUtils extends BaseFileUtils {
       //       {@code SimpleDataFormat} concurrently (w/in {@code DateStringifier})
       // TODO cleanup after Parquet upgrade to 1.12
       synchronized (primitiveType.stringifier()) {
+        // Date logical type is implemented as a signed INT32
+        // REF: https://github.com/apache/parquet-format/blob/master/LogicalTypes.md
         return java.sql.Date.valueOf(
             primitiveType.stringifier().stringify((Integer) val)
         );
