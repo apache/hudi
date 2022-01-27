@@ -98,6 +98,7 @@ When tagging a new version, the document versioning mechanism will:
 
 3. We have few hard coded versions to updated manually. Do fix them in docusaurus.config.js
    Example commit used when generating docs for 0.10.1 : https://github.com/apache/hudi/pull/4703/commits/b474ec266fe2243f8146ba7a112045bbc8b0ddc8 
+   This commit has changes for both docs and release highlights. Please update as per necessity. 
 
 ## Docs
 
