@@ -21,18 +21,21 @@ package org.apache.hudi.functional
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{LocatedFileStatus, Path}
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata
 import org.apache.hudi.common.util.ParquetUtils
 import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql.functions.typedLit
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, RowFactory, SaveMode, SparkSession}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 
+import java.math.BigInteger
+import java.nio.charset.StandardCharsets
 import java.sql.{Date, Timestamp}
 import scala.collection.JavaConverters._
-import scala.util.Random
+import scala.util.{Random, Success}
 
 class TestColumnStatsIndex extends HoodieClientTestBase {
   var spark: SparkSession = _
@@ -279,10 +282,8 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
   }
 
   @Test
-  def test(): Unit = {
-    val conf = new Configuration()
-
-    val df = createComplexDataFrame(spark)
+  def testParquetMetadataRangeExtraction(): Unit = {
+    val df = generateRandomDataFrame(spark)
 
     val pathStr = tempDir.resolve("min-max").toAbsolutePath.toString
 
@@ -292,32 +293,66 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
     val utils = new ParquetUtils
 
-
+    val conf = new Configuration()
     val path = new Path(pathStr)
     val fs = path.getFileSystem(conf)
 
     val parquetFilePath = fs.listStatus(path).filter(fs => fs.getPath.getName.endsWith(".parquet")).toSeq.head.getPath
 
-    val ranges = utils.readRangeFromParquetMetadata(
-      conf,
-      parquetFilePath,
-      Seq("c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8").asJava)
+    val ranges = utils.readRangeFromParquetMetadata(conf, parquetFilePath,
+      Seq("c1", "c2", "c3a", "c3b", "c3c", "c4", "c5", "c6", "c7", "c8").asJava)
+
+    ranges.forEach(r => {
+      // NOTE: Unfortunately Parquet can't compute statistics for Timestamp column, hence we
+      //       skip it in our assertions
+      if (r.getColumnName.equals("c4")) {
+        // scalastyle:off return
+        return
+        // scalastyle:on return
+      }
+
+      val min = r.getMinValue
+      val max = r.getMaxValue
+
+      assertNotNull(min)
+      assertNotNull(max)
+      assertTrue(r.getMinValue.asInstanceOf[Comparable[Object]].compareTo(r.getMaxValue.asInstanceOf[Object]) <= 0)
+    })
   }
 
-  private def createComplexDataFrame(spark: SparkSession): DataFrame = {
+  private def generateRandomDataFrame(spark: SparkSession): DataFrame = {
+    val sourceTableSchema =
+      new StructType()
+        .add("c1", IntegerType)
+        .add("c2", StringType)
+        // NOTE: We're testing different values for precision of the decimal to make sure
+        //       we execute paths bearing different underlying representations in Parquet
+        // REF: https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#DECIMAL
+        .add("c3a", DecimalType(9,3))
+        .add("c3b", DecimalType(10,3))
+        .add("c3c", DecimalType(20,3))
+        .add("c4", TimestampType)
+        .add("c5", ShortType)
+        .add("c6", DateType)
+        .add("c7", BinaryType)
+        .add("c8", ByteType)
+
     val rdd = spark.sparkContext.parallelize(0 to 1000, 1).map { item =>
       val c1 = Integer.valueOf(item)
-      val c2 = s" ${item}sdc"
-      //val c3 = new java.math.BigDecimal(s"${Random.nextInt(10000000)}.${Random.nextInt(10000000)}")
-      val c3 = new java.math.BigDecimal(s"10000000000000000.10000000000000001")
+      val c2 = Random.nextString(10)
+      val c3a = java.math.BigDecimal.valueOf(Random.nextInt() % (1 << 24), 3)
+      val c3b = java.math.BigDecimal.valueOf(Random.nextLong() % (1L << 32), 3)
+      // NOTE: We cap it at 2^64 to make sure we're not exceeding target decimal's range
+      val c3c = new java.math.BigDecimal(new BigInteger(64, new java.util.Random()), 3)
       val c4 = new Timestamp(System.currentTimeMillis())
-      val c5 = java.lang.Short.valueOf(s"${(item + 16) /10}")
-      val c6 = Date.valueOf(s"${2020}-${item % 11  +  1}-${item % 28  + 1}")
+      val c5 = java.lang.Short.valueOf(s"${(item + 16) / 10}")
+      val c6 = Date.valueOf(s"${2020}-${item % 11 + 1}-${item % 28 + 1}")
       val c7 = Array(item).map(_.toByte)
       val c8 = java.lang.Byte.valueOf("9")
 
-      RowFactory.create(c1, c2, c3, c4, c5, c6, c7, c8)
+      RowFactory.create(c1, c2, c3a, c3b, c3c, c4, c5, c6, c7, c8)
     }
+
     spark.createDataFrame(rdd, sourceTableSchema)
   }
 
