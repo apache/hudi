@@ -45,11 +45,11 @@ public class TestViewStorageProperties {
         .withStorageType(FileSystemViewStorageType.SPILLABLE_DISK)
         .withRemoteServerHost("host1")
         .withRemoteServerPort(1234).build();
-    ViewStorageProperties.createProperties(basePath, config);
-    ViewStorageProperties.createProperties(basePath, config);
-    ViewStorageProperties.createProperties(basePath, config);
+    ViewStorageProperties.createProperties(basePath, config, null);
+    ViewStorageProperties.createProperties(basePath, config, null);
+    ViewStorageProperties.createProperties(basePath, config, null);
 
-    FileSystemViewStorageConfig readConfig = ViewStorageProperties.loadFromProperties(basePath);
+    FileSystemViewStorageConfig readConfig = ViewStorageProperties.loadFromProperties(basePath, null);
     assertThat(readConfig.getStorageType(), is(FileSystemViewStorageType.SPILLABLE_DISK));
     assertThat(readConfig.getRemoteViewServerHost(), is("host1"));
     assertThat(readConfig.getRemoteViewServerPort(), is(1234));

@@ -166,7 +166,7 @@ public class MergeOnReadInputFormat
   public void open(MergeOnReadInputSplit split) throws IOException {
     this.currentReadCount = 0L;
     this.closed = false;
-    this.hadoopConf = StreamerUtil.getHadoopConf();
+    this.hadoopConf = StreamerUtil.getHadoopConf(this.conf);
     if (!(split.getLogPaths().isPresent() && split.getLogPaths().get().size() > 0)) {
       if (split.getInstantRange() != null) {
         // base file only with commit time filtering

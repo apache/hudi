@@ -71,7 +71,7 @@ public class TestBucketAssigner {
 
     writeConfig = StreamerUtil.getHoodieClientConfig(conf);
     context = new HoodieFlinkEngineContext(
-        new SerializableConfiguration(StreamerUtil.getHadoopConf()),
+        new SerializableConfiguration(StreamerUtil.getHadoopConf(conf)),
         new FlinkTaskContextSupplier(null));
     StreamerUtil.initTableIfNotExists(conf);
   }

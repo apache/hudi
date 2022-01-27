@@ -256,7 +256,7 @@ public class FormatUtils {
       org.apache.hadoop.conf.Configuration hadoopConf) {
     final String prefix = "parquet.";
     org.apache.hadoop.conf.Configuration copy = new org.apache.hadoop.conf.Configuration(hadoopConf);
-    Map<String, String> parquetOptions = FlinkOptions.getHoodiePropertiesWithPrefix(options.toMap(), prefix);
+    Map<String, String> parquetOptions = FlinkOptions.getPropertiesWithPrefix(options.toMap(), prefix);
     parquetOptions.forEach((k, v) -> copy.set(prefix + k, v));
     return copy;
   }

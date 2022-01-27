@@ -53,7 +53,7 @@ public class HiveSyncContext {
 
   public static HiveSyncContext create(Configuration conf) {
     HiveSyncConfig syncConfig = buildSyncConfig(conf);
-    org.apache.hadoop.conf.Configuration hadoopConf = StreamerUtil.getHadoopConf();
+    org.apache.hadoop.conf.Configuration hadoopConf = StreamerUtil.getHadoopConf(conf);
     String path = conf.getString(FlinkOptions.PATH);
     FileSystem fs = FSUtils.getFs(path, hadoopConf);
     HiveConf hiveConf = new HiveConf();

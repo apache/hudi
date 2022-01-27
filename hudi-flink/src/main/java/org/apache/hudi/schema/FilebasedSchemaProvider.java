@@ -65,7 +65,7 @@ public class FilebasedSchemaProvider extends SchemaProvider {
 
   public FilebasedSchemaProvider(Configuration conf) {
     final String sourceSchemaPath = conf.getString(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH);
-    final FileSystem fs = FSUtils.getFs(sourceSchemaPath, StreamerUtil.getHadoopConf());
+    final FileSystem fs = FSUtils.getFs(sourceSchemaPath, StreamerUtil.getHadoopConf(conf));
     try {
       this.sourceSchema = new Schema.Parser().parse(fs.open(new Path(sourceSchemaPath)));
     } catch (IOException ioe) {

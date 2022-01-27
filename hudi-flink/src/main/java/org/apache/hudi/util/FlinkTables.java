@@ -44,7 +44,7 @@ public class FlinkTables {
    */
   public static HoodieFlinkTable<?> createTable(Configuration conf, RuntimeContext runtimeContext) {
     HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(
-        new SerializableConfiguration(getHadoopConf()),
+        new SerializableConfiguration(getHadoopConf(conf)),
         new FlinkTaskContextSupplier(runtimeContext));
     HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, true);
     return HoodieFlinkTable.create(writeConfig, context);
