@@ -37,6 +37,7 @@ import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.schema.DecimalMetadata;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
@@ -45,6 +46,7 @@ import org.apache.parquet.schema.PrimitiveType;
 import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -309,8 +311,8 @@ public class ParquetUtils extends BaseFileUtils {
                                 columnChunkMetaData.getPrimitiveType(),
                                 columnChunkMetaData.getStatistics().genericGetMax()),
                             columnChunkMetaData.getStatistics().getNumNulls(),
-                            columnChunkMetaData.getPrimitiveType().stringifier()))
-            ).collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName));
+                            columnChunkMetaData.getPrimitiveType().stringifier())))
+            .collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName));
 
     // Combine those into file-level statistics
     // NOTE: Inlining this var makes javac (1.8) upset (due to its inability to infer
@@ -375,6 +377,14 @@ public class ParquetUtils extends BaseFileUtils {
             primitiveType.stringifier().stringify((Integer) val)
         );
       }
+    } else if (primitiveType.getOriginalType() == OriginalType.UTF8) {
+      // NOTE: UTF8 type designates a byte array that should be interpreted as a
+      // UTF-8 encoded character string
+      // REF: https://github.com/apache/parquet-format/blob/master/LogicalTypes.md
+      return ((Binary) val).toStringUsingUTF8();
+    } else if (primitiveType.getPrimitiveTypeName() == PrimitiveType.PrimitiveTypeName.BINARY) {
+      // NOTE: `getBytes` access makes a copy of the underlying byte buffer
+      return ((Binary) val).toByteBuffer();
     }
 
     return val;
