@@ -30,6 +30,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -61,6 +63,8 @@ import java.util.stream.Stream;
  * Utility functions involving with parquet.
  */
 public class ParquetUtils extends BaseFileUtils {
+
+  private static final Logger LOG = LogManager.getLogger(ParquetUtils.class);
 
   /**
    * Read the rowKey list matching the given filter, from the given parquet file. If the filter is empty, then this will

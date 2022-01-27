@@ -31,6 +31,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -39,6 +40,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -134,17 +136,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     this.enabledPartitionTypes = new ArrayList<>();
 
     if (writeConfig.isMetadataTableEnabled()) {
-      this.enabledPartitionTypes.add(MetadataPartitionType.FILES);
-      if (writeConfig.getMetadataConfig().isMetadataIndexBloomFilterEnabled()) {
-        MetadataPartitionType.BLOOM_FILTERS.setFileGroupCount(
-            writeConfig.getMetadataConfig().getMetadataIndexBloomFilterFileGroupCount());
-        this.enabledPartitionTypes.add(MetadataPartitionType.BLOOM_FILTERS);
-      }
-      if (writeConfig.getMetadataConfig().isMetadataIndexColumnStatsEnabled()) {
-        MetadataPartitionType.COLUMN_STATS.setFileGroupCount(
-            writeConfig.getMetadataConfig().getMetadataIndexColumnStatsFileGroupCount());
-        this.enabledPartitionTypes.add(MetadataPartitionType.COLUMN_STATS);
-      }
       this.tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
       this.metadataWriteConfig = createMetadataWriteConfig(writeConfig);
       enabled = true;
@@ -160,9 +151,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       ValidationUtils.checkArgument(!this.metadataWriteConfig.isMetadataTableEnabled(),
           "File listing cannot be used for Metadata Table");
 
-      initRegistry();
       this.dataMetaClient =
           HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(dataWriteConfig.getBasePath()).build();
+      enablePartitions();
+      initRegistry();
       initialize(engineContext, actionMetadata, inflightInstantTimestamp);
       initTableMetadata();
     } else {
@@ -171,8 +163,68 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   }
 
   public HoodieBackedTableMetadataWriter(Configuration hadoopConf, HoodieWriteConfig writeConfig,
-      HoodieEngineContext engineContext) {
+                                         HoodieEngineContext engineContext) {
     this(hadoopConf, writeConfig, engineContext, Option.empty(), Option.empty());
+  }
+
+  /**
+   * Enable metadata table partitions based on config.
+   */
+  private void enablePartitions() {
+    final HoodieMetadataConfig metadataConfig = dataWriteConfig.getMetadataConfig();
+    boolean isBootstrapCompleted = false;
+    Option<HoodieTableMetaClient> metaClient = Option.empty();
+    try {
+      isBootstrapCompleted = dataMetaClient.getFs().exists(new Path(metadataWriteConfig.getBasePath(), HoodieTableMetaClient.METAFOLDER_NAME));
+      if (isBootstrapCompleted) {
+        metaClient = Option.of(HoodieTableMetaClient.builder().setConf(hadoopConf.get())
+            .setBasePath(metadataWriteConfig.getBasePath()).build());
+      }
+    } catch (IOException e) {
+      throw new HoodieException("Failed to enable metadata partitions!", e);
+    }
+
+    enablePartition(MetadataPartitionType.FILES, metadataConfig, metaClient, isBootstrapCompleted);
+    if (metadataConfig.isBloomFilterIndexEnabled()) {
+      enablePartition(MetadataPartitionType.BLOOM_FILTERS, metadataConfig, metaClient, isBootstrapCompleted);
+    }
+    if (metadataConfig.isColumnStatsIndexEnabled()) {
+      enablePartition(MetadataPartitionType.COLUMN_STATS, metadataConfig, metaClient, isBootstrapCompleted);
+    }
+  }
+
+  /**
+   * Enable metadata table partition.
+   *
+   * @param partitionType        - Metadata table partition type
+   * @param metadataConfig       - Table config
+   * @param metaClient           - Meta client for the metadata table
+   * @param isBootstrapCompleted - Is metadata table bootstrap completed
+   */
+  private void enablePartition(final MetadataPartitionType partitionType, final HoodieMetadataConfig metadataConfig,
+                               final Option<HoodieTableMetaClient> metaClient, boolean isBootstrapCompleted) {
+    final int fileGroupCount = getPartitionFileGroupCount(partitionType, metaClient, metadataConfig, isBootstrapCompleted);
+    partitionType.setFileGroupCount(fileGroupCount);
+    this.enabledPartitionTypes.add(partitionType);
+  }
+
+  private static int getPartitionFileGroupCount(final MetadataPartitionType partitionType,
+                                                final Option<HoodieTableMetaClient> metaClient,
+                                                final HoodieMetadataConfig metadataConfig, boolean isBootstrapCompleted) {
+    if (isBootstrapCompleted) {
+      final List<FileSlice> latestFileSlices = HoodieTableMetadataUtil
+          .getPartitionLatestFileSlices(metaClient.get(), partitionType.getPartitionPath());
+      return Math.max(latestFileSlices.size(), 1);
+    }
+
+    switch (partitionType) {
+      case BLOOM_FILTERS:
+        return metadataConfig.getBloomFilterIndexFileGroupCount();
+      case COLUMN_STATS:
+        return metadataConfig.getColumnStatsIndexFileGroupCount();
+      default:
+        return 1;
+    }
   }
 
   protected abstract void initRegistry();
@@ -635,7 +687,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   @Override
   public void update(HoodieCommitMetadata commitMetadata, String instantTime, boolean isTableServiceAction) {
     processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, enabledPartitionTypes,
-        commitMetadata, dataMetaClient, dataWriteConfig.isMetadataIndexColumnStatsForAllColumns(), instantTime), !isTableServiceAction);
+        commitMetadata, dataMetaClient, dataWriteConfig.isMetadataIndexColumnStatsForAllColumnsEnabled(), instantTime), !isTableServiceAction);
   }
 
   /**
@@ -709,6 +761,38 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   protected abstract void commit(
       String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap,
       boolean canTriggerTableService);
+
+  /**
+   * Tag each record with the location in the given partition.
+   * The record is tagged with respective file slice's location based on its record key.
+   */
+  protected HoodieData<HoodieRecord> prepRecords(Map<MetadataPartitionType,
+      HoodieData<HoodieRecord>> partitionRecordsMap) {
+    // The result set
+    HoodieData<HoodieRecord> allPartitionRecords = engineContext.emptyHoodieData();
+
+    for (Map.Entry<MetadataPartitionType, HoodieData<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
+      final String partitionName = entry.getKey().getPartitionPath();
+      final int fileGroupCount = entry.getKey().getFileGroupCount();
+      HoodieData<HoodieRecord> records = entry.getValue();
+
+      List<FileSlice> fileSlices =
+          HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, partitionName);
+      ValidationUtils.checkArgument(fileSlices.size() == fileGroupCount,
+          String.format("Invalid number of file groups for partition:%s, found=%d, required=%d",
+              partitionName, fileSlices.size(), fileGroupCount));
+
+      HoodieData<HoodieRecord> rddSinglePartitionRecords = records.map(r -> {
+        FileSlice slice = fileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(),
+            fileGroupCount));
+        r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
+        return r;
+      });
+
+      allPartitionRecords = allPartitionRecords.union(rddSinglePartitionRecords);
+    }
+    return allPartitionRecords;
+  }
 
   /**
    *  Perform a compaction on the Metadata Table.

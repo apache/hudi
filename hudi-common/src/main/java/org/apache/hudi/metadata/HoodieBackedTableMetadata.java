@@ -62,7 +62,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -107,8 +106,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       try {
         this.metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get()).setBasePath(metadataBasePath).build();
         this.metadataTableConfig = metadataMetaClient.getTableConfig();
-        this.isMetaIndexBloomFilterEnabled = metadataConfig.isMetadataIndexBloomFilterEnabled();
-        this.isMetaIndexColumnStatsEnabled = metadataConfig.isMetadataIndexColumnStatsEnabled();
+        this.isBloomFilterIndexEnabled = metadataConfig.isBloomFilterIndexEnabled();
+        this.isColumnStatsIndexEnabled = metadataConfig.isColumnStatsIndexEnabled();
       } catch (TableNotFoundException e) {
         LOG.warn("Metadata table was not found at path " + metadataBasePath);
         this.isMetadataTableEnabled = false;
@@ -207,7 +206,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Retrieve record from base file
     if (baseFileReader != null) {
       HoodieTimer readTimer = new HoodieTimer();
-      Map<String, GenericRecord> baseFileRecords = baseFileReader.getRecordsByKeys(new TreeSet<>(keys));
+      Map<String, GenericRecord> baseFileRecords = baseFileReader.getRecordsByKeys(keys);
       for (String key : keys) {
         readTimer.startTimer();
         if (baseFileRecords.containsKey(key)) {

@@ -156,13 +156,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "log files and read parallelism in the column stats index partition. The recommendation is to size the "
           + "file group count such that the base files are under 1GB.");
 
-  public static final ConfigProperty<Boolean> METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS = ConfigProperty
-      .key(METADATA_PREFIX + ".index.column.stats.all_columns")
+  public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS = ConfigProperty
+      .key(METADATA_PREFIX + ".index.column.stats.all_columns.enable")
       .defaultValue(true)
       .sinceVersion("0.11.0")
       .withDocumentation("Enable indexing user data files column ranges under metadata table key lookups. When "
           + "enabled, metadata table will have a partition to store the column ranges and will "
-          + "used for pruning files during the index lookups.");
+          + "used for pruning files during the index lookups. Only applies if "
+          + ENABLE_METADATA_INDEX_COLUMN_STATS.key() + " is enabled.A");
 
   public static final ConfigProperty<Boolean> POPULATE_META_FIELDS = ConfigProperty
       .key(METADATA_PREFIX + ".populate.meta.fields")
@@ -197,23 +198,23 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBoolean(ENABLE);
   }
 
-  public boolean isMetadataIndexBloomFilterEnabled() {
+  public boolean isBloomFilterIndexEnabled() {
     return getBooleanOrDefault(ENABLE_METADATA_INDEX_BLOOM_FILTER);
   }
 
-  public boolean isMetadataIndexColumnStatsEnabled() {
+  public boolean isColumnStatsIndexEnabled() {
     return getBooleanOrDefault(ENABLE_METADATA_INDEX_COLUMN_STATS);
   }
 
-  public boolean isMetadataIndexColumnStatsForAllColumns() {
-    return getBooleanOrDefault(METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS);
+  public boolean isMetadataColumnStatsIndexForAllColumnsEnabled() {
+    return getBooleanOrDefault(ENABLE_METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS);
   }
 
-  public int getMetadataIndexBloomFilterFileGroupCount() {
+  public int getBloomFilterIndexFileGroupCount() {
     return getIntOrDefault(METADATA_INDEX_BLOOM_FILTER_FILE_GROUP_COUNT);
   }
 
-  public int getMetadataIndexColumnStatsFileGroupCount() {
+  public int getColumnStatsIndexFileGroupCount() {
     return getIntOrDefault(METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT);
   }
 
@@ -270,7 +271,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     }
 
     public Builder withMetadataIndexForAllColumns(boolean enable) {
-      metadataConfig.setValue(METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS, String.valueOf(enable));
+      metadataConfig.setValue(ENABLE_METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS, String.valueOf(enable));
       return this;
     }
 

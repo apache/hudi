@@ -73,8 +73,8 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   protected final String spillableMapDirectory;
 
   protected boolean isMetadataTableEnabled;
-  protected boolean isMetaIndexBloomFilterEnabled = false;
-  protected boolean isMetaIndexColumnStatsEnabled = false;
+  protected boolean isBloomFilterIndexEnabled = false;
+  protected boolean isColumnStatsIndexEnabled = false;
 
   protected BaseTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
                               String dataBasePath, String spillableMapDirectory) {
@@ -159,8 +159,8 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   @Override
   public Option<ByteBuffer> getBloomFilter(final String partitionName, final String fileName)
       throws HoodieMetadataException {
-    if (!isMetaIndexBloomFilterEnabled) {
-      LOG.error("Meta index for bloom filters is disabled!");
+    if (!isBloomFilterIndexEnabled) {
+      LOG.error("Metadata bloom filter index is disabled!");
       return Option.empty();
     }
 
@@ -178,8 +178,11 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   @Override
   public Map<Pair<String, String>, ByteBuffer> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList)
       throws HoodieMetadataException {
-    if (!isMetaIndexBloomFilterEnabled) {
-      LOG.error("Meta index for bloom filter is disabled!");
+    if (!isBloomFilterIndexEnabled) {
+      LOG.error("Metadata bloom filter index is disabled!");
+      return Collections.emptyMap();
+    }
+    if (partitionNameFileNameList.isEmpty()) {
       return Collections.emptyMap();
     }
 
@@ -197,7 +200,8 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     List<String> partitionIDFileIDStrings = new ArrayList<>(partitionIDFileIDSortedStrings);
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> hoodieRecordList =
         getRecordsByKeys(partitionIDFileIDStrings, MetadataPartitionType.BLOOM_FILTERS.getPartitionPath());
-    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_METADATA_STR, timer.endTimer()));
+    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_METADATA_STR,
+        (timer.endTimer() / partitionIDFileIDStrings.size())));
 
     Map<Pair<String, String>, ByteBuffer> partitionFileToBloomFilterMap = new HashMap<>();
     for (final Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>> entry : hoodieRecordList) {
@@ -220,8 +224,8 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   @Override
   public Map<Pair<String, String>, HoodieColumnStats> getColumnStats(final List<Pair<String, String>> partitionNameFileNameList, final String columnName)
       throws HoodieMetadataException {
-    if (!isMetaIndexColumnStatsEnabled) {
-      LOG.error("Meta index for column stats is disabled!");
+    if (!isColumnStatsIndexEnabled) {
+      LOG.error("Metadata column stats index is disabled!");
       return Collections.emptyMap();
     }
 

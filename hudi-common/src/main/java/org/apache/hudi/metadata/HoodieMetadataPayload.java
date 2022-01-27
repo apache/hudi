@@ -43,7 +43,6 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.io.storage.HoodieHFileReader;
-import org.apache.parquet.io.api.Binary;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -427,21 +426,19 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return columnRangeMetadataList.stream().map(columnRangeMetadata -> {
       HoodieKey key = new HoodieKey(getColumnStatsIndexKey(partitionName, columnRangeMetadata),
           MetadataPartitionType.COLUMN_STATS.getPartitionPath());
-      try {
-        HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_COLUMN_STATS,
-            HoodieColumnStats.newBuilder()
-                .setMinValue(columnRangeMetadata.getMinValue() == null ? null :
-                    new String(((Binary) columnRangeMetadata.getMinValue()).getBytes()))
-                .setMaxValue(columnRangeMetadata.getMaxValue() == null ? null :
-                    new String(((Binary) columnRangeMetadata.getMaxValue()).getBytes()))
-                .setNullCount(columnRangeMetadata.getNumNulls())
-                .setIsDeleted(isDeleted)
-                .build());
-        return new HoodieRecord<>(key, payload);
-      } catch (Exception e) {
-        return new HoodieRecord<>(null, null);
-      }
-    }).filter(record -> record.getKey() != null).map(e -> e);
+      HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_COLUMN_STATS,
+          HoodieColumnStats.newBuilder()
+              .setMinValue(columnRangeMetadata.getMinValue() == null ? null :
+                  columnRangeMetadata.getMinValue().toString())
+              .setMaxValue(columnRangeMetadata.getMaxValue() == null ? null :
+                  columnRangeMetadata.getMaxValue().toString())
+              .setNullCount(columnRangeMetadata.getNumNulls())
+              .setIsDeleted(isDeleted)
+              .build());
+      return new HoodieRecord<>(key, payload);
+    });
+
+
   }
 
   @Override

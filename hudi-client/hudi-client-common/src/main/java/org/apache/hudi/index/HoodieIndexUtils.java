@@ -133,7 +133,7 @@ public class HoodieIndexUtils {
       if (!candidateRecordKeys.isEmpty()) {
         HoodieTimer timer = new HoodieTimer().startTimer();
         HoodieFileReader fileReader = HoodieFileReaderFactory.getFileReader(configuration, filePath);
-        Set<String> fileRowKeys = fileReader.filterKeys(new TreeSet<>(candidateRecordKeys));
+        Set<String> fileRowKeys = fileReader.filterRowKeys(new TreeSet<>(candidateRecordKeys));
         foundRecordKeys.addAll(fileRowKeys);
         LOG.info(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)", filePath,
             timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size()));
