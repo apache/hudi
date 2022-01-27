@@ -69,4 +69,13 @@ public enum MetadataPartitionType {
         BLOOM_FILTERS
     );
   }
+
+  @Override
+  public String toString() {
+    return "Metadata partition {"
+        + "name: " + getPartitionPath()
+        + ", prefix: " + getFileIdPrefix()
+        + ", groups: " + getFileGroupCount()
+        + "}";
+  }
 }

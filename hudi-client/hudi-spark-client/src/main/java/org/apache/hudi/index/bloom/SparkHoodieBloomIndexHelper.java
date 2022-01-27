@@ -76,7 +76,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
         + config.getBloomIndexParallelism() + "}");
 
     JavaRDD<List<HoodieKeyLookupResult>> keyLookupResultRDD;
-    if (config.isMetadataIndexBloomFilterEnabled()) {
+    if (config.isMetadataBloomFilterIndexEnabled()) {
       // Step 1: Sort by file id
       JavaRDD<Tuple2<String, HoodieKey>> sortedFileIdAndKeyPairs =
           fileComparisonsRDD.sortBy(entry -> entry._1, true, joinParallelism);

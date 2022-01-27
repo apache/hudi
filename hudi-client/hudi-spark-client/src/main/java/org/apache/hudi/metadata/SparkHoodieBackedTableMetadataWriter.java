@@ -25,14 +25,13 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metrics.DistributedRegistry;
 
@@ -126,7 +125,8 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   protected void commit(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap, boolean canTriggerTableService) {
     ValidationUtils.checkState(metadataMetaClient != null, "Metadata table is not fully initialized yet.");
     ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
-    JavaRDD<HoodieRecord> recordRDD = prepRecords(partitionRecordsMap);
+    HoodieData<HoodieRecord> preppedRecords = prepRecords(partitionRecordsMap);
+    JavaRDD<HoodieRecord> preppedRecordRDD = HoodieJavaRDD.getJavaRDD(preppedRecords);
 
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, metadataWriteConfig, true)) {
       if (canTriggerTableService) {
@@ -151,7 +151,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         HoodieActiveTimeline.deleteInstantFile(metadataMetaClient.getFs(), metadataMetaClient.getMetaPath(), alreadyCompletedInstant);
         metadataMetaClient.reloadActiveTimeline();
       }
-      List<WriteStatus> statuses = writeClient.upsertPreppedRecords(recordRDD, instantTime).collect();
+      List<WriteStatus> statuses = writeClient.upsertPreppedRecords(preppedRecordRDD, instantTime).collect();
       statuses.forEach(writeStatus -> {
         if (writeStatus.hasErrors()) {
           throw new HoodieMetadataException("Failed to commit metadata table records at instant " + instantTime);
@@ -168,38 +168,5 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
     // Update total size of the metadata and count of base/log files
     metrics.ifPresent(m -> m.updateSizeMetrics(metadataMetaClient, metadata));
-  }
-
-  /**
-   * Tag each record with the location in the given partition.
-   * <p>
-   * The record is tagged with respective file slice's location based on its record key.
-   */
-  private JavaRDD<HoodieRecord> prepRecords(Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap) {
-    // The result set
-    JavaRDD<HoodieRecord> rddAllPartitionRecords = ((HoodieSparkEngineContext) engineContext).getJavaSparkContext().emptyRDD();
-
-    for (Map.Entry<MetadataPartitionType, HoodieData<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
-      final String partitionName = entry.getKey().getPartitionPath();
-      final int fileGroupCount = entry.getKey().getFileGroupCount();
-      HoodieData<HoodieRecord> records = entry.getValue();
-      JavaRDD<HoodieRecord> recordsRDD = (JavaRDD<HoodieRecord>) records.get();
-
-      List<FileSlice> fileSlices =
-          HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, partitionName);
-      ValidationUtils.checkArgument(fileSlices.size() == fileGroupCount,
-          String.format("Invalid number of file groups for partition:%s, found=%d, required=%d",
-              partitionName, fileSlices.size(), fileGroupCount));
-
-      JavaRDD<HoodieRecord> rddSinglePartitionRecords = recordsRDD.map(r -> {
-        FileSlice slice = fileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(),
-            fileGroupCount));
-        r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
-        return r;
-      });
-
-      rddAllPartitionRecords = rddAllPartitionRecords.union(rddSinglePartitionRecords);
-    }
-    return rddAllPartitionRecords;
   }
 }

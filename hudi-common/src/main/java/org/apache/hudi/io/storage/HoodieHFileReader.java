@@ -23,7 +23,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -31,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -139,23 +139,20 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   }
 
   @Override
-  public Set<String> filterRowKeys(Set candidateRowKeys) {
-    try {
-      return filterKeys(new TreeSet<>(candidateRowKeys));
-    } catch (IOException e) {
-      LOG.error("Failed to fetch keys from " + path);
-    }
-    return Collections.emptySet();
+  public Set<String> filterRowKeys(Set<String> candidateRowKeys) {
+    return candidateRowKeys.stream().filter(k -> {
+      try {
+        return isKeyAvailable(k);
+      } catch (IOException e) {
+        LOG.error("Failed to check key availability: " + k);
+        return false;
+      }
+    }).collect(Collectors.toSet());
   }
 
   @Override
-  public Set<String> filterKeys(TreeSet<String> sortedCandidateRowKeys) throws IOException {
-    return filterRecordsImpl(sortedCandidateRowKeys).keySet();
-  }
-
-  @Override
-  public Map<String, R> getRecordsByKeys(TreeSet<String> sortedCandidateRowKeys) throws IOException {
-    return filterRecordsImpl(sortedCandidateRowKeys);
+  public Map<String, R> getRecordsByKeys(List<String> rowKeys) throws IOException {
+    return filterRecordsImpl(new TreeSet<>(rowKeys));
   }
 
   /**
@@ -271,6 +268,19 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
         }
       }
     };
+  }
+
+  private boolean isKeyAvailable(String key) throws IOException {
+    final KeyValue kv = new KeyValue(key.getBytes(), null, null, null);
+    synchronized (this) {
+      if (keyScanner == null) {
+        keyScanner = reader.getScanner(false, false);
+      }
+      if (keyScanner.seekTo(kv) == 0) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @Override

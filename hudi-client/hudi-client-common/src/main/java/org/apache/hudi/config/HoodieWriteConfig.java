@@ -1435,12 +1435,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieIndexConfig.BLOOM_INDEX_BUCKETIZED_CHECKING);
   }
 
-  public boolean isMetadataIndexBloomFilterEnabled() {
-    return isMetadataTableEnabled() && getMetadataConfig().isMetadataIndexBloomFilterEnabled();
+  public boolean isMetadataBloomFilterIndexEnabled() {
+    return isMetadataTableEnabled() && getMetadataConfig().isBloomFilterIndexEnabled();
   }
 
-  public boolean isMetadataIndexColumnStatsForAllColumns() {
-    return isMetadataTableEnabled() && getMetadataConfig().isMetadataIndexColumnStatsForAllColumns();
+  public boolean isMetadataIndexColumnStatsForAllColumnsEnabled() {
+    return isMetadataTableEnabled() && getMetadataConfig().isMetadataColumnStatsIndexForAllColumnsEnabled();
   }
 
   public int getBloomIndexKeysPerBucket() {

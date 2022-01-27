@@ -30,6 +30,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -37,6 +39,7 @@ import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.schema.DecimalMetadata;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
@@ -59,6 +62,8 @@ import java.util.stream.Stream;
  * Utility functions involving with parquet.
  */
 public class ParquetUtils extends BaseFileUtils {
+
+  private static final Logger LOG = LogManager.getLogger(ParquetUtils.class);
 
   /**
    * Read the rowKey list matching the given filter, from the given parquet file. If the filter is empty, then this will
@@ -364,20 +369,26 @@ public class ParquetUtils extends BaseFileUtils {
   }
 
   private static Comparable<?> convertToNativeJavaType(PrimitiveType primitiveType, Comparable val) {
-    if (primitiveType.getOriginalType() == OriginalType.DECIMAL) {
-      DecimalMetadata decimalMetadata = primitiveType.getDecimalMetadata();
-      return BigDecimal.valueOf((Integer) val, decimalMetadata.getScale());
-    } else if (primitiveType.getOriginalType() == OriginalType.DATE) {
-      // NOTE: This is a workaround to address race-condition in using
-      //       {@code SimpleDataFormat} concurrently (w/in {@code DateStringifier})
-      // TODO cleanup after Parquet upgrade to 1.12
-      synchronized (primitiveType.stringifier()) {
-        return java.sql.Date.valueOf(
-            primitiveType.stringifier().stringify((Integer) val)
-        );
+    try {
+      if (primitiveType.getOriginalType() == OriginalType.DECIMAL) {
+        DecimalMetadata decimalMetadata = primitiveType.getDecimalMetadata();
+        // TODO: HUDI-1296 Parquet Decimal can be Binary backed and java native Integer casting of Parquet Binary might not work
+        return BigDecimal.valueOf((Integer) val, decimalMetadata.getScale());
+      } else if (primitiveType.getOriginalType() == OriginalType.DATE) {
+        // NOTE: This is a workaround to address race-condition in using
+        //       {@code SimpleDataFormat} concurrently (w/in {@code DateStringifier})
+        // TODO cleanup after Parquet upgrade to 1.12
+        synchronized (primitiveType.stringifier()) {
+          return java.sql.Date.valueOf(
+              primitiveType.stringifier().stringify((Integer) val)
+          );
+        }
+      } else if (primitiveType.getOriginalType() == OriginalType.UTF8) {
+        return new String(((Binary) val).getBytes());
       }
+    } catch (Exception e) {
+      LOG.error("Failed to convert " + val + " native Java type - " + e);
     }
-
     return val;
   }
 }

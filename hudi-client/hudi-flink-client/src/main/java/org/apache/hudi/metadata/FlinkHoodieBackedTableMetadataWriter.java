@@ -22,11 +22,10 @@ import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
@@ -42,7 +41,6 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter {
 
@@ -106,7 +104,8 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                         boolean canTriggerTableService) {
     ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
     ValidationUtils.checkState(metadataMetaClient != null, "Metadata table is not fully initialized yet.");
-    List<HoodieRecord> recordList = prepRecords(partitionRecordsMap);
+    HoodieData<HoodieRecord> preppedRecords = prepRecords(partitionRecordsMap);
+    List<HoodieRecord> preppedRecordList = HoodieList.getList(preppedRecords);
 
     try (HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient(engineContext, metadataWriteConfig)) {
       if (!metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(instantTime)) {
@@ -121,13 +120,14 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         // once rollback is complete, compaction will be retried again, which will eventually hit this code block where the respective commit is
         // already part of completed commit. So, we have to manually remove the completed instant and proceed.
         // and it is for the same reason we enabled withAllowMultiWriteOnSameInstant for metadata table.
-        HoodieInstant alreadyCompletedInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.getTimestamp().equals(instantTime)).lastInstant().get();
+        HoodieInstant alreadyCompletedInstant =
+            metadataMetaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.getTimestamp().equals(instantTime)).lastInstant().get();
         HoodieActiveTimeline.deleteInstantFile(metadataMetaClient.getFs(), metadataMetaClient.getMetaPath(), alreadyCompletedInstant);
         metadataMetaClient.reloadActiveTimeline();
       }
 
-      List<WriteStatus> statuses = recordList.size() > 0
-          ? writeClient.upsertPreppedRecords(recordList, instantTime)
+      List<WriteStatus> statuses = preppedRecordList.size() > 0
+          ? writeClient.upsertPreppedRecords(preppedRecordList, instantTime)
           : Collections.emptyList();
       statuses.forEach(writeStatus -> {
         if (writeStatus.hasErrors()) {
@@ -148,34 +148,5 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
     // Update total size of the metadata and count of base/log files
     metrics.ifPresent(m -> m.updateSizeMetrics(metadataMetaClient, metadata));
-  }
-
-  /**
-   * Tag each record with the location in the given partition.
-   * <p>
-   * The record is tagged with respective file slice's location based on its record key.
-   */
-  private List<HoodieRecord> prepRecords(Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap) {
-    List<HoodieRecord> allPartitionRecords = null;
-    for (Map.Entry<MetadataPartitionType, HoodieData<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
-      final String partitionName = entry.getKey().getPartitionPath();
-      final int fileGroupCount = entry.getKey().getFileGroupCount();
-      List<HoodieRecord> records = (List<HoodieRecord>) entry.getValue();
-
-      List<FileSlice> fileSlices =
-          HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, partitionName);
-      ValidationUtils.checkArgument(fileSlices.size() == fileGroupCount,
-          String.format("Invalid number of file groups: found=%d, required=%d", fileSlices.size(), fileGroupCount));
-
-      List<HoodieRecord> partitionRecords = records.stream().map(r -> {
-        FileSlice slice = fileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(),
-            fileGroupCount));
-        final String instantTime = slice.isEmpty() ? "I" : "U";
-        r.setCurrentLocation(new HoodieRecordLocation(instantTime, slice.getFileId()));
-        return r;
-      }).collect(Collectors.toList());
-      allPartitionRecords.addAll(partitionRecords);
-    }
-    return allPartitionRecords;
   }
 }

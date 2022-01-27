@@ -832,18 +832,14 @@ public class HoodieTableMetadataUtil {
       return Collections.singletonList(datasetMetaClient.getTableConfig().getRecordKeyFieldProp());
     }
 
-    if (datasetMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants() > 1) {
-      TableSchemaResolver schemaResolver = new TableSchemaResolver(datasetMetaClient);
-      // consider nested fields as well. if column stats is enabled only for a subset of columns,
-      // directly use them instead of all columns from the latest table schema
-      try {
-        return schemaResolver.getTableAvroSchema().getFields().stream()
-            .map(entry -> entry.name()).collect(Collectors.toList());
-      } catch (Exception e) {
-        throw new HoodieException("Failed to get latest columns for " + datasetMetaClient.getBasePath());
-      }
-    } else {
-      return Collections.emptyList();
+    TableSchemaResolver schemaResolver = new TableSchemaResolver(datasetMetaClient);
+    // consider nested fields as well. if column stats is enabled only for a subset of columns,
+    // directly use them instead of all columns from the latest table schema
+    try {
+      return schemaResolver.getTableAvroSchema().getFields().stream()
+          .map(entry -> entry.name()).collect(Collectors.toList());
+    } catch (Exception e) {
+      throw new HoodieException("Failed to get latest columns for " + datasetMetaClient.getBasePath());
     }
   }
 
@@ -877,7 +873,7 @@ public class HoodieTableMetadataUtil {
           columnRangeMetadataList = new ParquetUtils().readRangeFromParquetMetadata(
               datasetMetaClient.getHadoopConf(), fullFilePath, columns);
         } catch (Exception e) {
-          LOG.error("Failed to read column stats for " + fullFilePath);
+          LOG.error("Failed to read column stats for " + fullFilePath, e);
         }
       } else {
         columnRangeMetadataList =

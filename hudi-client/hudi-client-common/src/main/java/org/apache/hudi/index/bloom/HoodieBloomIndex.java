@@ -46,7 +46,6 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -123,7 +122,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
     // Step 2: Load all involved files as <Partition, filename> pairs
     List<Pair<String, BloomIndexFileInfo>> fileInfoList;
     if (config.getBloomIndexPruneByRanges()) {
-      fileInfoList = (config.getMetadataConfig().isMetadataIndexColumnStatsEnabled()
+      fileInfoList = (config.getMetadataConfig().isColumnStatsIndexEnabled()
           ? loadColumnRangesFromMetaIndex(affectedPartitionPathList, context, hoodieTable)
           : loadColumnRangesFromFiles(affectedPartitionPathList, context, hoodieTable));
     } else {
@@ -197,20 +196,14 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
 
     final String keyField = hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
     return context.flatMap(partitions, partitionName -> {
-      List<String> partitionFileNameList = HoodieIndexUtils.getLatestBaseFilesForPartition(partitionName,
-              hoodieTable).stream().map(baseFile -> baseFile.getFileName())
+      List<Pair<String, String>> columnStatKeys = HoodieIndexUtils.getLatestBaseFilesForPartition(partitionName,
+              hoodieTable).stream().map(baseFile -> Pair.of(partitionName, baseFile.getFileName()))
+          .sorted()
           .collect(toList());
+      if (columnStatKeys.isEmpty()) {
+        return Stream.empty();
+      }
       try {
-        List<Pair<String, String>> columnStatKeys = new ArrayList<>();
-        for (String fileName : partitionFileNameList) {
-          Pair<String, String> partitionFileNameKey = Pair.of(partitionName, fileName);
-          columnStatKeys.add(partitionFileNameKey);
-        }
-        if (columnStatKeys.isEmpty()) {
-          return Stream.empty();
-        }
-
-        Collections.sort(columnStatKeys);
         Map<Pair<String, String>, HoodieColumnStats> fileToColumnStatMap = hoodieTable
             .getMetadataTable().getColumnStats(columnStatKeys, keyField);
         List<Pair<String, BloomIndexFileInfo>> result = new ArrayList<>();
