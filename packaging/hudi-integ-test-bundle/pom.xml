@@ -78,7 +78,7 @@
                   <include>org.apache.hudi:hudi-spark-common_${scala.binary.version}</include>
                   <include>org.apache.hudi:hudi-utilities_${scala.binary.version}</include>
                   <include>org.apache.hudi:hudi-spark_${scala.binary.version}</include>
-                  <include>org.apache.hudi:${hudi.spark.module}_${scala.binary.version}</include>
+                  <include>org.apache.hudi:${hudi.spark.module}</include>
                   <include>org.apache.hudi:${hudi.spark.common.module}</include>
                   <include>org.apache.hudi:hudi-hive-sync</include>
                   <include>org.apache.hudi:hudi-sync-common</include>
@@ -467,7 +467,7 @@
 
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>${hudi.spark.module}_${scala.binary.version}</artifactId>
+      <artifactId>${hudi.spark.module}</artifactId>
       <version>${project.version}</version>
     </dependency>
 
