@@ -24,7 +24,8 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.vectorized.ColumnarBatch
+
+import org.apache.hudi.HoodieDataSourceHelper._
 
 class HoodieBootstrapRDD(@transient spark: SparkSession,
                         dataReadFunction: PartitionedFile => Iterator[Any],
@@ -56,18 +57,18 @@ class HoodieBootstrapRDD(@transient spark: SparkSession,
       // It is a bootstrap split. Check both skeleton and data files.
       if (dataSchema.isEmpty) {
         // No data column to fetch, hence fetch only from skeleton file
-        partitionedFileIterator = read(bootstrapPartition.split.skeletonFile.get,  skeletonReadFunction)
+        partitionedFileIterator = readParquetFile(bootstrapPartition.split.skeletonFile.get, skeletonReadFunction)
       } else if (skeletonSchema.isEmpty) {
         // No metadata column to fetch, hence fetch only from data file
-        partitionedFileIterator = read(bootstrapPartition.split.dataFile, dataReadFunction)
+        partitionedFileIterator = readParquetFile(bootstrapPartition.split.dataFile, dataReadFunction)
       } else {
         // Fetch from both data and skeleton file, and merge
-        val dataFileIterator = read(bootstrapPartition.split.dataFile, dataReadFunction)
-        val skeletonFileIterator = read(bootstrapPartition.split.skeletonFile.get, skeletonReadFunction)
+        val dataFileIterator = readParquetFile(bootstrapPartition.split.dataFile, dataReadFunction)
+        val skeletonFileIterator = readParquetFile(bootstrapPartition.split.skeletonFile.get, skeletonReadFunction)
         partitionedFileIterator = merge(skeletonFileIterator, dataFileIterator)
       }
     } else {
-      partitionedFileIterator = read(bootstrapPartition.split.dataFile, regularReadFunction)
+      partitionedFileIterator = readParquetFile(bootstrapPartition.split.dataFile, regularReadFunction)
     }
     partitionedFileIterator
   }
@@ -99,19 +100,6 @@ class HoodieBootstrapRDD(@transient spark: SparkSession,
     logDebug("Merged data and skeleton values => " + mergedArr.mkString(","))
     val mergedRow = InternalRow.fromSeq(mergedArr)
     mergedRow
-  }
-
-  def read(partitionedFile: PartitionedFile, readFileFunction: PartitionedFile => Iterator[Any])
-    : Iterator[InternalRow] = {
-    val fileIterator = readFileFunction(partitionedFile)
-
-    import scala.collection.JavaConverters._
-
-    val rows = fileIterator.flatMap(_ match {
-      case r: InternalRow => Seq(r)
-      case b: ColumnarBatch => b.rowIterator().asScala
-    })
-    rows
   }
 
   override protected def getPartitions: Array[Partition] = {

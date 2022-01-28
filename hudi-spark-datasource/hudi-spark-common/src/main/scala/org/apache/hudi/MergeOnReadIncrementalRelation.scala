@@ -25,9 +25,12 @@ import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.listAffectedFilesForC
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getCommitMetadata
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getWritePartitionPaths
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
+
 import org.apache.hadoop.fs.{GlobPattern, Path}
 import org.apache.hadoop.mapred.JobConf
+
 import org.apache.log4j.LogManager
+
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
@@ -121,7 +124,7 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
         filters :+ isNotNullFilter :+ largerThanFilter :+ lessThanFilter
       }
       val (requiredAvroSchema, requiredStructSchema) =
-        MergeOnReadSnapshotRelation.getRequiredSchema(tableAvroSchema, requiredColumns)
+        HoodieSparkUtils.getRequiredSchema(tableAvroSchema, requiredColumns)
 
       val hoodieTableState = HoodieMergeOnReadTableState(
         tableStructSchema,

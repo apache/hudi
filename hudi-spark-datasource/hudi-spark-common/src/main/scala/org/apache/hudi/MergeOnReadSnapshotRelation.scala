@@ -18,14 +18,15 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
 import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
+
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.SchemaConverters
@@ -107,7 +108,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
     log.debug(s" buildScan filters = ${filters.mkString(",")}")
 
     val (requiredAvroSchema, requiredStructSchema) =
-      MergeOnReadSnapshotRelation.getRequiredSchema(tableAvroSchema, requiredColumns)
+      HoodieSparkUtils.getRequiredSchema(tableAvroSchema, requiredColumns)
     val fileIndex = buildFileIndex(filters)
     val hoodieTableState = HoodieMergeOnReadTableState(
       tableStructSchema,
@@ -252,14 +253,4 @@ object MergeOnReadSnapshotRelation {
     path.toUri.toString
   }
 
-  def getRequiredSchema(tableAvroSchema: Schema, requiredColumns: Array[String]): (Schema, StructType) = {
-    // First get the required avro-schema, then convert the avro-schema to spark schema.
-    val name2Fields = tableAvroSchema.getFields.asScala.map(f => f.name() -> f).toMap
-    val requiredFields = requiredColumns.map(c => name2Fields(c))
-      .map(f => new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal(), f.order())).toList
-    val requiredAvroSchema = Schema.createRecord(tableAvroSchema.getName, tableAvroSchema.getDoc,
-      tableAvroSchema.getNamespace, tableAvroSchema.isError, requiredFields.asJava)
-    val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
-    (requiredAvroSchema, requiredStructSchema)
-  }
 }
