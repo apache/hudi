@@ -122,19 +122,23 @@ public class BaseRollbackHelper implements Serializable {
         rollbackStats.forEach(entry -> partitionToRollbackStats.add(Pair.of(entry.getPartitionPath(), entry)));
         return partitionToRollbackStats.stream();
       } else if (!rollbackRequest.getLogBlocksToBeDeleted().isEmpty()) {
-        Map<String, Long> logFilesToBeDeleted = rollbackRequest.getLogBlocksToBeDeleted();
-        String fileId = rollbackRequest.getFileId();
-        String latestBaseInstant = rollbackRequest.getLatestBaseInstant();
+        // NOTE: This maps log-files containing blocks to be rolled back into the corresponding file's size
+        Map<String, Long> logFilesWithBlocksToRollback = rollbackRequest.getLogBlocksToBeDeleted();
+
         FileSystem fs = metaClient.getFs();
         // collect all log files that is supposed to be deleted with this rollback
         // what happens if file was deleted when invoking fs.getFileStatus(?) below.
         // I understand we don't delete log files. but just curious if we need to handle this case.
         Map<FileStatus, Long> writtenLogFileSizeMap = new HashMap<>();
-        for (Map.Entry<String, Long> entry : logFilesToBeDeleted.entrySet()) {
+        for (Map.Entry<String, Long> entry : logFilesWithBlocksToRollback.entrySet()) {
           writtenLogFileSizeMap.put(fs.getFileStatus(new Path(entry.getKey())), entry.getValue());
         }
+
         HoodieLogFormat.Writer writer = null;
         try {
+          String fileId = rollbackRequest.getFileId();
+          String latestBaseInstant = rollbackRequest.getLatestBaseInstant();
+
           writer = HoodieLogFormat.newWriterBuilder()
               .onParentPath(FSUtils.getPartitionPath(metaClient.getBasePath(), rollbackRequest.getPartitionPath()))
               .withFileId(fileId)
@@ -156,7 +160,7 @@ public class BaseRollbackHelper implements Serializable {
               writer.close();
             }
           } catch (IOException io) {
-            throw new HoodieIOException("Error appending rollback block..", io);
+            throw new HoodieIOException("Error appending rollback block", io);
           }
         }
 
@@ -167,15 +171,22 @@ public class BaseRollbackHelper implements Serializable {
             metaClient.getFs().getFileStatus(Objects.requireNonNull(writer).getLogFile().getPath()),
             1L
         );
-        return Collections.singletonList(Pair.of(rollbackRequest.getPartitionPath(),
-            HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
-                .withRollbackBlockAppendResults(filesToNumBlocksRollback)
-                .withWrittenLogFileSizeMap(writtenLogFileSizeMap).build())).stream();
+
+        return Collections.singletonList(
+            Pair.of(rollbackRequest.getPartitionPath(),
+                HoodieRollbackStat.newBuilder()
+                    .withPartitionPath(rollbackRequest.getPartitionPath())
+                    .withRollbackBlockAppendResults(filesToNumBlocksRollback)
+                    .withWrittenLogFileSizeMap(writtenLogFileSizeMap)
+                    .build()))
+            .stream();
       } else {
-        return Collections
-            .singletonList(Pair.of(rollbackRequest.getPartitionPath(),
-                HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
-                    .build())).stream();
+        return Collections.singletonList(
+            Pair.of(rollbackRequest.getPartitionPath(),
+                HoodieRollbackStat.newBuilder()
+                    .withPartitionPath(rollbackRequest.getPartitionPath())
+                    .build()))
+            .stream();
       }
     }, numPartitions);
   }

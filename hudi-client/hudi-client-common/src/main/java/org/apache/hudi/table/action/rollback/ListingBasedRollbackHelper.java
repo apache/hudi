@@ -104,15 +104,18 @@ public class ListingBasedRollbackHelper implements Serializable {
         case APPEND_ROLLBACK_BLOCK: {
           String fileId = rollbackRequest.getFileId().get();
           String latestBaseInstant = rollbackRequest.getLatestBaseInstant().get();
+
           // collect all log files that is supposed to be deleted with this rollback
           Map<FileStatus, Long> writtenLogFileSizeMap = FSUtils.getAllLogFiles(metaClient.getFs(),
               FSUtils.getPartitionPath(config.getBasePath(), rollbackRequest.getPartitionPath()),
               fileId, HoodieFileFormat.HOODIE_LOG.getFileExtension(), latestBaseInstant)
               .collect(Collectors.toMap(HoodieLogFile::getFileStatus, value -> value.getFileStatus().getLen()));
+
           Map<String, Long> logFilesToBeDeleted = new HashMap<>();
           for (Map.Entry<FileStatus, Long> fileToBeDeleted : writtenLogFileSizeMap.entrySet()) {
             logFilesToBeDeleted.put(fileToBeDeleted.getKey().getPath().toString(), fileToBeDeleted.getValue());
           }
+
           return new HoodieRollbackRequest(rollbackRequest.getPartitionPath(), fileId, latestBaseInstant,
               Collections.EMPTY_LIST, logFilesToBeDeleted);
         }
