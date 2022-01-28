@@ -189,10 +189,9 @@ public class RollbackUtils {
           // (B.3) Rollback triggered for first commit - Same as (B.1)
           // (B.4) Rollback triggered for recurring commits - Same as (B.2) plus we need to delete the log files
           // as well if the base base file gets deleted.
-          HoodieCommitMetadata commitMetadata = table.getMetaClient().getCommitTimeline()
-              .getInstantDetails(instantToRollback)
-              .map(instantDetails -> HoodieCommitMetadata.fromBytes(instantDetails, HoodieCommitMetadata.class))
-              .get();
+          HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
+              table.getMetaClient().getCommitTimeline().getInstantDetails(instantToRollback).get(),
+              HoodieCommitMetadata.class);
 
           // In case all data was inserts and the commit failed, delete the file belonging to that commit
           // We do not know fileIds for inserts (first inserts are either log files or base files),
