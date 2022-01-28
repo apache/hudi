@@ -186,7 +186,11 @@ public class HoodieRealtimeRecordReaderUtils {
         Writable[] recordValues = new Writable[schema.getFields().size()];
         int recordValueIndex = 0;
         for (Schema.Field field : schema.getFields()) {
-          recordValues[recordValueIndex++] = avroToArrayWritable(record.get(field.name()), field.schema());
+          if (record.getSchema().getField(field.name()) == null) {
+            recordValues[recordValueIndex++] = null;
+          } else {
+            recordValues[recordValueIndex++] = avroToArrayWritable(record.get(field.name()), field.schema());
+          }
         }
         return new ArrayWritable(Writable.class, recordValues);
       case ENUM:

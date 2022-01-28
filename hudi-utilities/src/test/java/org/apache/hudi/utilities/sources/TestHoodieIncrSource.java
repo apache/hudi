@@ -40,6 +40,7 @@ import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -62,6 +63,7 @@ public class TestHoodieIncrSource extends HoodieClientTestHarness {
     cleanupResources();
   }
 
+  @Disabled
   @Test
   public void testHoodieIncrSource() throws IOException {
     HoodieWriteConfig writeConfig = getConfigBuilder(basePath)

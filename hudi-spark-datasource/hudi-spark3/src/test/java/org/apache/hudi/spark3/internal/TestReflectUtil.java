@@ -19,13 +19,14 @@
 package org.apache.hudi.spark3.internal;
 
 import org.apache.hudi.testutils.HoodieClientTestBase;
-
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation;
 import org.apache.spark.sql.catalyst.plans.logical.InsertIntoStatement;
-
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import scala.collection.JavaConverters;
+
+import java.util.ArrayList;
 
 /**
  * Unit tests {@link ReflectUtil}.
@@ -42,7 +43,7 @@ public class TestReflectUtil extends HoodieClientTestBase {
     InsertIntoStatement newStatment = ReflectUtil.createInsertInto(
         statement.table(),
         statement.partitionSpec(),
-        scala.collection.immutable.List.empty(),
+        JavaConverters.collectionAsScalaIterableConverter(new ArrayList<String>()).asScala().toSeq(),
         statement.query(),
         statement.overwrite(),
         statement.ifPartitionNotExists());
