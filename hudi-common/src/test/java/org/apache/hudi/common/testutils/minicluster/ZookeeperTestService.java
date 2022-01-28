@@ -34,6 +34,7 @@ import java.io.OutputStream;
 import java.io.Reader;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Objects;
 
@@ -163,6 +164,8 @@ public class ZookeeperTestService {
     // resulting in test failure (client timeout on first session).
     // set env and directly in order to handle static init/gc issues
     System.setProperty("zookeeper.preAllocSize", "100");
+    System.setProperty("zookeeper.maxCnxns", "60");
+    System.setProperty("zookeeper.4lw.commands.whitelist", "*");
     FileTxnLog.setPreallocSize(100 * 1024);
   }
 
@@ -173,7 +176,7 @@ public class ZookeeperTestService {
       try {
         try (Socket sock = new Socket("localhost", port)) {
           OutputStream outstream = sock.getOutputStream();
-          outstream.write("stat".getBytes());
+          outstream.write("stat".getBytes(StandardCharsets.UTF_8));
           outstream.flush();
         }
       } catch (IOException e) {
@@ -201,10 +204,10 @@ public class ZookeeperTestService {
         BufferedReader reader = null;
         try {
           OutputStream outstream = sock.getOutputStream();
-          outstream.write("stat".getBytes());
+          outstream.write("stat".getBytes(StandardCharsets.UTF_8));
           outstream.flush();
 
-          Reader isr = new InputStreamReader(sock.getInputStream());
+          Reader isr = new InputStreamReader(sock.getInputStream(), StandardCharsets.UTF_8);
           reader = new BufferedReader(isr);
           String line = reader.readLine();
           if (line != null && line.startsWith("Zookeeper version:")) {

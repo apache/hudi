@@ -409,11 +409,15 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected void cleanupDFS() throws IOException {
     if (hdfsTestService != null) {
       hdfsTestService.stop();
-      dfsCluster.shutdown();
       hdfsTestService = null;
+    }
+
+    if (dfsCluster != null) {
+      dfsCluster.shutdown();
       dfsCluster = null;
       dfs = null;
     }
+
     // Need to closeAll to clear FileSystem.Cache, required because DFS and LocalFS used in the
     // same JVM
     FileSystem.closeAll();
