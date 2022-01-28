@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -49,6 +50,7 @@ import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResou
 import static org.apache.hudi.io.storage.HoodieOrcConfig.AVRO_SCHEMA_METADATA_KEY;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -242,7 +244,7 @@ public class TestHoodieOrcReaderWriter {
       assertEquals("key" + index, record.get("_row_key").toString());
       assertEquals(Integer.toString(index), record.get("time").toString());
       assertEquals(Integer.toString(index), record.get("number").toString());
-      assertNull(record.get("added_field"));
+      assertThrows(AvroRuntimeException.class, () -> record.get("added_field"));
       index++;
     }
 
@@ -253,8 +255,8 @@ public class TestHoodieOrcReaderWriter {
       GenericRecord record = iter.next();
       assertEquals("key" + index, record.get("_row_key").toString());
       assertEquals(Integer.toString(index), record.get("time").toString());
-      assertNull(record.get("number"));
-      assertNull(record.get("added_field"));
+      assertThrows(AvroRuntimeException.class, () -> record.get("number"));
+      assertThrows(AvroRuntimeException.class, () -> record.get("added_field"));
       index++;
     }
   }
