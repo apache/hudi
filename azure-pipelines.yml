@@ -24,7 +24,7 @@ pool:
 variables:
   MAVEN_CACHE_FOLDER: $(Pipeline.Workspace)/.m2/repository
   MAVEN_OPTS: '-Dmaven.repo.local=$(MAVEN_CACHE_FOLDER) -Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true'
-  SPARK_VERSION: '2.4.4'
+  SPARK_VERSION: '3.2.0'
   HADOOP_VERSION: '2.7'
   SPARK_ARCHIVE: spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION)
 
