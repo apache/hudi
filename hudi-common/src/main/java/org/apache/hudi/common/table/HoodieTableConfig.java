@@ -31,6 +31,7 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -38,6 +39,7 @@ import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -57,6 +59,8 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * Configurations on the Hoodie Table like type of ingestion, storage formats, hive table name etc Configurations are loaded from hoodie.properties, these properties are usually set during
@@ -197,6 +201,14 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final String NO_OP_BOOTSTRAP_INDEX_CLASS = NoOpBootstrapIndex.class.getName();
 
+  public static final ConfigProperty<String> TABLE_CHECKSUM = ConfigProperty
+      .key("hoodie.table.checksum")
+      .noDefaultValue()
+      .sinceVersion("0.11.0")
+      .withDocumentation("Table checksum is used to guard against partial writes in HDFS. It is added as the last entry in hoodie.properties and then used to validate while reading table config.");
+
+  private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
+
   public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName) {
     super();
     Path propertyPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
@@ -208,6 +220,9 @@ public class HoodieTableConfig extends HoodieConfig {
         setValue(PAYLOAD_CLASS_NAME, payloadClassName);
         // FIXME(vc): wonder if this can be removed. Need to look into history.
         try (FSDataOutputStream outputStream = fs.create(propertyPath)) {
+          if (!isValidChecksum()) {
+            setValue(TABLE_CHECKSUM, String.valueOf(generateChecksum(props)));
+          }
           props.store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
         }
       }
@@ -216,6 +231,10 @@ public class HoodieTableConfig extends HoodieConfig {
     }
     ValidationUtils.checkArgument(contains(TYPE) && contains(NAME),
         "hoodie.properties file seems invalid. Please check for left over `.updated` files if any, manually copy it to hoodie.properties and retry");
+  }
+
+  private boolean isValidChecksum() {
+    return contains(TABLE_CHECKSUM) && validateChecksum(props);
   }
 
   /**
@@ -227,13 +246,20 @@ public class HoodieTableConfig extends HoodieConfig {
 
   private void fetchConfigs(FileSystem fs, String metaPath) throws IOException {
     Path cfgPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
+    Path backupCfgPath = new Path(metaPath, HOODIE_PROPERTIES_FILE_BACKUP);
     try (FSDataInputStream is = fs.open(cfgPath)) {
       props.load(is);
+      // validate checksum for latest table version
+      if (getTableVersion().versionCode() >= HoodieTableVersion.FOUR.versionCode() && !isValidChecksum()) {
+        LOG.warn("Checksum validation failed. Falling back to backed up configs.");
+        try (FSDataInputStream fsDataInputStream = fs.open(backupCfgPath)) {
+          props.load(fsDataInputStream);
+        }
+      }
     } catch (IOException ioe) {
       if (!fs.exists(cfgPath)) {
         LOG.warn("Run `table recover-configs` if config update/delete failed midway. Falling back to backed up configs.");
         // try the backup. this way no query ever fails if update fails midway.
-        Path backupCfgPath = new Path(metaPath, HOODIE_PROPERTIES_FILE_BACKUP);
         try (FSDataInputStream is = fs.open(backupCfgPath)) {
           props.load(is);
         }
@@ -284,15 +310,31 @@ public class HoodieTableConfig extends HoodieConfig {
       /// 2. delete the properties file, reads will go to the backup, until we are done.
       fs.delete(cfgPath, false);
       // 3. read current props, upsert and save back.
+      String checksum;
       try (FSDataInputStream in = fs.open(backupCfgPath);
            FSDataOutputStream out = fs.create(cfgPath, true)) {
-        Properties props = new Properties();
+        Properties props = new TypedProperties();
         props.load(in);
         modifyFn.accept(props, modifyProps);
+        if (props.containsKey(TABLE_CHECKSUM.key()) && validateChecksum(props)) {
+          checksum = props.getProperty(TABLE_CHECKSUM.key());
+        } else {
+          checksum = String.valueOf(generateChecksum(props));
+          props.setProperty(TABLE_CHECKSUM.key(), checksum);
+        }
         props.store(out, "Updated at " + System.currentTimeMillis());
       }
       // 4. verify and remove backup.
-      // FIXME(vc): generate a hash for verification.
+      try (FSDataInputStream in = fs.open(cfgPath)) {
+        Properties props = new TypedProperties();
+        props.load(in);
+        if (!props.containsKey(TABLE_CHECKSUM.key()) || !props.getProperty(TABLE_CHECKSUM.key()).equals(checksum)) {
+          // delete the properties file and throw exception indicating update failure
+          // subsequent writes will recover and update, reads will go to the backup until then
+          fs.delete(cfgPath, false);
+          throw new HoodieIOException("Checksum property missing or does not match.");
+        }
+      }
       fs.delete(backupCfgPath, false);
     } catch (IOException e) {
       throw new HoodieIOException("Error updating table configs.", e);
@@ -343,8 +385,26 @@ public class HoodieTableConfig extends HoodieConfig {
       if (hoodieConfig.contains(TIMELINE_TIMEZONE)) {
         HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getString(TIMELINE_TIMEZONE)));
       }
+      if (hoodieConfig.contains(TABLE_CHECKSUM)) {
+        hoodieConfig.setValue(TABLE_CHECKSUM, hoodieConfig.getString(TABLE_CHECKSUM));
+      } else {
+        hoodieConfig.setValue(TABLE_CHECKSUM, String.valueOf(generateChecksum(hoodieConfig.getProps())));
+      }
       hoodieConfig.getProps().store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
     }
+  }
+
+  public static long generateChecksum(Properties props) {
+    if (!props.containsKey(NAME.key())) {
+      throw new IllegalArgumentException(NAME.key() + " property needs to be specified");
+    }
+    String table = props.getProperty(NAME.key());
+    String database = props.getProperty(DATABASE_NAME.key(), "");
+    return BinaryUtil.generateChecksum(String.format(TABLE_CHECKSUM_FORMAT, database, table).getBytes(UTF_8));
+  }
+
+  public static boolean validateChecksum(Properties props) {
+    return Long.parseLong(props.getProperty(TABLE_CHECKSUM.key())) == generateChecksum(props);
   }
 
   /**
@@ -503,6 +563,13 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public String getUrlEncodePartitioning() {
     return getString(URL_ENCODE_PARTITIONING);
+  }
+
+  /**
+   * Read the table checksum.
+   */
+  private Long getTableChecksum() {
+    return getLong(TABLE_CHECKSUM);
   }
 
   public Map<String, String> propsMap() {

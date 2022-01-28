@@ -19,8 +19,10 @@
 package org.apache.hudi.common.properties;
 
 import org.apache.hudi.common.config.TypedProperties;
+
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -80,5 +82,26 @@ public class TestTypedProperties {
     assertEquals(true, typedProperties.getBoolean("key1"));
     assertEquals(true, typedProperties.getBoolean("key1", false));
     assertEquals(false, typedProperties.getBoolean("key2", false));
+  }
+
+  @Test
+  public void testPropertiesOrder() throws IOException {
+    Properties properties = new TypedProperties();
+    properties.put("key0", "true");
+    properties.put("key1", "false");
+    properties.put("key2", "true");
+    properties.put("key3", "false");
+    properties.put("key4", "true");
+    properties.put("key5", "true");
+    properties.put("key6", "false");
+    properties.put("key7", "true");
+    properties.put("key8", "false");
+    properties.put("key9", "true");
+
+    TypedProperties typedProperties = new TypedProperties(properties);
+    String[] props = typedProperties.stringPropertyNames().toArray(new String[0]);
+    for (int i = 0; i < props.length; i++) {
+      assertEquals(String.format("key%d", i), props[i]);
+    }
   }
 }
