@@ -90,13 +90,14 @@
     <maven-docker-plugin.version>0.37.0</maven-docker-plugin.version>
 
     <java.version>1.8</java.version>
-    <fasterxml.version>2.6.7</fasterxml.version>
-    <fasterxml.jackson.databind.version>2.6.7.3</fasterxml.jackson.databind.version>
-    <fasterxml.jackson.module.scala.version>2.6.7.1</fasterxml.jackson.module.scala.version>
-    <fasterxml.jackson.dataformat.yaml.version>2.7.4</fasterxml.jackson.dataformat.yaml.version>
-    <fasterxml.spark3.version>2.10.0</fasterxml.spark3.version>
-    <kafka.version>2.0.0</kafka.version>
-    <kafka.spark3.version>2.4.1</kafka.spark3.version>
+    <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
+    <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
+    <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
+    <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
+    <fasterxml.spark3.version>2.12.3</fasterxml.spark3.version>
+    <kafka.version>${kafka.spark3.version}</kafka.version>
+    <kafka.spark2.version>2.0.0</kafka.spark2.version>
+    <kafka.spark3.version>2.8.0</kafka.spark3.version>
     <pulsar.version>2.8.1</pulsar.version>
     <pulsar.spark.version>${pulsar.spark.scala11.version}</pulsar.spark.version>
     <pulsar.spark.scala11.version>2.4.5</pulsar.spark.scala11.version>
@@ -104,7 +105,9 @@
     <confluent.version>5.3.4</confluent.version>
     <glassfish.version>2.17</glassfish.version>
     <glassfish.el.version>3.0.1-b12</glassfish.el.version>
-    <parquet.version>1.10.1</parquet.version>
+    <parquet.version>${spark3.parquet.version}</parquet.version>
+    <spark3.parquet.version>1.12.2</spark3.parquet.version>
+    <spark2.parquet.version>1.10.1</spark2.parquet.version>
     <junit.jupiter.version>5.7.2</junit.jupiter.version>
     <junit.vintage.version>5.7.2</junit.vintage.version>
     <junit.platform.version>1.7.2</junit.platform.version>
@@ -120,13 +123,21 @@
     <trino.version>390</trino.version>
     <hive.exec.classifier>core</hive.exec.classifier>
     <metrics.version>4.1.1</metrics.version>
-    <orc.version>1.6.0</orc.version>
+    <orc.version>1.6.12</orc.version>
     <airlift.version>0.16</airlift.version>
     <prometheus.version>0.8.0</prometheus.version>
     <http.version>4.4.1</http.version>
-    <spark.version>${spark2.version}</spark.version>
+    <spark.version>${spark3.version}</spark.version>
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.3.0</spark3.version>
+    <spark2.bundle.version>2.4</spark2.bundle.version>
+    <spark3.bundle.version>3.2</spark3.bundle.version>
+    <sparkbundle.version>${spark3.bundle.version}</sparkbundle.version>
+    <hudi.spark.module>hudi-spark3</hudi.spark.module>
+    <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
+    <avro.version>${spark3.avro.version}</avro.version>
+    <spark3.avro.version>1.10.2</spark3.avro.version>
+    <spark2.avro.version>1.8.2</spark2.avro.version>
     <sparkbundle.version></sparkbundle.version>
     <flink1.15.version>1.15.1</flink1.15.version>
     <flink1.14.version>1.14.5</flink1.14.version>
@@ -154,12 +165,15 @@
     <caffeine.version>2.9.1</caffeine.version>
     <scala11.version>2.11.12</scala11.version>
     <scala12.version>2.12.10</scala12.version>
-    <scala.version>${scala11.version}</scala.version>
-    <scala.binary.version>2.11</scala.binary.version>
+    <scala.version>${scala12.version}</scala.version>
+    <spark2.scala.binary.version>2.11</spark2.scala.binary.version>
+    <spark3.scala.binary.version>2.12</spark3.scala.binary.version>
+    <scala.binary.version>${spark3.scala.binary.version}</scala.binary.version>
     <apache-rat-plugin.version>0.13</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
-    <scalatest.version>3.0.1</scalatest.version>
+    <scalatest.version>${scalatest.spark3.version}</scalatest.version>
     <scalatest.spark3.version>3.1.0</scalatest.spark3.version>
+    <scalatest.spark2.version>3.0.1</scalatest.spark2.version>
     <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j-surefire.properties</surefire-log4j.file>
     <thrift.version>0.12.0</thrift.version>
     <jetty.version>9.4.15.v20190215</jetty.version>
@@ -1602,12 +1616,19 @@
         </plugins>
       </build>
     </profile>
-    <!-- Exists for backwards compatibility; profile doesn't do anything -->
     <profile>
       <id>scala-2.11</id>
       <properties>
         <pulsar.spark.version>${pulsar.spark.scala11.version}</pulsar.spark.version>
+        <scala.version>${scala11.version}</scala.version>
+        <scala.binary.version>2.11</scala.binary.version>
+        <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
       </properties>
+      <activation>
+        <property>
+          <name>scala-2.11</name>
+        </property>
+      </activation>
     </profile>
     <profile>
       <id>scala-2.12</id>
@@ -1616,11 +1637,6 @@
         <scala.binary.version>2.12</scala.binary.version>
         <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
       </properties>
-      <activation>
-        <property>
-          <name>scala-2.12</name>
-        </property>
-      </activation>
       <build>
         <plugins>
           <plugin>
@@ -1652,19 +1668,33 @@
     <!-- Default is spark2 profile, and spark2 is an alias of spark2.4 -->
     <profile>
       <id>spark2</id>
+      <properties>
+        <spark.version>${spark2.version}</spark.version>
+        <sparkbundle.version>${spark2.bundle.version}</sparkbundle.version>
+        <scala.version>${scala11.version}</scala.version>
+        <scala.binary.version>${spark2.scala.binary.version}</scala.binary.version>
+        <hudi.spark.module>hudi-spark2_${scala.binary.version}</hudi.spark.module>
+        <hudi.spark.common.module>hudi-spark2-common_${scala.binary.version}</hudi.spark.common.module>
+        <scalatest.version>3.0.1</scalatest.version>
+        <kafka.version>2.0.0</kafka.version>
+        <parquet.version>1.10.1</parquet.version>
+        <orc.version>1.6.0</orc.version>
+        <avro.version>1.8.2</avro.version>
+        <fasterxml.version>2.6.7</fasterxml.version>
+        <fasterxml.jackson.databind.version>2.6.7.3</fasterxml.jackson.databind.version>
+        <fasterxml.jackson.module.scala.version>2.6.7.1</fasterxml.jackson.module.scala.version>
+        <fasterxml.jackson.dataformat.yaml.version>2.7.4</fasterxml.jackson.dataformat.yaml.version>
+        <skip.hudi-spark2.unit.tests>false</skip.hudi-spark2.unit.tests>
+        <skipITs>true</skipITs>
+        <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
+      </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark2</module>
         <module>hudi-spark-datasource/hudi-spark2-common</module>
       </modules>
-      <properties>
-        <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
-      </properties>
       <activation>
-        <activeByDefault>true</activeByDefault>
         <property>
           <name>spark2</name>
-          <!-- add spark2 moudule to all profile -->
-          <value>!disabled</value>
         </property>
       </activation>
     </profile>
@@ -1710,7 +1740,6 @@
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}
         </fasterxml.jackson.dataformat.yaml.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
-        <skipITs>true</skipITs>
       </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.3.x</module>
@@ -1777,13 +1806,13 @@
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}
         </fasterxml.jackson.dataformat.yaml.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
-        <skipITs>true</skipITs>
       </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.2.x</module>
         <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <activation>
+        <activeByDefault>true</activeByDefault>
         <property>
           <name>spark3.2</name>
         </property>

@@ -435,9 +435,14 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
       hdfsTestService.stop();
       dfsCluster.shutdown(true, true);
       hdfsTestService = null;
+    }
+
+    if (dfsCluster != null) {
+      dfsCluster.shutdown();
       dfsCluster = null;
       dfs = null;
     }
+
     // Need to closeAll to clear FileSystem.Cache, required because DFS and LocalFS used in the
     // same JVM
     FileSystem.closeAll();

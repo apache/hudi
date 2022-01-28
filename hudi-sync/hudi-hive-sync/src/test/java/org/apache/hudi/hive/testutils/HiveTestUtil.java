@@ -153,15 +153,24 @@ public class HiveTestUtil {
   }
 
   public static void clearIncrementalPullSetup(String path1, String path2) throws IOException, HiveException, MetaException {
-    fileSystem.delete(new Path(path1), true);
-    if (path2 != null) {
-      fileSystem.delete(new Path(path2), true);
+    if (fileSystem != null) {
+      if (path1 != null && fileSystem.exists(new Path(path1))) {
+        fileSystem.delete(new Path(path1), true);
+      }
+
+      if (path2 != null && fileSystem.exists(new Path(path2))) {
+        fileSystem.delete(new Path(path2), true);
+      }
+
+      clear();
     }
-    clear();
   }
 
   public static void clear() throws IOException, HiveException, MetaException {
-    fileSystem.delete(new Path(basePath), true);
+    if (hiveSyncConfig.basePath != null && fileSystem.exists(new Path(hiveSyncConfig.basePath))) {
+      fileSystem.delete(new Path(hiveSyncConfig.basePath), true);
+    }
+
     HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(TABLE_NAME)

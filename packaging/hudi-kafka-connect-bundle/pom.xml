@@ -346,7 +346,6 @@
         <dependency>
             <groupId>org.apache.avro</groupId>
             <artifactId>avro</artifactId>
-            <version>${avro.version}</version>
             <scope>compile</scope>
         </dependency>
         <dependency>

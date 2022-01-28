@@ -48,6 +48,7 @@ class TestCallCommandParser extends HoodieSparkSqlTestBase {
       checkArg(call, 5, 9.0e1, DataTypes.DoubleType)
     }
 
+    checkArg(call, 5, 9.0e1, DataTypes.DoubleType)
     checkArg(call, 6, new BigDecimal("900e-1"), DataTypes.createDecimalType(3, 1))
   }
 

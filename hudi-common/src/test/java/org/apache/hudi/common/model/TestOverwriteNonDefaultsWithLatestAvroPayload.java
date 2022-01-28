@@ -137,12 +137,12 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
   
   @Test
   public void testNullColumn() throws IOException {
-    Schema avroSchema = Schema.createRecord(Arrays.asList(
-            new Schema.Field("id", Schema.createUnion(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)), "", JsonProperties.NULL_VALUE),
-            new Schema.Field("name", Schema.createUnion(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)), "", JsonProperties.NULL_VALUE),
-            new Schema.Field("age", Schema.createUnion(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)), "", JsonProperties.NULL_VALUE),
-            new Schema.Field("job", Schema.createUnion(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)), "", JsonProperties.NULL_VALUE)
-            ));
+    Schema avroSchema = Schema.createRecord(
+        Arrays.asList(
+            new Schema.Field("id", Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)), "", JsonProperties.NULL_VALUE),
+            new Schema.Field("name", Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)), "", JsonProperties.NULL_VALUE),
+            new Schema.Field("age", Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)), "", JsonProperties.NULL_VALUE),
+            new Schema.Field("job", Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)), "", JsonProperties.NULL_VALUE)));
     GenericRecord record1 = new GenericData.Record(avroSchema);
     record1.put("id", "1");
     record1.put("name", "aa");
