@@ -34,7 +34,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
@@ -255,7 +254,7 @@ public class RollbackUtils {
           // Since only the latest committed instant could be rolled back, validate that this commit has
           // indeed appended log-block to the latest log-file
           checkArgument(
-              Objects.equals(writeStat.getFileName(), latestFileSlice.getLatestLogFile().get().getPath().getName()),
+              Objects.equals(getFileName(writeStat), latestFileSlice.getLatestLogFile().get().getPath().getName()),
               "Latest instant should only have modified Latest log-file"
           );
 
@@ -271,5 +270,11 @@ public class RollbackUtils {
               writeStat.getFileId(), latestFileSlice.getBaseInstantTime());
         })
         .collect(Collectors.toList());
+  }
+
+  private static String getFileName(HoodieWriteStat stat) {
+    String path = stat.getPath();
+    int lastDelimiterIndex = path.lastIndexOf("/");
+    return lastDelimiterIndex == -1 ? path : path.substring(lastDelimiterIndex);
   }
 }

@@ -231,11 +231,6 @@ public class HoodieWriteStat implements Serializable {
     return fileId;
   }
 
-  public String getFileName() {
-    int lastDelimiterIndex = path.lastIndexOf("/");
-    return lastDelimiterIndex == -1 ? path : path.substring(lastDelimiterIndex);
-  }
-
   public String getPath() {
     return path;
   }
