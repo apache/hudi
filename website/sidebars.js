@@ -56,6 +56,7 @@ module.exports = {
                 'transforms',
                 'markers',
                 'file_sizing',
+                'disaster_recovery',
                 'snapshot_exporter',
                 'precommit_validator'
             ],
