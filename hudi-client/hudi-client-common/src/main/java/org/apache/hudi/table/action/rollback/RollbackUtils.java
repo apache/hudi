@@ -244,13 +244,6 @@ public class RollbackUtils {
               HoodieTimeline.compareTimestamps(latestFileSlice.getBaseInstantTime(),
                   HoodieTimeline.LESSER_THAN_OR_EQUALS, rollbackInstant.getTimestamp()),
               "Log-file base-instant could not be less than the instant being rolled back");
-          // Since only the latest committed instant could be rolled back, validate that this commit has
-          // indeed appended log-block to the latest log-file
-          Option<String> affectedFileNameOpt = getFileName(writeStat);
-          checkArgument(
-              !affectedFileNameOpt.isPresent() || Objects.equals(affectedFileNameOpt.get(), latestFileSlice.getLatestLogFile().get().getPath().getName()),
-              "Latest instant should only have modified Latest log-file"
-          );
 
           // Command block "rolling back" the preceding block {@link HoodieCommandBlockTypeEnum#ROLLBACK_PREVIOUS_BLOCK}
           // w/in the latest file-slice is appended iff base-instant of the log-file is _strictly_ less
@@ -261,16 +254,8 @@ public class RollbackUtils {
         .map(writeStat -> {
           FileSlice latestFileSlice = latestFileSlices.get(writeStat.getFileId());
           return ListingBasedRollbackRequest.createRollbackRequestWithAppendRollbackBlockAction(partitionPath,
-              writeStat.getFileId(), latestFileSlice.getBaseInstantTime());
+              writeStat.getFileId(), latestFileSlice.getBaseInstantTime(), writeStat);
         })
         .collect(Collectors.toList());
-  }
-
-  private static Option<String> getFileName(HoodieWriteStat stat) {
-    return Option.ofNullable(stat.getPath())
-        .map(path -> {
-          int lastDelimiterIndex = path.lastIndexOf("/");
-          return lastDelimiterIndex == -1 ? path : path.substring(lastDelimiterIndex + 1);
-        });
   }
 }
