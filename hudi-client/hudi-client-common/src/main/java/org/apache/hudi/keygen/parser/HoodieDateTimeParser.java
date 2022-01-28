@@ -32,7 +32,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.TimeZone;
 
-public class HoodieDateTimeParserImpl extends AbstractHoodieDateTimeParser {
+public class HoodieDateTimeParser extends BaseHoodieDateTimeParser {
 
   private String configInputDateFormatList;
 
@@ -40,7 +40,7 @@ public class HoodieDateTimeParserImpl extends AbstractHoodieDateTimeParser {
   // https://docs.oracle.com/javase/8/docs/api/java/util/TimeZone.html
   private final DateTimeZone inputDateTimeZone;
 
-  public HoodieDateTimeParserImpl(TypedProperties config) {
+  public HoodieDateTimeParser(TypedProperties config) {
     super(config);
     KeyGenUtils.checkRequiredProperties(config, Arrays.asList(Config.TIMESTAMP_TYPE_FIELD_PROP, Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP));
     this.inputDateTimeZone = getInputDateTimeZone();

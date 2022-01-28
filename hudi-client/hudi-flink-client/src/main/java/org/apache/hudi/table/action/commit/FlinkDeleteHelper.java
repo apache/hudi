@@ -43,7 +43,7 @@ import java.util.stream.Collectors;
 
 @SuppressWarnings("checkstyle:LineLength")
 public class FlinkDeleteHelper<R> extends
-    AbstractDeleteHelper<EmptyHoodieRecordPayload, List<HoodieRecord<EmptyHoodieRecordPayload>>, List<HoodieKey>, List<WriteStatus>, R> {
+    BaseDeleteHelper<EmptyHoodieRecordPayload, List<HoodieRecord<EmptyHoodieRecordPayload>>, List<HoodieKey>, List<WriteStatus>, R> {
 
   private FlinkDeleteHelper() {
   }

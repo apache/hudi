@@ -42,13 +42,13 @@ import java.time.Instant;
 import java.util.HashMap;
 
 /**
- * A spark implementation of {@link AbstractDeleteHelper}.
+ * A spark implementation of {@link BaseDeleteHelper}.
  *
  * @param <T>
  */
 @SuppressWarnings("checkstyle:LineLength")
 public class SparkDeleteHelper<T extends HoodieRecordPayload,R> extends
-    AbstractDeleteHelper<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, R> {
+    BaseDeleteHelper<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, R> {
   private SparkDeleteHelper() {
   }
 

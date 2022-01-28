@@ -72,7 +72,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     this.operationType = operationType;
     this.extraMetadata = extraMetadata;
     this.taskContextSupplier = context.getTaskContextSupplier();
-    // TODO : Remove this once we refactor and move out autoCommit method from here, since the TxnManager is held in {@link AbstractHoodieWriteClient}.
+    // TODO : Remove this once we refactor and move out autoCommit method from here, since the TxnManager is held in {@link BaseHoodieWriteClient}.
     this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
     this.lastCompletedTxn = TransactionUtils.getLastCompletedTxnInstantAndMetadata(table.getMetaClient());
     if (table.getStorageLayout().doesNotSupport(operationType)) {

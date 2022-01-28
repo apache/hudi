@@ -17,8 +17,8 @@
 
 package org.apache.hudi.async;
 
-import org.apache.hudi.client.AbstractCompactor;
-import org.apache.hudi.client.AbstractHoodieWriteClient;
+import org.apache.hudi.client.BaseCompactor;
+import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -48,21 +48,21 @@ public abstract class AsyncCompactService extends HoodieAsyncService {
   public static final String COMPACT_POOL_NAME = "hoodiecompact";
 
   private final int maxConcurrentCompaction;
-  private transient AbstractCompactor compactor;
+  private transient BaseCompactor compactor;
   protected transient HoodieEngineContext context;
 
-  public AsyncCompactService(HoodieEngineContext context, AbstractHoodieWriteClient client) {
+  public AsyncCompactService(HoodieEngineContext context, BaseHoodieWriteClient client) {
     this(context, client, false);
   }
 
-  public AsyncCompactService(HoodieEngineContext context, AbstractHoodieWriteClient client, boolean runInDaemonMode) {
+  public AsyncCompactService(HoodieEngineContext context, BaseHoodieWriteClient client, boolean runInDaemonMode) {
     super(runInDaemonMode);
     this.context = context;
     this.compactor = createCompactor(client);
     this.maxConcurrentCompaction = 1;
   }
 
-  protected abstract AbstractCompactor createCompactor(AbstractHoodieWriteClient client);
+  protected abstract BaseCompactor createCompactor(BaseHoodieWriteClient client);
 
   /**
    * Start Compaction Service.
@@ -110,7 +110,7 @@ public abstract class AsyncCompactService extends HoodieAsyncService {
     return false;
   }
 
-  public synchronized void updateWriteClient(AbstractHoodieWriteClient writeClient) {
+  public synchronized void updateWriteClient(BaseHoodieWriteClient writeClient) {
     this.compactor.updateWriteClient(writeClient);
   }
 }

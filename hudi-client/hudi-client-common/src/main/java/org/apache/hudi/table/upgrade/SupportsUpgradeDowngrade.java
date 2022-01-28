@@ -26,7 +26,7 @@ import org.apache.hudi.table.HoodieTable;
 /**
  * Interface for engine-specific logic needed for upgrade and downgrade actions.
  */
-public interface BaseUpgradeDowngradeHelper {
+public interface SupportsUpgradeDowngrade {
   /**
    * @param config  Write config.
    * @param context {@link HoodieEngineContext} instance to use.
