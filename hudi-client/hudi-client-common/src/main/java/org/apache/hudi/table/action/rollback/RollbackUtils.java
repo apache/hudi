@@ -270,7 +270,7 @@ public class RollbackUtils {
     return Option.ofNullable(stat.getPath())
         .map(path -> {
           int lastDelimiterIndex = path.lastIndexOf("/");
-          return lastDelimiterIndex == -1 ? path : path.substring(lastDelimiterIndex);
+          return lastDelimiterIndex == -1 ? path : path.substring(lastDelimiterIndex + 1);
         });
   }
 }
