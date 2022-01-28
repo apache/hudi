@@ -833,4 +833,48 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertEquals(inputDF2.sort("_row_key").select("shortDecimal").collect().map(_.getDecimal(0).toPlainString).mkString(","),
       readResult.sort("_row_key").select("shortDecimal").collect().map(_.getDecimal(0).toPlainString).mkString(","))
   }
+
+  @Test
+  def testHoodieBaseFileOnlyViewRelation(): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+
+    val df = Seq((1, "z3", 30, "v1", "2018-09-23"), (2, "z3", 35, "v1", "2018-09-24"))
+      .toDF("id", "name", "age", "ts", "data_date")
+
+    df.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
+      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
+      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
+      .option("hoodie.insert.shuffle.parallelism", "4")
+      .option("hoodie.upsert.shuffle.parallelism", "4")
+      .option("hoodie.bulkinsert.shuffle.parallelism", "2")
+      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
+      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "data_date")
+      .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, "org.apache.hudi.keygen.TimestampBasedKeyGenerator")
+      .option(TimestampBasedAvroKeyGenerator.Config.TIMESTAMP_TYPE_FIELD_PROP, "DATE_STRING")
+      .option(TimestampBasedAvroKeyGenerator.Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyy/MM/dd")
+      .option(TimestampBasedAvroKeyGenerator.Config.TIMESTAMP_TIMEZONE_FORMAT_PROP, "GMT+8:00")
+      .option(TimestampBasedAvroKeyGenerator.Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, "yyyy-MM-dd")
+      .mode(org.apache.spark.sql.SaveMode.Append)
+      .save(basePath)
+
+    val res = spark.read.format("hudi").load(basePath)
+
+    assert(res.count() == 2)
+
+    // data_date is the partition field. Persist to the parquet file using the origin values, and read it.
+    assertTrue(
+      res.select("data_date").map(_.get(0).toString).collect().sorted.sameElements(
+        Array("2018-09-23", "2018-09-24")
+      )
+    )
+    assertTrue(
+      res.select("_hoodie_partition_path").map(_.get(0).toString).collect().sorted.sameElements(
+        Array("2018/09/23", "2018/09/24")
+      )
+    )
+  }
 }
