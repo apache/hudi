@@ -18,6 +18,9 @@
 
 package org.apache.hudi.table.action.rollback;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.PathFilter;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -33,11 +36,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.PathFilter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -122,18 +120,6 @@ public class BaseRollbackHelper implements Serializable {
         rollbackStats.forEach(entry -> partitionToRollbackStats.add(Pair.of(entry.getPartitionPath(), entry)));
         return partitionToRollbackStats.stream();
       } else if (!rollbackRequest.getLogBlocksToBeDeleted().isEmpty()) {
-        // NOTE: This maps log-files containing blocks to be rolled back into the corresponding file's size
-        Map<String, Long> logFilesWithBlocksToRollback = rollbackRequest.getLogBlocksToBeDeleted();
-
-        FileSystem fs = metaClient.getFs();
-        // collect all log files that is supposed to be deleted with this rollback
-        // what happens if file was deleted when invoking fs.getFileStatus(?) below.
-        // I understand we don't delete log files. but just curious if we need to handle this case.
-        Map<FileStatus, Long> writtenLogFileSizeMap = new HashMap<>();
-        for (Map.Entry<String, Long> entry : logFilesWithBlocksToRollback.entrySet()) {
-          writtenLogFileSizeMap.put(fs.getFileStatus(new Path(entry.getKey())), entry.getValue());
-        }
-
         HoodieLogFormat.Writer writer = null;
         try {
           String fileId = rollbackRequest.getFileId();
@@ -177,7 +163,6 @@ public class BaseRollbackHelper implements Serializable {
                 HoodieRollbackStat.newBuilder()
                     .withPartitionPath(rollbackRequest.getPartitionPath())
                     .withRollbackBlockAppendResults(filesToNumBlocksRollback)
-                    .withWrittenLogFileSizeMap(writtenLogFileSizeMap)
                     .build()))
             .stream();
       } else {
