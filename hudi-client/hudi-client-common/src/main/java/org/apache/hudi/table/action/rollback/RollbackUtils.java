@@ -35,7 +35,6 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -190,28 +189,23 @@ public class RollbackUtils {
           // (B.3) Rollback triggered for first commit - Same as (B.1)
           // (B.4) Rollback triggered for recurring commits - Same as (B.2) plus we need to delete the log files
           // as well if the base base file gets deleted.
-          try {
-            HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-                table.getMetaClient().getCommitTimeline()
-                    .getInstantDetails(new HoodieInstant(true, instantToRollback.getAction(), instantToRollback.getTimestamp()))
-                    .get(),
-                HoodieCommitMetadata.class);
+          HoodieCommitMetadata commitMetadata = table.getMetaClient().getCommitTimeline()
+              .getInstantDetails(instantToRollback)
+              .map(instantDetails -> HoodieCommitMetadata.fromBytes(instantDetails, HoodieCommitMetadata.class))
+              .get();
 
-            // In case all data was inserts and the commit failed, delete the file belonging to that commit
-            // We do not know fileIds for inserts (first inserts are either log files or base files),
-            // delete all files for the corresponding failed commit, if present (same as COW)
-            partitionRollbackRequests.add(
-                ListingBasedRollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath));
+          // In case all data was inserts and the commit failed, delete the file belonging to that commit
+          // We do not know fileIds for inserts (first inserts are either log files or base files),
+          // delete all files for the corresponding failed commit, if present (same as COW)
+          partitionRollbackRequests.add(
+              ListingBasedRollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath));
 
-            // append rollback blocks for updates
-            if (commitMetadata.getPartitionToWriteStats().containsKey(partitionPath)) {
-              partitionRollbackRequests
-                  .addAll(generateAppendRollbackBlocksAction(partitionPath, instantToRollback, commitMetadata, table));
-            }
-            break;
-          } catch (IOException io) {
-            throw new HoodieIOException("Failed to collect rollback actions for commit " + commit, io);
+          // append rollback blocks for updates
+          if (commitMetadata.getPartitionToWriteStats().containsKey(partitionPath)) {
+            partitionRollbackRequests
+                .addAll(generateAppendRollbackBlocksAction(partitionPath, instantToRollback, commitMetadata, table));
           }
+          break;
         default:
           break;
       }
@@ -253,8 +247,9 @@ public class RollbackUtils {
               "Log-file base-instant could not be less than the instant being rolled back");
           // Since only the latest committed instant could be rolled back, validate that this commit has
           // indeed appended log-block to the latest log-file
+          Option<String> affectedFileNameOpt = getFileName(writeStat);
           checkArgument(
-              Objects.equals(getFileName(writeStat), latestFileSlice.getLatestLogFile().get().getPath().getName()),
+              !affectedFileNameOpt.isPresent() || Objects.equals(affectedFileNameOpt.get(), latestFileSlice.getLatestLogFile().get().getPath().getName()),
               "Latest instant should only have modified Latest log-file"
           );
 
@@ -272,9 +267,11 @@ public class RollbackUtils {
         .collect(Collectors.toList());
   }
 
-  private static String getFileName(HoodieWriteStat stat) {
-    String path = stat.getPath();
-    int lastDelimiterIndex = path.lastIndexOf("/");
-    return lastDelimiterIndex == -1 ? path : path.substring(lastDelimiterIndex);
+  private static Option<String> getFileName(HoodieWriteStat stat) {
+    return Option.ofNullable(stat.getPath())
+        .map(path -> {
+          int lastDelimiterIndex = path.lastIndexOf("/");
+          return lastDelimiterIndex == -1 ? path : path.substring(lastDelimiterIndex);
+        });
   }
 }
