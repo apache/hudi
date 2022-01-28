@@ -76,6 +76,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import scala.Tuple2;
 
 import java.io.BufferedReader;
 import java.io.FileInputStream;
@@ -408,6 +409,16 @@ public class UtilitiesTestBase {
 
     public static String[] jsonifyRecords(List<HoodieRecord> records) {
       return records.stream().map(Helpers::toJsonString).toArray(String[]::new);
+    }
+
+    public static Tuple2<String, String>[] jsonifyRecordsByPartitions(List<HoodieRecord> records, int partitions) {
+      Tuple2<String, String>[] data = new Tuple2[records.size()];
+      for (int i = 0; i < records.size(); i++) {
+        int key = i % partitions;
+        String value = Helpers.toJsonString(records.get(i));
+        data[i] = new Tuple2<>(Long.toString(key), value);
+      }
+      return data;
     }
 
     private static void addAvroRecord(

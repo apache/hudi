@@ -60,6 +60,7 @@ parameters:
       - '!hudi-examples/hudi-examples-flink'
       - '!hudi-examples/hudi-examples-java'
       - '!hudi-examples/hudi-examples-spark'
+      - '!hudi-spark-datasource/hudi-spark3'
       - '!hudi-flink-datasource'
       - '!hudi-flink-datasource/hudi-flink'
       - '!hudi-flink-datasource/hudi-flink1.13.x'
@@ -72,12 +73,12 @@ parameters:
       - '!hudi-utilities'
 
 variables:
-  BUILD_PROFILES: '-Dscala-2.11 -Dspark2 -Dflink1.14'
+  BUILD_PROFILES: '-Dscala-2.12 -Dspark3 -Dflink1.14'
   PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true'
   MVN_OPTS_INSTALL: '-DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS)'
   MVN_OPTS_TEST: '-fae $(BUILD_PROFILES) $(PLUGIN_OPTS)'
-  SPARK_VERSION: '2.4.4'
-  HADOOP_VERSION: '2.7'
+  SPARK_VERSION: '3.2.1'
+  HADOOP_VERSION: '3.2'
   SPARK_ARCHIVE: spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION)
   JOB1_MODULES: ${{ join(',',parameters.job1Modules) }}
   JOB2_MODULES: ${{ join(',',parameters.job2Modules) }}
@@ -89,10 +90,12 @@ stages:
     jobs:
       - job: UT_FT_1
         displayName: UT FT common & flink & UT client/spark-client
-        timeoutInMinutes: '120'
+        timeoutInMinutes: '150'
         steps:
           - task: Maven@3
             displayName: maven install
+            continueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
@@ -101,6 +104,8 @@ stages:
               jdkVersionOption: '1.8'
           - task: Maven@3
             displayName: UT common flink client/spark-client
+            continueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -110,6 +115,8 @@ stages:
               mavenOptions: '-Xmx4g'
           - task: Maven@3
             displayName: FT common flink
+            continueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -119,10 +126,12 @@ stages:
               mavenOptions: '-Xmx4g'
       - job: UT_FT_2
         displayName: FT client/spark-client
-        timeoutInMinutes: '120'
+        timeoutInMinutes: '150'
         steps:
           - task: Maven@3
             displayName: maven install
+            continueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
@@ -131,6 +140,8 @@ stages:
               jdkVersionOption: '1.8'
           - task: Maven@3
             displayName: FT client/spark-client
+            continueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -140,10 +151,12 @@ stages:
               mavenOptions: '-Xmx4g'
       - job: UT_FT_3
         displayName: UT FT clients & cli & utilities & sync
-        timeoutInMinutes: '120'
+        timeoutInMinutes: '150'
         steps:
           - task: Maven@3
             displayName: maven install
+            continueOnError: true
+            retryCountOnTaskFailure: 3
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
@@ -152,6 +165,8 @@ stages:
               jdkVersionOption: '1.8'
           - task: Maven@3
             displayName: UT clients & cli & utilities & sync
+            continueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -161,6 +176,8 @@ stages:
               mavenOptions: '-Xmx4g'
           - task: Maven@3
             displayName: FT clients & cli & utilities & sync
+            continueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -170,10 +187,12 @@ stages:
               mavenOptions: '-Xmx4g'
       - job: UT_FT_4
         displayName: UT FT other modules
-        timeoutInMinutes: '120'
+        timeoutInMinutes: '150'
         steps:
           - task: Maven@3
             displayName: maven install
+            continueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
@@ -182,6 +201,8 @@ stages:
               jdkVersionOption: '1.8'
           - task: Maven@3
             displayName: UT other modules
+            continueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -191,6 +212,8 @@ stages:
               mavenOptions: '-Xmx4g'
           - task: Maven@3
             displayName: FT other modules
+            continueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -200,27 +223,22 @@ stages:
               mavenOptions: '-Xmx4g'
       - job: IT
         displayName: IT modules
-        timeoutInMinutes: '120'
+        timeoutInMinutes: '150'
         steps:
           - task: Maven@3
             displayName: maven install
+            continueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL) -Pintegration-tests
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-          - task: Maven@3
-            displayName: UT integ-test
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'test'
-              options: $(MVN_OPTS_TEST) -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test
-              publishJUnitResults: false
-              jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g'
           - task: AzureCLI@2
             displayName: Prepare for IT
+            continueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               azureSubscription: apachehudici-service-connection
               scriptType: bash

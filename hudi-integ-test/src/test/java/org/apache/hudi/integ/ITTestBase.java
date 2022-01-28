@@ -145,6 +145,11 @@ public abstract class ITTestBase {
     await().atMost(300, SECONDS).until(this::servicesUp);
     LOG.info(String.format("Waiting for all the containers and services finishes in %d ms",
         System.currentTimeMillis() - currTs));
+    try {
+      Thread.sleep(30000);
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      }
   }
 
   private boolean servicesUp() {
