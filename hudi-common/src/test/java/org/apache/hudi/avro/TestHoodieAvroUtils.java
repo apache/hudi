@@ -281,7 +281,7 @@ public class TestHoodieAvroUtils {
     try {
       HoodieAvroUtils.getNestedFieldVal(rec, "fake_key", false, false);
     } catch (Exception e) {
-      assertEquals("fake_key(Part -fake_key) field not found in record. Acceptable fields were :[timestamp, _row_key, non_pii_col, pii_col]",
+      assertEquals("Not a valid schema field: fake_key",
           e.getMessage());
     }
 

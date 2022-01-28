@@ -18,14 +18,13 @@
 
 package org.apache.hudi.common.testutils.minicluster;
 
-import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.testutils.NetworkTestUtils;
-import org.apache.hudi.common.util.FileIOUtils;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.NetworkTestUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -103,9 +102,11 @@ public class HdfsTestService {
 
   public void stop() {
     LOG.info("HDFS Minicluster service being shut down.");
-    miniDfsCluster.shutdown();
-    miniDfsCluster = null;
-    hadoopConf = null;
+    if (miniDfsCluster != null) {
+      miniDfsCluster.shutdown();
+      miniDfsCluster = null;
+      hadoopConf = null;
+    }
   }
 
   /**
