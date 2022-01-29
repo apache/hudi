@@ -421,11 +421,11 @@ The changes in the timeline when insert into a hudi table are divided into three
 
 1. create a new instant which is requested.
 
-1. change the requested instant to inflight and record the work profile.
+2. change the requested instant to inflight and record the work profile.
 
-1. change the inflight instant to completed and record the commit meta data.
+3. change the inflight instant to completed and record the commit meta data.
 
-1. after the commit is completed, files changes (like file size,  a new file) recorded in metadata are stored too. This part is described in the `Ansyc Snapshot Synchronization` part.
+4. after the commit is completed, files changes (like file size,  a new file) recorded in metadata are stored too. This part is described in the `Ansyc Snapshot Synchronization` part.
 
 Recods in storage are:
 
@@ -463,9 +463,9 @@ A hudi table reading process consists of three main parts, excluding the actual 
 
 1. partition pruning: decide that the partitions needed to be read. The following section describes the implementation.
 
-1. build file system view: get file status from metastore instead of file listing with distributed file system, and server only return the latest snapshot without multiple version.
+2. build file system view: get file status from metastore instead of file listing with distributed file system, and server only return the latest snapshot without multiple version.
 
-1. build timeline
+3. build timeline
 
 #### Asnyc Snapshot Synchronization
 
@@ -513,7 +513,7 @@ Finally, mark the completion of this commit synchronization by changing status i
 
 1. Write client completes a commit by sending instant's state changing message to server. Only when server responds to the success msg, can client consider it is a successfully write.
 
-1. Server completes a commit by
+2. Server completes a commit by
     1. save instant metadata like `HoodieCommitMetadata`
     2. change the state to 'completed'
     3. increase the table version and put a <version, instant_id> pair to the `tbl_version` table in the storage
@@ -522,7 +522,7 @@ Finally, mark the completion of this commit synchronization by changing status i
 
 1. The 'snapshot_status' in table `tbl_version` marks whether the commit has completed the snapshot synchronization. When the touching files of the commit are stored to `files` table, 'snapshot_status' can be 1 referred to sync successfully.
 
-1. Before reading / writing the hudi table, client will get partitions from server. The server will respond to client until all completed commits of the table finish their snapshot synchronization to keep consistency.
+2. Before reading / writing the hudi table, client will get partitions from server. The server will respond to client until all completed commits of the table finish their snapshot synchronization to keep consistency.
 
 ### Extension
 
@@ -546,14 +546,14 @@ After the partition service receiving the `filter sql`
 where date='20220101' and hour = '00'
 ```
 
-1. generate a new sql filter
+2. generate a new sql filter
 
 ```SQL
 where part_key_name='date' and part_key_val='20220101'
 where part_key_name='hour' and part_key_val='00'
 ```
 
-1. query the partition related table with the new sql filter to get the eligible partitions
+3. query the partition related table with the new sql filter to get the eligible partitions
 
 #### 2.Hive Metastore Adapter
 
