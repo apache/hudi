@@ -200,7 +200,7 @@ public class ColumnStatsIndexHelper {
 
                 indexRow.add(minMaxValue.getLeft());      // min
                 indexRow.add(minMaxValue.getRight());     // max
-                indexRow.add(colMetadata.getNumNulls());
+                indexRow.add(colMetadata.getNullCount());
               });
 
               return Row$.MODULE$.apply(JavaConversions.asScalaBuffer(indexRow));

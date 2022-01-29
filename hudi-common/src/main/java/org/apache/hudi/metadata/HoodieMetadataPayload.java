@@ -107,6 +107,10 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private static final String COLUMN_STATS_FIELD_MIN_VALUE = "minValue";
   private static final String COLUMN_STATS_FIELD_MAX_VALUE = "maxValue";
   private static final String COLUMN_STATS_FIELD_NULL_COUNT = "nullCount";
+  private static final String COLUMN_STATS_FIELD_VALUE_COUNT = "valueCount";
+  private static final String COLUMN_STATS_FIELD_TOTAL_SIZE = "totalSize";
+  private static final String COLUMN_STATS_FIELD_RESOURCE_NAME = "fileName";
+  private static final String COLUMN_STATS_FIELD_TOTAL_UNCOMPRESSED_SIZE = "totalUncompressedSize";
   private static final String COLUMN_STATS_FIELD_IS_DELETED = FIELD_IS_DELETED;
 
   private String key = null;
@@ -152,9 +156,13 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
           throw new HoodieMetadataException("Valid " + SCHEMA_FIELD_ID_COLUMN_STATS + " record expected for type: " + METADATA_TYPE_COLUMN_STATS);
         }
         columnStatMetadata = new HoodieColumnStats(
+            (String) v.get(COLUMN_STATS_FIELD_RESOURCE_NAME),
             (String) v.get(COLUMN_STATS_FIELD_MIN_VALUE),
             (String) v.get(COLUMN_STATS_FIELD_MAX_VALUE),
             (Long) v.get(COLUMN_STATS_FIELD_NULL_COUNT),
+            (Long) v.get(COLUMN_STATS_FIELD_VALUE_COUNT),
+            (Long) v.get(COLUMN_STATS_FIELD_TOTAL_SIZE),
+            (Long) v.get(COLUMN_STATS_FIELD_TOTAL_UNCOMPRESSED_SIZE),
             (Boolean) v.get(COLUMN_STATS_FIELD_IS_DELETED)
         );
       }
@@ -428,11 +436,15 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
           MetadataPartitionType.COLUMN_STATS.getPartitionPath());
       HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_COLUMN_STATS,
           HoodieColumnStats.newBuilder()
+              .setFileName(new Path(columnRangeMetadata.getFilePath()).getName())
               .setMinValue(columnRangeMetadata.getMinValue() == null ? null :
                   columnRangeMetadata.getMinValue().toString())
               .setMaxValue(columnRangeMetadata.getMaxValue() == null ? null :
                   columnRangeMetadata.getMaxValue().toString())
-              .setNullCount(columnRangeMetadata.getNumNulls())
+              .setNullCount(columnRangeMetadata.getNullCount())
+              .setValueCount(columnRangeMetadata.getValueCount())
+              .setTotalSize(columnRangeMetadata.getTotalSize())
+              .setTotalUncompressedSize(columnRangeMetadata.getTotalUncompressedSize())
               .setIsDeleted(isDeleted)
               .build());
       return new HoodieRecord<>(key, payload);

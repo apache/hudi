@@ -314,7 +314,9 @@ public class ParquetUtils extends BaseFileUtils {
                                 columnChunkMetaData.getPrimitiveType(),
                                 columnChunkMetaData.getStatistics().genericGetMax()),
                             columnChunkMetaData.getStatistics().getNumNulls(),
-                            columnChunkMetaData.getPrimitiveType().stringifier()))
+                            columnChunkMetaData.getValueCount(),
+                            columnChunkMetaData.getTotalSize(),
+                            columnChunkMetaData.getTotalUncompressedSize()))
             ).collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName));
 
     // Combine those into file-level statistics
@@ -365,7 +367,11 @@ public class ParquetUtils extends BaseFileUtils {
 
     return new HoodieColumnRangeMetadata<T>(
         one.getFilePath(),
-        one.getColumnName(), minValue, maxValue, one.getNumNulls() + another.getNumNulls(), one.getStringifier());
+        one.getColumnName(), minValue, maxValue,
+        one.getNullCount() + another.getNullCount(),
+        one.getValueCount() + another.getValueCount(),
+        one.getTotalSize() + another.getTotalSize(),
+        one.getTotalUncompressedSize() + another.getTotalUncompressedSize());
   }
 
   private static Comparable<?> convertToNativeJavaType(PrimitiveType primitiveType, Comparable val) {
