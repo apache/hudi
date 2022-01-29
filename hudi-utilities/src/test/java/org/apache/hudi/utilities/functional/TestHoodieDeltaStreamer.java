@@ -754,6 +754,38 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     });
   }
 
+  @Test
+  public void testDeltaSyncWithPendingClustering() throws Exception {
+    String tableBasePath = dfsBasePath + "/inlineClusteringPending";
+    // ingest data
+    int totalRecords = 2000;
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT);
+    cfg.continuousMode = false;
+    cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
+    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
+    ds.sync();
+    // assert ingest successful
+    TestHelpers.assertAtLeastNCommits(1, tableBasePath, dfs);
+
+    // schedule a clustering job to build a clustering plan and transition to inflight
+    HoodieClusteringJob clusteringJob = initialHoodieClusteringJob(tableBasePath, null, false, "schedule");
+    clusteringJob.cluster(0);
+    HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(dfs.getConf()).setBasePath(tableBasePath).build();
+    List<HoodieInstant> hoodieClusteringInstants = meta.getActiveTimeline().filterPendingReplaceTimeline().getInstants().collect(Collectors.toList());
+    HoodieInstant clusteringRequest = hoodieClusteringInstants.get(0);
+    meta.getActiveTimeline().transitionReplaceRequestedToInflight(clusteringRequest, Option.empty());
+
+    // do another ingestion with inline clustering enabled
+    cfg.configs.addAll(getAsyncServicesConfigs(totalRecords, "false", "true", "2", "", ""));
+    cfg.retryLastPendingInlineClusteringJob = true;
+    HoodieDeltaStreamer ds2 = new HoodieDeltaStreamer(cfg, jsc);
+    ds2.sync();
+    String completeClusteringTimeStamp = meta.reloadActiveTimeline().getCompletedReplaceTimeline().lastInstant().get().getTimestamp();
+    assertEquals(clusteringRequest.getTimestamp(), completeClusteringTimeStamp);
+    TestHelpers.assertAtLeastNCommits(2, tableBasePath, dfs);
+    TestHelpers.assertAtLeastNReplaceCommits(1, tableBasePath, dfs);
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testCleanerDeleteReplacedDataWithArchive(Boolean asyncClean) throws Exception {
