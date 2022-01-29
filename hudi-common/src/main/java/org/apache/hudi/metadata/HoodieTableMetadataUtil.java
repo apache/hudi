@@ -194,7 +194,8 @@ public class HoodieTableMetadataUtil {
    * @param partitionToDeletedFiles The {@code Map} to fill with files deleted per partition.
    * @param partitionToAppendedFiles The {@code Map} to fill with files appended per partition and their sizes.
    */
-  private static void processRollbackMetadata(HoodieActiveTimeline metadataTableTimeline, HoodieRollbackMetadata rollbackMetadata,
+  private static void processRollbackMetadata(HoodieActiveTimeline metadataTableTimeline,
+                                              HoodieRollbackMetadata rollbackMetadata,
                                               Map<String, List<String>> partitionToDeletedFiles,
                                               Map<String, Map<String, Long>> partitionToAppendedFiles,
                                               Option<String> lastSyncTs) {
@@ -261,17 +262,6 @@ public class HoodieTableMetadataUtil {
 
         // Extract appended file name from the absolute paths saved in getAppendFiles()
         pm.getRollbackLogFiles().forEach((path, size) -> {
-          partitionToAppendedFiles.get(partition).merge(new Path(path).getName(), size, fileMergeFn);
-        });
-      }
-
-      if (pm.getWrittenLogFiles() != null && !pm.getWrittenLogFiles().isEmpty()) {
-        if (!partitionToAppendedFiles.containsKey(partition)) {
-          partitionToAppendedFiles.put(partition, new HashMap<>());
-        }
-
-        // Extract appended file name from the absolute paths saved in getWrittenLogFiles()
-        pm.getWrittenLogFiles().forEach((path, size) -> {
           partitionToAppendedFiles.get(partition).merge(new Path(path).getName(), size, fileMergeFn);
         });
       }
