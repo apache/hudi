@@ -205,13 +205,15 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
   @Test
   def testColumnStatsTablesGarbageCollection(): Unit = {
-    val testZIndexPath = new Path(System.getProperty("java.io.tmpdir"), "zindex")
-    val fs = testZIndexPath.getFileSystem(spark.sparkContext.hadoopConfiguration)
+    val targetParquetTablePath = tempDir.resolve("index/zorder/input-table").toAbsolutePath.toString
+    val sourceJSONTablePath = getClass.getClassLoader.getResource("index/zorder/input-table-json").toString
 
-    val inputDf =
-      spark.read.parquet(
-        getClass.getClassLoader.getResource("index/zorder/input-table").toString
-      )
+    bootstrapParquetInputTableFromJSON(sourceJSONTablePath, targetParquetTablePath)
+
+    val inputDf = spark.read.parquet(targetParquetTablePath)
+
+    val testColumnStatsIndexPath = new Path(tempDir.resolve("zindex").toAbsolutePath.toString)
+    val fs = testColumnStatsIndexPath.getFileSystem(spark.sparkContext.hadoopConfiguration)
 
     // Try to save statistics
     ColumnStatsIndexHelper.updateColumnStatsIndexFor(
@@ -219,7 +221,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       sourceTableSchema,
       inputDf.inputFiles.toSeq.asJava,
       Seq("c1","c2","c3","c5","c6","c7","c8").asJava,
-      testZIndexPath.toString,
+      testColumnStatsIndexPath.toString,
       "2",
       Seq("0", "1").asJava
     )
@@ -230,7 +232,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       sourceTableSchema,
       inputDf.inputFiles.toSeq.asJava,
       Seq("c1","c2","c3","c5","c6","c7","c8").asJava,
-      testZIndexPath.toString,
+      testColumnStatsIndexPath.toString,
       "3",
       Seq("0", "1", "2").asJava
     )
@@ -241,14 +243,14 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       sourceTableSchema,
       inputDf.inputFiles.toSeq.asJava,
       Seq("c1","c2","c3","c5","c6","c7","c8").asJava,
-      testZIndexPath.toString,
+      testColumnStatsIndexPath.toString,
       "4",
       Seq("0", "1", "3").asJava
     )
 
-    assertEquals(!fs.exists(new Path(testZIndexPath, "2")), true)
-    assertEquals(!fs.exists(new Path(testZIndexPath, "3")), true)
-    assertEquals(fs.exists(new Path(testZIndexPath, "4")), true)
+    assertEquals(!fs.exists(new Path(testColumnStatsIndexPath, "2")), true)
+    assertEquals(!fs.exists(new Path(testColumnStatsIndexPath, "3")), true)
+    assertEquals(fs.exists(new Path(testColumnStatsIndexPath, "4")), true)
   }
 
   @Test
@@ -361,7 +363,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
     ds.withColumn("file", uuidToIdx(ds("file")))
   }
-  
+
   private def generateRandomDataFrame(spark: SparkSession): DataFrame = {
     val sourceTableSchema =
       new StructType()

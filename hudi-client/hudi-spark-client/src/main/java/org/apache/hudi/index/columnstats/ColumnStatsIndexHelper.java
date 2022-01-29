@@ -423,9 +423,8 @@ public class ColumnStatsIndexHelper {
       );
     } else if (colType instanceof StringType) {
       return Pair.of(
-          new String(((Binary) colMetadata.getMinValue()).getBytes()),
-          new String(((Binary) colMetadata.getMaxValue()).getBytes())
-      );
+          colMetadata.getMinValue().toString(),
+          colMetadata.getMaxValue().toString());
     } else if (colType instanceof DecimalType) {
       return Pair.of(
           new BigDecimal(colMetadata.getMinValue().toString()),
