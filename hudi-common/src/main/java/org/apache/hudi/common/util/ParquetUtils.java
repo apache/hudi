@@ -410,7 +410,7 @@ public class ParquetUtils extends BaseFileUtils {
       // NOTE: Unscaled number is stored in BE format (most significant byte is 0th)
       return new BigDecimal(new BigInteger(((Binary)val).getBytesUnsafe()), scale);
     } else {
-      throw new UnsupportedOperationException("not supported");
+      throw new UnsupportedOperationException(String.format("Unsupported value type (%s)", val.getClass().getName()));
     }
   }
 }
