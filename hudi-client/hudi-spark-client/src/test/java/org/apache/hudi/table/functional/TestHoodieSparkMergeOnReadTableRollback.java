@@ -142,8 +142,14 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void testRollbackWithDeltaAndCompactionCommit(boolean rollbackUsingMarkers) throws Exception {
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false, rollbackUsingMarkers, HoodieIndex.IndexType.SIMPLE)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build());
+    // NOTE: First writer will have Metadata table DISABLED
+    HoodieWriteConfig.Builder cfgBuilder =
+        getConfigBuilder(false, rollbackUsingMarkers, HoodieIndex.IndexType.SIMPLE)
+            .withMetadataConfig(
+                HoodieMetadataConfig.newBuilder()
+                    .enable(false)
+                    .build());
+
     addConfigsForPopulateMetaFields(cfgBuilder, true);
     HoodieWriteConfig cfg = cfgBuilder.build();
 
@@ -194,6 +200,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
        */
       final String commitTime1 = "002";
       // WriteClient with custom config (disable small file handling)
+      // NOTE: Second writer will have Metadata table ENABLED
       try (SparkRDDWriteClient secondClient = getHoodieWriteClient(getHoodieWriteConfigWithSmallFileHandlingOff(false));) {
         secondClient.startCommitWithTime(commitTime1);
 
