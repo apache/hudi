@@ -868,7 +868,7 @@ public class HoodieTableMetadataUtil {
       } else {
         columnRangeMetadataList =
             columns.stream().map(entry -> new HoodieColumnRangeMetadata<Comparable>(fileName,
-                    entry, null, null, 0, null))
+                    entry, null, null, 0, 0, 0, 0))
                 .collect(Collectors.toList());
       }
       return HoodieMetadataPayload.createColumnStatsRecords(partitionPath, columnRangeMetadataList, isDeleted);

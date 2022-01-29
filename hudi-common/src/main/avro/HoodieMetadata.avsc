@@ -91,15 +91,23 @@
             ]
         },
         {
-            "doc": "Metadata Index of column ranges for all data files in the user table",
+            "doc": "Metadata Index of column statistics for all data files in the user table",
             "name": "ColumnStatsMetadata",
             "type": [
                 "null",
                 {
-                    "doc": "Data file column ranges details",
+                    "doc": "Data file column statistics",
                     "name": "HoodieColumnStats",
                     "type": "record",
                     "fields": [
+                        {
+                            "doc": "File name for which this column statistics applies",
+                            "name": "fileName",
+                            "type": [
+                                "null",
+                                "string"
+                            ]
+                        },
                         {
                             "doc": "Minimum value in the range. Based on user data table schema, we can convert this to appropriate type",
                             "name": "minValue",
@@ -117,8 +125,32 @@
                             ]
                         },
                         {
-                            "doc": "Maximum value in the range. Based on user data table schema, we can convert it to appropriate type",
+                            "doc": "Total count of values",
+                            "name": "valueCount",
+                            "type": [
+                                "null",
+                                "long"
+                            ]
+                        },
+                        {
+                            "doc": "Total count of null values",
                             "name": "nullCount",
+                            "type": [
+                                "null",
+                                "long"
+                            ]
+                        },
+                        {
+                            "doc": "Total storage size on disk",
+                            "name": "totalSize",
+                            "type": [
+                                "null",
+                                "long"
+                            ]
+                        },
+                        {
+                            "doc": "Total uncompressed storage size on disk",
+                            "name": "totalUncompressedSize",
                             "type": [
                                 "null",
                                 "long"

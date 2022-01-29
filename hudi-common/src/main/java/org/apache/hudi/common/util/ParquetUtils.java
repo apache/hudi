@@ -304,18 +304,21 @@ public class ParquetUtils extends BaseFileUtils {
     Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnToStatsListMap = metadata.getBlocks().stream().sequential()
             .flatMap(blockMetaData -> blockMetaData.getColumns().stream()
                     .filter(f -> cols.contains(f.getPath().toDotString()))
-                    .map(columnChunkMetaData ->
-                        new HoodieColumnRangeMetadata<Comparable>(
-                            parquetFilePath.getName(),
-                            columnChunkMetaData.getPath().toDotString(),
-                            convertToNativeJavaType(
-                                columnChunkMetaData.getPrimitiveType(),
-                                columnChunkMetaData.getStatistics().genericGetMin()),
-                            convertToNativeJavaType(
-                                columnChunkMetaData.getPrimitiveType(),
-                                columnChunkMetaData.getStatistics().genericGetMax()),
-                            columnChunkMetaData.getStatistics().getNumNulls())))
-            .collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName));
+                .map(columnChunkMetaData ->
+                    new HoodieColumnRangeMetadata<Comparable>(
+                        parquetFilePath.getName(),
+                        columnChunkMetaData.getPath().toDotString(),
+                        convertToNativeJavaType(
+                            columnChunkMetaData.getPrimitiveType(),
+                            columnChunkMetaData.getStatistics().genericGetMin()),
+                        convertToNativeJavaType(
+                            columnChunkMetaData.getPrimitiveType(),
+                            columnChunkMetaData.getStatistics().genericGetMax()),
+                        columnChunkMetaData.getStatistics().getNumNulls(),
+                        columnChunkMetaData.getValueCount(),
+                        columnChunkMetaData.getTotalSize(),
+                        columnChunkMetaData.getTotalUncompressedSize()))
+            ).collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName));
 
     // Combine those into file-level statistics
     // NOTE: Inlining this var makes javac (1.8) upset (due to its inability to infer
@@ -359,13 +362,18 @@ public class ParquetUtils extends BaseFileUtils {
       maxValue = one.getMaxValue().compareTo(another.getMaxValue()) < 0 ? another.getMaxValue() : one.getMaxValue();
     } else if (one.getMaxValue() == null) {
       maxValue = another.getMaxValue();
-    } else  {
+    } else {
       maxValue = one.getMaxValue();
     }
 
     return new HoodieColumnRangeMetadata<T>(
         one.getFilePath(),
         one.getColumnName(), minValue, maxValue, one.getNumNulls() + another.getNumNulls());
+    one.getColumnName(), minValue, maxValue,
+        one.getNullCount() + another.getNullCount(),
+        one.getValueCount() + another.getValueCount(),
+        one.getTotalSize() + another.getTotalSize(),
+        one.getTotalUncompressedSize() + another.getTotalUncompressedSize());
   }
 
   private static Comparable<?> convertToNativeJavaType(PrimitiveType primitiveType, Comparable val) {
