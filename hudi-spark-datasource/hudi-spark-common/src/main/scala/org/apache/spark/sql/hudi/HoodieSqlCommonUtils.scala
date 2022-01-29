@@ -201,10 +201,8 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   }
 
   def getTableLocation(table: CatalogTable, sparkSession: SparkSession): String = {
-    val uri = if (table.tableType == CatalogTableType.MANAGED && isHoodieTable(table)) {
+    val uri = table.storage.locationUri.orElse {
       Some(sparkSession.sessionState.catalog.defaultTablePath(table.identifier))
-    } else {
-      table.storage.locationUri
     }
     val conf = sparkSession.sessionState.newHadoopConf()
     uri.map(makePathQualified(_, conf))
