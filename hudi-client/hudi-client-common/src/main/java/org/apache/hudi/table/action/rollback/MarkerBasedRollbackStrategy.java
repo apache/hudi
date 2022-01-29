@@ -90,6 +90,11 @@ public class MarkerBasedRollbackStrategy<T extends HoodieRecordPayload, I, K, O>
                 Collections.singletonList(fullDeletePath.toString()),
                 Collections.emptyMap());
           case APPEND:
+            // NOTE: This marker file-path does NOT correspond to a log-file, but rather is a phony
+            //       path serving as a "container" for the following components:
+            //          - Base file's file-id
+            //          - Base file's commit instant
+            //          - Partition path
             return getRollbackRequestForAppend(WriteMarkers.stripMarkerSuffix(markerFilePath));
           default:
             throw new HoodieRollbackException("Unknown marker type, during rollback of " + instantToRollback);
@@ -100,11 +105,11 @@ public class MarkerBasedRollbackStrategy<T extends HoodieRecordPayload, I, K, O>
     }
   }
 
-  protected HoodieRollbackRequest getRollbackRequestForAppend(String appendBaseFilePath) throws IOException {
-    Path baseFilePathForAppend = new Path(basePath, appendBaseFilePath);
+  protected HoodieRollbackRequest getRollbackRequestForAppend(String markerFilePath) throws IOException {
+    Path baseFilePathForAppend = new Path(basePath, markerFilePath);
     String fileId = FSUtils.getFileIdFromFilePath(baseFilePathForAppend);
     String baseCommitTime = FSUtils.getCommitTime(baseFilePathForAppend.getName());
-    String partitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), new Path(basePath, appendBaseFilePath).getParent());
+    String partitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), baseFilePathForAppend.getParent());
     Map<FileStatus, Long> writtenLogFileSizeMap = getWrittenLogFileSizeMap(partitionPath, baseCommitTime, fileId);
     Map<String, Long> writtenLogFileStrSizeMap = new HashMap<>();
     for (Map.Entry<FileStatus, Long> entry : writtenLogFileSizeMap.entrySet()) {
