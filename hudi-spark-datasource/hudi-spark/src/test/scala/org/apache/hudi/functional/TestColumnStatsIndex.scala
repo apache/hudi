@@ -66,7 +66,6 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
   }
 
   @Test
-  @Disabled
   def testColumnStatsTableComposition(): Unit = {
     val inputDf =
     // NOTE: Schema here is provided for validation that the input date is in the appropriate format
@@ -302,7 +301,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
     val ranges = utils.readRangeFromParquetMetadata(conf, parquetFilePath,
       Seq("c1", "c2", "c3a", "c3b", "c3c", "c4", "c5", "c6", "c7", "c8").asJava)
 
-    ranges.forEach(r => {
+    ranges.asScala.foreach(r => {
       // NOTE: Unfortunately Parquet can't compute statistics for Timestamp column, hence we
       //       skip it in our assertions
       if (r.getColumnName.equals("c4")) {
