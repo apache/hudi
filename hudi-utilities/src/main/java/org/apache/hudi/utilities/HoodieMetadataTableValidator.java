@@ -81,8 +81,8 @@ public class HoodieMetadataTableValidator {
         .setLoadActiveTimelineOnLoad(true)
         .build();
 
-    this.asyncMetadataTableValidateService = cfg.runningMode.equalsIgnoreCase(Mode.CONTINUOUS.name()) ?
-        Option.of(new AsyncMetadataTableValidateService()) : Option.empty();
+    this.asyncMetadataTableValidateService = cfg.runningMode.equalsIgnoreCase(Mode.CONTINUOUS.name())
+        ? Option.of(new AsyncMetadataTableValidateService()) : Option.empty();
   }
 
   /**
@@ -267,8 +267,8 @@ public class HoodieMetadataTableValidator {
     HoodieTableFileSystemView metaFsView = createHoodieTableFileSystemView(engineContext, true);
     HoodieTableFileSystemView fsView = createHoodieTableFileSystemView(engineContext, false);
 
-    List<FileSlice> fileSlicesFromMetadataTable = metaFsView.getAllFileSlices(partitionPath.toString()).sorted().collect(Collectors.toList());
-    List<FileSlice> fileSlicesFromFS = fsView.getAllFileSlices(partitionPath.toString()).sorted().collect(Collectors.toList());
+    List<FileSlice> fileSlicesFromMetadataTable = metaFsView.getLatestFileSlices(partitionPath.toString()).sorted().collect(Collectors.toList());
+    List<FileSlice> fileSlicesFromFS = fsView.getLatestFileSlices(partitionPath.toString()).sorted().collect(Collectors.toList());
 
     if (!fileSlicesFromMetadataTable.equals(fileSlicesFromFS)) {
       String message = "Validation of metadata file listing for partition " + partitionName + " failed.";
