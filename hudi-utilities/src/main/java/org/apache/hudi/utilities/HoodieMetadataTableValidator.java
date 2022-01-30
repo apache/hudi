@@ -110,11 +110,8 @@ public class HoodieMetadataTableValidator {
 
     @Parameter(names = {"--mode", "-m"}, description = "Set job mode: "
         + "Set \"CONTINUOUS\" Running MetadataTableValidator in continuous"
-        + "Set \"ONCE\" Running MetadataTableValidator once", required = true)
-    public String runningMode = null;
-
-    @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)
-    public String tableName = null;
+        + "Set \"ONCE\" Running MetadataTableValidator once", required = false)
+    public String runningMode = "once";
 
     @Parameter(names = {"--min-validate-interval-seconds"},
         description = "the min validate interval of each validate in continuous mode")
@@ -147,7 +144,6 @@ public class HoodieMetadataTableValidator {
           + "   --base-path " + basePath + ", \n"
           + "   --mode " + runningMode + ", \n"
           + "   --min-validate-interval-seconds " + minValidateIntervalSeconds + ", \n"
-          + "   --table-name " + tableName + ", \n"
           + "   --spark-master " + sparkMaster + ", \n"
           + "   --spark-memory " + sparkMemory + ", \n"
           + "   --props " + propsFilePath + ", \n"
@@ -167,7 +163,6 @@ public class HoodieMetadataTableValidator {
       return basePath.equals(config.basePath)
           && Objects.equals(runningMode, config.runningMode)
           && Objects.equals(minValidateIntervalSeconds, config.minValidateIntervalSeconds)
-          && Objects.equals(tableName, config.tableName)
           && Objects.equals(sparkMaster, config.sparkMaster)
           && Objects.equals(sparkMemory, config.sparkMemory)
           && Objects.equals(propsFilePath, config.propsFilePath)
@@ -176,7 +171,7 @@ public class HoodieMetadataTableValidator {
 
     @Override
     public int hashCode() {
-      return Objects.hash(basePath, runningMode, minValidateIntervalSeconds, tableName, sparkMaster, sparkMemory, propsFilePath, configs, help);
+      return Objects.hash(basePath, runningMode, minValidateIntervalSeconds, sparkMaster, sparkMemory, propsFilePath, configs, help);
     }
   }
 
@@ -255,38 +250,45 @@ public class HoodieMetadataTableValidator {
     }
 
     for (String partitionPath : allPartitionPathsMeta) {
-      validateFilesInPartition(engineContext, new Path(partitionPath));
+      validateFilesInPartition(engineContext, partitionPath);
     }
 
     LOG.info("MetaTable Validation Success.");
   }
 
-  private void validateFilesInPartition(HoodieSparkEngineContext engineContext, Path partitionPath) {
-    String partitionName = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), partitionPath);
+  private void validateFilesInPartition(HoodieSparkEngineContext engineContext, String partitionPath) {
 
     HoodieTableFileSystemView metaFsView = createHoodieTableFileSystemView(engineContext, true);
     HoodieTableFileSystemView fsView = createHoodieTableFileSystemView(engineContext, false);
 
-    List<FileSlice> fileSlicesFromMetadataTable = metaFsView.getLatestFileSlices(partitionPath.toString()).sorted().collect(Collectors.toList());
-    List<FileSlice> fileSlicesFromFS = fsView.getLatestFileSlices(partitionPath.toString()).sorted().collect(Collectors.toList());
+    List<FileSlice> latestFileSlicesFromMetadataTable = metaFsView.getLatestFileSlices(partitionPath).sorted().collect(Collectors.toList());
+    List<FileSlice> latestFileSlicesFromFS = fsView.getLatestFileSlices(partitionPath).sorted().collect(Collectors.toList());
 
-    if (!fileSlicesFromMetadataTable.equals(fileSlicesFromFS)) {
-      String message = "Validation of metadata file listing for partition " + partitionName + " failed.";
+    LOG.info("Latest file list from metadata: " + latestFileSlicesFromMetadataTable);
+    LOG.info("Latest file list from direct listing: " + latestFileSlicesFromFS);
+    if (!latestFileSlicesFromMetadataTable.equals(latestFileSlicesFromFS)) {
+      String message = "Validation of metadata get latest file slices for partition " + partitionPath + " failed."
+          + "Latest file list from metadata: " + latestFileSlicesFromMetadataTable
+          + "Latest file list from direct listing: " + latestFileSlicesFromFS;
       LOG.error(message);
-      LOG.error("File list from metadata: " + fileSlicesFromMetadataTable);
-      LOG.error("File list from direct listing: " + fileSlicesFromFS);
       throw new RuntimeException(message);
+    } else {
+      LOG.info("Validation of getLatestFileSlices success.");
     }
 
-    List<HoodieBaseFile> latestFilesFromMetadata = metaFsView.getLatestBaseFiles(partitionPath.toString()).collect(Collectors.toList());
-    List<HoodieBaseFile> latestFilesFromFS = fsView.getLatestBaseFiles(partitionPath.toString()).collect(Collectors.toList());
+    List<HoodieBaseFile> latestFilesFromMetadata = metaFsView.getLatestBaseFiles(partitionPath).collect(Collectors.toList());
+    List<HoodieBaseFile> latestFilesFromFS = fsView.getLatestBaseFiles(partitionPath).collect(Collectors.toList());
 
+    LOG.info("Latest base file from metadata: " + latestFilesFromMetadata);
+    LOG.info("Latest base file from direct listing: " + latestFilesFromFS);
     if (!latestFilesFromMetadata.equals(latestFilesFromFS)) {
-      String message = "Validation of metadata get latest base file for partition " + partitionName + " failed.";
+      String message = "Validation of metadata get latest base file for partition " + partitionPath + " failed. "
+          + "Latest base file from metadata: " + latestFilesFromMetadata
+          + "Latest base file from direct listing: " + latestFilesFromFS;
       LOG.error(message);
-      LOG.error("Latest base file from metadata: " + latestFilesFromMetadata);
-      LOG.error("Latest base file from direct listing: " + latestFilesFromFS);
       throw new RuntimeException(message);
+    } else {
+      LOG.info("Validation of getLatestBaseFiles success.");
     }
   }
 
