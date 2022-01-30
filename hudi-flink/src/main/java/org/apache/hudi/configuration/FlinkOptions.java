@@ -268,6 +268,12 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.\n"
           + "This will render any value set for the option in-effective");
 
+  public static final ConfigOption<Boolean> PARTIAL_OVERWRITE_ENABLED = ConfigOptions
+      .key("partial.overwrite.enabled")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Partial overwrite payload, the write.payload.class should be org.apache.hudi.common.model.PartialOverwriteWithLatestAvroPayload when it is true");
+
   /**
    * Flag to indicate whether to drop duplicates before insert/upsert.
    * By default false to gain extra performance.

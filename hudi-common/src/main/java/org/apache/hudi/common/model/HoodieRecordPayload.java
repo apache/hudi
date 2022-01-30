@@ -59,6 +59,18 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   }
 
   /**
+   * When more than one HoodieRecord have the same HoodieKey in the incoming batch, and get the merged result after calling preCombine method instead of choose one of two records,
+   * can call this method to get the order among combined record with previous records
+   * @param oldValue instance of the old {@link HoodieRecordPayload} to be compare.
+   * @return a negative integer, zero, or a positive integer as this object is less than, equal to, or greater than the specified object.
+   *
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
+  default int compareTo(T oldValue) {
+    return 0;
+  }
+
+  /**
    * This methods is deprecated. Please refer to {@link #combineAndGetUpdateValue(IndexedRecord, Schema, Properties)} for java docs.
    */
   @Deprecated

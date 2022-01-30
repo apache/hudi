@@ -78,4 +78,8 @@ public class HoodieRecordLocation implements Serializable {
   public void setFileId(String fileId) {
     this.fileId = fileId;
   }
+
+  public HoodieRecordLocation toLocal(String instantTime) {
+    return new HoodieRecordLocation(instantTime, fileId);
+  }
 }

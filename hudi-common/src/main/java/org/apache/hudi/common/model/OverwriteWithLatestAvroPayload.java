@@ -40,8 +40,18 @@ import java.util.Objects;
 public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
     implements HoodieRecordPayload<OverwriteWithLatestAvroPayload> {
 
+  /**
+   * the schema of generic record
+   */
+  public final String schema;
+
   public OverwriteWithLatestAvroPayload(GenericRecord record, Comparable orderingVal) {
+    this(record, orderingVal, null);
+  }
+
+  public OverwriteWithLatestAvroPayload(GenericRecord record, Comparable orderingVal, String schema) {
     super(record, orderingVal);
+    this.schema = schema;
   }
 
   public OverwriteWithLatestAvroPayload(Option<GenericRecord> record) {

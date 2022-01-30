@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
@@ -35,12 +36,14 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.bootstrap.aggregate.BootstrapAggFunction;
+import org.apache.hudi.sink.utils.PayloadCreation;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.util.FlinkTables;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
@@ -92,6 +95,11 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
   private final Pattern pattern;
   private String lastInstantTime;
 
+  /**
+   * Utilities to create hoodie pay load instance.
+   */
+  private transient PayloadCreation payloadCreation;
+
   public BootstrapOperator(Configuration conf) {
     this.conf = conf;
     this.pattern = Pattern.compile(conf.getString(FlinkOptions.INDEX_PARTITION_REGEX));
@@ -123,6 +131,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
     this.writeConfig = StreamerUtil.getHoodieClientConfig(this.conf, true);
     this.hoodieTable = FlinkTables.createTable(writeConfig, hadoopConf, getRuntimeContext());
     this.aggregateManager = getRuntimeContext().getGlobalAggregateManager();
+    this.payloadCreation = PayloadCreation.instance(this.conf);
 
     preLoadIndexRecords();
   }
@@ -210,16 +219,16 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
             return;
           }
 
-          final List<HoodieKey> hoodieKeys;
           try {
-            hoodieKeys =
-                fileUtils.fetchRecordKeyPartitionPath(this.hadoopConf, new Path(baseFile.getPath()));
+            final List<GenericRecord> hoodieRecords = fileUtils.readAvroRecords(this.hadoopConf, new Path(baseFile.getPath()));
+            for (GenericRecord record : hoodieRecords) {
+              String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+              String recordPartitionPath = record.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+              HoodieRecordPayload<?> payload = payloadCreation.generatePayload(record, schema.toString());
+              output.collect(new StreamRecord(new IndexRecord<>(new HoodieRecord<>(new HoodieKey(recordKey, recordPartitionPath), payload))));
+            }
           } catch (Exception e) {
-            throw new HoodieException(String.format("Error when loading record keys from file: %s", baseFile), e);
-          }
-
-          for (HoodieKey hoodieKey : hoodieKeys) {
-            output.collect(new StreamRecord(new IndexRecord(generateHoodieRecord(hoodieKey, fileSlice))));
+            throw new HoodieException(String.format("Error when loading record from file: %s", baseFile), e);
           }
         });
 
@@ -233,8 +242,8 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
             writeConfig, hadoopConf);
 
         try {
-          for (String recordKey : scanner.getRecords().keySet()) {
-            output.collect(new StreamRecord(new IndexRecord(generateHoodieRecord(new HoodieKey(recordKey, partitionPath), fileSlice))));
+          for (HoodieRecord record : scanner.getRecords().values()) {
+            output.collect(new StreamRecord(new IndexRecord(record)));
           }
         } catch (Exception e) {
           throw new HoodieException(String.format("Error when loading record keys from files: %s", logPaths), e);
