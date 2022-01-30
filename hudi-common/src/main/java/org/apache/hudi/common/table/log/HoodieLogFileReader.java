@@ -199,10 +199,10 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     // We may have had a crash which could have written this block partially
     // Skip blocksize in the stream and we should either find a sync marker (start of the next
     // block) or EOF. If we did not find either of it, then this block is a corrupted block.
-//    boolean isCorrupted = isBlockCorrupt(blocksize);
-//    if (isCorrupted) {
-//      return createCorruptBlock();
-//    }
+    boolean isCorrupted = isBlockCorrupt(blocksize);
+    if (isCorrupted) {
+      return createCorruptBlock();
+    }
 
     // 2. Read the version for this log format
     HoodieLogFormat.LogFormatVersion nextBlockVersion = readVersion();
