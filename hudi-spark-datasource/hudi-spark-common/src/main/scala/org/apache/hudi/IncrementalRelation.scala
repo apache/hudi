@@ -202,6 +202,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
               optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)))
             .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
               commitsToReturn.last.getTimestamp))
+          // schema enforcement does not happen in above spark.read with hudi. hence selecting explicitly w/ right column order
           val fieldNames : Array[String] = df.schema.fields.map(field => field.name)
           df = df.union(hudiDF.select(fieldNames.head, fieldNames.tail: _*))
         } else {
