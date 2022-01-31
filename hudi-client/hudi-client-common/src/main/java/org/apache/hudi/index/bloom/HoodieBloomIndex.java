@@ -283,7 +283,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
   protected <R> HoodieData<HoodieRecord<R>> tagLocationBacktoRecords(
       HoodiePairData<HoodieKey, HoodieRecordLocation> keyFilenamePair,
       HoodieData<HoodieRecord<R>> records) {
-    HoodiePairData<HoodieKey, HoodieRecord<?>> keyRecordPairs =
+    HoodiePairData<HoodieKey, HoodieRecord<R>> keyRecordPairs =
         records.mapToPair(record -> new ImmutablePair<>(record.getKey(), record));
     // Here as the records might have more data than keyFilenamePairs (some row keys' fileId is null),
     // so we do left outer join.
