@@ -194,14 +194,16 @@ class IncrementalRelation(val sqlContext: SQLContext,
         }
 
         if (doFullTableScan) {
-          df = df.union(sqlContext.read
-            .schema(usedSchema)
+          val hudiDF = sqlContext.read
             .format("hudi")
+            .schema(usedSchema)
             .load(basePath)
             .filter(String.format("%s > '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, //Notice the > in place of >= because we are working with optParam instead of first commit > optParam
               optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)))
             .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-              commitsToReturn.last.getTimestamp)))
+              commitsToReturn.last.getTimestamp))
+          val fieldNames : Array[String] = df.schema.fields.map(field => field.name)
+          df = df.union(hudiDF.select(fieldNames.head, fieldNames.tail: _*))
         } else {
           if (metaBootstrapFileIdToFullPath.nonEmpty) {
             df = sqlContext.sparkSession.read
