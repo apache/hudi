@@ -24,6 +24,16 @@ for different versions of PrestoDB.
 | >= 0.233             | No action needed. Hudi (0.5.1-incubating) is a compile time dependency. | Snapshot querying on COW tables. Read optimized querying on MOR tables. |
 | >= 0.240             | No action needed. Hudi 0.5.3 version is a compile time dependency. | Snapshot querying on both COW and MOR tables |
 
+:::note
+We upgraded Hudi version from 0.5.3 to 0.9.0 in Presto 0.265 but that introduced a breaking dependency change in
+another presto module. See [this issue](https://github.com/prestodb/presto/issues/17164) for more details. Since then,
+we have [fixed the hudi-presto-bundle](https://github.com/apache/hudi/pull/4551) in version 0.10.1. Now, we need to
+upgrade Hudi in Presto again. This is being tracked by [HUDI-3010](https://issues.apache.org/jira/browse/HUDI-3010).
+Our suggestion is to avoid upgrading Presto until the issue is fixed. However, if this is not an option, then the
+workaround is to download the hudi-presto-bundle jar from our [maven repo](https://mvnrepository.com/artifact/org.apache.hudi/hudi-presto-bundle)
+and place it in `<presto_install>/plugin/hive-hadoop2/`.
+:::
+
 ### Presto Environment
 1. Configure Presto according to the [Presto configuration document](https://prestodb.io/docs/current/installation/deployment.html).
 2. Configure hive catalog in ` /presto-server-0.2xxx/etc/catalog/hive.properties` as follows:
