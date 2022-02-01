@@ -81,45 +81,40 @@ data table will be added here. Metadata table is already in the HFile format. Th
 be extended and shared for this partition also. The type field will be used to detect the bloom filter payload record.
 Here is the schema for the bloom filter payload record.
 ```
-  {
-      "doc": "Metadata Index of bloom filters for all data files in the user table",
-      "name": "BloomFilterMetadata",
-      "type": [
-          "null",
-          {
-              "doc": "Data file bloom filter details",
-              "name": "HoodieMetadataBloomFilter",
-              "type": "record",
-              "fields": [
-                  {
-                      "doc": "Bloom filter type code",
-                      "name": "type",
-                      "type": "string"
-                  },
-                  {
-                      "doc": "Instant timestamp when this metadata was created/updated",
-                      "name": "timestamp",
-                      "type": "string"
-                  },
-                  {
-                      "doc": "Bloom filter binary byte array",
-                      "name": "bloomFilter",
-                      "type": "bytes"
-                  },
-                  {
-                      "doc": "Bloom filter entry valid/deleted flag",
-                      "name": "isDeleted",
-                      "type": "boolean"
-                  },
-                  {
-                      "doc": "Reserved bytes for future use",
-                      "name": "reserved",
-                      "type": "bytes"
-                  }
-              ]
-          }
-      ]
-  }
+    {
+        "doc": "Metadata Index of bloom filters for all data files in the user table",
+        "name": "BloomFilterMetadata",
+        "type": [
+            "null",
+            {
+                "doc": "Data file bloom filter details",
+                "name": "HoodieMetadataBloomFilter",
+                "type": "record",
+                "fields": [
+                    {
+                        "doc": "Bloom filter type code",
+                        "name": "type",
+                        "type": "string"
+                    },
+                    {
+                        "doc": "Instant timestamp when this metadata was created/updated",
+                        "name": "timestamp",
+                        "type": "string"
+                    },
+                    {
+                        "doc": "Bloom filter binary byte array",
+                        "name": "bloomFilter",
+                        "type": "bytes"
+                    },
+                    {
+                        "doc": "Bloom filter entry valid/deleted flag",
+                        "name": "isDeleted",
+                        "type": "boolean"
+                    }
+                ]
+            }
+        ]
+    }
 ```
 
 The key for the bloom filter record would be an encoded string representing the partition and base file combo. The
@@ -130,7 +125,7 @@ probability desired for the support max scale deployment. Base64 encoding the ha
 storage space for these keys.
 
 ```
-key = base64_encode(concat(hash64(partition name), hash128(file path)))
+key = base64_encode(concat(hash64(partition name), hash128(file name)))
 ```
 
 <img src="metadata_index_bloom_partition.png" alt="Bloom filter partition" width="500"/>
@@ -145,54 +140,81 @@ schema will be extended and shared for this partition also. The type field will 
 payload record. Here is the schema for the column stats payload record.
 
 ```
-  {
-      "doc": "Metadata Index of column ranges for all data files in the user table",
-      "name": "ColumnStatsMetadata",
-      "type": [
-          "null",
-          {
-              "doc": "Data file column ranges details",
-              "name": "HoodieColumnStats",
-              "type": "record",
-              "fields": [
-                  {
-                      "doc": "Minimum value in the range. Based on user data table schema, we can convert this to appropriate type",
-                      "name": "minValue",
-                      "type": [
-                          "null",
-                          "string"
-                      ]
-                  },
-                  {
-                      "doc": "Maximum value in the range. Based on user data table schema, we can convert it to appropriate type",
-                      "name": "maxValue",
-                      "type": [
-                          "null",
-                          "string"
-                      ]
-                  },
-                  {
-                      "doc": "Maximum value in the range. Based on user data table schema, we can convert it to appropriate type",
-                      "name": "nullCount",
-                      "type": [
-                          "null",
-                          "long"
-                      ]
-                  },
-                  {
-                      "doc": "Column range entry valid/deleted flag",
-                      "name": "isDeleted",
-                      "type": "boolean"
-                  },
-                  {
-                      "doc": "Reserved bits for future use",
-                      "name": "reserved",
-                      "type": "bytes"
-                  }
-              ]
-          }
-      ]
-  }
+    {
+        "doc": "Metadata Index of column statistics for all data files in the user table",
+        "name": "ColumnStatsMetadata",
+        "type": [
+            "null",
+            {
+                "doc": "Data file column statistics",
+                "name": "HoodieColumnStats",
+                "type": "record",
+                "fields": [
+                    {
+                        "doc": "File name for which this column statistics applies",
+                        "name": "fileName",
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    {
+                        "doc": "Minimum value in the range. Based on user data table schema, we can convert this to appropriate type",
+                        "name": "minValue",
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    {
+                        "doc": "Maximum value in the range. Based on user data table schema, we can convert it to appropriate type",
+                        "name": "maxValue",
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    {
+                        "doc": "Total count of values",
+                        "name": "valueCount",
+                        "type": [
+                            "null",
+                            "long"
+                        ]
+                    },
+                    {
+                        "doc": "Total count of null values",
+                        "name": "nullCount",
+                        "type": [
+                            "null",
+                            "long"
+                        ]
+                    },
+                    {
+                        "doc": "Total storage size on disk",
+                        "name": "totalSize",
+                        "type": [
+                            "null",
+                            "long"
+                        ]
+                    },
+                    {
+                        "doc": "Total uncompressed storage size on disk",
+                        "name": "totalUncompressedSize",
+                        "type": [
+                            "null",
+                            "long"
+                        ]
+                    },
+                    {
+                        "doc": "Column range entry valid/deleted flag",
+                        "name": "isDeleted",
+                        "type": "boolean"
+                    }
+                ]
+            }
+        ]
+    }
 ```
 
 Column stats records hold key ranges (min and max) for the file. The key for the column stat record would be an
@@ -201,7 +223,7 @@ these fields are converted to deterministic hash based IDs, and then they are ba
 bloom filter key.
 
 ```
-key = base64_encode(concat(hash64(column name), hash64(partition name), hash128(file path)))
+key = base64_encode(concat(hash64(column name), hash64(partition name), hash128(file name)))
 ```
 
 While Hash based IDs have quite a few desirable properties in the context of Hudi index lookups, there is an impact
@@ -275,10 +297,10 @@ Let's walk through the writer flow to update these partitions.
 Whenever a new commit is getting applied to metadata table, we do the following.<br>
 1. Files partition - prepare records for adding
 2. Column_stats partition - prepare records for adding
-[ColumnID][PartitionID][FileID] => ColumnStats
+[ColumnIndexID][PartitionIndexID][FileIndexID] => ColumnStats
 This involves reading the base file footers to fetch min max values for each column
 3. Bloom_filter partition - prepare records for adding
-[PartitionID][FileID] => BloomFilter
+[PartitionIndexID][FileIndexID] => BloomFilter
 This involves reading the base file footers.
 We can amortize the cost across (2) and (3) and just read it once and prepare/populate records for both partitions.  
 4. Commit all these records to metadata table.
