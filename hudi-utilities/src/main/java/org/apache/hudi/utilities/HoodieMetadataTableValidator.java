@@ -443,7 +443,8 @@ public class HoodieMetadataTableValidator {
 
     @Override
     public int compare(FileSlice o1, FileSlice o2) {
-      return (o1.getFileGroupId() + o1.getBaseInstantTime()).compareTo(o2.getFileGroupId() + o1.getBaseInstantTime());
+      return (o1.getPartitionPath() + o1.getFileId() + o1.getBaseInstantTime())
+          .compareTo(o2.getPartitionPath() + o2.getFileId() + o2.getBaseInstantTime());
     }
   }
 
