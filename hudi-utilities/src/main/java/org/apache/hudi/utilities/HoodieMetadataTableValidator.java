@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
@@ -49,6 +50,59 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
+/**
+ * A validator with spark-submit to compare list partitions and list files between metadata table and filesystem
+ * <p>
+ * You can run this validator with the following command and have a try:
+ * ```
+ * spark-submit \
+ *  --class org.apache.hudi.utilities.HoodieMetadataTableValidator \
+ *  --packages org.apache.spark:spark-avro_2.11:2.4.4 \
+ *  --master spark://xxxx:7077 \
+ *  --driver-memory 1g \
+ *  --executor-memory 1g \
+ *  $HUDI_DIR/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
+ *  --base-path basePath \
+ *  --mode CONTINUOUS
+ * ```
+ *
+ * <p>
+ * You can specify the running mode of the validator through `--mode`.
+ * There are 2 modes of the {@link HoodieMetadataTableValidator}:
+ * - CONTINUOUS : This validator will compare the result of listing partitions/listing files between metadata table and filesystem every 10 minutes(default).
+ * <p>
+ * Example command:
+ * ```
+ * spark-submit \
+ *  --class org.apache.hudi.utilities.HoodieMetadataTableValidator \
+ *  --packages org.apache.spark:spark-avro_2.11:2.4.4 \
+ *  --master spark://xxxx:7077 \
+ *  --driver-memory 1g \
+ *  --executor-memory 1g \
+ *  $HUDI_DIR/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
+ *  --base-path basePath \
+ *  --mode CONTINUOUS
+ * ```
+ *
+ * <p>
+ * You can specify the running mode of the validator through `--mode`.
+ * There are 2 modes of the {@link HoodieMetadataTableValidator}:
+ * - ONCE : This validator will compare the result of listing partitions/listing files between metadata table and filesystem only once.
+ * <p>
+ * Example command:
+ * ```
+ * spark-submit \
+ *  --class org.apache.hudi.utilities.HoodieMetadataTableValidator \
+ *  --packages org.apache.spark:spark-avro_2.11:2.4.4 \
+ *  --master spark://xxxx:7077 \
+ *  --driver-memory 1g \
+ *  --executor-memory 1g \
+ *  $HUDI_DIR/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
+ *  --base-path basePath \
+ *  --mode ONCE
+ * ```
+ *
+ */
 public class HoodieMetadataTableValidator {
 
   private static final Logger LOG = LogManager.getLogger(HoodieMetadataTableValidator.class);
@@ -114,8 +168,8 @@ public class HoodieMetadataTableValidator {
     public String runningMode = "once";
 
     @Parameter(names = {"--min-validate-interval-seconds"},
-        description = "the min validate interval of each validate in continuous mode")
-    public Integer minValidateIntervalSeconds = 10;
+        description = "the min validate interval of each validate in continuous mode, default is 10 minutes.")
+    public Integer minValidateIntervalSeconds = 10 * 60;
 
     @Parameter(names = {"--ignore-failed", "-ig"}, description = "Ignore metadata validate failure and continue.", required = false)
     public boolean ignoreFailed = false;
@@ -126,8 +180,12 @@ public class HoodieMetadataTableValidator {
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = false)
     public String sparkMemory = "1g";
 
+    @Parameter(names = {"--assume-date-partitioning"}, description = "Should HoodieWriteClient assume the data is partitioned by dates, i.e three levels from base path."
+        + "This is a stop-gap to support tables created by versions < 0.3.1. Will be removed eventually", required = false)
+    public Boolean assumeDatePartitioning = false;
+
     @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
-        + "hoodie client for deleting table partitions")
+        + "hoodie client")
     public String propsFilePath = null;
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
@@ -146,6 +204,7 @@ public class HoodieMetadataTableValidator {
           + "   --min-validate-interval-seconds " + minValidateIntervalSeconds + ", \n"
           + "   --spark-master " + sparkMaster + ", \n"
           + "   --spark-memory " + sparkMemory + ", \n"
+          + "   --assumeDatePartitioning-memory " + assumeDatePartitioning + ", \n"
           + "   --props " + propsFilePath + ", \n"
           + "   --hoodie-conf " + configs
           + "\n}";
@@ -165,13 +224,15 @@ public class HoodieMetadataTableValidator {
           && Objects.equals(minValidateIntervalSeconds, config.minValidateIntervalSeconds)
           && Objects.equals(sparkMaster, config.sparkMaster)
           && Objects.equals(sparkMemory, config.sparkMemory)
+          && Objects.equals(assumeDatePartitioning, config.assumeDatePartitioning)
           && Objects.equals(propsFilePath, config.propsFilePath)
           && Objects.equals(configs, config.configs);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(basePath, runningMode, minValidateIntervalSeconds, sparkMaster, sparkMemory, propsFilePath, configs, help);
+      return Objects.hash(basePath, runningMode, minValidateIntervalSeconds, sparkMaster,
+          sparkMemory, assumeDatePartitioning, propsFilePath, configs, help);
     }
   }
 
@@ -193,7 +254,7 @@ public class HoodieMetadataTableValidator {
     try {
       validator.run();
     } catch (Throwable throwable) {
-      LOG.error("Fail to run deleting table partitions for " + validator.cfg, throwable);
+      LOG.error("Fail to do hoodie metadata table validation for " + validator.cfg, throwable);
     } finally {
       jsc.stop();
     }
@@ -217,6 +278,11 @@ public class HoodieMetadataTableValidator {
       }
     } catch (Exception e) {
       throw new HoodieException("Unable to do hoodie metadata table validation in " + cfg.basePath, e);
+    } finally {
+
+      if (asyncMetadataTableValidateService.isPresent()) {
+        asyncMetadataTableValidateService.get().shutdown(true);
+      }
     }
   }
 
@@ -236,45 +302,58 @@ public class HoodieMetadataTableValidator {
   }
 
   public void doMetaTableValidation() {
+    metaClient.reloadActiveTimeline();
     String basePath = metaClient.getBasePath();
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
-    // compare partitions
-    List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(engineContext, basePath, false, false);
-    List<String> allPartitionPathsMeta = FSUtils.getAllPartitionPaths(engineContext, basePath, true, false);
+    List<String> allPartitions = validatePartitions(engineContext, basePath);
 
-    if (!compareCollectionResult(allPartitionPathsFromFS, allPartitionPathsMeta)) {
-      String message = "Compare Partitions Failedddd! " + "AllPartitionPathsFromFS : " + allPartitionPathsFromFS + " and allPartitionPathsMeta : " + allPartitionPathsMeta;
-      LOG.error(message);
-      throw new RuntimeException(message);
-    }
-
-    for (String partitionPath : allPartitionPathsMeta) {
+    for (String partitionPath : allPartitions) {
       validateFilesInPartition(engineContext, partitionPath);
     }
 
     LOG.info("MetaTable Validation Success.");
   }
 
+  /**
+   * Compare the listing partitions result between metadata table and fileSystem.
+   */
+  private List<String> validatePartitions(HoodieSparkEngineContext engineContext, String basePath) {
+    // compare partitions
+    List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(engineContext, basePath, false, false);
+    List<String> allPartitionPathsMeta = FSUtils.getAllPartitionPaths(engineContext, basePath, true, false);
+
+    if (!compareCollectionResult(allPartitionPathsFromFS, allPartitionPathsMeta)) {
+      String message = "Compare Partitions Failed! " + "AllPartitionPathsFromFS : " + allPartitionPathsFromFS + " and allPartitionPathsMeta : " + allPartitionPathsMeta;
+      LOG.error(message);
+      throw new HoodieValidationException(message);
+    }
+
+    return allPartitionPathsMeta;
+  }
+
+  /**
+   * Compare the listing files result between metadata table and fileSystem.
+   * For now, validate two kinds of apis:
+   * 1. getLatestFileSlices
+   * 2. getLatestBaseFiles
+   * @param engineContext
+   * @param partitionPath
+   */
   private void validateFilesInPartition(HoodieSparkEngineContext engineContext, String partitionPath) {
 
     HoodieTableFileSystemView metaFsView = createHoodieTableFileSystemView(engineContext, true);
     HoodieTableFileSystemView fsView = createHoodieTableFileSystemView(engineContext, false);
 
-    List<FileSlice> latestFileSlicesFromMetadataTable = metaFsView.getLatestFileSlices(partitionPath).sorted().collect(Collectors.toList());
-    List<FileSlice> latestFileSlicesFromFS = fsView.getLatestFileSlices(partitionPath).sorted().collect(Collectors.toList());
+    validateLatestFileSlices(metaFsView, fsView, partitionPath);
+    validateLatestBaseFiles(metaFsView, fsView, partitionPath);
 
-    LOG.info("Latest file list from metadata: " + latestFileSlicesFromMetadataTable);
-    LOG.info("Latest file list from direct listing: " + latestFileSlicesFromFS);
-    if (!latestFileSlicesFromMetadataTable.equals(latestFileSlicesFromFS)) {
-      String message = "Validation of metadata get latest file slices for partition " + partitionPath + " failed."
-          + "Latest file list from metadata: " + latestFileSlicesFromMetadataTable
-          + "Latest file list from direct listing: " + latestFileSlicesFromFS;
-      LOG.error(message);
-      throw new RuntimeException(message);
-    } else {
-      LOG.info("Validation of getLatestFileSlices success.");
-    }
+  }
+
+  /**
+   * Compare getLatestBaseFiles between metadata table and fileSystem.
+   */
+  private void validateLatestBaseFiles(HoodieTableFileSystemView metaFsView, HoodieTableFileSystemView fsView, String partitionPath) {
 
     List<HoodieBaseFile> latestFilesFromMetadata = metaFsView.getLatestBaseFiles(partitionPath).collect(Collectors.toList());
     List<HoodieBaseFile> latestFilesFromFS = fsView.getLatestBaseFiles(partitionPath).collect(Collectors.toList());
@@ -286,9 +365,30 @@ public class HoodieMetadataTableValidator {
           + "Latest base file from metadata: " + latestFilesFromMetadata
           + "Latest base file from direct listing: " + latestFilesFromFS;
       LOG.error(message);
-      throw new RuntimeException(message);
+      throw new HoodieValidationException(message);
     } else {
       LOG.info("Validation of getLatestBaseFiles success.");
+    }
+  }
+
+  /**
+   * Compare getLatestFileSlices between metadata table and fileSystem.
+   */
+  private void validateLatestFileSlices(HoodieTableFileSystemView metaFsView, HoodieTableFileSystemView fsView, String partitionPath) {
+
+    List<FileSlice> latestFileSlicesFromMetadataTable = metaFsView.getLatestFileSlices(partitionPath).sorted().collect(Collectors.toList());
+    List<FileSlice> latestFileSlicesFromFS = fsView.getLatestFileSlices(partitionPath).sorted().collect(Collectors.toList());
+
+    LOG.info("Latest file list from metadata: " + latestFileSlicesFromMetadataTable);
+    LOG.info("Latest file list from direct listing: " + latestFileSlicesFromFS);
+    if (!latestFileSlicesFromMetadataTable.equals(latestFileSlicesFromFS)) {
+      String message = "Validation of metadata get latest file slices for partition " + partitionPath + " failed."
+          + "Latest file list from metadata: " + latestFileSlicesFromMetadataTable
+          + "Latest file list from direct listing: " + latestFileSlicesFromFS;
+      LOG.error(message);
+      throw new HoodieValidationException(message);
+    } else {
+      LOG.info("Validation of getLatestFileSlices success.");
     }
   }
 
@@ -296,7 +396,7 @@ public class HoodieMetadataTableValidator {
 
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(enableMetadataTable)
-        .withAssumeDatePartitioning(false)
+        .withAssumeDatePartitioning(cfg.assumeDatePartitioning)
         .build();
 
     return FileSystemViewManager.createInMemoryFileSystemView(engineContext,
@@ -324,11 +424,13 @@ public class HoodieMetadataTableValidator {
                   + toSleepMs + " ms.");
               Thread.sleep(toSleepMs);
             }
-          } catch (Exception e) {
-            LOG.error("Shutting down AsyncMetadataTableValidateService due to exception", e);
+          } catch (HoodieValidationException e) {
+            LOG.error("Shutting down AsyncMetadataTableValidateService due to HoodieValidationException", e);
             if (!cfg.ignoreFailed) {
-              throw new HoodieException(e.getMessage(), e);
+              throw e;
             }
+          } catch (InterruptedException e) {
+            // ignore InterruptedException here.
           }
         }
       }, executor), executor);
