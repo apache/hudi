@@ -33,6 +33,9 @@ import java.util.stream.Collectors;
 
 /**
  * Realtime File Split with external base file.
+ *
+ * NOTE: If you're adding fields here you need to make sure that you appropriately de-/serialize them
+ *       in {@link #readFromInput(DataInput)} and {@link #writeToOutput(DataOutput)}
  */
 public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit implements RealtimeSplit {
 
