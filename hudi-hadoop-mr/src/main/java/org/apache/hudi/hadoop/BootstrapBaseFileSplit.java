@@ -32,6 +32,14 @@ public class BootstrapBaseFileSplit extends FileSplit {
 
   private FileSplit bootstrapFileSplit;
 
+  /**
+   * NOTE: This ctor is necessary for Hive to be able to serialize and
+   *       then instantiate it when deserializing back
+   */
+  public BootstrapBaseFileSplit() {
+    super();
+  }
+
   public BootstrapBaseFileSplit(FileSplit baseSplit, FileSplit bootstrapFileSplit)
       throws IOException {
     super(baseSplit.getPath(), baseSplit.getStart(), baseSplit.getLength(), baseSplit.getLocations());
