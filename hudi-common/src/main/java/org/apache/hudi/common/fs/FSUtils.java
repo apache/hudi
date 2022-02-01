@@ -136,6 +136,17 @@ public class FSUtils {
   }
 
   /**
+   * Makes path qualified w/ {@link FileSystem}'s URI
+   *
+   * @param fs instance of {@link FileSystem} path belongs to
+   * @param path path to be qualified
+   * @return qualified path, prefixed w/ the URI of the target FS object provided
+   */
+  public static Path makeQualified(FileSystem fs, Path path) {
+    return path.makeQualified(fs.getUri(), fs.getWorkingDirectory());
+  }
+
+  /**
    * A write token uniquely identifies an attempt at one of the IOHandle operations (Merge/Create/Append).
    */
   public static String makeWriteToken(int taskPartitionId, int stageId, long taskAttemptId) {

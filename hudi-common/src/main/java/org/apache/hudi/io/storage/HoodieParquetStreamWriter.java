@@ -31,7 +31,7 @@ import org.apache.parquet.io.OutputFile;
 
 import java.io.IOException;
 
-// TODO unify w/ HoodieParquetWriter
+// TODO(HUDI-3035) unify w/ HoodieParquetWriter
 public class HoodieParquetStreamWriter<R extends IndexedRecord> implements AutoCloseable {
 
   private final ParquetWriter<R> writer;
