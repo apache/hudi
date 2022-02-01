@@ -48,9 +48,9 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   private Option<List<IndexedRecord>> records;
 
   /**
-   * Dot-path notation reference to the key field w/in the record's schema
+   * Key field's name w/in the record's schema
    */
-  private final String keyFieldRef;
+  private final String keyFieldName;
 
   private final boolean enablePointLookups;
 
@@ -62,10 +62,10 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   public HoodieDataBlock(List<IndexedRecord> records,
                          Map<HeaderMetadataType, String> header,
                          Map<HeaderMetadataType, String> footer,
-                         String keyFieldRef) {
+                         String keyFieldName) {
     super(header, footer, Option.empty(), Option.empty(), null, false);
     this.records = Option.of(records);
-    this.keyFieldRef = keyFieldRef;
+    this.keyFieldName = keyFieldName;
     // If no reader-schema has been provided assume writer-schema as one
     this.readerSchema = getWriterSchema(super.getLogBlockHeader());
     this.enablePointLookups = false;
@@ -81,11 +81,11 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
                             Option<Schema> readerSchema,
                             Map<HeaderMetadataType, String> headers,
                             Map<HeaderMetadataType, String> footer,
-                            String keyFieldRef,
+                            String keyFieldName,
                             boolean enablePointLookups) {
     super(headers, footer, blockContentLocation, content, inputStream, readBlockLazily);
     this.records = Option.empty();
-    this.keyFieldRef = keyFieldRef;
+    this.keyFieldName = keyFieldName;
     // If no reader-schema has been provided assume writer-schema as one
     this.readerSchema = readerSchema.orElseGet(() -> getWriterSchema(super.getLogBlockHeader()));
     this.enablePointLookups = enablePointLookups;
@@ -182,7 +182,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   public abstract HoodieLogBlockType getBlockType();
 
   protected Option<Schema.Field> getKeyField(Schema schema) {
-    return Option.ofNullable(schema.getField(keyFieldRef));
+    return Option.ofNullable(schema.getField(keyFieldName));
   }
 
   protected Option<String> getRecordKey(IndexedRecord record) {

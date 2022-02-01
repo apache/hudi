@@ -502,9 +502,9 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   }
 
   private HoodieLogBlock.HoodieLogBlockType pickLogDataBlockFormat() {
-    HoodieLogBlock.HoodieLogBlockType logBlockType = config.getLogDataBlockFormat();
-    if (logBlockType != null) {
-      return logBlockType;
+    Option<HoodieLogBlock.HoodieLogBlockType> logBlockTypeOpt = config.getLogDataBlockFormat();
+    if (logBlockTypeOpt.isPresent()) {
+      return logBlockTypeOpt.get();
     }
 
     // Fallback to deduce data-block type based on the base file format
