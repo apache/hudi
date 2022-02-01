@@ -60,6 +60,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -84,6 +86,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("functional")
 public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunctionalTestHarness {
+
+  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieSparkMergeOnReadTableRollback.class);
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
@@ -519,6 +523,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         .withMarkersType(MarkerType.DIRECT.name())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build());
     HoodieWriteConfig cfg = cfgBuilder.build();
+
+    LOG.warn("XXX Base path " + cfg.getBasePath());
 
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
