@@ -46,7 +46,7 @@ public class Metrics {
 
   private Metrics(HoodieWriteConfig metricConfig) {
     registry = new MetricRegistry();
-    commonMetricPrefix = metricConfig.getMetricReporterMetricsNamePrefix();
+    commonMetricPrefix = metricConfig.isMetricsCommonPrefixEnabled() ? metricConfig.getTableName() : "";
     reporter = MetricsReporterFactory.createReporter(metricConfig, registry);
     if (reporter == null) {
       throw new RuntimeException("Cannot initialize Reporter.");
@@ -116,7 +116,7 @@ public class Metrics {
   }
 
   public static void registerGauges(Map<String, Long> metricsMap, Option<String> prefix) {
-    String metricPrefix = prefix.isPresent() ? prefix.get() + "." : "";
+    String metricPrefix = prefix.isPresent() && !prefix.get().isEmpty() ? prefix.get() + "." : "";
     metricsMap.forEach((k, v) -> registerGauge(metricPrefix + k, v));
   }
 

@@ -225,6 +225,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       builder.withMetricsConfig(HoodieMetricsConfig.newBuilder()
           .withReporterType(writeConfig.getMetricsReporterType().toString())
           .withExecutorMetrics(writeConfig.isExecutorMetricsEnabled())
+          .withCommonPrefix(writeConfig.isMetricsCommonPrefixEnabled())
           .on(true).build());
       switch (writeConfig.getMetricsReporterType()) {
         case GRAPHITE:

@@ -1561,6 +1561,10 @@ public class HoodieWriteConfig extends HoodieConfig {
         getStringOrDefault(HoodieMetricsConfig.EXECUTOR_METRICS_ENABLE, "false"));
   }
 
+  public boolean isMetricsCommonPrefixEnabled() {
+    return getBooleanOrDefault(HoodieMetricsConfig.ENABLE_COMMON_PREFIX);
+  }
+
   public MetricsReporterType getMetricsReporterType() {
     return MetricsReporterType.valueOf(getString(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE));
   }

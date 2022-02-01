@@ -84,6 +84,13 @@ public class HoodieMetricsConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("");
 
+  public static final ConfigProperty<Boolean> ENABLE_COMMON_PREFIX = ConfigProperty
+      .key(METRIC_PREFIX + ".common_prefix.enable")
+      .defaultValue(true)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Turn on/off common prefix for all metrics. Table name is used as the common prefix and its "
+          + "on by default");
+
   /**
    * @deprecated Use {@link #TURN_METRICS_ON} and its methods instead
    */
@@ -161,6 +168,11 @@ public class HoodieMetricsConfig extends HoodieConfig {
 
     public Builder withExecutorMetrics(boolean enable) {
       hoodieMetricsConfig.setValue(EXECUTOR_METRICS_ENABLE, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withCommonPrefix(boolean enable) {
+      hoodieMetricsConfig.setValue(ENABLE_COMMON_PREFIX, String.valueOf(enable));
       return this;
     }
 
