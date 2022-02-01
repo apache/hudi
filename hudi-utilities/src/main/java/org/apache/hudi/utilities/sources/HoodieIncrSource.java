@@ -135,7 +135,10 @@ public class HoodieIncrSource extends RowSource {
     DataFrameReader reader = sparkSession.read().format("org.apache.hudi")
         .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
         .option(DataSourceReadOptions.BEGIN_INSTANTTIME().key(), instantEndpts.getLeft())
-        .option(DataSourceReadOptions.END_INSTANTTIME().key(), instantEndpts.getRight());
+        .option(DataSourceReadOptions.END_INSTANTTIME().key(), instantEndpts.getRight())
+        .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().key(),
+            props.getString(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().key(),
+                DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().defaultValue()));
 
     Dataset<Row> source = reader.load(srcPath);
 
