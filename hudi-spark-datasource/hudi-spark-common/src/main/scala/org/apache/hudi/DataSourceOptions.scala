@@ -121,6 +121,10 @@ object DataSourceReadOptions {
     .sinceVersion("0.10.0")
     .withDocumentation("enable data skipping to boost query after doing z-order optimize for current table")
 
+  val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")
+    .defaultValue("false")
+    .withDocumentation("When doing an incremental query whether we should fall back to full table scans if file does not exist.")
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
   val QUERY_TYPE_OPT_KEY = QUERY_TYPE.key()
