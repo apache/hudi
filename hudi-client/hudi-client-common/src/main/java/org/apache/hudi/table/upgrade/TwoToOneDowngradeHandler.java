@@ -115,9 +115,11 @@ public class TwoToOneDowngradeHandler implements DowngradeHandler {
               + "\" is not supported for rollback.");
       }
     } else {
-      // In case of partial failures during downgrade, there is a chance that marker type file was deleted,
-      // but timeline server based marker files are left.  So deletes them if any
-      deleteTimelineBasedMarkerFiles(context, markerDir, fileSystem, parallelism);
+      if (fileSystem.exists(new Path(markerDir))) {
+        // In case of partial failures during downgrade, there is a chance that marker type file was deleted,
+        // but timeline server based marker files are left.  So deletes them if any
+        deleteTimelineBasedMarkerFiles(context, markerDir, fileSystem, parallelism);
+      }
     }
   }
 
