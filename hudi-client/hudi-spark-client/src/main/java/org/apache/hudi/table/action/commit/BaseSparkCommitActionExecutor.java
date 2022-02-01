@@ -297,6 +297,15 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       HoodieCommitMetadata metadata = result.getCommitMetadata().get();
       writeTableMetadata(metadata, actionType);
+      if (!config.getBasePath().endsWith("metadata")) {
+        LOG.warn(" BSCAE. committing " + instantTime);
+        metadata.getPartitionToWriteStats().forEach((partitionStatName, writeStats1) -> {
+          LOG.warn("  for partition " + partitionStatName);
+          for (HoodieWriteStat stat : writeStats1) {
+            LOG.warn("  file info " + stat.getFileId() + ", path " + stat.getPath() + ", total bytes written " + stat.getTotalWriteBytes());
+          }
+        });
+      }
       activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
       LOG.info("Committed " + instantTime);

@@ -209,6 +209,17 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
         this.txnManager.beginTransaction(Option.empty(), Option.empty());
       }
       writeTableMetadata(metadata);
+      if (!config.getBasePath().endsWith("metadata")) {
+        LOG.warn(" BaseClean ActionEeecutor. Clean commit " + instantTime);
+        metadata.getPartitionMetadata().forEach((partition, partitionMetadata) -> {
+          // Files deleted from a partition
+          List<String> deletedFiles = partitionMetadata.getDeletePathPatterns();
+          LOG.warn("  for partition " + partition);
+          for (String str : deletedFiles) {
+            LOG.warn("    cleaned up file " + str);
+          }
+        });
+      }
       table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant,
           TimelineMetadataUtils.serializeCleanMetadata(metadata));
       LOG.info("Marked clean started on " + inflightInstant.getTimestamp() + " as complete");

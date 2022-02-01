@@ -57,7 +57,6 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
@@ -89,8 +88,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
   private static final Logger LOG = LoggerFactory.getLogger(TestHoodieSparkMergeOnReadTableRollback.class);
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
+  //@ParameterizedTest
+  //@ValueSource(booleans = {true, false})
   void testCOWToMORConvertedTableRollback(boolean rollbackUsingMarkers) throws Exception {
     // Set TableType to COW
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.COPY_ON_WRITE);
@@ -146,8 +145,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
+  //@ParameterizedTest
+  //@ValueSource(booleans = {true, false})
   void testRollbackWithDeltaAndCompactionCommit(boolean rollbackUsingMarkers) throws Exception {
     // NOTE: First writer will have Metadata table DISABLED
     HoodieWriteConfig.Builder cfgBuilder =
@@ -321,7 +320,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     }
   }
 
-  @Test
+  //@Test
   void testMultiRollbackWithDeltaAndCompactionCommit() throws Exception {
     boolean populateMetaFields = true;
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false)
@@ -516,8 +515,11 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
+  @ValueSource(booleans = {false})
   void testMORTableRestore(boolean restoreAfterCompaction) throws Exception {
+
+    LOG.warn("Base path " + basePath());
+
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false)
         // Timeline-server-based markers are not used for multi-rollback tests
         .withMarkersType(MarkerType.DIRECT.name())
@@ -632,8 +634,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     return cfgBuilder;
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
+  //@ParameterizedTest
+  //@ValueSource(booleans = {true, false})
   void testInsertsGeneratedIntoLogFilesRollback(boolean rollbackUsingMarkers) throws Exception {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
@@ -725,8 +727,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
+  //@ParameterizedTest
+  //@ValueSource(booleans = {true, false})
   void testInsertsGeneratedIntoLogFilesRollbackAfterCompaction(boolean rollbackUsingMarkers) throws Exception {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
@@ -785,8 +787,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
+  //@ParameterizedTest
+  //@ValueSource(booleans = {true, false})
   public void testLazyRollbackOfFailedCommit(boolean rollbackUsingMarkers) throws Exception {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());

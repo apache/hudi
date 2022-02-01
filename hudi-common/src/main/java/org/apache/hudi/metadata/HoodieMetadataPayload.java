@@ -33,6 +33,9 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.apache.hudi.io.storage.HoodieHFileReader;
 
 import java.io.IOException;
@@ -62,6 +65,8 @@ import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_L
  * HoodieMetadataRecord for ease of operations.
  */
 public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadataPayload> {
+
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataPayload.class);
 
   // HoodieMetadata schema field ids
   public static final String KEY_FIELD_NAME = HoodieHFileReader.KEY_FIELD_NAME;
@@ -225,6 +230,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
           } else {
             // file appends.
             combinedFileInfo.merge(filename, fileInfo, (oldFileInfo, newFileInfo) -> {
+              LOG.warn("Merging two records for " + filename + ": old file info " + oldFileInfo.toString() + ", new file info " + newFileInfo.toString()
+                  + " :: new size " + (oldFileInfo.getSize() + newFileInfo.getSize()));
               return new HoodieMetadataFileInfo(oldFileInfo.getSize() + newFileInfo.getSize(), false);
             });
           }

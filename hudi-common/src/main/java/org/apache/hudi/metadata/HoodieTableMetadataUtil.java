@@ -89,6 +89,7 @@ public class HoodieTableMetadataUtil {
   public static List<HoodieRecord> convertMetadataToRecords(HoodieCommitMetadata commitMetadata, String instantTime) {
     List<HoodieRecord> records = new LinkedList<>();
     List<String> allPartitions = new LinkedList<>();
+    LOG.warn(" MDT. applying commit " + instantTime);
     commitMetadata.getPartitionToWriteStats().forEach((partitionStatName, writeStats) -> {
       final String partition = partitionStatName.equals(EMPTY_PARTITION_NAME) ? NON_PARTITIONED_NAME : partitionStatName;
       allPartitions.add(partition);
@@ -109,6 +110,10 @@ public class HoodieTableMetadataUtil {
             : hoodieWriteStat.getTotalWriteBytes();
         newFiles.put(filename, totalWriteBytes);
       });
+      LOG.warn("  for partition " + partition);
+      for (Map.Entry<String, Long> entry: newFiles.entrySet()) {
+        LOG.warn("   new file " + entry.getKey() + ", size " + entry.getValue());
+      }
       // New files added to a partition
       HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(
           partition, Option.of(newFiles), Option.empty());
@@ -134,10 +139,15 @@ public class HoodieTableMetadataUtil {
   public static List<HoodieRecord> convertMetadataToRecords(HoodieCleanMetadata cleanMetadata, String instantTime) {
     List<HoodieRecord> records = new LinkedList<>();
     int[] fileDeleteCount = {0};
+    LOG.warn(" Applying Clean to MDT " + instantTime);
     cleanMetadata.getPartitionMetadata().forEach((partitionName, partitionMetadata) -> {
       final String partition = partitionName.equals(EMPTY_PARTITION_NAME) ? NON_PARTITIONED_NAME : partitionName;
       // Files deleted from a partition
       List<String> deletedFiles = partitionMetadata.getDeletePathPatterns();
+      LOG.warn("  for partition " + partition);
+      for (String str: deletedFiles) {
+        LOG.warn("    cleaned up file " + str);
+      }
       HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.empty(),
           Option.of(new ArrayList<>(deletedFiles)));
 
@@ -162,6 +172,7 @@ public class HoodieTableMetadataUtil {
                                                             HoodieRestoreMetadata restoreMetadata, String instantTime, Option<String> lastSyncTs) {
     Map<String, Map<String, Long>> partitionToAppendedFiles = new HashMap<>();
     Map<String, List<String>> partitionToDeletedFiles = new HashMap<>();
+    LOG.warn(" MDT. Applying restore to " + instantTime);
     restoreMetadata.getHoodieRestoreMetadata().values().forEach(rms -> {
       rms.forEach(rm -> processRollbackMetadata(metadataTableTimeline, rm, partitionToDeletedFiles, partitionToAppendedFiles, lastSyncTs));
     });
@@ -175,8 +186,24 @@ public class HoodieTableMetadataUtil {
 
     Map<String, Map<String, Long>> partitionToAppendedFiles = new HashMap<>();
     Map<String, List<String>> partitionToDeletedFiles = new HashMap<>();
+    LOG.warn(" MDT. rolling back " + instantTime + ", commits getting rolled back " + rollbackMetadata.getCommitsRollback().get(0));
     processRollbackMetadata(metadataTableTimeline, rollbackMetadata, partitionToDeletedFiles, partitionToAppendedFiles, lastSyncTs);
+    LOG.warn("   deleted files ");
+    for (Map.Entry<String, List<String>> entry: partitionToDeletedFiles.entrySet()) {
+      LOG.warn("  for partition " + entry.getKey());
+      for (String delFile: entry.getValue()) {
+        LOG.warn("     deleted file " + delFile);
+      }
+    }
+    LOG.warn("   append log files ");
+    for (Map.Entry<String, Map<String, Long>> entry: partitionToAppendedFiles.entrySet()) {
+      LOG.warn("  for partition " + entry.getKey());
+      for (Map.Entry<String, Long> logFile: entry.getValue().entrySet()) {
+        LOG.warn("     log file " + logFile.getKey() + " -> " + logFile.getValue());
+      }
+    }
     if (!wasSynced) {
+      LOG.warn(" NOT SYNCED and hence no files will be deleted ");
       // Since the instant-being-rolled-back was never committed to the metadata table, the files added there
       // need not be deleted. For MOR Table, the rollback appends logBlocks so we need to keep the appended files.
       partitionToDeletedFiles.clear();
@@ -271,6 +298,22 @@ public class HoodieTableMetadataUtil {
   private static List<HoodieRecord> convertFilesToRecords(Map<String, List<String>> partitionToDeletedFiles,
                                                           Map<String, Map<String, Long>> partitionToAppendedFiles, String instantTime,
                                                           String operation) {
+    LOG.warn(" Converting files to records or restore or rollback for " + instantTime);
+    LOG.warn("   deleted files ");
+    for (Map.Entry<String, List<String>> entry: partitionToDeletedFiles.entrySet()) {
+      LOG.warn("  for partition " + entry.getKey());
+      for (String delFile: entry.getValue()) {
+        LOG.warn("     deleted file " + delFile);
+      }
+    }
+    LOG.warn("   append log files ");
+    for (Map.Entry<String, Map<String, Long>> entry: partitionToAppendedFiles.entrySet()) {
+      LOG.warn("  for partition " + entry.getKey());
+      for (Map.Entry<String, Long> logFile: entry.getValue().entrySet()) {
+        LOG.warn("     log file " + logFile.getKey() + " -> " + logFile.getValue());
+      }
+    }
+
     List<HoodieRecord> records = new LinkedList<>();
     int[] fileChangeCount = {0, 0}; // deletes, appends
 

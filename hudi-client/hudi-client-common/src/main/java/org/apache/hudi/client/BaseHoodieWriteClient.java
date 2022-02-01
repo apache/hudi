@@ -224,6 +224,15 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     finalizeWrite(table, instantTime, stats);
     // update Metadata table
     writeTableMetadata(table, instantTime, commitActionType, metadata);
+    if (!config.getBasePath().endsWith("metadata")) {
+      LOG.warn(" ABWC. committing " + instantTime);
+      metadata.getPartitionToWriteStats().forEach((partitionStatName, writeStats) -> {
+        LOG.warn("  for partition " + partitionStatName);
+        for (HoodieWriteStat stat : writeStats) {
+          LOG.warn("     file info " + stat.getFileId() + ", path " + stat.getPath() + ", total bytes written " + stat.getTotalWriteBytes());
+        }
+      });
+    }
     activeTimeline.saveAsComplete(new HoodieInstant(true, commitActionType, instantTime),
         Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
   }

@@ -42,6 +42,7 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -89,6 +90,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   private static transient JavaSparkContext jsc;
   private static transient HoodieSparkEngineContext context;
   private static transient TimelineService timelineService;
+  private String basePath;
 
   /**
    * An indicator of the initialization status.
@@ -97,8 +99,23 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   @TempDir
   protected java.nio.file.Path tempDir;
 
+  /**
+   * Initializes basePath.
+   */
+  protected void initPath() {
+    try {
+      java.nio.file.Path basePath = tempDir.resolve("dataset");
+      java.nio.file.Files.createDirectories(basePath);
+      System.out.println("YYY BAse path " + basePath.toString());
+      this.basePath = "hdfs://" + basePath.toString();
+    } catch (IOException ioe) {
+      throw new HoodieIOException(ioe.getMessage(), ioe);
+    }
+  }
+
   public String basePath() {
-    return tempDir.toAbsolutePath().toUri().toString();
+    //return tempDir.toAbsolutePath().toUri().toString();
+    return basePath;
   }
 
   @Override
@@ -170,6 +187,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   @BeforeEach
   public synchronized void runBeforeEach() {
     initialized = spark != null;
+    initPath();
     if (!initialized) {
       SparkConf sparkConf = conf();
       SparkRDDWriteClient.registerClasses(sparkConf);

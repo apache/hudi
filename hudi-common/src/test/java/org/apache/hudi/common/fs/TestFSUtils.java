@@ -78,6 +78,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void setUp() throws IOException {
     initMetaClient();
     basePath = "file:" + basePath;
+    System.out.println("YYY :: base path after meta clinet instantiation " + basePath + ",  " + metaClient.getBasePath());
   }
 
   @Test
