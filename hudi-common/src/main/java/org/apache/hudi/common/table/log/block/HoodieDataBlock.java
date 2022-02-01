@@ -151,7 +151,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
     HashSet<String> keySet = new HashSet<>(keys);
     return allRecords.stream()
-        .filter(record -> keySet.contains(getRecordKey(record)))
+        .filter(record -> keySet.contains(getRecordKey(record).orElse(null)))
         .collect(Collectors.toList());
   }
 
