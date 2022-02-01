@@ -126,14 +126,14 @@ records' payloads today will have to be refactored to instead interact w/ standa
 
 Following major components will be refactored:
 
-1. `WriteHandle`s will be  
+1. `HoodieWriteHandle`s will be  
    1. Accepting `HoodieRecord` instead of raw Avro payload (avoiding Avro conversion)
    2. Using Combining API engine to merge records (when necessary) 
    3. Passes `HoodieRecord` as is to `FileWriter`
-2. `FileWriter`s will be 
+2. `HoodieFileWriter`s will be 
    1. Accepting `HoodieRecord`
    2. Will be engine-specific (so that they're able to handle internal record representation)
-3. `RecordReader`s 
+3. `HoodieRealtimeRecordReader`s 
    1. API will be returning opaque `HoodieRecord` instead of raw Avro payload
 
 
@@ -148,7 +148,7 @@ Following major components will be refactored:
  - If we need special migration tools, describe them here.
    - No special migration tools will be necessary (other than BWC-bridge to make sure users can use 0.11 out of the box, and there are no breaking changes to the public API)
  - When will we remove the existing behavior
-   - In subsequent releases (either 0.12 or 0.13) 
+   - In subsequent releases (either 0.12 or 1.0) 
 
 ## Test Plan
 
