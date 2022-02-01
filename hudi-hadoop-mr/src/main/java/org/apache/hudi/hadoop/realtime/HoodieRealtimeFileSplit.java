@@ -32,6 +32,9 @@ import java.util.stream.Collectors;
 
 /**
  * Filesplit that wraps the base split and a list of log files to merge deltas from.
+ *
+ * NOTE: If you're adding fields here you need to make sure that you appropriately de-/serialize them
+ *       in {@link #readFromInput(DataInput)} and {@link #writeToOutput(DataOutput)}
  */
 public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit {
 
