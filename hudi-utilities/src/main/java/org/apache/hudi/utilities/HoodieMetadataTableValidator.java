@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
@@ -43,6 +44,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -52,20 +54,6 @@ import java.util.stream.Collectors;
 
 /**
  * A validator with spark-submit to compare list partitions and list files between metadata table and filesystem
- * <p>
- * You can run this validator with the following command and have a try:
- * ```
- * spark-submit \
- *  --class org.apache.hudi.utilities.HoodieMetadataTableValidator \
- *  --packages org.apache.spark:spark-avro_2.11:2.4.4 \
- *  --master spark://xxxx:7077 \
- *  --driver-memory 1g \
- *  --executor-memory 1g \
- *  $HUDI_DIR/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
- *  --base-path basePath \
- *  --mode CONTINUOUS
- * ```
- *
  * <p>
  * You can specify the running mode of the validator through `--mode`.
  * There are 2 modes of the {@link HoodieMetadataTableValidator}:
@@ -81,6 +69,7 @@ import java.util.stream.Collectors;
  *  --executor-memory 1g \
  *  $HUDI_DIR/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
  *  --base-path basePath \
+ *  --min-validate-interval-seconds 60 \
  *  --mode CONTINUOUS
  * ```
  *
@@ -99,6 +88,7 @@ import java.util.stream.Collectors;
  *  --executor-memory 1g \
  *  $HUDI_DIR/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
  *  --base-path basePath \
+ *  --min-validate-interval-seconds 60 \
  *  --mode ONCE
  * ```
  *
@@ -341,13 +331,25 @@ public class HoodieMetadataTableValidator {
    * @param partitionPath
    */
   private void validateFilesInPartition(HoodieSparkEngineContext engineContext, String partitionPath) {
+    HoodieTableFileSystemView metaFsView = null;
+    HoodieTableFileSystemView fsView = null;
 
-    HoodieTableFileSystemView metaFsView = createHoodieTableFileSystemView(engineContext, true);
-    HoodieTableFileSystemView fsView = createHoodieTableFileSystemView(engineContext, false);
+    try {
+      metaFsView = createHoodieTableFileSystemView(engineContext, true);
+      fsView = createHoodieTableFileSystemView(engineContext, false);
 
-    validateLatestFileSlices(metaFsView, fsView, partitionPath);
-    validateLatestBaseFiles(metaFsView, fsView, partitionPath);
+      validateLatestFileSlices(metaFsView, fsView, partitionPath);
+      validateLatestBaseFiles(metaFsView, fsView, partitionPath);
 
+    } finally {
+      if (metaFsView != null) {
+        metaFsView.close();
+      }
+
+      if (fsView != null) {
+        fsView.close();
+      }
+    }
   }
 
   /**
@@ -355,8 +357,8 @@ public class HoodieMetadataTableValidator {
    */
   private void validateLatestBaseFiles(HoodieTableFileSystemView metaFsView, HoodieTableFileSystemView fsView, String partitionPath) {
 
-    List<HoodieBaseFile> latestFilesFromMetadata = metaFsView.getLatestBaseFiles(partitionPath).collect(Collectors.toList());
-    List<HoodieBaseFile> latestFilesFromFS = fsView.getLatestBaseFiles(partitionPath).collect(Collectors.toList());
+    List<HoodieBaseFile> latestFilesFromMetadata = metaFsView.getLatestBaseFiles(partitionPath).sorted(new HoodieBaseFileCompactor()).collect(Collectors.toList());
+    List<HoodieBaseFile> latestFilesFromFS = fsView.getLatestBaseFiles(partitionPath).sorted(new HoodieBaseFileCompactor()).collect(Collectors.toList());
 
     LOG.info("Latest base file from metadata: " + latestFilesFromMetadata);
     LOG.info("Latest base file from direct listing: " + latestFilesFromFS);
@@ -376,13 +378,13 @@ public class HoodieMetadataTableValidator {
    */
   private void validateLatestFileSlices(HoodieTableFileSystemView metaFsView, HoodieTableFileSystemView fsView, String partitionPath) {
 
-    List<FileSlice> latestFileSlicesFromMetadataTable = metaFsView.getLatestFileSlices(partitionPath).sorted().collect(Collectors.toList());
-    List<FileSlice> latestFileSlicesFromFS = fsView.getLatestFileSlices(partitionPath).sorted().collect(Collectors.toList());
+    List<FileSlice> latestFileSlicesFromMetadataTable = metaFsView.getLatestFileSlices(partitionPath).sorted(new FileSliceCompactor()).collect(Collectors.toList());
+    List<FileSlice> latestFileSlicesFromFS = fsView.getLatestFileSlices(partitionPath).sorted(new FileSliceCompactor()).collect(Collectors.toList());
 
     LOG.info("Latest file list from metadata: " + latestFileSlicesFromMetadataTable);
     LOG.info("Latest file list from direct listing: " + latestFileSlicesFromFS);
     if (!latestFileSlicesFromMetadataTable.equals(latestFileSlicesFromFS)) {
-      String message = "Validation of metadata get latest file slices for partition " + partitionPath + " failed."
+      String message = "Validation of metadata get latest file slices for partition " + partitionPath + " failed. "
           + "Latest file list from metadata: " + latestFileSlicesFromMetadataTable
           + "Latest file list from direct listing: " + latestFileSlicesFromFS;
       LOG.error(message);
@@ -434,6 +436,22 @@ public class HoodieMetadataTableValidator {
           }
         }
       }, executor), executor);
+    }
+  }
+
+  public static class FileSliceCompactor implements Comparator<FileSlice>, Serializable {
+
+    @Override
+    public int compare(FileSlice o1, FileSlice o2) {
+      return (o1.getFileGroupId() + o1.getBaseInstantTime()).compareTo(o2.getFileGroupId() + o1.getBaseInstantTime());
+    }
+  }
+
+  public static class HoodieBaseFileCompactor implements Comparator<HoodieBaseFile>, Serializable {
+
+    @Override
+    public int compare(HoodieBaseFile o1, HoodieBaseFile o2) {
+      return o1.getPath().compareTo(o2.getPath());
     }
   }
 }
