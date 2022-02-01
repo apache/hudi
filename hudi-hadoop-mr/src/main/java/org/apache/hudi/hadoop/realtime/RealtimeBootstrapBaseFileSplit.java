@@ -18,11 +18,11 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
-
-import org.apache.hadoop.mapred.FileSplit;
+import org.apache.hudi.hadoop.InputSplitUtils;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -43,7 +43,15 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
 
   private String basePath;
 
-  private final boolean belongsToIncrementalSplit;
+  private boolean belongsToIncrementalSplit;
+
+  /**
+   * NOTE: This ctor is necessary for Hive to be able to serialize and
+   *       then instantiate it when deserializing back
+   */
+  public RealtimeBootstrapBaseFileSplit() {
+    super();
+  }
 
   public RealtimeBootstrapBaseFileSplit(FileSplit baseSplit,
                                         String basePath,
@@ -63,12 +71,14 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
   public void write(DataOutput out) throws IOException {
     super.write(out);
     writeToOutput(out);
+    InputSplitUtils.writeBoolean(belongsToIncrementalSplit, out);
   }
 
   @Override
   public void readFields(DataInput in) throws IOException {
     super.readFields(in);
     readFromInput(in);
+    belongsToIncrementalSplit = InputSplitUtils.readBoolean(in);
   }
 
   @Override
