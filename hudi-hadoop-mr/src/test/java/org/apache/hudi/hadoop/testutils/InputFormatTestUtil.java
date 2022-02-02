@@ -368,7 +368,7 @@ public class InputFormatTestUtil {
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writeSchema.toString());
     HoodieDataBlock dataBlock = null;
     if (logBlockType == HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK) {
-      dataBlock = new HoodieHFileDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, Compression.Algorithm.GZ);
+      dataBlock = new HoodieHFileDataBlock(records, header, Compression.Algorithm.GZ);
     } else if (logBlockType == HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK) {
       dataBlock = new HoodieParquetDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, CompressionCodecName.GZIP);
     } else {

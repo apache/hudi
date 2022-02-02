@@ -529,7 +529,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       case AVRO_DATA_BLOCK:
         return new HoodieAvroDataBlock(recordList, header, keyField);
       case HFILE_DATA_BLOCK:
-        return new HoodieHFileDataBlock(recordList, header, keyField, writeConfig.getHFileCompressionAlgorithm());
+        return new HoodieHFileDataBlock(recordList, header, writeConfig.getHFileCompressionAlgorithm());
       case PARQUET_DATA_BLOCK:
         return new HoodieParquetDataBlock(recordList, header, keyField, writeConfig.getParquetCompressionCodec());
       default:
