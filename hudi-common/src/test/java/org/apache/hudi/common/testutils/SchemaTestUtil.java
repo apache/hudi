@@ -71,6 +71,10 @@ public final class SchemaTestUtil {
     return toRecords(getSimpleSchema(), getSimpleSchema(), from, limit);
   }
 
+  public static List<GenericRecord> generateTestGenericRecords(int from, int limit) throws IOException, URISyntaxException {
+    return toRecords(getSimpleSchema(), getSimpleSchema(), from, limit);
+  }
+
   public static List<String> generateTestJsonRecords(int from, int limit) throws IOException, URISyntaxException {
     Path dataPath = initializeSampleDataPath();
 
@@ -81,9 +85,9 @@ public final class SchemaTestUtil {
     }
   }
 
-  private static List<IndexedRecord> toRecords(Schema writerSchema, Schema readerSchema, int from, int limit)
+  private static <T extends IndexedRecord> List<T> toRecords(Schema writerSchema, Schema readerSchema, int from, int limit)
       throws IOException, URISyntaxException {
-    GenericDatumReader<IndexedRecord> reader = new GenericDatumReader<>(writerSchema, readerSchema);
+    GenericDatumReader<T> reader = new GenericDatumReader<>(writerSchema, readerSchema);
     Path dataPath = initializeSampleDataPath();
 
     try (Stream<String> stream = Files.lines(dataPath)) {

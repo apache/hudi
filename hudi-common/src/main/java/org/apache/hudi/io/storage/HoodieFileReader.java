@@ -27,7 +27,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.util.Option;
 
-public interface HoodieFileReader<R extends IndexedRecord> {
+public interface HoodieFileReader<R extends IndexedRecord> extends AutoCloseable {
 
   public String[] readMinMaxRecordKeys();
 

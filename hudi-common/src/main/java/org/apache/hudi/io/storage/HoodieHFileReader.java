@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io.storage;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -51,6 +50,7 @@ import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -77,11 +77,11 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     this.reader = HFile.createReader(FSUtils.getFs(path.toString(), configuration), path, cacheConfig, conf);
   }
 
-  public HoodieHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig, FileSystem inlineFs) throws IOException {
+  public HoodieHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig, FileSystem fs) throws IOException {
     this.conf = configuration;
     this.path = path;
-    this.fsDataInputStream = inlineFs.open(path);
-    this.reader = HFile.createReader(inlineFs, path, cacheConfig, configuration);
+    this.fsDataInputStream = fs.open(path);
+    this.reader = HFile.createReader(fs, path, cacheConfig, configuration);
   }
 
   public HoodieHFileReader(byte[] content) throws IOException {
@@ -332,28 +332,14 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     }
   }
 
-  static class SeekableByteArrayInputStream extends ByteArrayInputStream implements Seekable, PositionedReadable {
+  static class SeekableByteArrayInputStream extends ByteBufferBackedInputStream implements Seekable, PositionedReadable {
     public SeekableByteArrayInputStream(byte[] buf) {
       super(buf);
     }
 
     @Override
     public long getPos() throws IOException {
-      return pos;
-    }
-
-    @Override
-    public void seek(long pos) throws IOException {
-      if (mark != 0) {
-        throw new IllegalStateException();
-      }
-
-      reset();
-      long skipped = skip(pos);
-
-      if (skipped != pos) {
-        throw new IOException();
-      }
+      return getPosition();
     }
 
     @Override
@@ -363,19 +349,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
 
     @Override
     public int read(long position, byte[] buffer, int offset, int length) throws IOException {
-
-      if (position >= buf.length) {
-        throw new IllegalArgumentException();
-      }
-      if (position + length > buf.length) {
-        throw new IllegalArgumentException();
-      }
-      if (length > buffer.length) {
-        throw new IllegalArgumentException();
-      }
-
-      System.arraycopy(buf, (int) position, buffer, offset, length);
-      return length;
+      return copyFrom(position, buffer, offset, length);
     }
 
     @Override

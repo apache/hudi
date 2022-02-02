@@ -182,7 +182,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
           LOG.warn("Failed to convert record " + r.toString(), e);
           return null;
         }
-      }).collect(Collectors.toList()), header));
+      }).collect(Collectors.toList()), header, HoodieRecord.RECORD_KEY_METADATA_FIELD));
       return Pair.of(partitionPath, logWriter.getLogFile());
     }
   }
