@@ -133,22 +133,19 @@ public interface HoodieTimeline extends Serializable {
 
   /**
    * Timeline to just include commits (commit/deltacommit), compaction and replace actions.
-   * 
-   * @return
+   *
    */
   HoodieTimeline getWriteTimeline();
 
   /**
    * Timeline to just include replace instants that have valid (commit/deltacommit) actions.
    *
-   * @return
    */
   HoodieTimeline getCompletedReplaceTimeline();
 
   /**
    * Filter this timeline to just include requested and inflight compaction instants.
-   * 
-   * @return
+   *
    */
   HoodieTimeline filterPendingCompactionTimeline();
 
@@ -234,8 +231,7 @@ public interface HoodieTimeline extends Serializable {
 
   /**
    * Get hash of timeline.
-   * 
-   * @return
+   *
    */
   String getTimelineHash();
 
