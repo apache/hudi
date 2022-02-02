@@ -18,7 +18,7 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.avro.model.HoodieColumnStats;
+import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
@@ -117,7 +117,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private int type = 0;
   private Map<String, HoodieMetadataFileInfo> filesystemMetadata = null;
   private HoodieMetadataBloomFilter bloomFilterMetadata = null;
-  private HoodieColumnStats columnStatMetadata = null;
+  private HoodieMetadataColumnStats columnStatMetadata = null;
 
   public HoodieMetadataPayload(GenericRecord record, Comparable<?> orderingVal) {
     this(Option.of(record));
@@ -155,7 +155,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         if (v == null) {
           throw new HoodieMetadataException("Valid " + SCHEMA_FIELD_ID_COLUMN_STATS + " record expected for type: " + METADATA_TYPE_COLUMN_STATS);
         }
-        columnStatMetadata = new HoodieColumnStats(
+        columnStatMetadata = new HoodieMetadataColumnStats(
             (String) v.get(COLUMN_STATS_FIELD_RESOURCE_NAME),
             (String) v.get(COLUMN_STATS_FIELD_MIN_VALUE),
             (String) v.get(COLUMN_STATS_FIELD_MAX_VALUE),
@@ -177,14 +177,14 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     this(key, type, null, metadataBloomFilter, null);
   }
 
-  private HoodieMetadataPayload(String key, int type, HoodieColumnStats columnStats) {
+  private HoodieMetadataPayload(String key, int type, HoodieMetadataColumnStats columnStats) {
     this(key, type, null, null, columnStats);
   }
 
   protected HoodieMetadataPayload(String key, int type,
                                   Map<String, HoodieMetadataFileInfo> filesystemMetadata,
                                   HoodieMetadataBloomFilter metadataBloomFilter,
-                                  HoodieColumnStats columnStats) {
+                                  HoodieMetadataColumnStats columnStats) {
     this.key = key;
     this.type = type;
     this.filesystemMetadata = filesystemMetadata;
@@ -246,11 +246,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     ValidationUtils.checkArgument(!baseFileName.contains(Path.SEPARATOR)
             && FSUtils.isBaseFile(new Path(baseFileName)),
         "Invalid base file '" + baseFileName + "' for MetaIndexBloomFilter!");
-    final String bloomFilterKey = new PartitionIndexID(partitionName).asBase64EncodedString()
+    final String bloomFilterIndexKey = new PartitionIndexID(partitionName).asBase64EncodedString()
         .concat(new FileIndexID(baseFileName).asBase64EncodedString());
-    HoodieKey key = new HoodieKey(bloomFilterKey, MetadataPartitionType.BLOOM_FILTERS.getPartitionPath());
+    HoodieKey key = new HoodieKey(bloomFilterIndexKey, MetadataPartitionType.BLOOM_FILTERS.getPartitionPath());
 
-    // TODO: Get the bloom filter type from the file
+    // TODO: HUDI-3203 Get the bloom filter type from the file
     HoodieMetadataBloomFilter metadataBloomFilter =
         new HoodieMetadataBloomFilter(BloomFilterTypeCode.DYNAMIC_V0.name(),
             timestamp, bloomFilter, isDeleted);
@@ -283,7 +283,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return this.bloomFilterMetadata;
   }
 
-  private HoodieColumnStats combineColumnStatsMetadatat(HoodieMetadataPayload previousRecord) {
+  private HoodieMetadataColumnStats combineColumnStatsMetadatat(HoodieMetadataPayload previousRecord) {
     return this.columnStatMetadata;
   }
 
@@ -333,7 +333,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   /**
    * Get the bloom filter metadata from this payload.
    */
-  public Option<HoodieColumnStats> getColumnStatMetadata() {
+  public Option<HoodieMetadataColumnStats> getColumnStatMetadata() {
     if (columnStatMetadata == null) {
       return Option.empty();
     }
@@ -435,7 +435,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       HoodieKey key = new HoodieKey(getColumnStatsIndexKey(partitionName, columnRangeMetadata),
           MetadataPartitionType.COLUMN_STATS.getPartitionPath());
       HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_COLUMN_STATS,
-          HoodieColumnStats.newBuilder()
+          HoodieMetadataColumnStats.newBuilder()
               .setFileName(new Path(columnRangeMetadata.getFilePath()).getName())
               .setMinValue(columnRangeMetadata.getMinValue() == null ? null :
                   columnRangeMetadata.getMinValue().toString())

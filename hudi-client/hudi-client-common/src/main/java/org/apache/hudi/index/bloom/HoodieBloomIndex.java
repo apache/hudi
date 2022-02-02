@@ -19,7 +19,7 @@
 
 package org.apache.hudi.index.bloom;
 
-import org.apache.hudi.avro.model.HoodieColumnStats;
+import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
@@ -196,18 +196,19 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
 
     final String keyField = hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
     return context.flatMap(partitions, partitionName -> {
-      List<Pair<String, String>> columnStatKeys = HoodieIndexUtils.getLatestBaseFilesForPartition(partitionName,
+      // Partition and file name pairs
+      List<Pair<String, String>> partitionFileNameList = HoodieIndexUtils.getLatestBaseFilesForPartition(partitionName,
               hoodieTable).stream().map(baseFile -> Pair.of(partitionName, baseFile.getFileName()))
           .sorted()
           .collect(toList());
-      if (columnStatKeys.isEmpty()) {
+      if (partitionFileNameList.isEmpty()) {
         return Stream.empty();
       }
       try {
-        Map<Pair<String, String>, HoodieColumnStats> fileToColumnStatMap = hoodieTable
-            .getMetadataTable().getColumnStats(columnStatKeys, keyField);
+        Map<Pair<String, String>, HoodieMetadataColumnStats> fileToColumnStatsMap = hoodieTable
+            .getMetadataTable().getColumnStats(partitionFileNameList, keyField);
         List<Pair<String, BloomIndexFileInfo>> result = new ArrayList<>();
-        for (Map.Entry<Pair<String, String>, HoodieColumnStats> entry : fileToColumnStatMap.entrySet()) {
+        for (Map.Entry<Pair<String, String>, HoodieMetadataColumnStats> entry : fileToColumnStatsMap.entrySet()) {
           result.add(Pair.of(entry.getKey().getLeft(),
               new BloomIndexFileInfo(
                   FSUtils.getFileId(entry.getKey().getRight()),

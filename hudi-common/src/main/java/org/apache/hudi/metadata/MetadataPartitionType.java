@@ -62,14 +62,6 @@ public enum MetadataPartitionType {
     );
   }
 
-  public static List<MetadataPartitionType> allTypes() {
-    return Arrays.asList(
-        FILES,
-        COLUMN_STATS,
-        BLOOM_FILTERS
-    );
-  }
-
   @Override
   public String toString() {
     return "Metadata partition {"

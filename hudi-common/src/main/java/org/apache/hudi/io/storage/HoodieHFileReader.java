@@ -138,6 +138,14 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     }
   }
 
+  /**
+   * Filter keys by availability.
+   * <p>
+   * Note: This method is performant when the caller passes in a sorted candidate keys.
+   *
+   * @param candidateRowKeys - Keys to check for the availability
+   * @return Subset of candidate keys that are available
+   */
   @Override
   public Set<String> filterRowKeys(Set<String> candidateRowKeys) {
     return candidateRowKeys.stream().filter(k -> {

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.avro.model.HoodieColumnStats;
+import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -155,7 +155,7 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
   }
 
   @Override
-  public Map<Pair<String, String>, HoodieColumnStats> getColumnStats(final List<Pair<String, String>> partitionNameFileNameList, final String columnName)
+  public Map<Pair<String, String>, HoodieMetadataColumnStats> getColumnStats(final List<Pair<String, String>> partitionNameFileNameList, final String columnName)
       throws HoodieMetadataException {
     throw new HoodieMetadataException("Unsupported operation: getColumnsStats!");
   }

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.avro.model.HoodieColumnStats;
+import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -137,7 +137,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * @return Map of partition and file name pair to its column stats
    * @throws HoodieMetadataException
    */
-  Map<Pair<String, String>, HoodieColumnStats> getColumnStats(final List<Pair<String, String>> partitionNameFileNameList, final String columnName)
+  Map<Pair<String, String>, HoodieMetadataColumnStats> getColumnStats(final List<Pair<String, String>> partitionNameFileNameList, final String columnName)
       throws HoodieMetadataException;
 
   /**
