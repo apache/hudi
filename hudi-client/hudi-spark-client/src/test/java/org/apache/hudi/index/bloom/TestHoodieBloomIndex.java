@@ -27,7 +27,10 @@ import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -36,6 +39,7 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -51,11 +55,14 @@ import org.junit.jupiter.params.provider.MethodSource;
 import scala.Tuple2;
 
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -81,11 +88,14 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
 
   @BeforeEach
   public void setUp() throws Exception {
-    initSparkContexts();
     initPath();
-    initFileSystem();
-    // We have some records to be tagged (two different partitions)
-    initMetaClient();
+    HoodieIndexConfig.Builder indexBuilder = HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM);
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withIndexConfig(indexBuilder.build())
+        .build();
+    init(HoodieTableType.COPY_ON_WRITE, config);
+    writeClient = getHoodieWriteClient(config);
+    metaClient = HoodieTestUtils.init(hadoopConf, basePath, tableType, new Properties());
   }
 
   @AfterEach
@@ -111,7 +121,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
     HoodieBloomIndex index = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(hoodieTable, SCHEMA);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter);
 
     // Create some partitions, and put some files
     // "2016/01/21": 0 file
@@ -141,10 +151,40 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     // Still 0, as no valid commit
     assertEquals(0, filesList.size());
 
-    testTable.addCommit("20160401010101").withInserts("2016/04/01", "2");
-    testTable.addCommit("20150312101010").withInserts("2015/03/12", "1")
-        .withInserts("2015/03/12", "3", record1)
-        .withInserts("2015/03/12", "4", record2, record3, record4);
+    final String fileId1 = "1";
+    final String fileId2 = "2";
+    final String fileId3 = "3";
+    final String fileId4 = "4";
+    final Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap = new HashMap<>();
+
+    String commitTime = "20160401010101";
+    Path baseFilePath = testTable.forCommit(commitTime).withInserts(partitions.get(1), fileId2, Collections.emptyList());
+    long baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    partitionToFilesNameLengthMap.computeIfAbsent(partitions.get(1),
+        k -> new ArrayList<>()).add(Pair.of(fileId2, Integer.valueOf((int) baseFileLength)));
+    testTable.doWriteOperation(commitTime, WriteOperationType.UPSERT, Arrays.asList(partitions.get(1)),
+        partitionToFilesNameLengthMap, false, false);
+
+    commitTime = "20150312101010";
+    partitionToFilesNameLengthMap.clear();
+    testTable.forCommit(commitTime);
+    baseFilePath = testTable.withInserts(partitions.get(2), fileId1, Collections.emptyList());
+    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    partitionToFilesNameLengthMap.computeIfAbsent(partitions.get(2),
+        k -> new ArrayList<>()).add(Pair.of(fileId1, Integer.valueOf((int) baseFileLength)));
+
+    baseFilePath = testTable.withInserts(partitions.get(2), fileId3, Collections.singletonList(record1));
+    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    partitionToFilesNameLengthMap.computeIfAbsent(partitions.get(2),
+        k -> new ArrayList<>()).add(Pair.of(fileId3, Integer.valueOf((int) baseFileLength)));
+
+    baseFilePath = testTable.withInserts(partitions.get(2), fileId4, Arrays.asList(record2, record3, record4));
+    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    partitionToFilesNameLengthMap.computeIfAbsent(partitions.get(2),
+        k -> new ArrayList<>()).add(Pair.of(fileId4, Integer.valueOf((int) baseFileLength)));
+
+    testTable.doWriteOperation(commitTime, WriteOperationType.UPSERT, Arrays.asList(partitions.get(2)),
+        partitionToFilesNameLengthMap, false, false);
 
     filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
     assertEquals(4, filesList.size());
@@ -228,9 +268,20 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     // record2, record3).
     BloomFilter filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.SIMPLE.name());
     filter.add(record3.getRecordKey());
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, filter);
-    String fileId = testTable.addCommit("000").getFileIdWithInserts(partition, record1, record2);
-    String filename = testTable.getBaseFileNameById(fileId);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, filter, metadataWriter);
+
+    final Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap = new HashMap<>();
+    final String commitTime = "0000001";
+    final String fileId = UUID.randomUUID().toString();
+
+    Path baseFilePath = testTable.forCommit(commitTime)
+        .withInserts(partition, fileId, Arrays.asList(record1, record2));
+    long baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    partitionToFilesNameLengthMap.computeIfAbsent(partition,
+        k -> new ArrayList<>()).add(Pair.of(fileId, Integer.valueOf((int) baseFileLength)));
+    testTable.doWriteOperation(commitTime, WriteOperationType.UPSERT, Collections.singletonList(partition),
+        partitionToFilesNameLengthMap, false, false);
+    final String filename = testTable.getBaseFileNameById(fileId);
 
     // The bloom filter contains 3 records
     assertTrue(filter.mightContain(record1.getRecordKey()));
@@ -304,7 +355,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     // Also create the metadata and config
     HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
     HoodieSparkTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(hoodieTable, SCHEMA);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter);
 
     // Let's tag
     HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
@@ -315,10 +366,39 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
       assertFalse(record.isCurrentLocationKnown());
     }
 
+    final Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap = new HashMap<>();
+    final String partition1 = "2016/01/31";
+    final String partition2 = "2015/01/31";
+
     // We create three parquet file, each having one record. (two different partitions)
-    String fileId1 = testTable.addCommit("001").getFileIdWithInserts("2016/01/31", record1);
-    String fileId2 = testTable.addCommit("002").getFileIdWithInserts("2016/01/31", record2);
-    String fileId3 = testTable.addCommit("003").getFileIdWithInserts("2015/01/31", record4);
+    final String fileId1 = UUID.randomUUID().toString();
+    final String commit1 = "0000001";
+    Path baseFilePath = testTable.forCommit(commit1).withInserts(partition1, fileId1, Collections.singletonList(record1));
+    long baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    partitionToFilesNameLengthMap.computeIfAbsent(partition1,
+        k -> new ArrayList<>()).add(Pair.of(fileId1, Integer.valueOf((int) baseFileLength)));
+    testTable.doWriteOperation(commit1, WriteOperationType.UPSERT, Collections.singletonList(partition1),
+        partitionToFilesNameLengthMap, false, false);
+
+    final String fileId2 = UUID.randomUUID().toString();
+    final String commit2 = "0000002";
+    baseFilePath = testTable.forCommit(commit2).withInserts(partition1, fileId2, Collections.singletonList(record2));
+    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    partitionToFilesNameLengthMap.clear();
+    partitionToFilesNameLengthMap.computeIfAbsent(partition1,
+        k -> new ArrayList<>()).add(Pair.of(fileId2, Integer.valueOf((int) baseFileLength)));
+    testTable.doWriteOperation(commit2, WriteOperationType.UPSERT, Collections.singletonList(partition1),
+        partitionToFilesNameLengthMap, false, false);
+
+    final String fileId3 = UUID.randomUUID().toString();
+    final String commit3 = "0000003";
+    baseFilePath = testTable.forCommit(commit3).withInserts(partition2, fileId3, Collections.singletonList(record4));
+    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    partitionToFilesNameLengthMap.clear();
+    partitionToFilesNameLengthMap.computeIfAbsent(partition2,
+        k -> new ArrayList<>()).add(Pair.of(fileId3, Integer.valueOf((int) baseFileLength)));
+    testTable.doWriteOperation(commit3, WriteOperationType.UPSERT, Collections.singletonList(partition2),
+        partitionToFilesNameLengthMap, false, false);
 
     // We do the tag again
     taggedRecordRDD = tagLocation(bloomIndex, recordRDD, HoodieSparkTable.create(config, context, metaClient));
@@ -326,7 +406,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     // Check results
     for (HoodieRecord record : taggedRecordRDD.collect()) {
       if (record.getRecordKey().equals(rowKey1)) {
-        if (record.getPartitionPath().equals("2015/01/31")) {
+        if (record.getPartitionPath().equals(partition2)) {
           assertEquals(record.getCurrentLocation().getFileId(), fileId3);
         } else {
           assertEquals(record.getCurrentLocation().getFileId(), fileId1);
@@ -369,7 +449,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     // Also create the metadata and config
     HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(hoodieTable, SCHEMA);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter);
 
     // Let's tag
     HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
@@ -386,10 +466,39 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
       assertTrue(!record._2.isPresent());
     }
 
+    final String partition1 = "2016/01/31";
+    final String partition2 = "2015/01/31";
+    final String fileId1 = UUID.randomUUID().toString();
+    final String fileId2 = UUID.randomUUID().toString();
+    final String fileId3 = UUID.randomUUID().toString();
+    final Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap = new HashMap<>();
+
     // We create three parquet file, each having one record. (two different partitions)
-    String fileId1 = testTable.addCommit("001").getFileIdWithInserts("2016/01/31", record1);
-    String fileId2 = testTable.addCommit("002").getFileIdWithInserts("2016/01/31", record2);
-    String fileId3 = testTable.addCommit("003").getFileIdWithInserts("2015/01/31", record4);
+    final String commit1 = "0000001";
+    Path baseFilePath = testTable.forCommit(commit1).withInserts(partition1, fileId1, Collections.singletonList(record1));
+    long baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    partitionToFilesNameLengthMap.computeIfAbsent(partition1,
+        k -> new ArrayList<>()).add(Pair.of(fileId1, Integer.valueOf((int) baseFileLength)));
+    testTable.doWriteOperation(commit1, WriteOperationType.UPSERT, Collections.singletonList(partition1),
+        partitionToFilesNameLengthMap, false, false);
+
+    final String commit2 = "0000002";
+    partitionToFilesNameLengthMap.clear();
+    baseFilePath = testTable.forCommit(commit2).withInserts(partition1, fileId2, Collections.singletonList(record2));
+    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    partitionToFilesNameLengthMap.computeIfAbsent(partition1,
+        k -> new ArrayList<>()).add(Pair.of(fileId2, Integer.valueOf((int) baseFileLength)));
+    testTable.doWriteOperation(commit2, WriteOperationType.UPSERT, Collections.singletonList(partition1),
+        partitionToFilesNameLengthMap, false, false);
+
+    final String commit3 = "0000003";
+    partitionToFilesNameLengthMap.clear();
+    baseFilePath = testTable.forCommit(commit3).withInserts(partition2, fileId3, Collections.singletonList(record4));
+    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    partitionToFilesNameLengthMap.computeIfAbsent(partition2,
+        k -> new ArrayList<>()).add(Pair.of(fileId3, Integer.valueOf((int) baseFileLength)));
+    testTable.doWriteOperation(commit3, WriteOperationType.UPSERT, Collections.singletonList(partition2),
+        partitionToFilesNameLengthMap, false, false);
 
     // We do the tag again
     metaClient = HoodieTableMetaClient.reload(metaClient);

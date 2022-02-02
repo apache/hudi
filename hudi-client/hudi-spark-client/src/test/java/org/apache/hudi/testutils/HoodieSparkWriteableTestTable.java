@@ -19,6 +19,9 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
@@ -27,9 +30,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.HoodieTable;
-
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -65,7 +65,7 @@ public class HoodieSparkWriteableTestTable extends HoodieWriteableTestTable {
   public static HoodieSparkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema,
                                                  HoodieTableMetadataWriter metadataWriter) {
     BloomFilter filter = BloomFilterFactory
-        .createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.SIMPLE.name());
+        .createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.DYNAMIC_V0.name());
     return of(metaClient, schema, filter, metadataWriter);
   }
 
@@ -108,11 +108,11 @@ public class HoodieSparkWriteableTestTable extends HoodieWriteableTestTable {
   }
 
   public HoodieSparkWriteableTestTable withInserts(String partition, String fileId, HoodieRecord... records) throws Exception {
-    return withInserts(partition, fileId, Arrays.asList(records));
+    withInserts(partition, fileId, Arrays.asList(records));
+    return this;
   }
 
-  public HoodieSparkWriteableTestTable withInserts(String partition, String fileId, List<HoodieRecord> records) throws Exception {
-    super.withInserts(partition, fileId, records, new SparkTaskContextSupplier());
-    return this;
+  public Path withInserts(String partition, String fileId, List<HoodieRecord> records) throws Exception {
+    return super.withInserts(partition, fileId, records, new SparkTaskContextSupplier());
   }
 }

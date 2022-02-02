@@ -21,6 +21,7 @@ package org.apache.hudi.index.bloom;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.data.HoodieMapPair;
 import org.apache.hudi.common.model.HoodieKey;
@@ -95,6 +96,10 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
         .withIndexConfig(HoodieIndexConfig.newBuilder().bloomIndexPruneByRanges(rangePruning)
             .bloomIndexTreebasedFilter(treeFiltering).bloomIndexBucketizedChecking(bucketizedChecking)
             .bloomIndexKeysPerBucket(2).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .withMetadataIndexBloomFilter(false)
+            .withMetadataIndexColumnStats(false)
+            .build())
         .build();
   }
 

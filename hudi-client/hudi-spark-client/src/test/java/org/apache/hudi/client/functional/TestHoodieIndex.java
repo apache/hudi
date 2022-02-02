@@ -18,6 +18,8 @@
 
 package org.apache.hudi.client.functional;
 
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
@@ -47,12 +49,8 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
 import org.apache.hudi.testutils.Assertions;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
-
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
@@ -61,8 +59,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import scala.Tuple2;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -73,8 +73,6 @@ import java.util.Random;
 import java.util.UUID;
 import java.util.stream.Stream;
 
-import scala.Tuple2;
-
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -82,17 +80,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 @Tag("functional")
-public class TestHoodieIndex extends HoodieClientTestHarness {
+public class TestHoodieIndex extends TestHoodieMetadataBase {
 
   private static Stream<Arguments> indexTypeParams() {
-    Object[][] data = new Object[][] {
-        {IndexType.BLOOM, true},
-        {IndexType.GLOBAL_BLOOM, true},
-        {IndexType.SIMPLE, true},
-        {IndexType.GLOBAL_SIMPLE, true},
-        {IndexType.SIMPLE, false},
-        {IndexType.GLOBAL_SIMPLE, false},
-        {IndexType.BUCKET, false}
+    // IndexType, populateMetaFields, enableMetadataIndex
+    Object[][] data = new Object[][]{
+        {IndexType.BLOOM, true, true},
+        {IndexType.BLOOM, true, false},
+        {IndexType.GLOBAL_BLOOM, true, true},
+        {IndexType.GLOBAL_BLOOM, true, false},
+        {IndexType.SIMPLE, true, true},
+        {IndexType.SIMPLE, true, false},
+        {IndexType.SIMPLE, false, true},
+        {IndexType.SIMPLE, false, false},
+        {IndexType.GLOBAL_SIMPLE, true, true},
+        {IndexType.GLOBAL_SIMPLE, false, true},
+        {IndexType.GLOBAL_SIMPLE, false, false},
+        {IndexType.BUCKET, false, true},
+        {IndexType.BUCKET, false, false},
     };
     return Stream.of(data).map(Arguments::of);
   }
@@ -103,29 +108,34 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   private HoodieIndex index;
   private HoodieWriteConfig config;
 
-  private void setUp(IndexType indexType, boolean populateMetaFields) throws Exception {
-    setUp(indexType, populateMetaFields, true, true);
+  private void setUp(IndexType indexType, boolean populateMetaFields, boolean enableMetadataIndex) throws Exception {
+    setUp(indexType, populateMetaFields, true, enableMetadataIndex, true);
   }
 
-  private void setUp(IndexType indexType, boolean populateMetaFields, boolean enableMetadata, boolean rollbackUsingMarkers) throws Exception {
-    this.indexType = indexType;
+  private void setUp(IndexType indexType, boolean populateMetaFields, boolean enableMetadata, boolean enableMetadataIndex,
+                     boolean rollbackUsingMarkers) throws Exception {
     initPath();
-    initSparkContexts();
-    initTestDataGenerator();
-    initFileSystem();
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE, populateMetaFields ? new Properties()
-        : getPropertiesForKeyGen());
     HoodieIndexConfig.Builder indexBuilder = HoodieIndexConfig.newBuilder().withIndexType(indexType)
         .fromProperties(populateMetaFields ? new Properties() : getPropertiesForKeyGen())
         .withIndexType(indexType);
     config = getConfigBuilder()
         .withProperties(populateMetaFields ? new Properties() : getPropertiesForKeyGen())
         .withRollbackUsingMarkers(rollbackUsingMarkers)
-        .withIndexConfig(indexBuilder
-            .build()).withAutoCommit(false).withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata).build())
+        .withIndexConfig(indexBuilder.build())
+        .withAutoCommit(false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(enableMetadata)
+            .withMetadataIndexBloomFilter(enableMetadataIndex)
+            .withMetadataIndexColumnStats(enableMetadataIndex)
+            .build())
         .withLayoutConfig(HoodieLayoutConfig.newBuilder().fromProperties(indexBuilder.build().getProps())
-            .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build()).build();
+            .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build())
+        .build();
+    init(HoodieTableType.COPY_ON_WRITE, config);
     writeClient = getHoodieWriteClient(config);
+    this.indexType = indexType;
+    metaClient = HoodieTestUtils.init(hadoopConf, basePath, tableType, populateMetaFields ? new Properties()
+        : getPropertiesForKeyGen());
     this.index = writeClient.getIndex();
   }
 
@@ -136,8 +146,9 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
 
   @ParameterizedTest
   @MethodSource("indexTypeParams")
-  public void testSimpleTagLocationAndUpdate(IndexType indexType, boolean populateMetaFields) throws Exception {
-    setUp(indexType, populateMetaFields);
+  public void testSimpleTagLocationAndUpdate(IndexType indexType, boolean populateMetaFields,
+                                             boolean enableMetadataIndex) throws Exception {
+    setUp(indexType, populateMetaFields, enableMetadataIndex);
     String newCommitTime = "001";
     int totalRecords = 10 + random.nextInt(20);
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
@@ -186,8 +197,9 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
 
   @ParameterizedTest
   @MethodSource("indexTypeParams")
-  public void testTagLocationAndDuplicateUpdate(IndexType indexType, boolean populateMetaFields) throws Exception {
-    setUp(indexType, populateMetaFields);
+  public void testTagLocationAndDuplicateUpdate(IndexType indexType, boolean populateMetaFields,
+                                                boolean enableMetadataIndex) throws Exception {
+    setUp(indexType, populateMetaFields, enableMetadataIndex);
     String newCommitTime = "001";
     int totalRecords = 10 + random.nextInt(20);
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
@@ -236,8 +248,9 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
 
   @ParameterizedTest
   @MethodSource("indexTypeParams")
-  public void testSimpleTagLocationAndUpdateWithRollback(IndexType indexType, boolean populateMetaFields) throws Exception {
-    setUp(indexType, populateMetaFields, true, false);
+  public void testSimpleTagLocationAndUpdateWithRollback(IndexType indexType, boolean populateMetaFields,
+                                                         boolean enableMetadataIndex) throws Exception {
+    setUp(indexType, populateMetaFields, true, enableMetadataIndex, false);
     String newCommitTime = writeClient.startCommit();
     int totalRecords = 20 + random.nextInt(20);
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
@@ -286,17 +299,21 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   }
 
   private static Stream<Arguments> regularIndexTypeParams() {
-    Object[][] data = new Object[][] {
-        {IndexType.BLOOM, true},
-        {IndexType.SIMPLE, true}
+    // IndexType, populateMetaFields, enableMetadataIndex
+    Object[][] data = new Object[][]{
+        {IndexType.BLOOM, true, true},
+        {IndexType.BLOOM, true, false},
+        {IndexType.SIMPLE, true, true},
+        {IndexType.SIMPLE, true, false}
     };
     return Stream.of(data).map(Arguments::of);
   }
 
   @ParameterizedTest
   @MethodSource("regularIndexTypeParams")
-  public void testTagLocationAndFetchRecordLocations(IndexType indexType, boolean populateMetaFields) throws Exception {
-    setUp(indexType, populateMetaFields);
+  public void testTagLocationAndFetchRecordLocations(IndexType indexType, boolean populateMetaFields,
+                                                     boolean enableMetadataIndex) throws Exception {
+    setUp(indexType, populateMetaFields, enableMetadataIndex);
     String p1 = "2016/01/31";
     String p2 = "2015/01/31";
     String rowKey1 = UUID.randomUUID().toString();
@@ -322,7 +339,6 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record4));
 
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-
     JavaRDD<HoodieRecord> taggedRecordRDD = tagLocation(index, recordRDD, hoodieTable);
 
     // Should not find any files
@@ -331,10 +347,31 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     }
 
     // We create three parquet file, each having one record. (two different partitions)
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(hoodieTable, SCHEMA);
-    String fileId1 = testTable.addCommit("001").getFileIdWithInserts(p1, record1);
-    String fileId2 = testTable.addCommit("002").getFileIdWithInserts(p1, record2);
-    String fileId3 = testTable.addCommit("003").getFileIdWithInserts(p2, record4);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter);
+    final String fileId1 = "fileID1";
+    final String fileId2 = "fileID2";
+    final String fileId3 = "fileID3";
+
+    Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap = new HashMap<>();
+    Path baseFilePath = testTable.forCommit("0000001").withInserts(p1, fileId1, Collections.singletonList(record1));
+    long baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    partitionToFilesNameLengthMap.computeIfAbsent(p1, k -> new ArrayList<>()).add(Pair.of(fileId1, Integer.valueOf((int) baseFileLength)));
+    testTable.doWriteOperation("0000001", WriteOperationType.UPSERT, Arrays.asList(p1, p2),
+        partitionToFilesNameLengthMap, false, false);
+
+    partitionToFilesNameLengthMap.clear();
+    baseFilePath = testTable.forCommit("0000002").withInserts(p1, fileId2, Collections.singletonList(record2));
+    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    partitionToFilesNameLengthMap.computeIfAbsent(p1, k -> new ArrayList<>()).add(Pair.of(fileId2, Integer.valueOf((int) baseFileLength)));
+    testTable.doWriteOperation("0000002", WriteOperationType.UPSERT, Arrays.asList(p1, p2),
+        partitionToFilesNameLengthMap, false, false);
+
+    partitionToFilesNameLengthMap.clear();
+    baseFilePath = testTable.forCommit("0000003").withInserts(p2, fileId3, Collections.singletonList(record4));
+    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    partitionToFilesNameLengthMap.computeIfAbsent(p2, k -> new ArrayList<>()).add(Pair.of(fileId3, Integer.valueOf((int) baseFileLength)));
+    testTable.doWriteOperation("0000003", WriteOperationType.UPSERT, Arrays.asList(p1, p2),
+        partitionToFilesNameLengthMap, false, false);
 
     // We do the tag again
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -378,14 +415,17 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
 
   @Test
   public void testSimpleGlobalIndexTagLocationWhenShouldUpdatePartitionPath() throws Exception {
-    setUp(IndexType.GLOBAL_SIMPLE, true);
+    setUp(IndexType.GLOBAL_SIMPLE, true, true);
     config = getConfigBuilder()
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType)
             .withGlobalSimpleIndexUpdatePartitionPath(true)
             .withBloomIndexUpdatePartitionPath(true)
             .build())
-        .withMetadataConfig(
-            HoodieMetadataConfig.newBuilder().enable(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withMetadataIndexBloomFilter(true)
+            .withMetadataIndexColumnStats(true)
+            .build())
         .build();
     writeClient = getHoodieWriteClient(config);
     index = writeClient.getIndex();
@@ -434,12 +474,12 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
 
     final String file1P1C0 = UUID.randomUUID().toString();
     Map<String, List<Pair<String, Integer>>> c1PartitionToFilesNameLengthMap = new HashMap<>();
-    c1PartitionToFilesNameLengthMap.put(p1, Collections.singletonList(Pair.of(file1P1C0, 100)));
+    // We have some records to be tagged (two different partitions)
+    Path baseFilePath = testTable.forCommit("1000").withInserts(p1, file1P1C0, Collections.singletonList(originalRecord));
+    long baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    c1PartitionToFilesNameLengthMap.put(p1, Collections.singletonList(Pair.of(file1P1C0, Integer.valueOf((int) baseFileLength))));
     testTable.doWriteOperation("1000", WriteOperationType.INSERT, Arrays.asList(p1),
         c1PartitionToFilesNameLengthMap, false, false);
-
-    // We have some records to be tagged (two different partitions)
-    testTable.withInserts(p1, file1P1C0, originalRecord);
 
     // test against incoming record with a different partition
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Collections.singletonList(incomingRecord));

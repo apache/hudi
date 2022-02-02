@@ -96,7 +96,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
     return (HoodieWriteableTestTable) super.forCommit(instantTime);
   }
 
-  public HoodieWriteableTestTable withInserts(String partition, String fileId, List<HoodieRecord> records, TaskContextSupplier contextSupplier) throws Exception {
+  public Path withInserts(String partition, String fileId, List<HoodieRecord> records, TaskContextSupplier contextSupplier) throws Exception {
     FileCreateUtils.createPartitionMetaFile(basePath, partition);
     String fileName = baseFileName(currentInstantTime, fileId);
 
@@ -150,7 +150,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
       }
     }
 
-    return this;
+    return baseFilePath;
   }
 
   public Map<String, List<HoodieLogFile>> withLogAppends(List<HoodieRecord> records) throws Exception {
