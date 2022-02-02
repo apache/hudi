@@ -50,6 +50,16 @@ public class CollectionUtils {
   }
 
   /**
+   * Combines provided {@link Map}s into one
+   */
+  @SuppressWarnings("unchecked")
+  public static <K, V> HashMap<K, V> combine(Map<K, V> one, Map<K, V> another) {
+    HashMap<K, V> combined = new HashMap<>(one);
+    combined.putAll(another);
+    return combined;
+  }
+
+  /**
    * Combines provided array and an element into a new array
    */
   @SuppressWarnings("unchecked")
