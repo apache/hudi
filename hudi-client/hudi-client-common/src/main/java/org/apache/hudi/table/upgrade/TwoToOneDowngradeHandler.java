@@ -54,7 +54,7 @@ public class TwoToOneDowngradeHandler implements DowngradeHandler {
   @Override
   public Map<ConfigProperty, String> downgrade(
       HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
-      BaseUpgradeDowngradeHelper upgradeDowngradeHelper) {
+      SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTableMetaClient metaClient = table.getMetaClient();
 
@@ -115,9 +115,11 @@ public class TwoToOneDowngradeHandler implements DowngradeHandler {
               + "\" is not supported for rollback.");
       }
     } else {
-      // In case of partial failures during downgrade, there is a chance that marker type file was deleted,
-      // but timeline server based marker files are left.  So deletes them if any
-      deleteTimelineBasedMarkerFiles(context, markerDir, fileSystem, parallelism);
+      if (fileSystem.exists(new Path(markerDir))) {
+        // In case of partial failures during downgrade, there is a chance that marker type file was deleted,
+        // but timeline server based marker files are left.  So deletes them if any
+        deleteTimelineBasedMarkerFiles(context, markerDir, fileSystem, parallelism);
+      }
     }
   }
 

@@ -16,31 +16,31 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client;
+package org.apache.hudi.metrics.custom;
 
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.metrics.MetricsReporter;
 
-import java.io.IOException;
-import java.io.Serializable;
+import com.codahale.metrics.MetricRegistry;
+
+import java.util.Properties;
 
 /**
- * Run one round of compaction.
+ * Extensible metrics reporter for custom implementation.
  */
-public abstract class AbstractCompactor<T extends HoodieRecordPayload, I, K, O> implements Serializable {
+public abstract class CustomizableMetricsReporter extends MetricsReporter {
+  private Properties props;
+  private MetricRegistry registry;
 
-  private static final long serialVersionUID = 1L;
-
-  protected transient AbstractHoodieWriteClient<T, I, K, O> compactionClient;
-
-  public AbstractCompactor(AbstractHoodieWriteClient<T, I, K, O> compactionClient) {
-    this.compactionClient = compactionClient;
+  public CustomizableMetricsReporter(Properties props, MetricRegistry registry) {
+    this.props = props;
+    this.registry = registry;
   }
 
-  public abstract void compact(HoodieInstant instant) throws IOException;
-
-  public void updateWriteClient(AbstractHoodieWriteClient<T, I, K, O> writeClient) {
-    this.compactionClient = writeClient;
+  public Properties getProps() {
+    return props;
   }
 
+  public MetricRegistry getRegistry() {
+    return registry;
+  }
 }

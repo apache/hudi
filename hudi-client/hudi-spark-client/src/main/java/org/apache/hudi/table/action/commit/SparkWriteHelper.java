@@ -32,11 +32,11 @@ import org.apache.spark.api.java.JavaRDD;
 import scala.Tuple2;
 
 /**
- * A spark implementation of {@link AbstractWriteHelper}.
+ * A spark implementation of {@link BaseWriteHelper}.
  *
  * @param <T>
  */
-public class SparkWriteHelper<T extends HoodieRecordPayload,R> extends AbstractWriteHelper<T, JavaRDD<HoodieRecord<T>>,
+public class SparkWriteHelper<T extends HoodieRecordPayload,R> extends BaseWriteHelper<T, JavaRDD<HoodieRecord<T>>,
     JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, R> {
   private SparkWriteHelper() {
   }

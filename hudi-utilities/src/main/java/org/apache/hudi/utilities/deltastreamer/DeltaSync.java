@@ -190,6 +190,9 @@ public class DeltaSync implements Serializable {
    */
   private transient Option<HoodieTimeline> commitTimelineOpt;
 
+  // all commits timeline
+  private transient Option<HoodieTimeline> allCommitsTimelineOpt;
+
   /**
    * Tracks whether new schema is being seen and creates client accordingly.
    */
@@ -245,15 +248,18 @@ public class DeltaSync implements Serializable {
       switch (meta.getTableType()) {
         case COPY_ON_WRITE:
           this.commitTimelineOpt = Option.of(meta.getActiveTimeline().getCommitTimeline().filterCompletedInstants());
+          this.allCommitsTimelineOpt = Option.of(meta.getActiveTimeline().getAllCommitsTimeline());
           break;
         case MERGE_ON_READ:
           this.commitTimelineOpt = Option.of(meta.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants());
+          this.allCommitsTimelineOpt = Option.of(meta.getActiveTimeline().getAllCommitsTimeline());
           break;
         default:
           throw new HoodieException("Unsupported table type :" + meta.getTableType());
       }
     } else {
       this.commitTimelineOpt = Option.empty();
+      this.allCommitsTimelineOpt = Option.empty();
       String partitionColumns = HoodieSparkUtils.getPartitionColumns(keyGenerator, props);
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)
@@ -306,6 +312,14 @@ public class DeltaSync implements Serializable {
         }
       }
 
+      // complete the pending clustering before writing to sink
+      if (cfg.retryLastPendingInlineClusteringJob && getHoodieClientConfig(this.schemaProvider).inlineClusteringEnabled()) {
+        Option<String> pendingClusteringInstant = getLastPendingClusteringInstant(allCommitsTimelineOpt);
+        if (pendingClusteringInstant.isPresent()) {
+          writeClient.cluster(pendingClusteringInstant.get(), true);
+        }
+      }
+
       result = writeToSink(srcRecordsWithCkpt.getRight().getRight(),
           srcRecordsWithCkpt.getRight().getLeft(), metrics, overallTimerContext);
     }
@@ -315,6 +329,14 @@ public class DeltaSync implements Serializable {
     // Clear persistent RDDs
     jssc.getPersistentRDDs().values().forEach(JavaRDD::unpersist);
     return result;
+  }
+
+  private Option<String> getLastPendingClusteringInstant(Option<HoodieTimeline> commitTimelineOpt) {
+    if (commitTimelineOpt.isPresent()) {
+      Option<HoodieInstant> pendingClusteringInstant = commitTimelineOpt.get().filterPendingReplaceTimeline().lastInstant();
+      return pendingClusteringInstant.isPresent() ? Option.of(pendingClusteringInstant.get().getTimestamp()) : Option.empty();
+    }
+    return Option.empty();
   }
 
   /**
@@ -348,6 +370,7 @@ public class DeltaSync implements Serializable {
           .initTable(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath);
     }
 
+    LOG.debug("Checkpoint from config: " + cfg.checkpoint);
     if (!resumeCheckpointStr.isPresent() && cfg.checkpoint != null) {
       resumeCheckpointStr = Option.of(cfg.checkpoint);
     }
@@ -448,6 +471,7 @@ public class DeltaSync implements Serializable {
       Option<HoodieCommitMetadata> commitMetadataOption = getLatestCommitMetadataWithValidCheckpointInfo(commitTimelineOpt.get());
       if (commitMetadataOption.isPresent()) {
         HoodieCommitMetadata commitMetadata = commitMetadataOption.get();
+        LOG.debug("Checkpoint reset from metadata: " + commitMetadata.getMetadata(CHECKPOINT_RESET_KEY));
         if (cfg.checkpoint != null && (StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))
             || !cfg.checkpoint.equals(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY)))) {
           resumeCheckpointStr = Option.of(cfg.checkpoint);

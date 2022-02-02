@@ -30,7 +30,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import java.time.Duration;
 import java.time.Instant;
 
-public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O, R> {
+public abstract class BaseWriteHelper<T extends HoodieRecordPayload, I, K, O, R> {
 
   public HoodieWriteMetadata<O> write(String instantTime,
                                       I inputRecords,

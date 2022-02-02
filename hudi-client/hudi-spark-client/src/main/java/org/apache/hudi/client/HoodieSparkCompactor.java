@@ -31,12 +31,12 @@ import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
 
-public class HoodieSparkCompactor<T extends HoodieRecordPayload> extends AbstractCompactor<T,
+public class HoodieSparkCompactor<T extends HoodieRecordPayload> extends BaseCompactor<T,
     JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
   private static final Logger LOG = LogManager.getLogger(HoodieSparkCompactor.class);
   private transient HoodieEngineContext context;
 
-  public HoodieSparkCompactor(AbstractHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> compactionClient,
+  public HoodieSparkCompactor(BaseHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> compactionClient,
                               HoodieEngineContext context) {
     super(compactionClient);
     this.context = context;

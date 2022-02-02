@@ -43,19 +43,19 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
-public abstract class AbstractSparkDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public abstract class BaseSparkDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends BaseSparkCommitActionExecutor<T> {
-  private static final Logger LOG = LogManager.getLogger(AbstractSparkDeltaCommitActionExecutor.class);
+  private static final Logger LOG = LogManager.getLogger(BaseSparkDeltaCommitActionExecutor.class);
 
   // UpsertPartitioner for MergeOnRead table type
   private SparkUpsertDeltaCommitPartitioner mergeOnReadUpsertPartitioner;
 
-  public AbstractSparkDeltaCommitActionExecutor(HoodieSparkEngineContext context, HoodieWriteConfig config, HoodieTable table,
+  public BaseSparkDeltaCommitActionExecutor(HoodieSparkEngineContext context, HoodieWriteConfig config, HoodieTable table,
                                                 String instantTime, WriteOperationType operationType) {
     this(context, config, table, instantTime, operationType, Option.empty());
   }
 
-  public AbstractSparkDeltaCommitActionExecutor(HoodieSparkEngineContext context, HoodieWriteConfig config, HoodieTable table,
+  public BaseSparkDeltaCommitActionExecutor(HoodieSparkEngineContext context, HoodieWriteConfig config, HoodieTable table,
                                                 String instantTime, WriteOperationType operationType,
                                                 Option<Map<String, String>> extraMetadata) {
     super(context, config, table, instantTime, operationType, extraMetadata);

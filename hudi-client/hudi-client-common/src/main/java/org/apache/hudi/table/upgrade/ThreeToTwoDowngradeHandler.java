@@ -33,7 +33,7 @@ import java.util.Map;
 public class ThreeToTwoDowngradeHandler implements DowngradeHandler {
 
   @Override
-  public Map<ConfigProperty, String> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, BaseUpgradeDowngradeHelper upgradeDowngradeHelper) {
+  public Map<ConfigProperty, String> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     if (config.isMetadataTableEnabled()) {
       // Metadata Table in version 3 is synchronous and in version 2 is asynchronous. Downgrading to asynchronous
       // removes the checks in code to decide whether to use a LogBlock or not. Also, the schema for the

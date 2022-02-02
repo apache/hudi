@@ -28,7 +28,7 @@ import org.apache.hudi.table.HoodieTable;
 /**
  * Spark upgrade and downgrade helper.
  */
-public class SparkUpgradeDowngradeHelper implements BaseUpgradeDowngradeHelper {
+public class SparkUpgradeDowngradeHelper implements SupportsUpgradeDowngrade {
 
   private static final SparkUpgradeDowngradeHelper SINGLETON_INSTANCE =
       new SparkUpgradeDowngradeHelper();

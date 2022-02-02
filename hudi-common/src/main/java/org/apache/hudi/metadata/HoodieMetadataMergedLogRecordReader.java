@@ -139,7 +139,7 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
 
   @Override
   protected String getKeyField() {
-    return HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY;
+    return HoodieMetadataPayload.KEY_FIELD_NAME;
   }
 
   /**

@@ -372,6 +372,9 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
 
+    @Parameter(names = {"--retry-last-pending-inline-clustering", "-rc"}, description = "Retry last pending inline clustering plan before writing to sink.")
+    public Boolean retryLastPendingInlineClusteringJob = false;
+
     public boolean isAsyncCompactionEnabled() {
       return continuousMode && !forceDisableCompaction
           && HoodieTableType.MERGE_ON_READ.equals(HoodieTableType.valueOf(tableType));

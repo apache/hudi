@@ -24,7 +24,7 @@ import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
-import org.apache.hudi.client.AbstractHoodieWriteClient;
+import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieData;
@@ -96,7 +96,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
   // Virtual keys support for metadata table. This Field is
   // from the metadata payload schema.
-  private static final String RECORD_KEY_FIELD = HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY;
+  private static final String RECORD_KEY_FIELD_NAME = HoodieMetadataPayload.KEY_FIELD_NAME;
 
   protected HoodieWriteConfig metadataWriteConfig;
   protected HoodieWriteConfig dataWriteConfig;
@@ -217,8 +217,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     // RecordKey properties are needed for the metadata table records
     final Properties properties = new Properties();
-    properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), RECORD_KEY_FIELD);
-    properties.put("hoodie.datasource.write.recordkey.field", RECORD_KEY_FIELD);
+    properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), RECORD_KEY_FIELD_NAME);
+    properties.put("hoodie.datasource.write.recordkey.field", RECORD_KEY_FIELD_NAME);
     builder.withProperties(properties);
 
     if (writeConfig.isMetricsOn()) {
@@ -454,7 +454,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
         .setPayloadClassName(HoodieMetadataPayload.class.getName())
         .setBaseFileFormat(HoodieFileFormat.HFILE.toString())
-        .setRecordKeyFields(RECORD_KEY_FIELD)
+        .setRecordKeyFields(RECORD_KEY_FIELD_NAME)
         .setPopulateMetaFields(dataWriteConfig.getMetadataConfig().populateMetaFields())
         .setKeyGeneratorClassProp(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
         .initTable(hadoopConf.get(), metadataWriteConfig.getBasePath());
@@ -682,7 +682,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    *   2. In multi-writer scenario, a parallel operation with a greater instantTime may have completed creating a
    *      deltacommit.
    */
-  protected void compactIfNecessary(AbstractHoodieWriteClient writeClient, String instantTime) {
+  protected void compactIfNecessary(BaseHoodieWriteClient writeClient, String instantTime) {
     // finish off any pending compactions if any from previous attempt.
     writeClient.runAnyPendingCompactions();
 
@@ -706,7 +706,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }
   }
 
-  protected void cleanIfNecessary(AbstractHoodieWriteClient writeClient, String instantTime) {
+  protected void cleanIfNecessary(BaseHoodieWriteClient writeClient, String instantTime) {
     Option<HoodieInstant> lastCompletedCompactionInstant = metadataMetaClient.reloadActiveTimeline()
         .getCommitTimeline().filterCompletedInstants().lastInstant();
     if (lastCompletedCompactionInstant.isPresent()
