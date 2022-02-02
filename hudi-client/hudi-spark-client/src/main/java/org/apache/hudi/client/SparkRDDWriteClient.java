@@ -422,7 +422,8 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> getTableAndInitCtx(WriteOperationType operationType, String instantTime) {
+  protected HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> getTableAndInitCtx(WriteOperationType operationType,
+                                                                                                                  String instantTime) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
     UpgradeDowngrade upgradeDowngrade = new UpgradeDowngrade(
         metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance());
@@ -439,8 +440,11 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
             metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
             .run(HoodieTableVersion.current(), instantTime);
         metaClient.reloadActiveTimeline();
-        initializeMetadataTable(Option.of(instantTime));
       }
+      // Initialize Metadata Table to make sure it's bootstrapped _before_ the operation,
+      // if it didn't exist before
+      // See https://issues.apache.org/jira/browse/HUDI-3343 for more details
+      initializeMetadataTable(Option.of(instantTime));
     } finally {
       this.txnManager.endTransaction();
     }
