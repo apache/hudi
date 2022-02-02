@@ -400,19 +400,16 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
     if (filesystemMetadata != null) {
       filesystemMetadata.forEach((filename, fileInfo) -> {
-        // If the filename wasnt present then we carry it forward
-        if (!combinedFileInfo.containsKey(filename)) {
-          combinedFileInfo.put(filename, fileInfo);
+        if (fileInfo.getIsDeleted()) {
+          combinedFileInfo.remove(filename);
         } else {
-          if (fileInfo.getIsDeleted()) {
-            // file deletion
-            combinedFileInfo.remove(filename);
-          } else {
-            // file appends.
-            combinedFileInfo.merge(filename, fileInfo, (oldFileInfo, newFileInfo) -> {
-              return new HoodieMetadataFileInfo(oldFileInfo.getSize() + newFileInfo.getSize(), false);
-            });
-          }
+          // NOTE: There are 2 possible cases here:
+          //    - New file is created: in that case we're simply adding its info
+          //    - File is appended to (only log-files of MOR tables on supported FS): in that case
+          //      we simply pick the info w/ largest file-size as the most recent one, since file's
+          //      sizes are increasing monotonically (meaning that the larger file-size is more recent one)
+          combinedFileInfo.merge(filename, fileInfo, (oldFileInfo, newFileInfo) ->
+              new HoodieMetadataFileInfo(Math.max(oldFileInfo.getSize(), newFileInfo.getSize()), false));
         }
       });
     }
