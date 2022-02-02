@@ -99,7 +99,6 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
         //    - {@code BaseFileWithLogsSplit}: in case base file does NOT have associated bootstrap file
         //       and does have log files appended;
         //    - {@code FileSplit}: in case Hive passed down non-Hudi path
-        //
         if (split instanceof RealtimeBootstrapBaseFileSplit) {
           return split;
         } else if (split instanceof BootstrapBaseFileSplit) {
@@ -228,8 +227,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
           BaseFileWithLogsSplit bs = unsafeCast(s);
           rtSplits.add(new HoodieRealtimeFileSplit(bs, bs.getBasePath(), bs.getDeltaLogFiles(), bs.getMaxCommitTime(), finalHoodieVirtualKeyInfo));
         } else if (s instanceof RealtimeBootstrapBaseFileSplit) {
-          RealtimeBootstrapBaseFileSplit bs = unsafeCast(s);
-          rtSplits.add(bs);
+          rtSplits.add(s);
         }
       } catch (IOException e) {
         throw new HoodieIOException("Error creating hoodie real time split ", e);
