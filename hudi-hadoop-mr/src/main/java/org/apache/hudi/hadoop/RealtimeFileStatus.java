@@ -18,10 +18,10 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.common.model.HoodieLogFile;
-
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.hadoop.realtime.RealtimePath;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -55,16 +55,16 @@ public class RealtimeFileStatus extends FileStatus {
   @Override
   public Path getPath() {
     Path path = super.getPath();
-    PathWithLogFilePath pathWithLogFilePath = new PathWithLogFilePath(path.getParent(), path.getName());
-    pathWithLogFilePath.setBelongsToIncrementalPath(belongToIncrementalFileStatus);
-    pathWithLogFilePath.setDeltaLogFiles(deltaLogFiles);
-    pathWithLogFilePath.setMaxCommitTime(maxCommitTime);
-    pathWithLogFilePath.setBasePath(basePath);
-    pathWithLogFilePath.setBaseFilePath(baseFilePath);
+    RealtimePath realtimePath = new RealtimePath(path.getParent(), path.getName());
+    realtimePath.setBelongsToIncrementalPath(belongToIncrementalFileStatus);
+    realtimePath.setDeltaLogFiles(deltaLogFiles);
+    realtimePath.setMaxCommitTime(maxCommitTime);
+    realtimePath.setBasePath(basePath);
+    realtimePath.setBaseFilePath(baseFilePath);
     if (bootStrapFileStatus != null) {
-      pathWithLogFilePath.setPathWithBootstrapFileStatus((PathWithBootstrapFileStatus)bootStrapFileStatus.getPath());
+      realtimePath.setPathWithBootstrapFileStatus((PathWithBootstrapFileStatus)bootStrapFileStatus.getPath());
     }
-    return pathWithLogFilePath;
+    return realtimePath;
   }
 
   public void setBelongToIncrementalFileStatus(boolean belongToIncrementalFileStatus) {

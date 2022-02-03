@@ -41,7 +41,6 @@ import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
 import org.apache.hudi.hadoop.FileStatusWithBootstrapBaseFile;
 import org.apache.hudi.hadoop.HoodieCopyOnWriteTableInputFormat;
 import org.apache.hudi.hadoop.LocatedFileStatusWithBootstrapBaseFile;
-import org.apache.hudi.hadoop.PathWithLogFilePath;
 import org.apache.hudi.hadoop.RealtimeFileStatus;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
@@ -165,8 +164,8 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
 
   @Override
   protected boolean isSplitable(FileSystem fs, Path filename) {
-    if (filename instanceof PathWithLogFilePath) {
-      return ((PathWithLogFilePath)filename).splitable();
+    if (filename instanceof RealtimePath) {
+      return ((RealtimePath)filename).splitable();
     }
 
     return super.isSplitable(fs, filename);
@@ -177,16 +176,16 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
   // PathWithLogFilePath, so those bootstrap files should be processed int this function.
   @Override
   protected FileSplit makeSplit(Path file, long start, long length, String[] hosts) {
-    if (file instanceof PathWithLogFilePath) {
-      return doMakeSplitForPathWithLogFilePath((PathWithLogFilePath) file, start, length, hosts, null);
+    if (file instanceof RealtimePath) {
+      return doMakeSplitForPathWithLogFilePath((RealtimePath) file, start, length, hosts, null);
     }
     return super.makeSplit(file, start, length, hosts);
   }
 
   @Override
   protected FileSplit makeSplit(Path file, long start, long length, String[] hosts, String[] inMemoryHosts) {
-    if (file instanceof PathWithLogFilePath) {
-      return doMakeSplitForPathWithLogFilePath((PathWithLogFilePath) file, start, length, hosts, inMemoryHosts);
+    if (file instanceof RealtimePath) {
+      return doMakeSplitForPathWithLogFilePath((RealtimePath) file, start, length, hosts, inMemoryHosts);
     }
     return super.makeSplit(file, start, length, hosts, inMemoryHosts);
   }
@@ -235,7 +234,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
     return result;
   }
 
-  private FileSplit doMakeSplitForPathWithLogFilePath(PathWithLogFilePath path, long start, long length, String[] hosts, String[] inMemoryHosts) {
+  private FileSplit doMakeSplitForPathWithLogFilePath(RealtimePath path, long start, long length, String[] hosts, String[] inMemoryHosts) {
     if (!path.includeBootstrapFilePath()) {
       return path.buildSplit(path, start, length, hosts);
     } else {

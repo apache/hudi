@@ -16,11 +16,11 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hadoop;
+package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.hadoop.realtime.BaseFileWithLogsSplit;
+import org.apache.hudi.hadoop.PathWithBootstrapFileStatus;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,7 +29,7 @@ import java.util.List;
  * Encode additional information in Path to track matching log file and base files.
  * Hence, this class tracks a log/base file status.
  */
-public class PathWithLogFilePath extends Path {
+public class RealtimePath extends Path {
   // a flag to mark this split is produced by incremental query or not.
   private boolean belongsToIncrementalPath = false;
   // the log files belong this path.
@@ -44,7 +44,7 @@ public class PathWithLogFilePath extends Path {
   // only if current query table is bootstrap table, this field is used.
   private PathWithBootstrapFileStatus pathWithBootstrapFileStatus;
 
-  public PathWithLogFilePath(Path parent, String child) {
+  public RealtimePath(Path parent, String child) {
     super(parent, child);
   }
 
