@@ -37,9 +37,7 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
-import org.apache.hudi.hadoop.realtime.BaseFileWithLogsSplit;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
 import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
 import org.apache.hudi.hadoop.realtime.RealtimeBootstrapBaseFileSplit;
@@ -89,9 +87,8 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
         //    - {@code FileSplit}: in case Hive passed down non-Hudi path
         if (split instanceof RealtimeBootstrapBaseFileSplit) {
           return split;
-        } else if (split instanceof BaseFileWithLogsSplit) {
-          BaseFileWithLogsSplit baseFileWithLogsSplit = unsafeCast(split);
-          return createHoodieRealtimeSplitUnchecked(baseFileWithLogsSplit, hoodieVirtualKeyInfoOpt);
+        } else if (split instanceof HoodieRealtimeFileSplit) {
+          return split;
         } else {
           // TODO cleanup
           checkState(!(split instanceof BootstrapBaseFileSplit));
@@ -127,15 +124,12 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
     Option<HoodieVirtualKeyInfo> finalHoodieVirtualKeyInfo = hoodieVirtualKeyInfo;
     fileSplits.stream().forEach(s -> {
       // deal with incremental query.
-      try {
-        if (s instanceof BaseFileWithLogsSplit) {
-          BaseFileWithLogsSplit bs = unsafeCast(s);
-          rtSplits.add(new HoodieRealtimeFileSplit(bs, bs.getBasePath(), bs.getDeltaLogFiles(), bs.getMaxCommitTime(), finalHoodieVirtualKeyInfo));
-        } else if (s instanceof RealtimeBootstrapBaseFileSplit) {
-          rtSplits.add(s);
-        }
-      } catch (IOException e) {
-        throw new HoodieIOException("Error creating hoodie real time split ", e);
+      if (s instanceof HoodieRealtimeFileSplit) {
+        HoodieRealtimeFileSplit bs = unsafeCast(s);
+        rtSplits.add(bs);
+      } else if (s instanceof RealtimeBootstrapBaseFileSplit) {
+
+        rtSplits.add(s);
       }
     });
     LOG.info("Returning a total splits of " + rtSplits.size());
@@ -158,9 +152,9 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
     return Option.empty();
   }
 
-  private static boolean doesBelongToIncrementalQuery(FileSplit s) {
-    if (s instanceof BaseFileWithLogsSplit) {
-      BaseFileWithLogsSplit bs = unsafeCast(s);
+  public static boolean doesBelongToIncrementalQuery(FileSplit s) {
+    if (s instanceof HoodieRealtimeFileSplit) {
+      HoodieRealtimeFileSplit bs = unsafeCast(s);
       return bs.getBelongsToIncrementalQuery();
     } else if (s instanceof RealtimeBootstrapBaseFileSplit) {
       RealtimeBootstrapBaseFileSplit bs = unsafeCast(s);
@@ -285,20 +279,6 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
       if (LOG.isDebugEnabled()) {
         LOG.debug("The projection Ids: {" + columnIds + "} start with ','. First comma is removed");
       }
-    }
-  }
-
-  private static HoodieRealtimeFileSplit createHoodieRealtimeSplitUnchecked(BaseFileWithLogsSplit baseFileWithLogsSplit,
-                                                                            Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfoOpt) {
-    try {
-      return new HoodieRealtimeFileSplit(
-          baseFileWithLogsSplit,
-          baseFileWithLogsSplit.getBasePath(),
-          baseFileWithLogsSplit.getDeltaLogFiles(),
-          baseFileWithLogsSplit.getMaxCommitTime(),
-          hoodieVirtualKeyInfoOpt);
-    } catch (IOException e) {
-      throw new HoodieIOException(String.format("Failed to init %s", HoodieRealtimeFileSplit.class.getSimpleName()), e);
     }
   }
 }
