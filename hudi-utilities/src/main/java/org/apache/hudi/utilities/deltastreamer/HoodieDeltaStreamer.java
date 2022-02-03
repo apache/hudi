@@ -369,6 +369,15 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--bootstrap-index-class"}, description = "subclass of BootstrapIndex")
     public String bootstrapIndexClass = HFileBootstrapIndex.class.getName();
 
+    @Parameter(names = {"--retry-on-source-failures"}, description = "Retry on any source failures")
+    public Boolean retryOnSourceFailures = false;
+
+    @Parameter(names = {"--retry-interval-seconds"}, description = "the retry interval for source failures if --retry-on-source-failures is enabled")
+    public Integer retryIntervalSecs = 30;
+
+    @Parameter(names = {"--max-retry-count"}, description = "the max retry count if --retry-on-source-failures is enabled")
+    public Integer maxRetryCount = 3;
+
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
 
