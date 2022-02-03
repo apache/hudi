@@ -35,7 +35,7 @@ import java.util.List;
  * NOTE: If you're adding fields here you need to make sure that you appropriately de-/serialize them
  *       in {@link #readFromInput(DataInput)} and {@link #writeToOutput(DataOutput)}
  */
-public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit implements RealtimeSplit {
+public class HoodieRealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit implements RealtimeSplit {
   /**
    * Marks whether this path produced as part of Incremental Query
    */
@@ -62,14 +62,14 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
    * NOTE: This ctor is necessary for Hive to be able to serialize and
    *       then instantiate it when deserializing back
    */
-  public RealtimeBootstrapBaseFileSplit() {}
+  public HoodieRealtimeBootstrapBaseFileSplit() {}
 
-  public RealtimeBootstrapBaseFileSplit(FileSplit baseSplit,
-                                        String basePath,
-                                        List<HoodieLogFile> deltaLogFiles,
-                                        String maxInstantTime,
-                                        FileSplit externalFileSplit,
-                                        boolean belongsToIncrementalQuery) throws IOException {
+  public HoodieRealtimeBootstrapBaseFileSplit(FileSplit baseSplit,
+                                              String basePath,
+                                              List<HoodieLogFile> deltaLogFiles,
+                                              String maxInstantTime,
+                                              FileSplit externalFileSplit,
+                                              boolean belongsToIncrementalQuery) throws IOException {
     super(baseSplit, externalFileSplit);
     this.maxCommitTime = maxInstantTime;
     this.deltaLogFiles = deltaLogFiles;

@@ -34,9 +34,9 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.realtime.HoodieRealtimeBootstrapBaseFileSplit;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
 import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
-import org.apache.hudi.hadoop.realtime.RealtimeBootstrapBaseFileSplit;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -59,8 +59,8 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
     if (s instanceof HoodieRealtimeFileSplit) {
       HoodieRealtimeFileSplit bs = unsafeCast(s);
       return bs.getBelongsToIncrementalQuery();
-    } else if (s instanceof RealtimeBootstrapBaseFileSplit) {
-      RealtimeBootstrapBaseFileSplit bs = unsafeCast(s);
+    } else if (s instanceof HoodieRealtimeBootstrapBaseFileSplit) {
+      HoodieRealtimeBootstrapBaseFileSplit bs = unsafeCast(s);
       return bs.getBelongsToIncrementalQuery();
     }
 
