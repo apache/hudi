@@ -372,7 +372,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
 
   public static boolean canAddProjectionToJobConf(final RealtimeSplit realtimeSplit, final JobConf jobConf) {
     return jobConf.get(HoodieInputFormatUtils.HOODIE_READ_COLUMNS_PROP) == null
-            || (!realtimeSplit.getDeltaLogPaths().isEmpty() && !HoodieRealtimeInputFormatUtils.requiredProjectionFieldsExistInConf(jobConf, realtimeSplit.getHoodieVirtualKeyInfo()));
+            || (!realtimeSplit.getDeltaLogPaths().isEmpty() && !HoodieRealtimeInputFormatUtils.requiredProjectionFieldsExistInConf(jobConf, realtimeSplit.getVirtualKeyInfo()));
   }
 
   /**

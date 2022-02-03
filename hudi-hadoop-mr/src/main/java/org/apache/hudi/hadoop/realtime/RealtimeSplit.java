@@ -64,7 +64,7 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
    * Returns Virtual key info if meta fields are disabled.
    * @return
    */
-  Option<HoodieVirtualKeyInfo> getHoodieVirtualKeyInfo();
+  Option<HoodieVirtualKeyInfo> getVirtualKeyInfo();
 
   /**
    * Update Maximum valid instant time.
@@ -78,7 +78,7 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
    */
   void setBasePath(String basePath);
 
-  void setHoodieVirtualKeyInfo(Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo);
+  void setVirtualKeyInfo(Option<HoodieVirtualKeyInfo> virtualKeyInfo);
 
   default void writeToOutput(DataOutput out) throws IOException {
     InputSplitUtils.writeString(getBasePath(), out);
@@ -89,7 +89,7 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
       out.writeLong(logFile.getFileSize());
     }
 
-    Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt = getHoodieVirtualKeyInfo();
+    Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt = getVirtualKeyInfo();
     if (!virtualKeyInfoOpt.isPresent()) {
       InputSplitUtils.writeBoolean(false, out);
     } else {
@@ -120,22 +120,22 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
       String partitionPathField = InputSplitUtils.readString(in);
       int recordFieldIndex = Integer.parseInt(InputSplitUtils.readString(in));
       int partitionPathIndex = Integer.parseInt(InputSplitUtils.readString(in));
-      setHoodieVirtualKeyInfo(Option.of(new HoodieVirtualKeyInfo(recordKeyField, partitionPathField, recordFieldIndex, partitionPathIndex)));
+      setVirtualKeyInfo(Option.of(new HoodieVirtualKeyInfo(recordKeyField, partitionPathField, recordFieldIndex, partitionPathIndex)));
     }
   }
 
   /**
    * The file containing this split's data.
    */
-  public Path getPath();
+  Path getPath();
 
   /**
    * The position of the first byte in the file to process.
    */
-  public long getStart();
+  long getStart();
 
   /**
    * The number of bytes in the file to process.
    */
-  public long getLength();
+  long getLength();
 }

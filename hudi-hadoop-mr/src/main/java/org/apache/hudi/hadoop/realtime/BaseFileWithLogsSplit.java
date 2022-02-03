@@ -122,13 +122,13 @@ public class BaseFileWithLogsSplit extends FileSplit implements RealtimeSplit {
   }
 
   @Override
-  public Option<HoodieVirtualKeyInfo> getHoodieVirtualKeyInfo() {
+  public Option<HoodieVirtualKeyInfo> getVirtualKeyInfo() {
     return virtualKeyInfo;
   }
 
   @Override
-  public void setHoodieVirtualKeyInfo(Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo) {
-    this.virtualKeyInfo = hoodieVirtualKeyInfo;
+  public void setVirtualKeyInfo(Option<HoodieVirtualKeyInfo> virtualKeyInfo) {
+    this.virtualKeyInfo = virtualKeyInfo;
   }
 
   public String getBaseFilePath() {

@@ -18,6 +18,12 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
@@ -29,13 +35,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
-
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.io.ArrayWritable;
-import org.apache.hadoop.io.NullWritable;
-import org.apache.hadoop.io.Writable;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.RecordReader;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -65,8 +64,8 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     this.mergedLogRecordScanner = getMergedLogRecordScanner();
     this.deltaRecordMap = mergedLogRecordScanner.getRecords();
     this.deltaRecordKeys = new HashSet<>(this.deltaRecordMap.keySet());
-    if (split.getHoodieVirtualKeyInfo().isPresent()) {
-      this.recordKeyIndex = split.getHoodieVirtualKeyInfo().get().getRecordKeyFieldIndex();
+    if (split.getVirtualKeyInfo().isPresent()) {
+      this.recordKeyIndex = split.getVirtualKeyInfo().get().getRecordKeyFieldIndex();
     }
   }
 
