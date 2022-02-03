@@ -642,6 +642,13 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }
   }
 
+  private MetadataRecordsGenerationParams getRecordsGenerationParams() {
+    return new MetadataRecordsGenerationParams(
+        dataMetaClient, enabledPartitionTypes, dataWriteConfig.getBloomFilterType(),
+        dataWriteConfig.getBloomIndexParallelism(),
+        dataWriteConfig.isMetadataIndexColumnStatsForAllColumnsEnabled());
+  }
+
   /**
    * Interface to assist in converting commit metadata to List of HoodieRecords to be written to metadata table.
    * Updates of different commit metadata uses the same method to convert to HoodieRecords and hence.
@@ -672,8 +679,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   @Override
   public void update(HoodieCommitMetadata commitMetadata, String instantTime, boolean isTableServiceAction) {
-    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, enabledPartitionTypes,
-        commitMetadata, dataMetaClient, dataWriteConfig.isMetadataIndexColumnStatsForAllColumnsEnabled(), instantTime), !isTableServiceAction);
+    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(
+        engineContext, commitMetadata, instantTime, getRecordsGenerationParams()), !isTableServiceAction);
   }
 
   /**
@@ -684,8 +691,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   @Override
   public void update(HoodieCleanMetadata cleanMetadata, String instantTime) {
-    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, enabledPartitionTypes,
-        cleanMetadata, dataMetaClient, instantTime), false);
+    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext,
+        cleanMetadata, getRecordsGenerationParams(), instantTime), false);
   }
 
   /**
@@ -697,7 +704,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   @Override
   public void update(HoodieRestoreMetadata restoreMetadata, String instantTime) {
     processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext,
-        enabledPartitionTypes, metadataMetaClient.getActiveTimeline(), restoreMetadata, dataMetaClient, instantTime,
+        metadataMetaClient.getActiveTimeline(), restoreMetadata, getRecordsGenerationParams(), instantTime,
         metadata.getSyncedInstantTime()), false);
   }
 
@@ -723,8 +730,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       }
 
       Map<MetadataPartitionType, HoodieData<HoodieRecord>> records =
-          HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, enabledPartitionTypes,
-              metadataMetaClient.getActiveTimeline(), rollbackMetadata, dataMetaClient, instantTime,
+          HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, metadataMetaClient.getActiveTimeline(),
+              rollbackMetadata, getRecordsGenerationParams(), instantTime,
               metadata.getSyncedInstantTime(), wasSynced);
       commit(instantTime, records, false);
     }

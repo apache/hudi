@@ -22,7 +22,6 @@ import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
-import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieKey;
@@ -241,6 +240,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static HoodieRecord<HoodieMetadataPayload> createBloomFilterMetadataRecord(final String partitionName,
                                                                                     final String baseFileName,
                                                                                     final String timestamp,
+                                                                                    final String bloomFilterType,
                                                                                     final ByteBuffer bloomFilter,
                                                                                     final boolean isDeleted) {
     ValidationUtils.checkArgument(!baseFileName.contains(Path.SEPARATOR)
@@ -250,10 +250,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         .concat(new FileIndexID(baseFileName).asBase64EncodedString());
     HoodieKey key = new HoodieKey(bloomFilterIndexKey, MetadataPartitionType.BLOOM_FILTERS.getPartitionPath());
 
-    // TODO: HUDI-3203 Get the bloom filter type from the file
     HoodieMetadataBloomFilter metadataBloomFilter =
-        new HoodieMetadataBloomFilter(BloomFilterTypeCode.DYNAMIC_V0.name(),
-            timestamp, bloomFilter, isDeleted);
+        new HoodieMetadataBloomFilter(bloomFilterType, timestamp, bloomFilter, isDeleted);
     HoodieMetadataPayload metadataPayload = new HoodieMetadataPayload(key.getRecordKey(),
         HoodieMetadataPayload.METADATA_TYPE_BLOOM_FILTER, metadataBloomFilter);
     return new HoodieRecord<>(key, metadataPayload);
