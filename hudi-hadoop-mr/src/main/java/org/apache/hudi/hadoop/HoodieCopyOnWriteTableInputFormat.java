@@ -280,7 +280,6 @@ public class HoodieCopyOnWriteTableInputFormat extends FileInputFormat<NullWrita
                     throw new IllegalStateException("Invalid state: base-file has to be present");
                   }
                 }
-
               })
               .collect(Collectors.toList())
       );

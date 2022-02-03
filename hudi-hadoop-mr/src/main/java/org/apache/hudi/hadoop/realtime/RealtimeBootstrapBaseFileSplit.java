@@ -29,7 +29,6 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Realtime File Split with external base file.
@@ -39,7 +38,6 @@ import java.util.stream.Collectors;
  */
 public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit implements RealtimeSplit {
 
-  private List<String> deltaLogPaths;
   private List<HoodieLogFile> deltaLogFiles = new ArrayList<>();
 
   private String maxInstantTime;
@@ -52,9 +50,7 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
    * NOTE: This ctor is necessary for Hive to be able to serialize and
    *       then instantiate it when deserializing back
    */
-  public RealtimeBootstrapBaseFileSplit() {
-    super();
-  }
+  public RealtimeBootstrapBaseFileSplit() {}
 
   public RealtimeBootstrapBaseFileSplit(FileSplit baseSplit,
                                         String basePath,
@@ -65,7 +61,6 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
     super(baseSplit, externalFileSplit);
     this.maxInstantTime = maxInstantTime;
     this.deltaLogFiles = deltaLogFiles;
-    this.deltaLogPaths = deltaLogFiles.stream().map(entry -> entry.getPath().toString()).collect(Collectors.toList());
     this.basePath = basePath;
     this.belongsToIncrementalSplit = belongsToIncrementalQuery;
   }
@@ -85,13 +80,13 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
   }
 
   @Override
-  public List<String> getDeltaLogPaths() {
-    return deltaLogPaths;
+  public List<HoodieLogFile> getDeltaLogFiles() {
+    return deltaLogFiles;
   }
 
   @Override
-  public List<HoodieLogFile> getDeltaLogFiles() {
-    return deltaLogFiles;
+  public void setDeltaLogFiles(List<HoodieLogFile> deltaLogFiles) {
+    this.deltaLogFiles = deltaLogFiles;
   }
 
   @Override
@@ -105,17 +100,12 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
   }
 
   @Override
-  public Option<HoodieVirtualKeyInfo> getHoodieVirtualKeyInfo() {
+  public Option<HoodieVirtualKeyInfo> getVirtualKeyInfo() {
     return Option.empty();
   }
 
   public boolean getBelongsToIncrementalQuery() {
     return belongsToIncrementalSplit;
-  }
-
-  @Override
-  public void setDeltaLogPaths(List<String> deltaLogPaths) {
-    this.deltaLogPaths = deltaLogPaths;
   }
 
   @Override
@@ -129,6 +119,5 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
   }
 
   @Override
-  public void setHoodieVirtualKeyInfo(Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo) {}
-
+  public void setVirtualKeyInfo(Option<HoodieVirtualKeyInfo> virtualKeyInfo) {}
 }

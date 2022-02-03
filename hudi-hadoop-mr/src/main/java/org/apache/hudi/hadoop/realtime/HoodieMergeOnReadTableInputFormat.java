@@ -26,6 +26,7 @@ import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.SplitLocationInfo;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -37,6 +38,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
 import org.apache.hudi.hadoop.FileStatusWithBootstrapBaseFile;
 import org.apache.hudi.hadoop.HoodieCopyOnWriteTableInputFormat;
@@ -235,19 +237,37 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
   }
 
   private FileSplit doMakeSplitForPathWithLogFilePath(HoodieRealtimePath path, long start, long length, String[] hosts, String[] inMemoryHosts) {
-    if (!path.includeBootstrapFilePath()) {
-      return path.buildSplit(path, start, length, hosts);
-    } else {
+    if (path.includeBootstrapFilePath()) {
       FileSplit bf =
           inMemoryHosts == null
               ? super.makeSplit(path.getPathWithBootstrapFileStatus(), start, length, hosts)
               : super.makeSplit(path.getPathWithBootstrapFileStatus(), start, length, hosts, inMemoryHosts);
-      return HoodieRealtimeInputFormatUtils.createRealtimeBoostrapBaseFileSplit(
+      return createRealtimeBoostrapBaseFileSplit(
           (BootstrapBaseFileSplit) bf,
           path.getBasePath(),
           path.getDeltaLogFiles(),
           path.getMaxCommitTime(),
           path.getBelongsToIncrementalQuery());
+    }
+
+    return path.buildSplit(path, start, length, hosts);
+  }
+
+  public static RealtimeBootstrapBaseFileSplit createRealtimeBoostrapBaseFileSplit(BootstrapBaseFileSplit split,
+                                                                                   String basePath,
+                                                                                   List<HoodieLogFile> logFiles,
+                                                                                   String maxInstantTime,
+                                                                                   boolean belongsToIncrementalQuery) {
+    try {
+      String[] hosts = split.getLocationInfo() != null ? Arrays.stream(split.getLocationInfo())
+          .filter(x -> !x.isInMemory()).toArray(String[]::new) : new String[0];
+      String[] inMemoryHosts = split.getLocationInfo() != null ? Arrays.stream(split.getLocationInfo())
+          .filter(SplitLocationInfo::isInMemory).toArray(String[]::new) : new String[0];
+      FileSplit baseSplit = new FileSplit(split.getPath(), split.getStart(), split.getLength(),
+          hosts, inMemoryHosts);
+      return new RealtimeBootstrapBaseFileSplit(baseSplit, basePath, logFiles, maxInstantTime, split.getBootstrapFileSplit(), belongsToIncrementalQuery);
+    } catch (IOException e) {
+      throw new HoodieIOException("Error creating hoodie real time split ", e);
     }
   }
 }
