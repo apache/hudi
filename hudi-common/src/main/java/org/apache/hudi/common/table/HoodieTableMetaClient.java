@@ -766,7 +766,9 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder set(Map<String, Object> props) {
       for (Map.Entry<String, Object> entry : props.entrySet()) {
-        set(entry.getKey(), entry.getValue());
+        if (HoodieTableConfig.PERSISTED_CONFIG_LIST.contains(entry.getKey())) {
+          set(entry.getKey(), entry.getValue());
+        }
       }
       return this;
     }
@@ -782,7 +784,9 @@ public class HoodieTableMetaClient implements Serializable {
       HoodieConfig hoodieConfig = new HoodieConfig(properties);
 
       for (String key : hoodieConfig.getProps().stringPropertyNames()) {
-        set(key, hoodieConfig.getString(key));
+        if (HoodieTableConfig.PERSISTED_CONFIG_LIST.contains(key)) {
+          set(key, hoodieConfig.getString(key));
+        }
       }
 
       if (hoodieConfig.contains(HoodieTableConfig.DATABASE_NAME)) {

@@ -809,7 +809,7 @@ class TestMORDataSource extends HoodieClientTestBase {
     val commit1Time = metaClient.getActiveTimeline.lastInstant().get().getTimestamp
 
     val dataGen2 = new HoodieTestDataGenerator(Array("2022-01-02"))
-    val records2 = recordsToStrings(dataGen2.generateInserts("002", 50)).toList
+    val records2 = recordsToStrings(dataGen2.generateInserts("002", 60)).toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(options)
@@ -828,18 +828,18 @@ class TestMORDataSource extends HoodieClientTestBase {
     // snapshot query
     val snapshotQueryRes = spark.read.format("hudi").load(basePath)
       assertEquals(snapshotQueryRes.where(s"_hoodie_commit_time = '$commit1Time'").count, 50)
-    assertEquals(snapshotQueryRes.where(s"_hoodie_commit_time = '$commit2Time'").count, 30)
+    assertEquals(snapshotQueryRes.where(s"_hoodie_commit_time = '$commit2Time'").count, 40)
     assertEquals(snapshotQueryRes.where(s"_hoodie_commit_time = '$commit3Time'").count, 20)
 
     assertEquals(snapshotQueryRes.where("partition = '2022-01-01'").count, 50)
-    assertEquals(snapshotQueryRes.where("partition = '2022-01-02'").count, 50)
+    assertEquals(snapshotQueryRes.where("partition = '2022-01-02'").count, 60)
 
     // read_optimized query
     val readOptimizedQueryRes = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
       .load(basePath)
     assertEquals(readOptimizedQueryRes.where("partition = '2022-01-01'").count, 50)
-    assertEquals(readOptimizedQueryRes.where("partition = '2022-01-02'").count, 50)
+    assertEquals(readOptimizedQueryRes.where("partition = '2022-01-02'").count, 60)
 
     // incremental query
     val incrementalQueryRes = spark.read.format("hudi")

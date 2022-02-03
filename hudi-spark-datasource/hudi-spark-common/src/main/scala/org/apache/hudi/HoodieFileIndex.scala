@@ -301,8 +301,8 @@ object HoodieFileIndex extends Logging {
     val tableConfig = metaClient.getTableConfig
     val keyGenerator = tableConfig.getKeyGeneratorClassName
 
-    if (keyGenerator.equals(classOf[TimestampBasedKeyGenerator].getCanonicalName) ||
-        keyGenerator.equals(classOf[TimestampBasedAvroKeyGenerator].getCanonicalName)) {
+    if (keyGenerator != null && (keyGenerator.equals(classOf[TimestampBasedKeyGenerator].getCanonicalName) ||
+        keyGenerator.equals(classOf[TimestampBasedAvroKeyGenerator].getCanonicalName))) {
       val inputFormat = tableConfig.getString(KeyGeneratorOptions.Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP)
       val outputFormat = tableConfig.getString(KeyGeneratorOptions.Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP)
       if (StringUtils.isNullOrEmpty(inputFormat) || StringUtils.isNullOrEmpty(outputFormat) ||
