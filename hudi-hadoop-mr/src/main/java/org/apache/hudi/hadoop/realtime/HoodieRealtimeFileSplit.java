@@ -118,10 +118,12 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
     return virtualKeyInfo;
   }
 
+  @Override
   public boolean getBelongsToIncrementalQuery() {
     return belongsToIncrementalQuery;
   }
 
+  @Override
   public void setBelongsToIncrementalQuery(boolean belongsToIncrementalPath) {
     this.belongsToIncrementalQuery = belongsToIncrementalPath;
   }

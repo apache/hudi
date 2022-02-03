@@ -67,6 +67,11 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
   Option<HoodieVirtualKeyInfo> getVirtualKeyInfo();
 
   /**
+   * Returns the flag whether this split belongs to an Incremental Query
+   */
+  boolean getBelongsToIncrementalQuery();
+
+  /**
    * Update Maximum valid instant time.
    * @param maxCommitTime
    */
@@ -78,11 +83,18 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
    */
   void setBasePath(String basePath);
 
+  /**
+   * Sets the flag whether this split belongs to an Incremental Query
+   */
+  void setBelongsToIncrementalQuery(boolean belongsToIncrementalQuery);
+
   void setVirtualKeyInfo(Option<HoodieVirtualKeyInfo> virtualKeyInfo);
 
   default void writeToOutput(DataOutput out) throws IOException {
     InputSplitUtils.writeString(getBasePath(), out);
     InputSplitUtils.writeString(getMaxCommitTime(), out);
+    InputSplitUtils.writeBoolean(getBelongsToIncrementalQuery(), out);
+
     out.writeInt(getDeltaLogFiles().size());
     for (HoodieLogFile logFile : getDeltaLogFiles()) {
       InputSplitUtils.writeString(logFile.getPath().toString(), out);
@@ -104,6 +116,7 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
   default void readFromInput(DataInput in) throws IOException {
     setBasePath(InputSplitUtils.readString(in));
     setMaxCommitTime(InputSplitUtils.readString(in));
+    setBelongsToIncrementalQuery(InputSplitUtils.readBoolean(in));
 
     int totalLogFiles = in.readInt();
     List<HoodieLogFile> deltaLogPaths = new ArrayList<>(totalLogFiles);

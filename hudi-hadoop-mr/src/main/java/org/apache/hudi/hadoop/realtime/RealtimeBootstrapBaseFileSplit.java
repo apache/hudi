@@ -22,7 +22,6 @@ import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
-import org.apache.hudi.hadoop.InputSplitUtils;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -31,20 +30,33 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Realtime File Split with external base file.
+ * Realtime {@link FileSplit} with external base file
  *
  * NOTE: If you're adding fields here you need to make sure that you appropriately de-/serialize them
  *       in {@link #readFromInput(DataInput)} and {@link #writeToOutput(DataOutput)}
  */
 public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit implements RealtimeSplit {
-
+  /**
+   * Marks whether this path produced as part of Incremental Query
+   */
+  private boolean belongsToIncrementalQuery = false;
+  /**
+   * List of delta log-files holding updated records for this base-file
+   */
   private List<HoodieLogFile> deltaLogFiles = new ArrayList<>();
-
-  private String maxInstantTime;
-
+  /**
+   * Latest commit instant available at the time of the query in which all of the files
+   * pertaining to this split are represented
+   */
+  private String maxCommitTime;
+  /**
+   * Base path of the table this path belongs to
+   */
   private String basePath;
-
-  private boolean belongsToIncrementalSplit;
+  /**
+   * Virtual key configuration of the table this split belongs to
+   */
+  private Option<HoodieVirtualKeyInfo> virtualKeyInfo = Option.empty();
 
   /**
    * NOTE: This ctor is necessary for Hive to be able to serialize and
@@ -59,24 +71,22 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
                                         FileSplit externalFileSplit,
                                         boolean belongsToIncrementalQuery) throws IOException {
     super(baseSplit, externalFileSplit);
-    this.maxInstantTime = maxInstantTime;
+    this.maxCommitTime = maxInstantTime;
     this.deltaLogFiles = deltaLogFiles;
     this.basePath = basePath;
-    this.belongsToIncrementalSplit = belongsToIncrementalQuery;
+    this.belongsToIncrementalQuery = belongsToIncrementalQuery;
   }
 
   @Override
   public void write(DataOutput out) throws IOException {
     super.write(out);
     writeToOutput(out);
-    InputSplitUtils.writeBoolean(belongsToIncrementalSplit, out);
   }
 
   @Override
   public void readFields(DataInput in) throws IOException {
     super.readFields(in);
     readFromInput(in);
-    belongsToIncrementalSplit = InputSplitUtils.readBoolean(in);
   }
 
   @Override
@@ -91,7 +101,7 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
 
   @Override
   public String getMaxCommitTime() {
-    return maxInstantTime;
+    return maxCommitTime;
   }
 
   @Override
@@ -101,16 +111,22 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
 
   @Override
   public Option<HoodieVirtualKeyInfo> getVirtualKeyInfo() {
-    return Option.empty();
+    return virtualKeyInfo;
   }
 
+  @Override
   public boolean getBelongsToIncrementalQuery() {
-    return belongsToIncrementalSplit;
+    return belongsToIncrementalQuery;
+  }
+
+  @Override
+  public void setBelongsToIncrementalQuery(boolean belongsToIncrementalPath) {
+    this.belongsToIncrementalQuery = belongsToIncrementalPath;
   }
 
   @Override
   public void setMaxCommitTime(String maxInstantTime) {
-    this.maxInstantTime = maxInstantTime;
+    this.maxCommitTime = maxInstantTime;
   }
 
   @Override
@@ -119,5 +135,7 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
   }
 
   @Override
-  public void setVirtualKeyInfo(Option<HoodieVirtualKeyInfo> virtualKeyInfo) {}
+  public void setVirtualKeyInfo(Option<HoodieVirtualKeyInfo> virtualKeyInfo) {
+    this.virtualKeyInfo = virtualKeyInfo;
+  }
 }
