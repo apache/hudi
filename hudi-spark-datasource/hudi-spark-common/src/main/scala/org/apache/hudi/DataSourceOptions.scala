@@ -579,6 +579,35 @@ object DataSourceWriteOptions {
     .withDocumentation("When set to true, will not write the partition columns into hudi. " +
       "By default, false.")
 
+  val SPARK_DATASOURCE_WRITER_POOL_NAME = "sparkdatasourcewrite"
+
+  val SPARK_DATASOURCE_WRITES_SCHEDULING_WEIGHT: ConfigProperty[Int] = ConfigProperty
+    .key("spark.datasource.writes.scheduling.weight")
+    .defaultValue(1)
+    .withDocumentation("Scheduling weight for spark datasource writes as defined in https://spark.apache.org/docs/latest/job-scheduling.html. " +
+      "spark.scheduler.mode should be set to FAIR to leverage this config");
+
+
+  val COMPACTION_SCHEDULING_WEIGHT: ConfigProperty[Int] = ConfigProperty
+    .key("compaction.scheduling.weight")
+    .defaultValue(1)
+    .withDocumentation("Scheduling weight for async compaction as defined in https://spark.apache.org/docs/latest/job-scheduling.html. " +
+      "spark.scheduler.mode should be set to FAIR to leverage this config");
+
+
+  val SPARK_DATASOURCE_WRITES_SCHEDULING_MIN_SHARE: ConfigProperty[Int] = ConfigProperty
+    .key("spark.datasource.writes.scheduling.min.share")
+    .defaultValue(0)
+    .withDocumentation("Scheduling min share for spark datasource writes as defined in https://spark.apache.org/docs/latest/job-scheduling.html. " +
+      "spark.scheduler.mode should be set to FAIR to leverage this config");
+
+
+  val COMPACTION_SCHEDULING_MIN_SHARE: ConfigProperty[Int] = ConfigProperty
+    .key("compaction.scheduling.min.share")
+    .defaultValue(0)
+    .withDocumentation("Scheduling min share for async compaction as defined in https://spark.apache.org/docs/latest/job-scheduling.html. " +
+      "spark.scheduler.mode should be set to FAIR to leverage this config");
+
   /** @deprecated Use {@link HIVE_ASSUME_DATE_PARTITION} and its methods instead */
   @Deprecated
   val HIVE_ASSUME_DATE_PARTITION_OPT_KEY = HIVE_ASSUME_DATE_PARTITION.key()

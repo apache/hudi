@@ -24,30 +24,32 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
+import static org.apache.hudi.SparkSchedulerConfigs.SPARK_SCHEDULER_ALLOCATION_FILE_KEY;
+import static org.apache.hudi.SparkSchedulerConfigs.SPARK_SCHEDULER_MODE_KEY;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-public class TestSchedulerConfGenerator {
+public class TestDeltastreamerSchedulerConfGenerator {
 
   @Test
   public void testGenerateSparkSchedulingConf() throws Exception {
     HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
-    Map<String, String> configs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
-    assertNull(configs.get(SchedulerConfGenerator.SPARK_SCHEDULER_ALLOCATION_FILE_KEY), "spark.scheduler.mode not set");
+    Map<String, String> configs = DeltastreamerSchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
+    assertNull(configs.get(SPARK_SCHEDULER_ALLOCATION_FILE_KEY), "spark.scheduler.mode not set");
 
-    System.setProperty(SchedulerConfGenerator.SPARK_SCHEDULER_MODE_KEY, "FAIR");
+    System.setProperty(SPARK_SCHEDULER_MODE_KEY, "FAIR");
     cfg.continuousMode = false;
-    configs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
-    assertNull(configs.get(SchedulerConfGenerator.SPARK_SCHEDULER_ALLOCATION_FILE_KEY), "continuousMode is false");
+    configs = DeltastreamerSchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
+    assertNull(configs.get(SPARK_SCHEDULER_ALLOCATION_FILE_KEY), "continuousMode is false");
 
     cfg.continuousMode = true;
     cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
-    configs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
-    assertNull(configs.get(SchedulerConfGenerator.SPARK_SCHEDULER_ALLOCATION_FILE_KEY),
+    configs = DeltastreamerSchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
+    assertNull(configs.get(SPARK_SCHEDULER_ALLOCATION_FILE_KEY),
         "table type is not MERGE_ON_READ");
 
     cfg.tableType = HoodieTableType.MERGE_ON_READ.name();
-    configs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
-    assertNotNull(configs.get(SchedulerConfGenerator.SPARK_SCHEDULER_ALLOCATION_FILE_KEY), "all satisfies");
+    configs = DeltastreamerSchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
+    assertNotNull(configs.get(SPARK_SCHEDULER_ALLOCATION_FILE_KEY), "all satisfies");
   }
 }

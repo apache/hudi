@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.async.AsyncCompactService;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
 
@@ -34,25 +33,21 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.apache.hudi.SparkSchedulerConfigs.COMPACT_POOL_NAME;
+import static org.apache.hudi.SparkSchedulerConfigs.SPARK_SCHEDULER_ALLOCATION_FILE_KEY;
+import static org.apache.hudi.SparkSchedulerConfigs.SPARK_SCHEDULER_FAIR_MODE;
+import static org.apache.hudi.SparkSchedulerConfigs.SPARK_SCHEDULER_MODE_KEY;
+import static org.apache.hudi.SparkSchedulerConfigs.SPARK_SCHEDULING_PATTERN;
+
 /**
  * Utility Class to generate Spark Scheduling allocation file. This kicks in only when user sets
  * spark.scheduler.mode=FAIR at spark-submit time
  */
-public class SchedulerConfGenerator {
+public class DeltastreamerSchedulerConfGenerator {
 
-  private static final Logger LOG = LogManager.getLogger(SchedulerConfGenerator.class);
+  private static final Logger LOG = LogManager.getLogger(DeltastreamerSchedulerConfGenerator.class);
 
   public static final String DELTASYNC_POOL_NAME = HoodieDeltaStreamer.DELTASYNC_POOL_NAME;
-  public static final String COMPACT_POOL_NAME = AsyncCompactService.COMPACT_POOL_NAME;
-  public static final String SPARK_SCHEDULER_MODE_KEY = "spark.scheduler.mode";
-  public static final String SPARK_SCHEDULER_FAIR_MODE = "FAIR";
-  public static final String SPARK_SCHEDULER_ALLOCATION_FILE_KEY = "spark.scheduler.allocation.file";
-
-  private static final String SPARK_SCHEDULING_PATTERN =
-      "<?xml version=\"1.0\"?>\n<allocations>\n  <pool name=\"%s\">\n"
-          + "    <schedulingMode>%s</schedulingMode>\n    <weight>%s</weight>\n    <minShare>%s</minShare>\n"
-          + "  </pool>\n  <pool name=\"%s\">\n    <schedulingMode>%s</schedulingMode>\n"
-          + "    <weight>%s</weight>\n    <minShare>%s</minShare>\n  </pool>\n</allocations>";
 
   /**
    * Helper to generate spark scheduling configs in XML format with input params.
@@ -64,7 +59,7 @@ public class SchedulerConfGenerator {
    * @return Spark scheduling configs
    */
   private static String generateConfig(Integer deltaSyncWeight, Integer compactionWeight, Integer deltaSyncMinShare,
-      Integer compactionMinShare) {
+                                       Integer compactionMinShare) {
     return String.format(SPARK_SCHEDULING_PATTERN, DELTASYNC_POOL_NAME, SPARK_SCHEDULER_FAIR_MODE,
         deltaSyncWeight.toString(), deltaSyncMinShare.toString(), COMPACT_POOL_NAME, SPARK_SCHEDULER_FAIR_MODE,
         compactionWeight.toString(), compactionMinShare.toString());
@@ -104,7 +99,7 @@ public class SchedulerConfGenerator {
    * @throws IOException Throws an IOException when write configs to file failed
    */
   private static String generateAndStoreConfig(Integer deltaSyncWeight, Integer compactionWeight,
-      Integer deltaSyncMinShare, Integer compactionMinShare) throws IOException {
+                                               Integer deltaSyncMinShare, Integer compactionMinShare) throws IOException {
     File tempConfigFile = File.createTempFile(UUID.randomUUID().toString(), ".xml");
     BufferedWriter bw = new BufferedWriter(new FileWriter(tempConfigFile));
     bw.write(generateConfig(deltaSyncWeight, compactionWeight, deltaSyncMinShare, compactionMinShare));

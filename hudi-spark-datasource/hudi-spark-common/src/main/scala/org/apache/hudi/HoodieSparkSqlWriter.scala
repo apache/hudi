@@ -117,6 +117,11 @@ object HoodieSparkSqlWriter {
     }
 
     val jsc = new JavaSparkContext(sparkContext)
+    if (asyncCompactionTriggerFn.isDefined) {
+      val sparkAdditionalConfigs = SparkSchedulerConfGenerator.getSparkSchedulingConfigs(hoodieConfig.getProps, tableType, jsc.getConf)
+      sparkAdditionalConfigs.foreach(kv => jsc.setLocalProperty(kv._1, kv._2))
+      jsc.setLocalProperty("spark.scheduler.pool", DataSourceWriteOptions.SPARK_DATASOURCE_WRITER_POOL_NAME)
+    }
     val instantTime = HoodieActiveTimeline.createNewInstantTime()
     val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(hoodieConfig.getProps))
 

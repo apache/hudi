@@ -505,7 +505,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
   public static void main(String[] args) throws Exception {
     final Config cfg = getConfig(args);
-    Map<String, String> additionalSparkConfigs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
+    Map<String, String> additionalSparkConfigs = DeltastreamerSchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
     JavaSparkContext jssc =
         UtilHelpers.buildSparkContext("delta-streamer-" + cfg.targetTableName, cfg.sparkMaster, additionalSparkConfigs);
 
