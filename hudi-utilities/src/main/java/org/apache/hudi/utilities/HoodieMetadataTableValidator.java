@@ -50,7 +50,9 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * A validator with spark-submit to compare list partitions and list files between metadata table and filesystem.
@@ -368,25 +370,28 @@ public class HoodieMetadataTableValidator {
   }
 
   private void validateAllFileGroups(HoodieTableFileSystemView metaFsView, HoodieTableFileSystemView fsView, String partitionPath) {
-    // Since we always create a new fsView for each partition and close it after validation.
-    // there is only one HoodieFileGroup in fileGroups list
-    HoodieFileGroup fileGroupsFromMeta = metaFsView.getAllFileGroups().collect(Collectors.toList()).get(0);
-    HoodieFileGroup fileGroupsFromFS = fsView.getAllFileGroups().collect(Collectors.toList()).get(0);
+    List<HoodieFileGroup> fileGroupsFromMetadata = metaFsView.getAllFileGroups(partitionPath).sorted(new HoodieFileGroupCompactor()).collect(Collectors.toList());
+    List<HoodieFileGroup> fileGroupsFromFS = fsView.getAllFileGroups(partitionPath).sorted(new HoodieFileGroupCompactor()).collect(Collectors.toList());
 
-    List<FileSlice> allFileSlicesFromMeta = fileGroupsFromMeta.getAllFileSlices().sorted(new FileSliceCompactor()).collect(Collectors.toList());
-    List<FileSlice> allFileSlicesFromFS = fileGroupsFromFS.getAllFileSlices().sorted(new FileSliceCompactor()).collect(Collectors.toList());
+    List<FileSlice> allFileSlicesFromMeta = fileGroupsFromMetadata.stream().flatMap(HoodieFileGroup::getAllFileSlices).sorted(new FileSliceCompactor()).collect(Collectors.toList());
+    List<FileSlice> allFileSlicesFromFS = fileGroupsFromFS.stream().flatMap(HoodieFileGroup::getAllFileSlices).sorted(new FileSliceCompactor()).collect(Collectors.toList());
 
-    LOG.info("All file slices from metadata: " + allFileSlicesFromMeta);
-    LOG.info("All file slices from direct listing: " + allFileSlicesFromFS);
-    if (allFileSlicesFromMeta.size() != allFileSlicesFromFS.size()
-        || !allFileSlicesFromMeta.equals(allFileSlicesFromFS)) {
-      String message = "Validation of metadata get all file slices for partition " + partitionPath + " failed. "
-          + "All file slices from metadata: " + allFileSlicesFromMeta
-          + "All file slices from direct listing: " + allFileSlicesFromFS;
+    LOG.info("All file slices from metadata: " + allFileSlicesFromMeta + ". For partitions " + partitionPath);
+    LOG.info("All file slices from direct listing: " + allFileSlicesFromFS + ". For partitions " + partitionPath);
+    validateFileSlice(allFileSlicesFromMeta, allFileSlicesFromFS, partitionPath);
+
+    LOG.info("Validation of AllFileGroups success.");
+  }
+
+  private void validateFileSlice(List<FileSlice> fileSlicesFromMeta, List<FileSlice> fileSlicesFromFS, String partitionPath) {
+    if (fileSlicesFromMeta.size() != fileSlicesFromFS.size() || !fileSlicesFromMeta.equals(fileSlicesFromFS)) {
+      String message = "Validation of metadata file slices for partition " + partitionPath + " failed. "
+          + "File slices from metadata: " + fileSlicesFromMeta
+          + "File slices from direct listing: " + fileSlicesFromFS;
       LOG.error(message);
       throw new HoodieValidationException(message);
     } else {
-      LOG.info("Validation of all fileGroups success.");
+      LOG.info("Validation of fileSlices success.");
     }
   }
 
@@ -398,8 +403,8 @@ public class HoodieMetadataTableValidator {
     List<HoodieBaseFile> latestFilesFromMetadata = metaFsView.getLatestBaseFiles(partitionPath).sorted(new HoodieBaseFileCompactor()).collect(Collectors.toList());
     List<HoodieBaseFile> latestFilesFromFS = fsView.getLatestBaseFiles(partitionPath).sorted(new HoodieBaseFileCompactor()).collect(Collectors.toList());
 
-    LOG.info("Latest base file from metadata: " + latestFilesFromMetadata);
-    LOG.info("Latest base file from direct listing: " + latestFilesFromFS);
+    LOG.info("Latest base file from metadata: " + latestFilesFromMetadata + ". For partitions " + partitionPath);
+    LOG.info("Latest base file from direct listing: " + latestFilesFromFS + ". For partitions " + partitionPath);
     if (latestFilesFromMetadata.size() != latestFilesFromFS.size()
         || !latestFilesFromMetadata.equals(latestFilesFromFS)) {
       String message = "Validation of metadata get latest base file for partition " + partitionPath + " failed. "
@@ -420,18 +425,11 @@ public class HoodieMetadataTableValidator {
     List<FileSlice> latestFileSlicesFromMetadataTable = metaFsView.getLatestFileSlices(partitionPath).sorted(new FileSliceCompactor()).collect(Collectors.toList());
     List<FileSlice> latestFileSlicesFromFS = fsView.getLatestFileSlices(partitionPath).sorted(new FileSliceCompactor()).collect(Collectors.toList());
 
-    LOG.info("Latest file list from metadata: " + latestFileSlicesFromMetadataTable);
-    LOG.info("Latest file list from direct listing: " + latestFileSlicesFromFS);
-    if (latestFileSlicesFromMetadataTable.size() != latestFileSlicesFromFS.size()
-        || !latestFileSlicesFromMetadataTable.equals(latestFileSlicesFromFS)) {
-      String message = "Validation of metadata get latest file slices for partition " + partitionPath + " failed. "
-          + "Latest file list from metadata: " + latestFileSlicesFromMetadataTable
-          + "Latest file list from direct listing: " + latestFileSlicesFromFS;
-      LOG.error(message);
-      throw new HoodieValidationException(message);
-    } else {
-      LOG.info("Validation of getLatestFileSlices success.");
-    }
+    LOG.info("Latest file list from metadata: " + latestFileSlicesFromMetadataTable + ". For partition " + partitionPath);
+    LOG.info("Latest file list from direct listing: " + latestFileSlicesFromFS+ ". For partition " + partitionPath);
+
+    validateFileSlice(latestFileSlicesFromMetadataTable, latestFileSlicesFromFS, partitionPath);
+    LOG.info("Validation of getLatestFileSlices success.");
   }
 
   private HoodieTableFileSystemView createHoodieTableFileSystemView(HoodieSparkEngineContext engineContext, boolean enableMetadataTable) {
@@ -489,6 +487,14 @@ public class HoodieMetadataTableValidator {
     @Override
     public int compare(HoodieBaseFile o1, HoodieBaseFile o2) {
       return o1.getPath().compareTo(o2.getPath());
+    }
+  }
+
+  public static class HoodieFileGroupCompactor implements Comparator<HoodieFileGroup>, Serializable {
+
+    @Override
+    public int compare(HoodieFileGroup o1, HoodieFileGroup o2) {
+      return o1.getFileGroupId().compareTo(o2.getFileGroupId());
     }
   }
 
