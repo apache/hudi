@@ -21,6 +21,8 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -46,6 +48,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -157,7 +160,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   }
 
   @Override
-  public Option<ByteBuffer> getBloomFilter(final String partitionName, final String fileName)
+  public Option<BloomFilter> getBloomFilter(final String partitionName, final String fileName)
       throws HoodieMetadataException {
     if (!isBloomFilterIndexEnabled) {
       LOG.error("Metadata bloom filter index is disabled!");
@@ -165,7 +168,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     }
 
     final Pair<String, String> partitionFileName = Pair.of(partitionName, fileName);
-    Map<Pair<String, String>, ByteBuffer> bloomFilters = getBloomFilters(Collections.singletonList(partitionFileName));
+    Map<Pair<String, String>, BloomFilter> bloomFilters = getBloomFilters(Collections.singletonList(partitionFileName));
     if (bloomFilters.isEmpty()) {
       LOG.error("Meta index: missing bloom filter for partition: " + partitionName + ", file: " + fileName);
       return Option.empty();
@@ -176,7 +179,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   }
 
   @Override
-  public Map<Pair<String, String>, ByteBuffer> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList)
+  public Map<Pair<String, String>, BloomFilter> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList)
       throws HoodieMetadataException {
     if (!isBloomFilterIndexEnabled) {
       LOG.error("Metadata bloom filter index is disabled!");
@@ -203,7 +206,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_METADATA_STR,
         (timer.endTimer() / partitionIDFileIDStrings.size())));
 
-    Map<Pair<String, String>, ByteBuffer> partitionFileToBloomFilterMap = new HashMap<>();
+    Map<Pair<String, String>, BloomFilter> partitionFileToBloomFilterMap = new HashMap<>();
     for (final Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>> entry : hoodieRecordList) {
       if (entry.getRight().isPresent()) {
         final Option<HoodieMetadataBloomFilter> bloomFilterMetadata =
@@ -211,7 +214,11 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
         if (bloomFilterMetadata.isPresent()) {
           if (!bloomFilterMetadata.get().getIsDeleted()) {
             ValidationUtils.checkState(fileToKeyMap.containsKey(entry.getLeft()));
-            partitionFileToBloomFilterMap.put(fileToKeyMap.get(entry.getLeft()), bloomFilterMetadata.get().getBloomFilter());
+            final ByteBuffer bloomFilterByteBuffer = bloomFilterMetadata.get().getBloomFilter();
+            final String bloomFilterType = bloomFilterMetadata.get().getType();
+            final BloomFilter bloomFilter = BloomFilterFactory.fromString(
+                StandardCharsets.UTF_8.decode(bloomFilterByteBuffer).toString(), bloomFilterType);
+            partitionFileToBloomFilterMap.put(fileToKeyMap.get(entry.getLeft()), bloomFilter);
           }
         } else {
           LOG.error("Meta index bloom filter missing for: " + fileToKeyMap.get(entry.getLeft()));
