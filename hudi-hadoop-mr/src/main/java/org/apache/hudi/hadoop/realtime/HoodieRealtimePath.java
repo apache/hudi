@@ -34,7 +34,7 @@ public class HoodieRealtimePath extends Path {
   /**
    * Marks whether this path produced as part of Incremental Query
    */
-  private boolean belongsToIncrementalPath = false;
+  private boolean belongsToIncrementalQuery = false;
   /**
    * List of delta log-files holding updated records for this base-file
    */
@@ -57,10 +57,6 @@ public class HoodieRealtimePath extends Path {
     super(parent, child);
   }
 
-  public void setBelongsToIncrementalPath(boolean belongsToIncrementalPath) {
-    this.belongsToIncrementalPath = belongsToIncrementalPath;
-  }
-
   public List<HoodieLogFile> getDeltaLogFiles() {
     return deltaLogFiles;
   }
@@ -81,12 +77,16 @@ public class HoodieRealtimePath extends Path {
     return basePath;
   }
 
-  public boolean getBelongsToIncrementalQuery() {
-    return belongsToIncrementalPath;
-  }
-
   public void setBasePath(String basePath) {
     this.basePath = basePath;
+  }
+
+  public boolean getBelongsToIncrementalQuery() {
+    return belongsToIncrementalQuery;
+  }
+
+  public void setBelongsToIncrementalQuery(boolean belongsToIncrementalQuery) {
+    this.belongsToIncrementalQuery = belongsToIncrementalQuery;
   }
 
   public boolean isSplitable() {
@@ -107,7 +107,7 @@ public class HoodieRealtimePath extends Path {
 
   public HoodieRealtimeFileSplit buildSplit(Path file, long start, long length, String[] hosts) {
     HoodieRealtimeFileSplit bs = new HoodieRealtimeFileSplit(file, start, length, hosts);
-    bs.setBelongsToIncrementalQuery(belongsToIncrementalPath);
+    bs.setBelongsToIncrementalQuery(belongsToIncrementalQuery);
     bs.setDeltaLogFiles(deltaLogFiles);
     bs.setMaxCommitTime(maxCommitTime);
     bs.setBasePath(basePath);

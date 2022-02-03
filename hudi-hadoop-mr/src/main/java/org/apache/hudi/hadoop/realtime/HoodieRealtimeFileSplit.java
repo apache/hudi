@@ -43,6 +43,10 @@ import java.util.List;
  */
 public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit {
   /**
+   * Marks whether this path produced as part of Incremental Query
+   */
+  private boolean belongsToIncrementalQuery = false;
+  /**
    * List of delta log-files holding updated records for this base-file
    */
   private List<HoodieLogFile> deltaLogFiles = new ArrayList<>();
@@ -92,8 +96,16 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
     return maxCommitTime;
   }
 
+  public void setMaxCommitTime(String maxCommitTime) {
+    this.maxCommitTime = maxCommitTime;
+  }
+
   public String getBasePath() {
     return basePath;
+  }
+
+  public void setBasePath(String basePath) {
+    this.basePath = basePath;
   }
 
   @Override
@@ -106,12 +118,12 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
     return virtualKeyInfo;
   }
 
-  public void setMaxCommitTime(String maxCommitTime) {
-    this.maxCommitTime = maxCommitTime;
+  public boolean getBelongsToIncrementalQuery() {
+    return belongsToIncrementalQuery;
   }
 
-  public void setBasePath(String basePath) {
-    this.basePath = basePath;
+  public void setBelongsToIncrementalQuery(boolean belongsToIncrementalPath) {
+    this.belongsToIncrementalQuery = belongsToIncrementalPath;
   }
 
   @Override

@@ -56,11 +56,10 @@ public class RealtimeFileStatus extends FileStatus {
   public Path getPath() {
     Path path = super.getPath();
     HoodieRealtimePath realtimePath = new HoodieRealtimePath(path.getParent(), path.getName());
-    realtimePath.setBelongsToIncrementalPath(belongToIncrementalFileStatus);
+    realtimePath.setBelongsToIncrementalQuery(belongToIncrementalFileStatus);
     realtimePath.setDeltaLogFiles(deltaLogFiles);
     realtimePath.setMaxCommitTime(maxCommitTime);
     realtimePath.setBasePath(basePath);
-    realtimePath.setBaseFilePath(baseFilePath);
     if (bootStrapFileStatus != null) {
       realtimePath.setPathWithBootstrapFileStatus((PathWithBootstrapFileStatus)bootStrapFileStatus.getPath());
     }
