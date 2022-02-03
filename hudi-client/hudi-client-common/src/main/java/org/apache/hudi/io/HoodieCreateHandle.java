@@ -235,19 +235,18 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
     stat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
     stat.setFileId(writeStatus.getFileId());
     stat.setPath(new Path(config.getBasePath()), path);
-    stat.setTotalWriteBytes(computeTotalWriteBytes());
-    stat.setFileSizeInBytes(computeFileSizeInBytes());
     stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
+
+    long totalWrittenBytes = computeTotalWrittenBytes();
+    stat.setTotalWriteBytes(totalWrittenBytes);
+    stat.setFileSizeInBytes(totalWrittenBytes);
+
     RuntimeStats runtimeStats = new RuntimeStats();
     runtimeStats.setTotalCreateTime(timer.endTimer());
     stat.setRuntimeStats(runtimeStats);
   }
 
-  protected long computeTotalWriteBytes() throws IOException {
-    return FSUtils.getFileSize(fs, path);
-  }
-
-  protected long computeFileSizeInBytes() throws IOException {
+  protected long computeTotalWrittenBytes() throws IOException {
     return FSUtils.getFileSize(fs, path);
   }
 
