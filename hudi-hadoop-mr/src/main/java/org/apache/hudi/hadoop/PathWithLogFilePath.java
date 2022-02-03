@@ -18,9 +18,9 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.common.model.HoodieLogFile;
-
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.hadoop.realtime.BaseFileWithLogsSplit;
 
 import java.util.ArrayList;
 import java.util.List;

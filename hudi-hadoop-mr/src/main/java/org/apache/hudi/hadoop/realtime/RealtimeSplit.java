@@ -18,18 +18,18 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapred.InputSplitWithLocationInfo;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.InputSplitUtils;
-
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.mapred.InputSplitWithLocationInfo;
 
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Realtime Input Split Interface.
@@ -40,9 +40,13 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
    * Return Log File Paths.
    * @return
    */
-  List<String> getDeltaLogPaths();
+  default List<String> getDeltaLogPaths() {
+    return getDeltaLogFiles().stream().map(entry -> entry.getPath().toString()).collect(Collectors.toList());
+  }
 
   List<HoodieLogFile> getDeltaLogFiles();
+
+  void setDeltaLogFiles(List<HoodieLogFile> deltaLogFiles);
 
   /**
    * Return Max Instant Time.
@@ -63,13 +67,6 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
   Option<HoodieVirtualKeyInfo> getHoodieVirtualKeyInfo();
 
   /**
-   * Update Log File Paths.
-   *
-   * @param deltaLogPaths
-   */
-  void setDeltaLogPaths(List<String> deltaLogPaths);
-
-  /**
    * Update Maximum valid instant time.
    * @param maxCommitTime
    */
@@ -86,9 +83,10 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
   default void writeToOutput(DataOutput out) throws IOException {
     InputSplitUtils.writeString(getBasePath(), out);
     InputSplitUtils.writeString(getMaxCommitTime(), out);
-    out.writeInt(getDeltaLogPaths().size());
-    for (String logFilePath : getDeltaLogPaths()) {
-      InputSplitUtils.writeString(logFilePath, out);
+    out.writeInt(getDeltaLogFiles().size());
+    for (HoodieLogFile logFile : getDeltaLogFiles()) {
+      InputSplitUtils.writeString(logFile.getPath().toString(), out);
+      out.writeLong(logFile.getFileSize());
     }
 
     Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt = getHoodieVirtualKeyInfo();
@@ -106,12 +104,16 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
   default void readFromInput(DataInput in) throws IOException {
     setBasePath(InputSplitUtils.readString(in));
     setMaxCommitTime(InputSplitUtils.readString(in));
+
     int totalLogFiles = in.readInt();
-    List<String> deltaLogPaths = new ArrayList<>(totalLogFiles);
+    List<HoodieLogFile> deltaLogPaths = new ArrayList<>(totalLogFiles);
     for (int i = 0; i < totalLogFiles; i++) {
-      deltaLogPaths.add(InputSplitUtils.readString(in));
+      String logFilePath = InputSplitUtils.readString(in);
+      long logFileSize = in.readLong();
+      deltaLogPaths.add(new HoodieLogFile(new Path(logFilePath), logFileSize));
     }
-    setDeltaLogPaths(deltaLogPaths);
+    setDeltaLogFiles(deltaLogPaths);
+
     boolean hoodieVirtualKeyPresent = InputSplitUtils.readBoolean(in);
     if (hoodieVirtualKeyPresent) {
       String recordKeyField = InputSplitUtils.readString(in);
