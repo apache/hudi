@@ -85,13 +85,9 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
 
     Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfoOpt = getHoodieVirtualKeyInfo(metaClient);
 
-    // NOTE: This timeline is kept in sync w/ {@code HoodieTableFileIndexBase}
-    HoodieInstant latestCommitInstant =
-        metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().get();
-
     InputSplit[] finalSplits = fileSplits.stream()
       .map(split -> {
-        // There are 4 types of splits could we have to handle here
+        // There are 4 types of splits we have to handle here
         //    - {@code BootstrapBaseFileSplit}: in case base file does have associated bootstrap file,
         //      but does NOT have any log files appended (convert it to {@code RealtimeBootstrapBaseFileSplit})
         //    - {@code RealtimeBootstrapBaseFileSplit}: in case base file does have associated bootstrap file
@@ -101,18 +97,13 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
         //    - {@code FileSplit}: in case Hive passed down non-Hudi path
         if (split instanceof RealtimeBootstrapBaseFileSplit) {
           return split;
-        } else if (split instanceof BootstrapBaseFileSplit) {
-          BootstrapBaseFileSplit bootstrapBaseFileSplit = unsafeCast(split);
-          return createRealtimeBoostrapBaseFileSplit(
-              bootstrapBaseFileSplit,
-              metaClient.getBasePath(),
-              Collections.emptyList(),
-              latestCommitInstant.getTimestamp(),
-              false);
         } else if (split instanceof BaseFileWithLogsSplit) {
           BaseFileWithLogsSplit baseFileWithLogsSplit = unsafeCast(split);
           return createHoodieRealtimeSplitUnchecked(baseFileWithLogsSplit, hoodieVirtualKeyInfoOpt);
         } else {
+          // TODO cleanup
+          checkState(!(split instanceof BootstrapBaseFileSplit));
+
           // Non-Hudi paths might result in just generic {@code FileSplit} being
           // propagated up to this point
           return split;
