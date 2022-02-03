@@ -464,7 +464,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   }
 
   protected void runTableServicesInline(HoodieTable<T, I, K, O> table, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
-    if (config.areAnyTableServicesInline() || config.scheduleInlineTableServices()) {
+    if (config.areAnyTableServicesExecutedInline() || config.areAnyTableServicesScheduledInline()) {
       if (config.isMetadataTableEnabled()) {
         table.getHoodieView().sync();
       }

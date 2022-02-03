@@ -1859,11 +1859,11 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   /**
-   * Are any table services configured to run inline?
+   * Are any table services configured to run inline for both scheduling and execution?
    *
    * @return True if any table services are configured to run inline, false otherwise.
    */
-  public Boolean areAnyTableServicesInline() {
+  public Boolean areAnyTableServicesExecutedInline() {
     return inlineClusteringEnabled() || inlineCompactionEnabled() || isAutoClean();
   }
 
@@ -1876,7 +1876,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     return isAsyncClusteringEnabled() || !inlineCompactionEnabled() || isAsyncClean();
   }
 
-  public Boolean scheduleInlineTableServices() {
+  public Boolean areAnyTableServicesScheduledInline() {
     return scheduleInlineCompaction() || scheduleInlineClustering();
   }
 
