@@ -28,6 +28,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -43,7 +44,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -53,11 +53,10 @@ import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 /**
- * A validator with spark-submit to compare list partitions and list files between metadata table and filesystem
+ * A validator with spark-submit to compare list partitions and list files between metadata table and filesystem.
+ *
  * <p>
- * You can specify the running mode of the validator through `--mode`.
- * There are 2 modes of the {@link HoodieMetadataTableValidator}:
- * - CONTINUOUS : This validator will compare the result of listing partitions/listing files between metadata table and filesystem every 10 minutes(default).
+ * - Default : This validator will compare the result of listing partitions/listing files between metadata table and filesystem only once.
  * <p>
  * Example command:
  * ```
@@ -69,14 +68,14 @@ import java.util.stream.Collectors;
  *  --executor-memory 1g \
  *  $HUDI_DIR/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
  *  --base-path basePath \
- *  --min-validate-interval-seconds 60 \
- *  --mode CONTINUOUS
+ *  --validate-latest-fileSlices \
+ *  --validate-latest-baseFiles \
+ *  --validate-all-file-groups \
  * ```
  *
  * <p>
- * You can specify the running mode of the validator through `--mode`.
- * There are 2 modes of the {@link HoodieMetadataTableValidator}:
- * - ONCE : This validator will compare the result of listing partitions/listing files between metadata table and filesystem only once.
+ * Also You can set `--continuous` for long running this validator.
+ * And use `--min-validate-interval-seconds` to control the validation frequency, default is 10 minutes.
  * <p>
  * Example command:
  * ```
@@ -88,8 +87,11 @@ import java.util.stream.Collectors;
  *  --executor-memory 1g \
  *  $HUDI_DIR/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
  *  --base-path basePath \
+ *  --validate-latest-fileSlices \
+ *  --validate-latest-baseFiles \
+ *  --validate-all-file-groups \
+ *  --continuous \
  *  --min-validate-interval-seconds 60 \
- *  --mode ONCE
  * ```
  *
  */
@@ -125,8 +127,7 @@ public class HoodieMetadataTableValidator {
         .setLoadActiveTimelineOnLoad(true)
         .build();
 
-    this.asyncMetadataTableValidateService = cfg.runningMode.equalsIgnoreCase(Mode.CONTINUOUS.name())
-        ? Option.of(new AsyncMetadataTableValidateService()) : Option.empty();
+    this.asyncMetadataTableValidateService = cfg.continuous ? Option.of(new AsyncMetadataTableValidateService()) : Option.empty();
   }
 
   /**
@@ -141,24 +142,25 @@ public class HoodieMetadataTableValidator {
         .getProps(true);
   }
 
-  public enum Mode {
-    // Running MetadataTableValidator in continuous
-    CONTINUOUS,
-    // Running MetadataTableValidator once
-    ONCE
-  }
-
   public static class Config implements Serializable {
     @Parameter(names = {"--base-path", "-sp"}, description = "Base path for the table", required = true)
     public String basePath = null;
 
-    @Parameter(names = {"--mode", "-m"}, description = "Set job mode: "
-        + "Set \"CONTINUOUS\" Running MetadataTableValidator in continuous"
-        + "Set \"ONCE\" Running MetadataTableValidator once", required = false)
-    public String runningMode = "once";
+    @Parameter(names = {"--continuous"}, description = "Running MetadataTableValidator in continuous. "
+        + "Can use --min-validate-interval-seconds to control validation frequency", required = false)
+    public boolean continuous = false;
+
+    @Parameter(names = {"--validate-latest-fileSlices"}, description = "Validate latest fileSlices for all partitions.", required = false)
+    public boolean validateLatestFileSlices = false;
+
+    @Parameter(names = {"--validate-latest-baseFiles"}, description = "Validate latest baseFiles for all partitions.", required = false)
+    public boolean validateLatestBaseFiles = false;
+
+    @Parameter(names = {"--validate-all-file-groups"}, description = "Validate all file groups, and all file slices within file groups.", required = false)
+    public boolean validateAllFileGroups = false;
 
     @Parameter(names = {"--min-validate-interval-seconds"},
-        description = "the min validate interval of each validate in continuous mode, default is 10 minutes.")
+        description = "the min validate interval of each validate when set --continuous, default is 10 minutes.")
     public Integer minValidateIntervalSeconds = 10 * 60;
 
     @Parameter(names = {"--ignore-failed", "-ig"}, description = "Ignore metadata validate failure and continue.", required = false)
@@ -190,7 +192,10 @@ public class HoodieMetadataTableValidator {
     public String toString() {
       return "MetadataTableValidatorConfig {\n"
           + "   --base-path " + basePath + ", \n"
-          + "   --mode " + runningMode + ", \n"
+          + "   --validate-latest-fileSlices " + validateLatestFileSlices + ", \n"
+          + "   --validate-latest-baseFiles " + validateLatestBaseFiles + ", \n"
+          + "   --validate-all-file-groups " + validateAllFileGroups + ", \n"
+          + "   --continuous " + continuous + ", \n"
           + "   --min-validate-interval-seconds " + minValidateIntervalSeconds + ", \n"
           + "   --spark-master " + sparkMaster + ", \n"
           + "   --spark-memory " + sparkMemory + ", \n"
@@ -210,7 +215,10 @@ public class HoodieMetadataTableValidator {
       }
       Config config = (Config) o;
       return basePath.equals(config.basePath)
-          && Objects.equals(runningMode, config.runningMode)
+          && Objects.equals(continuous, config.continuous)
+          && Objects.equals(validateLatestFileSlices, config.validateLatestFileSlices)
+          && Objects.equals(validateLatestBaseFiles, config.validateLatestBaseFiles)
+          && Objects.equals(validateAllFileGroups, config.validateAllFileGroups)
           && Objects.equals(minValidateIntervalSeconds, config.minValidateIntervalSeconds)
           && Objects.equals(sparkMaster, config.sparkMaster)
           && Objects.equals(sparkMemory, config.sparkMemory)
@@ -221,8 +229,8 @@ public class HoodieMetadataTableValidator {
 
     @Override
     public int hashCode() {
-      return Objects.hash(basePath, runningMode, minValidateIntervalSeconds, sparkMaster,
-          sparkMemory, assumeDatePartitioning, propsFilePath, configs, help);
+      return Objects.hash(basePath, continuous, validateLatestFileSlices, validateLatestBaseFiles, validateAllFileGroups,
+          minValidateIntervalSeconds, sparkMaster, sparkMemory, assumeDatePartitioning, propsFilePath, configs, help);
     }
   }
 
@@ -253,18 +261,12 @@ public class HoodieMetadataTableValidator {
   public void run() {
     try {
       LOG.info(cfg);
-      Mode mode = Mode.valueOf(cfg.runningMode.toUpperCase());
-      switch (mode) {
-        case CONTINUOUS:
-          LOG.info(" ****** do hoodie metadata table validation in CONTINUOUS mode ******");
-          doHoodieMetadataTableValidationContinuous();
-          break;
-        case ONCE:
-          LOG.info(" ****** do hoodie metadata table validation once ******");
-          doHoodieMetadataTableValidationOnce();
-          break;
-        default:
-          LOG.info("Unsupported running mode [" + cfg.runningMode + "], quit the job directly");
+      if (cfg.continuous) {
+        LOG.info(" ****** do hoodie metadata table validation in CONTINUOUS mode ******");
+        doHoodieMetadataTableValidationContinuous();
+      } else {
+        LOG.info(" ****** do hoodie metadata table validation once ******");
+        doHoodieMetadataTableValidationOnce();
       }
     } catch (Exception e) {
       throw new HoodieException("Unable to do hoodie metadata table validation in " + cfg.basePath, e);
@@ -313,7 +315,11 @@ public class HoodieMetadataTableValidator {
     List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(engineContext, basePath, false, cfg.assumeDatePartitioning);
     List<String> allPartitionPathsMeta = FSUtils.getAllPartitionPaths(engineContext, basePath, true, cfg.assumeDatePartitioning);
 
-    if (!compareCollectionResult(allPartitionPathsFromFS, allPartitionPathsMeta)) {
+    allPartitionPathsFromFS.sort(new StringCompactor());
+    allPartitionPathsMeta.sort(new StringCompactor());
+
+    if (allPartitionPathsFromFS.size() != allPartitionPathsMeta.size()
+        || !allPartitionPathsFromFS.equals(allPartitionPathsMeta)) {
       String message = "Compare Partitions Failed! " + "AllPartitionPathsFromFS : " + allPartitionPathsFromFS + " and allPartitionPathsMeta : " + allPartitionPathsMeta;
       LOG.error(message);
       throw new HoodieValidationException(message);
@@ -338,8 +344,17 @@ public class HoodieMetadataTableValidator {
       metaFsView = createHoodieTableFileSystemView(engineContext, true);
       fsView = createHoodieTableFileSystemView(engineContext, false);
 
-      validateLatestFileSlices(metaFsView, fsView, partitionPath);
-      validateLatestBaseFiles(metaFsView, fsView, partitionPath);
+      if (cfg.validateLatestFileSlices) {
+        validateLatestFileSlices(metaFsView, fsView, partitionPath);
+      }
+
+      if (cfg.validateLatestBaseFiles) {
+        validateLatestBaseFiles(metaFsView, fsView, partitionPath);
+      }
+
+      if (cfg.validateAllFileGroups) {
+        validateAllFileGroups(metaFsView, fsView, partitionPath);
+      }
 
     } finally {
       if (metaFsView != null) {
@@ -349,6 +364,29 @@ public class HoodieMetadataTableValidator {
       if (fsView != null) {
         fsView.close();
       }
+    }
+  }
+
+  private void validateAllFileGroups(HoodieTableFileSystemView metaFsView, HoodieTableFileSystemView fsView, String partitionPath) {
+    // Since we always create a new fsView for each partition and close it after validation.
+    // there is only one HoodieFileGroup in fileGroups list
+    HoodieFileGroup fileGroupsFromMeta = metaFsView.getAllFileGroups().collect(Collectors.toList()).get(0);
+    HoodieFileGroup fileGroupsFromFS = fsView.getAllFileGroups().collect(Collectors.toList()).get(0);
+
+    List<FileSlice> allFileSlicesFromMeta = fileGroupsFromMeta.getAllFileSlices().sorted(new FileSliceCompactor()).collect(Collectors.toList());
+    List<FileSlice> allFileSlicesFromFS = fileGroupsFromFS.getAllFileSlices().sorted(new FileSliceCompactor()).collect(Collectors.toList());
+
+    LOG.info("All file slices from metadata: " + allFileSlicesFromMeta);
+    LOG.info("All file slices from direct listing: " + allFileSlicesFromFS);
+    if (allFileSlicesFromMeta.size() != allFileSlicesFromFS.size()
+        || !allFileSlicesFromMeta.equals(allFileSlicesFromFS)) {
+      String message = "Validation of metadata get all file slices for partition " + partitionPath + " failed. "
+          + "All file slices from metadata: " + allFileSlicesFromMeta
+          + "All file slices from direct listing: " + allFileSlicesFromFS;
+      LOG.error(message);
+      throw new HoodieValidationException(message);
+    } else {
+      LOG.info("Validation of all fileGroups success.");
     }
   }
 
@@ -362,7 +400,8 @@ public class HoodieMetadataTableValidator {
 
     LOG.info("Latest base file from metadata: " + latestFilesFromMetadata);
     LOG.info("Latest base file from direct listing: " + latestFilesFromFS);
-    if (!latestFilesFromMetadata.equals(latestFilesFromFS)) {
+    if (latestFilesFromMetadata.size() != latestFilesFromFS.size()
+        || !latestFilesFromMetadata.equals(latestFilesFromFS)) {
       String message = "Validation of metadata get latest base file for partition " + partitionPath + " failed. "
           + "Latest base file from metadata: " + latestFilesFromMetadata
           + "Latest base file from direct listing: " + latestFilesFromFS;
@@ -383,7 +422,8 @@ public class HoodieMetadataTableValidator {
 
     LOG.info("Latest file list from metadata: " + latestFileSlicesFromMetadataTable);
     LOG.info("Latest file list from direct listing: " + latestFileSlicesFromFS);
-    if (!latestFileSlicesFromMetadataTable.equals(latestFileSlicesFromFS)) {
+    if (latestFileSlicesFromMetadataTable.size() != latestFileSlicesFromFS.size()
+        || !latestFileSlicesFromMetadataTable.equals(latestFileSlicesFromFS)) {
       String message = "Validation of metadata get latest file slices for partition " + partitionPath + " failed. "
           + "Latest file list from metadata: " + latestFileSlicesFromMetadataTable
           + "Latest file list from direct listing: " + latestFileSlicesFromFS;
@@ -403,10 +443,6 @@ public class HoodieMetadataTableValidator {
 
     return FileSystemViewManager.createInMemoryFileSystemView(engineContext,
         metaClient, metadataConfig);
-  }
-
-  protected boolean compareCollectionResult(Collection<String> c1, Collection<String> c2) {
-    return c1.size() == c2.size() && c1.containsAll(c2) && c1.containsAll(c2);
   }
 
   public class AsyncMetadataTableValidateService extends HoodieAsyncService {
@@ -453,6 +489,14 @@ public class HoodieMetadataTableValidator {
     @Override
     public int compare(HoodieBaseFile o1, HoodieBaseFile o2) {
       return o1.getPath().compareTo(o2.getPath());
+    }
+  }
+
+  public static class StringCompactor implements Comparator<String>, Serializable {
+
+    @Override
+    public int compare(String o1, String o2) {
+      return o1.compareTo(o2);
     }
   }
 }
