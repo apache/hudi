@@ -394,7 +394,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .withMetadataIndexBloomFilter(true)
+            .withMetadataIndexBloomFilterFileGroups(4)
             .withMetadataIndexColumnStats(true)
+            .withMetadataIndexBloomFilterFileGroups(2)
             .withMetadataIndexForAllColumns(true)
             .build())
         .build();

@@ -52,6 +52,7 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -172,7 +173,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   private void enablePartitions() {
     final HoodieMetadataConfig metadataConfig = dataWriteConfig.getMetadataConfig();
-    boolean isBootstrapCompleted = false;
+    boolean isBootstrapCompleted;
     Option<HoodieTableMetaClient> metaClient = Option.empty();
     try {
       isBootstrapCompleted = dataMetaClient.getFs().exists(new Path(metadataWriteConfig.getBasePath(), HoodieTableMetaClient.METAFOLDER_NAME));
@@ -184,12 +185,14 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       throw new HoodieException("Failed to enable metadata partitions!", e);
     }
 
-    enablePartition(MetadataPartitionType.FILES, metadataConfig, metaClient, isBootstrapCompleted);
+    Option<HoodieTableFileSystemView> fsView = Option.ofNullable(
+        metaClient.isPresent() ? HoodieTableMetadataUtil.getFileSystemView(metaClient.get()) : null);
+    enablePartition(MetadataPartitionType.FILES, metadataConfig, metaClient, fsView, isBootstrapCompleted);
     if (metadataConfig.isBloomFilterIndexEnabled()) {
-      enablePartition(MetadataPartitionType.BLOOM_FILTERS, metadataConfig, metaClient, isBootstrapCompleted);
+      enablePartition(MetadataPartitionType.BLOOM_FILTERS, metadataConfig, metaClient, fsView, isBootstrapCompleted);
     }
     if (metadataConfig.isColumnStatsIndexEnabled()) {
-      enablePartition(MetadataPartitionType.COLUMN_STATS, metadataConfig, metaClient, isBootstrapCompleted);
+      enablePartition(MetadataPartitionType.COLUMN_STATS, metadataConfig, metaClient, fsView, isBootstrapCompleted);
     }
   }
 
@@ -199,32 +202,15 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * @param partitionType        - Metadata table partition type
    * @param metadataConfig       - Table config
    * @param metaClient           - Meta client for the metadata table
+   * @param fsView               - Metadata table filesystem view to use
    * @param isBootstrapCompleted - Is metadata table bootstrap completed
    */
   private void enablePartition(final MetadataPartitionType partitionType, final HoodieMetadataConfig metadataConfig,
-                               final Option<HoodieTableMetaClient> metaClient, boolean isBootstrapCompleted) {
-    final int fileGroupCount = getPartitionFileGroupCount(partitionType, metaClient, metadataConfig, isBootstrapCompleted);
+                               final Option<HoodieTableMetaClient> metaClient, Option<HoodieTableFileSystemView> fsView, boolean isBootstrapCompleted) {
+    final int fileGroupCount = HoodieTableMetadataUtil.getPartitionFileGroupCount(partitionType, metaClient, fsView,
+        metadataConfig, isBootstrapCompleted);
     partitionType.setFileGroupCount(fileGroupCount);
     this.enabledPartitionTypes.add(partitionType);
-  }
-
-  private static int getPartitionFileGroupCount(final MetadataPartitionType partitionType,
-                                                final Option<HoodieTableMetaClient> metaClient,
-                                                final HoodieMetadataConfig metadataConfig, boolean isBootstrapCompleted) {
-    if (isBootstrapCompleted) {
-      final List<FileSlice> latestFileSlices = HoodieTableMetadataUtil
-          .getPartitionLatestFileSlices(metaClient.get(), partitionType.getPartitionPath());
-      return Math.max(latestFileSlices.size(), 1);
-    }
-
-    switch (partitionType) {
-      case BLOOM_FILTERS:
-        return metadataConfig.getBloomFilterIndexFileGroupCount();
-      case COLUMN_STATS:
-        return metadataConfig.getColumnStatsIndexFileGroupCount();
-      default:
-        return 1;
-    }
   }
 
   protected abstract void initRegistry();
@@ -771,13 +757,14 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // The result set
     HoodieData<HoodieRecord> allPartitionRecords = engineContext.emptyHoodieData();
 
+    HoodieTableFileSystemView fsView = HoodieTableMetadataUtil.getFileSystemView(metadataMetaClient);
     for (Map.Entry<MetadataPartitionType, HoodieData<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
       final String partitionName = entry.getKey().getPartitionPath();
       final int fileGroupCount = entry.getKey().getFileGroupCount();
       HoodieData<HoodieRecord> records = entry.getValue();
 
       List<FileSlice> fileSlices =
-          HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, partitionName);
+          HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(fsView), partitionName);
       ValidationUtils.checkArgument(fileSlices.size() == fileGroupCount,
           String.format("Invalid number of file groups for partition:%s, found=%d, required=%d",
               partitionName, fileSlices.size(), fileGroupCount));

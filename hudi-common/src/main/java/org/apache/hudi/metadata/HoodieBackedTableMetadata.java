@@ -131,7 +131,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   @Override
   protected List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> keys,
                                                                                              String partitionName) {
-    Map<Pair<String, FileSlice>, List<String>> partitionFileSliceToKeysMap = getPartitionFileSlices(partitionName, keys);
+    Map<Pair<String, FileSlice>, List<String>> partitionFileSliceToKeysMap = getPartitionFileSliceToKeysMapping(partitionName, keys);
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> result = new ArrayList<>();
     AtomicInteger fileSlicesKeysCount = new AtomicInteger();
     partitionFileSliceToKeysMap.forEach((partitionFileSlicePair, fileSliceKeys) -> {
@@ -249,30 +249,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   /**
-   * Get the file slice details for the given key in a partition.
-   *
-   * @param partitionName - Metadata partition name
-   * @param key           - Key to get the file slice for
-   * @return Partition and file slice pair for the given key
-   */
-  private Pair<String, FileSlice> getPartitionFileSlice(final String partitionName, final String key) {
-    // Metadata is in sync till the latest completed instant on the dataset
-    List<FileSlice> latestFileSlices =
-        HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, partitionName);
-
-    final FileSlice slice = latestFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(key,
-        latestFileSlices.size()));
-    return Pair.of(partitionName, slice);
-  }
-
-  /**
    * Get the latest file slices for the interested keys in a given partition.
    *
    * @param partitionName - Partition to get the file slices from
    * @param keys          - Interested keys
    * @return FileSlices for the keys
    */
-  private Map<Pair<String, FileSlice>, List<String>> getPartitionFileSlices(final String partitionName, final List<String> keys) {
+  private Map<Pair<String, FileSlice>, List<String>> getPartitionFileSliceToKeysMapping(final String partitionName, final List<String> keys) {
     // Metadata is in sync till the latest completed instant on the dataset
     List<FileSlice> latestFileSlices =
         HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, partitionName);
@@ -281,8 +264,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     for (String key : keys) {
       final FileSlice slice = latestFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(key,
           latestFileSlices.size()));
-      final Pair<String, FileSlice> keyFileSlicePair = Pair.of(partitionName, slice);
-      partitionFileSliceToKeysMap.computeIfAbsent(keyFileSlicePair, k -> new ArrayList<>()).add(key);
+      final Pair<String, FileSlice> partitionNameFileSlicePair = Pair.of(partitionName, slice);
+      partitionFileSliceToKeysMap.computeIfAbsent(partitionNameFileSlicePair, k -> new ArrayList<>()).add(key);
     }
     return partitionFileSliceToKeysMap;
   }

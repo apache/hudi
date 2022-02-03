@@ -97,7 +97,7 @@
                 "null",
                 {
                     "doc": "Data file column statistics",
-                    "name": "HoodieColumnStats",
+                    "name": "HoodieMetadataColumnStats",
                     "type": "record",
                     "fields": [
                         {

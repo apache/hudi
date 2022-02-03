@@ -79,11 +79,11 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
     if (config.isMetadataBloomFilterIndexEnabled()) {
       // Step 1: Sort by file id
       JavaRDD<Tuple2<String, HoodieKey>> sortedFileIdAndKeyPairs =
-          fileComparisonsRDD.sortBy(entry -> entry._1, true, joinParallelism);
+          fileComparisonsRDD.sortBy(Tuple2::_1, true, joinParallelism);
 
       // Step 2: Use bloom filter to filter and the actual log file to get the record location
       keyLookupResultRDD = sortedFileIdAndKeyPairs.mapPartitionsWithIndex(
-          new HoodieMetadataBloomIndexCheckFunction(hoodieTable, config), true);
+          new HoodieMetadataBloomIndexCheckFunction(hoodieTable), true);
     } else if (config.useBloomIndexBucketizedChecking()) {
       Map<String, Long> comparisonsPerFileGroup = computeComparisonsPerFileGroup(
           config, recordsPerPartition, partitionToFileInfo, fileComparisonsRDD, context);

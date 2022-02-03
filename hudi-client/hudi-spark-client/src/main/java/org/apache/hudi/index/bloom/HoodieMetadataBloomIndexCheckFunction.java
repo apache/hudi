@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.HoodieKeyLookupResult;
@@ -47,7 +46,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 
 /**
  * Spark Function2 implementation for checking bloom filters for the
@@ -66,11 +64,9 @@ public class HoodieMetadataBloomIndexCheckFunction implements
   // per batch so that the total fetched bloom filters would not cross 128 MB.
   private static final long BLOOM_FILTER_CHECK_MAX_FILE_COUNT_PER_BATCH = 256;
   private final HoodieTable hoodieTable;
-  private final HoodieWriteConfig config;
 
-  public HoodieMetadataBloomIndexCheckFunction(HoodieTable hoodieTable, HoodieWriteConfig config) {
+  public HoodieMetadataBloomIndexCheckFunction(HoodieTable hoodieTable) {
     this.hoodieTable = hoodieTable;
-    this.config = config;
   }
 
   @Override
@@ -116,9 +112,8 @@ public class HoodieMetadataBloomIndexCheckFunction implements
         return Collections.emptyList();
       }
 
-      List<Pair<String, String>> partitionNameFileNameList = fileToKeysMap.keySet()
-          .stream().collect(Collectors.toList());
-      Map<Pair<String, String>, ByteBuffer> fileIDToBloomFilterByteBufferMap =
+      List<Pair<String, String>> partitionNameFileNameList = new ArrayList<>(fileToKeysMap.keySet());
+      Map<Pair<String, String>, ByteBuffer> fileToBloomFilterMap =
           hoodieTable.getMetadataTable().getBloomFilters(partitionNameFileNameList);
 
       final AtomicInteger totalKeys = new AtomicInteger(0);
@@ -128,10 +123,10 @@ public class HoodieMetadataBloomIndexCheckFunction implements
         final String fileId = FSUtils.getFileId(fileName);
         ValidationUtils.checkState(!fileId.isEmpty());
 
-        if (!fileIDToBloomFilterByteBufferMap.containsKey(partitionPathFileNamePair)) {
+        if (!fileToBloomFilterMap.containsKey(partitionPathFileNamePair)) {
           throw new HoodieIndexException("Failed to get the bloom filter for " + partitionPathFileNamePair);
         }
-        final ByteBuffer fileBloomFilterByteBuffer = fileIDToBloomFilterByteBufferMap.get(partitionPathFileNamePair);
+        final ByteBuffer fileBloomFilterByteBuffer = fileToBloomFilterMap.get(partitionPathFileNamePair);
 
         HoodieDynamicBoundedBloomFilter fileBloomFilter =
             new HoodieDynamicBoundedBloomFilter(StandardCharsets.UTF_8.decode(fileBloomFilterByteBuffer).toString(),

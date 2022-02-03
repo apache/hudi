@@ -368,8 +368,7 @@ public class ParquetUtils extends BaseFileUtils {
 
     return new HoodieColumnRangeMetadata<T>(
         one.getFilePath(),
-        one.getColumnName(), minValue, maxValue, one.getNumNulls() + another.getNumNulls());
-    one.getColumnName(), minValue, maxValue,
+        one.getColumnName(), minValue, maxValue,
         one.getNullCount() + another.getNullCount(),
         one.getValueCount() + another.getValueCount(),
         one.getTotalSize() + another.getTotalSize(),

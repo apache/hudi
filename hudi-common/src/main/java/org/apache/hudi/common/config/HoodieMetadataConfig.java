@@ -265,8 +265,18 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withMetadataIndexBloomFilterFileGroups(int fileGroupCount) {
+      metadataConfig.setValue(METADATA_INDEX_BLOOM_FILTER_FILE_GROUP_COUNT, String.valueOf(fileGroupCount));
+      return this;
+    }
+
     public Builder withMetadataIndexColumnStats(boolean enable) {
       metadataConfig.setValue(ENABLE_METADATA_INDEX_COLUMN_STATS, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withMetadataIndexColumnStatsFileGroupCount(int fileGroupCount) {
+      metadataConfig.setValue(METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT, String.valueOf(fileGroupCount));
       return this;
     }
 

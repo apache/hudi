@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -715,7 +716,7 @@ public class HoodieTableMetadataUtil {
    */
   public static List<FileSlice> getPartitionLatestMergedFileSlices(HoodieTableMetaClient metaClient, String partition) {
     LOG.info("Loading latest merged file slices for metadata table partition " + partition);
-    return getPartitionFileSlices(metaClient, partition, true);
+    return getPartitionFileSlices(metaClient, Option.empty(), partition, true);
   }
 
   /**
@@ -723,12 +724,33 @@ public class HoodieTableMetadataUtil {
    * returned is sorted in the correct order of file group name.
    *
    * @param metaClient - Instance of {@link HoodieTableMetaClient}.
+   * @param fsView     - Metadata table filesystem view
    * @param partition  - The name of the partition whose file groups are to be loaded.
    * @return List of latest file slices for all file groups in a given partition.
    */
-  public static List<FileSlice> getPartitionLatestFileSlices(HoodieTableMetaClient metaClient, String partition) {
+  public static List<FileSlice> getPartitionLatestFileSlices(HoodieTableMetaClient metaClient,
+                                                             Option<HoodieTableFileSystemView> fsView, String partition) {
     LOG.info("Loading latest file slices for metadata table partition " + partition);
-    return getPartitionFileSlices(metaClient, partition, false);
+    return getPartitionFileSlices(metaClient, fsView, partition, false);
+  }
+
+  /**
+   * Get metadata table file system view.
+   *
+   * @param metaClient - Metadata table meta client
+   * @return Filesystem view for the metadata table
+   */
+  public static HoodieTableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient) {
+    // If there are no commits on the metadata table then the table's
+    // default FileSystemView will not return any file slices even
+    // though we may have initialized them.
+    HoodieTimeline timeline = metaClient.getActiveTimeline();
+    if (timeline.empty()) {
+      final HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION,
+          HoodieActiveTimeline.createNewInstantTime());
+      timeline = new HoodieDefaultTimeline(Arrays.asList(instant).stream(), metaClient.getActiveTimeline()::getInstantDetails);
+    }
+    return new HoodieTableFileSystemView(metaClient, timeline);
   }
 
   /**
@@ -742,23 +764,15 @@ public class HoodieTableMetadataUtil {
    *                        slices without any merging, and this is needed for the writers.
    * @return List of latest file slices for all file groups in a given partition.
    */
-  private static List<FileSlice> getPartitionFileSlices(HoodieTableMetaClient metaClient, String partition,
+  private static List<FileSlice> getPartitionFileSlices(HoodieTableMetaClient metaClient,
+                                                        Option<HoodieTableFileSystemView> fileSystemView,
+                                                        String partition,
                                                         boolean mergeFileSlices) {
-    // If there are no commits on the metadata table then the table's
-    // default FileSystemView will not return any file slices even
-    // though we may have initialized them.
-    HoodieTimeline timeline = metaClient.getActiveTimeline();
-    if (timeline.empty()) {
-      final HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION,
-          HoodieActiveTimeline.createNewInstantTime());
-      timeline = new HoodieDefaultTimeline(Arrays.asList(instant).stream(), metaClient.getActiveTimeline()::getInstantDetails);
-    }
-
-    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, timeline);
+    HoodieTableFileSystemView fsView = fileSystemView.orElse(getFileSystemView(metaClient));
     Stream<FileSlice> fileSliceStream;
     if (mergeFileSlices) {
       fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(
-          partition, timeline.filterCompletedInstants().lastInstant().get().getTimestamp());
+          partition, metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().get().getTimestamp());
     } else {
       fileSliceStream = fsView.getLatestFileSlices(partition);
     }
@@ -844,9 +858,9 @@ public class HoodieTableMetadataUtil {
 
   }
 
-  public static Stream<HoodieRecord> getColumnStats(final String partitionPath, final String filePathWithPartition,
-                                                    HoodieTableMetaClient datasetMetaClient,
-                                                    List<String> columns, boolean isDeleted) {
+  private static Stream<HoodieRecord> getColumnStats(final String partitionPath, final String filePathWithPartition,
+                                                     HoodieTableMetaClient datasetMetaClient,
+                                                     List<String> columns, boolean isDeleted) {
     final String partition = partitionPath.equals(EMPTY_PARTITION_NAME) ? NON_PARTITIONED_NAME : partitionPath;
     final int offset = partition.equals(NON_PARTITIONED_NAME) ? (filePathWithPartition.startsWith("/") ? 1 : 0)
         : partition.length() + 1;
@@ -874,6 +888,36 @@ public class HoodieTableMetadataUtil {
       return HoodieMetadataPayload.createColumnStatsRecords(partitionPath, columnRangeMetadataList, isDeleted);
     } else {
       throw new HoodieException("Column range index not supported for filePathWithPartition " + fileName);
+    }
+  }
+
+  /**
+   * Get file group count for a metadata table partition.
+   *
+   * @param partitionType        - Metadata table partition type
+   * @param metaClient           - Metadata table meta client
+   * @param fsView               - Filesystem view
+   * @param metadataConfig       - Metadata config
+   * @param isBootstrapCompleted - Is bootstrap completed for the metadata table
+   * @return File group count for the requested metadata partition type
+   */
+  public static int getPartitionFileGroupCount(final MetadataPartitionType partitionType,
+                                               final Option<HoodieTableMetaClient> metaClient,
+                                               final Option<HoodieTableFileSystemView> fsView,
+                                               final HoodieMetadataConfig metadataConfig, boolean isBootstrapCompleted) {
+    if (isBootstrapCompleted) {
+      final List<FileSlice> latestFileSlices = HoodieTableMetadataUtil
+          .getPartitionLatestFileSlices(metaClient.get(), fsView, partitionType.getPartitionPath());
+      return Math.max(latestFileSlices.size(), 1);
+    }
+
+    switch (partitionType) {
+      case BLOOM_FILTERS:
+        return metadataConfig.getBloomFilterIndexFileGroupCount();
+      case COLUMN_STATS:
+        return metadataConfig.getColumnStatsIndexFileGroupCount();
+      default:
+        return 1;
     }
   }
 

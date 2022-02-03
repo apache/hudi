@@ -19,7 +19,7 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.avro.model.HoodieColumnStats;
+import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
@@ -190,10 +190,10 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     Set<String> partitionIDFileIDSortedStrings = new TreeSet<>();
     Map<String, Pair<String, String>> fileToKeyMap = new HashMap<>();
     partitionNameFileNameList.forEach(partitionNameFileNamePair -> {
-          final String bloomKey = new PartitionIndexID(partitionNameFileNamePair.getLeft()).asBase64EncodedString()
-              .concat(new FileIndexID(partitionNameFileNamePair.getRight()).asBase64EncodedString());
-          partitionIDFileIDSortedStrings.add(bloomKey);
-          fileToKeyMap.put(bloomKey, partitionNameFileNamePair);
+          final String bloomFilterIndexKey = HoodieMetadataPayload.getBloomFilterIndexKey(
+              new PartitionIndexID(partitionNameFileNamePair.getLeft()), new FileIndexID(partitionNameFileNamePair.getRight()));
+          partitionIDFileIDSortedStrings.add(bloomFilterIndexKey);
+          fileToKeyMap.put(bloomFilterIndexKey, partitionNameFileNamePair);
         }
     );
 
@@ -222,7 +222,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   }
 
   @Override
-  public Map<Pair<String, String>, HoodieColumnStats> getColumnStats(final List<Pair<String, String>> partitionNameFileNameList, final String columnName)
+  public Map<Pair<String, String>, HoodieMetadataColumnStats> getColumnStats(final List<Pair<String, String>> partitionNameFileNameList, final String columnName)
       throws HoodieMetadataException {
     if (!isColumnStatsIndexEnabled) {
       LOG.error("Metadata column stats index is disabled!");
@@ -231,13 +231,14 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
     Map<String, Pair<String, String>> columnStatKeyToFileNameMap = new HashMap<>();
     TreeSet<String> sortedKeys = new TreeSet<>();
-    final String columnIndexStr = new ColumnIndexID(columnName).asBase64EncodedString();
+    final ColumnIndexID columnIndexID = new ColumnIndexID(columnName);
     for (Pair<String, String> partitionNameFileNamePair : partitionNameFileNameList) {
-      final String columnStatIndexKey = columnIndexStr
-          .concat(new PartitionIndexID(partitionNameFileNamePair.getLeft()).asBase64EncodedString())
-          .concat(new FileIndexID(partitionNameFileNamePair.getRight()).asBase64EncodedString());
-      sortedKeys.add(columnStatIndexKey);
-      columnStatKeyToFileNameMap.put(columnStatIndexKey, partitionNameFileNamePair);
+      final String columnStatsIndexKey = HoodieMetadataPayload.getColumnStatsIndexKey(
+          new PartitionIndexID(partitionNameFileNamePair.getLeft()),
+          new FileIndexID(partitionNameFileNamePair.getRight()),
+          columnIndexID);
+      sortedKeys.add(columnStatsIndexKey);
+      columnStatKeyToFileNameMap.put(columnStatsIndexKey, partitionNameFileNamePair);
     }
 
     List<String> columnStatKeys = new ArrayList<>(sortedKeys);
@@ -246,10 +247,10 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
         getRecordsByKeys(columnStatKeys, MetadataPartitionType.COLUMN_STATS.getPartitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_COLUMN_STATS_METADATA_STR, timer.endTimer()));
 
-    Map<Pair<String, String>, HoodieColumnStats> fileToColumnStatMap = new HashMap<>();
+    Map<Pair<String, String>, HoodieMetadataColumnStats> fileToColumnStatMap = new HashMap<>();
     for (final Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>> entry : hoodieRecordList) {
       if (entry.getRight().isPresent()) {
-        final Option<HoodieColumnStats> columnStatMetadata =
+        final Option<HoodieMetadataColumnStats> columnStatMetadata =
             entry.getRight().get().getData().getColumnStatMetadata();
         if (columnStatMetadata.isPresent()) {
           if (!columnStatMetadata.get().getIsDeleted()) {
