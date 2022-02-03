@@ -28,7 +28,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.io.HoodieKeyLookupHandle;
+import org.apache.hudi.io.HoodieKeyLookupResult;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.ArrayList;
@@ -63,9 +63,8 @@ public class ListBasedHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper 
         HoodieList.getList(fileComparisonPairs).stream()
             .sorted(Comparator.comparing(ImmutablePair::getLeft)).collect(toList());
 
-    List<HoodieKeyLookupHandle.KeyLookupResult> keyLookupResults = new ArrayList<>();
-
-    Iterator<List<HoodieKeyLookupHandle.KeyLookupResult>> iterator = new HoodieBaseBloomIndexCheckFunction(
+    List<HoodieKeyLookupResult> keyLookupResults = new ArrayList<>();
+    Iterator<List<HoodieKeyLookupResult>> iterator = new HoodieBaseBloomIndexCheckFunction(
         hoodieTable, config).apply(fileComparisonPairList.iterator());
     while (iterator.hasNext()) {
       keyLookupResults.addAll(iterator.next());
@@ -77,7 +76,7 @@ public class ListBasedHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper 
         lookupResult.getMatchingRecordKeys().stream()
             .map(recordKey -> new ImmutablePair<>(lookupResult, recordKey)).iterator()
     ).mapToPair(pair -> {
-      HoodieKeyLookupHandle.KeyLookupResult lookupResult = pair.getLeft();
+      HoodieKeyLookupResult lookupResult = pair.getLeft();
       String recordKey = pair.getRight();
       return new ImmutablePair<>(
           new HoodieKey(recordKey, lookupResult.getPartitionPath()),

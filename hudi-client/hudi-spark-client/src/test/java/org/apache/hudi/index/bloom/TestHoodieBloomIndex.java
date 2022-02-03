@@ -18,9 +18,13 @@
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.Path;
+import org.apache.hudi.client.functional.TestHoodieMetadataBase;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -32,14 +36,10 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
-import org.apache.hudi.io.HoodieKeyLookupHandle;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
-
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
@@ -48,6 +48,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import scala.Tuple2;
 
 import java.nio.file.Paths;
 import java.util.Arrays;
@@ -59,8 +60,6 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import scala.Tuple2;
-
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -69,14 +68,14 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestHoodieBloomIndex extends HoodieClientTestHarness {
+public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
 
   private static final Schema SCHEMA = getSchemaFromResource(TestHoodieBloomIndex.class, "/exampleSchema.avsc", true);
   private static final String TEST_NAME_WITH_PARAMS = "[{index}] Test with rangePruning={0}, treeFiltering={1}, bucketizedChecking={2}";
 
   public static Stream<Arguments> configParams() {
     Object[][] data =
-        new Object[][] {{true, true, true}, {false, true, true}, {true, true, false}, {true, false, true}};
+        new Object[][]{{true, true, true}, {false, true, true}, {true, true, false}, {true, false, true}};
     return Stream.of(data).map(Arguments::of);
   }
 
@@ -99,6 +98,10 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
         .withIndexConfig(HoodieIndexConfig.newBuilder().bloomIndexPruneByRanges(rangePruning)
             .bloomIndexTreebasedFilter(treeFiltering).bloomIndexBucketizedChecking(bucketizedChecking)
             .bloomIndexKeysPerBucket(2).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .withMetadataIndexBloomFilter(false)
+            .withMetadataIndexColumnStats(false)
+            .build())
         .build();
   }
 
@@ -134,7 +137,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
         new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
     List<String> partitions = Arrays.asList("2016/01/21", "2016/04/01", "2015/03/12");
-    List<ImmutablePair<String, BloomIndexFileInfo>> filesList = index.loadInvolvedFiles(partitions, context, hoodieTable);
+    List<ImmutablePair<String, BloomIndexFileInfo>> filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
     // Still 0, as no valid commit
     assertEquals(0, filesList.size());
 
@@ -143,7 +146,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
         .withInserts("2015/03/12", "3", record1)
         .withInserts("2015/03/12", "4", record2, record3, record4);
 
-    filesList = index.loadInvolvedFiles(partitions, context, hoodieTable);
+    filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
     assertEquals(4, filesList.size());
 
     if (rangePruning) {
@@ -241,9 +244,9 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
-    HoodieKeyLookupHandle keyHandle = new HoodieKeyLookupHandle<>(config, table, Pair.of(partition, fileId));
-    List<String> results = keyHandle.checkCandidatesAgainstFile(hadoopConf, uuids,
-        new Path(Paths.get(basePath, partition, filename).toString()));
+    List<String> results = HoodieIndexUtils.filterKeysFromFile(
+        new Path(Paths.get(basePath, partition, filename).toString()), uuids, hadoopConf);
+
     assertEquals(results.size(), 2);
     assertTrue(results.get(0).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")
         || results.get(1).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0"));

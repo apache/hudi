@@ -175,11 +175,11 @@ public abstract class AbstractHoodieLogRecordReader {
     return this.simpleKeyGenFields.get().getKey();
   }
 
-  public void scan() {
+  public synchronized void scan() {
     scan(Option.empty());
   }
 
-  public void scan(Option<List<String>> keys) {
+  public synchronized void scan(Option<List<String>> keys) {
     currentInstantLogBlocks = new ArrayDeque<>();
     progress = 0.0f;
     totalLogFiles = new AtomicLong(0);

@@ -116,7 +116,7 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
    * @param key Key of the record to retrieve
    * @return {@code HoodieRecord} if key was found else {@code Option.empty()}
    */
-  public List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordByKey(String key) {
+  public synchronized List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordByKey(String key) {
     return Collections.singletonList(Pair.of(key, Option.ofNullable((HoodieRecord) records.get(key))));
   }
 

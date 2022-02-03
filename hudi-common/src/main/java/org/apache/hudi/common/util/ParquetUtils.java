@@ -30,6 +30,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -61,6 +63,8 @@ import java.util.stream.Stream;
  * Utility functions involving with parquet.
  */
 public class ParquetUtils extends BaseFileUtils {
+
+  private static final Logger LOG = LogManager.getLogger(ParquetUtils.class);
 
   /**
    * Read the rowKey list matching the given filter, from the given parquet file. If the filter is empty, then this will
@@ -300,18 +304,21 @@ public class ParquetUtils extends BaseFileUtils {
     Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnToStatsListMap = metadata.getBlocks().stream().sequential()
             .flatMap(blockMetaData -> blockMetaData.getColumns().stream()
                     .filter(f -> cols.contains(f.getPath().toDotString()))
-                    .map(columnChunkMetaData ->
-                        new HoodieColumnRangeMetadata<Comparable>(
-                            parquetFilePath.getName(),
-                            columnChunkMetaData.getPath().toDotString(),
-                            convertToNativeJavaType(
-                                columnChunkMetaData.getPrimitiveType(),
-                                columnChunkMetaData.getStatistics().genericGetMin()),
-                            convertToNativeJavaType(
-                                columnChunkMetaData.getPrimitiveType(),
-                                columnChunkMetaData.getStatistics().genericGetMax()),
-                            columnChunkMetaData.getStatistics().getNumNulls())))
-            .collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName));
+                .map(columnChunkMetaData ->
+                    new HoodieColumnRangeMetadata<Comparable>(
+                        parquetFilePath.getName(),
+                        columnChunkMetaData.getPath().toDotString(),
+                        convertToNativeJavaType(
+                            columnChunkMetaData.getPrimitiveType(),
+                            columnChunkMetaData.getStatistics().genericGetMin()),
+                        convertToNativeJavaType(
+                            columnChunkMetaData.getPrimitiveType(),
+                            columnChunkMetaData.getStatistics().genericGetMax()),
+                        columnChunkMetaData.getStatistics().getNumNulls(),
+                        columnChunkMetaData.getValueCount(),
+                        columnChunkMetaData.getTotalSize(),
+                        columnChunkMetaData.getTotalUncompressedSize()))
+            ).collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName));
 
     // Combine those into file-level statistics
     // NOTE: Inlining this var makes javac (1.8) upset (due to its inability to infer
@@ -355,13 +362,17 @@ public class ParquetUtils extends BaseFileUtils {
       maxValue = one.getMaxValue().compareTo(another.getMaxValue()) < 0 ? another.getMaxValue() : one.getMaxValue();
     } else if (one.getMaxValue() == null) {
       maxValue = another.getMaxValue();
-    } else  {
+    } else {
       maxValue = one.getMaxValue();
     }
 
     return new HoodieColumnRangeMetadata<T>(
         one.getFilePath(),
-        one.getColumnName(), minValue, maxValue, one.getNumNulls() + another.getNumNulls());
+        one.getColumnName(), minValue, maxValue,
+        one.getNullCount() + another.getNullCount(),
+        one.getValueCount() + another.getValueCount(),
+        one.getTotalSize() + another.getTotalSize(),
+        one.getTotalUncompressedSize() + another.getTotalUncompressedSize());
   }
 
   private static Comparable<?> convertToNativeJavaType(PrimitiveType primitiveType, Comparable val) {
@@ -408,7 +419,7 @@ public class ParquetUtils extends BaseFileUtils {
       return BigDecimal.valueOf((Long) val, scale);
     } else if (val instanceof Binary) {
       // NOTE: Unscaled number is stored in BE format (most significant byte is 0th)
-      return new BigDecimal(new BigInteger(((Binary)val).getBytesUnsafe()), scale);
+      return new BigDecimal(new BigInteger(((Binary) val).getBytesUnsafe()), scale);
     } else {
       throw new UnsupportedOperationException(String.format("Unsupported value type (%s)", val.getClass().getName()));
     }

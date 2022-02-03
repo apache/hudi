@@ -18,27 +18,40 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.table.HoodieTable;
-
-import java.io.IOException;
+import java.util.List;
 
 /**
- * Extract range information for a given file slice.
+ * Encapsulates the result from a key lookup.
  */
-public class HoodieRangeInfoHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieReadHandle<T, I, K, O> {
+public class HoodieKeyLookupResult {
 
-  public HoodieRangeInfoHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
-      Pair<String, String> partitionPathFilePair) {
-    super(config, hoodieTable, partitionPathFilePair);
+  private final String fileId;
+  private final String baseInstantTime;
+  private final List<String> matchingRecordKeys;
+  private final String partitionPath;
+
+  public HoodieKeyLookupResult(String fileId, String partitionPath, String baseInstantTime,
+                               List<String> matchingRecordKeys) {
+    this.fileId = fileId;
+    this.partitionPath = partitionPath;
+    this.baseInstantTime = baseInstantTime;
+    this.matchingRecordKeys = matchingRecordKeys;
   }
 
-  public String[] getMinMaxKeys() throws IOException {
-    try (HoodieFileReader reader = createNewFileReader()) {
-      return reader.readMinMaxRecordKeys();
-    }
+  public String getFileId() {
+    return fileId;
+  }
+
+  public String getBaseInstantTime() {
+    return baseInstantTime;
+  }
+
+  public String getPartitionPath() {
+    return partitionPath;
+  }
+
+  public List<String> getMatchingRecordKeys() {
+    return matchingRecordKeys;
   }
 }
+

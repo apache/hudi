@@ -31,7 +31,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.io.HoodieKeyLookupHandle;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
@@ -130,7 +130,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
         new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
     List<String> partitions = asList("2016/01/21", "2016/04/01", "2015/03/12");
-    List<Pair<String, BloomIndexFileInfo>> filesList = index.loadInvolvedFiles(partitions, context, hoodieTable);
+    List<Pair<String, BloomIndexFileInfo>> filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
     // Still 0, as no valid commit
     assertEquals(0, filesList.size());
 
@@ -140,7 +140,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
         .withInserts("2015/03/12", "4", record2, record3, record4);
     metaClient.reloadActiveTimeline();
 
-    filesList = index.loadInvolvedFiles(partitions, context, hoodieTable);
+    filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
     assertEquals(4, filesList.size());
 
     if (rangePruning) {
@@ -242,9 +242,8 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     HoodieFlinkTable table = HoodieFlinkTable.create(config, context, metaClient);
-    HoodieKeyLookupHandle keyHandle = new HoodieKeyLookupHandle<>(config, table, Pair.of(partition, fileId));
-    List<String> results = keyHandle.checkCandidatesAgainstFile(hadoopConf, uuids,
-        new Path(java.nio.file.Paths.get(basePath, partition, filename).toString()));
+    List<String> results = HoodieIndexUtils.filterKeysFromFile(
+        new Path(java.nio.file.Paths.get(basePath, partition, filename).toString()), uuids, hadoopConf);
     assertEquals(results.size(), 2);
     assertTrue(results.get(0).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")
         || results.get(1).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0"));

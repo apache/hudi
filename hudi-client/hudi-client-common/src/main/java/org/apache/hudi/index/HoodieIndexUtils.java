@@ -18,17 +18,30 @@
 
 package org.apache.hudi.index;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIndexException;
+import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 
 import static java.util.stream.Collectors.toList;
 
@@ -36,6 +49,8 @@ import static java.util.stream.Collectors.toList;
  * Hoodie Index Utilities.
  */
 public class HoodieIndexUtils {
+
+  private static final Logger LOG = LogManager.getLogger(HoodieIndexUtils.class);
 
   /**
    * Fetches Pair of partition path and {@link HoodieBaseFile}s for interested partitions.
@@ -100,5 +115,35 @@ public class HoodieIndexUtils {
       record.seal();
     }
     return record;
+  }
+
+  /**
+   * Given a list of row keys and one file, return only row keys existing in that file.
+   *
+   * @param filePath            - File to filter keys from
+   * @param candidateRecordKeys - Candidate keys to filter
+   * @return List of candidate keys that are available in the file
+   */
+  public static List<String> filterKeysFromFile(Path filePath, List<String> candidateRecordKeys,
+                                                Configuration configuration) throws HoodieIndexException {
+    ValidationUtils.checkArgument(FSUtils.isBaseFile(filePath));
+    List<String> foundRecordKeys = new ArrayList<>();
+    try {
+      // Load all rowKeys from the file, to double-confirm
+      if (!candidateRecordKeys.isEmpty()) {
+        HoodieTimer timer = new HoodieTimer().startTimer();
+        HoodieFileReader fileReader = HoodieFileReaderFactory.getFileReader(configuration, filePath);
+        Set<String> fileRowKeys = fileReader.filterRowKeys(new TreeSet<>(candidateRecordKeys));
+        foundRecordKeys.addAll(fileRowKeys);
+        LOG.info(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)", filePath,
+            timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size()));
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Keys matching for file " + filePath + " => " + foundRecordKeys);
+        }
+      }
+    } catch (Exception e) {
+      throw new HoodieIndexException("Error checking candidate keys against file.", e);
+    }
+    return foundRecordKeys;
   }
 }
