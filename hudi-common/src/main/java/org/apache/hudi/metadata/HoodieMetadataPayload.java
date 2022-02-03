@@ -399,6 +399,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     }
 
     if (filesystemMetadata != null) {
+      validate(filesystemMetadata);
       // Combine previous record w/ the new one
       // NOTE: New records _always_ take precedence over the old one, as such no special case
       //       handling is actually necessary
@@ -495,6 +496,12 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     }
     sb.append('}');
     return sb.toString();
+  }
+
+  private static void validate(Map<String, HoodieMetadataFileInfo> filesystemMetadata) {
+    filesystemMetadata.forEach((fileName, fileInfo) -> {
+      ValidationUtils.checkState(fileInfo.getIsDeleted() || fileInfo.getSize() > 0, "Existing files should have size > 0");
+    });
   }
 
   private static <T> T getNestedFieldValue(GenericRecord record, String fieldName) {
