@@ -18,22 +18,25 @@
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.hudi.client.functional.TestHoodieMetadataBase;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 
 import org.apache.avro.Schema;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
@@ -41,12 +44,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -59,7 +64,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
+public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
 
   private static final Schema SCHEMA = getSchemaFromResource(TestHoodieGlobalBloomIndex.class, "/exampleSchema.avsc", true);
 
@@ -67,7 +72,13 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
   public void setUp() throws Exception {
     initSparkContexts();
     initPath();
+    initFileSystem();
     initMetaClient();
+    HoodieIndexConfig.Builder indexBuilder = HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.GLOBAL_BLOOM);
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withIndexConfig(indexBuilder.build())
+        .build();
+    writeClient = getHoodieWriteClient(config);
   }
 
   @AfterEach
@@ -81,13 +92,15 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     HoodieGlobalBloomIndex index =
         new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(hoodieTable, SCHEMA);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter);
 
     // Create some partitions, and put some files, along with the meta file
     // "2016/01/21": 0 file
     // "2016/04/01": 1 file (2_0_20160401010101.parquet)
     // "2015/03/12": 3 files (1_0_20150312101010.parquet, 3_0_20150312101010.parquet, 4_0_20150312101010.parquet)
-    testTable.withPartitionMetaFiles("2016/01/21", "2016/04/01", "2015/03/12");
+    final String p1 = "2016/01/21";
+    final String p2 = "2016/04/01";
+    final String p3 = "2015/03/12";
 
     RawTripTestPayload rowChange1 =
         new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
@@ -107,16 +120,46 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
         new HoodieAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
     // intentionally missed the partition "2015/03/12" to see if the GlobalBloomIndex can pick it up
-    List<String> partitions = Arrays.asList("2016/01/21", "2016/04/01");
+    List<String> partitions = Arrays.asList(p1, p2);
     // partitions will NOT be respected by this loadInvolvedFiles(...) call
     List<Pair<String, BloomIndexFileInfo>> filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
     // Still 0, as no valid commit
     assertEquals(0, filesList.size());
 
-    testTable.addCommit("20160401010101").withInserts("2016/04/01", "2");
-    testTable.addCommit("20150312101010").withInserts("2015/03/12", "1")
-        .withInserts("2015/03/12", "3", record1)
-        .withInserts("2015/03/12", "4", record2, record3, record4);
+    final String fileId1 = "1";
+    final String fileId2 = "2";
+    final String fileId3 = "3";
+    final String fileId4 = "4";
+    final Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap = new HashMap<>();
+
+    final String c1 = "20160401010101";
+    Path baseFilePath = testTable.forCommit(c1).withInserts(p2, fileId2, Collections.emptyList());
+    long baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    partitionToFilesNameLengthMap.computeIfAbsent(p2,
+        k -> new ArrayList<>()).add(Pair.of(fileId2, Integer.valueOf((int) baseFileLength)));
+    testTable.doWriteOperation(c1, WriteOperationType.UPSERT, Collections.singletonList(p2),
+        partitionToFilesNameLengthMap, false, false);
+
+    final String c2 = "20150312101010";
+    testTable.forCommit(c2);
+    baseFilePath = testTable.withInserts(p3, fileId1, Collections.emptyList());
+    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    partitionToFilesNameLengthMap.clear();
+    partitionToFilesNameLengthMap.computeIfAbsent(p3,
+        k -> new ArrayList<>()).add(Pair.of(fileId1, Integer.valueOf((int) baseFileLength)));
+
+    baseFilePath = testTable.withInserts(p3, fileId3, Collections.singletonList(record1));
+    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    partitionToFilesNameLengthMap.computeIfAbsent(p3,
+        k -> new ArrayList<>()).add(Pair.of(fileId3, Integer.valueOf((int) baseFileLength)));
+
+    baseFilePath = testTable.withInserts(p3, fileId4, Arrays.asList(record2, record3, record4));
+    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    partitionToFilesNameLengthMap.computeIfAbsent(p3,
+        k -> new ArrayList<>()).add(Pair.of(fileId4, Integer.valueOf((int) baseFileLength)));
+
+    testTable.doWriteOperation(c2, WriteOperationType.UPSERT, Collections.singletonList(p3),
+        partitionToFilesNameLengthMap, false, false);
 
     filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
     assertEquals(4, filesList.size());
@@ -185,17 +228,21 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
   @Test
   public void testTagLocation() throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withBloomIndexUpdatePartitionPath(false).build()).build();
-    HoodieGlobalBloomIndex index =
-        new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
+        .withIndexConfig(HoodieIndexConfig.newBuilder()
+            .withIndexType(HoodieIndex.IndexType.GLOBAL_BLOOM)
+            .withBloomIndexUpdatePartitionPath(false)
+            .build())
+        .build();
+    HoodieGlobalBloomIndex index = new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(hoodieTable, SCHEMA);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter);
 
     // Create some partitions, and put some files, along with the meta file
     // "2016/01/21": 0 file
     // "2016/04/01": 1 file (2_0_20160401010101.parquet)
     // "2015/03/12": 3 files (1_0_20150312101010.parquet, 3_0_20150312101010.parquet, 4_0_20150312101010.parquet)
-    testTable.withPartitionMetaFiles("2016/01/21", "2016/04/01", "2015/03/12");
+    final String partition2 = "2016/04/01";
+    final String partition3 = "2015/03/12";
 
     RawTripTestPayload rowChange1 =
         new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
@@ -223,13 +270,49 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     HoodieRecord record5 =
         new HoodieAvroRecord(new HoodieKey(rowChange5.getRowKey(), rowChange5.getPartitionPath()), rowChange5);
 
-    JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record5));
+    final String fileId1 = UUID.randomUUID().toString();
+    final String fileId2 = UUID.randomUUID().toString();
+    final String fileId3 = UUID.randomUUID().toString();
+    final String fileId4 = UUID.randomUUID().toString();
+    final Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap = new HashMap<>();
 
     // intentionally missed the partition "2015/03/12" to see if the GlobalBloomIndex can pick it up
-    String fileId1 = testTable.addCommit("1000").getFileIdWithInserts("2016/04/01", record1);
-    String fileId2 = testTable.addCommit("2000").getFileIdWithInserts("2015/03/12");
-    String fileId3 = testTable.addCommit("3000").getFileIdWithInserts("2015/03/12", record2);
-    String fileId4 = testTable.addCommit("4000").getFileIdWithInserts("2015/03/12", record4);
+    String commitTime = "0000001";
+    Path baseFilePath = testTable.forCommit(commitTime).withInserts(partition2, fileId1, Collections.singletonList(record1));
+    long baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    partitionToFilesNameLengthMap.computeIfAbsent(partition2,
+        k -> new ArrayList<>()).add(Pair.of(fileId1, Integer.valueOf((int) baseFileLength)));
+    testTable.doWriteOperation(commitTime, WriteOperationType.UPSERT, Collections.singletonList(partition2),
+        partitionToFilesNameLengthMap, false, false);
+
+    commitTime = "0000002";
+    baseFilePath = testTable.forCommit(commitTime).withInserts(partition3, fileId2, Collections.emptyList());
+    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    partitionToFilesNameLengthMap.clear();
+    partitionToFilesNameLengthMap.computeIfAbsent(partition3,
+        k -> new ArrayList<>()).add(Pair.of(fileId2, Integer.valueOf((int) baseFileLength)));
+    testTable.doWriteOperation(commitTime, WriteOperationType.UPSERT, Collections.singletonList(partition3),
+        partitionToFilesNameLengthMap, false, false);
+
+    commitTime = "0000003";
+    baseFilePath = testTable.forCommit(commitTime).withInserts(partition3, fileId3, Collections.singletonList(record2));
+    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    partitionToFilesNameLengthMap.clear();
+    partitionToFilesNameLengthMap.computeIfAbsent(partition3,
+        k -> new ArrayList<>()).add(Pair.of(fileId3, Integer.valueOf((int) baseFileLength)));
+    testTable.doWriteOperation(commitTime, WriteOperationType.UPSERT, Collections.singletonList(partition3),
+        partitionToFilesNameLengthMap, false, false);
+
+    commitTime = "0000004";
+    baseFilePath = testTable.forCommit(commitTime).withInserts(partition3, fileId4, Collections.singletonList(record4));
+    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    partitionToFilesNameLengthMap.clear();
+    partitionToFilesNameLengthMap.computeIfAbsent(partition3,
+        k -> new ArrayList<>()).add(Pair.of(fileId4, Integer.valueOf((int) baseFileLength)));
+    testTable.doWriteOperation(commitTime, WriteOperationType.UPSERT, Collections.singletonList(partition3),
+        partitionToFilesNameLengthMap, false, false);
+
+    JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record5));
 
     // partitions will NOT be respected by this loadInvolvedFiles(...) call
     JavaRDD<HoodieRecord> taggedRecordRDD = tagLocation(index, recordRDD, hoodieTable);
@@ -266,12 +349,15 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
   public void testTagLocationWhenShouldUpdatePartitionPath() throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withBloomIndexUpdatePartitionPath(true).build())
+        .withIndexConfig(HoodieIndexConfig.newBuilder()
+            .withIndexType(HoodieIndex.IndexType.GLOBAL_BLOOM)
+            .withBloomIndexUpdatePartitionPath(true)
+            .build())
         .build();
     HoodieGlobalBloomIndex index =
         new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(hoodieTable, SCHEMA);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter);
     final String p1 = "2016/01/31";
     final String p2 = "2016/02/28";
 
@@ -309,7 +395,16 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
             new HoodieKey(incomingPayloadSamePartition.getRowKey(), incomingPayloadSamePartition.getPartitionPath()),
             incomingPayloadSamePartition);
 
-    testTable.addCommit("1000").getFileIdWithInserts(p1, originalRecord);
+    final String fileId1 = UUID.randomUUID().toString();
+    final Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap = new HashMap<>();
+
+    final String commitTime = "0000001";
+    Path baseFilePath = testTable.forCommit(commitTime).withInserts(p1, fileId1, Collections.singletonList(originalRecord));
+    long baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    partitionToFilesNameLengthMap.computeIfAbsent(p1,
+        k -> new ArrayList<>()).add(Pair.of(fileId1, Integer.valueOf((int) baseFileLength)));
+    testTable.doWriteOperation(commitTime, WriteOperationType.UPSERT, Arrays.asList(p1),
+        partitionToFilesNameLengthMap, false, false);
 
     // test against incoming record with a different partition
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Collections.singletonList(incomingRecord));
