@@ -21,7 +21,7 @@ package org.apache.hudi.hadoop;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.hadoop.realtime.RealtimePath;
+import org.apache.hudi.hadoop.realtime.HoodieRealtimePath;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -55,7 +55,7 @@ public class RealtimeFileStatus extends FileStatus {
   @Override
   public Path getPath() {
     Path path = super.getPath();
-    RealtimePath realtimePath = new RealtimePath(path.getParent(), path.getName());
+    HoodieRealtimePath realtimePath = new HoodieRealtimePath(path.getParent(), path.getName());
     realtimePath.setBelongsToIncrementalPath(belongToIncrementalFileStatus);
     realtimePath.setDeltaLogFiles(deltaLogFiles);
     realtimePath.setMaxCommitTime(maxCommitTime);

@@ -770,7 +770,7 @@ public class TestHoodieRealtimeRecordReader {
       realtimeFileStatus.setMaxCommitTime(instantTime);
       realtimeFileStatus.setBasePath(basePath.toString());
       realtimeFileStatus.setDeltaLogFiles(fileSlice.getLogFiles().collect(Collectors.toList()));
-      RealtimePath realtimePath = (RealtimePath) realtimeFileStatus.getPath();
+      HoodieRealtimePath realtimePath = (HoodieRealtimePath) realtimeFileStatus.getPath();
       HoodieRealtimeFileSplit split = realtimePath.buildSplit(realtimePath, 0, 0, new String[] {""});
 
       JobConf newJobConf = new JobConf(baseJobConf);

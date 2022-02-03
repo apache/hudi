@@ -164,8 +164,8 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
 
   @Override
   protected boolean isSplitable(FileSystem fs, Path filename) {
-    if (filename instanceof RealtimePath) {
-      return ((RealtimePath)filename).isSplitable();
+    if (filename instanceof HoodieRealtimePath) {
+      return ((HoodieRealtimePath)filename).isSplitable();
     }
 
     return super.isSplitable(fs, filename);
@@ -176,16 +176,16 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
   // PathWithLogFilePath, so those bootstrap files should be processed int this function.
   @Override
   protected FileSplit makeSplit(Path file, long start, long length, String[] hosts) {
-    if (file instanceof RealtimePath) {
-      return doMakeSplitForPathWithLogFilePath((RealtimePath) file, start, length, hosts, null);
+    if (file instanceof HoodieRealtimePath) {
+      return doMakeSplitForPathWithLogFilePath((HoodieRealtimePath) file, start, length, hosts, null);
     }
     return super.makeSplit(file, start, length, hosts);
   }
 
   @Override
   protected FileSplit makeSplit(Path file, long start, long length, String[] hosts, String[] inMemoryHosts) {
-    if (file instanceof RealtimePath) {
-      return doMakeSplitForPathWithLogFilePath((RealtimePath) file, start, length, hosts, inMemoryHosts);
+    if (file instanceof HoodieRealtimePath) {
+      return doMakeSplitForPathWithLogFilePath((HoodieRealtimePath) file, start, length, hosts, inMemoryHosts);
     }
     return super.makeSplit(file, start, length, hosts, inMemoryHosts);
   }
@@ -234,7 +234,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
     return result;
   }
 
-  private FileSplit doMakeSplitForPathWithLogFilePath(RealtimePath path, long start, long length, String[] hosts, String[] inMemoryHosts) {
+  private FileSplit doMakeSplitForPathWithLogFilePath(HoodieRealtimePath path, long start, long length, String[] hosts, String[] inMemoryHosts) {
     if (!path.includeBootstrapFilePath()) {
       return path.buildSplit(path, start, length, hosts);
     } else {

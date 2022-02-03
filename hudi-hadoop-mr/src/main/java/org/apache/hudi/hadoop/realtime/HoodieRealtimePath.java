@@ -30,7 +30,7 @@ import java.util.List;
  * base files of the MOR tables, such as list of delta log files (holding updated records) associated
  * w/ the base file, etc.
  */
-public class RealtimePath extends Path {
+public class HoodieRealtimePath extends Path {
   /**
    * Marks whether this path produced as part of Incremental Query
    */
@@ -53,7 +53,7 @@ public class RealtimePath extends Path {
    */
   private PathWithBootstrapFileStatus pathWithBootstrapFileStatus;
 
-  public RealtimePath(Path parent, String child) {
+  public HoodieRealtimePath(Path parent, String child) {
     super(parent, child);
   }
 
