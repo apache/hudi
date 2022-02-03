@@ -50,9 +50,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * A validator with spark-submit to compare list partitions and list files between metadata table and filesystem.
@@ -426,7 +424,7 @@ public class HoodieMetadataTableValidator {
     List<FileSlice> latestFileSlicesFromFS = fsView.getLatestFileSlices(partitionPath).sorted(new FileSliceCompactor()).collect(Collectors.toList());
 
     LOG.info("Latest file list from metadata: " + latestFileSlicesFromMetadataTable + ". For partition " + partitionPath);
-    LOG.info("Latest file list from direct listing: " + latestFileSlicesFromFS+ ". For partition " + partitionPath);
+    LOG.info("Latest file list from direct listing: " + latestFileSlicesFromFS + ". For partition " + partitionPath);
 
     validateFileSlice(latestFileSlicesFromMetadataTable, latestFileSlicesFromFS, partitionPath);
     LOG.info("Validation of getLatestFileSlices success.");
