@@ -32,9 +32,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
-import java.sql.{Date, Timestamp}
 import scala.collection.JavaConversions._
-import scala.util.Random
 
 @Tag("functional")
 class TestLayoutOptimization extends HoodieClientTestBase {
@@ -150,22 +148,6 @@ class TestLayoutOptimization extends HoodieClientTestBase {
   private def assertRowsMatch(one: DataFrame, other: DataFrame) = {
     val rows = one.count()
     assert(rows == other.count() && one.intersect(other).count() == rows)
-  }
-
-  def createComplexDataFrame(spark: SparkSession): DataFrame = {
-    val rdd = spark.sparkContext.parallelize(0 to 1000, 1).map { item =>
-      val c1 = Integer.valueOf(item)
-      val c2 = s" ${item}sdc"
-      val c3 = new java.math.BigDecimal(s"${Random.nextInt(1000)}.${item}")
-      val c4 = new Timestamp(System.currentTimeMillis())
-      val c5 = java.lang.Short.valueOf(s"${(item + 16) /10}")
-      val c6 = Date.valueOf(s"${2020}-${item % 11  +  1}-${item % 28  + 1}")
-      val c7 = Array(item).map(_.toByte)
-      val c8 = java.lang.Byte.valueOf("9")
-
-      RowFactory.create(c1, c2, c3, c4, c5, c6, c7, c8)
-    }
-    spark.createDataFrame(rdd, sourceTableSchema)
   }
 }
 

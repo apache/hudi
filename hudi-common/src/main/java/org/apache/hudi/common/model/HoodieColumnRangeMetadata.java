@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.parquet.schema.PrimitiveStringifier;
-
 import java.util.Objects;
 
 /**
@@ -31,15 +29,13 @@ public class HoodieColumnRangeMetadata<T> {
   private final T minValue;
   private final T maxValue;
   private final long numNulls;
-  private final PrimitiveStringifier stringifier;
 
-  public HoodieColumnRangeMetadata(final String filePath, final String columnName, final T minValue, final T maxValue, final long numNulls, final PrimitiveStringifier stringifier) {
+  public HoodieColumnRangeMetadata(final String filePath, final String columnName, final T minValue, final T maxValue, final long numNulls) {
     this.filePath = filePath;
     this.columnName = columnName;
     this.minValue = minValue;
     this.maxValue = maxValue;
     this.numNulls = numNulls;
-    this.stringifier = stringifier;
   }
 
   public String getFilePath() {
@@ -56,10 +52,6 @@ public class HoodieColumnRangeMetadata<T> {
 
   public T getMaxValue() {
     return this.maxValue;
-  }
-
-  public PrimitiveStringifier getStringifier() {
-    return stringifier;
   }
 
   public long getNumNulls() {

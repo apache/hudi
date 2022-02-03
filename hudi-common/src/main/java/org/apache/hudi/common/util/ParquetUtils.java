@@ -37,6 +37,7 @@ import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.schema.DecimalMetadata;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
@@ -45,6 +46,7 @@ import org.apache.parquet.schema.PrimitiveType;
 import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -308,9 +310,8 @@ public class ParquetUtils extends BaseFileUtils {
                             convertToNativeJavaType(
                                 columnChunkMetaData.getPrimitiveType(),
                                 columnChunkMetaData.getStatistics().genericGetMax()),
-                            columnChunkMetaData.getStatistics().getNumNulls(),
-                            columnChunkMetaData.getPrimitiveType().stringifier()))
-            ).collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName));
+                            columnChunkMetaData.getStatistics().getNumNulls())))
+            .collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName));
 
     // Combine those into file-level statistics
     // NOTE: Inlining this var makes javac (1.8) upset (due to its inability to infer
@@ -360,24 +361,56 @@ public class ParquetUtils extends BaseFileUtils {
 
     return new HoodieColumnRangeMetadata<T>(
         one.getFilePath(),
-        one.getColumnName(), minValue, maxValue, one.getNumNulls() + another.getNumNulls(), one.getStringifier());
+        one.getColumnName(), minValue, maxValue, one.getNumNulls() + another.getNumNulls());
   }
 
   private static Comparable<?> convertToNativeJavaType(PrimitiveType primitiveType, Comparable val) {
     if (primitiveType.getOriginalType() == OriginalType.DECIMAL) {
-      DecimalMetadata decimalMetadata = primitiveType.getDecimalMetadata();
-      return BigDecimal.valueOf((Integer) val, decimalMetadata.getScale());
+      return extractDecimal(val, primitiveType.getDecimalMetadata());
     } else if (primitiveType.getOriginalType() == OriginalType.DATE) {
       // NOTE: This is a workaround to address race-condition in using
       //       {@code SimpleDataFormat} concurrently (w/in {@code DateStringifier})
       // TODO cleanup after Parquet upgrade to 1.12
       synchronized (primitiveType.stringifier()) {
+        // Date logical type is implemented as a signed INT32
+        // REF: https://github.com/apache/parquet-format/blob/master/LogicalTypes.md
         return java.sql.Date.valueOf(
             primitiveType.stringifier().stringify((Integer) val)
         );
       }
+    } else if (primitiveType.getOriginalType() == OriginalType.UTF8) {
+      // NOTE: UTF8 type designates a byte array that should be interpreted as a
+      // UTF-8 encoded character string
+      // REF: https://github.com/apache/parquet-format/blob/master/LogicalTypes.md
+      return ((Binary) val).toStringUsingUTF8();
+    } else if (primitiveType.getPrimitiveTypeName() == PrimitiveType.PrimitiveTypeName.BINARY) {
+      // NOTE: `getBytes` access makes a copy of the underlying byte buffer
+      return ((Binary) val).toByteBuffer();
     }
 
     return val;
+  }
+
+  @Nonnull
+  private static BigDecimal extractDecimal(Object val, DecimalMetadata decimalMetadata) {
+    // In Parquet, Decimal could be represented as either of
+    //    1. INT32 (for 1 <= precision <= 9)
+    //    2. INT64 (for 1 <= precision <= 18)
+    //    3. FIXED_LEN_BYTE_ARRAY (precision is limited by the array size. Length n can store <= floor(log_10(2^(8*n - 1) - 1)) base-10 digits)
+    //    4. BINARY (precision is not limited)
+    // REF: https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#DECIMAL
+    int scale = decimalMetadata.getScale();
+    if (val == null) {
+      return null;
+    } else if (val instanceof Integer) {
+      return BigDecimal.valueOf((Integer) val, scale);
+    } else if (val instanceof Long) {
+      return BigDecimal.valueOf((Long) val, scale);
+    } else if (val instanceof Binary) {
+      // NOTE: Unscaled number is stored in BE format (most significant byte is 0th)
+      return new BigDecimal(new BigInteger(((Binary)val).getBytesUnsafe()), scale);
+    } else {
+      throw new UnsupportedOperationException(String.format("Unsupported value type (%s)", val.getClass().getName()));
+    }
   }
 }
