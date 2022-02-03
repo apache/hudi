@@ -71,11 +71,12 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
 
   @Override
   public InputSplit[] getSplits(JobConf job, int numSplits) throws IOException {
-    List<FileSplit> fileSplits = Arrays.stream(super.getSplits(job, numSplits)).map(is -> (FileSplit) is).collect(Collectors.toList());
+    List<FileSplit> fileSplits = Arrays.stream(super.getSplits(job, numSplits))
+        .map(is -> (FileSplit) is)
+        .collect(Collectors.toList());
 
-    return HoodieRealtimeInputFormatUtils.isIncrementalQuerySplits(fileSplits)
-        ? HoodieRealtimeInputFormatUtils.getIncrementalRealtimeSplits(job, fileSplits)
-        : HoodieRealtimeInputFormatUtils.getRealtimeSplits(job, fileSplits);
+    return (containsIncrementalQuerySplits(fileSplits) ? filterIncrementalQueryFileSplits(fileSplits) : fileSplits)
+        .toArray(new FileSplit[0]);
   }
 
   /**
@@ -179,7 +180,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
   @Override
   protected FileSplit makeSplit(Path file, long start, long length, String[] hosts) {
     if (file instanceof HoodieRealtimePath) {
-      return doMakeSplitForPathWithLogFilePath((HoodieRealtimePath) file, start, length, hosts, null);
+      return doMakeSplitForRealtimePath((HoodieRealtimePath) file, start, length, hosts, null);
     }
     return super.makeSplit(file, start, length, hosts);
   }
@@ -187,7 +188,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
   @Override
   protected FileSplit makeSplit(Path file, long start, long length, String[] hosts, String[] inMemoryHosts) {
     if (file instanceof HoodieRealtimePath) {
-      return doMakeSplitForPathWithLogFilePath((HoodieRealtimePath) file, start, length, hosts, inMemoryHosts);
+      return doMakeSplitForRealtimePath((HoodieRealtimePath) file, start, length, hosts, inMemoryHosts);
     }
     return super.makeSplit(file, start, length, hosts, inMemoryHosts);
   }
@@ -236,7 +237,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
     return result;
   }
 
-  private FileSplit doMakeSplitForPathWithLogFilePath(HoodieRealtimePath path, long start, long length, String[] hosts, String[] inMemoryHosts) {
+  private FileSplit doMakeSplitForRealtimePath(HoodieRealtimePath path, long start, long length, String[] hosts, String[] inMemoryHosts) {
     if (path.includeBootstrapFilePath()) {
       FileSplit bf =
           inMemoryHosts == null
@@ -253,7 +254,16 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
     return path.buildSplit(path, start, length, hosts);
   }
 
-  public static RealtimeBootstrapBaseFileSplit createRealtimeBoostrapBaseFileSplit(BootstrapBaseFileSplit split,
+  private static boolean containsIncrementalQuerySplits(List<FileSplit> fileSplits) {
+    return fileSplits.stream().anyMatch(HoodieRealtimeInputFormatUtils::doesBelongToIncrementalQuery);
+  }
+
+  private static List<FileSplit> filterIncrementalQueryFileSplits(List<FileSplit> fileSplits) {
+    return fileSplits.stream().filter(HoodieRealtimeInputFormatUtils::doesBelongToIncrementalQuery)
+        .collect(Collectors.toList());
+  }
+
+  private static RealtimeBootstrapBaseFileSplit createRealtimeBoostrapBaseFileSplit(BootstrapBaseFileSplit split,
                                                                                    String basePath,
                                                                                    List<HoodieLogFile> logFiles,
                                                                                    String maxInstantTime,

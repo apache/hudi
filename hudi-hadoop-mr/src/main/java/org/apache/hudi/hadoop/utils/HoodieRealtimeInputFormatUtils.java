@@ -22,31 +22,25 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.mapred.FileSplit;
-import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
 import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
 import org.apache.hudi.hadoop.realtime.RealtimeBootstrapBaseFileSplit;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.parquet.schema.MessageType;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -56,101 +50,10 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.TypeUtils.unsafeCast;
-import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
 
   private static final Logger LOG = LogManager.getLogger(HoodieRealtimeInputFormatUtils.class);
-
-  public static InputSplit[] getRealtimeSplits(Configuration conf, List<FileSplit> fileSplits) throws IOException {
-    if (fileSplits.isEmpty()) {
-      return new InputSplit[0];
-    }
-
-    FileSplit fileSplit = fileSplits.get(0);
-
-    // Pre-process table-config to fetch virtual key info
-    Path partitionPath = fileSplit.getPath().getParent();
-    HoodieTableMetaClient metaClient = getTableMetaClientForBasePathUnchecked(conf, partitionPath);
-
-    Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfoOpt = getHoodieVirtualKeyInfo(metaClient);
-
-    InputSplit[] finalSplits = fileSplits.stream()
-      .map(split -> {
-        // There are 4 types of splits we have to handle here
-        //    - {@code BootstrapBaseFileSplit}: in case base file does have associated bootstrap file,
-        //      but does NOT have any log files appended (convert it to {@code RealtimeBootstrapBaseFileSplit})
-        //    - {@code RealtimeBootstrapBaseFileSplit}: in case base file does have associated bootstrap file
-        //      and does have log files appended
-        //    - {@code BaseFileWithLogsSplit}: in case base file does NOT have associated bootstrap file
-        //       and does have log files appended;
-        //    - {@code FileSplit}: in case Hive passed down non-Hudi path
-        if (split instanceof RealtimeBootstrapBaseFileSplit) {
-          return split;
-        } else if (split instanceof HoodieRealtimeFileSplit) {
-          return split;
-        } else {
-          // TODO cleanup
-          checkState(!(split instanceof BootstrapBaseFileSplit));
-
-          // Non-Hudi paths might result in just generic {@code FileSplit} being
-          // propagated up to this point
-          return split;
-        }
-      })
-      .toArray(InputSplit[]::new);
-
-    LOG.info("Returning a total splits of " + finalSplits.length);
-
-    return finalSplits;
-  }
-
-  /**
-   * @deprecated will be replaced w/ {@link #getRealtimeSplits(Configuration, List)}
-   */
-  // get IncrementalRealtimeSplits
-  public static InputSplit[] getIncrementalRealtimeSplits(Configuration conf, List<FileSplit> fileSplits) throws IOException {
-    checkState(fileSplits.stream().allMatch(HoodieRealtimeInputFormatUtils::doesBelongToIncrementalQuery),
-        "All splits have to belong to incremental query");
-
-    List<InputSplit> rtSplits = new ArrayList<>();
-    Set<Path> partitionSet = fileSplits.stream().map(f -> f.getPath().getParent()).collect(Collectors.toSet());
-    Map<Path, HoodieTableMetaClient> partitionsToMetaClient = getTableMetaClientByPartitionPath(conf, partitionSet);
-    // Pre process tableConfig from first partition to fetch virtual key info
-    Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo = Option.empty();
-    if (partitionSet.size() > 0) {
-      hoodieVirtualKeyInfo = getHoodieVirtualKeyInfo(partitionsToMetaClient.get(partitionSet.iterator().next()));
-    }
-    Option<HoodieVirtualKeyInfo> finalHoodieVirtualKeyInfo = hoodieVirtualKeyInfo;
-    fileSplits.stream().forEach(s -> {
-      // deal with incremental query.
-      if (s instanceof HoodieRealtimeFileSplit) {
-        HoodieRealtimeFileSplit bs = unsafeCast(s);
-        rtSplits.add(bs);
-      } else if (s instanceof RealtimeBootstrapBaseFileSplit) {
-
-        rtSplits.add(s);
-      }
-    });
-    LOG.info("Returning a total splits of " + rtSplits.size());
-    return rtSplits.toArray(new InputSplit[0]);
-  }
-
-  public static Option<HoodieVirtualKeyInfo> getHoodieVirtualKeyInfo(HoodieTableMetaClient metaClient) {
-    HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    if (!tableConfig.populateMetaFields()) {
-      TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
-      try {
-        MessageType parquetSchema = tableSchemaResolver.getTableParquetSchema();
-        return Option.of(new HoodieVirtualKeyInfo(tableConfig.getRecordKeyFieldProp(),
-            tableConfig.getPartitionFieldProp(), parquetSchema.getFieldIndex(tableConfig.getRecordKeyFieldProp()),
-            parquetSchema.getFieldIndex(tableConfig.getPartitionFieldProp())));
-      } catch (Exception exception) {
-        throw new HoodieException("Fetching table schema failed with exception ", exception);
-      }
-    }
-    return Option.empty();
-  }
 
   public static boolean doesBelongToIncrementalQuery(FileSplit s) {
     if (s instanceof HoodieRealtimeFileSplit) {
@@ -162,13 +65,6 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
     }
 
     return false;
-  }
-
-  public static boolean isIncrementalQuerySplits(List<FileSplit> fileSplits) {
-    if (fileSplits == null || fileSplits.size() == 0) {
-      return false;
-    }
-    return fileSplits.stream().anyMatch(HoodieRealtimeInputFormatUtils::doesBelongToIncrementalQuery);
   }
 
   // Return parquet file with a list of log files in the same file group.
