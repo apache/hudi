@@ -42,7 +42,7 @@ public class HoodieHFileInputFormat extends HoodieFileInputFormatBase {
   }
 
   @Override
-  protected boolean includeLogFilesForSnapShotView() {
+  protected boolean includeLogFilesForSnapshotView() {
     return false;
   }
 

@@ -90,14 +90,16 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
     for (String logFilePath : getDeltaLogPaths()) {
       InputSplitUtils.writeString(logFilePath, out);
     }
-    if (!getHoodieVirtualKeyInfo().isPresent()) {
+
+    Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt = getHoodieVirtualKeyInfo();
+    if (!virtualKeyInfoOpt.isPresent()) {
       InputSplitUtils.writeBoolean(false, out);
     } else {
       InputSplitUtils.writeBoolean(true, out);
-      InputSplitUtils.writeString(getHoodieVirtualKeyInfo().get().getRecordKeyField(), out);
-      InputSplitUtils.writeString(getHoodieVirtualKeyInfo().get().getPartitionPathField(), out);
-      InputSplitUtils.writeString(String.valueOf(getHoodieVirtualKeyInfo().get().getRecordKeyFieldIndex()), out);
-      InputSplitUtils.writeString(String.valueOf(getHoodieVirtualKeyInfo().get().getPartitionPathFieldIndex()), out);
+      InputSplitUtils.writeString(virtualKeyInfoOpt.get().getRecordKeyField(), out);
+      InputSplitUtils.writeString(virtualKeyInfoOpt.get().getPartitionPathField(), out);
+      InputSplitUtils.writeString(String.valueOf(virtualKeyInfoOpt.get().getRecordKeyFieldIndex()), out);
+      InputSplitUtils.writeString(String.valueOf(virtualKeyInfoOpt.get().getPartitionPathFieldIndex()), out);
     }
   }
 

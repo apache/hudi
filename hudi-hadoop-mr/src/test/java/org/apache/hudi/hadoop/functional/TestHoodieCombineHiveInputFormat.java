@@ -245,7 +245,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testMutilReaderRealtimeComineHoodieInputFormat() throws Exception {
+  public void testMultiReaderRealtimeCombineHoodieInputFormat() throws Exception {
     // test for hudi-1722
     Configuration conf = new Configuration();
     // initial commit

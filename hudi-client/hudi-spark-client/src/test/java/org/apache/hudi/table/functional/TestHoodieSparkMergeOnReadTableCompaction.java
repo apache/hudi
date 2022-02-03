@@ -22,6 +22,7 @@ package org.apache.hudi.table.functional;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -113,13 +114,14 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     JavaRDD records = jsc().parallelize(dataGen.generateInserts(instant, numRecords), 2);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     client.startCommitWithTime(instant);
-    List<WriteStatus> writeStatues = client.upsert(records, instant).collect();
-    org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
+    List<WriteStatus> writeStatuses = client.upsert(records, instant).collect();
+    org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatuses);
     if (doCommit) {
-      Assertions.assertTrue(client.commitStats(instant, writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
-          Option.empty(), metaClient.getCommitActionType()));
+      List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
+      boolean committed = client.commitStats(instant, writeStats, Option.empty(), metaClient.getCommitActionType());
+      Assertions.assertTrue(committed);
     }
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    return writeStatues;
+    return writeStatuses;
   }
 }
