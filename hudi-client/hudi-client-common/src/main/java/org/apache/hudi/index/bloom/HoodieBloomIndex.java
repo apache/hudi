@@ -30,14 +30,12 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.MetadataNotFoundException;
-import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.HoodieRangeInfoHandle;
 import org.apache.hudi.table.HoodieTable;
@@ -59,8 +57,7 @@ import static org.apache.hudi.index.HoodieIndexUtils.getLatestBaseFilesForAllPar
 /**
  * Indexing mechanism based on bloom filter. Each parquet file includes its row_key bloom filter in its metadata.
  */
-public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
-    extends HoodieIndex<T, Object, Object, Object> {
+public class HoodieBloomIndex<T extends HoodieRecordPayload<T>> extends HoodieBaseBloomIndex<T> {
   private static final Logger LOG = LogManager.getLogger(HoodieBloomIndex.class);
 
   private final BaseHoodieBloomIndexHelper bloomIndexHelper;
@@ -98,7 +95,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
     }
 
     // Step 3: Tag the incoming records, as inserts or updates, by joining with existing record keys
-    HoodieData<HoodieRecord<T>> taggedRecords = tagLocationBacktoRecords(keyFilenamePairs, records);
+    HoodieData<HoodieRecord<T>> taggedRecords = tagLocationBackToRecords(keyFilenamePairs, records);
 
     if (config.getBloomIndexUseCaching()) {
       records.unpersist();
@@ -277,20 +274,6 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
               new HoodieKey(recordKey, partitionPath)))
           .collect(Collectors.toList());
     }).flatMap(List::iterator);
-  }
-
-  /**
-   * Tag the <rowKey, filename> back to the original HoodieRecord List.
-   */
-  protected HoodieData<HoodieRecord<T>> tagLocationBacktoRecords(
-      HoodiePairData<HoodieKey, HoodieRecordLocation> keyFilenamePair,
-      HoodieData<HoodieRecord<T>> records) {
-    HoodiePairData<HoodieKey, HoodieRecord<T>> keyRecordPairs =
-        records.mapToPair(record -> new ImmutablePair<>(record.getKey(), record));
-    // Here as the records might have more data than keyFilenamePairs (some row keys' fileId is null),
-    // so we do left outer join.
-    return keyRecordPairs.leftOuterJoin(keyFilenamePair).values()
-        .map(v -> HoodieIndexUtils.getTaggedRecord(v.getLeft(), Option.ofNullable(v.getRight().orElse(null))));
   }
 
   @Override

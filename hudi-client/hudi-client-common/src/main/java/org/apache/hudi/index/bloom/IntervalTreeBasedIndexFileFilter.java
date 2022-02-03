@@ -42,25 +42,33 @@ class IntervalTreeBasedIndexFileFilter implements IndexFileFilter {
    * @param partitionToFileIndexInfo Map of partition to List of {@link BloomIndexFileInfo}s
    */
   IntervalTreeBasedIndexFileFilter(final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo) {
-    partitionToFileIndexInfo.forEach((partition, bloomIndexFiles) -> {
-      // Note that the interval tree implementation doesn't have auto-balancing to ensure logN search time.
-      // So, we are shuffling the input here hoping the tree will not have any skewness. If not, the tree could be
-      // skewed which could result in N search time instead of logN.
-      Collections.shuffle(bloomIndexFiles);
-      KeyRangeLookupTree lookUpTree = new KeyRangeLookupTree();
-      bloomIndexFiles.forEach(indexFileInfo -> {
-        if (indexFileInfo.hasKeyRanges()) {
-          lookUpTree.insert(new KeyRangeNode(indexFileInfo.getMinRecordKey(), indexFileInfo.getMaxRecordKey(),
-              indexFileInfo.getFileId()));
-        } else {
-          if (!partitionToFilesWithNoRanges.containsKey(partition)) {
-            partitionToFilesWithNoRanges.put(partition, new HashSet<>());
-          }
-          partitionToFilesWithNoRanges.get(partition).add(indexFileInfo.getFileId());
-        }
-      });
-      partitionToFileIndexLookUpTree.put(partition, lookUpTree);
+    partitionToFileIndexInfo.forEach((partition, indexFileInfo) -> {
+      initialize(partition, indexFileInfo);
     });
+  }
+
+  IntervalTreeBasedIndexFileFilter(final String partition, List<BloomIndexFileInfo> fileIndexInfo) {
+    initialize(partition, fileIndexInfo);
+  }
+
+  private void initialize(final String partition, List<BloomIndexFileInfo> fileIndexInfo) {
+    // Note that the interval tree implementation doesn't have auto-balancing to ensure logN search time.
+    // So, we are shuffling the input here hoping the tree will not have any skewness. If not, the tree could be
+    // skewed which could result in N search time instead of logN.
+    Collections.shuffle(fileIndexInfo);
+    KeyRangeLookupTree lookUpTree = new KeyRangeLookupTree();
+    fileIndexInfo.forEach(indexFileInfo -> {
+      if (indexFileInfo.hasKeyRanges()) {
+        lookUpTree.insert(new KeyRangeNode(indexFileInfo.getMinRecordKey(), indexFileInfo.getMaxRecordKey(),
+            indexFileInfo.getFileId()));
+      } else {
+        if (!partitionToFilesWithNoRanges.containsKey(partition)) {
+          partitionToFilesWithNoRanges.put(partition, new HashSet<>());
+        }
+        partitionToFilesWithNoRanges.get(partition).add(indexFileInfo.getFileId());
+      }
+    });
+    partitionToFileIndexLookUpTree.put(partition, lookUpTree);
   }
 
   @Override

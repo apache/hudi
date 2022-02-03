@@ -130,6 +130,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
@@ -383,12 +384,23 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertEquals(tableMetadata.getLatestCompactionTime().get(), "0000003001");
   }
 
+  private static Stream<Arguments> metadataIndexTypeParams() {
+    Object[][] data = new Object[][]{
+        {COPY_ON_WRITE, HoodieIndex.IndexType.BLOOM},
+        {MERGE_ON_READ, HoodieIndex.IndexType.BLOOM},
+        {COPY_ON_WRITE, HoodieIndex.IndexType.METADATA_BLOOM},
+        {MERGE_ON_READ, HoodieIndex.IndexType.METADATA_BLOOM},
+    };
+    return Stream.of(data).map(Arguments::of);
+  }
+
   @ParameterizedTest
-  @EnumSource(HoodieTableType.class)
-  public void testTableOperationsWithMetadataIndex(HoodieTableType tableType) throws Exception {
+  @MethodSource("metadataIndexTypeParams")
+  public void testTableOperationsWithMetadataIndex(HoodieTableType tableType, HoodieIndex.IndexType indexType) throws Exception {
     initPath();
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
         .withIndexConfig(HoodieIndexConfig.newBuilder()
+            .withIndexType(indexType)
             .bloomIndexBucketizedChecking(false)
             .build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()

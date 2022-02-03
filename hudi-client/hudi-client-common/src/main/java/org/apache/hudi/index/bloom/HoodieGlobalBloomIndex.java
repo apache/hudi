@@ -96,7 +96,7 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload<T>> extends Ho
    * Tagging for global index should only consider the record key.
    */
   @Override
-  protected HoodieData<HoodieRecord<T>> tagLocationBacktoRecords(
+  protected HoodieData<HoodieRecord<T>> tagLocationBackToRecords(
       HoodiePairData<HoodieKey, HoodieRecordLocation> keyLocationPairs,
       HoodieData<HoodieRecord<T>> records) {
 

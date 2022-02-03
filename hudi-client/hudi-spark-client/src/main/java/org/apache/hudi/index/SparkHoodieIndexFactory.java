@@ -27,7 +27,9 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
 import org.apache.hudi.index.bloom.HoodieGlobalBloomIndex;
+import org.apache.hudi.index.bloom.HoodieMetadataBloomIndex;
 import org.apache.hudi.index.bloom.SparkHoodieBloomIndexHelper;
+import org.apache.hudi.index.bloom.SparkHoodieMetadataBloomIndexHelper;
 import org.apache.hudi.index.bucket.HoodieBucketIndex;
 import org.apache.hudi.index.hbase.SparkHoodieHBaseIndex;
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex;
@@ -60,6 +62,8 @@ public final class SparkHoodieIndexFactory {
         return new HoodieBucketIndex(config);
       case BLOOM:
         return new HoodieBloomIndex<>(config, SparkHoodieBloomIndexHelper.getInstance());
+      case METADATA_BLOOM:
+        return new HoodieMetadataBloomIndex<>(config, SparkHoodieMetadataBloomIndexHelper.getInstance());
       case GLOBAL_BLOOM:
         return new HoodieGlobalBloomIndex<>(config, SparkHoodieBloomIndexHelper.getInstance());
       case SIMPLE:
