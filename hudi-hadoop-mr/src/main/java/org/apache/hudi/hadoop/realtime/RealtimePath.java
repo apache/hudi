@@ -26,22 +26,31 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Encode additional information in Path to track matching log file and base files.
- * Hence, this class tracks a log/base file status.
+ * {@link Path} implementation encoding additional information necessary to appropriately read
+ * base files of the MOR tables, such as list of delta log files (holding updated records) associated
+ * w/ the base file, etc.
  */
 public class RealtimePath extends Path {
-  // a flag to mark this split is produced by incremental query or not.
+  /**
+   * Marks whether this path produced as part of Incremental Query
+   */
   private boolean belongsToIncrementalPath = false;
-  // the log files belong this path.
+  /**
+   * List of delta log-files holding updated records for this base-file
+   */
   private List<HoodieLogFile> deltaLogFiles = new ArrayList<>();
-  // max commit time of current path.
+  /**
+   * Latest commit instant available at the time of the query in which all of the files
+   * pertaining to this split are represented
+   */
   private String maxCommitTime = "";
-  // the basePath of current hoodie table.
+  /**
+   * Base path of the table this path belongs to
+   */
   private String basePath = "";
-  // the base file belong to this path;
-  private String baseFilePath = "";
-  // the bootstrap file belong to this path.
-  // only if current query table is bootstrap table, this field is used.
+  /**
+   * File status for the Bootstrap file (only relevant if this table is a bootstrapped table
+   */
   private PathWithBootstrapFileStatus pathWithBootstrapFileStatus;
 
   public RealtimePath(Path parent, String child) {
@@ -80,12 +89,8 @@ public class RealtimePath extends Path {
     this.basePath = basePath;
   }
 
-  public void setBaseFilePath(String baseFilePath) {
-    this.baseFilePath = baseFilePath;
-  }
-
-  public boolean splitable() {
-    return !baseFilePath.isEmpty();
+  public boolean isSplitable() {
+    return !toString().isEmpty();
   }
 
   public PathWithBootstrapFileStatus getPathWithBootstrapFileStatus() {
@@ -100,13 +105,12 @@ public class RealtimePath extends Path {
     return pathWithBootstrapFileStatus != null;
   }
 
-  public BaseFileWithLogsSplit buildSplit(Path file, long start, long length, String[] hosts) {
-    BaseFileWithLogsSplit bs = new BaseFileWithLogsSplit(file, start, length, hosts);
+  public HoodieRealtimeFileSplit buildSplit(Path file, long start, long length, String[] hosts) {
+    HoodieRealtimeFileSplit bs = new HoodieRealtimeFileSplit(file, start, length, hosts);
     bs.setBelongsToIncrementalQuery(belongsToIncrementalPath);
     bs.setDeltaLogFiles(deltaLogFiles);
     bs.setMaxCommitTime(maxCommitTime);
     bs.setBasePath(basePath);
-    bs.setBaseFilePath(baseFilePath);
     return bs;
   }
 }

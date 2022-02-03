@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
@@ -42,7 +43,7 @@ import java.util.List;
  */
 public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit {
   /**
-   * List of delta log-files holding updated records
+   * List of delta log-files holding updated records for this base-file
    */
   private List<HoodieLogFile> deltaLogFiles = new ArrayList<>();
   /**
@@ -51,7 +52,7 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
    */
   private String maxCommitTime;
   /**
-   * Base file's path
+   * Base path of the table this path belongs to
    */
   private String basePath;
   /**
@@ -61,6 +62,13 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
 
   public HoodieRealtimeFileSplit() {}
 
+  HoodieRealtimeFileSplit(Path file, long start, long length, String[] hosts) {
+    super(file, start, length, hosts);
+  }
+
+  /**
+   * @deprecated
+   */
   public HoodieRealtimeFileSplit(FileSplit baseSplit, String basePath, List<HoodieLogFile> deltaLogFiles, String maxCommitTime,
                                  Option<HoodieVirtualKeyInfo> virtualKeyInfo)
       throws IOException {

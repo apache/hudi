@@ -165,7 +165,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
   @Override
   protected boolean isSplitable(FileSystem fs, Path filename) {
     if (filename instanceof RealtimePath) {
-      return ((RealtimePath)filename).splitable();
+      return ((RealtimePath)filename).isSplitable();
     }
 
     return super.isSplitable(fs, filename);
