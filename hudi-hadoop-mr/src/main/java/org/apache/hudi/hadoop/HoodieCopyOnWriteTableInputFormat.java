@@ -305,6 +305,9 @@ public class HoodieCopyOnWriteTableInputFormat extends FileInputFormat<NullWrita
     }
   }
 
+  /**
+   * Creates {@link RealtimeFileStatus} for the file-slice where base file is present
+   */
   @Nonnull
   private static RealtimeFileStatus createRealtimeFileStatusUnchecked(HoodieBaseFile baseFile,
                                                                       Stream<HoodieLogFile> logFiles,
@@ -335,6 +338,9 @@ public class HoodieCopyOnWriteTableInputFormat extends FileInputFormat<NullWrita
     }
   }
 
+  /**
+   * Creates {@link RealtimeFileStatus} for the file-slice where base file is NOT present
+   */
   @Nonnull
   private static RealtimeFileStatus createRealtimeFileStatusUnchecked(HoodieLogFile latestLogFile,
                                                                       Stream<HoodieLogFile> logFiles,
