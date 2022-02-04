@@ -40,10 +40,12 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
+import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -70,7 +72,7 @@ import java.util.stream.Collectors;
  *  --base-path basePath \
  *  --validate-latest-fileSlices \
  *  --validate-latest-baseFiles \
- *  --validate-all-file-groups \
+ *  --validate-all-file-groups
  * ```
  *
  * <p>
@@ -91,18 +93,18 @@ import java.util.stream.Collectors;
  *  --validate-latest-baseFiles \
  *  --validate-all-file-groups \
  *  --continuous \
- *  --min-validate-interval-seconds 60 \
+ *  --min-validate-interval-seconds 60
  * ```
  *
  */
-public class HoodieMetadataTableValidator {
+public class HoodieMetadataTableValidator implements Serializable{
 
   private static final Logger LOG = LogManager.getLogger(HoodieMetadataTableValidator.class);
 
   // Spark context
-  private  transient JavaSparkContext jsc;
+  private transient JavaSparkContext jsc;
   // config
-  private  Config cfg;
+  private Config cfg;
   // Properties with source, hoodie client, key generator etc.
   private TypedProperties props;
 
@@ -163,6 +165,9 @@ public class HoodieMetadataTableValidator {
         description = "the min validate interval of each validate when set --continuous, default is 10 minutes.")
     public Integer minValidateIntervalSeconds = 10 * 60;
 
+    @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for valuation", required = false)
+    public int parallelism = 200;
+
     @Parameter(names = {"--ignore-failed", "-ig"}, description = "Ignore metadata validate failure and continue.", required = false)
     public boolean ignoreFailed = false;
 
@@ -197,6 +202,7 @@ public class HoodieMetadataTableValidator {
           + "   --validate-all-file-groups " + validateAllFileGroups + ", \n"
           + "   --continuous " + continuous + ", \n"
           + "   --min-validate-interval-seconds " + minValidateIntervalSeconds + ", \n"
+          + "   --parallelism " + parallelism + ", \n"
           + "   --spark-master " + sparkMaster + ", \n"
           + "   --spark-memory " + sparkMemory + ", \n"
           + "   --assumeDatePartitioning-memory " + assumeDatePartitioning + ", \n"
@@ -220,6 +226,7 @@ public class HoodieMetadataTableValidator {
           && Objects.equals(validateLatestBaseFiles, config.validateLatestBaseFiles)
           && Objects.equals(validateAllFileGroups, config.validateAllFileGroups)
           && Objects.equals(minValidateIntervalSeconds, config.minValidateIntervalSeconds)
+          && Objects.equals(parallelism, config.parallelism)
           && Objects.equals(sparkMaster, config.sparkMaster)
           && Objects.equals(sparkMemory, config.sparkMemory)
           && Objects.equals(assumeDatePartitioning, config.assumeDatePartitioning)
@@ -230,7 +237,7 @@ public class HoodieMetadataTableValidator {
     @Override
     public int hashCode() {
       return Objects.hash(basePath, continuous, validateLatestFileSlices, validateLatestBaseFiles, validateAllFileGroups,
-          minValidateIntervalSeconds, sparkMaster, sparkMemory, assumeDatePartitioning, propsFilePath, configs, help);
+          minValidateIntervalSeconds, parallelism, sparkMaster, sparkMemory, assumeDatePartitioning, propsFilePath, configs, help);
     }
   }
 
@@ -279,7 +286,14 @@ public class HoodieMetadataTableValidator {
   }
 
   private void doHoodieMetadataTableValidationOnce() {
-    doMetaTableValidation();
+    try {
+      doMetaTableValidation();
+    } catch (HoodieValidationException e) {
+      LOG.error("MetaTable validation failed to HoodieValidationException", e);
+      if (!cfg.ignoreFailed) {
+        throw e;
+      }
+    }
   }
 
   private void doHoodieMetadataTableValidationContinuous() {
@@ -294,17 +308,37 @@ public class HoodieMetadataTableValidator {
   }
 
   public void doMetaTableValidation() {
+    boolean finalResult = true;
     metaClient.reloadActiveTimeline();
     String basePath = metaClient.getBasePath();
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-
     List<String> allPartitions = validatePartitions(engineContext, basePath);
+    HoodieTableFileSystemView metaFsView = createHoodieTableFileSystemView(engineContext, true);
+    HoodieTableFileSystemView fsView = createHoodieTableFileSystemView(engineContext, false);
 
-    for (String partitionPath : allPartitions) {
-      validateFilesInPartition(engineContext, partitionPath);
+    List<Boolean> result = engineContext.parallelize(allPartitions, allPartitions.size()).map(partitionPath -> {
+      try {
+        validateFilesInPartition(metaFsView, fsView, partitionPath);
+        LOG.info("MetaTable Validation for " + partitionPath + " success.");
+        return true;
+      } catch (HoodieValidationException e) {
+        LOG.error("MetaTable validation for " + partitionPath + " failed due to HoodieValidationException", e);
+        if (!cfg.ignoreFailed) {
+          throw e;
+        }
+        return false;
+      }
+    }).collectAsList();
+
+    for (Boolean res : result) {
+      finalResult &= res;
     }
 
-    LOG.info("MetaTable Validation Success.");
+    if (finalResult) {
+      LOG.info("MetaTable Validation Success.");
+    } else {
+      LOG.warn("MetaTable Validation failed.");
+    }
   }
 
   /**
@@ -315,8 +349,8 @@ public class HoodieMetadataTableValidator {
     List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(engineContext, basePath, false, cfg.assumeDatePartitioning);
     List<String> allPartitionPathsMeta = FSUtils.getAllPartitionPaths(engineContext, basePath, true, cfg.assumeDatePartitioning);
 
-    allPartitionPathsFromFS.sort(new StringCompactor());
-    allPartitionPathsMeta.sort(new StringCompactor());
+    Collections.sort(allPartitionPathsFromFS);
+    Collections.sort(allPartitionPathsMeta);
 
     if (allPartitionPathsFromFS.size() != allPartitionPathsMeta.size()
         || !allPartitionPathsFromFS.equals(allPartitionPathsMeta)) {
@@ -333,37 +367,22 @@ public class HoodieMetadataTableValidator {
    * For now, validate two kinds of apis:
    * 1. getLatestFileSlices
    * 2. getLatestBaseFiles
-   * @param engineContext
+   * 3. getAllFileGroups and getAllFileSlices
+   * @param metaFsView
+   * @param fsView
    * @param partitionPath
    */
-  private void validateFilesInPartition(HoodieSparkEngineContext engineContext, String partitionPath) {
-    HoodieTableFileSystemView metaFsView = null;
-    HoodieTableFileSystemView fsView = null;
+  private void validateFilesInPartition(HoodieTableFileSystemView metaFsView, HoodieTableFileSystemView fsView , String partitionPath) {
+    if (cfg.validateLatestFileSlices) {
+      validateLatestFileSlices(metaFsView, fsView, partitionPath);
+    }
 
-    try {
-      metaFsView = createHoodieTableFileSystemView(engineContext, true);
-      fsView = createHoodieTableFileSystemView(engineContext, false);
+    if (cfg.validateLatestBaseFiles) {
+      validateLatestBaseFiles(metaFsView, fsView, partitionPath);
+    }
 
-      if (cfg.validateLatestFileSlices) {
-        validateLatestFileSlices(metaFsView, fsView, partitionPath);
-      }
-
-      if (cfg.validateLatestBaseFiles) {
-        validateLatestBaseFiles(metaFsView, fsView, partitionPath);
-      }
-
-      if (cfg.validateAllFileGroups) {
-        validateAllFileGroups(metaFsView, fsView, partitionPath);
-      }
-
-    } finally {
-      if (metaFsView != null) {
-        metaFsView.close();
-      }
-
-      if (fsView != null) {
-        fsView.close();
-      }
+    if (cfg.validateAllFileGroups) {
+      validateAllFileGroups(metaFsView, fsView, partitionPath);
     }
   }
 
@@ -378,7 +397,7 @@ public class HoodieMetadataTableValidator {
     LOG.info("All file slices from direct listing: " + allFileSlicesFromFS + ". For partitions " + partitionPath);
     validateFileSlice(allFileSlicesFromMeta, allFileSlicesFromFS, partitionPath);
 
-    LOG.info("Validation of AllFileGroups success.");
+    LOG.info("Validation of AllFileGroups success for partition " + partitionPath);
   }
 
   private void validateFileSlice(List<FileSlice> fileSlicesFromMeta, List<FileSlice> fileSlicesFromFS, String partitionPath) {
@@ -389,7 +408,7 @@ public class HoodieMetadataTableValidator {
       LOG.error(message);
       throw new HoodieValidationException(message);
     } else {
-      LOG.info("Validation of fileSlices success.");
+      LOG.info("Validation of fileSlices success for partition " + partitionPath);
     }
   }
 
@@ -411,7 +430,7 @@ public class HoodieMetadataTableValidator {
       LOG.error(message);
       throw new HoodieValidationException(message);
     } else {
-      LOG.info("Validation of getLatestBaseFiles success.");
+      LOG.info("Validation of getLatestBaseFiles for partition " + partitionPath);
     }
   }
 
@@ -427,7 +446,7 @@ public class HoodieMetadataTableValidator {
     LOG.info("Latest file list from direct listing: " + latestFileSlicesFromFS + ". For partition " + partitionPath);
 
     validateFileSlice(latestFileSlicesFromMetadataTable, latestFileSlicesFromFS, partitionPath);
-    LOG.info("Validation of getLatestFileSlices success.");
+    LOG.info("Validation of getLatestFileSlices for partition " + partitionPath);
   }
 
   private HoodieTableFileSystemView createHoodieTableFileSystemView(HoodieSparkEngineContext engineContext, boolean enableMetadataTable) {
@@ -493,14 +512,6 @@ public class HoodieMetadataTableValidator {
     @Override
     public int compare(HoodieFileGroup o1, HoodieFileGroup o2) {
       return o1.getFileGroupId().compareTo(o2.getFileGroupId());
-    }
-  }
-
-  public static class StringCompactor implements Comparator<String>, Serializable {
-
-    @Override
-    public int compare(String o1, String o2) {
-      return o1.compareTo(o2);
     }
   }
 }
