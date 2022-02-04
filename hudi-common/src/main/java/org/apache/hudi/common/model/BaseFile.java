@@ -86,7 +86,7 @@ public class BaseFile implements Serializable {
       return false;
     }
     BaseFile dataFile = (BaseFile) o;
-    return Objects.equals(fullPath, dataFile.fullPath);
+    return Objects.equals(excludePrefix(fullPath), excludePrefix(dataFile.fullPath));
   }
 
   @Override
@@ -97,5 +97,13 @@ public class BaseFile implements Serializable {
   @Override
   public String toString() {
     return "BaseFile{fullPath=" + fullPath + ", fileLen=" + fileLen + '}';
+  }
+
+  private String excludePrefix(String s) {
+    String[] split = s.split(":");
+    if (split.length == 1) {
+      return s;
+    }
+    return split[1];
   }
 }

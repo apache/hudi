@@ -18,10 +18,11 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.fs.FSUtils;
+
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.fs.FSUtils;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -182,7 +183,7 @@ public class HoodieLogFile implements Serializable {
       return false;
     }
     HoodieLogFile that = (HoodieLogFile) o;
-    return Objects.equals(pathStr, that.pathStr);
+    return Objects.equals(excludePrefix(pathStr), excludePrefix(that.pathStr));
   }
 
   @Override
@@ -193,5 +194,13 @@ public class HoodieLogFile implements Serializable {
   @Override
   public String toString() {
     return "HoodieLogFile{pathStr='" + pathStr + '\'' + ", fileLen=" + fileLen + '}';
+  }
+
+  private String excludePrefix(String s) {
+    String[] split = s.split(":");
+    if (split.length == 1) {
+      return s;
+    }
+    return split[1];
   }
 }
