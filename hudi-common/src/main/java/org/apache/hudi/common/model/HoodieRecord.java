@@ -20,11 +20,8 @@ package org.apache.hudi.common.model;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.IOException;
@@ -35,8 +32,6 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-
-import static org.apache.hudi.TypeUtils.unsafeCast;
 
 /**
  * A Single Record managed by Hoodie.
@@ -241,39 +236,13 @@ public abstract class HoodieRecord<T> implements Serializable {
 
   // NOTE: This method is assuming semantic that `preCombine` operation is bound to pick one or the other
   //       object, and may not create a new one
-  public HoodieRecord<T> preCombine(HoodieRecord<T> oldValue) {
-    T picked = unsafeCast(getData().preCombine(oldValue.getData()));
-    return picked.equals(getData()) ? this : oldValue;
-  }
+  public abstract HoodieRecord<T> preCombine(HoodieRecord<T> previousRecord);
 
   // NOTE: This method is assuming semantic that only records bearing the same (partition, key) could
   //       be combined
-  public Option<HoodieRecord<T>> combineAndGetUpdateValue(HoodieRecord<T> current, Schema schema, Properties props) throws IOException {
-    ValidationUtils.checkState(Objects.equals(getKey(), current.getKey()));
+  public abstract Option<HoodieRecord<T>> combineAndGetUpdateValue(HoodieRecord<T> previousRecord, Schema schema, Properties props) throws IOException;
 
-    Option<IndexedRecord> currentPayload = current.getData().getInsertValue(schema, props);
-    if (!currentPayload.isPresent()) {
-      return Option.empty();
-    }
-
-    return getData().combineAndGetUpdateValue(currentPayload.get(), schema, props)
-        .map(combinedAvroPayload -> {
-          // NOTE: It's assumed that records aren't precombined more than once in its lifecycle,
-          //       therefore we simply stub out precombine value here
-          int newPreCombineVal = 0;
-          T combinedPayload = unsafeCast(
-              ReflectionUtils.loadPayload(
-                  getData().getClass().getCanonicalName(),
-                  new Object[]{combinedAvroPayload, newPreCombineVal /* NOTE */},
-                  GenericRecord.class,
-                  Comparable.class));
-          return new HoodieRecord<T>(getKey(), combinedPayload, getOperation());
-        });
-  }
-
-  public Option<Map<String, String>> getMetadata() {
-    return getData().getMetadata();
-  }
+  public abstract Option<Map<String, String>> getMetadata();
 
   //////////////////////////////////////////////////////////////////////////////
 
