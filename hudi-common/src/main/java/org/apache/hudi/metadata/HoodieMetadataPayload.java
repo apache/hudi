@@ -18,14 +18,14 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
+import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -33,9 +33,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
-
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.io.storage.HoodieHFileReader;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -43,7 +44,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.io.storage.HoodieHFileReader;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -257,7 +257,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
             timestamp, bloomFilter, isDeleted);
     HoodieMetadataPayload metadataPayload = new HoodieMetadataPayload(key.getRecordKey(),
         HoodieMetadataPayload.METADATA_TYPE_BLOOM_FILTER, metadataBloomFilter);
-    return new HoodieRecord<>(key, metadataPayload);
+    return new HoodieAvroRecord<>(key, metadataPayload);
   }
 
   @Override
@@ -448,7 +448,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
               .setTotalUncompressedSize(columnRangeMetadata.getTotalUncompressedSize())
               .setIsDeleted(isDeleted)
               .build());
-      return new HoodieRecord<>(key, payload);
+      return new HoodieAvroRecord<>(key, payload);
     });
 
 
