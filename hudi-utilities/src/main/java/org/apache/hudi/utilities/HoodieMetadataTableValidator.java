@@ -201,6 +201,7 @@ public class HoodieMetadataTableValidator implements Serializable{
           + "   --validate-latest-baseFiles " + validateLatestBaseFiles + ", \n"
           + "   --validate-all-file-groups " + validateAllFileGroups + ", \n"
           + "   --continuous " + continuous + ", \n"
+          + "   --ignore-failed " + ignoreFailed + ", \n"
           + "   --min-validate-interval-seconds " + minValidateIntervalSeconds + ", \n"
           + "   --parallelism " + parallelism + ", \n"
           + "   --spark-master " + sparkMaster + ", \n"
@@ -227,6 +228,7 @@ public class HoodieMetadataTableValidator implements Serializable{
           && Objects.equals(validateAllFileGroups, config.validateAllFileGroups)
           && Objects.equals(minValidateIntervalSeconds, config.minValidateIntervalSeconds)
           && Objects.equals(parallelism, config.parallelism)
+          && Objects.equals(ignoreFailed, config.ignoreFailed)
           && Objects.equals(sparkMaster, config.sparkMaster)
           && Objects.equals(sparkMemory, config.sparkMemory)
           && Objects.equals(assumeDatePartitioning, config.assumeDatePartitioning)
@@ -237,7 +239,7 @@ public class HoodieMetadataTableValidator implements Serializable{
     @Override
     public int hashCode() {
       return Objects.hash(basePath, continuous, validateLatestFileSlices, validateLatestBaseFiles, validateAllFileGroups,
-          minValidateIntervalSeconds, parallelism, sparkMaster, sparkMemory, assumeDatePartitioning, propsFilePath, configs, help);
+          minValidateIntervalSeconds, parallelism, ignoreFailed, sparkMaster, sparkMemory, assumeDatePartitioning, propsFilePath, configs, help);
     }
   }
 
