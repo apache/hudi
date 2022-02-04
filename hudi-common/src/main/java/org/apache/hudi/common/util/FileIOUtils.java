@@ -30,6 +30,7 @@ import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -203,5 +204,39 @@ public class FileIOUtils {
 
   public static Option<byte[]> readDataFromPath(FileSystem fileSystem, org.apache.hadoop.fs.Path detailPath) {
     return readDataFromPath(fileSystem, detailPath, false);
+  }
+
+  public static void killJVMIfDesired(String signalFilePath, String msg) {
+    try {
+      final String val = FileIOUtils.readAsUTFString(new FileInputStream(signalFilePath));
+      boolean kill = Boolean.parseBoolean(val.trim());
+      if (kill) {
+        System.out.println("Killing the jvm at " + signalFilePath + " Reason: " + msg);
+        System.exit(1);
+      }
+    } catch (Exception e) {
+      System.err.println(">>> error killing the jvm at " + signalFilePath + " ...");
+      e.printStackTrace();
+    }
+  }
+
+  /**
+   * Kill with probability of 1/denom
+   *
+   * @param signalFilePath
+   * @param msg
+   * @param denom
+   */
+  public static void killJVMIfDesired(String signalFilePath, String msg, int denom) {
+    try {
+      boolean kill = false;//new Random().nextInt(denom) == 0;
+      if (kill) {
+        System.out.println("Killing the jvm at " + signalFilePath + " Reason: " + msg);
+        System.exit(1);
+      }
+    } catch (Exception e) {
+      System.err.println(">>> error killing the jvm at " + signalFilePath + " ...");
+      e.printStackTrace();
+    }
   }
 }
