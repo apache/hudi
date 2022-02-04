@@ -18,16 +18,25 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import static org.apache.hudi.TypeUtils.unsafeCast;
 
 /**
  * A Single Record managed by Hoodie.
@@ -40,6 +49,8 @@ public abstract class HoodieRecord<T> implements Serializable {
   public static final String PARTITION_PATH_METADATA_FIELD = "_hoodie_partition_path";
   public static final String FILENAME_METADATA_FIELD = "_hoodie_file_name";
   public static final String OPERATION_METADATA_FIELD = "_hoodie_operation";
+
+  public static final EmptyRecord SENTINEL = new EmptyRecord();
 
   public static final List<String> HOODIE_META_COLUMNS =
       CollectionUtils.createImmutableList(COMMIT_TIME_METADATA_FIELD, COMMIT_SEQNO_METADATA_FIELD,
@@ -195,10 +206,6 @@ public abstract class HoodieRecord<T> implements Serializable {
     return sb.toString();
   }
 
-  public static String generateSequenceId(String instantTime, int partitionId, long recordIndex) {
-    return instantTime + "_" + partitionId + "_" + recordIndex;
-  }
-
   public String getPartitionPath() {
     assert key != null;
     return key.getPartitionPath();
@@ -220,6 +227,82 @@ public abstract class HoodieRecord<T> implements Serializable {
   public void checkState() {
     if (sealed) {
       throw new UnsupportedOperationException("Not allowed to modify after sealed");
+    }
+  }
+
+  //////////////////////////////////////////////////////////////////////////////
+
+  //
+  // NOTE: This method duplicates those ones of the HoodieRecordPayload and are placed here
+  //       for the duration of RFC-46 implementation, until migration off `HoodieRecordPayload`
+  //       is complete
+  //
+  // TODO cleanup
+
+  // NOTE: This method is assuming semantic that `preCombine` operation is bound to pick one or the other
+  //       object, and may not create a new one
+  public HoodieRecord<T> preCombine(HoodieRecord<T> oldValue) {
+    T picked = unsafeCast(getData().preCombine(oldValue.getData()));
+    return picked.equals(getData()) ? this : oldValue;
+  }
+
+  // NOTE: This method is assuming semantic that only records bearing the same (partition, key) could
+  //       be combined
+  public Option<HoodieRecord<T>> combineAndGetUpdateValue(HoodieRecord<T> current, Schema schema, Properties props) throws IOException {
+    ValidationUtils.checkState(Objects.equals(getKey(), current.getKey()));
+
+    Option<IndexedRecord> currentPayload = current.getData().getInsertValue(schema, props);
+    if (!currentPayload.isPresent()) {
+      return Option.empty();
+    }
+
+    return getData().combineAndGetUpdateValue(currentPayload.get(), schema, props)
+        .map(combinedAvroPayload -> {
+          // NOTE: It's assumed that records aren't precombined more than once in its lifecycle,
+          //       therefore we simply stub out precombine value here
+          int newPreCombineVal = 0;
+          T combinedPayload = unsafeCast(
+              ReflectionUtils.loadPayload(
+                  getData().getClass().getCanonicalName(),
+                  new Object[]{combinedAvroPayload, newPreCombineVal /* NOTE */},
+                  GenericRecord.class,
+                  Comparable.class));
+          return new HoodieRecord<T>(getKey(), combinedPayload, getOperation());
+        });
+  }
+
+  public Option<Map<String, String>> getMetadata() {
+    return getData().getMetadata();
+  }
+
+  //////////////////////////////////////////////////////////////////////////////
+
+  public static String generateSequenceId(String instantTime, int partitionId, long recordIndex) {
+    return instantTime + "_" + partitionId + "_" + recordIndex;
+  }
+
+  private static class EmptyRecord implements GenericRecord {
+    private EmptyRecord() {}
+
+    @Override
+    public void put(int i, Object v) {}
+
+    @Override
+    public Object get(int i) {
+      return null;
+    }
+
+    @Override
+    public Schema getSchema() {
+      return null;
+    }
+
+    @Override
+    public void put(String key, Object v) {}
+
+    @Override
+    public Object get(String key) {
+      return null;
     }
   }
 }
