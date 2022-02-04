@@ -155,8 +155,8 @@ public class HoodieTableMetadataUtil {
 
     records.add(HoodieMetadataPayload.createPartitionListRecord(partitionsList));
 
-    // New files added to a partition
-    List<HoodieRecord<HoodieMetadataPayload>> updatedFilesRecords =
+    // Update files listing records for each individual partition
+    List<HoodieRecord<HoodieMetadataPayload>> updatedPartitionFilesRecords =
         commitMetadata.getPartitionToWriteStats().entrySet()
             .stream()
             .map(entry -> {
@@ -195,7 +195,7 @@ public class HoodieTableMetadataUtil {
             })
             .collect(Collectors.toList());
 
-    records.addAll(updatedFilesRecords);
+    records.addAll(updatedPartitionFilesRecords);
 
     LOG.info("Updating at " + instantTime + " from Commit/" + commitMetadata.getOperationType()
         + ". #partitions_updated=" + records.size());
