@@ -778,13 +778,11 @@ nonReserved
     | DATABASE | SELECT | FROM | WHERE | HAVING | TO | TABLE | WITH | NOT
     | DIRECTORY
     | BOTH | LEADING | TRAILING
-    | CALL
     ;
 
 SELECT: 'SELECT';
 FROM: 'FROM';
 ADD: 'ADD';
-CALL: 'CALL';
 AS: 'AS';
 ALL: 'ALL';
 ANY: 'ANY';

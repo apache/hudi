@@ -24,11 +24,10 @@ singleStatement
     ;
 
 statement
-    : mergeInto                                                             #mergeIntoTable
-    | updateTableStmt                                                       #updateTable
-    | deleteTableStmt                                                       #deleteTable
-    | callStmt                                                              #callProcedure
-    | .*?                                                                   #passThrough
+    : mergeInto                                                        #mergeIntoTable
+    | updateTableStmt                                                  #updateTable
+    | deleteTableStmt                                                  #deleteTable
+    | .*?                                                              #passThrough
     ;
 
 
@@ -100,29 +99,7 @@ deleteTableStmt
   : DELETE FROM tableIdentifier (WHERE where=booleanExpression)?
   ;
 
-callStmt
-  : CALL multipartIdentifier '(' (callArgument (',' callArgument)*)? ')'  #call
-  ;
 
-multipartIdentifier
-    : parts+=identifier ('.' parts+=identifier)*
-    ;
-
-callExpression
-    : constant
-    | stringMap
-    ;
-
-callArgument
-    : callExpression                        #positionalArgument
-    | identifier '=>' callExpression        #namedArgument
-    ;
-
-stringMap
-    : MAP '(' constant (',' constant)* ')'
-    ;
-
-CALL: 'CALL';
 PRIMARY: 'PRIMARY';
 KEY: 'KEY';
 MERGE: 'MERGE';

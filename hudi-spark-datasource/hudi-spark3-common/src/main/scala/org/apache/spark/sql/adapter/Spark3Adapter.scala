@@ -29,11 +29,10 @@ import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, Join, J
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._
 import org.apache.spark.sql.connector.catalog.Table
-import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.parser.HoodieSpark3ExtendedSqlParser
 import org.apache.spark.sql.{Row, SparkSession}
 
 /**
