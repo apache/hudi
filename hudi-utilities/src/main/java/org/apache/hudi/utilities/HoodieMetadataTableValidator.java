@@ -40,7 +40,6 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
-import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.Serializable;
@@ -97,7 +96,7 @@ import java.util.stream.Collectors;
  * ```
  *
  */
-public class HoodieMetadataTableValidator implements Serializable{
+public class HoodieMetadataTableValidator implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieMetadataTableValidator.class);
 
@@ -374,7 +373,7 @@ public class HoodieMetadataTableValidator implements Serializable{
    * @param fsView
    * @param partitionPath
    */
-  private void validateFilesInPartition(HoodieTableFileSystemView metaFsView, HoodieTableFileSystemView fsView , String partitionPath) {
+  private void validateFilesInPartition(HoodieTableFileSystemView metaFsView, HoodieTableFileSystemView fsView, String partitionPath) {
     if (cfg.validateLatestFileSlices) {
       validateLatestFileSlices(metaFsView, fsView, partitionPath);
     }
