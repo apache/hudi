@@ -18,21 +18,21 @@
 
 package org.apache.hudi.common.model;
 
-import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
-import org.apache.hudi.common.util.collection.Pair;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * A Single Record managed by Hoodie.
  */
-public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable {
+public abstract class HoodieRecord<T> implements Serializable {
 
   public static final String COMMIT_TIME_METADATA_FIELD = "_hoodie_commit_time";
   public static final String COMMIT_SEQNO_METADATA_FIELD = "_hoodie_commit_seqno";
@@ -64,7 +64,7 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
   /**
    * Actual payload of the record.
    */
-  private T data;
+  protected T data;
 
   /**
    * Current location of record on storage. Filled in by looking up index
@@ -109,6 +109,8 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
 
   public HoodieRecord() {
   }
+
+  public abstract HoodieRecord<T> newInstance();
 
   public HoodieKey getKey() {
     return key;

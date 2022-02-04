@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.transform;
 
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -111,6 +112,6 @@ public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord>
 
     HoodieRecordPayload payload = payloadCreation.createPayload(gr);
     HoodieOperation operation = HoodieOperation.fromValue(record.getRowKind().toByteValue());
-    return new HoodieRecord<>(hoodieKey, payload, operation);
+    return new HoodieAvroRecord<>(hoodieKey, payload, operation);
   }
 }

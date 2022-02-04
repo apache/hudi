@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.bootstrap;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.bootstrap.BootstrapRecordPayload;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.AvroOrcUtils;
@@ -73,7 +74,7 @@ class OrcBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
         GenericRecord gr = new GenericData.Record(HoodieAvroUtils.RECORD_KEY_SCHEMA);
         gr.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recKey);
         BootstrapRecordPayload payload = new BootstrapRecordPayload(gr);
-        HoodieRecord rec = new HoodieRecord(new HoodieKey(recKey, partitionPath), payload);
+        HoodieRecord rec = new HoodieAvroRecord(new HoodieKey(recKey, partitionPath), payload);
         return rec;
       });
       wrapper.execute();

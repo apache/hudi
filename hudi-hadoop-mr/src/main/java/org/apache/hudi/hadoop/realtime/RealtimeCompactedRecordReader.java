@@ -21,6 +21,7 @@ package org.apache.hudi.hadoop.realtime;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
@@ -96,9 +97,9 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
 
   private Option<GenericRecord> buildGenericRecordwithCustomPayload(HoodieRecord record) throws IOException {
     if (usesCustomPayload) {
-      return record.getData().getInsertValue(getWriterSchema());
+      return ((HoodieAvroRecord) record).getData().getInsertValue(getWriterSchema());
     } else {
-      return record.getData().getInsertValue(getReaderSchema());
+      return ((HoodieAvroRecord) record).getData().getInsertValue(getReaderSchema());
     }
   }
 

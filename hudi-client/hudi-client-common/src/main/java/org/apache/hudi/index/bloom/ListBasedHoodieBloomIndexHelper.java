@@ -57,11 +57,11 @@ public class ListBasedHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper 
   public HoodiePairData<HoodieKey, HoodieRecordLocation> findMatchingFilesForRecordKeys(
       HoodieWriteConfig config, HoodieEngineContext context, HoodieTable hoodieTable,
       HoodiePairData<String, String> partitionRecordKeyPairs,
-      HoodieData<ImmutablePair<String, HoodieKey>> fileComparisonPairs,
+      HoodieData<Pair<String, HoodieKey>> fileComparisonPairs,
       Map<String, List<BloomIndexFileInfo>> partitionToFileInfo, Map<String, Long> recordsPerPartition) {
     List<Pair<String, HoodieKey>> fileComparisonPairList =
         HoodieList.getList(fileComparisonPairs).stream()
-            .sorted(Comparator.comparing(ImmutablePair::getLeft)).collect(toList());
+            .sorted(Comparator.comparing(Pair::getLeft)).collect(toList());
 
     List<HoodieKeyLookupResult> keyLookupResults = new ArrayList<>();
     Iterator<List<HoodieKeyLookupResult>> iterator = new HoodieBaseBloomIndexCheckFunction(

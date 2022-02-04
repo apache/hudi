@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.format.mor;
 
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
@@ -340,7 +341,7 @@ public class MergeOnReadInputFormat
         while (logRecordsKeyIterator.hasNext()) {
           String curAvroKey = logRecordsKeyIterator.next();
           Option<IndexedRecord> curAvroRecord = null;
-          final HoodieRecord<?> hoodieRecord = scanner.getRecords().get(curAvroKey);
+          final HoodieAvroRecord<?> hoodieRecord = (HoodieAvroRecord) scanner.getRecords().get(curAvroKey);
           try {
             curAvroRecord = hoodieRecord.getData().getInsertValue(tableSchema);
           } catch (IOException e) {
@@ -412,7 +413,7 @@ public class MergeOnReadInputFormat
       public boolean hasNext() {
         while (recordsIterator.hasNext()) {
           Option<IndexedRecord> curAvroRecord = null;
-          final HoodieRecord<?> hoodieRecord = recordsIterator.next();
+          final HoodieAvroRecord<?> hoodieRecord = (HoodieAvroRecord) recordsIterator.next();
           try {
             curAvroRecord = hoodieRecord.getData().getInsertValue(tableSchema);
           } catch (IOException e) {
@@ -725,7 +726,7 @@ public class MergeOnReadInputFormat
     }
 
     private Option<IndexedRecord> getInsertValue(String curKey) throws IOException {
-      final HoodieRecord<?> record = scanner.getRecords().get(curKey);
+      final HoodieAvroRecord<?> record = (HoodieAvroRecord) scanner.getRecords().get(curKey);
       if (!emitDelete && HoodieOperation.isDelete(record.getOperation())) {
         return Option.empty();
       }
@@ -750,7 +751,7 @@ public class MergeOnReadInputFormat
     private Option<IndexedRecord> mergeRowWithLog(
         RowData curRow,
         String curKey) throws IOException {
-      final HoodieRecord<?> record = scanner.getRecords().get(curKey);
+      final HoodieAvroRecord<?> record = (HoodieAvroRecord) scanner.getRecords().get(curKey);
       GenericRecord historyAvroRecord = (GenericRecord) rowDataToAvroConverter.convert(tableSchema, curRow);
       return record.getData().combineAndGetUpdateValue(historyAvroRecord, tableSchema);
     }
