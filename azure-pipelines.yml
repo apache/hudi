@@ -144,7 +144,7 @@ stages:
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: UT_FT_4
         displayName: UT FT other modules
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Cache@2
             displayName: set cache
