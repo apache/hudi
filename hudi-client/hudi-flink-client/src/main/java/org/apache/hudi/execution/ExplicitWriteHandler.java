@@ -19,6 +19,7 @@
 package org.apache.hudi.execution;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
@@ -44,7 +45,7 @@ public class ExplicitWriteHandler<T extends HoodieRecordPayload>
   @Override
   public void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> payload) {
     final HoodieRecord insertPayload = payload.record;
-    handle.write(insertPayload, payload.insertValue, payload.exception);
+    handle.write(insertPayload, payload.schema, new TypedProperties(payload.props));
   }
 
   @Override

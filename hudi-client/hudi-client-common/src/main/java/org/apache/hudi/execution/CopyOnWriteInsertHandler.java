@@ -19,6 +19,7 @@
 package org.apache.hudi.execution;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -69,8 +70,8 @@ public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
 
   @Override
   public void consumeOneRecord(HoodieInsertValueGenResult<HoodieRecord> payload) {
-    final HoodieRecord insertPayload = payload.record;
-    String partitionPath = insertPayload.getPartitionPath();
+    final HoodieRecord record = payload.record;
+    String partitionPath = record.getPartitionPath();
     HoodieWriteHandle<?,?,?,?> handle = handles.get(partitionPath);
     if (handle == null) {
       // If the records are sorted, this means that we encounter a new partition path
@@ -81,7 +82,7 @@ public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
       }
       // Lazily initialize the handle, for the first time
       handle = writeHandleFactory.create(config, instantTime, hoodieTable,
-          insertPayload.getPartitionPath(), idPrefix, taskContextSupplier);
+          record.getPartitionPath(), idPrefix, taskContextSupplier);
       handles.put(partitionPath, handle);
     }
 
@@ -90,10 +91,10 @@ public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
       statuses.addAll(handle.close());
       // Open new handle
       handle = writeHandleFactory.create(config, instantTime, hoodieTable,
-          insertPayload.getPartitionPath(), idPrefix, taskContextSupplier);
+          record.getPartitionPath(), idPrefix, taskContextSupplier);
       handles.put(partitionPath, handle);
     }
-    handle.write(insertPayload, payload.insertValue, payload.exception);
+    handle.write(record, payload.schema, new TypedProperties(payload.props));
   }
 
   @Override

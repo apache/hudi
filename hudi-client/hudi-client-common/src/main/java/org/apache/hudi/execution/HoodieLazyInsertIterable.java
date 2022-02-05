@@ -18,20 +18,17 @@
 
 package org.apache.hudi.execution;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.HoodieTable;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 
 import java.util.Iterator;
 import java.util.List;
@@ -79,18 +76,14 @@ public abstract class HoodieLazyInsertIterable<T extends HoodieRecordPayload>
 
   // Used for caching HoodieRecord along with insertValue. We need this to offload computation work to buffering thread.
   public static class HoodieInsertValueGenResult<T extends HoodieRecord> {
-    public T record;
-    public Option<IndexedRecord> insertValue;
-    // It caches the exception seen while fetching insert value.
-    public Option<Exception> exception = Option.empty();
+    public final T record;
+    public final Schema schema;
+    public final Properties props;
 
     public HoodieInsertValueGenResult(T record, Schema schema, Properties properties) {
       this.record = record;
-      try {
-        this.insertValue = ((HoodieRecordPayload) record.getData()).getInsertValue(schema, properties);
-      } catch (Exception e) {
-        this.exception = Option.of(e);
-      }
+      this.schema = schema;
+      this.props = properties;
     }
   }
 
