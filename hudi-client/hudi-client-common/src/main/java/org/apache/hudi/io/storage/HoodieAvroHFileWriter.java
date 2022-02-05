@@ -18,14 +18,6 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -38,6 +30,13 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.io.Writable;
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
@@ -54,8 +53,8 @@ import java.util.concurrent.atomic.AtomicLong;
  *  1. Records should be added in order of keys
  *  2. There are no column stats
  */
-public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedRecord>
-    implements HoodieFileWriter<R> {
+public class HoodieAvroHFileWriter<T extends HoodieRecordPayload, R extends IndexedRecord>
+    implements HoodieAvroFileWriter<R> {
   private static AtomicLong recordIndex = new AtomicLong(1);
 
   private final Path file;
@@ -74,8 +73,8 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   // This is private in CacheConfig so have been copied here.
   private static String DROP_BEHIND_CACHE_COMPACTION_KEY = "hbase.hfile.drop.behind.compaction";
 
-  public HoodieHFileWriter(String instantTime, Path file, HoodieHFileConfig hfileConfig, Schema schema,
-                           TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
+  public HoodieAvroHFileWriter(String instantTime, Path file, HoodieHFileConfig hfileConfig, Schema schema,
+                               TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
 
     Configuration conf = FSUtils.registerFileSystem(file, hfileConfig.getHadoopConf());
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);

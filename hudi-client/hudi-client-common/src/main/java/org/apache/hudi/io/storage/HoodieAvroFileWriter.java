@@ -18,16 +18,15 @@
 
 package org.apache.hudi.io.storage;
 
-import java.util.concurrent.atomic.AtomicLong;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 
-import org.apache.avro.generic.IndexedRecord;
-
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicLong;
 
-public interface HoodieFileWriter<R extends IndexedRecord> {
+public interface HoodieAvroFileWriter<R extends IndexedRecord> {
 
   void writeAvroWithMetadata(R newRecord, HoodieRecord record) throws IOException;
 

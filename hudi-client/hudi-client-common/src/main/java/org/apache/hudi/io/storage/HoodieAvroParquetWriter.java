@@ -18,16 +18,15 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 
@@ -38,8 +37,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * HoodieParquetWriter extends the ParquetWriter to help limit the size of underlying file. Provides a way to check if
  * the current file can take more records with the <code>canWrite()</code>
  */
-public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends IndexedRecord>
-    extends ParquetWriter<IndexedRecord> implements HoodieFileWriter<R> {
+public class HoodieAvroParquetWriter<T extends HoodieRecordPayload, R extends IndexedRecord>
+    extends ParquetWriter<IndexedRecord> implements HoodieAvroFileWriter<R> {
 
   private static AtomicLong recordIndex = new AtomicLong(1);
 
@@ -51,12 +50,12 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
 
-  public HoodieParquetWriter(String instantTime,
-                             Path file,
-                             HoodieAvroParquetConfig parquetConfig,
-                             Schema schema,
-                             TaskContextSupplier taskContextSupplier,
-                             boolean populateMetaFields) throws IOException {
+  public HoodieAvroParquetWriter(String instantTime,
+                                 Path file,
+                                 HoodieAvroParquetConfig parquetConfig,
+                                 Schema schema,
+                                 TaskContextSupplier taskContextSupplier,
+                                 boolean populateMetaFields) throws IOException {
     super(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf()),
         ParquetFileWriter.Mode.CREATE,
         parquetConfig.getWriteSupport(),

@@ -47,10 +47,10 @@ import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_MAX_RECORD_KEY_
 import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.io.storage.HoodieOrcConfig.AVRO_SCHEMA_METADATA_KEY;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestHoodieOrcReaderWriter {
   private final Path filePath = new Path(System.getProperty("java.io.tmpdir") + "/f1_1-0-1_000.orc");
@@ -64,7 +64,7 @@ public class TestHoodieOrcReaderWriter {
     }
   }
 
-  private HoodieOrcWriter createOrcWriter(Schema avroSchema) throws Exception {
+  private HoodieAvroOrcWriter createOrcWriter(Schema avroSchema) throws Exception {
     BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.00001, -1, BloomFilterTypeCode.SIMPLE.name());
     Configuration conf = new Configuration();
     int orcStripSize = Integer.parseInt(HoodieStorageConfig.ORC_STRIPE_SIZE.defaultValue());
@@ -73,13 +73,13 @@ public class TestHoodieOrcReaderWriter {
     HoodieOrcConfig config = new HoodieOrcConfig(conf, CompressionKind.ZLIB, orcStripSize, orcBlockSize, maxFileSize, filter);
     TaskContextSupplier mockTaskContextSupplier = Mockito.mock(TaskContextSupplier.class);
     String instantTime = "000";
-    return new HoodieOrcWriter(instantTime, filePath, config, avroSchema, mockTaskContextSupplier);
+    return new HoodieAvroOrcWriter(instantTime, filePath, config, avroSchema, mockTaskContextSupplier);
   }
 
   @Test
   public void testWriteReadMetadata() throws Exception {
     Schema avroSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchema.avsc");
-    HoodieOrcWriter writer = createOrcWriter(avroSchema);
+    HoodieAvroOrcWriter writer = createOrcWriter(avroSchema);
     for (int i = 0; i < 3; i++) {
       GenericRecord record = new GenericData.Record(avroSchema);
       record.put("_row_key", "key" + i);
@@ -114,7 +114,7 @@ public class TestHoodieOrcReaderWriter {
   @Test
   public void testWriteReadPrimitiveRecord() throws Exception {
     Schema avroSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchema.avsc");
-    HoodieOrcWriter writer = createOrcWriter(avroSchema);
+    HoodieAvroOrcWriter writer = createOrcWriter(avroSchema);
     for (int i = 0; i < 3; i++) {
       GenericRecord record = new GenericData.Record(avroSchema);
       record.put("_row_key", "key" + i);
@@ -145,7 +145,7 @@ public class TestHoodieOrcReaderWriter {
   public void testWriteReadComplexRecord() throws Exception {
     Schema avroSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchemaWithUDT.avsc");
     Schema udtSchema = avroSchema.getField("driver").schema().getTypes().get(1);
-    HoodieOrcWriter writer = createOrcWriter(avroSchema);
+    HoodieAvroOrcWriter writer = createOrcWriter(avroSchema);
     for (int i = 0; i < 3; i++) {
       GenericRecord record = new GenericData.Record(avroSchema);
       record.put("_row_key", "key" + i);
@@ -186,7 +186,7 @@ public class TestHoodieOrcReaderWriter {
   @Test
   public void testWriteReadWithEvolvedSchema() throws Exception {
     Schema avroSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchema.avsc");
-    HoodieOrcWriter writer = createOrcWriter(avroSchema);
+    HoodieAvroOrcWriter writer = createOrcWriter(avroSchema);
     for (int i = 0; i < 3; i++) {
       GenericRecord record = new GenericData.Record(avroSchema);
       record.put("_row_key", "key" + i);

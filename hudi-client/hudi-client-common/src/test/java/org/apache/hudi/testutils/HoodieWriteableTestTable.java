@@ -19,6 +19,12 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
@@ -38,18 +44,11 @@ import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieStorageConfig;
+import org.apache.hudi.io.storage.HoodieAvroOrcWriter;
 import org.apache.hudi.io.storage.HoodieAvroParquetConfig;
+import org.apache.hudi.io.storage.HoodieAvroParquetWriter;
 import org.apache.hudi.io.storage.HoodieOrcConfig;
-import org.apache.hudi.io.storage.HoodieOrcWriter;
-import org.apache.hudi.io.storage.HoodieParquetWriter;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.orc.CompressionKind;
@@ -113,7 +112,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
       HoodieAvroParquetConfig config = new HoodieAvroParquetConfig(writeSupport, CompressionCodecName.GZIP,
           ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, 120 * 1024 * 1024,
           new Configuration(), Double.parseDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION.defaultValue()));
-      try (HoodieParquetWriter writer = new HoodieParquetWriter(
+      try (HoodieAvroParquetWriter writer = new HoodieAvroParquetWriter(
           currentInstantTime,
           new Path(Paths.get(basePath, partition, fileName).toString()),
           config, schema, contextSupplier, populateMetaFields)) {
@@ -136,7 +135,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
       int orcBlockSize = Integer.parseInt(HoodieStorageConfig.ORC_BLOCK_SIZE.defaultValue());
       int maxFileSize = Integer.parseInt(HoodieStorageConfig.ORC_FILE_MAX_SIZE.defaultValue());
       HoodieOrcConfig config = new HoodieOrcConfig(conf, CompressionKind.ZLIB, orcStripSize, orcBlockSize, maxFileSize, filter);
-      try (HoodieOrcWriter writer = new HoodieOrcWriter(
+      try (HoodieAvroOrcWriter writer = new HoodieAvroOrcWriter(
           currentInstantTime,
           new Path(Paths.get(basePath, partition, fileName).toString()),
           config, schema, contextSupplier)) {
