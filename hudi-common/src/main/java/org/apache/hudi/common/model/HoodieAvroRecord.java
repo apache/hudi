@@ -22,6 +22,8 @@ package org.apache.hudi.common.model;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.io.storage.HoodieFileWriter;
 import org.apache.hudi.common.io.storage.HoodieRecordFileWriter;
 import org.apache.hudi.common.util.Option;
@@ -120,9 +122,11 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public HoodieRecord rewriteRecord(Schema schema) throws IOException {
-    Option<IndexedRecord> avroRecordPayloadOpt = getData().getInsertValue(schema);
-    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload((GenericRecord) avroRecordPayloadOpt.get()), getOperation());
+  public HoodieRecord rewriteRecord(Schema recordSchema, Schema targetSchema, TypedProperties props) throws IOException {
+    Option<IndexedRecord> avroRecordPayloadOpt = getData().getInsertValue(recordSchema, props);
+    GenericRecord avroPayloadInNewSchema =
+        HoodieAvroUtils.rewriteRecord((GenericRecord) avroRecordPayloadOpt.get(), targetSchema);
+    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(avroPayloadInNewSchema), getOperation());
   }
 
   @Override

@@ -20,6 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.io.storage.HoodieFileWriter;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -36,6 +37,8 @@ import java.util.stream.IntStream;
 
 /**
  * A Single Record managed by Hoodie.
+ *
+ * TODO make immutable
  */
 public abstract class HoodieRecord<T> implements Serializable {
 
@@ -266,7 +269,7 @@ public abstract class HoodieRecord<T> implements Serializable {
   //       be combined
   public abstract Option<HoodieRecord<T>> combineAndGetUpdateValue(HoodieRecord<T> previousRecord, Schema schema, Properties props) throws IOException;
 
-  public abstract HoodieRecord<T> rewriteRecord(Schema schema) throws IOException;
+  public abstract HoodieRecord<T> rewriteRecord(Schema recordSchema, Schema targetSchema, TypedProperties props) throws IOException;
 
   public abstract HoodieRecord<T> overrideMetadataFieldValue(HoodieMetadataField metadataField, String value) throws IOException;
 

@@ -26,10 +26,19 @@ import java.util.Properties;
 
 public interface HoodieFileWriter {
 
-  // TODO rename
+  boolean canWrite();
+
   void writeWithMetadata(HoodieRecord record, Schema schema, Properties props) throws IOException;
 
-  // TODO rename
   void write(HoodieRecord record, Schema schema, Properties props) throws IOException;
 
+  void close() throws IOException;
+
+  default void writeWithMetadata(HoodieRecord record, Schema schema) throws IOException {
+    writeWithMetadata(record, schema, new Properties());
+  }
+
+  default void write(HoodieRecord record, Schema schema) throws IOException {
+    write(record, schema, new Properties());
+  }
 }
