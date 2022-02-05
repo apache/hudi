@@ -38,12 +38,31 @@ import java.util.stream.IntStream;
  */
 public abstract class HoodieRecord<T> implements Serializable {
 
-  public static final String COMMIT_TIME_METADATA_FIELD = "_hoodie_commit_time";
-  public static final String COMMIT_SEQNO_METADATA_FIELD = "_hoodie_commit_seqno";
-  public static final String RECORD_KEY_METADATA_FIELD = "_hoodie_record_key";
-  public static final String PARTITION_PATH_METADATA_FIELD = "_hoodie_partition_path";
-  public static final String FILENAME_METADATA_FIELD = "_hoodie_file_name";
-  public static final String OPERATION_METADATA_FIELD = "_hoodie_operation";
+  public static final String COMMIT_TIME_METADATA_FIELD = HoodieMetadataField.COMMIT_TIME_METADATA_FIELD.getFieldName();
+  public static final String COMMIT_SEQNO_METADATA_FIELD = HoodieMetadataField.COMMIT_SEQNO_METADATA_FIELD.getFieldName();
+  public static final String RECORD_KEY_METADATA_FIELD = HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName();
+  public static final String PARTITION_PATH_METADATA_FIELD = HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.getFieldName();
+  public static final String FILENAME_METADATA_FIELD = HoodieMetadataField.FILENAME_METADATA_FIELD.getFieldName();
+  public static final String OPERATION_METADATA_FIELD = HoodieMetadataField.OPERATION_METADATA_FIELD.getFieldName();
+
+  public enum HoodieMetadataField {
+    COMMIT_TIME_METADATA_FIELD("_hoodie_commit_time"),
+    COMMIT_SEQNO_METADATA_FIELD("_hoodie_commit_seqno"),
+    RECORD_KEY_METADATA_FIELD("_hoodie_record_key"),
+    PARTITION_PATH_METADATA_FIELD("_hoodie_partition_path"),
+    FILENAME_METADATA_FIELD("_hoodie_file_name"),
+    OPERATION_METADATA_FIELD("_hoodie_operation");
+
+    private final String fieldName;
+
+    HoodieMetadataField(String fieldName) {
+      this.fieldName = fieldName;
+    }
+
+    public String getFieldName() {
+      return fieldName;
+    }
+  }
 
   public static final EmptyRecord SENTINEL = new EmptyRecord();
 
@@ -242,7 +261,13 @@ public abstract class HoodieRecord<T> implements Serializable {
   //       be combined
   public abstract Option<HoodieRecord<T>> combineAndGetUpdateValue(HoodieRecord<T> previousRecord, Schema schema, Properties props) throws IOException;
 
+  public abstract HoodieRecord<T> rewriteRecord(Schema schema) throws IOException;
+
+  public abstract HoodieRecord<T> overrideMetadataFieldValue(HoodieMetadataField metadataField, String value) throws IOException;
+
   public abstract Option<Map<String, String>> getMetadata();
+
+  public abstract boolean canBeIgnored();
 
   //////////////////////////////////////////////////////////////////////////////
 

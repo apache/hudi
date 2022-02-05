@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 
+import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Objects;
@@ -95,18 +96,53 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
           // NOTE: It's assumed that records aren't precombined more than once in its lifecycle,
           //       therefore we simply stub out precombine value here
           int newPreCombineVal = 0;
-          T combinedPayload = unsafeCast(
-              ReflectionUtils.loadPayload(
-                  getData().getClass().getCanonicalName(),
-                  new Object[]{combinedAvroPayload, newPreCombineVal /* NOTE */},
-                  GenericRecord.class,
-                  Comparable.class));
+          T combinedPayload = instantiateRecordPayloadWrapper(combinedAvroPayload, newPreCombineVal);
           return new HoodieAvroRecord<>(getKey(), combinedPayload, getOperation());
         });
   }
 
+  @Override
+  public HoodieRecord rewriteRecord(Schema schema) throws IOException {
+    Option<IndexedRecord> avroRecordPayloadOpt = getData().getInsertValue(schema);
+    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload((GenericRecord) avroRecordPayloadOpt.get()), getOperation());
+  }
+
+  @Override
+  public HoodieRecord overrideMetadataFieldValue(HoodieMetadataField metadataField, String value) throws IOException {
+    // NOTE: RewriteAvroPayload is expected here
+    Option<IndexedRecord> avroPayloadOpt = getData().getInsertValue(null);
+    IndexedRecord avroPayload = avroPayloadOpt.get();
+
+    avroPayload.put(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(metadataField.getFieldName()), value);
+
+    return new HoodieAvroRecord(getKey(), new RewriteAvroPayload((GenericRecord) avroPayload), getOperation());
+  }
+
   public Option<Map<String, String>> getMetadata() {
     return getData().getMetadata();
+  }
+
+  @Override
+  public boolean canBeIgnored() {
+    return getData().canBeIgnored();
+  }
+
+  @Nonnull
+  private T instantiateRecordPayloadWrapper(Object combinedAvroPayload, Comparable newPreCombineVal) {
+    return unsafeCast(
+        ReflectionUtils.loadPayload(
+            getData().getClass().getCanonicalName(),
+            new Object[]{combinedAvroPayload, newPreCombineVal},
+            GenericRecord.class,
+            Comparable.class));
+  }
+
+  private static <T extends HoodieRecordPayload> Comparable getPrecombineValue(T data) {
+    if (data instanceof BaseAvroPayload) {
+      return ((BaseAvroPayload) data).orderingVal;
+    }
+
+    return -1;
   }
 
   //////////////////////////////////////////////////////////////////////////////
