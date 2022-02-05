@@ -38,6 +38,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.exception.HoodieException;
 
+import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -46,6 +47,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 public class HoodieCompactor {
 
@@ -80,8 +82,8 @@ public class HoodieCompactor {
     public String tableName = null;
     @Parameter(names = {"--instant-time", "-it"}, description = "Compaction Instant time", required = false)
     public String compactionInstantTime = null;
-    @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert", required = true)
-    public int parallelism = 1;
+    @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert", required = false)
+    public int parallelism = 200;
     @Parameter(names = {"--schema-file", "-sf"}, description = "path for Avro schema file", required = false)
     public String schemaFile = null;
     @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
@@ -97,7 +99,7 @@ public class HoodieCompactor {
         + "Set \"scheduleAndExecute\" means make a compact plan first and execute that plan immediately", required = false)
     public String runningMode = null;
     @Parameter(names = {"--strategy", "-st"}, description = "Strategy Class", required = false)
-    public String strategyClassName = null;
+    public String strategyClassName = LogFileSizeBasedCompactionStrategy.class.getName();
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
 
@@ -107,8 +109,57 @@ public class HoodieCompactor {
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
         + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
-            splitter = IdentitySplitter.class)
+        splitter = IdentitySplitter.class)
     public List<String> configs = new ArrayList<>();
+
+    @Override
+    public String toString() {
+      return "HoodieCompactorConfig {\n"
+          + "   --base-path " + basePath + ", \n"
+          + "   --table-name " + tableName + ", \n"
+          + "   --instant-time " + compactionInstantTime + ", \n"
+          + "   --parallelism " + parallelism + ", \n"
+          + "   --schema-file " + schemaFile + ", \n"
+          + "   --spark-master " + sparkMaster + ", \n"
+          + "   --spark-memory " + sparkMemory + ", \n"
+          + "   --retry " + retry + ", \n"
+          + "   --schedule " + runSchedule + ", \n"
+          + "   --mode " + runningMode + ", \n"
+          + "   --strategy " + strategyClassName + ", \n"
+          + "   --props " + propsFilePath + ", \n"
+          + "   --hoodie-conf " + configs
+          + "\n}";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      Config config = (Config) o;
+      return basePath.equals(config.basePath)
+          && Objects.equals(tableName, config.tableName)
+          && Objects.equals(compactionInstantTime, config.compactionInstantTime)
+          && Objects.equals(parallelism, config.parallelism)
+          && Objects.equals(schemaFile, config.schemaFile)
+          && Objects.equals(sparkMaster, config.sparkMaster)
+          && Objects.equals(sparkMemory, config.sparkMemory)
+          && Objects.equals(retry, config.retry)
+          && Objects.equals(runSchedule, config.runSchedule)
+          && Objects.equals(runningMode, config.runningMode)
+          && Objects.equals(strategyClassName, config.strategyClassName)
+          && Objects.equals(propsFilePath, config.propsFilePath)
+          && Objects.equals(configs, config.configs);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(basePath, tableName, compactionInstantTime, schemaFile,
+          sparkMaster, parallelism, sparkMemory, retry, runSchedule, runningMode, strategyClassName, propsFilePath, configs, help);
+    }
   }
 
   public static void main(String[] args) {
@@ -133,6 +184,8 @@ public class HoodieCompactor {
     this.fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
     // need to do validate in case that users call compact() directly without setting cfg.runningMode
     validateRunningMode(cfg);
+    LOG.info(cfg);
+
     int ret = UtilHelpers.retry(retry, () -> {
       switch (cfg.runningMode.toLowerCase()) {
         case SCHEDULE: {
@@ -194,9 +247,10 @@ public class HoodieCompactor {
     } else {
       schemaStr = UtilHelpers.parseSchema(fs, cfg.schemaFile);
     }
+    LOG.info("Schema --> : " + schemaStr);
 
     try (SparkRDDWriteClient<HoodieRecordPayload> client =
-                UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
+             UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
       // If no compaction instant is provided by --instant-time, find the earliest scheduled compaction
       // instant from the active timeline
       if (StringUtils.isNullOrEmpty(cfg.compactionInstantTime)) {
@@ -219,7 +273,7 @@ public class HoodieCompactor {
 
   private Option<String> doSchedule(JavaSparkContext jsc) {
     try (SparkRDDWriteClient client =
-            UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.of(cfg.strategyClassName), props)) {
+             UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.of(cfg.strategyClassName), props)) {
 
       if (StringUtils.isNullOrEmpty(cfg.compactionInstantTime)) {
         LOG.warn("No instant time is provided for scheduling compaction.");
