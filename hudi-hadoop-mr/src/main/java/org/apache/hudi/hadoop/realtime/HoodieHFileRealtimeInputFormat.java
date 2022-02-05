@@ -18,6 +18,8 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
@@ -87,5 +89,11 @@ public class HoodieHFileRealtimeInputFormat extends HoodieRealtimeFileInputForma
 
     return new HoodieRealtimeRecordReader((HoodieRealtimeFileSplit) split, jobConf,
         hFileInputFormat.getRecordReader(split, jobConf, reporter));
+  }
+
+  @Override
+  protected boolean isSplitable(FileSystem fs, Path filename) {
+    // This file isn't splittable.
+    return false;
   }
 }
