@@ -20,6 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.common.io.storage.HoodieFileWriter;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -243,6 +244,10 @@ public abstract class HoodieRecord<T> implements Serializable {
       throw new UnsupportedOperationException("Not allowed to modify after sealed");
     }
   }
+
+  public abstract void writeWithMetadata(HoodieFileWriter writer, Schema schema, Properties props) throws IOException;
+
+  public abstract void write(HoodieFileWriter writer, Schema schema, Properties props) throws IOException;
 
   //////////////////////////////////////////////////////////////////////////////
 

@@ -22,6 +22,8 @@ package org.apache.hudi.common.model;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hudi.common.io.storage.HoodieFileWriter;
+import org.apache.hudi.common.io.storage.HoodieRecordFileWriter;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -61,6 +63,22 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
       throw new IllegalStateException("Payload already deflated for record.");
     }
     return data;
+  }
+
+  @Override
+  public void writeWithMetadata(HoodieFileWriter writer, Schema schema, Properties props) throws IOException {
+    HoodieRecordFileWriter<IndexedRecord> avroWriter = unsafeCast(writer);
+    IndexedRecord avroPayload = (IndexedRecord) getData().getInsertValue(schema, props).get();
+
+    avroWriter.writeWithMetadata(avroPayload, this);
+  }
+
+  @Override
+  public void write(HoodieFileWriter writer, Schema schema, Properties props) throws IOException {
+    HoodieRecordFileWriter<IndexedRecord> avroWriter = unsafeCast(writer);
+    IndexedRecord avroPayload = (IndexedRecord) getData().getInsertValue(schema, props).get();
+
+    avroWriter.write(getRecordKey(), avroPayload);
   }
 
   //////////////////////////////////////////////////////////////////////////////
