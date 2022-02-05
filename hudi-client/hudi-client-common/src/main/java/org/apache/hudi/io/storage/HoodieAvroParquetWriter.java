@@ -81,7 +81,7 @@ public class HoodieAvroParquetWriter extends ParquetWriter<IndexedRecord> implem
   }
 
   @Override
-  public void writeAvroWithMetadata(IndexedRecord avroRecord, HoodieRecord record) throws IOException {
+  public void writeWithMetadata(IndexedRecord avroRecord, HoodieRecord record) throws IOException {
     if (populateMetaFields) {
       prepRecordWithMetadata(avroRecord, record, instantTime,
           taskContextSupplier.getPartitionIdSupplier().get(), recordIndex, file.getName());
@@ -98,7 +98,7 @@ public class HoodieAvroParquetWriter extends ParquetWriter<IndexedRecord> implem
   }
 
   @Override
-  public void writeAvro(String key, IndexedRecord object) throws IOException {
+  public void write(String key, IndexedRecord object) throws IOException {
     super.write(object);
     if (populateMetaFields) {
       writeSupport.add(key);

@@ -93,10 +93,10 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
   }
 
   @Override
-  public void writeAvroWithMetadata(IndexedRecord avroRecord, HoodieRecord record) throws IOException {
+  public void writeWithMetadata(IndexedRecord avroRecord, HoodieRecord record) throws IOException {
     prepRecordWithMetadata(avroRecord, record, instantTime,
         taskContextSupplier.getPartitionIdSupplier().get(), RECORD_INDEX, file.getName());
-    writeAvro(record.getRecordKey(), avroRecord);
+    write(record.getRecordKey(), avroRecord);
   }
 
   @Override
@@ -105,7 +105,7 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
   }
 
   @Override
-  public void writeAvro(String recordKey, IndexedRecord object) throws IOException {
+  public void write(String recordKey, IndexedRecord object) throws IOException {
     for (int col = 0; col < batch.numCols; col++) {
       ColumnVector colVector = batch.cols[col];
       final String thisField = fieldNames.get(col);

@@ -122,11 +122,11 @@ public class TestHoodieHFileReaderWriter {
       record.put("time", Integer.toString(RANDOM.nextInt()));
       record.put("number", i);
       if (testAvroWithMeta) {
-        writer.writeAvroWithMetadata(record, new HoodieAvroRecord(new HoodieKey((String) record.get("_row_key"),
+        writer.writeWithMetadata(record, new HoodieAvroRecord(new HoodieKey((String) record.get("_row_key"),
             Integer.toString((Integer) record.get("number"))), new EmptyHoodieRecordPayload())); // payload does not matter. GenericRecord passed in is what matters
         // only HoodieKey will be looked up from the 2nd arg(HoodieRecord).
       } else {
-        writer.writeAvro(key, record);
+        writer.write(key, record);
       }
       recordMap.put(key, record);
     }

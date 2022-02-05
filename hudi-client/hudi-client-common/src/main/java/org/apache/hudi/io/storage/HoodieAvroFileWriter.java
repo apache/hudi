@@ -18,25 +18,33 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.io.storage.HoodieRecordFileWriter;
 import org.apache.hudi.common.model.HoodieRecord;
 
 import java.io.IOException;
+import java.util.Properties;
 import java.util.concurrent.atomic.AtomicLong;
 
-public interface HoodieAvroFileWriter {
-
-  void writeAvroWithMetadata(IndexedRecord newRecord, HoodieRecord record) throws IOException;
-
-  boolean canWrite();
-
-  void close() throws IOException;
-
-  void writeAvro(String key, IndexedRecord oldRecord) throws IOException;
+public interface HoodieAvroFileWriter extends HoodieRecordFileWriter<IndexedRecord> {
 
   long getBytesWritten();
+
+  // TODO rename
+  @Override
+  default void writeWithMetadata(HoodieRecord record, Schema schema, Properties props) throws IOException {
+    record.writeWithMetadata(this, schema, props);
+  }
+
+  // TODO rename
+  @Override
+  default void write(HoodieRecord record, Schema schema, Properties props) throws IOException {
+    record.write(this, schema, props);
+  }
+
 
   default void prepRecordWithMetadata(IndexedRecord avroRecord, HoodieRecord record, String instantTime, Integer partitionId, AtomicLong recordIndex, String fileName) {
     String seqId = HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex.getAndIncrement());

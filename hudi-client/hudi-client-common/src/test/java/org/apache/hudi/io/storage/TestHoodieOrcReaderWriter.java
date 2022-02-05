@@ -85,7 +85,7 @@ public class TestHoodieOrcReaderWriter {
       record.put("_row_key", "key" + i);
       record.put("time", Integer.toString(i));
       record.put("number", i);
-      writer.writeAvro("key" + i, record);
+      writer.write("key" + i, record);
     }
     writer.close();
 
@@ -120,7 +120,7 @@ public class TestHoodieOrcReaderWriter {
       record.put("_row_key", "key" + i);
       record.put("time", Integer.toString(i));
       record.put("number", i);
-      writer.writeAvro("key" + i, record);
+      writer.write("key" + i, record);
     }
     writer.close();
 
@@ -156,7 +156,7 @@ public class TestHoodieOrcReaderWriter {
       innerRecord.put("list", Collections.singletonList(i));
       innerRecord.put("map", Collections.singletonMap("key" + i, "value" + i));
       record.put("driver", innerRecord);
-      writer.writeAvro("key" + i, record);
+      writer.write("key" + i, record);
     }
     writer.close();
 
@@ -192,7 +192,7 @@ public class TestHoodieOrcReaderWriter {
       record.put("_row_key", "key" + i);
       record.put("time", Integer.toString(i));
       record.put("number", i);
-      writer.writeAvro("key" + i, record);
+      writer.write("key" + i, record);
     }
     writer.close();
 

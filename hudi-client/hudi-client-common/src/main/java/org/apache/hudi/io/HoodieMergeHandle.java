@@ -293,9 +293,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
         IndexedRecord recordWithMetadataInSchema = rewriteRecord((GenericRecord) indexedRecord.get());
         if (preserveMetadata) {
-          fileWriter.writeAvro(hoodieRecord.getRecordKey(), recordWithMetadataInSchema);
+          fileWriter.write(hoodieRecord.getRecordKey(), recordWithMetadataInSchema);
         } else {
-          fileWriter.writeAvroWithMetadata(recordWithMetadataInSchema, hoodieRecord);
+          fileWriter.writeWithMetadata(recordWithMetadataInSchema, hoodieRecord);
         }
         recordsWritten++;
       } else {
@@ -353,7 +353,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     if (copyOldRecord) {
       // this should work as it is, since this is an existing record
       try {
-        fileWriter.writeAvro(key, oldRecord);
+        fileWriter.write(key, oldRecord);
       } catch (IOException | RuntimeException e) {
         String errMsg = String.format("Failed to merge old record into new file for key %s from old file %s to new file %s with writerSchema %s",
                 key, getOldFilePath(), newFilePath, writeSchemaWithMetaFields.toString(true));

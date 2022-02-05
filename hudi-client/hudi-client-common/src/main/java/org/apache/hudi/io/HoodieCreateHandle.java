@@ -141,9 +141,9 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
         if (preserveHoodieMetadata) {
           // do not preserve FILENAME_METADATA_FIELD
           recordWithMetadataInSchema.put(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.FILENAME_METADATA_FIELD), path.getName());
-          fileWriter.writeAvro(record.getRecordKey(), recordWithMetadataInSchema);
+          fileWriter.write(record.getRecordKey(), recordWithMetadataInSchema);
         } else {
-          fileWriter.writeAvroWithMetadata(recordWithMetadataInSchema, record);
+          fileWriter.writeWithMetadata(recordWithMetadataInSchema, record);
         }
         // update the new location of record, so we know where to find it next
         record.unseal();

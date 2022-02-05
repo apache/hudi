@@ -109,13 +109,13 @@ public class HoodieAvroHFileWriter
   }
 
   @Override
-  public void writeAvroWithMetadata(IndexedRecord avroRecord, HoodieRecord record) throws IOException {
+  public void writeWithMetadata(IndexedRecord avroRecord, HoodieRecord record) throws IOException {
     if (populateMetaFields) {
       prepRecordWithMetadata(avroRecord, record, instantTime,
           taskContextSupplier.getPartitionIdSupplier().get(), recordIndex, file.getName());
-      writeAvro(record.getRecordKey(), (IndexedRecord) avroRecord);
+      write(record.getRecordKey(), (IndexedRecord) avroRecord);
     } else {
-      writeAvro(record.getRecordKey(), (IndexedRecord) avroRecord);
+      write(record.getRecordKey(), (IndexedRecord) avroRecord);
     }
   }
 
@@ -125,7 +125,7 @@ public class HoodieAvroHFileWriter
   }
 
   @Override
-  public void writeAvro(String recordKey, IndexedRecord record) throws IOException {
+  public void write(String recordKey, IndexedRecord record) throws IOException {
     byte[] value = null;
     boolean isRecordSerialized = false;
     if (keyFieldSchema.isPresent()) {
