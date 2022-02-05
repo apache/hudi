@@ -36,7 +36,6 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
@@ -53,8 +52,8 @@ import java.util.concurrent.atomic.AtomicLong;
  *  1. Records should be added in order of keys
  *  2. There are no column stats
  */
-public class HoodieAvroHFileWriter<T extends HoodieRecordPayload, R extends IndexedRecord>
-    implements HoodieAvroFileWriter<R> {
+public class HoodieAvroHFileWriter
+    implements HoodieAvroFileWriter {
   private static AtomicLong recordIndex = new AtomicLong(1);
 
   private final Path file;
@@ -110,7 +109,7 @@ public class HoodieAvroHFileWriter<T extends HoodieRecordPayload, R extends Inde
   }
 
   @Override
-  public void writeAvroWithMetadata(R avroRecord, HoodieRecord record) throws IOException {
+  public void writeAvroWithMetadata(IndexedRecord avroRecord, HoodieRecord record) throws IOException {
     if (populateMetaFields) {
       prepRecordWithMetadata(avroRecord, record, instantTime,
           taskContextSupplier.getPartitionIdSupplier().get(), recordIndex, file.getName());

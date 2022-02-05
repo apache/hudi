@@ -95,7 +95,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
 
   protected Map<String, HoodieRecord<T>> keyToNewRecords;
   protected Set<String> writtenRecordKeys;
-  protected HoodieAvroFileWriter<IndexedRecord> fileWriter;
+  protected HoodieAvroFileWriter fileWriter;
   private boolean preserveMetadata = false;
 
   protected Path newFilePath;

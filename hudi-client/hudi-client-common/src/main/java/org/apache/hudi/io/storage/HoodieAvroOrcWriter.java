@@ -29,7 +29,6 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.orc.OrcFile;
 import org.apache.orc.TypeDescription;
@@ -48,8 +47,7 @@ import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_TY
 import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER;
 import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER;
 
-public class HoodieAvroOrcWriter<T extends HoodieRecordPayload, R extends IndexedRecord>
-    implements HoodieAvroFileWriter<R>, Closeable {
+public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
   private static final AtomicLong RECORD_INDEX = new AtomicLong(1);
 
   private final long maxFileSize;
@@ -95,7 +93,7 @@ public class HoodieAvroOrcWriter<T extends HoodieRecordPayload, R extends Indexe
   }
 
   @Override
-  public void writeAvroWithMetadata(R avroRecord, HoodieRecord record) throws IOException {
+  public void writeAvroWithMetadata(IndexedRecord avroRecord, HoodieRecord record) throws IOException {
     prepRecordWithMetadata(avroRecord, record, instantTime,
         taskContextSupplier.getPartitionIdSupplier().get(), RECORD_INDEX, file.getName());
     writeAvro(record.getRecordKey(), avroRecord);

@@ -26,19 +26,19 @@ import org.apache.hudi.common.model.HoodieRecord;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
 
-public interface HoodieAvroFileWriter<R extends IndexedRecord> {
+public interface HoodieAvroFileWriter {
 
-  void writeAvroWithMetadata(R newRecord, HoodieRecord record) throws IOException;
+  void writeAvroWithMetadata(IndexedRecord newRecord, HoodieRecord record) throws IOException;
 
   boolean canWrite();
 
   void close() throws IOException;
 
-  void writeAvro(String key, R oldRecord) throws IOException;
+  void writeAvro(String key, IndexedRecord oldRecord) throws IOException;
 
   long getBytesWritten();
 
-  default void prepRecordWithMetadata(R avroRecord, HoodieRecord record, String instantTime, Integer partitionId, AtomicLong recordIndex, String fileName) {
+  default void prepRecordWithMetadata(IndexedRecord avroRecord, HoodieRecord record, String instantTime, Integer partitionId, AtomicLong recordIndex, String fileName) {
     String seqId = HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex.getAndIncrement());
     HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord, record.getRecordKey(), record.getPartitionPath(), fileName);
     HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord, instantTime, seqId);

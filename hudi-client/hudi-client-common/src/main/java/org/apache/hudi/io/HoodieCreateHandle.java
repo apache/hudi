@@ -52,7 +52,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
 
   private static final Logger LOG = LogManager.getLogger(HoodieCreateHandle.class);
 
-  protected final HoodieAvroFileWriter<IndexedRecord> fileWriter;
+  protected final HoodieAvroFileWriter fileWriter;
   protected final Path path;
   protected long recordsWritten = 0;
   protected long insertRecordsWritten = 0;

@@ -26,7 +26,6 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 
@@ -37,8 +36,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * HoodieParquetWriter extends the ParquetWriter to help limit the size of underlying file. Provides a way to check if
  * the current file can take more records with the <code>canWrite()</code>
  */
-public class HoodieAvroParquetWriter<T extends HoodieRecordPayload, R extends IndexedRecord>
-    extends ParquetWriter<IndexedRecord> implements HoodieAvroFileWriter<R> {
+public class HoodieAvroParquetWriter extends ParquetWriter<IndexedRecord> implements HoodieAvroFileWriter {
 
   private static AtomicLong recordIndex = new AtomicLong(1);
 
@@ -83,7 +81,7 @@ public class HoodieAvroParquetWriter<T extends HoodieRecordPayload, R extends In
   }
 
   @Override
-  public void writeAvroWithMetadata(R avroRecord, HoodieRecord record) throws IOException {
+  public void writeAvroWithMetadata(IndexedRecord avroRecord, HoodieRecord record) throws IOException {
     if (populateMetaFields) {
       prepRecordWithMetadata(avroRecord, record, instantTime,
           taskContextSupplier.getPartitionIdSupplier().get(), recordIndex, file.getName());
