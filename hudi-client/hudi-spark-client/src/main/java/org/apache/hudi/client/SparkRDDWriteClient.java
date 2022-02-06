@@ -299,7 +299,8 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
                                     HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                     String compactionCommitTime) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction");
-    List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect();
+    List<HoodieWriteStat> writeStats = metadata.getPartitionToWriteStats().entrySet().stream().flatMap(e ->
+        e.getValue().stream()).collect(Collectors.toList());
     final HoodieInstant compactionInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionCommitTime);
     try {
       this.txnManager.beginTransaction(Option.of(compactionInstant), Option.empty());
