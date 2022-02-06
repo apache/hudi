@@ -25,7 +25,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -33,12 +32,12 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Base flink implementation of {@link HoodieIndex}.
- * @param <T> payload type
  */
-public abstract class FlinkHoodieIndex<T extends HoodieRecordPayload> extends HoodieIndex<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
+public abstract class FlinkHoodieIndex<T extends HoodieRecordPayload> extends HoodieIndex<List<HoodieRecord<T>>, List<WriteStatus>> {
   protected FlinkHoodieIndex(HoodieWriteConfig config) {
     super(config);
   }
@@ -48,21 +47,22 @@ public abstract class FlinkHoodieIndex<T extends HoodieRecordPayload> extends Ho
   @PublicAPIMethod(maturity = ApiMaturityLevel.DEPRECATED)
   public abstract List<WriteStatus> updateLocation(List<WriteStatus> writeStatuses,
                                                    HoodieEngineContext context,
-                                                   HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> hoodieTable) throws HoodieIndexException;
+                                                   HoodieTable hoodieTable) throws HoodieIndexException;
 
   @Override
   @Deprecated
   @PublicAPIMethod(maturity = ApiMaturityLevel.DEPRECATED)
   public abstract List<HoodieRecord<T>> tagLocation(List<HoodieRecord<T>> records,
                                                     HoodieEngineContext context,
-                                                    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> hoodieTable) throws HoodieIndexException;
+                                                    HoodieTable hoodieTable) throws HoodieIndexException;
 
   @Override
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public HoodieData<HoodieRecord<T>> tagLocation(
-      HoodieData<HoodieRecord<T>> records, HoodieEngineContext context,
+  public <R> HoodieData<HoodieRecord<R>> tagLocation(
+      HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
       HoodieTable hoodieTable) throws HoodieIndexException {
-    return HoodieList.of(tagLocation(HoodieList.getList(records), context, hoodieTable));
+    List<HoodieRecord<T>> hoodieRecords = tagLocation(HoodieList.getList(records.map(record -> (HoodieRecord<T>) record)), context, hoodieTable);
+    return HoodieList.of(hoodieRecords.stream().map(r -> (HoodieRecord<R>) r).collect(Collectors.toList()));
   }
 
   @Override

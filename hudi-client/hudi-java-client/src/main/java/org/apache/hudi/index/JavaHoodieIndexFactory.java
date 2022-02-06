@@ -44,9 +44,9 @@ public final class JavaHoodieIndexFactory {
     // TODO more indexes to be added
     switch (config.getIndexType()) {
       case INMEMORY:
-        return new HoodieInMemoryHashIndex<>(config);
+        return new HoodieInMemoryHashIndex(config);
       case BLOOM:
-        return new HoodieBloomIndex<>(config, ListBasedHoodieBloomIndexHelper.getInstance());
+        return new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
       default:
         throw new HoodieIndexException("Unsupported index type " + config.getIndexType());
     }

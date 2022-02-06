@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -32,15 +31,14 @@ import java.util.Map;
  */
 public class HoodieCorruptBlock extends HoodieLogBlock {
 
-  private HoodieCorruptBlock(Option<byte[]> corruptedBytes, FSDataInputStream inputStream, boolean readBlockLazily,
-      Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
-      Map<HeaderMetadataType, String> footer) {
+  public HoodieCorruptBlock(Option<byte[]> corruptedBytes, FSDataInputStream inputStream, boolean readBlockLazily,
+                            Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
+                            Map<HeaderMetadataType, String> footer) {
     super(header, footer, blockContentLocation, corruptedBytes, inputStream, readBlockLazily);
   }
 
   @Override
   public byte[] getContentBytes() throws IOException {
-
     if (!getContent().isPresent() && readBlockLazily) {
       // read content from disk
       inflate();
@@ -53,11 +51,4 @@ public class HoodieCorruptBlock extends HoodieLogBlock {
     return HoodieLogBlockType.CORRUPT_BLOCK;
   }
 
-  public static HoodieLogBlock getBlock(HoodieLogFile logFile, FSDataInputStream inputStream,
-      Option<byte[]> corruptedBytes, boolean readBlockLazily, long position, long blockSize, long blockEndPos,
-      Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer) {
-
-    return new HoodieCorruptBlock(corruptedBytes, inputStream, readBlockLazily,
-        Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)), header, footer);
-  }
 }

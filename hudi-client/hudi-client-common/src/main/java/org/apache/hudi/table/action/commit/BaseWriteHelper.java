@@ -86,5 +86,5 @@ public abstract class BaseWriteHelper<T extends HoodieRecordPayload, I, K, O, R>
   }
 
   public abstract I deduplicateRecords(
-      I records, HoodieIndex<T, ?, ?, ?> index, int parallelism);
+      I records, HoodieIndex<?, ?> index, int parallelism);
 }

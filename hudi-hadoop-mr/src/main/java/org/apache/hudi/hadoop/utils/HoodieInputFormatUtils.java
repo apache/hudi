@@ -318,7 +318,7 @@ public class HoodieInputFormatUtils {
     Map<Path, HoodieTableMetaClient> metaClientMap = new HashMap<>();
     return partitions.stream().collect(Collectors.toMap(Function.identity(), p -> {
       try {
-        HoodieTableMetaClient metaClient = getTableMetaClientForBasePath(p.getFileSystem(conf), p);
+        HoodieTableMetaClient metaClient = getTableMetaClientForBasePathUnchecked(conf, p);
         metaClientMap.put(p, metaClient);
         return metaClient;
       } catch (IOException e) {
@@ -328,20 +328,17 @@ public class HoodieInputFormatUtils {
   }
 
   /**
-   * Extract HoodieTableMetaClient from a partition path(not base path).
-   * @param fs
-   * @param dataPath
-   * @return
-   * @throws IOException
+   * Extract HoodieTableMetaClient from a partition path (not base path)
    */
-  public static HoodieTableMetaClient getTableMetaClientForBasePath(FileSystem fs, Path dataPath) throws IOException {
+  public static HoodieTableMetaClient getTableMetaClientForBasePathUnchecked(Configuration conf, Path partitionPath) throws IOException {
+    FileSystem fs = partitionPath.getFileSystem(conf);
     int levels = HoodieHiveUtils.DEFAULT_LEVELS_TO_BASEPATH;
-    if (HoodiePartitionMetadata.hasPartitionMetadata(fs, dataPath)) {
-      HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(fs, dataPath);
+    if (HoodiePartitionMetadata.hasPartitionMetadata(fs, partitionPath)) {
+      HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(fs, partitionPath);
       metadata.readFromFS();
       levels = metadata.getPartitionDepth();
     }
-    Path baseDir = HoodieHiveUtils.getNthParent(dataPath, levels);
+    Path baseDir = HoodieHiveUtils.getNthParent(partitionPath, levels);
     LOG.info("Reading hoodie metadata from path " + baseDir.toString());
     return HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(baseDir.toString()).build();
   }
@@ -440,6 +437,9 @@ public class HoodieInputFormatUtils {
         .build();
   }
 
+  /**
+   * @deprecated
+   */
   public static List<FileStatus> filterFileStatusForSnapshotMode(JobConf job, Map<String, HoodieTableMetaClient> tableMetaClientMap,
                                                                  List<Path> snapshotPaths, boolean includeLogFiles) throws IOException {
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(job);

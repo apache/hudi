@@ -22,21 +22,28 @@ package org.apache.hudi.common.util.hash;
 import org.apache.hudi.common.util.Base64CodecUtil;
 
 /**
- * A stateful Hoodie object ID representing any table column.
+ * Hoodie object ID representing any file.
  */
-public class ColumnID extends HoodieID {
+public class FileIndexID extends HoodieIndexID {
 
-  private static final Type TYPE = Type.COLUMN;
-  private static final HashID.Size ID_COLUMN_HASH_SIZE = HashID.Size.BITS_64;
+  private static final Type TYPE = Type.FILE;
+  private static final HashID.Size ID_FILE_HASH_SIZE = HashID.Size.BITS_128;
+  private final String fileName;
   private final byte[] hash;
 
-  public ColumnID(final String message) {
-    this.hash = HashID.hash(message, ID_COLUMN_HASH_SIZE);
+  public FileIndexID(final String fileName) {
+    this.fileName = fileName;
+    this.hash = HashID.hash(fileName, ID_FILE_HASH_SIZE);
+  }
+
+  @Override
+  public String getName() {
+    return fileName;
   }
 
   @Override
   public int bits() {
-    return ID_COLUMN_HASH_SIZE.byteSize();
+    return ID_FILE_HASH_SIZE.byteSize();
   }
 
   @Override

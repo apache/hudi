@@ -66,7 +66,7 @@ public class HoodieParquetInputFormat extends HoodieFileInputFormatBase implemen
     return HoodieInputFormatUtils.filterInstantsTimeline(timeline);
   }
 
-  protected boolean includeLogFilesForSnapShotView() {
+  protected boolean includeLogFilesForSnapshotView() {
     return false;
   }
 

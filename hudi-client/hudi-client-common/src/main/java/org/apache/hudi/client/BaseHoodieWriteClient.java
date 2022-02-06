@@ -105,7 +105,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   private static final Logger LOG = LogManager.getLogger(BaseHoodieWriteClient.class);
 
   protected final transient HoodieMetrics metrics;
-  private final transient HoodieIndex<T, ?, ?, ?> index;
+  private final transient HoodieIndex<?, ?> index;
 
   protected transient Timer.Context writeTimer = null;
   protected transient Timer.Context compactionTimer;
@@ -142,7 +142,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     this.txnManager = new TransactionManager(config, fs);
   }
 
-  protected abstract HoodieIndex<T, ?, ?, ?> createIndex(HoodieWriteConfig writeConfig);
+  protected abstract HoodieIndex<?, ?> createIndex(HoodieWriteConfig writeConfig);
 
   public void setOperationType(WriteOperationType operationType) {
     this.operationType = operationType;
@@ -639,8 +639,8 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
           .findFirst());
       if (commitInstantOpt.isPresent()) {
         LOG.info("Scheduling Rollback at instant time :" + rollbackInstantTime);
-        Option<HoodieRollbackPlan> rollbackPlanOption = pendingRollbackInfo.map(entry -> Option.of(entry.getRollbackPlan())).orElse(table.scheduleRollback(context, rollbackInstantTime,
-            commitInstantOpt.get(), false, config.shouldRollbackUsingMarkers()));
+        Option<HoodieRollbackPlan> rollbackPlanOption = pendingRollbackInfo.map(entry -> Option.of(entry.getRollbackPlan()))
+            .orElseGet(() -> table.scheduleRollback(context, rollbackInstantTime, commitInstantOpt.get(), false, config.shouldRollbackUsingMarkers()));
         if (rollbackPlanOption.isPresent()) {
           // execute rollback
           HoodieRollbackMetadata rollbackMetadata = table.rollback(context, rollbackInstantTime, commitInstantOpt.get(), true,
@@ -1160,7 +1160,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     return metrics;
   }
 
-  public HoodieIndex<T, ?, ?, ?> getIndex() {
+  public HoodieIndex<?, ?> getIndex() {
     return index;
   }
 

@@ -83,7 +83,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PLAN_STRATEGY_SMALL_FILE_LIMIT = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "small.file.limit")
-      .defaultValue(String.valueOf(600 * 1024 * 1024L))
+      .defaultValue(String.valueOf(300 * 1024 * 1024L))
       .sinceVersion("0.7.0")
       .withDocumentation("Files smaller than the size specified here are candidates for clustering");
 

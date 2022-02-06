@@ -18,17 +18,18 @@
 
 package org.apache.hudi.io.storage;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -51,10 +52,14 @@ import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
-public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileReader {
+public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileReader<R> {
+  private static final Logger LOG = LogManager.getLogger(HoodieHFileReader.class);
   private Path path;
   private Configuration conf;
   private HFile.Reader reader;
@@ -77,11 +82,11 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     this.reader = HFile.createReader(FSUtils.getFs(path.toString(), configuration), path, cacheConfig, conf);
   }
 
-  public HoodieHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig, FileSystem inlineFs) throws IOException {
+  public HoodieHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig, FileSystem fs) throws IOException {
     this.conf = configuration;
     this.path = path;
-    this.fsDataInputStream = inlineFs.open(path);
-    this.reader = HFile.createReader(inlineFs, path, cacheConfig, configuration);
+    this.fsDataInputStream = fs.open(path);
+    this.reader = HFile.createReader(fs, path, cacheConfig, configuration);
   }
 
   public HoodieHFileReader(byte[] content) throws IOException {
@@ -133,23 +138,50 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     }
   }
 
+  /**
+   * Filter keys by availability.
+   * <p>
+   * Note: This method is performant when the caller passes in a sorted candidate keys.
+   *
+   * @param candidateRowKeys - Keys to check for the availability
+   * @return Subset of candidate keys that are available
+   */
   @Override
-  public Set<String> filterRowKeys(Set candidateRowKeys) {
-    // Current implementation reads all records and filters them. In certain cases, it many be better to:
-    //  1. Scan a limited subset of keys (min/max range of candidateRowKeys)
-    //  2. Lookup keys individually (if the size of candidateRowKeys is much less than the total keys in file)
-    try {
-      List<Pair<String, R>> allRecords = readAllRecords();
-      Set<String> rowKeys = new HashSet<>();
-      allRecords.forEach(t -> {
-        if (candidateRowKeys.contains(t.getFirst())) {
-          rowKeys.add(t.getFirst());
-        }
-      });
-      return rowKeys;
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to read row keys from " + path, e);
+  public Set<String> filterRowKeys(Set<String> candidateRowKeys) {
+    return candidateRowKeys.stream().filter(k -> {
+      try {
+        return isKeyAvailable(k);
+      } catch (IOException e) {
+        LOG.error("Failed to check key availability: " + k);
+        return false;
+      }
+    }).collect(Collectors.toSet());
+  }
+
+  @Override
+  public Map<String, R> getRecordsByKeys(List<String> rowKeys) throws IOException {
+    return filterRecordsImpl(new TreeSet<>(rowKeys));
+  }
+
+  /**
+   * Filter records by sorted keys.
+   * <p>
+   * TODO: Implement single seek and sequential scan till the last candidate key
+   * instead of repeated seeks.
+   *
+   * @param sortedCandidateRowKeys - Sorted set of keys to fetch records for
+   * @return Map of keys to fetched records
+   * @throws IOException When the deserialization of records fail
+   */
+  private synchronized Map<String, R> filterRecordsImpl(TreeSet<String> sortedCandidateRowKeys) throws IOException {
+    HashMap<String, R> filteredRecords = new HashMap<>();
+    for (String key : sortedCandidateRowKeys) {
+      Option<R> record = getRecordByKey(key);
+      if (record.isPresent()) {
+        filteredRecords.put(key, record.get());
+      }
     }
+    return filteredRecords;
   }
 
   public List<Pair<String, R>> readAllRecords(Schema writerSchema, Schema readerSchema) throws IOException {
@@ -246,6 +278,19 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     };
   }
 
+  private boolean isKeyAvailable(String key) throws IOException {
+    final KeyValue kv = new KeyValue(key.getBytes(), null, null, null);
+    synchronized (this) {
+      if (keyScanner == null) {
+        keyScanner = reader.getScanner(false, false);
+      }
+      if (keyScanner.seekTo(kv) == 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   @Override
   public Option getRecordByKey(String key, Schema readerSchema) throws IOException {
     byte[] value = null;
@@ -332,28 +377,14 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     }
   }
 
-  static class SeekableByteArrayInputStream extends ByteArrayInputStream implements Seekable, PositionedReadable {
+  static class SeekableByteArrayInputStream extends ByteBufferBackedInputStream implements Seekable, PositionedReadable {
     public SeekableByteArrayInputStream(byte[] buf) {
       super(buf);
     }
 
     @Override
     public long getPos() throws IOException {
-      return pos;
-    }
-
-    @Override
-    public void seek(long pos) throws IOException {
-      if (mark != 0) {
-        throw new IllegalStateException();
-      }
-
-      reset();
-      long skipped = skip(pos);
-
-      if (skipped != pos) {
-        throw new IOException();
-      }
+      return getPosition();
     }
 
     @Override
@@ -363,19 +394,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
 
     @Override
     public int read(long position, byte[] buffer, int offset, int length) throws IOException {
-
-      if (position >= buf.length) {
-        throw new IllegalArgumentException();
-      }
-      if (position + length > buf.length) {
-        throw new IllegalArgumentException();
-      }
-      if (length > buffer.length) {
-        throw new IllegalArgumentException();
-      }
-
-      System.arraycopy(buf, (int) position, buffer, offset, length);
-      return length;
+      return copyFrom(position, buffer, offset, length);
     }
 
     @Override
