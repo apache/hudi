@@ -93,7 +93,7 @@ public class PartialOverwriteWithLatestAvroPayload extends OverwriteWithLatestAv
 
   @Override
   public int compareTo(OverwriteWithLatestAvroPayload oldValue) {
-    return oldValue.orderingVal.compareTo(orderingVal);
+    return orderingVal.compareTo(oldValue.orderingVal);
   }
 
   @Override

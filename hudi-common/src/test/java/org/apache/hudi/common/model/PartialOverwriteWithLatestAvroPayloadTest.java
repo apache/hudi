@@ -86,6 +86,24 @@ class PartialOverwriteWithLatestAvroPayloadTest {
   }
 
   @Test
+  public void testCompareFunction() {
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("id", "1");
+    record.put("partition", "partition1");
+    record.put("ts", 0L);
+    record.put("_hoodie_is_deleted", false);
+    record.put("city", "NY0");
+    record.put("child", Arrays.asList("A"));
+
+    PartialOverwriteWithLatestAvroPayload payload1 = new PartialOverwriteWithLatestAvroPayload(record, 1);
+    PartialOverwriteWithLatestAvroPayload payload2 = new PartialOverwriteWithLatestAvroPayload(record, 2);
+
+    assertEquals(payload1.compareTo(payload2), -1);
+    assertEquals(payload2.compareTo(payload1), 1);
+    assertEquals(payload1.compareTo(payload1), 0);
+  }
+
+  @Test
   public void testActiveRecordsWithSchema() throws IOException {
     GenericRecord record1 = new GenericData.Record(schema);
     record1.put("id", "1");
