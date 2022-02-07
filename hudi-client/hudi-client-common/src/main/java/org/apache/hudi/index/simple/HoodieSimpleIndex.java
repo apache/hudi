@@ -148,7 +148,7 @@ public class HoodieSimpleIndex
   protected HoodiePairData<HoodieKey, HoodieRecordLocation> fetchRecordLocations(
       HoodieEngineContext context, HoodieTable hoodieTable, int parallelism,
       List<Pair<String, HoodieBaseFile>> baseFiles) {
-    int fetchParallelism = Math.max(1, Math.max(baseFiles.size(), parallelism));
+    int fetchParallelism = Math.max(1, Math.min(baseFiles.size(), parallelism));
 
     return context.parallelize(baseFiles, fetchParallelism)
         .flatMap(partitionPathBaseFile -> new HoodieKeyLocationFetchHandle(config, hoodieTable, partitionPathBaseFile, keyGeneratorOpt)

@@ -45,6 +45,8 @@ class TestDataSourceForBootstrap {
     HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> "4",
     HoodieWriteConfig.BULKINSERT_PARALLELISM_VALUE.key -> "4",
     HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE.key -> "4",
+    "hoodie.simple.index.parallelism" -> "2",
+    "hoodie.global.simple.index.parallelism" -> "2",
     HoodieBootstrapConfig.PARALLELISM_VALUE.key -> "4",
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
