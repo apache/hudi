@@ -18,17 +18,7 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
-import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
-
 import org.apache.hadoop.conf.Configurable;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
 import org.apache.hadoop.hive.ql.io.sarg.ConvertAstToSearchArg;
 import org.apache.hadoop.hive.ql.plan.TableScanDesc;
@@ -39,6 +29,9 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -61,10 +54,6 @@ public class HoodieParquetInputFormat extends HoodieFileInputFormatBase implemen
   // NOTE: We're only using {@code MapredParquetInputFormat} to compose vectorized
   //       {@code RecordReader}
   private final MapredParquetInputFormat mapredParquetInputFormat = new MapredParquetInputFormat();
-
-  protected HoodieDefaultTimeline filterInstantsTimeline(HoodieDefaultTimeline timeline) {
-    return HoodieInputFormatUtils.filterInstantsTimeline(timeline);
-  }
 
   protected boolean includeLogFilesForSnapshotView() {
     return false;
@@ -94,32 +83,6 @@ public class HoodieParquetInputFormat extends HoodieFileInputFormatBase implemen
     }
 
     return getRecordReaderInternal(split, job, reporter);
-  }
-
-  @Override
-  protected boolean isSplitable(FileSystem fs, Path filename) {
-    return !(filename instanceof PathWithBootstrapFileStatus);
-  }
-
-  @Override
-  protected FileSplit makeSplit(Path file, long start, long length,
-                                String[] hosts) {
-    FileSplit split = new FileSplit(file, start, length, hosts);
-
-    if (file instanceof PathWithBootstrapFileStatus) {
-      return makeExternalFileSplit((PathWithBootstrapFileStatus)file, split);
-    }
-    return split;
-  }
-
-  @Override
-  protected FileSplit makeSplit(Path file, long start, long length,
-                                String[] hosts, String[] inMemoryHosts) {
-    FileSplit split = new FileSplit(file, start, length, hosts, inMemoryHosts);
-    if (file instanceof PathWithBootstrapFileStatus) {
-      return makeExternalFileSplit((PathWithBootstrapFileStatus)file, split);
-    }
-    return split;
   }
 
   private RecordReader<NullWritable, ArrayWritable> getRecordReaderInternal(InputSplit split,
@@ -174,18 +137,6 @@ public class HoodieParquetInputFormat extends HoodieFileInputFormatBase implemen
           getRecordReaderInternal(rightSplit, jobConfCopy, reporter),
           colNamesWithTypesForExternal.size(),
           true);
-    }
-  }
-
-  private BootstrapBaseFileSplit makeExternalFileSplit(PathWithBootstrapFileStatus file, FileSplit split) {
-    try {
-      LOG.info("Making external data split for " + file);
-      FileStatus externalFileStatus = file.getBootstrapFileStatus();
-      FileSplit externalFileSplit = makeSplit(externalFileStatus.getPath(), 0, externalFileStatus.getLen(),
-          new String[0], new String[0]);
-      return new BootstrapBaseFileSplit(split, externalFileSplit);
-    } catch (IOException e) {
-      throw new HoodieIOException(e.getMessage(), e);
     }
   }
 }
