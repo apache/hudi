@@ -40,6 +40,7 @@ import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hudi.common.config.SerializableSchema;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -85,6 +86,17 @@ public class HoodieAvroUtils {
   public static final Schema RECORD_KEY_SCHEMA = initRecordKeySchema();
 
   /**
+   * TODO
+   */
+  public static Option<byte[]> recordToBytes(HoodieRecord record, Schema schema) throws IOException {
+    if (record instanceof HoodieAvroRecord) {
+      return ((HoodieAvroRecord<?>) record).asAvro(schema).map(HoodieAvroUtils::indexedRecordToBytes);
+    }
+
+    throw new UnsupportedOperationException(String.format("Unsupported type of record (%s)", record.getClass()));
+  }
+
+  /**
    * Convert a given avro record to bytes.
    */
   public static byte[] avroToBytes(GenericRecord record) {
@@ -120,17 +132,24 @@ public class HoodieAvroUtils {
   }
 
   /**
-   * Convert serialized bytes back into avro record.
+   * Converts serialized bytes back into avro record.
    */
   public static GenericRecord bytesToAvro(byte[] bytes, Schema schema) throws IOException {
     return bytesToAvro(bytes, schema, schema);
   }
 
   /**
-   * Convert serialized bytes back into avro record.
+   * Converts serialized bytes back into avro record.
    */
   public static GenericRecord bytesToAvro(byte[] bytes, Schema writerSchema, Schema readerSchema) throws IOException {
-    BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(bytes, reuseDecoder.get());
+    return bytesToAvro(bytes, 0, bytes.length, writerSchema, readerSchema);
+  }
+
+  /**
+   * Converts serialized bytes back into avro record.
+   */
+  public static GenericRecord bytesToAvro(byte[] bytes, int offset, int length, Schema writerSchema, Schema readerSchema) throws IOException {
+    BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(bytes, offset, length, reuseDecoder.get());
     reuseDecoder.set(decoder);
     GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(writerSchema, readerSchema);
     return reader.read(null, decoder);

@@ -23,6 +23,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
+import org.apache.hudi.common.io.storage.HoodieAvroFileWriter;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.parquet.io.OutputStreamBackedOutputFile;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -32,15 +34,15 @@ import org.apache.parquet.io.OutputFile;
 import java.io.IOException;
 
 // TODO(HUDI-3035) unify w/ HoodieParquetWriter
-public class HoodieParquetStreamWriter<R extends IndexedRecord> implements AutoCloseable {
+public class HoodieParquetStreamWriter implements HoodieAvroFileWriter, AutoCloseable {
 
-  private final ParquetWriter<R> writer;
+  private final ParquetWriter<IndexedRecord> writer;
   private final HoodieAvroWriteSupport writeSupport;
 
   public HoodieParquetStreamWriter(FSDataOutputStream outputStream,
                                    HoodieAvroParquetConfig parquetConfig) throws IOException {
     this.writeSupport = parquetConfig.getWriteSupport();
-    this.writer = new Builder<R>(new OutputStreamBackedOutputFile(outputStream), writeSupport)
+    this.writer = new Builder<IndexedRecord>(new OutputStreamBackedOutputFile(outputStream), writeSupport)
         .withWriteMode(ParquetFileWriter.Mode.CREATE)
         .withCompressionCodec(parquetConfig.getCompressionCodecName())
         .withRowGroupSize(parquetConfig.getBlockSize())
@@ -52,9 +54,26 @@ public class HoodieParquetStreamWriter<R extends IndexedRecord> implements AutoC
         .build();
   }
 
-  public void writeAvro(String key, R object) throws IOException {
-    writer.write(object);
+  @Override
+  public boolean canWrite() {
+    return true;
+  }
+
+  @Override
+  public long getBytesWritten() {
+    return 0;
+  }
+
+  @Override
+  public void write(String key, IndexedRecord record) throws IOException {
+    writer.write(record);
     writeSupport.add(key);
+  }
+
+  @Override
+  public void writeWithMetadata(IndexedRecord newRecord, HoodieRecord record) throws IOException {
+    // TODO support populating the metadata
+    write(record.getRecordKey(), newRecord);
   }
 
   @Override
