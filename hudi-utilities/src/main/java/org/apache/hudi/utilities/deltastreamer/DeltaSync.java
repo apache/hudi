@@ -56,6 +56,7 @@ import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.sync.common.AbstractSyncTool;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
@@ -211,6 +212,8 @@ public class DeltaSync implements Serializable {
 
   private transient HoodieDeltaStreamerMetrics metrics;
 
+  private transient HoodieMetrics hoodieMetrics;
+
   public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
                    TypedProperties props, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                    Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
@@ -231,6 +234,7 @@ public class DeltaSync implements Serializable {
     this.transformer = UtilHelpers.createTransformer(cfg.transformerClassNames);
 
     this.metrics = new HoodieDeltaStreamerMetrics(getHoodieClientConfig(this.schemaProvider));
+    this.hoodieMetrics = new HoodieMetrics(getHoodieClientConfig(this.schemaProvider));
 
     this.formatAdapter = new SourceFormatAdapter(
         UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics));
@@ -484,6 +488,8 @@ public class DeltaSync implements Serializable {
     if (Objects.equals(checkpointStr, resumeCheckpointStr.orElse(null))) {
       LOG.info("No new data, source checkpoint has not changed. Nothing to commit. Old checkpoint=("
           + resumeCheckpointStr + "). New Checkpoint=(" + checkpointStr + ")");
+      String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
+      hoodieMetrics.updateMetricsForEmptyData(commitActionType);
       return null;
     }
 
