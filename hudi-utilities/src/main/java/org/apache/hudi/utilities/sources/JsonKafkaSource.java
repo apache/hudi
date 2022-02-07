@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
+import org.apache.hudi.utilities.exception.HoodieSourceTimeoutException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
@@ -59,14 +60,18 @@ public class JsonKafkaSource extends JsonSource {
 
   @Override
   protected InputBatch<JavaRDD<String>> fetchNewData(Option<String> lastCheckpointStr, long sourceLimit) {
-    OffsetRange[] offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, sourceLimit, metrics);
-    long totalNewMsgs = CheckpointUtils.totalNewMessages(offsetRanges);
-    LOG.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
-    if (totalNewMsgs <= 0) {
-      return new InputBatch<>(Option.empty(), CheckpointUtils.offsetsToStr(offsetRanges));
+    try {
+      OffsetRange[] offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, sourceLimit, metrics);
+      long totalNewMsgs = CheckpointUtils.totalNewMessages(offsetRanges);
+      LOG.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
+      if (totalNewMsgs <= 0) {
+        return new InputBatch<>(Option.empty(), CheckpointUtils.offsetsToStr(offsetRanges));
+      }
+      JavaRDD<String> newDataRDD = toRDD(offsetRanges);
+      return new InputBatch<>(Option.of(newDataRDD), CheckpointUtils.offsetsToStr(offsetRanges));
+    } catch (org.apache.kafka.common.errors.TimeoutException e) {
+      throw new HoodieSourceTimeoutException("Kafka Source timed out " + e.getMessage());
     }
-    JavaRDD<String> newDataRDD = toRDD(offsetRanges);
-    return new InputBatch<>(Option.of(newDataRDD), CheckpointUtils.offsetsToStr(offsetRanges));
   }
 
   private JavaRDD<String> toRDD(OffsetRange[] offsetRanges) {

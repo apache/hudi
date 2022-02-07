@@ -66,6 +66,7 @@ import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallback
 import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Config;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
+import org.apache.hudi.utilities.exception.HoodieSourceTimeoutException;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaSet;
@@ -377,6 +378,29 @@ public class DeltaSync implements Serializable {
     }
     LOG.info("Checkpoint to resume from : " + resumeCheckpointStr);
 
+    int maxRetryCount = cfg.retryOnSourceFailures ? cfg.maxRetryCount : 1;
+    int curRetryCount = 0;
+    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> sourceDataToSync = null;
+    while (curRetryCount++ < maxRetryCount && sourceDataToSync == null) {
+      try {
+        sourceDataToSync = fetchFromSource(resumeCheckpointStr);
+      } catch (HoodieSourceTimeoutException e) {
+        if (curRetryCount >= maxRetryCount) {
+          throw e;
+        }
+        try {
+          LOG.error("Exception thrown while fetching data from source. Msg : " + e.getMessage() + ", class : " + e.getClass() + ", cause : " + e.getCause());
+          LOG.error("Sleeping for " + (cfg.retryIntervalSecs) + " before retrying again. Current retry count " + curRetryCount + ", max retry count " + cfg.maxRetryCount);
+          Thread.sleep(cfg.retryIntervalSecs * 1000);
+        } catch (InterruptedException ex) {
+          LOG.error("Ignoring InterruptedException while waiting to retry on source failure " + e.getMessage());
+        }
+      }
+    }
+    return sourceDataToSync;
+  }
+
+  private Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchFromSource(Option<String> resumeCheckpointStr) {
     final Option<JavaRDD<GenericRecord>> avroRDDOptional;
     final String checkpointStr;
     SchemaProvider schemaProvider;
@@ -415,7 +439,7 @@ public class DeltaSync implements Serializable {
                     targetSchemaProvider = UtilHelpers.createRowBasedSchemaProvider(r.schema(), props, jssc);
                   }
                   return (SchemaProvider) new DelegatingSchemaProvider(props, jssc,
-                    dataAndCheckpoint.getSchemaProvider(), targetSchemaProvider); })
+                      dataAndCheckpoint.getSchemaProvider(), targetSchemaProvider); })
                 .orElse(dataAndCheckpoint.getSchemaProvider());
         avroRDDOptional = transformed
             .map(t -> HoodieSparkUtils.createRdd(
@@ -434,7 +458,7 @@ public class DeltaSync implements Serializable {
 
     if (Objects.equals(checkpointStr, resumeCheckpointStr.orElse(null))) {
       LOG.info("No new data, source checkpoint has not changed. Nothing to commit. Old checkpoint=("
-           + resumeCheckpointStr + "). New Checkpoint=(" + checkpointStr + ")");
+          + resumeCheckpointStr + "). New Checkpoint=(" + checkpointStr + ")");
       return null;
     }
 
