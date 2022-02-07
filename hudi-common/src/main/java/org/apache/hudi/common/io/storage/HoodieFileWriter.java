@@ -25,7 +25,6 @@ import java.io.IOException;
 import java.util.Properties;
 
 public interface HoodieFileWriter {
-
   boolean canWrite();
 
   void writeWithMetadata(HoodieRecord record, Schema schema, Properties props) throws IOException;

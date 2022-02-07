@@ -25,5 +25,5 @@ import java.io.IOException;
 public interface HoodieRecordFileWriter<R> extends HoodieFileWriter {
   void writeWithMetadata(R newRecord, HoodieRecord record) throws IOException;
 
-  void write(String key, R oldRecord) throws IOException;
+  void write(String key, R record) throws IOException;
 }

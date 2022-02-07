@@ -16,19 +16,19 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io.storage;
+package org.apache.hudi.common.io.storage;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.io.storage.HoodieRecordFileWriter;
 import org.apache.hudi.common.model.HoodieRecord;
 
 import java.io.IOException;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicLong;
 
+// TODO remove HoodieRecordFileWriter inheritance to clean up the interface
 public interface HoodieAvroFileWriter extends HoodieRecordFileWriter<IndexedRecord> {
 
   long getBytesWritten();
