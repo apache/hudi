@@ -44,6 +44,7 @@ import java.sql.{Date, Timestamp}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
+
 /**
  * Basic tests on the spark datasource for COW table.
  */
