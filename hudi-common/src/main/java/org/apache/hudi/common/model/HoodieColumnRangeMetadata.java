@@ -18,7 +18,12 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.ValidationUtils;
+
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Objects;
+import java.util.function.BiFunction;
 
 /**
  * Hoodie Range metadata.
@@ -32,6 +37,24 @@ public class HoodieColumnRangeMetadata<T> {
   private final long valueCount;
   private final long totalSize;
   private final long totalUncompressedSize;
+
+  public static final BiFunction<HoodieColumnRangeMetadata<Comparable>, HoodieColumnRangeMetadata<Comparable>, HoodieColumnRangeMetadata<Comparable>> COLUMN_RANGE_MERGE_FUNCTION =
+      (oldColumnRange, newColumnRange) -> {
+        ValidationUtils.checkArgument(oldColumnRange.getColumnName().equals(newColumnRange.getColumnName()));
+        ValidationUtils.checkArgument(oldColumnRange.getFilePath().equals(newColumnRange.getFilePath()));
+        return new HoodieColumnRangeMetadata<>(
+            newColumnRange.getFilePath(),
+            newColumnRange.getColumnName(),
+            (Comparable) Arrays.asList(oldColumnRange.getMinValue(), newColumnRange.getMinValue())
+                .stream().filter(Objects::nonNull).min(Comparator.naturalOrder()).orElse(null),
+            (Comparable) Arrays.asList(oldColumnRange.getMinValue(), newColumnRange.getMinValue())
+                .stream().filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null),
+            oldColumnRange.getNullCount() + newColumnRange.getNullCount(),
+            oldColumnRange.getValueCount() + newColumnRange.getValueCount(),
+            oldColumnRange.getTotalSize() + newColumnRange.getTotalSize(),
+            oldColumnRange.getTotalUncompressedSize() + newColumnRange.getTotalUncompressedSize()
+        );
+      };
 
   public HoodieColumnRangeMetadata(final String filePath, final String columnName, final T minValue, final T maxValue,
                                    final long nullCount, long valueCount, long totalSize, long totalUncompressedSize) {

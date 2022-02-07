@@ -42,6 +42,7 @@ import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.specific.SpecificRecordBase;
 
 import org.apache.hudi.common.config.SerializableSchema;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -609,5 +610,35 @@ public class HoodieAvroUtils {
                                              String[] columns,
                                              SerializableSchema schema, boolean consistentLogicalTimestampEnabled) {
     return getRecordColumnValues(record, columns, schema.get(), consistentLogicalTimestampEnabled);
+  }
+
+  /**
+   * Accumulate column range statistics for the requested record.
+   *
+   * @param record   - Record to get the column range statistics for
+   * @param schema   - Schema for the record
+   * @param filePath - File that record belongs to
+   */
+  public static void accumulateColumnRanges(IndexedRecord record, Schema schema, String filePath,
+                                            Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap) {
+    if (!(record instanceof GenericRecord)) {
+      throw new HoodieIOException("Record is not a generic type to get column range metadata!");
+    }
+
+    schema.getFields().forEach(field -> {
+      final String fieldVal = getNestedFieldValAsString((GenericRecord) record, field.name(), true, true);
+      final int fieldSize = fieldVal == null ? 0 : fieldVal.length();
+      final HoodieColumnRangeMetadata<Comparable> fieldRange = new HoodieColumnRangeMetadata<>(
+          filePath,
+          field.name(),
+          fieldVal,
+          fieldVal,
+          fieldVal == null ? 1 : 0,
+          fieldVal == null ? 0 : 1,
+          fieldSize,
+          fieldSize
+      );
+      columnRangeMap.merge(field.name(), fieldRange, HoodieColumnRangeMetadata.COLUMN_RANGE_MERGE_FUNCTION);
+    });
   }
 }

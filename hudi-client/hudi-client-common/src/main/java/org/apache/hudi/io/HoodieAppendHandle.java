@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -320,7 +321,21 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     statuses.add(this.writeStatus);
   }
 
-  private void processAppendResult(AppendResult result) {
+  /**
+   * Get column statistics for the records part of this append handle.
+   *
+   * @param filePath       - Log file that records are part of
+   * @param recordList     - List of records appended to the log for which column statistics is needed for
+   * @param columnRangeMap - Output map to accumulate the column statistics for the records
+   */
+  private void getRecordsStats(final String filePath, List<IndexedRecord> recordList,
+                               Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap) {
+    recordList.forEach(record -> {
+      HoodieAvroUtils.accumulateColumnRanges(record, writeSchemaWithMetaFields, filePath, columnRangeMap);
+    });
+  }
+
+  private void processAppendResult(AppendResult result, List<IndexedRecord> recordList) {
     HoodieDeltaWriteStat stat = (HoodieDeltaWriteStat) this.writeStatus.getStat();
 
     if (stat.getPath() == null) {
@@ -338,6 +353,11 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       stat = (HoodieDeltaWriteStat) this.writeStatus.getStat();
       updateWriteStatus(stat, result);
     }
+
+    Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap = stat.getRecordsStats().isPresent()
+        ? stat.getRecordsStats().get().getStats() : new HashMap<>();
+    getRecordsStats(stat.getPath(), recordList, columnRangeMap);
+    stat.setRecordsStats(new HoodieDeltaWriteStat.RecordsStats<>(columnRangeMap));
 
     resetWriteCounts();
     assert stat.getRuntimeStats() != null;
@@ -376,7 +396,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
 
       if (blocks.size() > 0) {
         AppendResult appendResult = writer.appendBlocks(blocks);
-        processAppendResult(appendResult);
+        processAppendResult(appendResult, recordList);
         recordList.clear();
         keysToDelete.clear();
       }

@@ -48,9 +48,12 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.BiFunction;
 import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -110,7 +113,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private static final String COLUMN_STATS_FIELD_NULL_COUNT = "nullCount";
   private static final String COLUMN_STATS_FIELD_VALUE_COUNT = "valueCount";
   private static final String COLUMN_STATS_FIELD_TOTAL_SIZE = "totalSize";
-  private static final String COLUMN_STATS_FIELD_RESOURCE_NAME = "fileName";
+  private static final String COLUMN_STATS_FIELD_FILE_NAME = "fileName";
   private static final String COLUMN_STATS_FIELD_TOTAL_UNCOMPRESSED_SIZE = "totalUncompressedSize";
   private static final String COLUMN_STATS_FIELD_IS_DELETED = FIELD_IS_DELETED;
 
@@ -119,6 +122,26 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private Map<String, HoodieMetadataFileInfo> filesystemMetadata = null;
   private HoodieMetadataBloomFilter bloomFilterMetadata = null;
   private HoodieMetadataColumnStats columnStatMetadata = null;
+
+  public static final BiFunction<HoodieMetadataColumnStats, HoodieMetadataColumnStats, HoodieMetadataColumnStats> COLUMN_STATS_MERGE_FUNCTION =
+      (oldColumnStats, newColumnStats) -> {
+        ValidationUtils.checkArgument(oldColumnStats.getFileName().equals(newColumnStats.getFileName()));
+        if (newColumnStats.getIsDeleted()) {
+          return newColumnStats;
+        }
+        return new HoodieMetadataColumnStats(
+            newColumnStats.getFileName(),
+            Arrays.asList(oldColumnStats.getMinValue(), newColumnStats.getMinValue())
+                .stream().filter(Objects::nonNull).min(Comparator.naturalOrder()).orElse(null),
+            Arrays.asList(oldColumnStats.getMinValue(), newColumnStats.getMinValue())
+                .stream().filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null),
+            oldColumnStats.getNullCount() + newColumnStats.getNullCount(),
+            oldColumnStats.getValueCount() + newColumnStats.getValueCount(),
+            oldColumnStats.getTotalSize() + newColumnStats.getTotalSize(),
+            oldColumnStats.getTotalUncompressedSize() + newColumnStats.getTotalUncompressedSize(),
+            newColumnStats.getIsDeleted()
+        );
+      };
 
   public HoodieMetadataPayload(GenericRecord record, Comparable<?> orderingVal) {
     this(Option.of(record));
@@ -157,7 +180,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
           throw new HoodieMetadataException("Valid " + SCHEMA_FIELD_ID_COLUMN_STATS + " record expected for type: " + METADATA_TYPE_COLUMN_STATS);
         }
         columnStatMetadata = new HoodieMetadataColumnStats(
-            (String) v.get(COLUMN_STATS_FIELD_RESOURCE_NAME),
+            (String) v.get(COLUMN_STATS_FIELD_FILE_NAME),
             (String) v.get(COLUMN_STATS_FIELD_MIN_VALUE),
             (String) v.get(COLUMN_STATS_FIELD_MAX_VALUE),
             (Long) v.get(COLUMN_STATS_FIELD_NULL_COUNT),
@@ -273,18 +296,23 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         HoodieMetadataBloomFilter combineBloomFilterMetadata = combineBloomFilterMetadata(previousRecord);
         return new HoodieMetadataPayload(key, type, combineBloomFilterMetadata);
       case METADATA_TYPE_COLUMN_STATS:
-        return new HoodieMetadataPayload(key, type, combineColumnStatsMetadatat(previousRecord));
+        return new HoodieMetadataPayload(key, type, combineColumnStatsMetadata(previousRecord));
       default:
         throw new HoodieMetadataException("Unknown type of HoodieMetadataPayload: " + type);
     }
   }
 
   private HoodieMetadataBloomFilter combineBloomFilterMetadata(HoodieMetadataPayload previousRecord) {
+    // Bloom filters are always additive. No need to merge with previous bloom filter
     return this.bloomFilterMetadata;
   }
 
-  private HoodieMetadataColumnStats combineColumnStatsMetadatat(HoodieMetadataPayload previousRecord) {
-    return this.columnStatMetadata;
+  private HoodieMetadataColumnStats combineColumnStatsMetadata(HoodieMetadataPayload previousRecord) {
+    ValidationUtils.checkArgument(previousRecord.getColumnStatMetadata().isPresent());
+    ValidationUtils.checkArgument(getColumnStatMetadata().isPresent());
+    ValidationUtils.checkArgument(previousRecord.getColumnStatMetadata().get()
+        .getFileName().equals(this.columnStatMetadata.getFileName()));
+    return COLUMN_STATS_MERGE_FUNCTION.apply(previousRecord.getColumnStatMetadata().get(), this.columnStatMetadata);
   }
 
   @Override
@@ -459,8 +487,6 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
               .build());
       return new HoodieAvroRecord<>(key, payload);
     });
-
-
   }
 
   @Override
