@@ -269,9 +269,11 @@ public abstract class HoodieRecord<T> implements Serializable {
   //       be combined
   public abstract Option<HoodieRecord<T>> combineAndGetUpdateValue(HoodieRecord<T> previousRecord, Schema schema, Properties props) throws IOException;
 
-  public abstract HoodieRecord<T> rewriteRecord(Schema recordSchema, Schema targetSchema, TypedProperties props) throws IOException;
+  public abstract HoodieRecord rewriteRecord(Schema recordSchema, Schema targetSchema, TypedProperties props) throws IOException;
 
-  public abstract HoodieRecord<T> overrideMetadataFieldValue(HoodieMetadataField metadataField, String value) throws IOException;
+  public abstract HoodieRecord addMetadataValues(Map<HoodieMetadataField, String> metadataValues) throws IOException;
+
+  public abstract HoodieRecord overrideMetadataValue(HoodieMetadataField metadataField, String value) throws IOException;
 
   public abstract Option<Map<String, String>> getMetadata();
 

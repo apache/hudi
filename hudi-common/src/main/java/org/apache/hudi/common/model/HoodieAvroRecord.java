@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -83,6 +84,11 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     avroWriter.write(getRecordKey(), avroPayload);
   }
 
+  // TODO remove
+  public Option<GenericRecord> asAvro(Schema schema) throws IOException {
+    return getData().getInsertValue(schema);
+  }
+
   //////////////////////////////////////////////////////////////////////////////
 
   //
@@ -130,7 +136,22 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public HoodieRecord overrideMetadataFieldValue(HoodieMetadataField metadataField, String value) throws IOException {
+  public HoodieRecord addMetadataValues(Map<HoodieMetadataField, String> metadataValues) throws IOException {
+    // NOTE: RewriteAvroPayload is expected here
+    GenericRecord avroRecordPayload = (GenericRecord) getData().getInsertValue(null).get();
+
+    Arrays.stream(HoodieMetadataField.values()).forEach(metadataField -> {
+      String value = metadataValues.get(metadataField);
+      if (value != null) {
+        avroRecordPayload.put(metadataField.getFieldName(), metadataValues.get(metadataField));
+      }
+    });
+
+    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(avroRecordPayload), getOperation());
+  }
+
+  @Override
+  public HoodieRecord overrideMetadataValue(HoodieMetadataField metadataField, String value) throws IOException {
     // NOTE: RewriteAvroPayload is expected here
     Option<IndexedRecord> avroPayloadOpt = getData().getInsertValue(null);
     IndexedRecord avroPayload = avroPayloadOpt.get();

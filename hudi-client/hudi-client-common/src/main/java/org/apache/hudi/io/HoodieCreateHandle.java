@@ -132,12 +132,12 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
         if (record.canBeIgnored()) {
           return;
         }
-        // Convert to a record with hoodie commit metadata in schema
+        // Convert to a record with Hudi metadata in schema
         HoodieRecord recordWithMetaFields = record.rewriteRecord(schema, writeSchemaWithMetaFields, props);
         if (preserveHoodieMetadata) {
-          // do not preserve FILENAME_METADATA_FIELD
+          // Overwrite FILENAME_METADATA_FIELD
           HoodieRecord overriddenRecord =
-              recordWithMetaFields.overrideMetadataFieldValue(HoodieRecord.HoodieMetadataField.FILENAME_METADATA_FIELD, path.getName());
+              recordWithMetaFields.overrideMetadataValue(HoodieRecord.HoodieMetadataField.FILENAME_METADATA_FIELD, path.getName());
           fileWriter.write(overriddenRecord, writeSchemaWithMetaFields);
         } else {
           fileWriter.writeWithMetadata(recordWithMetaFields, writeSchemaWithMetaFields);
