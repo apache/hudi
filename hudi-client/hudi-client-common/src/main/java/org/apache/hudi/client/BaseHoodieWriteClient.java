@@ -861,7 +861,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * @param compactionInstantTime Compaction Instant Time
    * @return Collection of WriteStatus to inspect errors and counts
    */
-  public O compact(String compactionInstantTime) {
+  public HoodieWriteMetadata<O> compact(String compactionInstantTime) {
     return compact(compactionInstantTime, config.shouldAutoCommit());
   }
 
@@ -1001,7 +1001,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * @param compactionInstantTime Compaction Instant Time
    * @return Collection of Write Status
    */
-  protected abstract O compact(String compactionInstantTime, boolean shouldComplete);
+  protected abstract HoodieWriteMetadata<O> compact(String compactionInstantTime, boolean shouldComplete);
 
   /**
    * Performs a compaction operation on a table, serially before or after an insert/upsert action.

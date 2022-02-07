@@ -391,13 +391,13 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected List<WriteStatus> compact(String compactionInstantTime, boolean shouldComplete) {
+  protected HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime, boolean shouldComplete) {
     // only used for metadata table, the compaction happens in single thread
     try {
-      List<WriteStatus> writeStatuses =
-          getHoodieTable().compact(context, compactionInstantTime).getWriteStatuses();
+      HoodieWriteMetadata<List<WriteStatus>> compactionMetadata = getHoodieTable().compact(context, compactionInstantTime);
+      List<WriteStatus> writeStatuses = compactionMetadata.getWriteStatuses();
       commitCompaction(compactionInstantTime, writeStatuses, Option.empty());
-      return writeStatuses;
+      return compactionMetadata;
     } catch (IOException e) {
       throw new HoodieException("Error while compacting instant: " + compactionInstantTime);
     }

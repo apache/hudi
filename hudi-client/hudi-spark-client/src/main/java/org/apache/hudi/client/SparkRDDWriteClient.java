@@ -328,7 +328,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected JavaRDD<WriteStatus> compact(String compactionInstantTime, boolean shouldComplete) {
+  protected HoodieWriteMetadata<JavaRDD<WriteStatus>> compact(String compactionInstantTime, boolean shouldComplete) {
     HoodieSparkTable<T> table = HoodieSparkTable.create(config, context, true);
     preWrite(compactionInstantTime, WriteOperationType.COMPACT, table.getMetaClient());
     HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
@@ -344,7 +344,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     if (shouldComplete && compactionMetadata.getCommitMetadata().isPresent()) {
       completeTableService(TableServiceType.COMPACT, compactionMetadata.getCommitMetadata().get(), statuses, table, compactionInstantTime);
     }
-    return statuses;
+    return compactionMetadata;
   }
 
   @Override

@@ -23,7 +23,9 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -35,6 +37,7 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -43,6 +46,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class HoodieCompactor {
 
@@ -153,8 +157,8 @@ public class HoodieCompactor {
         throw new HoodieCompactionException("There is no scheduled compaction in the table.");
       }
     }
-    JavaRDD<WriteStatus> writeResponse = client.compact(cfg.compactionInstantTime);
-    return UtilHelpers.handleErrors(jsc, cfg.compactionInstantTime, writeResponse);
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(cfg.compactionInstantTime);
+    return handleErrors(compactionMetadata.getCommitMetadata().get(), cfg.compactionInstantTime);
   }
 
   private int doSchedule(JavaSparkContext jsc) throws Exception {
@@ -167,5 +171,18 @@ public class HoodieCompactor {
     }
     client.scheduleCompactionAtInstant(cfg.compactionInstantTime, Option.empty());
     return 0;
+  }
+
+  private int handleErrors(HoodieCommitMetadata metadata, String instantTime) {
+    List<HoodieWriteStat> writeStats = metadata.getPartitionToWriteStats().entrySet().stream().flatMap(e ->
+        e.getValue().stream()).collect(Collectors.toList());
+    long errorsCount = writeStats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum();
+    if (errorsCount == 0) {
+      LOG.info(String.format("Table imported into hoodie with %s instant time.", instantTime));
+      return 0;
+    }
+
+    LOG.error(String.format("Import failed with %d errors.", errorsCount));
+    return -1;
   }
 }

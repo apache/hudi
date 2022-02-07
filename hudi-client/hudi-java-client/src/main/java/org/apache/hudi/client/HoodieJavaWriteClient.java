@@ -224,7 +224,7 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected List<WriteStatus> compact(String compactionInstantTime,
+  protected HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime,
                                       boolean shouldComplete) {
     throw new HoodieNotSupportedException("Compact is not supported in HoodieJavaClient");
   }
