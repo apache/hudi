@@ -31,7 +31,6 @@ import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.sql.DataFrameReader;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
@@ -131,23 +130,26 @@ public class HoodieIncrSource extends RowSource {
       return Pair.of(Option.empty(), queryTypeAndInstantEndpts.getKey());
     }
 
+    Dataset<Row> source = null;
     // Do Incr pull. Set end instant if available
-    DataFrameReader reader = null;
     if (queryTypeAndInstantEndpts.getKey().equals(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())) {
-      reader = sparkSession.read().format("org.apache.hudi")
+      source = sparkSession.read().format("org.apache.hudi")
           .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
           .option(DataSourceReadOptions.BEGIN_INSTANTTIME().key(), queryTypeAndInstantEndpts.getValue().getLeft())
           .option(DataSourceReadOptions.END_INSTANTTIME().key(), queryTypeAndInstantEndpts.getValue().getRight())
           .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().key(),
               props.getString(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().key(),
-                  DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().defaultValue()));
+                  DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().defaultValue()))
+          .load(srcPath);
     } else {
       // if checkpoint is missing from source table, and if strategy is set to READ_UPTO_LATEST_COMMIT, we have to issue snapshot query
-      reader = sparkSession.read().format("org.apache.hudi")
-          .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL());
+      source = sparkSession.read().format("org.apache.hudi")
+          .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL())
+          .load(srcPath)
+          // add filtering so that only interested records are returned.
+          .filter(String.format("%s > '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+              queryTypeAndInstantEndpts.getRight().getLeft()));
     }
-
-    Dataset<Row> source = reader.load(srcPath);
 
     /*
      * log.info("Partition Fields are : (" + partitionFields + "). Initial Source Schema :" + source.schema());

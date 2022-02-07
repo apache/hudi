@@ -75,7 +75,7 @@ public class TestHoodieIncrSource extends HoodieClientTestHarness {
     readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.empty(), 300, inserts3.getKey());
 
     // even if the begin timestamp is archived (100), full table scan should kick in.
-    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of("100"), 300, inserts3.getKey());
+    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of("100"), 200, inserts3.getKey());
 
     // read just the latest
     readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.empty(), 100, inserts3.getKey());
