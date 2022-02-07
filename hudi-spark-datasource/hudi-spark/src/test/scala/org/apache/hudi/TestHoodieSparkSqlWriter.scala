@@ -144,8 +144,6 @@ class TestHoodieSparkSqlWriter {
       HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
       "hoodie.insert.shuffle.parallelism" -> "1",
       "hoodie.upsert.shuffle.parallelism" -> "1",
-      "hoodie.simple.index.parallelism" -> "2",
-      "hoodie.global.simple.index.parallelism" -> "2",
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",

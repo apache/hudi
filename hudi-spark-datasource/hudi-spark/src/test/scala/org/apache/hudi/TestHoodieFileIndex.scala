@@ -56,8 +56,6 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",
-    "hoodie.simple.index.parallelism" -> "2",
-    "hoodie.global.simple.index.parallelism" -> "2",
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",

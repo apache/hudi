@@ -32,7 +32,6 @@ stages:
   - stage: test
     jobs:
       - job: UT_FT_1
-        condition : false
         displayName: UT FT common & flink & UT client/spark-client
         timeoutInMinutes: '90'
         steps:
@@ -72,7 +71,6 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: UT_FT_2
-        condition : false
         displayName: FT client/spark-client
         timeoutInMinutes: '90'
         steps:
@@ -103,7 +101,6 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: UT_FT_3
-        condition : false
         displayName: UT FT clients & cli & utilities & sync/hive-sync
         timeoutInMinutes: '90'
         steps:
@@ -144,7 +141,7 @@ stages:
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: UT_FT_4
         displayName: UT FT other modules
-        timeoutInMinutes: '120'
+        timeoutInMinutes: '90'
         steps:
           - task: Cache@2
             displayName: set cache
@@ -168,7 +165,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Punit-tests -pl hudi-spark-datasource/hudi-spark
+              options: -Punit-tests -pl !hudi-common,!hudi-flink,!hudi-client/hudi-spark-client,!hudi-client/hudi-client-common,!hudi-client/hudi-flink-client,!hudi-client/hudi-java-client,!hudi-cli,!hudi-utilities,!hudi-sync/hudi-hive-sync
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
@@ -182,7 +179,6 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: IT
-        condition : false
         steps:
           - task: AzureCLI@2
             displayName: Prepare for IT

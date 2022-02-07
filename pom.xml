@@ -354,12 +354,6 @@
                 ${surefire-log4j.file}
               </log4j.configuration>
             </systemPropertyVariables>
-           <!--properties>
-                    <property>
-                        <name>listener</name>
-                        <value>org.apache.hudi.PrintOutCurrentTestRunListener</value>
-                    </property>
-                </properties-->
           </configuration>
         </plugin>
         <plugin>

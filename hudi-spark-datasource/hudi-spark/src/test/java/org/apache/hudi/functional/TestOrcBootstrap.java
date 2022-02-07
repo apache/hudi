@@ -48,7 +48,6 @@ import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
@@ -238,7 +237,6 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
     HoodieWriteConfig config = getConfigBuilder(schema.toString())
         .withAutoCommit(true)
         .withSchema(schema.toString())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(IndexType.BLOOM).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(1)
             .build())
