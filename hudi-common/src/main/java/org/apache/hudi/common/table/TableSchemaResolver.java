@@ -21,14 +21,13 @@ package org.apache.hudi.common.table;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.SchemaCompatibility;
-
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -42,10 +41,8 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.InvalidTableException;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
@@ -61,15 +58,11 @@ public class TableSchemaResolver {
 
   private static final Logger LOG = LogManager.getLogger(TableSchemaResolver.class);
   private final HoodieTableMetaClient metaClient;
-  private final boolean withOperationField;
+  private final boolean hasOperationField;
 
   public TableSchemaResolver(HoodieTableMetaClient metaClient) {
-    this(metaClient, false);
-  }
-
-  public TableSchemaResolver(HoodieTableMetaClient metaClient, boolean withOperationField) {
     this.metaClient = metaClient;
-    this.withOperationField = withOperationField;
+    this.hasOperationField = hasOperationField();
   }
 
   /**
@@ -122,7 +115,7 @@ public class TableSchemaResolver {
     }
   }
 
-  public Schema getTableAvroSchemaFromDataFile() throws Exception {
+  public Schema getTableAvroSchemaFromDataFile() {
     return convertParquetSchemaToAvro(getTableParquetSchemaFromDataFile());
   }
 
@@ -151,7 +144,7 @@ public class TableSchemaResolver {
     Option<Schema> schemaFromTableConfig = metaClient.getTableConfig().getTableCreateSchema();
     if (schemaFromTableConfig.isPresent()) {
       if (includeMetadataFields) {
-        return HoodieAvroUtils.addMetadataFields(schemaFromTableConfig.get(), withOperationField);
+        return HoodieAvroUtils.addMetadataFields(schemaFromTableConfig.get(), hasOperationField);
       } else {
         return schemaFromTableConfig.get();
       }
@@ -176,7 +169,7 @@ public class TableSchemaResolver {
     }
     Option<Schema> schemaFromTableConfig = metaClient.getTableConfig().getTableCreateSchema();
     if (schemaFromTableConfig.isPresent()) {
-      Schema schema = HoodieAvroUtils.addMetadataFields(schemaFromTableConfig.get(), withOperationField);
+      Schema schema = HoodieAvroUtils.addMetadataFields(schemaFromTableConfig.get(), hasOperationField);
       return convertAvroSchemaToParquet(schema);
     }
     return getTableParquetSchemaFromDataFile();
@@ -244,7 +237,7 @@ public class TableSchemaResolver {
 
       Schema schema = new Schema.Parser().parse(existingSchemaStr);
       if (includeMetadataFields) {
-        schema = HoodieAvroUtils.addMetadataFields(schema, withOperationField);
+        schema = HoodieAvroUtils.addMetadataFields(schema, hasOperationField);
       }
       return Option.of(schema);
     } catch (Exception e) {
@@ -476,5 +469,19 @@ public class TableSchemaResolver {
       return new AvroSchemaConverter().convert(lastBlock.getSchema());
     }
     return null;
+  }
+
+  public boolean isHasOperationField() {
+    return hasOperationField;
+  }
+
+  private boolean hasOperationField() {
+    try {
+      Schema tableAvroSchema = getTableAvroSchemaFromDataFile();
+      return tableAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null;
+    } catch (Exception e) {
+      LOG.warn("Failed to read operation field from avro schema", e);
+      return false;
+    }
   }
 }
