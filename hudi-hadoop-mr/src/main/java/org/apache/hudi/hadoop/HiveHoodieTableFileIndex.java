@@ -64,7 +64,7 @@ public class HiveHoodieTableFileIndex extends BaseHoodieTableFileIndex {
     return new Object[0];
   }
 
-  static class NoopCache implements FileStatusCacheTrait {
+  static class NoopCache implements FileStatusCache {
     @Override
     public Option<FileStatus[]> get(Path path) {
       return Option.empty();

@@ -81,7 +81,7 @@ public abstract class BaseHoodieTableFileIndex {
   private final HoodieTableMetaClient metaClient;
   private final HoodieEngineContext engineContext;
 
-  private final transient FileStatusCacheTrait fileStatusCache;
+  private final transient FileStatusCache fileStatusCache;
 
   protected transient volatile long cachedFileSize = 0L;
   protected transient volatile Map<PartitionPath, List<FileSlice>> cachedAllInputFileSlices;
@@ -107,7 +107,7 @@ public abstract class BaseHoodieTableFileIndex {
                                   List<Path> queryPaths,
                                   Option<String> specifiedQueryInstant,
                                   boolean shouldIncludePendingCommits,
-                                  FileStatusCacheTrait fileStatusCache) {
+                                  FileStatusCache fileStatusCache) {
     this.partitionColumns = metaClient.getTableConfig().getPartitionFields()
         .orElse(new String[0]);
 
@@ -130,7 +130,7 @@ public abstract class BaseHoodieTableFileIndex {
     this.engineContext = engineContext;
     this.fileStatusCache = fileStatusCache;
 
-    refresh0();
+    doRefresh();
   }
 
   protected abstract Object[] parsePartitionColumnValues(String[] partitionColumns, String partitionPath);
@@ -138,7 +138,7 @@ public abstract class BaseHoodieTableFileIndex {
   /**
    * Returns latest completed instant as seen by this instance of the file-index
    */
-  public Option<HoodieInstant> latestCompletedInstant() {
+  public Option<HoodieInstant> getLatestCompletedInstant() {
     return getActiveTimeline().filterCompletedInstants().lastInstant();
   }
 
@@ -176,7 +176,7 @@ public abstract class BaseHoodieTableFileIndex {
 
   protected void refresh() {
     fileStatusCache.invalidate();
-    refresh0();
+    doRefresh();
   }
 
   protected HoodieTimeline getActiveTimeline() {
@@ -245,7 +245,7 @@ public abstract class BaseHoodieTableFileIndex {
     return CollectionUtils.combine(cachedPartitionToFiles, fetchedPartitionToFiles);
   }
 
-  private void refresh0() {
+  private void doRefresh() {
     long startTime = System.currentTimeMillis();
 
     Map<PartitionPath, FileStatus[]> partitionFiles = loadPartitionPathFiles();
@@ -262,7 +262,7 @@ public abstract class BaseHoodieTableFileIndex {
     fileSystemView = new HoodieTableFileSystemView(metaClient, activeTimeline, allFiles);
 
     Option<String> queryInstant =
-        specifiedQueryInstant.orElseOption(latestInstant.map(HoodieInstant::getTimestamp));
+        specifiedQueryInstant.or(() -> latestInstant.map(HoodieInstant::getTimestamp));
 
     if (tableType.equals(HoodieTableType.MERGE_ON_READ) && queryType.equals(HoodieTableQueryType.SNAPSHOT)) {
       cachedAllInputFileSlices = partitionFiles.keySet().stream()
@@ -341,7 +341,7 @@ public abstract class BaseHoodieTableFileIndex {
     }
   }
 
-  protected interface FileStatusCacheTrait {
+  protected interface FileStatusCache {
     Option<FileStatus[]> get(Path path);
 
     void put(Path path, FileStatus[] leafFiles);

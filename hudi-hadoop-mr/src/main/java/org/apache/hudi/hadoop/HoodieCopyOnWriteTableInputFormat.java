@@ -280,7 +280,7 @@ public class HoodieCopyOnWriteTableInputFormat extends FileInputFormat<NullWrita
                 Option<HoodieLogFile> latestLogFileOpt = fileSlice.getLatestLogFile();
                 Stream<HoodieLogFile> logFiles = fileSlice.getLogFiles();
 
-                Option<HoodieInstant> latestCompletedInstantOpt = fileIndex.latestCompletedInstant();
+                Option<HoodieInstant> latestCompletedInstantOpt = fileIndex.getLatestCompletedInstant();
 
                 // Check if we're reading a MOR table
                 if (includeLogFilesForSnapshotView()) {

@@ -306,8 +306,8 @@ object SparkHoodieTableFileIndex {
     }
   }
 
-  private def adapt(cache: FileStatusCache): BaseHoodieTableFileIndex.FileStatusCacheTrait = {
-    new BaseHoodieTableFileIndex.FileStatusCacheTrait {
+  private def adapt(cache: FileStatusCache): BaseHoodieTableFileIndex.FileStatusCache = {
+    new BaseHoodieTableFileIndex.FileStatusCache {
       override def get(path: Path): org.apache.hudi.common.util.Option[Array[FileStatus]] = toJavaOption(cache.getLeafFiles(path))
       override def put(path: Path, leafFiles: Array[FileStatus]): Unit = cache.putLeafFiles(path, leafFiles)
       override def invalidate(): Unit = cache.invalidateAll()
