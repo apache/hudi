@@ -114,7 +114,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
     assertEquals(asJson(sort(expectedZIndexTableDf)), asJson(sort(replace(newZIndexTableDf))))
   }
 
-  // @Test
+  @Test
   def testZIndexTableMerge(): Unit = {
     val testZIndexPath = new Path(basePath, "zindex")
 
