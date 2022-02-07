@@ -18,6 +18,11 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -39,18 +44,11 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Deque;
 import java.util.HashSet;
@@ -66,7 +64,7 @@ import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlo
 /**
  * Implements logic to scan log blocks and expose valid and deleted log records to subclass implementation. Subclass is
  * free to either apply merging or expose raw data back to the caller.
- *
+ * <p>
  * NOTE: If readBlockLazily is turned on, does not merge, instead keeps reading log blocks and merges everything at once
  * This is an optimization to avoid seek() back and forth to read new block (forward seek()) and lazily read content of
  * seen block (reverse and forward seek()) during merge | | Read Block 1 Metadata | | Read Block 1 Data | | | Read Block
@@ -359,25 +357,27 @@ public abstract class AbstractHoodieLogRecordReader {
    * handle it.
    */
   private void processDataBlock(HoodieDataBlock dataBlock, Option<List<String>> keys) throws Exception {
-    // TODO (NA) - Implement getRecordItr() in HoodieAvroDataBlock and use that here
-    List<IndexedRecord> recs = new ArrayList<>();
+    HoodieDataBlock.HoodieRecordMapper mapper = (rec) -> createHoodieRecord(rec, this.hoodieTableMetaClient.getTableConfig(),
+        this.payloadClassFQN, this.preCombineField, this.withOperationField, this.simpleKeyGenFields, this.partitionName);
+
+    List<HoodieRecord> records;
     if (!keys.isPresent()) {
-      recs = dataBlock.getRecords();
+      records = dataBlock.getRecords(mapper);
     } else {
-      recs = dataBlock.getRecords(keys.get());
+      records = dataBlock.getRecords(keys.get(), mapper);
     }
-    totalLogRecords.addAndGet(recs.size());
-    for (IndexedRecord rec : recs) {
-      processNextRecord(createHoodieRecord(rec, this.hoodieTableMetaClient.getTableConfig(), this.payloadClassFQN,
-          this.preCombineField, this.withOperationField, this.simpleKeyGenFields, this.partitionName));
+
+    for (HoodieRecord rec : records) {
+      processNextRecord(rec);
     }
+
+    totalLogRecords.addAndGet(records.size());
   }
 
   /**
    * Create @{@link HoodieRecord} from the @{@link IndexedRecord}.
    *
    * @param rec                - IndexedRecord to create the HoodieRecord from
-   * @param hoodieTableConfig  - Table config
    * @param payloadClassFQN    - Payload class fully qualified name
    * @param preCombineField    - PreCombine field
    * @param withOperationField - Whether operation field is enabled
