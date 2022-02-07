@@ -226,7 +226,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
               String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
               String recordPartitionPath = record.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
               HoodieRecordPayload<?> payload = payloadCreation.generatePayload(record, schema.toString());
-              output.collect(new StreamRecord(new IndexRecord<>(new HoodieRecord<>(new HoodieKey(recordKey, recordPartitionPath), payload))));
+              output.collect(new StreamRecord(new IndexRecord<>(new HoodieAvroRecord<>(new HoodieKey(recordKey, recordPartitionPath), payload))));
             }
           } catch (Exception e) {
             throw new HoodieException(String.format("Error when loading record from file: %s", baseFile), e);

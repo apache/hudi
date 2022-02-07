@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -168,7 +169,9 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     if (null == oldRecord) {
       this.indexState.update(newRecord);
     } else {
-      HoodieRecord hoodieRecord = new HoodieRecord(newRecord.getKey(), newRecord.getData().preCombine(oldRecord.getData()), newRecord.getOperation());
+      HoodieRecordPayload hoodieRecordPayload = newRecord.getData() instanceof HoodieRecordPayload
+          ? ((HoodieRecordPayload) newRecord.getData()).preCombine(((HoodieRecordPayload) oldRecord.getData())) : null;
+      HoodieRecord hoodieRecord = new HoodieAvroRecord(newRecord.getKey(), hoodieRecordPayload, newRecord.getOperation());
       hoodieRecord.setCurrentLocation(newRecord.getCurrentLocation());
       this.indexState.update(hoodieRecord);
     }
@@ -201,7 +204,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
           out.collect((O) deleteRecord);
 
           if (conf.getBoolean(FlinkOptions.PARTIAL_OVERWRITE_ENABLED)) {
-            HoodieRecord newRecord = new HoodieRecord(new HoodieKey(recordKey, partitionPath), oldRecord.getData());
+            HoodieRecord newRecord = new HoodieAvroRecord(new HoodieKey(recordKey, partitionPath), ((HoodieRecordPayload<?>) oldRecord.getData()));
             newRecord.setCurrentLocation(location);
             out.collect((O) newRecord);
           }
