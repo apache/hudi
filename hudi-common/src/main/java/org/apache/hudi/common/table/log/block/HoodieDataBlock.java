@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.log.block;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -45,7 +46,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
   // TODO rebase records/content to leverage Either to warrant
   //      that they are mutex (used by read/write flows respectively)
-  private Option<List<IndexedRecord>> records;
+  private Option<List<HoodieRecord>> records;
 
   /**
    * Key field's name w/in the record's schema
@@ -59,7 +60,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   /**
    * NOTE: This ctor is used on the write-path (ie when records ought to be written into the log)
    */
-  public HoodieDataBlock(List<IndexedRecord> records,
+  public HoodieDataBlock(List<HoodieRecord> records,
                          Map<HeaderMetadataType, String> header,
                          Map<HeaderMetadataType, String> footer,
                          String keyFieldName) {
@@ -112,11 +113,11 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   /**
    * Returns all the records contained w/in this block
    */
-  public final List<IndexedRecord> getRecords() {
+  public final List<HoodieRecord> getRecords(HoodieRecordMapper mapper) {
     if (!records.isPresent()) {
       try {
         // in case records are absent, read content lazily and then convert to IndexedRecords
-        records = Option.of(readRecordsFromBlockPayload());
+        records = Option.of(readRecordsFromBlockPayload(mapper));
       } catch (IOException io) {
         throw new HoodieIOException("Unable to convert content bytes to records", io);
       }
@@ -136,15 +137,15 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    * @return List of IndexedRecords for the keys of interest.
    * @throws IOException in case of failures encountered when reading/parsing records
    */
-  public final List<IndexedRecord> getRecords(List<String> keys) throws IOException {
+  public final List<HoodieRecord> getRecords(List<String> keys, HoodieRecordMapper mapper) throws IOException {
     boolean fullScan = keys.isEmpty();
     if (enablePointLookups && !fullScan) {
-      return lookupRecords(keys);
+      return lookupRecords(keys, mapper);
     }
 
     // Otherwise, we fetch all the records and filter out all the records, but the
     // ones requested
-    List<IndexedRecord> allRecords = getRecords();
+    List<HoodieRecord> allRecords = getRecords(mapper);
     if (fullScan) {
       return allRecords;
     }
@@ -155,29 +156,29 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
         .collect(Collectors.toList());
   }
 
-  protected List<IndexedRecord> readRecordsFromBlockPayload() throws IOException {
+  protected List<HoodieRecord> readRecordsFromBlockPayload(HoodieRecordMapper mapper) throws IOException {
     if (readBlockLazily && !getContent().isPresent()) {
       // read log block contents from disk
       inflate();
     }
 
     try {
-      return deserializeRecords(getContent().get());
+      return deserializeRecords(getContent().get(), mapper);
     } finally {
       // Free up content to be GC'd by deflating the block
       deflate();
     }
   }
 
-  protected List<IndexedRecord> lookupRecords(List<String> keys) throws IOException {
+  protected List<HoodieRecord> lookupRecords(List<String> keys, HoodieRecordMapper mapper) throws IOException {
     throw new UnsupportedOperationException(
         String.format("Point lookups are not supported by this Data block type (%s)", getBlockType())
     );
   }
 
-  protected abstract byte[] serializeRecords(List<IndexedRecord> records) throws IOException;
+  protected abstract byte[] serializeRecords(List<HoodieRecord> records) throws IOException;
 
-  protected abstract List<IndexedRecord> deserializeRecords(byte[] content) throws IOException;
+  protected abstract List<HoodieRecord> deserializeRecords(byte[] content, HoodieRecordMapper mapper) throws IOException;
 
   public abstract HoodieLogBlockType getBlockType();
 
@@ -185,9 +186,14 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     return Option.ofNullable(schema.getField(keyFieldName));
   }
 
-  protected Option<String> getRecordKey(IndexedRecord record) {
-    return getKeyField(record.getSchema())
-        .map(keyField -> record.get(keyField.pos()))
-        .map(Object::toString);
+  protected Option<String> getRecordKey(HoodieRecord record) {
+    return Option.ofNullable(record.getRecordKey());
+  }
+
+  // TODO remove
+  @FunctionalInterface
+  public
+  interface HoodieRecordMapper {
+    HoodieRecord apply(IndexedRecord avroPayload);
   }
 }

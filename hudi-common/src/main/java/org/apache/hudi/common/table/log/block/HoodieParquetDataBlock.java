@@ -27,6 +27,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.hudi.io.storage.HoodieAvroParquetConfig;
@@ -69,11 +70,10 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     this.compressionCodecName = Option.empty();
   }
 
-  public HoodieParquetDataBlock(
-      @Nonnull List<IndexedRecord> records,
-      @Nonnull Map<HeaderMetadataType, String> header,
-      @Nonnull String keyField,
-      @Nonnull CompressionCodecName compressionCodecName
+  public HoodieParquetDataBlock(@Nonnull List<HoodieRecord> records,
+                                @Nonnull Map<HeaderMetadataType, String> header,
+                                @Nonnull String keyField,
+                                @Nonnull CompressionCodecName compressionCodecName
   ) {
     super(records, header, new HashMap<>(), keyField);
 
@@ -86,7 +86,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
   }
 
   @Override
-  protected byte[] serializeRecords(List<IndexedRecord> records) throws IOException {
+  protected byte[] serializeRecords(List<HoodieRecord> records) throws IOException {
     if (records.size() == 0) {
       return new byte[0];
     }
@@ -109,10 +109,9 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
     try (FSDataOutputStream outputStream = new FSDataOutputStream(baos)) {
-      try (HoodieParquetStreamWriter<IndexedRecord> parquetWriter = new HoodieParquetStreamWriter<>(outputStream, avroParquetConfig)) {
-        for (IndexedRecord record : records) {
-          String recordKey = getRecordKey(record).orElse(null);
-          parquetWriter.writeAvro(recordKey, record);
+      try (HoodieParquetStreamWriter parquetWriter = new HoodieParquetStreamWriter(outputStream, avroParquetConfig)) {
+        for (HoodieRecord record : records) {
+          parquetWriter.write(record, writerSchema);
         }
         outputStream.flush();
       }
@@ -134,11 +133,13 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
 
   /**
    * NOTE: We're overriding the whole reading sequence to make sure we properly respect
-   *       the requested Reader's schema and only fetch the columns that have been explicitly
-   *       requested by the caller (providing projected Reader's schema)
+   * the requested Reader's schema and only fetch the columns that have been explicitly
+   * requested by the caller (providing projected Reader's schema)
+   *
+   * @param mapper
    */
   @Override
-  protected List<IndexedRecord> readRecordsFromBlockPayload() throws IOException {
+  protected List<HoodieRecord> readRecordsFromBlockPayload(HoodieRecordMapper mapper) throws IOException {
     HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
 
     // NOTE: It's important to extend Hadoop configuration here to make sure configuration
@@ -152,20 +153,20 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
 
-    ArrayList<IndexedRecord> records = new ArrayList<>();
+    ArrayList<HoodieRecord> records = new ArrayList<>();
 
     getProjectedParquetRecordsIterator(
         inlineConf,
         readerSchema,
         HadoopInputFile.fromPath(inlineLogFilePath, inlineConf)
     )
-        .forEachRemaining(records::add);
+        .forEachRemaining(avroPayload -> records.add(mapper.apply(avroPayload)));
 
     return records;
   }
 
   @Override
-  protected List<IndexedRecord> deserializeRecords(byte[] content) throws IOException {
+  protected List<HoodieRecord> deserializeRecords(byte[] content, HoodieRecordMapper mapper) throws IOException {
     throw new UnsupportedOperationException("Should not be invoked");
   }
 }
