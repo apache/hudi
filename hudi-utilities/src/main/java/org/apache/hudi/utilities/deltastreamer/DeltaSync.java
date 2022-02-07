@@ -680,9 +680,10 @@ public class DeltaSync implements Serializable {
 
   public void syncHive() {
     HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, cfg.targetBasePath, cfg.baseFileFormat);
-    LOG.info("Syncing target hoodie table with hive table(" + hiveSyncConfig.tableName + "). Hive metastore URL :"
-        + hiveSyncConfig.jdbcUrl + ", basePath :" + cfg.targetBasePath);
     HiveConf hiveConf = new HiveConf(conf, HiveConf.class);
+    if (StringUtils.isNullOrEmpty(hiveConf.get(HiveConf.ConfVars.METASTOREURIS.varname))) {
+      hiveConf.set(HiveConf.ConfVars.METASTOREURIS.varname, hiveSyncConfig.metastoreUris);
+    }
     LOG.info("Hive Conf => " + hiveConf.getAllProperties().toString());
     LOG.info("Hive Sync Conf => " + hiveSyncConfig.toString());
     new HiveSyncTool(hiveSyncConfig, hiveConf, fs).syncHoodieTable();
