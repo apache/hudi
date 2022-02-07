@@ -35,6 +35,7 @@ import java.util.Map;
 /**
  * This is a mock class, built for testing only. Don't use it as an example of KmsClient implementation.
  * (org.apache.parquet.crypto.keytools.samples.VaultClient is the sample implementation).
+ * This function is only recommended for use in spark3.2+.
  */
 public class InMemoryKMS implements KmsClient {
   private static final Logger LOG = LoggerFactory.getLogger(InMemoryKMS.class);

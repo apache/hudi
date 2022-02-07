@@ -36,6 +36,9 @@ import java.util.List;
 
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
 
+/**
+ *  This function is only recommended for use in spark3.2+.
+ */
 public class TestParquetEncryption extends HoodieClientTestBase {
 
   private SparkSession spark;
