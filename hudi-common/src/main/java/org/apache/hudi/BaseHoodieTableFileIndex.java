@@ -60,9 +60,9 @@ import java.util.stream.Collectors;
  *   <li>Query instant/range</li>
  * </ul>
  */
-public abstract class JavaBaseHoodieTableFileIndex {
+public abstract class BaseHoodieTableFileIndex {
 
-  private static final Logger LOG = LogManager.getLogger(JavaBaseHoodieTableFileIndex.class);
+  private static final Logger LOG = LogManager.getLogger(BaseHoodieTableFileIndex.class);
 
   private final String[] partitionColumns;
 
@@ -100,14 +100,14 @@ public abstract class JavaBaseHoodieTableFileIndex {
    * @param shouldIncludePendingCommits flags whether file-index should exclude any pending operations
    * @param fileStatusCache transient cache of fetched [[FileStatus]]es
    */
-  public JavaBaseHoodieTableFileIndex(HoodieEngineContext engineContext,
-                                      HoodieTableMetaClient metaClient,
-                                      TypedProperties configProperties,
-                                      HoodieTableQueryType queryType,
-                                      List<Path> queryPaths,
-                                      Option<String> specifiedQueryInstant,
-                                      boolean shouldIncludePendingCommits,
-                                      FileStatusCacheTrait fileStatusCache) {
+  public BaseHoodieTableFileIndex(HoodieEngineContext engineContext,
+                                  HoodieTableMetaClient metaClient,
+                                  TypedProperties configProperties,
+                                  HoodieTableQueryType queryType,
+                                  List<Path> queryPaths,
+                                  Option<String> specifiedQueryInstant,
+                                  boolean shouldIncludePendingCommits,
+                                  FileStatusCacheTrait fileStatusCache) {
     this.partitionColumns = metaClient.getTableConfig().getPartitionFields()
         .orElse(new String[0]);
 
@@ -292,7 +292,7 @@ public abstract class JavaBaseHoodieTableFileIndex {
 
     cachedFileSize = cachedAllInputFileSlices.values().stream()
         .flatMap(Collection::stream)
-        .mapToLong(JavaBaseHoodieTableFileIndex::fileSliceSize)
+        .mapToLong(BaseHoodieTableFileIndex::fileSliceSize)
         .sum();
 
     // If the partition value contains InternalRow.empty, we query it as a non-partitioned table.

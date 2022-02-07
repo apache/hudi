@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.view.{FileSystemViewStorageConfig, HoodieTableFileSystemView}
 
 import scala.collection.JavaConverters._
-import scala.collection.JavaConversions._
 import scala.collection.mutable
 import scala.language.implicitConversions
 
@@ -50,15 +49,17 @@ import scala.language.implicitConversions
  * @param specifiedQueryInstant instant as of which table is being queried
  * @param shouldIncludePendingCommits flags whether file-index should exclude any pending operations
  * @param fileStatusCache transient cache of fetched [[FileStatus]]es
+ *
+ * TODO remove
  */
-abstract class BaseHoodieTableFileIndex(engineContext: HoodieEngineContext,
-                                        metaClient: HoodieTableMetaClient,
-                                        configProperties: TypedProperties,
-                                        queryType: HoodieTableQueryType,
-                                        protected val queryPaths: Seq[Path],
-                                        specifiedQueryInstant: Option[String] = None,
-                                        shouldIncludePendingCommits: Boolean = false,
-                                        @transient fileStatusCache: FileStatusCacheTrait) {
+abstract class DeprecatedBaseHoodieTableFileIndex(engineContext: HoodieEngineContext,
+                                                  metaClient: HoodieTableMetaClient,
+                                                  configProperties: TypedProperties,
+                                                  queryType: HoodieTableQueryType,
+                                                  protected val queryPaths: Seq[Path],
+                                                  specifiedQueryInstant: Option[String] = None,
+                                                  shouldIncludePendingCommits: Boolean = false,
+                                                  @transient fileStatusCache: FileStatusCacheTrait) {
 
   private lazy val _partitionColumns: Array[String] =
     metaClient.getTableConfig.getPartitionFields.orElse(Array[String]())

@@ -18,7 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, Path}
-import JavaBaseHoodieTableFileIndex.PartitionPath
+import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_INCREMENTAL_OPT_VAL, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, generateFieldMap, toJavaOption}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -41,7 +41,7 @@ import scala.collection.JavaConverters._
 import scala.language.implicitConversions
 
 /**
- * Implementation of the [[JavaBaseHoodieTableFileIndex]] for Spark
+ * Implementation of the [[BaseHoodieTableFileIndex]] for Spark
  *
  * @param spark spark session
  * @param metaClient Hudi table's meta-client
@@ -57,7 +57,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
                                 queryPaths: Seq[Path],
                                 specifiedQueryInstant: Option[String] = None,
                                 @transient fileStatusCache: FileStatusCache = NoopCache)
-  extends JavaBaseHoodieTableFileIndex(
+  extends BaseHoodieTableFileIndex(
     new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)),
     metaClient,
     configProperties,
@@ -306,8 +306,8 @@ object SparkHoodieTableFileIndex {
     }
   }
 
-  private def adapt(cache: FileStatusCache): JavaBaseHoodieTableFileIndex.FileStatusCacheTrait = {
-    new JavaBaseHoodieTableFileIndex.FileStatusCacheTrait {
+  private def adapt(cache: FileStatusCache): BaseHoodieTableFileIndex.FileStatusCacheTrait = {
+    new BaseHoodieTableFileIndex.FileStatusCacheTrait {
       override def get(path: Path): org.apache.hudi.common.util.Option[Array[FileStatus]] = toJavaOption(cache.getLeafFiles(path))
       override def put(path: Path, leafFiles: Array[FileStatus]): Unit = cache.putLeafFiles(path, leafFiles)
       override def invalidate(): Unit = cache.invalidateAll()
