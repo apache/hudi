@@ -51,10 +51,12 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -239,10 +241,22 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
                                                                                Option<Map<String, Long>> filesAdded,
                                                                                Option<List<String>> filesDeleted) {
     Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>();
-    filesAdded.ifPresent(
-        m -> m.forEach((filename, size) -> fileInfo.put(filename, new HoodieMetadataFileInfo(size, false))));
-    filesDeleted.ifPresent(
-        m -> m.forEach(filename -> fileInfo.put(filename, new HoodieMetadataFileInfo(0L, true))));
+    filesAdded.ifPresent(filesMap ->
+        fileInfo.putAll(
+            filesMap.entrySet().stream().collect(
+                Collectors.toMap(Map.Entry::getKey, (entry) -> {
+                  long fileSize = entry.getValue();
+                  // Assert that the file-size of the file being added is positive, since Hudi
+                  // should not be creating empty files
+                  checkState(fileSize > 0);
+                  return new HoodieMetadataFileInfo(fileSize, false);
+                })))
+    );
+    filesDeleted.ifPresent(filesList ->
+        fileInfo.putAll(
+            filesList.stream().collect(
+                Collectors.toMap(Function.identity(), (ignored) -> new HoodieMetadataFileInfo(0L, true))))
+    );
 
     HoodieKey key = new HoodieKey(partition, MetadataPartitionType.FILES.getPartitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_FILE_LIST, fileInfo);
@@ -517,7 +531,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private static void validatePayload(int type, Map<String, HoodieMetadataFileInfo> filesystemMetadata) {
     if (type == METADATA_TYPE_FILE_LIST) {
       filesystemMetadata.forEach((fileName, fileInfo) -> {
-        ValidationUtils.checkState(fileInfo.getIsDeleted() || fileInfo.getSize() > 0, "Existing files should have size > 0");
+        checkState(fileInfo.getIsDeleted() || fileInfo.getSize() > 0, "Existing files should have size > 0");
       });
     }
   }
