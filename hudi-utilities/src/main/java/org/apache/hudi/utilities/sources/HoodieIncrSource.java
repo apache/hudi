@@ -123,22 +123,29 @@ public class HoodieIncrSource extends RowSource {
     Option<String> beginInstant =
         lastCkptStr.isPresent() ? lastCkptStr.get().isEmpty() ? Option.empty() : lastCkptStr : Option.empty();
 
-    Pair<String, String> instantEndpts = IncrSourceHelper.calculateBeginAndEndInstants(sparkContext, srcPath,
+    Pair<String, Pair<String, String>> queryTypeAndInstantEndpts = IncrSourceHelper.calculateBeginAndEndInstants(sparkContext, srcPath,
         numInstantsPerFetch, beginInstant, missingCheckpointStrategy);
 
-    if (instantEndpts.getKey().equals(instantEndpts.getValue())) {
-      LOG.warn("Already caught up. Begin Checkpoint was :" + instantEndpts.getKey());
-      return Pair.of(Option.empty(), instantEndpts.getKey());
+    if (queryTypeAndInstantEndpts.getValue().getKey().equals(queryTypeAndInstantEndpts.getValue().getValue())) {
+      LOG.warn("Already caught up. Begin Checkpoint was :" + queryTypeAndInstantEndpts.getKey());
+      return Pair.of(Option.empty(), queryTypeAndInstantEndpts.getKey());
     }
 
     // Do Incr pull. Set end instant if available
-    DataFrameReader reader = sparkSession.read().format("org.apache.hudi")
-        .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
-        .option(DataSourceReadOptions.BEGIN_INSTANTTIME().key(), instantEndpts.getLeft())
-        .option(DataSourceReadOptions.END_INSTANTTIME().key(), instantEndpts.getRight())
-        .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().key(),
-            props.getString(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().key(),
-                DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().defaultValue()));
+    DataFrameReader reader = null;
+    if (queryTypeAndInstantEndpts.getKey().equals(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())) {
+      reader = sparkSession.read().format("org.apache.hudi")
+          .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
+          .option(DataSourceReadOptions.BEGIN_INSTANTTIME().key(), queryTypeAndInstantEndpts.getValue().getLeft())
+          .option(DataSourceReadOptions.END_INSTANTTIME().key(), queryTypeAndInstantEndpts.getValue().getRight())
+          .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().key(),
+              props.getString(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().key(),
+                  DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().defaultValue()));
+    } else {
+      // if checkpoint is missing from source table, and if strategy is set to READ_UPTO_LATEST_COMMIT, we have to issue snapshot query
+      reader = sparkSession.read().format("org.apache.hudi")
+          .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL());
+    }
 
     Dataset<Row> source = reader.load(srcPath);
 
@@ -168,6 +175,6 @@ public class HoodieIncrSource extends RowSource {
     final Dataset<Row> src = source.drop(HoodieRecord.HOODIE_META_COLUMNS.stream()
         .filter(x -> !x.equals(HoodieRecord.PARTITION_PATH_METADATA_FIELD)).toArray(String[]::new));
     // log.info("Final Schema from Source is :" + src.schema());
-    return Pair.of(Option.of(src), instantEndpts.getRight());
+    return Pair.of(Option.of(src), queryTypeAndInstantEndpts.getRight().getRight());
   }
 }

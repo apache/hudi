@@ -101,24 +101,31 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
             ? lastCkptStr.get().isEmpty() ? Option.empty() : lastCkptStr
             : Option.empty();
 
-    Pair<String, String> instantEndpts =
+    Pair<String, Pair<String, String>> queryTypeAndInstantEndpts =
         IncrSourceHelper.calculateBeginAndEndInstants(
             sparkContext, srcPath, numInstantsPerFetch, beginInstant, missingCheckpointStrategy);
 
-    if (instantEndpts.getKey().equals(instantEndpts.getValue())) {
-      LOG.warn("Already caught up. Begin Checkpoint was :" + instantEndpts.getKey());
-      return Pair.of(Option.empty(), instantEndpts.getKey());
+    if (queryTypeAndInstantEndpts.getValue().getKey().equals(queryTypeAndInstantEndpts.getValue().getValue())) {
+      LOG.warn("Already caught up. Begin Checkpoint was :" + queryTypeAndInstantEndpts.getKey());
+      return Pair.of(Option.empty(), queryTypeAndInstantEndpts.getKey());
     }
 
+    DataFrameReader metaReader = null;
     // Do incremental pull. Set end instant if available.
-    DataFrameReader metaReader = sparkSession.read().format("org.apache.hudi")
-        .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
-        .option(DataSourceReadOptions.BEGIN_INSTANTTIME().key(), instantEndpts.getLeft())
-        .option(DataSourceReadOptions.END_INSTANTTIME().key(), instantEndpts.getRight());
+    if (queryTypeAndInstantEndpts.getKey().equals(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())) {
+      metaReader = sparkSession.read().format("org.apache.hudi")
+          .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
+          .option(DataSourceReadOptions.BEGIN_INSTANTTIME().key(), queryTypeAndInstantEndpts.getRight().getLeft())
+          .option(DataSourceReadOptions.END_INSTANTTIME().key(), queryTypeAndInstantEndpts.getRight().getRight());
+    } else {
+      // if checkpoint is missing from source table, and if strategy is set to READ_UPTO_LATEST_COMMIT, we have to issue snapshot query
+      metaReader = sparkSession.read().format("org.apache.hudi")
+          .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL());
+    }
     Dataset<Row> source = metaReader.load(srcPath);
     
     if (source.isEmpty()) {
-      return Pair.of(Option.empty(), instantEndpts.getRight());
+      return Pair.of(Option.empty(), queryTypeAndInstantEndpts.getRight().getRight());
     }
 
     String filter = "s3.object.size > 0";
@@ -167,6 +174,6 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     if (!cloudFiles.isEmpty()) {
       dataset = Option.of(sparkSession.read().format(fileFormat).load(cloudFiles.toArray(new String[0])));
     }
-    return Pair.of(dataset, instantEndpts.getRight());
+    return Pair.of(dataset, queryTypeAndInstantEndpts.getRight().getRight());
   }
 }
