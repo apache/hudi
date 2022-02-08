@@ -44,7 +44,6 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import com.codahale.metrics.Timer;
 import org.apache.hadoop.conf.Configuration;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
