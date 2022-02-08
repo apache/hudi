@@ -82,7 +82,7 @@ public class TestHoodieWriteConfig {
   public void testDefaultIndexAccordingToEngineType() {
     testEngineSpecificConfig(HoodieWriteConfig::getIndexType,
         constructConfigMap(
-            EngineType.SPARK, HoodieIndex.IndexType.BLOOM,
+            EngineType.SPARK, HoodieIndex.IndexType.SIMPLE,
             EngineType.FLINK, HoodieIndex.IndexType.INMEMORY,
             EngineType.JAVA, HoodieIndex.IndexType.INMEMORY));
   }
