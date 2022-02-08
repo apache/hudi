@@ -18,9 +18,6 @@
 
 package org.apache.hudi.utilities;
 
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.async.HoodieAsyncService;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -37,6 +34,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
 
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
@@ -69,8 +69,8 @@ import java.util.stream.Collectors;
  *  --executor-memory 1g \
  *  $HUDI_DIR/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
  *  --base-path basePath \
- *  --validate-latest-fileSlices \
- *  --validate-latest-baseFiles \
+ *  --validate-latest-file-slices \
+ *  --validate-latest-base-files \
  *  --validate-all-file-groups
  * ```
  *
@@ -88,8 +88,8 @@ import java.util.stream.Collectors;
  *  --executor-memory 1g \
  *  $HUDI_DIR/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
  *  --base-path basePath \
- *  --validate-latest-fileSlices \
- *  --validate-latest-baseFiles \
+ *  --validate-latest-file-slices \
+ *  --validate-latest-base-files \
  *  --validate-all-file-groups \
  *  --continuous \
  *  --min-validate-interval-seconds 60
@@ -151,10 +151,10 @@ public class HoodieMetadataTableValidator implements Serializable {
         + "Can use --min-validate-interval-seconds to control validation frequency", required = false)
     public boolean continuous = false;
 
-    @Parameter(names = {"--validate-latest-fileSlices"}, description = "Validate latest fileSlices for all partitions.", required = false)
+    @Parameter(names = {"--validate-latest-file-slices"}, description = "Validate latest file slices for all partitions.", required = false)
     public boolean validateLatestFileSlices = false;
 
-    @Parameter(names = {"--validate-latest-baseFiles"}, description = "Validate latest baseFiles for all partitions.", required = false)
+    @Parameter(names = {"--validate-latest-base-files"}, description = "Validate latest base files for all partitions.", required = false)
     public boolean validateLatestBaseFiles = false;
 
     @Parameter(names = {"--validate-all-file-groups"}, description = "Validate all file groups, and all file slices within file groups.", required = false)
@@ -196,8 +196,8 @@ public class HoodieMetadataTableValidator implements Serializable {
     public String toString() {
       return "MetadataTableValidatorConfig {\n"
           + "   --base-path " + basePath + ", \n"
-          + "   --validate-latest-fileSlices " + validateLatestFileSlices + ", \n"
-          + "   --validate-latest-baseFiles " + validateLatestBaseFiles + ", \n"
+          + "   --validate-latest-file-slices " + validateLatestFileSlices + ", \n"
+          + "   --validate-latest-base-files " + validateLatestBaseFiles + ", \n"
           + "   --validate-all-file-groups " + validateAllFileGroups + ", \n"
           + "   --continuous " + continuous + ", \n"
           + "   --ignore-failed " + ignoreFailed + ", \n"
@@ -288,9 +288,9 @@ public class HoodieMetadataTableValidator implements Serializable {
 
   private void doHoodieMetadataTableValidationOnce() {
     try {
-      doMetaTableValidation();
+      doMetadataTableValidation();
     } catch (HoodieValidationException e) {
-      LOG.error("MetaTable validation failed to HoodieValidationException", e);
+      LOG.error("Metadata table validation failed to HoodieValidationException", e);
       if (!cfg.ignoreFailed) {
         throw e;
       }
@@ -308,7 +308,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     });
   }
 
-  public void doMetaTableValidation() {
+  public void doMetadataTableValidation() {
     boolean finalResult = true;
     metaClient.reloadActiveTimeline();
     String basePath = metaClient.getBasePath();
@@ -320,10 +320,10 @@ public class HoodieMetadataTableValidator implements Serializable {
     List<Boolean> result = engineContext.parallelize(allPartitions, allPartitions.size()).map(partitionPath -> {
       try {
         validateFilesInPartition(metaFsView, fsView, partitionPath);
-        LOG.info("MetaTable Validation for " + partitionPath + " success.");
+        LOG.info("Metadata table validation succeeded for " + partitionPath);
         return true;
       } catch (HoodieValidationException e) {
-        LOG.error("MetaTable validation for " + partitionPath + " failed due to HoodieValidationException", e);
+        LOG.error("Metadata table validation failed for " + partitionPath + " due to HoodieValidationException", e);
         if (!cfg.ignoreFailed) {
           throw e;
         }
@@ -336,9 +336,9 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
 
     if (finalResult) {
-      LOG.info("MetaTable Validation Success.");
+      LOG.info("Metadata table validation succeeded.");
     } else {
-      LOG.warn("MetaTable Validation failed.");
+      LOG.warn("Metadata table validation failed.");
     }
   }
 
@@ -398,7 +398,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     LOG.info("All file slices from direct listing: " + allFileSlicesFromFS + ". For partitions " + partitionPath);
     validateFileSlice(allFileSlicesFromMeta, allFileSlicesFromFS, partitionPath);
 
-    LOG.info("Validation of AllFileGroups success for partition " + partitionPath);
+    LOG.info("Validation of all file groups succeeded for partition " + partitionPath);
   }
 
   private void validateFileSlice(List<FileSlice> fileSlicesFromMeta, List<FileSlice> fileSlicesFromFS, String partitionPath) {
@@ -409,7 +409,7 @@ public class HoodieMetadataTableValidator implements Serializable {
       LOG.error(message);
       throw new HoodieValidationException(message);
     } else {
-      LOG.info("Validation of fileSlices success for partition " + partitionPath);
+      LOG.info("Validation of file slices succeeded for partition " + partitionPath);
     }
   }
 
@@ -431,7 +431,7 @@ public class HoodieMetadataTableValidator implements Serializable {
       LOG.error(message);
       throw new HoodieValidationException(message);
     } else {
-      LOG.info("Validation of getLatestBaseFiles for partition " + partitionPath);
+      LOG.info("Validation of getLatestBaseFiles succeeded for partition " + partitionPath);
     }
   }
 
@@ -447,7 +447,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     LOG.info("Latest file list from direct listing: " + latestFileSlicesFromFS + ". For partition " + partitionPath);
 
     validateFileSlice(latestFileSlicesFromMetadataTable, latestFileSlicesFromFS, partitionPath);
-    LOG.info("Validation of getLatestFileSlices for partition " + partitionPath);
+    LOG.info("Validation of getLatestFileSlices succeeded for partition " + partitionPath);
   }
 
   private HoodieTableFileSystemView createHoodieTableFileSystemView(HoodieSparkEngineContext engineContext, boolean enableMetadataTable) {
@@ -470,7 +470,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         while (true) {
           try {
             long start = System.currentTimeMillis();
-            doMetaTableValidation();
+            doMetadataTableValidation();
             long toSleepMs = cfg.minValidateIntervalSeconds * 1000 - (System.currentTimeMillis() - start);
 
             if (toSleepMs > 0) {
