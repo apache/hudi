@@ -19,6 +19,7 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -208,18 +209,18 @@ public class HoodieAvroHFileReader implements HoodieAvroFileReader {
     return readAllRecords(schema, schema);
   }
 
-  public List<Pair<String, IndexedRecord>> readRecords(List<String> keys) throws IOException {
+  public List<Pair<String, GenericRecord>> readRecords(List<String> keys) throws IOException {
     reader.loadFileInfo();
     Schema schema = new Schema.Parser().parse(new String(reader.loadFileInfo().get(KEY_SCHEMA.getBytes())));
     return readRecords(keys, schema);
   }
 
-  public List<Pair<String, IndexedRecord>> readRecords(List<String> keys, Schema schema) throws IOException {
+  public List<Pair<String, GenericRecord>> readRecords(List<String> keys, Schema schema) throws IOException {
     this.schema = schema;
     reader.loadFileInfo();
-    List<Pair<String, IndexedRecord>> records = new ArrayList<>();
+    List<Pair<String, GenericRecord>> records = new ArrayList<>();
     for (String key: keys) {
-      Option<IndexedRecord> value = getRecordByKey(key, schema);
+      Option<GenericRecord> value = getRecordByKey(key, schema);
       if (value.isPresent()) {
         records.add(new Pair(key, value.get()));
       }

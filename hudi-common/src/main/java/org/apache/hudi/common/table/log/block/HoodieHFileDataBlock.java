@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.log.block;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -183,7 +184,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     try (HoodieAvroHFileReader reader =
              new HoodieAvroHFileReader(inlineConf, inlinePath, new CacheConfig(inlineConf), inlinePath.getFileSystem(inlineConf))) {
       // Get writer's schema from the header
-      List<Pair<String, IndexedRecord>> logRecords = reader.readRecords(keys, readerSchema);
+      List<Pair<String, GenericRecord>> logRecords = reader.readRecords(keys, readerSchema);
       return logRecords.stream().map(Pair::getSecond).collect(Collectors.toList());
     }
   }
