@@ -13,13 +13,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-dag_name: cow-spark-long-running-multi-partitions.yaml
-dag_rounds: 50
-dag_intermittent_delay_mins: 1
+dag_name: cow-spark-deltastreamer-long-running-multi-partitions.yaml
+dag_rounds: 30
+dag_intermittent_delay_mins: 0
 dag_content:
   first_insert:
     config:
-      record_size: 1000
+      record_size: 200
       num_partitions_insert: 50
       repeat_count: 1
       num_records_insert: 10000
@@ -33,12 +33,12 @@ dag_content:
     deps: first_insert
   first_validate:
     config:
-      validate_hive: true
+      validate_hive: false
     type: ValidateDatasetNode
     deps: first_hive_sync
   first_upsert:
     config:
-      record_size: 1000
+      record_size: 200
       num_partitions_insert: 50
       num_records_insert: 300
       repeat_count: 1
@@ -60,13 +60,13 @@ dag_content:
     deps: first_delete
   second_validate:
     config:
-      validate_hive: true
+      validate_hive: false
       delete_input_data: true
     type: ValidateDatasetNode
     deps: second_hive_sync
   last_validate:
     config:
-      execute_itr_count: 50
+      execute_itr_count: 30
       validate_clean: true
       validate_archival: true
     type: ValidateAsyncOperations
