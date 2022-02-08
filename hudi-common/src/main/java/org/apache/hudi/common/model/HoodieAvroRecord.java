@@ -128,6 +128,16 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
+  public HoodieRecord mergeWith(HoodieRecord other, Schema readerSchema, Schema writerSchema) throws IOException {
+    ValidationUtils.checkState(other instanceof HoodieAvroRecord);
+    GenericRecord mergedPayload = HoodieAvroUtils.stitchRecords(
+        asAvro(readerSchema).get(),
+        ((HoodieAvroRecord<?>) other).asAvro(readerSchema).get(),
+        writerSchema);
+    return new HoodieAvroRecord(getKey(), instantiateRecordPayloadWrapper(mergedPayload, getPrecombineValue(getData())), getOperation());
+  }
+
+  @Override
   public HoodieRecord rewriteRecord(Schema recordSchema, Schema targetSchema, TypedProperties props) throws IOException {
     Option<IndexedRecord> avroRecordPayloadOpt = getData().getInsertValue(recordSchema, props);
     GenericRecord avroPayloadInNewSchema =

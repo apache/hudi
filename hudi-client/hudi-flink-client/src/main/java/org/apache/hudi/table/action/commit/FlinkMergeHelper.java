@@ -20,7 +20,6 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -73,11 +72,11 @@ public class FlinkMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHe
     Configuration cfgForHoodieFile = new Configuration(table.getHadoopConf());
     HoodieAvroFileReader reader = HoodieFileReaderFactory.getFileReader(cfgForHoodieFile, mergeHandle.getOldFilePath());
     try {
-      final Iterator<IndexedRecord> readerIterator;
+      final Iterator<HoodieRecord> readerIterator;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
         readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader, readerSchema, externalSchemaTransformation);
       } else {
-        readerIterator = reader.getRecordIterator(readerSchema);
+        readerIterator = reader.getRecordIterator(readerSchema, createHoodieRecordMapper(table));
       }
 
       wrapper = new BoundedInMemoryExecutor(table.getConfig().getWriteBufferLimitBytes(), new IteratorBasedQueueProducer<>(readerIterator),

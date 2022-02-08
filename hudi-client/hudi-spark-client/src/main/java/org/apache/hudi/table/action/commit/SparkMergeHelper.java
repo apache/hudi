@@ -20,7 +20,6 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -31,7 +30,7 @@ import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.SparkBoundedInMemoryExecutor;
 import org.apache.hudi.io.HoodieMergeHandle;
-import org.apache.hudi.io.storage.HoodieAvroFileReader;
+import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.spark.api.java.JavaRDD;
@@ -71,13 +70,13 @@ public class SparkMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHe
     }
 
     BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
-    HoodieAvroFileReader reader = HoodieFileReaderFactory.getFileReader(cfgForHoodieFile, mergeHandle.getOldFilePath());
+    HoodieFileReader reader = HoodieFileReaderFactory.getFileReader(cfgForHoodieFile, mergeHandle.getOldFilePath());
     try {
-      final Iterator<IndexedRecord> readerIterator;
+      final Iterator<HoodieRecord> readerIterator;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
         readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader, readerSchema, externalSchemaTransformation);
       } else {
-        readerIterator = reader.getRecordIterator(readerSchema);
+        readerIterator = reader.getRecordIterator(readerSchema, createHoodieRecordMapper(table));
       }
 
       wrapper = new SparkBoundedInMemoryExecutor(table.getConfig(), readerIterator,

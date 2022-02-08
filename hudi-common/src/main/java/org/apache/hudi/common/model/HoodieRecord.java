@@ -270,6 +270,8 @@ public abstract class HoodieRecord<T> implements Serializable {
   //       be combined
   public abstract Option<HoodieRecord<T>> combineAndGetUpdateValue(HoodieRecord<T> previousRecord, Schema schema, Properties props) throws IOException;
 
+  public abstract HoodieRecord mergeWith(HoodieRecord other, Schema readerSchema, Schema writerSchema) throws IOException;
+
   public abstract HoodieRecord rewriteRecord(Schema recordSchema, Schema targetSchema, TypedProperties props) throws IOException;
 
   public abstract HoodieRecord addMetadataValues(Map<HoodieMetadataField, String> metadataValues) throws IOException;
