@@ -50,7 +50,7 @@ import java.util.stream.Stream;
 /**
  * Pluggable implementation for scheduling clustering and creating ClusteringPlan.
  */
-public abstract class ClusteringPlanStrategy<T extends HoodieRecordPayload,I,K,O> implements Serializable {
+public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
   private static final Logger LOG = LogManager.getLogger(ClusteringPlanStrategy.class);
 
   public static final int CLUSTERING_PLAN_VERSION_1 = 1;

@@ -19,7 +19,6 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -37,7 +36,7 @@ import scala.Tuple2;
  *
  * @param <T> HoodieRecordPayload type
  */
-public class RDDPartitionSortPartitioner<T extends HoodieRecordPayload>
+public class RDDPartitionSortPartitioner<T>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   @Override

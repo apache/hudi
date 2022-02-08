@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -54,14 +53,15 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public class SparkExecuteClusteringCommitActionExecutor<T>
     extends BaseSparkCommitActionExecutor<T> {
 
   private static final Logger LOG = LogManager.getLogger(SparkExecuteClusteringCommitActionExecutor.class);
   private final HoodieClusteringPlan clusteringPlan;
 
   public SparkExecuteClusteringCommitActionExecutor(HoodieEngineContext context,
-                                                    HoodieWriteConfig config, HoodieTable table,
+                                                    HoodieWriteConfig config,
+                                                    HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                                     String instantTime) {
     super(context, config, table, instantTime, WriteOperationType.CLUSTER);
     this.clusteringPlan = ClusteringUtils.getClusteringPlan(table.getMetaClient(), HoodieTimeline.getReplaceCommitRequestedInstant(instantTime))
@@ -76,7 +76,7 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
     table.getMetaClient().reloadActiveTimeline();
 
     final Schema schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
-    HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = ((ClusteringExecutionStrategy<T, JavaRDD<HoodieRecord<? extends HoodieRecordPayload>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>>)
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = ((ClusteringExecutionStrategy<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>>)
         ReflectionUtils.loadClass(config.getClusteringExecutionStrategyClass(),
             new Class<?>[] {HoodieTable.class, HoodieEngineContext.class, HoodieWriteConfig.class}, table, context, config))
         .performClustering(clusteringPlan, schema, instantTime);
@@ -119,10 +119,10 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
     // for the below execution strategy, new filegroup id would be same as old filegroup id
     if (SparkSingleFileSortExecutionStrategy.class.getName().equals(config.getClusteringExecutionStrategyClass())) {
       return ClusteringUtils.getFileGroupsFromClusteringPlan(clusteringPlan)
-          .collect(Collectors.groupingBy(fg -> fg.getPartitionPath(), Collectors.mapping(fg -> fg.getFileId(), Collectors.toList())));
+          .collect(Collectors.groupingBy(HoodieFileGroupId::getPartitionPath, Collectors.mapping(HoodieFileGroupId::getFileId, Collectors.toList())));
     }
     return ClusteringUtils.getFileGroupsFromClusteringPlan(clusteringPlan)
         .filter(fg -> !newFilesWritten.contains(fg))
-        .collect(Collectors.groupingBy(fg -> fg.getPartitionPath(), Collectors.mapping(fg -> fg.getFileId(), Collectors.toList())));
+        .collect(Collectors.groupingBy(HoodieFileGroupId::getPartitionPath, Collectors.mapping(HoodieFileGroupId::getFileId, Collectors.toList())));
   }
 }

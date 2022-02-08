@@ -80,7 +80,7 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
 /**
  * Clustering strategy to submit multiple spark jobs and union the results.
  */
-public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPayload<T>>
+public abstract class MultipleSparkJobExecutionStrategy<T>
     extends ClusteringExecutionStrategy<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
   private static final Logger LOG = LogManager.getLogger(MultipleSparkJobExecutionStrategy.class);
 

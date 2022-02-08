@@ -36,7 +36,7 @@ import java.util.stream.StreamSupport;
 /**
  * Reads records from base file and merges any updates from log files and provides iterable over all records in the file slice.
  */
-public class HoodieFileSliceReader<T extends HoodieRecordPayload> implements Iterator<HoodieRecord<T>> {
+public class HoodieFileSliceReader<T> implements Iterator<HoodieRecord<T>> {
   private final Iterator<HoodieRecord<T>> recordsIterator;
 
   public static HoodieFileSliceReader getFileSliceReader(

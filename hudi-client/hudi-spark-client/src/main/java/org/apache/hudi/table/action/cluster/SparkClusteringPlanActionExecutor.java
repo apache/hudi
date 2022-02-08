@@ -31,7 +31,7 @@ import org.apache.spark.api.java.JavaRDD;
 import java.util.Map;
 
 @SuppressWarnings("checkstyle:LineLength")
-public class SparkClusteringPlanActionExecutor<T extends HoodieRecordPayload> extends
+public class SparkClusteringPlanActionExecutor<T> extends
     BaseClusteringPlanActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   public SparkClusteringPlanActionExecutor(HoodieEngineContext context,

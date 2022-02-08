@@ -37,7 +37,7 @@ import scala.Tuple2;
  *
  * @param <T>
  */
-public class SparkWriteHelper<T extends HoodieRecordPayload,R> extends BaseWriteHelper<T, JavaRDD<HoodieRecord<T>>,
+public class SparkWriteHelper<T, R> extends BaseWriteHelper<T, JavaRDD<HoodieRecord<T>>,
     JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, R> {
   private SparkWriteHelper() {
   }
@@ -46,13 +46,13 @@ public class SparkWriteHelper<T extends HoodieRecordPayload,R> extends BaseWrite
     private static final SparkWriteHelper SPARK_WRITE_HELPER = new SparkWriteHelper();
   }
 
-  public static SparkWriteHelper newInstance() {
+  public static <T, R> SparkWriteHelper<T, R> newInstance() {
     return WriteHelperHolder.SPARK_WRITE_HELPER;
   }
 
   @Override
   protected JavaRDD<HoodieRecord<T>> tag(JavaRDD<HoodieRecord<T>> dedupedRecords, HoodieEngineContext context,
-                                         HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table) {
+      HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table) {
     return HoodieJavaRDD.getJavaRDD(
         table.getIndex().tagLocation(HoodieJavaRDD.of(dedupedRecords), context, table));
   }
@@ -67,11 +67,12 @@ public class SparkWriteHelper<T extends HoodieRecordPayload,R> extends BaseWrite
       Object key = isIndexingGlobal ? hoodieKey.getRecordKey() : hoodieKey;
       return new Tuple2<>(key, record);
     }).reduceByKey((rec1, rec2) -> {
-      @SuppressWarnings("unchecked")
-      T reducedData = (T) rec2.getData().preCombine(rec1.getData());
+      final HoodieRecordPayload data1 = (HoodieRecordPayload) rec1.getData();
+      final HoodieRecordPayload data2 = (HoodieRecordPayload) rec2.getData();
+      @SuppressWarnings("unchecked") final HoodieRecordPayload reducedData = (HoodieRecordPayload) data2.preCombine(data1);
       HoodieKey reducedKey = rec1.getData().equals(reducedData) ? rec1.getKey() : rec2.getKey();
 
-      return new HoodieAvroRecord<T>(reducedKey, reducedData);
+      return new HoodieAvroRecord(reducedKey, reducedData);
     }, parallelism).map(Tuple2::_2);
   }
 

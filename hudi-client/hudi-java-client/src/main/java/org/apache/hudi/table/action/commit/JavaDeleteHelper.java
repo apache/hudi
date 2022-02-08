@@ -42,9 +42,11 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@SuppressWarnings("checkstyle:LineLength")
-public class JavaDeleteHelper<R> extends
-    BaseDeleteHelper<EmptyHoodieRecordPayload, List<HoodieRecord<EmptyHoodieRecordPayload>>, List<HoodieKey>, List<WriteStatus>, R> {
+/**
+ * A java implementation of {@link BaseDeleteHelper}.
+ */
+public class JavaDeleteHelper<T, R> extends
+    BaseDeleteHelper<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, R> {
 
   private JavaDeleteHelper() {
   }
@@ -53,13 +55,13 @@ public class JavaDeleteHelper<R> extends
     private static final JavaDeleteHelper JAVA_DELETE_HELPER = new JavaDeleteHelper();
   }
 
-  public static JavaDeleteHelper newInstance() {
+  public static <T, R> JavaDeleteHelper<T, R> newInstance() {
     return DeleteHelperHolder.JAVA_DELETE_HELPER;
   }
 
   @Override
   public List<HoodieKey> deduplicateKeys(List<HoodieKey> keys,
-                                         HoodieTable<EmptyHoodieRecordPayload, List<HoodieRecord<EmptyHoodieRecordPayload>>, List<HoodieKey>, List<WriteStatus>> table,
+                                         HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
                                          int parallelism) {
     boolean isIndexingGlobal = table.getIndex().isGlobal();
     if (isIndexingGlobal) {
@@ -84,10 +86,10 @@ public class JavaDeleteHelper<R> extends
                                                         List<HoodieKey> keys,
                                                         HoodieEngineContext context,
                                                         HoodieWriteConfig config,
-                                                        HoodieTable<EmptyHoodieRecordPayload, List<HoodieRecord<EmptyHoodieRecordPayload>>, List<HoodieKey>, List<WriteStatus>> table,
-                                                        BaseCommitActionExecutor<EmptyHoodieRecordPayload, List<HoodieRecord<EmptyHoodieRecordPayload>>, List<HoodieKey>, List<WriteStatus>, R> deleteExecutor) {
+                                                        HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
+                                                        BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, R> deleteExecutor) {
     try {
-      HoodieWriteMetadata<List<WriteStatus>> result = null;
+      HoodieWriteMetadata<List<WriteStatus>> result;
       List<HoodieKey> dedupedKeys = keys;
       final int parallelism = config.getDeleteShuffleParallelism();
       if (config.shouldCombineBeforeDelete()) {
@@ -95,16 +97,16 @@ public class JavaDeleteHelper<R> extends
         dedupedKeys = deduplicateKeys(keys, table, parallelism);
       }
 
-      List<HoodieRecord<EmptyHoodieRecordPayload>> dedupedRecords =
-          dedupedKeys.stream().map(key -> new HoodieAvroRecord<>(key, new EmptyHoodieRecordPayload())).collect(Collectors.toList());
+      List<HoodieRecord<T>> dedupedRecords =
+          dedupedKeys.stream().map(key -> new HoodieAvroRecord(key, new EmptyHoodieRecordPayload())).collect(Collectors.<HoodieRecord<T>>toList());
       Instant beginTag = Instant.now();
       // perform index look up to get existing location of records
-      List<HoodieRecord<EmptyHoodieRecordPayload>> taggedRecords = HoodieList.getList(
+      List<HoodieRecord<T>> taggedRecords = HoodieList.getList(
           table.getIndex().tagLocation(HoodieList.of(dedupedRecords), context, table));
       Duration tagLocationDuration = Duration.between(beginTag, Instant.now());
 
       // filter out non existent keys/records
-      List<HoodieRecord<EmptyHoodieRecordPayload>> taggedValidRecords = taggedRecords.stream().filter(HoodieRecord::isCurrentLocationKnown).collect(Collectors.toList());
+      List<HoodieRecord<T>> taggedValidRecords = taggedRecords.stream().filter(HoodieRecord::isCurrentLocationKnown).collect(Collectors.toList());
       if (!taggedValidRecords.isEmpty()) {
         result = deleteExecutor.execute(taggedValidRecords);
         result.setIndexLookupDuration(tagLocationDuration);
@@ -112,7 +114,7 @@ public class JavaDeleteHelper<R> extends
         // if entire set of keys are non existent
         deleteExecutor.saveWorkloadProfileMetadataToInflight(new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())), instantTime);
         result = new HoodieWriteMetadata<>();
-        result.setWriteStatuses(Collections.EMPTY_LIST);
+        result.setWriteStatuses(Collections.emptyList());
         deleteExecutor.commitOnAutoCommit(result);
       }
       return result;

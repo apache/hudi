@@ -31,7 +31,7 @@ import org.apache.hudi.table.HoodieTable;
 import java.util.List;
 import java.util.Map;
 
-public class JavaClusteringPlanActionExecutor<T extends HoodieRecordPayload> extends
+public class JavaClusteringPlanActionExecutor<T> extends
     BaseClusteringPlanActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
 
   public JavaClusteringPlanActionExecutor(

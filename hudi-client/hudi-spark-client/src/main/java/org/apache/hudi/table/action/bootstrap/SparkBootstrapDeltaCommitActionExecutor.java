@@ -18,30 +18,33 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
-import java.util.Map;
-
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.BaseSparkCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.SparkBulkInsertDeltaCommitActionExecutor;
+
 import org.apache.spark.api.java.JavaRDD;
 
-public class SparkBootstrapDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>>
+import java.util.Map;
+
+public class SparkBootstrapDeltaCommitActionExecutor<T>
     extends SparkBootstrapCommitActionExecutor<T> {
 
   public SparkBootstrapDeltaCommitActionExecutor(HoodieSparkEngineContext context,
-                                                 HoodieWriteConfig config, HoodieTable table,
+                                                 HoodieWriteConfig config,
+                                                 HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                                  Option<Map<String, String>> extraMetadata) {
     super(context, config, table, extraMetadata);
   }
 
   @Override
-  protected BaseSparkCommitActionExecutor<T> getBulkInsertActionExecutor(JavaRDD<HoodieRecord> inputRecordsRDD) {
+  protected BaseSparkCommitActionExecutor<T> getBulkInsertActionExecutor(JavaRDD<HoodieRecord<T>> inputRecordsRDD) {
     return new SparkBulkInsertDeltaCommitActionExecutor((HoodieSparkEngineContext) context, new HoodieWriteConfig.Builder().withProps(config.getProps())
         .withSchema(bootstrapSchema).build(), table, HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
         inputRecordsRDD, extraMetadata);

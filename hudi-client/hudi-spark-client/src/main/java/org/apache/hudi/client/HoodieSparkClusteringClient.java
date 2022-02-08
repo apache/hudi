@@ -37,7 +37,7 @@ import java.util.stream.Stream;
 /**
  * Async clustering client for Spark datasource.
  */
-public class HoodieSparkClusteringClient<T extends HoodieRecordPayload> extends
+public class HoodieSparkClusteringClient<T> extends
     BaseClusterer<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieSparkClusteringClient.class);

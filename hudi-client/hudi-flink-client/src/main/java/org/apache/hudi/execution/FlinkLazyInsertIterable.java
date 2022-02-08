@@ -36,7 +36,7 @@ import org.apache.avro.Schema;
 import java.util.Iterator;
 import java.util.List;
 
-public class FlinkLazyInsertIterable<T extends HoodieRecordPayload> extends HoodieLazyInsertIterable<T> {
+public class FlinkLazyInsertIterable<T> extends HoodieLazyInsertIterable<T> {
 
   public FlinkLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,
                                  boolean areRecordsSorted,

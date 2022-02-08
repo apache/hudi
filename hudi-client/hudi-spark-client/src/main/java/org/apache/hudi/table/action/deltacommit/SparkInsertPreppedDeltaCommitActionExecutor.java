@@ -20,8 +20,8 @@ package org.apache.hudi.table.action.deltacommit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -29,13 +29,14 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.spark.api.java.JavaRDD;
 
-public class SparkInsertPreppedDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public class SparkInsertPreppedDeltaCommitActionExecutor<T>
     extends BaseSparkDeltaCommitActionExecutor<T> {
 
   private final JavaRDD<HoodieRecord<T>> preppedRecords;
 
   public SparkInsertPreppedDeltaCommitActionExecutor(HoodieSparkEngineContext context,
-                                                     HoodieWriteConfig config, HoodieTable table,
+                                                     HoodieWriteConfig config,
+                                                     HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                                      String instantTime, JavaRDD<HoodieRecord<T>> preppedRecords) {
     super(context, config, table, instantTime, WriteOperationType.INSERT_PREPPED);
     this.preppedRecords = preppedRecords;

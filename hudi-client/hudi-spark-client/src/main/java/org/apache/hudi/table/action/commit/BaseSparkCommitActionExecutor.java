@@ -20,16 +20,15 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.SparkMemoryUtils;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
-import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -44,50 +43,51 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
 import org.apache.hudi.io.CreateHandleFactory;
+import org.apache.hudi.io.HoodieConcatHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieSortedMergeHandle;
-import org.apache.hudi.io.HoodieConcatHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
-import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.storage.StorageLevel;
-import scala.Tuple2;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.stream.Collectors;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import scala.Tuple2;
 
 import static org.apache.hudi.common.util.ClusteringUtils.getAllFileGroupsInPendingClusteringPlans;
 
-public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayload> extends
-    BaseCommitActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, HoodieWriteMetadata> {
+public abstract class BaseSparkCommitActionExecutor<T> extends
+    BaseCommitActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, HoodieWriteMetadata<JavaRDD<WriteStatus>>> {
 
   private static final Logger LOG = LogManager.getLogger(BaseSparkCommitActionExecutor.class);
   protected Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
 
   public BaseSparkCommitActionExecutor(HoodieEngineContext context,
                                        HoodieWriteConfig config,
-                                       HoodieTable table,
+                                       HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                        String instantTime,
                                        WriteOperationType operationType) {
     super(context, config, table, instantTime, operationType, Option.empty());
@@ -96,10 +96,10 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
 
   public BaseSparkCommitActionExecutor(HoodieEngineContext context,
                                        HoodieWriteConfig config,
-                                       HoodieTable table,
+                                       HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                        String instantTime,
                                        WriteOperationType operationType,
-                                       Option extraMetadata) {
+                                       Option<Map<String, String>> extraMetadata) {
     super(context, config, table, instantTime, operationType, extraMetadata);
     initKeyGenIfNeeded(config.populateMetaFields());
   }
@@ -117,11 +117,11 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   private JavaRDD<HoodieRecord<T>> clusteringHandleUpdate(JavaRDD<HoodieRecord<T>> inputRecordsRDD) {
     context.setJobStatus(this.getClass().getSimpleName(), "Handling updates which are under clustering");
     Set<HoodieFileGroupId> fileGroupsInPendingClustering =
-        table.getFileSystemView().getFileGroupsInPendingClustering().map(entry -> entry.getKey()).collect(Collectors.toSet());
-    UpdateStrategy updateStrategy = (UpdateStrategy) ReflectionUtils
+        table.getFileSystemView().getFileGroupsInPendingClustering().map(Pair::getKey).collect(Collectors.toSet());
+    UpdateStrategy<T, JavaRDD<HoodieRecord<T>>> updateStrategy = (UpdateStrategy<T, JavaRDD<HoodieRecord<T>>>) ReflectionUtils
         .loadClass(config.getClusteringUpdatesStrategyClass(), this.context, fileGroupsInPendingClustering);
     Pair<JavaRDD<HoodieRecord<T>>, Set<HoodieFileGroupId>> recordsAndPendingClusteringFileGroups =
-        (Pair<JavaRDD<HoodieRecord<T>>, Set<HoodieFileGroupId>>) updateStrategy.handleUpdate(inputRecordsRDD);
+        updateStrategy.handleUpdate(inputRecordsRDD);
     Set<HoodieFileGroupId> fileGroupsWithUpdatesAndPendingClustering = recordsAndPendingClusteringFileGroups.getRight();
     if (fileGroupsWithUpdatesAndPendingClustering.isEmpty()) {
       return recordsAndPendingClusteringFileGroups.getLeft();
@@ -249,7 +249,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     return partitionedRDD.map(Tuple2::_2);
   }
 
-  protected JavaRDD<WriteStatus> updateIndex(JavaRDD<WriteStatus> writeStatusRDD, HoodieWriteMetadata result) {
+  protected JavaRDD<WriteStatus> updateIndex(JavaRDD<WriteStatus> writeStatusRDD, HoodieWriteMetadata<JavaRDD<WriteStatus>> result) {
     // cache writeStatusRDD before updating index, so that all actions before this are not triggered again for future
     // RDD actions that are performed after updating the index.
     writeStatusRDD = writeStatusRDD.persist(SparkMemoryUtils.getWriteStatusStorageLevel(config.getProps()));
@@ -262,7 +262,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     return statuses;
   }
 
-  protected void updateIndexAndCommitIfNeeded(JavaRDD<WriteStatus> writeStatusRDD, HoodieWriteMetadata result) {
+  protected void updateIndexAndCommitIfNeeded(JavaRDD<WriteStatus> writeStatusRDD, HoodieWriteMetadata<JavaRDD<WriteStatus>> result) {
     updateIndex(writeStatusRDD, result);
     result.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(result));
     commitOnAutoCommit(result);
@@ -311,8 +311,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     return Collections.emptyMap();
   }
 
-  @SuppressWarnings("unchecked")
-  protected Iterator<List<WriteStatus>> handleUpsertPartition(String instantTime, Integer partition, Iterator recordItr,
+  protected Iterator<List<WriteStatus>> handleUpsertPartition(String instantTime, Integer partition, Iterator<HoodieRecord<T>> recordItr,
                                                               Partitioner partitioner) {
     SparkHoodiePartitioner upsertPartitioner = (SparkHoodiePartitioner) partitioner;
     BucketInfo binfo = upsertPartitioner.getBucketInfo(partition);
@@ -332,7 +331,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     }
   }
 
-  protected Iterator<List<WriteStatus>> handleInsertPartition(String instantTime, Integer partition, Iterator recordItr,
+  protected Iterator<List<WriteStatus>> handleInsertPartition(String instantTime, Integer partition, Iterator<HoodieRecord<T>> recordItr,
                                                               Partitioner partitioner) {
     return handleUpsertPartition(instantTime, partition, recordItr, partitioner);
   }
@@ -344,10 +343,10 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
     if (!recordItr.hasNext()) {
       LOG.info("Empty partition with fileId => " + fileId);
-      return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
+      return Collections.emptyIterator();
     }
     // these are updates
-    HoodieMergeHandle upsertHandle = getUpdateHandle(partitionPath, fileId, recordItr);
+    HoodieMergeHandle<?, ?, ?, ?> upsertHandle = getUpdateHandle(partitionPath, fileId, recordItr);
     return handleUpdateInternal(upsertHandle, fileId);
   }
 
@@ -357,7 +356,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
-      SparkMergeHelper.newInstance().runMerge(table, upsertHandle);
+      SparkMergeHelper.<T>newInstance().runMerge(table, upsertHandle);
     }
 
     // TODO(vc): This needs to be revisited
@@ -369,9 +368,9 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     return Collections.singletonList(upsertHandle.writeStatuses()).iterator();
   }
 
-  protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
+  protected HoodieMergeHandle<?, ?, ?, ?> getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
     if (table.requireSortedRecords()) {
-      return new HoodieSortedMergeHandle<>(config, instantTime, (HoodieSparkTable) table, recordItr, partitionPath, fileId, taskContextSupplier,
+      return new HoodieSortedMergeHandle<>(config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier,
           keyGeneratorOpt);
     } else if (!WriteOperationType.isChangingRecords(operationType) && config.allowDuplicateInserts()) {
       return new HoodieConcatHandle<>(config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
@@ -386,9 +385,9 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
     if (!recordItr.hasNext()) {
       LOG.info("Empty partition");
-      return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
+      return Collections.emptyIterator();
     }
-    return new SparkLazyInsertIterable(recordItr, true, config, instantTime, table, idPfx,
+    return new SparkLazyInsertIterable<>(recordItr, true, config, instantTime, table, idPfx,
         taskContextSupplier, new CreateHandleFactory<>());
   }
 

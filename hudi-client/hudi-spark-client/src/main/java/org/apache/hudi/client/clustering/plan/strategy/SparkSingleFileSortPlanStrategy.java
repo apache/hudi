@@ -37,7 +37,7 @@ import java.util.stream.Stream;
  * In this strategy, clustering group for each partition is built in the same way as {@link SparkSizeBasedClusteringPlanStrategy}.
  * The difference is that the output groups is 1 and file group id remains the same.
  */
-public class SparkSingleFileSortPlanStrategy<T extends HoodieRecordPayload<T>>
+public class SparkSingleFileSortPlanStrategy<T>
     extends SparkSizeBasedClusteringPlanStrategy<T> {
 
   public SparkSingleFileSortPlanStrategy(HoodieSparkCopyOnWriteTable<T> table, HoodieSparkEngineContext engineContext, HoodieWriteConfig writeConfig) {

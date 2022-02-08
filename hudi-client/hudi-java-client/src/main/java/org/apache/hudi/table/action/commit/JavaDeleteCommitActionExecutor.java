@@ -21,7 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -29,18 +29,18 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.util.List;
 
-public class JavaDeleteCommitActionExecutor<T extends HoodieRecordPayload<T>> extends BaseJavaCommitActionExecutor<T> {
+public class JavaDeleteCommitActionExecutor<T> extends BaseJavaCommitActionExecutor<T> {
   private final List<HoodieKey> keys;
 
   public JavaDeleteCommitActionExecutor(HoodieEngineContext context,
-                                         HoodieWriteConfig config, HoodieTable table,
-                                         String instantTime, List<HoodieKey> keys) {
+      HoodieWriteConfig config, HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
+      String instantTime, List<HoodieKey> keys) {
     super(context, config, table, instantTime, WriteOperationType.DELETE);
     this.keys = keys;
   }
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
-    return JavaDeleteHelper.newInstance().execute(instantTime, keys, context, config, table, this);
+    return JavaDeleteHelper.<T, HoodieWriteMetadata<List<WriteStatus>>>newInstance().execute(instantTime, keys, context, config, table, this);
   }
 }

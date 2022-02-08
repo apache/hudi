@@ -20,29 +20,29 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
-import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.BulkInsertPartitioner;
-
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.util.List;
 
-public class JavaBulkInsertPreppedCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public class JavaBulkInsertPreppedCommitActionExecutor<T>
     extends BaseJavaCommitActionExecutor<T> {
 
   private final List<HoodieRecord<T>> preppedInputRecord;
-  private final Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner;
+  private final Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> userDefinedBulkInsertPartitioner;
 
   public JavaBulkInsertPreppedCommitActionExecutor(HoodieJavaEngineContext context,
-                                                   HoodieWriteConfig config, HoodieTable table,
+                                                   HoodieWriteConfig config,
+                                                   HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
                                                    String instantTime, List<HoodieRecord<T>> preppedInputRecord,
-                                                   Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner) {
+                                                   Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> userDefinedBulkInsertPartitioner) {
     super(context, config, table, instantTime, WriteOperationType.BULK_INSERT);
     this.preppedInputRecord = preppedInputRecord;
     this.userDefinedBulkInsertPartitioner = userDefinedBulkInsertPartitioner;
@@ -51,7 +51,7 @@ public class JavaBulkInsertPreppedCommitActionExecutor<T extends HoodieRecordPay
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
     try {
-      return JavaBulkInsertHelper.newInstance().bulkInsert(preppedInputRecord, instantTime, table, config,
+      return JavaBulkInsertHelper.<T, List<WriteStatus>>newInstance().bulkInsert(preppedInputRecord, instantTime, table, config,
           this, false, userDefinedBulkInsertPartitioner);
     } catch (Throwable e) {
       if (e instanceof HoodieInsertException) {

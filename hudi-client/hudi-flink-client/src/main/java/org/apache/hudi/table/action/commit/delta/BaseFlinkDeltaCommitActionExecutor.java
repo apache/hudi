@@ -20,8 +20,8 @@ package org.apache.hudi.table.action.commit.delta;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.FlinkLazyInsertIterable;
@@ -34,13 +34,13 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
-public abstract class BaseFlinkDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public abstract class BaseFlinkDeltaCommitActionExecutor<T>
     extends BaseFlinkCommitActionExecutor<T> {
 
   public BaseFlinkDeltaCommitActionExecutor(HoodieEngineContext context,
                                             FlinkAppendHandle<?, ?, ?, ?> writeHandle,
                                             HoodieWriteConfig config,
-                                            HoodieTable table,
+                                            HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
                                             String instantTime,
                                             WriteOperationType operationType) {
     super(context, writeHandle, config, table, instantTime, operationType);
@@ -48,7 +48,7 @@ public abstract class BaseFlinkDeltaCommitActionExecutor<T extends HoodieRecordP
 
   @Override
   public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
-    FlinkAppendHandle appendHandle = (FlinkAppendHandle) writeHandle;
+    FlinkAppendHandle<?, ?, ?, ?> appendHandle = (FlinkAppendHandle<?, ?, ?, ?>) writeHandle;
     appendHandle.doAppend();
     List<WriteStatus> writeStatuses = appendHandle.close();
     return Collections.singletonList(writeStatuses).iterator();
@@ -57,6 +57,6 @@ public abstract class BaseFlinkDeltaCommitActionExecutor<T extends HoodieRecordP
   @Override
   public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr) {
     return new FlinkLazyInsertIterable<>(recordItr, true, config, instantTime, table,
-        idPfx, taskContextSupplier, new ExplicitWriteHandleFactory(writeHandle));
+        idPfx, taskContextSupplier, new ExplicitWriteHandleFactory<>(writeHandle));
   }
 }

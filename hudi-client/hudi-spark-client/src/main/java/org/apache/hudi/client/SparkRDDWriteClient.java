@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
@@ -73,7 +72,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @SuppressWarnings("checkstyle:LineLength")
-public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
+public class SparkRDDWriteClient<T> extends
     BaseHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   private static final Logger LOG = LogManager.getLogger(SparkRDDWriteClient.class);
@@ -110,7 +109,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected HoodieIndex createIndex(HoodieWriteConfig writeConfig) {
+  protected HoodieIndex<?, ?> createIndex(HoodieWriteConfig writeConfig) {
     return SparkHoodieIndexFactory.createIndex(config);
   }
 
@@ -537,6 +536,6 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   @Override
   protected void releaseResources() {
     ((HoodieSparkEngineContext) context).getJavaSparkContext().getPersistentRDDs().values()
-        .forEach(rdd -> rdd.unpersist());
+        .forEach(JavaRDD::unpersist);
   }
 }

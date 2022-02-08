@@ -22,7 +22,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.SparkBoundedInMemoryExecutor;
@@ -43,7 +42,7 @@ import org.apache.spark.api.java.JavaRDD;
 import java.io.IOException;
 import java.util.Iterator;
 
-public class SparkMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHelper<T, JavaRDD<HoodieRecord<T>>,
+public class SparkMergeHelper<T> extends BaseMergeHelper<T, JavaRDD<HoodieRecord<T>>,
     JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   private SparkMergeHelper() {
@@ -53,16 +52,15 @@ public class SparkMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHe
     private static final SparkMergeHelper SPARK_MERGE_HELPER = new SparkMergeHelper();
   }
 
-  public static SparkMergeHelper newInstance() {
+  public static <T> SparkMergeHelper<T> newInstance() {
     return SparkMergeHelper.MergeHelperHolder.SPARK_MERGE_HELPER;
   }
 
   @Override
   public void runMerge(HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
-                       HoodieMergeHandle<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> upsertHandle) throws IOException {
+                       HoodieMergeHandle<?, ?, ?, ?> mergeHandle) throws IOException {
     final boolean externalSchemaTransformation = table.getConfig().shouldUseExternalSchemaTransformation();
     Configuration cfgForHoodieFile = new Configuration(table.getHadoopConf());
-    HoodieMergeHandle<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> mergeHandle = upsertHandle;
     HoodieBaseFile baseFile = mergeHandle.baseFileForMerge();
 
     final GenericDatumWriter<GenericRecord> gWriter;
@@ -79,7 +77,7 @@ public class SparkMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHe
     }
 
     BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
-    HoodieFileReader<GenericRecord> reader = HoodieFileReaderFactory.<GenericRecord>getFileReader(cfgForHoodieFile, mergeHandle.getOldFilePath());
+    HoodieFileReader<GenericRecord> reader = HoodieFileReaderFactory.getFileReader(cfgForHoodieFile, mergeHandle.getOldFilePath());
     try {
       final Iterator<GenericRecord> readerIterator;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
@@ -90,12 +88,12 @@ public class SparkMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHe
 
       ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
       ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
-      wrapper = new SparkBoundedInMemoryExecutor(table.getConfig(), readerIterator,
+      wrapper = new SparkBoundedInMemoryExecutor<>(table.getConfig(), readerIterator,
           new UpdateHandler(mergeHandle), record -> {
         if (!externalSchemaTransformation) {
           return record;
         }
-        return transformRecordBasedOnNewSchema(gReader, gWriter, encoderCache, decoderCache, (GenericRecord) record);
+        return transformRecordBasedOnNewSchema(gReader, gWriter, encoderCache, decoderCache, record);
       });
       wrapper.execute();
     } catch (Exception e) {

@@ -22,6 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -36,11 +37,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class SparkInsertOverwriteTableCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public class SparkInsertOverwriteTableCommitActionExecutor<T>
     extends SparkInsertOverwriteCommitActionExecutor<T> {
 
   public SparkInsertOverwriteTableCommitActionExecutor(HoodieEngineContext context,
-                                                       HoodieWriteConfig config, HoodieTable table,
+                                                       HoodieWriteConfig config,
+                                                       HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                                        String instantTime, JavaRDD<HoodieRecord<T>> inputRecordsRDD) {
     super(context, config, table, instantTime, inputRecordsRDD, WriteOperationType.INSERT_OVERWRITE_TABLE);
   }

@@ -26,7 +26,7 @@ import org.apache.spark.Partitioner;
 /**
  * Packs incoming records to be inserted into buckets (1 bucket = 1 RDD partition).
  */
-public abstract class SparkHoodiePartitioner<T extends HoodieRecordPayload<T>> extends Partitioner
+public abstract class SparkHoodiePartitioner extends Partitioner
     implements org.apache.hudi.table.action.commit.Partitioner {
 
   /**

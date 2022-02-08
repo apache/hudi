@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -40,9 +39,9 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.JavaLazyInsertIterable;
 import org.apache.hudi.io.CreateHandleFactory;
+import org.apache.hudi.io.HoodieConcatHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieSortedMergeHandle;
-import org.apache.hudi.io.HoodieConcatHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
@@ -65,14 +64,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload> extends
-    BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, HoodieWriteMetadata> {
+public abstract class BaseJavaCommitActionExecutor<T> extends
+    BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, HoodieWriteMetadata<List<WriteStatus>>> {
 
   private static final Logger LOG = LogManager.getLogger(BaseJavaCommitActionExecutor.class);
 
   public BaseJavaCommitActionExecutor(HoodieEngineContext context,
                                        HoodieWriteConfig config,
-                                       HoodieTable table,
+                                       HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
                                        String instantTime,
                                        WriteOperationType operationType) {
     super(context, config, table, instantTime, operationType, Option.empty());
@@ -80,10 +79,10 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
 
   public BaseJavaCommitActionExecutor(HoodieEngineContext context,
                                        HoodieWriteConfig config,
-                                       HoodieTable table,
+                                       HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
                                        String instantTime,
                                        WriteOperationType operationType,
-                                       Option extraMetadata) {
+                                       Option<Map<String, String>> extraMetadata) {
     super(context, config, table, instantTime, operationType, extraMetadata);
   }
 
@@ -156,7 +155,7 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
         .map(record -> Pair.of(Pair.of(record.getKey(), Option.ofNullable(record.getCurrentLocation())), record))
         .collect(Collectors.groupingBy(x -> partitioner.getPartition(x.getLeft())));
     Map<Integer, List<HoodieRecord<T>>> results = new LinkedHashMap<>();
-    partitionedMidRecords.forEach((key, value) -> results.put(key, value.stream().map(x -> x.getRight()).collect(Collectors.toList())));
+    partitionedMidRecords.forEach((key, value) -> results.put(key, value.stream().map(Pair::getRight).collect(Collectors.toList())));
     return results;
   }
 
@@ -235,8 +234,7 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
     return true;
   }
 
-  @SuppressWarnings("unchecked")
-  protected Iterator<List<WriteStatus>> handleUpsertPartition(String instantTime, Integer partition, Iterator recordItr,
+  protected Iterator<List<WriteStatus>> handleUpsertPartition(String instantTime, Integer partition, Iterator<HoodieRecord<T>> recordItr,
                                                               Partitioner partitioner) {
     JavaUpsertPartitioner javaUpsertPartitioner = (JavaUpsertPartitioner) partitioner;
     BucketInfo binfo = javaUpsertPartitioner.getBucketInfo(partition);
@@ -256,7 +254,7 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
     }
   }
 
-  protected Iterator<List<WriteStatus>> handleInsertPartition(String instantTime, Integer partition, Iterator recordItr,
+  protected Iterator<List<WriteStatus>> handleInsertPartition(String instantTime, Integer partition, Iterator<HoodieRecord<T>> recordItr,
                                                               Partitioner partitioner) {
     return handleUpsertPartition(instantTime, partition, recordItr, partitioner);
   }
@@ -268,20 +266,20 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
     if (!recordItr.hasNext()) {
       LOG.info("Empty partition with fileId => " + fileId);
-      return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
+      return Collections.emptyIterator();
     }
     // these are updates
-    HoodieMergeHandle upsertHandle = getUpdateHandle(partitionPath, fileId, recordItr);
+    HoodieMergeHandle<?, ?, ?, ?> upsertHandle = getUpdateHandle(partitionPath, fileId, recordItr);
     return handleUpdateInternal(upsertHandle, fileId);
   }
 
-  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?,?,?,?> upsertHandle, String fileId)
+  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?, ?, ?, ?> upsertHandle, String fileId)
       throws IOException {
     if (upsertHandle.getOldFilePath() == null) {
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
-      JavaMergeHelper.newInstance().runMerge(table, upsertHandle);
+      JavaMergeHelper.<T>newInstance().runMerge(table, upsertHandle);
     }
 
     List<WriteStatus> statuses = upsertHandle.writeStatuses();
@@ -291,7 +289,7 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
     return Collections.singletonList(statuses).iterator();
   }
 
-  protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
+  protected HoodieMergeHandle<?, ?, ?, ?> getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
     if (table.requireSortedRecords()) {
       return new HoodieSortedMergeHandle<>(config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, Option.empty());
     } else if (!WriteOperationType.isChangingRecords(operationType) && config.allowDuplicateInserts()) {
@@ -301,7 +299,7 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
     }
   }
 
-  protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId,
+  protected HoodieMergeHandle<?, ?, ?, ?> getUpdateHandle(String partitionPath, String fileId,
                                               Map<String, HoodieRecord<T>> keyToNewRecords,
                                               HoodieBaseFile dataFileToBeMerged) {
     return new HoodieMergeHandle<>(config, instantTime, table, keyToNewRecords,
@@ -313,7 +311,7 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
     if (!recordItr.hasNext()) {
       LOG.info("Empty partition");
-      return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
+      return Collections.emptyIterator();
     }
     return new JavaLazyInsertIterable<>(recordItr, true, config, instantTime, table, idPfx,
         taskContextSupplier, new CreateHandleFactory<>());
@@ -336,7 +334,7 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
     return getUpsertPartitioner(profile);
   }
 
-  public void updateIndexAndCommitIfNeeded(List<WriteStatus> writeStatuses, HoodieWriteMetadata result) {
+  public void updateIndexAndCommitIfNeeded(List<WriteStatus> writeStatuses, HoodieWriteMetadata<List<WriteStatus>> result) {
     Instant indexStartTime = Instant.now();
     // Update the index back
     List<WriteStatus> statuses = HoodieList.getList(

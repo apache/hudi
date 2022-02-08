@@ -32,7 +32,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -67,6 +66,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
+
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
@@ -81,7 +81,7 @@ import java.util.Map;
  * <p>
  * UPDATES - Produce a new version of the file, just replacing the updated records with new values
  */
-public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
+public class HoodieFlinkCopyOnWriteTable<T>
     extends HoodieFlinkTable<T> implements HoodieCompactionHandler<T> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkCopyOnWriteTable.class);
@@ -204,7 +204,7 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
       String instantTime,
       List<HoodieRecord<T>> records) {
-    return new FlinkInsertOverwriteCommitActionExecutor(context, writeHandle, config, this, instantTime, records).execute();
+    return new FlinkInsertOverwriteCommitActionExecutor<>(context, writeHandle, config, this, instantTime, records).execute();
   }
 
   @Override
@@ -213,7 +213,7 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
       String instantTime,
       List<HoodieRecord<T>> records) {
-    return new FlinkInsertOverwriteTableCommitActionExecutor(context, writeHandle, config, this, instantTime, records).execute();
+    return new FlinkInsertOverwriteTableCommitActionExecutor<>(context, writeHandle, config, this, instantTime, records).execute();
   }
 
   @Override
@@ -240,7 +240,7 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
   }
 
   @Override
-  public HoodieWriteMetadata deletePartitions(HoodieEngineContext context, String instantTime, List<String> partitions) {
+  public HoodieWriteMetadata<List<WriteStatus>> deletePartitions(HoodieEngineContext context, String instantTime, List<String> partitions) {
     throw new HoodieNotSupportedException("DeletePartitions is not supported yet");
   }
 
@@ -316,25 +316,25 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
    */
   @Override
   public Option<HoodieCleanerPlan> scheduleCleaning(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
-    return new CleanPlanActionExecutor(context, config, this, instantTime, extraMetadata).execute();
+    return new CleanPlanActionExecutor<>(context, config, this, instantTime, extraMetadata).execute();
   }
 
   @Override
   public Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context, String instantTime, HoodieInstant instantToRollback,
                                                      boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers) {
-    return new BaseRollbackPlanActionExecutor(context, config, this, instantTime, instantToRollback, skipTimelinePublish,
+    return new BaseRollbackPlanActionExecutor<>(context, config, this, instantTime, instantToRollback, skipTimelinePublish,
         shouldRollbackUsingMarkers).execute();
   }
 
   @Override
   public HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime, boolean skipLocking) {
-    return new CleanActionExecutor(context, config, this, cleanInstantTime).execute();
+    return new CleanActionExecutor<>(context, config, this, cleanInstantTime).execute();
   }
 
   @Override
   public HoodieRollbackMetadata rollback(HoodieEngineContext context, String rollbackInstantTime, HoodieInstant commitInstant,
                                          boolean deleteInstants, boolean skipLocking) {
-    return new CopyOnWriteRollbackActionExecutor(context, config, this, rollbackInstantTime, commitInstant, deleteInstants, skipLocking).execute();
+    return new CopyOnWriteRollbackActionExecutor<>(context, config, this, rollbackInstantTime, commitInstant, deleteInstants, skipLocking).execute();
   }
 
   @Override
@@ -355,17 +355,17 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
       String instantTime, String partitionPath, String fileId,
       Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException {
     // these are updates
-    HoodieMergeHandle upsertHandle = getUpdateHandle(instantTime, partitionPath, fileId, keyToNewRecords, oldDataFile);
+    HoodieMergeHandle<?, ?, ?, ?> upsertHandle = getUpdateHandle(instantTime, partitionPath, fileId, keyToNewRecords, oldDataFile);
     return handleUpdateInternal(upsertHandle, instantTime, fileId);
   }
 
-  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?,?,?,?> upsertHandle, String instantTime,
+  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?, ?, ?, ?> upsertHandle, String instantTime,
                                                              String fileId) throws IOException {
     if (upsertHandle.getOldFilePath() == null) {
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
-      FlinkMergeHelper.newInstance().runMerge(this, upsertHandle);
+      FlinkMergeHelper.<T>newInstance().runMerge(this, upsertHandle);
     }
 
     // TODO(vc): This needs to be revisited
@@ -377,7 +377,7 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
     return Collections.singletonList(upsertHandle.writeStatuses()).iterator();
   }
 
-  protected HoodieMergeHandle getUpdateHandle(String instantTime, String partitionPath, String fileId,
+  protected HoodieMergeHandle<?, ?, ?, ?> getUpdateHandle(String instantTime, String partitionPath, String fileId,
                                               Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile dataFileToBeMerged) {
     Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
     if (!config.populateMetaFields()) {
@@ -400,9 +400,9 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
   @Override
   public Iterator<List<WriteStatus>> handleInsert(
       String instantTime, String partitionPath, String fileId,
-      Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap) {
+      Map<String, HoodieRecord<T>> recordMap) {
     HoodieCreateHandle<?, ?, ?, ?> createHandle =
-        new HoodieCreateHandle(config, instantTime, this, partitionPath, fileId, recordMap, taskContextSupplier);
+        new HoodieCreateHandle<>(config, instantTime, this, partitionPath, fileId, recordMap, taskContextSupplier);
     createHandle.write();
     return Collections.singletonList(createHandle.close()).iterator();
   }

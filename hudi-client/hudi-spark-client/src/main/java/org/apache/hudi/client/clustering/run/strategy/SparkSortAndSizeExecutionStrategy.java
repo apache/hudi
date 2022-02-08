@@ -43,7 +43,7 @@ import java.util.Properties;
  * 1) Spark execution engine.
  * 2) Uses bulk_insert to write data into new files.
  */
-public class SparkSortAndSizeExecutionStrategy<T extends HoodieRecordPayload<T>>
+public class SparkSortAndSizeExecutionStrategy<T>
     extends MultipleSparkJobExecutionStrategy<T> {
   private static final Logger LOG = LogManager.getLogger(SparkSortAndSizeExecutionStrategy.class);
 

@@ -41,7 +41,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
 
-public abstract class BaseClusteringPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieClusteringPlan>> {
+public abstract class BaseClusteringPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieClusteringPlan>> {
 
   private static final Logger LOG = LogManager.getLogger(BaseClusteringPlanActionExecutor.class);
 

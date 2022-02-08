@@ -46,8 +46,7 @@ import org.apache.hudi.table.WorkloadStat;
 /**
  * Packs incoming records to be inserted into buckets (1 bucket = 1 RDD partition).
  */
-public class SparkBucketIndexPartitioner<T extends HoodieRecordPayload<T>> extends
-    SparkHoodiePartitioner<T> {
+public class SparkBucketIndexPartitioner extends SparkHoodiePartitioner {
 
   private final int numBuckets;
   private final String indexKeyField;

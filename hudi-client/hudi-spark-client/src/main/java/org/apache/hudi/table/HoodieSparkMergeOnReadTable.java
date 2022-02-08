@@ -74,7 +74,7 @@ import java.util.Map;
  * action
  * </p>
  */
-public class HoodieSparkMergeOnReadTable<T extends HoodieRecordPayload> extends HoodieSparkCopyOnWriteTable<T> {
+public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<T> {
 
   HoodieSparkMergeOnReadTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);

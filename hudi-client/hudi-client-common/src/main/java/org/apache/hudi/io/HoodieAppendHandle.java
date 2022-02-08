@@ -74,7 +74,7 @@ import java.util.stream.Collectors;
 /**
  * IO Operation to append data onto an existing file.
  */
-public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
+public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieAppendHandle.class);
   // This acts as the sequenceID for records written
@@ -112,7 +112,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   private final int maxBlockSize = config.getLogFileDataBlockMaxSize();
   // Header metadata for a log block
   protected final Map<HeaderMetadataType, String> header = new HashMap<>();
-  private SizeEstimator<HoodieRecord> sizeEstimator;
+  private SizeEstimator<HoodieRecord<T>> sizeEstimator;
 
   private Properties recordProperties = new Properties();
 
@@ -121,7 +121,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
     this.fileId = fileId;
     this.recordItr = recordItr;
-    sizeEstimator = new DefaultSizeEstimator();
+    this.sizeEstimator = new DefaultSizeEstimator<>();
     this.statuses = new ArrayList<>();
     this.recordProperties.putAll(config.getProps());
   }
@@ -131,7 +131,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     this(config, instantTime, hoodieTable, partitionPath, fileId, null, sparkTaskContextSupplier);
   }
 
-  private void init(HoodieRecord record) {
+  private void init(HoodieRecord<T> record) {
     if (doInit) {
       // extract some information from the first record
       SliceView rtView = hoodieTable.getSliceView();
@@ -196,7 +196,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   }
 
   private Option<IndexedRecord> getIndexedRecord(HoodieRecord<T> hoodieRecord) {
-    Option<Map<String, String>> recordMetadata = hoodieRecord.getData().getMetadata();
+    Option<Map<String, String>> recordMetadata = ((HoodieRecordPayload) hoodieRecord.getData()).getMetadata();
     try {
       // Pass the isUpdateRecord to the props for HoodieRecordPayload to judge
       // Whether it is an update or insert record.
@@ -204,7 +204,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       // If the format can not record the operation field, nullify the DELETE payload manually.
       boolean nullifyPayload = HoodieOperation.isDelete(hoodieRecord.getOperation()) && !config.allowOperationMetadataField();
       recordProperties.put(HoodiePayloadProps.PAYLOAD_IS_UPDATE_RECORD_FOR_MOR, String.valueOf(isUpdateRecord));
-      Option<IndexedRecord> avroRecord = nullifyPayload ? Option.empty() : hoodieRecord.getData().getInsertValue(tableSchema, recordProperties);
+      Option<IndexedRecord> avroRecord = nullifyPayload ? Option.empty()
+          : ((HoodieRecordPayload) hoodieRecord.getData()).getInsertValue(tableSchema, recordProperties);
       if (avroRecord.isPresent()) {
         if (avroRecord.get().equals(IGNORE_RECORD)) {
           return avroRecord;
@@ -348,7 +349,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
 
   public void doAppend() {
     while (recordItr.hasNext()) {
-      HoodieRecord record = recordItr.next();
+      HoodieRecord<T> record = recordItr.next();
       init(record);
       flushToDiskIfRequired(record);
       writeToBuffer(record);
@@ -386,13 +387,13 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   }
 
   @Override
-  public boolean canWrite(HoodieRecord record) {
+  public boolean canWrite(HoodieRecord<T> record) {
     return config.getParquetMaxFileSize() >= estimatedNumberOfBytesWritten
         * config.getLogFileToParquetCompressionRatio();
   }
 
   @Override
-  public void write(HoodieRecord record, Option<IndexedRecord> insertValue) {
+  public void write(HoodieRecord<T> record, Option<IndexedRecord> insertValue) {
     Option<Map<String, String>> recordMetadata = ((HoodieRecordPayload) record.getData()).getMetadata();
     try {
       init(record);
@@ -463,7 +464,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     if (!partitionPath.equals(record.getPartitionPath())) {
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
           + record.getPartitionPath() + " but trying to insert into partition: " + partitionPath);
-      writeStatus.markFailure(record, failureEx, record.getData().getMetadata());
+      writeStatus.markFailure(record, failureEx, ((HoodieRecordPayload) record.getData()).getMetadata());
       return;
     }
 
@@ -488,7 +489,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   /**
    * Checks if the number of records have reached the set threshold and then flushes the records to disk.
    */
-  private void flushToDiskIfRequired(HoodieRecord record) {
+  private void flushToDiskIfRequired(HoodieRecord<T> record) {
     // Append if max number of records reached to achieve block size
     if (numberOfRecords >= (int) (maxBlockSize / averageRecordSize)) {
       // Recompute averageRecordSize before writing a new block and update existing value with

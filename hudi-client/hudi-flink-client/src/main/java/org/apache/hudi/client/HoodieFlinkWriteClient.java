@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -77,7 +76,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @SuppressWarnings("checkstyle:LineLength")
-public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
+public class HoodieFlinkWriteClient<T> extends
     BaseHoodieWriteClient<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkWriteClient.class);
@@ -102,7 +101,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
    * Complete changes performed at the given instantTime marker with specified action.
    */
   @Override
-  protected HoodieIndex createIndex(HoodieWriteConfig writeConfig) {
+  protected HoodieIndex<?, ?> createIndex(HoodieWriteConfig writeConfig) {
     return FlinkHoodieIndexFactory.createIndex((HoodieFlinkEngineContext) context, config);
   }
 
@@ -194,7 +193,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     // create the write handle if not exists
     final HoodieWriteHandle<?, ?, ?, ?> writeHandle = getOrCreateWriteHandle(records.get(0), getConfig(),
         instantTime, table, records.listIterator());
-    HoodieWriteMetadata result = ((HoodieFlinkTable<T>) table).insertOverwrite(context, writeHandle, instantTime, records);
+    HoodieWriteMetadata<List<WriteStatus>> result = ((HoodieFlinkTable<T>) table).insertOverwrite(context, writeHandle, instantTime, records);
     return postWrite(result, instantTime, table);
   }
 
@@ -207,13 +206,14 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
    */
   public List<WriteStatus> insertOverwriteTable(
       List<HoodieRecord<T>> records, final String instantTime) {
-    HoodieTable table = getTableAndInitCtx(WriteOperationType.INSERT_OVERWRITE_TABLE, instantTime);
+    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
+        getTableAndInitCtx(WriteOperationType.INSERT_OVERWRITE_TABLE, instantTime);
     table.validateInsertSchema();
     preWrite(instantTime, WriteOperationType.INSERT_OVERWRITE_TABLE, table.getMetaClient());
     // create the write handle if not exists
     final HoodieWriteHandle<?, ?, ?, ?> writeHandle = getOrCreateWriteHandle(records.get(0), getConfig(),
         instantTime, table, records.listIterator());
-    HoodieWriteMetadata result = ((HoodieFlinkTable<T>) table).insertOverwriteTable(context, writeHandle, instantTime, records);
+    HoodieWriteMetadata<List<WriteStatus>> result = ((HoodieFlinkTable<T>) table).insertOverwriteTable(context, writeHandle, instantTime, records);
     return postWrite(result, instantTime, table);
   }
 

@@ -21,8 +21,9 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -34,18 +35,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class JavaInsertOverwriteTableCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public class JavaInsertOverwriteTableCommitActionExecutor<T>
     extends JavaInsertOverwriteCommitActionExecutor<T> {
 
   public JavaInsertOverwriteTableCommitActionExecutor(HoodieEngineContext context,
-                                                      HoodieWriteConfig config, HoodieTable table,
+                                                      HoodieWriteConfig config,
+                                                      HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
                                                       String instantTime, List<HoodieRecord<T>> inputRecords) {
     super(context, config, table, instantTime, inputRecords, WriteOperationType.INSERT_OVERWRITE_TABLE);
   }
 
   protected List<String> getAllExistingFileIds(String partitionPath) {
     return table.getSliceView().getLatestFileSlices(partitionPath)
-        .map(fg -> fg.getFileId()).distinct().collect(Collectors.toList());
+        .map(FileSlice::getFileId).distinct().collect(Collectors.toList());
   }
 
   @Override

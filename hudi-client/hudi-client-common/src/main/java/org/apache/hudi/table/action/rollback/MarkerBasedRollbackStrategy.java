@@ -45,7 +45,7 @@ import static org.apache.hudi.table.action.rollback.BaseRollbackHelper.EMPTY_STR
 /**
  * Performs rollback using marker files generated during the write..
  */
-public class MarkerBasedRollbackStrategy<T extends HoodieRecordPayload, I, K, O> implements BaseRollbackPlanActionExecutor.RollbackStrategy {
+public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlanActionExecutor.RollbackStrategy {
 
   private static final Logger LOG = LogManager.getLogger(MarkerBasedRollbackStrategy.class);
 

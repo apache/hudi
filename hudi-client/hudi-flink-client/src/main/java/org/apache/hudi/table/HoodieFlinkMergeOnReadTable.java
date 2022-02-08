@@ -24,7 +24,6 @@ import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -45,7 +44,7 @@ import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
 import java.util.List;
 import java.util.Map;
 
-public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload>
+public class HoodieFlinkMergeOnReadTable<T>
     extends HoodieFlinkCopyOnWriteTable<T> {
 
   HoodieFlinkMergeOnReadTable(
@@ -103,32 +102,31 @@ public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload>
       HoodieEngineContext context,
       String instantTime,
       Option<Map<String, String>> extraMetadata) {
-    ScheduleCompactionActionExecutor scheduleCompactionExecutor = new ScheduleCompactionActionExecutor(
+    return new ScheduleCompactionActionExecutor<>(
         context, config, this, instantTime, extraMetadata,
-        new HoodieFlinkMergeOnReadTableCompactor());
-    return scheduleCompactionExecutor.execute();
+        new HoodieFlinkMergeOnReadTableCompactor<>()).execute();
   }
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> compact(
       HoodieEngineContext context, String compactionInstantTime) {
-    RunCompactionActionExecutor compactionExecutor = new RunCompactionActionExecutor(
-        context, config, this, compactionInstantTime, new HoodieFlinkMergeOnReadTableCompactor(),
-        new HoodieFlinkCopyOnWriteTable(config, context, getMetaClient()));
+    RunCompactionActionExecutor<T> compactionExecutor = new RunCompactionActionExecutor<>(
+        context, config, this, compactionInstantTime, new HoodieFlinkMergeOnReadTableCompactor<>(),
+        new HoodieFlinkCopyOnWriteTable<>(config, context, getMetaClient()));
     return convertMetadata(compactionExecutor.execute());
   }
 
   @Override
   public Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context, String instantTime, HoodieInstant instantToRollback,
                                                      boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers) {
-    return new BaseRollbackPlanActionExecutor(context, config, this, instantTime, instantToRollback, skipTimelinePublish,
+    return new BaseRollbackPlanActionExecutor<>(context, config, this, instantTime, instantToRollback, skipTimelinePublish,
         shouldRollbackUsingMarkers).execute();
   }
 
   @Override
   public HoodieRollbackMetadata rollback(HoodieEngineContext context, String rollbackInstantTime, HoodieInstant commitInstant,
                                          boolean deleteInstants, boolean skipLocking) {
-    return new MergeOnReadRollbackActionExecutor(context, config, this, rollbackInstantTime, commitInstant, deleteInstants,
+    return new MergeOnReadRollbackActionExecutor<>(context, config, this, rollbackInstantTime, commitInstant, deleteInstants,
         skipLocking).execute();
   }
 }

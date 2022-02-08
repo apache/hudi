@@ -20,8 +20,9 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.collection.Pair;
@@ -33,28 +34,29 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class JavaInsertOverwriteCommitActionExecutor<T extends HoodieRecordPayload<T>>
-    extends BaseJavaCommitActionExecutor<T> {
+public class JavaInsertOverwriteCommitActionExecutor<T> extends BaseJavaCommitActionExecutor<T> {
 
   private final List<HoodieRecord<T>> inputRecords;
 
   public JavaInsertOverwriteCommitActionExecutor(HoodieEngineContext context,
-                                                 HoodieWriteConfig config, HoodieTable table,
+                                                 HoodieWriteConfig config,
+                                                 HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
                                                  String instantTime, List<HoodieRecord<T>> inputRecords) {
     this(context, config, table, instantTime, inputRecords, WriteOperationType.INSERT_OVERWRITE);
   }
 
   public JavaInsertOverwriteCommitActionExecutor(HoodieEngineContext context,
-                                                  HoodieWriteConfig config, HoodieTable table,
-                                                  String instantTime, List<HoodieRecord<T>> inputRecords,
-                                                  WriteOperationType writeOperationType) {
+                                                 HoodieWriteConfig config,
+                                                 HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
+                                                 String instantTime, List<HoodieRecord<T>> inputRecords,
+                                                 WriteOperationType writeOperationType) {
     super(context, config, table, instantTime, writeOperationType);
     this.inputRecords = inputRecords;
   }
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
-    return JavaWriteHelper.newInstance().write(instantTime, inputRecords, context, table,
+    return JavaWriteHelper.<T, HoodieWriteMetadata<List<WriteStatus>>>newInstance().write(instantTime, inputRecords, context, table,
         config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, operationType);
   }
 
@@ -74,6 +76,6 @@ public class JavaInsertOverwriteCommitActionExecutor<T extends HoodieRecordPaylo
 
   private List<String> getAllExistingFileIds(String partitionPath) {
     // because new commit is not complete. it is safe to mark all existing file Ids as old files
-    return table.getSliceView().getLatestFileSlices(partitionPath).map(fg -> fg.getFileId()).distinct().collect(Collectors.toList());
+    return table.getSliceView().getLatestFileSlices(partitionPath).map(FileSlice::getFileId).distinct().collect(Collectors.toList());
   }
 }

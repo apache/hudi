@@ -56,7 +56,7 @@ import scala.Tuple2;
 /**
  * Packs incoming records to be upserted, into buckets (1 bucket = 1 RDD partition).
  */
-public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHoodiePartitioner<T> {
+public class UpsertPartitioner extends SparkHoodiePartitioner {
 
   private static final Logger LOG = LogManager.getLogger(UpsertPartitioner.class);
 

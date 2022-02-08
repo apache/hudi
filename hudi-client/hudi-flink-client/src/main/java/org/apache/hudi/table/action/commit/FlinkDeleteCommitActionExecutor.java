@@ -21,7 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieWriteHandle;
@@ -30,13 +30,13 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.util.List;
 
-public class FlinkDeleteCommitActionExecutor<T extends HoodieRecordPayload<T>> extends BaseFlinkCommitActionExecutor<T> {
+public class FlinkDeleteCommitActionExecutor<T> extends BaseFlinkCommitActionExecutor<T> {
   private final List<HoodieKey> keys;
 
   public FlinkDeleteCommitActionExecutor(HoodieEngineContext context,
                                          HoodieWriteHandle<?, ?, ?, ?> writeHandle,
                                          HoodieWriteConfig config,
-                                         HoodieTable table,
+                                         HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
                                          String instantTime,
                                          List<HoodieKey> keys) {
     super(context, writeHandle, config, table, instantTime, WriteOperationType.DELETE);
@@ -45,6 +45,6 @@ public class FlinkDeleteCommitActionExecutor<T extends HoodieRecordPayload<T>> e
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
-    return FlinkDeleteHelper.newInstance().execute(instantTime, keys, context, config, table, this);
+    return FlinkDeleteHelper.<T, HoodieWriteMetadata<List<WriteStatus>>>newInstance().execute(instantTime, keys, context, config, table, this);
   }
 }

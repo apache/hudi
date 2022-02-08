@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <p>
  * Please use this with caution. This can end up creating very large files if not used correctly.
  */
-public class SingleFileHandleCreateFactory<T extends HoodieRecordPayload, I, K, O> extends CreateHandleFactory<T, I, K, O> implements Serializable {
+public class SingleFileHandleCreateFactory<T, I, K, O> extends CreateHandleFactory<T, I, K, O> implements Serializable {
 
   private final AtomicBoolean isHandleCreated = new AtomicBoolean(false);
   private final String fileId;

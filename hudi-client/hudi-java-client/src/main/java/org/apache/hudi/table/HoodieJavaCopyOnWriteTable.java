@@ -32,7 +32,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -68,14 +67,15 @@ import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nonnull;
+
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
-import javax.annotation.Nonnull;
 import java.util.List;
 import java.util.Map;
 
-public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
+public class HoodieJavaCopyOnWriteTable<T>
     extends HoodieJavaTable<T> implements HoodieCompactionHandler<T> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieJavaCopyOnWriteTable.class);
@@ -112,7 +112,7 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
                                                            String instantTime,
                                                            List<HoodieRecord<T>> records,
                                                            Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> bulkInsertPartitioner) {
-    return new JavaBulkInsertCommitActionExecutor((HoodieJavaEngineContext) context, config,
+    return new JavaBulkInsertCommitActionExecutor<>((HoodieJavaEngineContext) context, config,
         this, instantTime, records, bulkInsertPartitioner).execute();
   }
 
@@ -124,7 +124,7 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
   }
 
   @Override
-  public HoodieWriteMetadata deletePartitions(HoodieEngineContext context, String instantTime, List<String> partitions) {
+  public HoodieWriteMetadata<List<WriteStatus>> deletePartitions(HoodieEngineContext context, String instantTime, List<String> partitions) {
     throw new HoodieNotSupportedException("Delete partitions is not supported yet");
   }
 
@@ -150,7 +150,7 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
                                                                   String instantTime,
                                                                   List<HoodieRecord<T>> preppedRecords,
                                                                   Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> bulkInsertPartitioner) {
-    return new JavaBulkInsertPreppedCommitActionExecutor((HoodieJavaEngineContext) context, config,
+    return new JavaBulkInsertPreppedCommitActionExecutor<>((HoodieJavaEngineContext) context, config,
         this, instantTime, preppedRecords, bulkInsertPartitioner).execute();
   }
 
@@ -158,7 +158,7 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
   public HoodieWriteMetadata<List<WriteStatus>> insertOverwrite(HoodieEngineContext context,
                                                                 String instantTime,
                                                                 List<HoodieRecord<T>> records) {
-    return new JavaInsertOverwriteCommitActionExecutor(
+    return new JavaInsertOverwriteCommitActionExecutor<>(
         context, config, this, instantTime, records).execute();
   }
 
@@ -166,7 +166,7 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
   public HoodieWriteMetadata<List<WriteStatus>> insertOverwriteTable(HoodieEngineContext context,
                                                                      String instantTime,
                                                                      List<HoodieRecord<T>> records) {
-    return new JavaInsertOverwriteTableCommitActionExecutor(
+    return new JavaInsertOverwriteTableCommitActionExecutor<>(
         context, config, this, instantTime, records).execute();
   }
 
@@ -213,7 +213,7 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
   @Override
   public Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context, String instantTime, HoodieInstant instantToRollback,
                                                      boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers) {
-    return new BaseRollbackPlanActionExecutor(context, config, this, instantTime, instantToRollback, skipTimelinePublish,
+    return new BaseRollbackPlanActionExecutor<>(context, config, this, instantTime, instantToRollback, skipTimelinePublish,
         shouldRollbackUsingMarkers).execute();
   }
 
@@ -225,7 +225,7 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
   @Override
   public HoodieCleanMetadata clean(HoodieEngineContext context,
                                    String cleanInstantTime, boolean skipLocking) {
-    return new CleanActionExecutor(context, config, this, cleanInstantTime).execute();
+    return new CleanActionExecutor<>(context, config, this, cleanInstantTime).execute();
   }
 
   @Override
@@ -234,7 +234,7 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
                                          HoodieInstant commitInstant,
                                          boolean deleteInstants,
                                          boolean skipLocking) {
-    return new CopyOnWriteRollbackActionExecutor(
+    return new CopyOnWriteRollbackActionExecutor<>(
         context, config, this, rollbackInstantTime, commitInstant, deleteInstants, skipLocking).execute();
   }
 
@@ -243,7 +243,7 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
                                            String instantToSavepoint,
                                            String user,
                                            String comment) {
-    return new SavepointActionExecutor(
+    return new SavepointActionExecutor<>(
         context, config, this, instantToSavepoint, user, comment).execute();
   }
 
@@ -251,7 +251,7 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
   public HoodieRestoreMetadata restore(HoodieEngineContext context,
                                        String restoreInstantTime,
                                        String instantToRestore) {
-    return new CopyOnWriteRestoreActionExecutor(
+    return new CopyOnWriteRestoreActionExecutor<>(
         context, config, this, restoreInstantTime, instantToRestore).execute();
   }
 
@@ -261,7 +261,7 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
       Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile)
       throws IOException {
     // these are updates
-    HoodieMergeHandle upsertHandle = getUpdateHandle(instantTime, partitionPath, fileId, keyToNewRecords, oldDataFile);
+    HoodieMergeHandle<?, ?, ?, ?> upsertHandle = getUpdateHandle(instantTime, partitionPath, fileId, keyToNewRecords, oldDataFile);
     return handleUpdateInternal(upsertHandle, instantTime, fileId);
   }
 
@@ -271,7 +271,7 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
-      JavaMergeHelper.newInstance().runMerge(this, upsertHandle);
+      JavaMergeHelper.<T>newInstance().runMerge(this, upsertHandle);
     }
 
     // TODO(yihua): This needs to be revisited
@@ -283,7 +283,7 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
     return Collections.singletonList(upsertHandle.writeStatuses()).iterator();
   }
 
-  protected HoodieMergeHandle getUpdateHandle(String instantTime, String partitionPath, String fileId,
+  protected HoodieMergeHandle<?, ?, ?, ?> getUpdateHandle(String instantTime, String partitionPath, String fileId,
                                               Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile dataFileToBeMerged) {
     if (requireSortedRecords()) {
       return new HoodieSortedMergeHandle<>(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
@@ -297,9 +297,9 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
   @Override
   public Iterator<List<WriteStatus>> handleInsert(
       String instantTime, String partitionPath, String fileId,
-      Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap) {
+      Map<String, HoodieRecord<T>> recordMap) {
     HoodieCreateHandle<?, ?, ?, ?> createHandle =
-        new HoodieCreateHandle(config, instantTime, this, partitionPath, fileId, recordMap, taskContextSupplier);
+        new HoodieCreateHandle<>(config, instantTime, this, partitionPath, fileId, recordMap, taskContextSupplier);
     createHandle.write();
     return Collections.singletonList(createHandle.close()).iterator();
   }

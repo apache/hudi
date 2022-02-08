@@ -21,7 +21,8 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.collection.Pair;
@@ -30,21 +31,23 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import scala.Tuple2;
 
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class SparkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayload<T>>
+import scala.Tuple2;
+
+public class SparkDeletePartitionCommitActionExecutor<T>
     extends SparkInsertOverwriteCommitActionExecutor<T> {
 
   private List<String> partitions;
-  public SparkDeletePartitionCommitActionExecutor(HoodieEngineContext context,
-                                                  HoodieWriteConfig config, HoodieTable table,
+  public SparkDeletePartitionCommitActionExecutor(HoodieEngineContext context, HoodieWriteConfig config,
+                                                  HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                                   String instantTime, List<String> partitions) {
     super(context, config, table, instantTime,null, WriteOperationType.DELETE_PARTITION);
     this.partitions = partitions;
@@ -56,7 +59,7 @@ public class SparkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayl
     HoodieTimer timer = new HoodieTimer().startTimer();
     Map<String, List<String>> partitionToReplaceFileIds = jsc.parallelize(partitions, partitions.size()).distinct()
         .mapToPair(partitionPath -> new Tuple2<>(partitionPath, getAllExistingFileIds(partitionPath))).collectAsMap();
-    HoodieWriteMetadata result = new HoodieWriteMetadata();
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> result = new HoodieWriteMetadata<>();
     result.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
     result.setIndexUpdateDuration(Duration.ofMillis(timer.endTimer()));
 

@@ -19,7 +19,6 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import java.util.List;
@@ -30,7 +29,7 @@ import java.util.List;
  *
  * @param <T> HoodieRecordPayload type
  */
-public class JavaNonSortPartitioner<T extends HoodieRecordPayload>
+public class JavaNonSortPartitioner<T>
     implements BulkInsertPartitioner<List<HoodieRecord<T>>> {
 
   @Override

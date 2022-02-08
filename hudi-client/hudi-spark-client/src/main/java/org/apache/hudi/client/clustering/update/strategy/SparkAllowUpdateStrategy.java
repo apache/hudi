@@ -35,7 +35,7 @@ import java.util.stream.Collectors;
 /**
  * Allow ingestion commits during clustering job.
  */
-public class SparkAllowUpdateStrategy<T extends HoodieRecordPayload<T>> extends UpdateStrategy<T, JavaRDD<HoodieRecord<T>>> {
+public class SparkAllowUpdateStrategy<T> extends UpdateStrategy<T, JavaRDD<HoodieRecord<T>>> {
 
   public SparkAllowUpdateStrategy(
       HoodieSparkEngineContext engineContext, HashSet<HoodieFileGroupId> fileGroupsInPendingClustering) {

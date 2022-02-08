@@ -20,7 +20,6 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.keygen.KeyGenUtils;
@@ -41,7 +40,7 @@ import java.util.Iterator;
  * <P>The records iterator for super constructor is reset as empty thus the initialization for new records
  * does nothing. This handle keep the iterator for itself to override the write behavior.
  */
-public class FlinkConcatAndReplaceHandle<T extends HoodieRecordPayload, I, K, O>
+public class FlinkConcatAndReplaceHandle<T, I, K, O>
     extends FlinkMergeAndReplaceHandle<T, I, K, O> {
   private static final Logger LOG = LoggerFactory.getLogger(FlinkConcatAndReplaceHandle.class);
 

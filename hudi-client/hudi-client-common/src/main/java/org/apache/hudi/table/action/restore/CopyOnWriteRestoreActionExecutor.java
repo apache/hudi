@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.restore;
 
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -30,11 +29,11 @@ import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 
-public class CopyOnWriteRestoreActionExecutor<T extends HoodieRecordPayload, I, K, O>
+public class CopyOnWriteRestoreActionExecutor<T, I, K, O>
     extends BaseRestoreActionExecutor<T, I, K, O> {
   public CopyOnWriteRestoreActionExecutor(HoodieEngineContext context,
                                           HoodieWriteConfig config,
-                                          HoodieTable table,
+                                          HoodieTable<T, I, K, O> table,
                                           String instantTime,
                                           String restoreInstantTime) {
     super(context, config, table, instantTime, restoreInstantTime);
@@ -50,7 +49,7 @@ public class CopyOnWriteRestoreActionExecutor<T extends HoodieRecordPayload, I, 
     String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
     table.scheduleRollback(context, newInstantTime, instantToRollback, false, false);
     table.getMetaClient().reloadActiveTimeline();
-    CopyOnWriteRollbackActionExecutor rollbackActionExecutor = new CopyOnWriteRollbackActionExecutor(
+    CopyOnWriteRollbackActionExecutor<T, I, K, O> rollbackActionExecutor = new CopyOnWriteRollbackActionExecutor<>(
         context,
         config,
         table,

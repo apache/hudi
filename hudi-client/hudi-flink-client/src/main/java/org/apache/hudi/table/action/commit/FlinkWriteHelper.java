@@ -49,7 +49,7 @@ import java.util.stream.Collectors;
  * <p>Computing the records batch locations all at a time is a pressure to the engine,
  * we should avoid that in streaming system.
  */
-public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends BaseWriteHelper<T, List<HoodieRecord<T>>,
+public class FlinkWriteHelper<T, R> extends BaseWriteHelper<T, List<HoodieRecord<T>>,
     List<HoodieKey>, List<WriteStatus>, R> {
 
   private FlinkWriteHelper() {
@@ -59,14 +59,14 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends BaseWrit
     private static final FlinkWriteHelper FLINK_WRITE_HELPER = new FlinkWriteHelper();
   }
 
-  public static FlinkWriteHelper newInstance() {
+  public static <T, R> FlinkWriteHelper<T, R> newInstance() {
     return WriteHelperHolder.FLINK_WRITE_HELPER;
   }
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> write(String instantTime, List<HoodieRecord<T>> inputRecords, HoodieEngineContext context,
-                                                      HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table, boolean shouldCombine, int shuffleParallelism,
-                                                      BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, R> executor, WriteOperationType operationType) {
+      HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table, boolean shouldCombine, int shuffleParallelism,
+      BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, R> executor, WriteOperationType operationType) {
     try {
       Instant lookupBegin = Instant.now();
       Duration indexLookupDuration = Duration.between(lookupBegin, Instant.now());
@@ -98,17 +98,16 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends BaseWrit
     }).collect(Collectors.groupingBy(Pair::getLeft));
 
     return keyedRecords.values().stream().map(x -> x.stream().map(Pair::getRight).reduce((rec1, rec2) -> {
-      final T data1 = rec1.getData();
-      final T data2 = rec2.getData();
-
-      @SuppressWarnings("unchecked") final T reducedData = (T) data2.preCombine(data1);
+      final HoodieRecordPayload data1 = (HoodieRecordPayload) rec1.getData();
+      final HoodieRecordPayload data2 = (HoodieRecordPayload) rec2.getData();
+      @SuppressWarnings("unchecked") final HoodieRecordPayload reducedData = (HoodieRecordPayload) data2.preCombine(data1);
       // we cannot allow the user to change the key or partitionPath, since that will affect
       // everything
       // so pick it from one of the records.
       boolean choosePrev = data1.equals(reducedData);
       HoodieKey reducedKey = choosePrev ? rec1.getKey() : rec2.getKey();
       HoodieOperation operation = choosePrev ? rec1.getOperation() : rec2.getOperation();
-      HoodieRecord<T> hoodieRecord = new HoodieAvroRecord<>(reducedKey, reducedData, operation);
+      HoodieRecord<T> hoodieRecord = new HoodieAvroRecord(reducedKey, reducedData, operation);
       // reuse the location from the first record.
       hoodieRecord.setCurrentLocation(rec1.getCurrentLocation());
       return hoodieRecord;

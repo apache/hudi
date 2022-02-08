@@ -43,7 +43,7 @@ import java.util.stream.Collectors;
  * UpsertPartitioner for MergeOnRead table type, this allows auto correction of small parquet files to larger ones
  * without the need for an index in the logFile.
  */
-public class SparkUpsertDeltaCommitPartitioner<T extends HoodieRecordPayload<T>> extends UpsertPartitioner<T> {
+public class SparkUpsertDeltaCommitPartitioner extends UpsertPartitioner {
 
   public SparkUpsertDeltaCommitPartitioner(WorkloadProfile profile, HoodieSparkEngineContext context, HoodieTable table,
                                            HoodieWriteConfig config) {

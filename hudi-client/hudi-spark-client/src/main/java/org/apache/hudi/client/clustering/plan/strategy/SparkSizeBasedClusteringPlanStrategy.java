@@ -50,7 +50,7 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
  * 1) Creates clustering groups based on max size allowed per group.
  * 2) Excludes files that are greater than 'small.file.limit' from clustering plan.
  */
-public class SparkSizeBasedClusteringPlanStrategy<T extends HoodieRecordPayload<T>>
+public class SparkSizeBasedClusteringPlanStrategy<T>
     extends PartitionAwareClusteringPlanStrategy<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
   private static final Logger LOG = LogManager.getLogger(SparkSizeBasedClusteringPlanStrategy.class);
 

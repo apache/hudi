@@ -29,7 +29,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
  *
  * @param <T>
  */
-public abstract class BaseDeleteHelper<T extends HoodieRecordPayload, I, K, O, R> {
+public abstract class BaseDeleteHelper<T, I, K, O, R> {
 
   /**
    * Deduplicate Hoodie records, using the given deduplication function.

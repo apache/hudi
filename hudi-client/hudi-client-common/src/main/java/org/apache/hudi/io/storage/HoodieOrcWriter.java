@@ -47,7 +47,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.AvroOrcUtils;
 
-public class HoodieOrcWriter<T extends HoodieRecordPayload, R extends IndexedRecord>
+public class HoodieOrcWriter<T, R extends IndexedRecord>
     implements HoodieFileWriter<R>, Closeable {
   private static final AtomicLong RECORD_INDEX = new AtomicLong(1);
 

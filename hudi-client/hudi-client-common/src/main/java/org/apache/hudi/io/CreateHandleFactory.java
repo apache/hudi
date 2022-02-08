@@ -19,15 +19,14 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.Serializable;
 
-public class CreateHandleFactory<T extends HoodieRecordPayload, I, K, O> extends WriteHandleFactory<T, I, K, O> implements Serializable {
+public class CreateHandleFactory<T, I, K, O> extends WriteHandleFactory<T, I, K, O> implements Serializable {
 
-  private boolean preserveMetadata = false;
+  private boolean preserveMetadata;
 
   public CreateHandleFactory() {
     this(false);
@@ -42,7 +41,7 @@ public class CreateHandleFactory<T extends HoodieRecordPayload, I, K, O> extends
                                               final HoodieTable<T, I, K, O> hoodieTable, final String partitionPath,
                                               final String fileIdPrefix, TaskContextSupplier taskContextSupplier) {
 
-    return new HoodieCreateHandle(hoodieConfig, commitTime, hoodieTable, partitionPath,
+    return new HoodieCreateHandle<>(hoodieConfig, commitTime, hoodieTable, partitionPath,
         getNextFileId(fileIdPrefix), taskContextSupplier, preserveMetadata);
   }
 }

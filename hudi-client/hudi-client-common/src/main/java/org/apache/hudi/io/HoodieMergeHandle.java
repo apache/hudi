@@ -90,7 +90,7 @@ import java.util.Set;
  *
  * </p>
  */
-public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
+public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieMergeHandle.class);
 
@@ -213,7 +213,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       long memoryForMerge = IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config);
       LOG.info("MaxMemoryPerPartitionMerge => " + memoryForMerge);
       this.keyToNewRecords = new ExternalSpillableMap<>(memoryForMerge, config.getSpillableMapBasePath(),
-          new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(tableSchema),
+          new DefaultSizeEstimator<>(), new HoodieRecordSizeEstimator<>(tableSchema),
           config.getCommonConfig().getSpillableDiskMapType(),
           config.getCommonConfig().isBitCaskDiskMapCompressionEnabled());
     } catch (IOException io) {
@@ -245,11 +245,11 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       keyToNewRecords.put(record.getRecordKey(), record);
     }
     LOG.info("Number of entries in MemoryBasedMap => "
-        + ((ExternalSpillableMap) keyToNewRecords).getInMemoryMapNumEntries()
+        + ((ExternalSpillableMap<String, HoodieRecord<T>>) keyToNewRecords).getInMemoryMapNumEntries()
         + "Total size in bytes of MemoryBasedMap => "
-        + ((ExternalSpillableMap) keyToNewRecords).getCurrentInMemoryMapSize() + "Number of entries in BitCaskDiskMap => "
-        + ((ExternalSpillableMap) keyToNewRecords).getDiskBasedMapNumEntries() + "Size of file spilled to disk => "
-        + ((ExternalSpillableMap) keyToNewRecords).getSizeOfFileOnDiskInBytes());
+        + ((ExternalSpillableMap<String, HoodieRecord<T>>) keyToNewRecords).getCurrentInMemoryMapSize() + "Number of entries in BitCaskDiskMap => "
+        + ((ExternalSpillableMap<String, HoodieRecord<T>>) keyToNewRecords).getDiskBasedMapNumEntries() + "Size of file spilled to disk => "
+        + ((ExternalSpillableMap<String, HoodieRecord<T>>) keyToNewRecords).getSizeOfFileOnDiskInBytes());
   }
 
   private boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord, GenericRecord oldRecord, Option<IndexedRecord> indexedRecord) {
@@ -267,7 +267,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
 
   protected void writeInsertRecord(HoodieRecord<T> hoodieRecord) throws IOException {
     Schema schema = useWriterSchema ? tableSchemaWithMetaFields : tableSchema;
-    Option<IndexedRecord> insertRecord = hoodieRecord.getData().getInsertValue(schema, config.getProps());
+    Option<IndexedRecord> insertRecord = ((HoodieRecordPayload) hoodieRecord.getData()).getInsertValue(schema, config.getProps());
     // just skip the ignored record
     if (insertRecord.isPresent() && insertRecord.get().equals(IGNORE_RECORD)) {
       return;
@@ -282,7 +282,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   }
 
   protected boolean writeRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> indexedRecord, boolean isDelete) {
-    Option recordMetadata = hoodieRecord.getData().getMetadata();
+    Option<Map<String, String>> recordMetadata = ((HoodieRecordPayload) hoodieRecord.getData()).getMetadata();
     if (!partitionPath.equals(hoodieRecord.getPartitionPath())) {
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
           + hoodieRecord.getPartitionPath() + " but trying to insert into partition: " + partitionPath);
@@ -327,7 +327,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       HoodieRecord<T> hoodieRecord = keyToNewRecords.get(key).newInstance();
       try {
         Option<IndexedRecord> combinedAvroRecord =
-            hoodieRecord.getData().combineAndGetUpdateValue(oldRecord,
+            ((HoodieRecordPayload) hoodieRecord.getData()).combineAndGetUpdateValue(oldRecord,
               useWriterSchema ? tableSchemaWithMetaFields : tableSchema,
                 config.getPayloadConfig().getProps());
 
@@ -368,7 +368,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   protected void writeIncomingRecords() throws IOException {
     // write out any pending records (this can happen when inserts are turned into updates)
     Iterator<HoodieRecord<T>> newRecordsItr = (keyToNewRecords instanceof ExternalSpillableMap)
-        ? ((ExternalSpillableMap)keyToNewRecords).iterator() : keyToNewRecords.values().iterator();
+        ? ((ExternalSpillableMap<String, HoodieRecord<T>>) keyToNewRecords).iterator()
+        : keyToNewRecords.values().iterator();
     while (newRecordsItr.hasNext()) {
       HoodieRecord<T> hoodieRecord = newRecordsItr.next();
       if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
@@ -383,7 +384,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       writeIncomingRecords();
 
       if (keyToNewRecords instanceof ExternalSpillableMap) {
-        ((ExternalSpillableMap) keyToNewRecords).close();
+        ((ExternalSpillableMap<String, HoodieRecord<T>>) keyToNewRecords).close();
       } else {
         keyToNewRecords.clear();
       }
@@ -426,7 +427,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
 
     long oldNumWrites = 0;
     try {
-      HoodieFileReader reader = HoodieFileReaderFactory.getFileReader(hoodieTable.getHadoopConf(), oldFilePath);
+      HoodieFileReader<IndexedRecord> reader = HoodieFileReaderFactory.getFileReader(hoodieTable.getHadoopConf(), oldFilePath);
       oldNumWrites = reader.getTotalRecords();
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to check for merge data validation", e);

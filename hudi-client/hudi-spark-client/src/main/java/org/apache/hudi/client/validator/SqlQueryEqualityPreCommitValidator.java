@@ -40,7 +40,7 @@ import org.apache.spark.sql.SQLContext;
  * 
  * Expects both queries to return same result.
  */
-public class SqlQueryEqualityPreCommitValidator<T extends HoodieRecordPayload, I, K, O extends JavaRDD<WriteStatus>> extends SqlQueryPreCommitValidator<T, I, K, O> {
+public class SqlQueryEqualityPreCommitValidator<T, I, K, O extends JavaRDD<WriteStatus>> extends SqlQueryPreCommitValidator<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(SqlQueryEqualityPreCommitValidator.class);
 

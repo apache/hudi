@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -44,17 +43,17 @@ import java.util.List;
  * @param <T>
  */
 @SuppressWarnings("checkstyle:LineLength")
-public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends BaseBulkInsertHelper<T, List<HoodieRecord<T>>,
+public class JavaBulkInsertHelper<T, R> extends BaseBulkInsertHelper<T, List<HoodieRecord<T>>,
     List<HoodieKey>, List<WriteStatus>, R> {
 
   private JavaBulkInsertHelper() {
   }
 
   private static class BulkInsertHelperHolder {
-    private static final JavaBulkInsertHelper JAVA_BULK_INSERT_HELPER = new JavaBulkInsertHelper();
+    private static final JavaBulkInsertHelper JAVA_BULK_INSERT_HELPER = new JavaBulkInsertHelper<>();
   }
 
-  public static JavaBulkInsertHelper newInstance() {
+  public static <T, R> JavaBulkInsertHelper<T, R> newInstance() {
     return BulkInsertHelperHolder.JAVA_BULK_INSERT_HELPER;
   }
 
@@ -65,8 +64,8 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Base
                                                            final HoodieWriteConfig config,
                                                            final BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, R> executor,
                                                            final boolean performDedupe,
-                                                           final Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner) {
-    HoodieWriteMetadata result = new HoodieWriteMetadata();
+                                                           final Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> userDefinedBulkInsertPartitioner) {
+    HoodieWriteMetadata<List<WriteStatus>> result = new HoodieWriteMetadata<>();
 
     // It's possible the transition to inflight could have already happened.
     if (!table.getActiveTimeline().filterInflights().containsInstant(instantTime)) {
@@ -77,9 +76,9 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Base
     }
 
     // write new files
-    List<WriteStatus> writeStatuses = bulkInsert(inputRecords, instantTime, table, config, performDedupe, userDefinedBulkInsertPartitioner, false, config.getBulkInsertShuffleParallelism(), new CreateHandleFactory(false));
+    List<WriteStatus> writeStatuses = bulkInsert(inputRecords, instantTime, table, config, performDedupe, userDefinedBulkInsertPartitioner, false, config.getBulkInsertShuffleParallelism(), new CreateHandleFactory<>(false));
     //update index
-    ((BaseJavaCommitActionExecutor) executor).updateIndexAndCommitIfNeeded(writeStatuses, result);
+    ((BaseJavaCommitActionExecutor<T>) executor).updateIndexAndCommitIfNeeded(writeStatuses, result);
     return result;
   }
 
@@ -89,24 +88,24 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Base
                                       HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
                                       HoodieWriteConfig config,
                                       boolean performDedupe,
-                                      Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner,
+                                      Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> userDefinedBulkInsertPartitioner,
                                       boolean useWriterSchema,
                                       int parallelism,
-                                      WriteHandleFactory writeHandleFactory) {
+                                      WriteHandleFactory<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> writeHandleFactory) {
 
     // De-dupe/merge if needed
     List<HoodieRecord<T>> dedupedRecords = inputRecords;
 
     if (performDedupe) {
-      dedupedRecords = (List<HoodieRecord<T>>) JavaWriteHelper.newInstance().combineOnCondition(config.shouldCombineBeforeInsert(), inputRecords,
+      dedupedRecords = JavaWriteHelper.<T, R>newInstance().combineOnCondition(config.shouldCombineBeforeInsert(), inputRecords,
           parallelism, table);
     }
 
     final List<HoodieRecord<T>> repartitionedRecords;
-    BulkInsertPartitioner partitioner = userDefinedBulkInsertPartitioner.isPresent()
+    BulkInsertPartitioner<List<HoodieRecord<T>>> partitioner = userDefinedBulkInsertPartitioner.isPresent()
         ? userDefinedBulkInsertPartitioner.get()
         : JavaBulkInsertInternalPartitionerFactory.get(config.getBulkInsertSortMode());
-    repartitionedRecords = (List<HoodieRecord<T>>) partitioner.repartitionRecords(dedupedRecords, parallelism);
+    repartitionedRecords = partitioner.repartitionRecords(dedupedRecords, parallelism);
 
     FileIdPrefixProvider fileIdPrefixProvider = (FileIdPrefixProvider) ReflectionUtils.loadClass(
         config.getFileIdPrefixProviderClassName(),

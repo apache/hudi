@@ -465,7 +465,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
 
     HoodieSparkTable<?> table = HoodieSparkTable.create(config, context, reloadedMetaClient);
 
-    SparkUpsertDeltaCommitPartitioner<?> partitioner = new SparkUpsertDeltaCommitPartitioner<>(profile, context, table, config);
+    SparkUpsertDeltaCommitPartitioner partitioner = new SparkUpsertDeltaCommitPartitioner(profile, context, table, config);
 
     assertEquals(3, partitioner.numPartitions());
     assertEquals(

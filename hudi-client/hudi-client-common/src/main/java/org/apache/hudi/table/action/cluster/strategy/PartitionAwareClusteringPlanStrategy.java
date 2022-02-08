@@ -43,7 +43,7 @@ import java.util.stream.Stream;
 /**
  * Scheduling strategy with restriction that clustering groups can only contain files from same partition.
  */
-public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecordPayload,I,K,O> extends ClusteringPlanStrategy<T,I,K,O> {
+public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends ClusteringPlanStrategy<T,I,K,O> {
   private static final Logger LOG = LogManager.getLogger(PartitionAwareClusteringPlanStrategy.class);
 
   public PartitionAwareClusteringPlanStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {

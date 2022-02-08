@@ -49,7 +49,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
+public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieCreateHandle.class);
 
@@ -118,7 +118,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
   }
 
   @Override
-  public boolean canWrite(HoodieRecord record) {
+  public boolean canWrite(HoodieRecord<T> record) {
     return (fileWriter.canWrite() && record.getPartitionPath().equals(writeStatus.getPartitionPath()))
         || layoutControlsNumFiles();
   }
@@ -127,8 +127,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
    * Perform the actual writing of the given record into the backing file.
    */
   @Override
-  public void write(HoodieRecord record, Option<IndexedRecord> avroRecord) {
-    Option recordMetadata = ((HoodieRecordPayload) record.getData()).getMetadata();
+  public void write(HoodieRecord<T> record, Option<IndexedRecord> avroRecord) {
+    Option<Map<String, String>> recordMetadata = ((HoodieRecordPayload) record.getData()).getMetadata();
     if (HoodieOperation.isDelete(record.getOperation())) {
       avroRecord = Option.empty();
     }
@@ -184,9 +184,9 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
         final String key = keyIterator.next();
         HoodieRecord<T> record = recordMap.get(key);
         if (useWriterSchema) {
-          write(record, record.getData().getInsertValue(tableSchemaWithMetaFields, config.getProps()));
+          write(record, ((HoodieRecordPayload) record.getData()).getInsertValue(tableSchemaWithMetaFields, config.getProps()));
         } else {
-          write(record, record.getData().getInsertValue(tableSchema, config.getProps()));
+          write(record, ((HoodieRecordPayload) record.getData()).getInsertValue(tableSchema, config.getProps()));
         }
       }
     } catch (IOException io) {

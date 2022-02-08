@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -51,13 +50,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public class JavaExecuteClusteringCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public class JavaExecuteClusteringCommitActionExecutor<T>
     extends BaseJavaCommitActionExecutor<T> {
 
   private final HoodieClusteringPlan clusteringPlan;
 
   public JavaExecuteClusteringCommitActionExecutor(
-      HoodieEngineContext context, HoodieWriteConfig config, HoodieTable table,
+      HoodieEngineContext context, HoodieWriteConfig config,
+      HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
       String instantTime) {
     super(context, config, table, instantTime, WriteOperationType.CLUSTER);
     this.clusteringPlan = ClusteringUtils.getClusteringPlan(
@@ -75,7 +75,7 @@ public class JavaExecuteClusteringCommitActionExecutor<T extends HoodieRecordPay
 
     final Schema schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
     HoodieWriteMetadata<List<WriteStatus>> writeMetadata = (
-        (ClusteringExecutionStrategy<T, List<HoodieRecord<? extends HoodieRecordPayload>>, List<HoodieKey>, List<WriteStatus>>)
+        (ClusteringExecutionStrategy<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>>)
             ReflectionUtils.loadClass(config.getClusteringExecutionStrategyClass(),
                 new Class<?>[] {HoodieTable.class, HoodieEngineContext.class, HoodieWriteConfig.class}, table, context, config))
         .performClustering(clusteringPlan, schema, instantTime);
@@ -118,6 +118,6 @@ public class JavaExecuteClusteringCommitActionExecutor<T extends HoodieRecordPay
         .map(s -> new HoodieFileGroupId(s.getPartitionPath(), s.getFileId())).collect(Collectors.toSet());
     return ClusteringUtils.getFileGroupsFromClusteringPlan(clusteringPlan)
         .filter(fg -> !newFilesWritten.contains(fg))
-        .collect(Collectors.groupingBy(fg -> fg.getPartitionPath(), Collectors.mapping(fg -> fg.getFileId(), Collectors.toList())));
+        .collect(Collectors.groupingBy(HoodieFileGroupId::getPartitionPath, Collectors.mapping(HoodieFileGroupId::getFileId, Collectors.toList())));
   }
 }

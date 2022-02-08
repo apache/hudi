@@ -22,7 +22,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.IteratorBasedQueueProducer;
@@ -44,7 +43,7 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 
-public class JavaMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHelper<T, List<HoodieRecord<T>>,
+public class JavaMergeHelper<T> extends BaseMergeHelper<T, List<HoodieRecord<T>>,
     List<HoodieKey>, List<WriteStatus>> {
 
   private JavaMergeHelper() {
@@ -54,16 +53,15 @@ public class JavaMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHel
     private static final JavaMergeHelper JAVA_MERGE_HELPER = new JavaMergeHelper();
   }
 
-  public static JavaMergeHelper newInstance() {
+  public static <T> JavaMergeHelper<T> newInstance() {
     return JavaMergeHelper.MergeHelperHolder.JAVA_MERGE_HELPER;
   }
 
   @Override
   public void runMerge(HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
-                       HoodieMergeHandle<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> upsertHandle) throws IOException {
+                       HoodieMergeHandle<?, ?, ?, ?> mergeHandle) throws IOException {
     final boolean externalSchemaTransformation = table.getConfig().shouldUseExternalSchemaTransformation();
     Configuration cfgForHoodieFile = new Configuration(table.getHadoopConf());
-    HoodieMergeHandle<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> mergeHandle = upsertHandle;
     HoodieBaseFile baseFile = mergeHandle.baseFileForMerge();
 
     final GenericDatumWriter<GenericRecord> gWriter;
@@ -91,12 +89,12 @@ public class JavaMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHel
 
       ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
       ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
-      wrapper = new BoundedInMemoryExecutor(table.getConfig().getWriteBufferLimitBytes(), new IteratorBasedQueueProducer<>(readerIterator),
+      wrapper = new BoundedInMemoryExecutor<>(table.getConfig().getWriteBufferLimitBytes(), new IteratorBasedQueueProducer<>(readerIterator),
           Option.of(new UpdateHandler(mergeHandle)), record -> {
         if (!externalSchemaTransformation) {
           return record;
         }
-        return transformRecordBasedOnNewSchema(gReader, gWriter, encoderCache, decoderCache, (GenericRecord) record);
+        return transformRecordBasedOnNewSchema(gReader, gWriter, encoderCache, decoderCache, record);
       });
       wrapper.execute();
     } catch (Exception e) {

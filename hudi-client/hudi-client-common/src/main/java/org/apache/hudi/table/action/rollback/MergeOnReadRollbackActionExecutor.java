@@ -34,7 +34,7 @@ import org.apache.log4j.Logger;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MergeOnReadRollbackActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseRollbackActionExecutor<T, I, K, O> {
+public class MergeOnReadRollbackActionExecutor<T, I, K, O> extends BaseRollbackActionExecutor<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(MergeOnReadRollbackActionExecutor.class);
 

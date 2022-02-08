@@ -29,7 +29,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
 
-public class MergeOnReadRestoreActionExecutor<T extends HoodieRecordPayload, I, K, O>
+public class MergeOnReadRestoreActionExecutor<T, I, K, O>
     extends BaseRestoreActionExecutor<T, I, K, O> {
   public MergeOnReadRestoreActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table,
                                           String instantTime, String restoreInstantTime) {

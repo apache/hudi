@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -44,20 +43,17 @@ import java.util.HashMap;
 
 /**
  * A spark implementation of {@link BaseDeleteHelper}.
- *
- * @param <T>
  */
-@SuppressWarnings("checkstyle:LineLength")
-public class SparkDeleteHelper<T extends HoodieRecordPayload,R> extends
+public class SparkDeleteHelper<T, R> extends
     BaseDeleteHelper<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, R> {
   private SparkDeleteHelper() {
   }
 
   private static class DeleteHelperHolder {
-    private static final SparkDeleteHelper SPARK_DELETE_HELPER = new SparkDeleteHelper();
+    private static final SparkDeleteHelper SPARK_DELETE_HELPER = new SparkDeleteHelper<>();
   }
 
-  public static SparkDeleteHelper newInstance() {
+  public static <T, R> SparkDeleteHelper<T, R> newInstance() {
     return DeleteHelperHolder.SPARK_DELETE_HELPER;
   }
 
@@ -83,7 +79,7 @@ public class SparkDeleteHelper<T extends HoodieRecordPayload,R> extends
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
 
     try {
-      HoodieWriteMetadata result = null;
+      HoodieWriteMetadata<JavaRDD<WriteStatus>> result;
       JavaRDD<HoodieKey> dedupedKeys = keys;
       final int parallelism = config.getDeleteShuffleParallelism();
       if (config.shouldCombineBeforeDelete()) {
@@ -109,7 +105,7 @@ public class SparkDeleteHelper<T extends HoodieRecordPayload,R> extends
       } else {
         // if entire set of keys are non existent
         deleteExecutor.saveWorkloadProfileMetadataToInflight(new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())), instantTime);
-        result = new HoodieWriteMetadata();
+        result = new HoodieWriteMetadata<>();
         result.setWriteStatuses(jsc.emptyRDD());
         deleteExecutor.commitOnAutoCommit(result);
       }

@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.NumericUtils;
@@ -51,7 +50,7 @@ import java.util.stream.Collectors;
 /**
  * Packs incoming records to be upserted, into buckets.
  */
-public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements Partitioner  {
+public class JavaUpsertPartitioner implements Partitioner  {
 
   private static final Logger LOG = LogManager.getLogger(JavaUpsertPartitioner.class);
 

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.WriteHandleFactory;
@@ -26,7 +25,7 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-public abstract class BaseBulkInsertHelper<T extends HoodieRecordPayload, I, K, O, R> {
+public abstract class BaseBulkInsertHelper<T, I, K, O, R> {
 
   /**
    * Mark instant as inflight, write input records, update index and return result.
@@ -34,7 +33,7 @@ public abstract class BaseBulkInsertHelper<T extends HoodieRecordPayload, I, K, 
   public abstract HoodieWriteMetadata<O> bulkInsert(I inputRecords, String instantTime,
                                                     HoodieTable<T, I, K, O> table, HoodieWriteConfig config,
                                                     BaseCommitActionExecutor<T, I, K, O, R> executor, boolean performDedupe,
-                                                    Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner);
+                                                    Option<BulkInsertPartitioner<I>> userDefinedBulkInsertPartitioner);
 
   /**
    * Only write input records. Does not change timeline/index. Return information about new files created.
@@ -42,8 +41,8 @@ public abstract class BaseBulkInsertHelper<T extends HoodieRecordPayload, I, K, 
   public abstract O bulkInsert(I inputRecords, String instantTime,
                                HoodieTable<T, I, K, O> table, HoodieWriteConfig config,
                                boolean performDedupe,
-                               Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner,
+                               Option<BulkInsertPartitioner<I>> userDefinedBulkInsertPartitioner,
                                boolean addMetadataFields,
                                int parallelism,
-                               WriteHandleFactory writeHandleFactory);
+                               WriteHandleFactory<T, I, K, O> writeHandleFactory);
 }

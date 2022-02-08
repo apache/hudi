@@ -31,7 +31,7 @@ import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
 
-public class HoodieSparkCompactor<T extends HoodieRecordPayload> extends BaseCompactor<T,
+public class HoodieSparkCompactor<T> extends BaseCompactor<T,
     JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
   private static final Logger LOG = LogManager.getLogger(HoodieSparkCompactor.class);
   private transient HoodieEngineContext context;

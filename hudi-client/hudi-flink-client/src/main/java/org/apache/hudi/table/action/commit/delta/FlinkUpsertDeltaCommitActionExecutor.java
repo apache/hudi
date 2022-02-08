@@ -18,9 +18,10 @@
 
 package org.apache.hudi.table.action.commit.delta;
 
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.FlinkAppendHandle;
@@ -30,14 +31,14 @@ import org.apache.hudi.table.action.commit.FlinkWriteHelper;
 
 import java.util.List;
 
-public class FlinkUpsertDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public class FlinkUpsertDeltaCommitActionExecutor<T>
     extends BaseFlinkDeltaCommitActionExecutor<T> {
   private final List<HoodieRecord<T>> inputRecords;
 
   public FlinkUpsertDeltaCommitActionExecutor(HoodieEngineContext context,
                                               FlinkAppendHandle<?, ?, ?, ?> writeHandle,
                                               HoodieWriteConfig config,
-                                              HoodieTable table,
+                                              HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
                                               String instantTime,
                                               List<HoodieRecord<T>> inputRecords) {
     super(context, writeHandle, config, table, instantTime, WriteOperationType.UPSERT);
@@ -45,8 +46,8 @@ public class FlinkUpsertDeltaCommitActionExecutor<T extends HoodieRecordPayload<
   }
 
   @Override
-  public HoodieWriteMetadata execute() {
-    return FlinkWriteHelper.newInstance().write(instantTime, inputRecords, context, table,
+  public HoodieWriteMetadata<List<WriteStatus>> execute() {
+    return FlinkWriteHelper.<T, HoodieWriteMetadata<List<WriteStatus>>>newInstance().write(instantTime, inputRecords, context, table,
         config.shouldCombineBeforeUpsert(), config.getUpsertShuffleParallelism(), this, operationType);
   }
 }

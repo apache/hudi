@@ -23,7 +23,6 @@ import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -34,6 +33,7 @@ import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -47,7 +47,7 @@ import java.util.List;
 /**
  * Takes a bunch of keys and returns ones that are present in the file group.
  */
-public class HoodieKeyLookupHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieReadHandle<T, I, K, O> {
+public class HoodieKeyLookupHandle<T, I, K, O> extends HoodieReadHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieKeyLookupHandle.class);
 
@@ -78,7 +78,7 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload, I, K, O> exten
   }
 
   private BloomFilter getBloomFilter() {
-    BloomFilter bloomFilter = null;
+    BloomFilter bloomFilter;
     HoodieTimer timer = new HoodieTimer().startTimer();
     try {
       if (this.useMetadataTableIndex) {
@@ -93,7 +93,7 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload, I, K, O> exten
             new HoodieDynamicBoundedBloomFilter(StandardCharsets.UTF_8.decode(bloomFilterByteBuffer.get()).toString(),
                 BloomFilterTypeCode.DYNAMIC_V0);
       } else {
-        try (HoodieFileReader reader = createNewFileReader()) {
+        try (HoodieFileReader<IndexedRecord> reader = createNewFileReader()) {
           bloomFilter = reader.readBloomFilter();
         }
       }

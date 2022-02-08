@@ -45,7 +45,7 @@ import java.util.Queue;
  * The implementation performs a merge-sort by comparing the key of the record being written to the list of
  * keys in newRecordKeys (sorted in-memory).
  */
-public class HoodieSortedMergeHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
+public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
 
   private Queue<String> newRecordKeysSorted = new PriorityQueue<>();
 
@@ -91,9 +91,9 @@ public class HoodieSortedMergeHandle<T extends HoodieRecordPayload, I, K, O> ext
       }
       try {
         if (useWriterSchema) {
-          writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(tableSchemaWithMetaFields, config.getProps()));
+          writeRecord(hoodieRecord, ((HoodieRecordPayload) hoodieRecord.getData()).getInsertValue(tableSchemaWithMetaFields, config.getProps()));
         } else {
-          writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(tableSchema, config.getProps()));
+          writeRecord(hoodieRecord, ((HoodieRecordPayload) hoodieRecord.getData()).getInsertValue(tableSchema, config.getProps()));
         }
         insertRecordsWritten++;
         writtenRecordKeys.add(keyToPreWrite);
@@ -113,9 +113,9 @@ public class HoodieSortedMergeHandle<T extends HoodieRecordPayload, I, K, O> ext
         HoodieRecord<T> hoodieRecord = keyToNewRecords.get(key);
         if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
           if (useWriterSchema) {
-            writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(tableSchemaWithMetaFields, config.getProps()));
+            writeRecord(hoodieRecord, ((HoodieRecordPayload) hoodieRecord.getData()).getInsertValue(tableSchemaWithMetaFields, config.getProps()));
           } else {
-            writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(tableSchema, config.getProps()));
+            writeRecord(hoodieRecord, ((HoodieRecordPayload) hoodieRecord.getData()).getInsertValue(tableSchema, config.getProps()));
           }
           insertRecordsWritten++;
         }

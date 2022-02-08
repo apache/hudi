@@ -19,7 +19,7 @@
 
 package org.apache.hudi.common.model;
 
-public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecord<T> {
+public class HoodieAvroRecord<T> extends HoodieRecord<T> {
   public HoodieAvroRecord(HoodieKey key, T data) {
     super(key, data);
   }

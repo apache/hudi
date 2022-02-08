@@ -41,7 +41,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Validator framework to run sql queries and compare table state at different locations.
  */
-public abstract class SqlQueryPreCommitValidator<T extends HoodieRecordPayload, I, K, O extends JavaRDD<WriteStatus>> extends SparkPreCommitValidator<T, I, K, O> {
+public abstract class SqlQueryPreCommitValidator<T, I, K, O extends JavaRDD<WriteStatus>> extends SparkPreCommitValidator<T, I, K, O> {
   private static final Logger LOG = LogManager.getLogger(SqlQueryPreCommitValidator.class);
   private static final AtomicInteger TABLE_COUNTER = new AtomicInteger(0);
 

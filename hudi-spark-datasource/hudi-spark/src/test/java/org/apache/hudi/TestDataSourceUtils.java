@@ -22,7 +22,6 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -254,7 +253,7 @@ public class TestDataSourceUtils {
     assertThat(config.getUserDefinedBulkInsertPartitionerClass(), is(equalTo(partitionerClassName)));
   }
 
-  public static class NoOpBulkInsertPartitioner<T extends HoodieRecordPayload>
+  public static class NoOpBulkInsertPartitioner<T>
       implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
     public NoOpBulkInsertPartitioner(HoodieWriteConfig config) {}

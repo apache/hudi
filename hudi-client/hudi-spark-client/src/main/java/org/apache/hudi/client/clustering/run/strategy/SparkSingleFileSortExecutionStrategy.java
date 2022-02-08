@@ -44,7 +44,7 @@ import java.util.Properties;
  * This strategy is similar to {@link SparkSortAndSizeExecutionStrategy} with the difference being that
  * there should be only one large file group per clustering group.
  */
-public class SparkSingleFileSortExecutionStrategy<T extends HoodieRecordPayload<T>>
+public class SparkSingleFileSortExecutionStrategy<T>
     extends MultipleSparkJobExecutionStrategy<T> {
 
   private static final Logger LOG = LogManager.getLogger(SparkSingleFileSortExecutionStrategy.class);

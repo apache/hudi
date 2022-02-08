@@ -20,35 +20,40 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
-import scala.Tuple2;
 
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class SparkInsertOverwriteCommitActionExecutor<T extends HoodieRecordPayload<T>>
+import scala.Tuple2;
+
+public class SparkInsertOverwriteCommitActionExecutor<T>
     extends BaseSparkCommitActionExecutor<T> {
 
   private final JavaRDD<HoodieRecord<T>> inputRecordsRDD;
 
   public SparkInsertOverwriteCommitActionExecutor(HoodieEngineContext context,
-                                                  HoodieWriteConfig config, HoodieTable table,
+                                                  HoodieWriteConfig config,
+                                                  HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                                   String instantTime, JavaRDD<HoodieRecord<T>> inputRecordsRDD) {
     this(context, config, table, instantTime, inputRecordsRDD, WriteOperationType.INSERT_OVERWRITE);
   }
 
   public SparkInsertOverwriteCommitActionExecutor(HoodieEngineContext context,
-                                                  HoodieWriteConfig config, HoodieTable table,
+                                                  HoodieWriteConfig config,
+                                                  HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                                   String instantTime, JavaRDD<HoodieRecord<T>> inputRecordsRDD,
                                                   WriteOperationType writeOperationType) {
     super(context, config, table, instantTime, writeOperationType);
@@ -57,7 +62,8 @@ public class SparkInsertOverwriteCommitActionExecutor<T extends HoodieRecordPayl
 
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> execute() {
-    return SparkWriteHelper.newInstance().write(instantTime, inputRecordsRDD, context, table,
+    return SparkWriteHelper.<T, HoodieWriteMetadata<JavaRDD<WriteStatus>>>newInstance()
+        .write(instantTime, inputRecordsRDD, context, table,
         config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, operationType);
   }
 
@@ -81,6 +87,6 @@ public class SparkInsertOverwriteCommitActionExecutor<T extends HoodieRecordPayl
 
   protected List<String> getAllExistingFileIds(String partitionPath) {
     // because new commit is not complete. it is safe to mark all existing file Ids as old files
-    return table.getSliceView().getLatestFileSlices(partitionPath).map(fg -> fg.getFileId()).distinct().collect(Collectors.toList());
+    return table.getSliceView().getLatestFileSlices(partitionPath).map(FileSlice::getFileId).distinct().collect(Collectors.toList());
   }
 }

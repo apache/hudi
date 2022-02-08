@@ -35,7 +35,7 @@ import java.util.Properties;
  * Every Hoodie table has an implementation of the <code>HoodieRecordPayload</code> This abstracts out callbacks which depend on record specific logic.
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
-public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Serializable {
+public interface HoodieRecordPayload<T> extends Serializable {
 
   /**
    * This method is deprecated. Please use this {@link #preCombine(HoodieRecordPayload, Properties)} method.
