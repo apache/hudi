@@ -16,27 +16,18 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hive;
+package org.apache.hudi.sync.common;
 
 import java.util.ArrayList;
 import java.util.List;
-import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+/**
+ * Extractor for Non-partitioned hive tables.
+ */
+public class NonPartitionedExtractor implements PartitionValueExtractor {
 
-public class TestMultiPartKeysValueExtractor {
-
-  @Test
-  public void testMultiPartExtractor() {
-    MultiPartKeysValueExtractor valueExtractor = new MultiPartKeysValueExtractor();
-    // Test extract empty partitionPath
-    assertEquals(new ArrayList<>(), valueExtractor.extractPartitionValuesInPath(""));
-    List<String> expected = new ArrayList<>();
-    expected.add("2021-04-25");
-    expected.add("04");
-    // Test extract multi-partition path
-    assertEquals(expected, valueExtractor.extractPartitionValuesInPath("2021-04-25/04"));
-    // Test extract hive style partition path
-    assertEquals(expected, valueExtractor.extractPartitionValuesInPath("ds=2021-04-25/hh=04"));
+  @Override
+  public List<String> extractPartitionValuesInPath(String partitionPath) {
+    return new ArrayList<>();
   }
 }

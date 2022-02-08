@@ -23,12 +23,13 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import org.apache.hudi.DataSourceUtils;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 import org.apache.hudi.integ.testsuite.helpers.HiveServiceProvider;
+import org.apache.hudi.sync.common.HoodieSyncConfig;
 
 /**
  * A hive query node in the DAG of operations for a workflow. used to perform a hive query with given config.
@@ -46,13 +47,14 @@ public class HiveQueryNode extends DagNode<Boolean> {
   public void execute(ExecutionContext executionContext, int curItrCount) throws Exception {
     log.info("Executing hive query node {}", this.getName());
     this.hiveServiceProvider.startLocalHiveServiceIfNeeded(executionContext.getHoodieTestSuiteWriter().getConfiguration());
-    HiveSyncConfig hiveSyncConfig = DataSourceUtils
-        .buildHiveSyncConfig(executionContext.getHoodieTestSuiteWriter().getDeltaStreamerWrapper()
-                .getDeltaSyncService().getDeltaSync().getProps(),
-            executionContext.getHoodieTestSuiteWriter().getDeltaStreamerWrapper()
-                .getDeltaSyncService().getDeltaSync().getCfg().targetBasePath,
-            executionContext.getHoodieTestSuiteWriter().getDeltaStreamerWrapper()
-                .getDeltaSyncService().getDeltaSync().getCfg().baseFileFormat);
+    TypedProperties properties = new TypedProperties();
+    properties.putAll(executionContext.getHoodieTestSuiteWriter().getDeltaStreamerWrapper()
+        .getDeltaSyncService().getDeltaSync().getProps());
+    properties.put(HoodieSyncConfig.META_SYNC_BASE_PATH, executionContext.getHoodieTestSuiteWriter().getDeltaStreamerWrapper()
+        .getDeltaSyncService().getDeltaSync().getCfg().targetBasePath);
+    properties.put(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT, executionContext.getHoodieTestSuiteWriter().getDeltaStreamerWrapper()
+        .getDeltaSyncService().getDeltaSync().getCfg().baseFileFormat);
+    HiveSyncConfig hiveSyncConfig = new HiveSyncConfig(properties);
     this.hiveServiceProvider.syncToLocalHiveIfNeeded(executionContext.getHoodieTestSuiteWriter());
     Connection con = DriverManager.getConnection(hiveSyncConfig.jdbcUrl, hiveSyncConfig.hiveUser,
         hiveSyncConfig.hivePass);

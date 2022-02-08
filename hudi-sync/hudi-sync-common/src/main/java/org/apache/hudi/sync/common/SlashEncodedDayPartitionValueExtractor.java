@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hive;
+package org.apache.hudi.sync.common;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;

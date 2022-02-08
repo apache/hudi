@@ -22,8 +22,9 @@ import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
-import org.apache.hudi.hive.MultiPartKeysValueExtractor
+import org.apache.hudi.hive.HiveSyncConfig
 import org.apache.hudi.hive.ddl.HiveSyncMode
+import org.apache.hudi.sync.common.{HoodieSyncConfig, MultiPartKeysValueExtractor}
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Expression}
@@ -105,14 +106,14 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends HoodieLeaf
         SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME -> tableConfig.getKeyGeneratorClassName,
         OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
         PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp,
-        META_SYNC_ENABLED.key -> enableHive.toString,
-        HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
-        HIVE_USE_JDBC.key -> "false",
-        HIVE_DATABASE.key -> tableId.database.getOrElse("default"),
-        HIVE_TABLE.key -> tableId.table,
-        HIVE_PARTITION_FIELDS.key -> tableConfig.getPartitionFieldProp,
-        HIVE_PARTITION_EXTRACTOR_CLASS.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
-        HIVE_SUPPORT_TIMESTAMP_TYPE.key -> "true",
+        HoodieSyncConfig.META_SYNC_ENABLED.key -> enableHive.toString,
+        HiveSyncConfig.HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
+        HiveSyncConfig.HIVE_USE_JDBC.key -> "false",
+        HoodieSyncConfig.META_SYNC_DATABASE_NAME.key -> tableId.database.getOrElse("default"),
+        HoodieSyncConfig.META_SYNC_TABLE_NAME.key -> tableId.table,
+        HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key -> tableConfig.getPartitionFieldProp,
+        HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
+        HiveSyncConfig.HIVE_SUPPORT_TIMESTAMP_TYPE.key -> "true",
         HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "200",
         SqlKeyGenerator.PARTITION_SCHEMA -> hoodieCatalogTable.partitionSchema.toDDL
       )

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -31,16 +30,15 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -161,12 +159,9 @@ public class BootstrapExecutor implements Serializable {
    */
   private void syncHive() {
     if (cfg.enableHiveSync || cfg.enableMetaSync) {
-      HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, cfg.targetBasePath, cfg.baseFileFormat);
-      HiveConf hiveConf = new HiveConf(fs.getConf(), HiveConf.class);
-      hiveConf.set(HiveConf.ConfVars.METASTOREURIS.varname,hiveSyncConfig.metastoreUris);
-      LOG.info("Hive Conf => " + hiveConf.getAllProperties().toString());
-      LOG.info("Hive Sync Conf => " + hiveSyncConfig);
-      new HiveSyncTool(hiveSyncConfig, new HiveConf(configuration, HiveConf.class), fs).syncHoodieTable();
+      props.put(HoodieSyncConfig.META_SYNC_BASE_PATH, cfg.targetBasePath);
+      props.put(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT, cfg.baseFileFormat);
+      new HiveSyncTool(props, configuration, fs).syncHoodieTable();
     }
   }
 
