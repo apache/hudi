@@ -18,6 +18,11 @@
 
 package org.apache.hudi.client.clustering.run.strategy;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteStatus;
@@ -39,6 +44,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
@@ -46,12 +52,6 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -121,7 +121,7 @@ public abstract class SingleSparkJobExecutionStrategy<T extends HoodieRecordPayl
         .map(op -> new HoodieFileGroupId(op.getPartitionPath(), op.getFileId()))
         .collect(Collectors.toList());
 
-    Iterator<HoodieRecord<T>> inputRecords = readRecordsForGroupBaseFiles(clusteringOps.getOperations());
+    Iterator<HoodieRecord> inputRecords = readRecordsForGroupBaseFiles(clusteringOps.getOperations());
     Iterator<List<WriteStatus>> writeStatuses = performClusteringWithRecordsIterator(inputRecords, clusteringOps.getNumOutputGroups(), instantTime,
         strategyParams, schema.get(), inputFileIds, preserveHoodieMetadata, taskContextSupplier);
 
@@ -136,7 +136,7 @@ public abstract class SingleSparkJobExecutionStrategy<T extends HoodieRecordPayl
    * The number of new file groups created is bounded by numOutputGroups.
    * Note that commit is not done as part of strategy. commit is callers responsibility.
    */
-  public abstract Iterator<List<WriteStatus>> performClusteringWithRecordsIterator(final Iterator<HoodieRecord<T>> records, final int numOutputGroups,
+  public abstract Iterator<List<WriteStatus>> performClusteringWithRecordsIterator(final Iterator<HoodieRecord> records, final int numOutputGroups,
                                                                                    final String instantTime,
                                                                                    final Map<String, String> strategyParams, final Schema schema,
                                                                                    final List<HoodieFileGroupId> fileGroupIdList, final boolean preserveHoodieMetadata,
@@ -145,21 +145,19 @@ public abstract class SingleSparkJobExecutionStrategy<T extends HoodieRecordPayl
   /**
    * Read records from baseFiles and get iterator.
    */
-  private Iterator<HoodieRecord<T>> readRecordsForGroupBaseFiles(List<ClusteringOperation> clusteringOps) {
-    List<Iterator<HoodieRecord<T>>> iteratorsForPartition = clusteringOps.stream().map(clusteringOp -> {
-
-      Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
-      Iterable<IndexedRecord> indexedRecords = () -> {
-        try {
-          return HoodieFileReaderFactory.getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath())).getRecordIterator(readerSchema);
-        } catch (IOException e) {
-          throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
-              + " and " + clusteringOp.getDeltaFilePaths(), e);
-        }
-      };
-
-      return StreamSupport.stream(indexedRecords.spliterator(), false).map(record -> transform(record)).iterator();
-    }).collect(Collectors.toList());
+  private Iterator<HoodieRecord> readRecordsForGroupBaseFiles(List<ClusteringOperation> clusteringOps) {
+    List<Iterator<HoodieRecord>> iteratorsForPartition = clusteringOps.stream()
+        .map(clusteringOp -> {
+          Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
+          try {
+            HoodieFileReader reader = HoodieFileReaderFactory.getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath()));
+            return reader.getRecordIterator(readerSchema, this::transform);
+          } catch (IOException e) {
+            throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
+                + " and " + clusteringOp.getDeltaFilePaths(), e);
+          }
+        })
+        .collect(Collectors.toList());
 
     return new ConcatenatingIterator<>(iteratorsForPartition);
   }
