@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
+import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -63,10 +64,10 @@ public class IncrSourceHelper {
    * @param numInstantsPerFetch             Max Instants per fetch
    * @param beginInstant                    Last Checkpoint String
    * @param missingCheckpointStrategy when begin instant is missing, allow reading based on missing checkpoint strategy
-   * @return begin and end instants
+   * @return begin and end instants along with query type.
    */
-  public static Pair<String, String> calculateBeginAndEndInstants(JavaSparkContext jssc, String srcBasePath,
-                                                                  int numInstantsPerFetch, Option<String> beginInstant, MissingCheckpointStrategy missingCheckpointStrategy) {
+  public static Pair<String, Pair<String, String>> calculateBeginAndEndInstants(JavaSparkContext jssc, String srcBasePath,
+                                                                                 int numInstantsPerFetch, Option<String> beginInstant, MissingCheckpointStrategy missingCheckpointStrategy) {
     ValidationUtils.checkArgument(numInstantsPerFetch > 0,
         "Make sure the config hoodie.deltastreamer.source.hoodieincr.num_instants is set to a positive value");
     HoodieTableMetaClient srcMetaClient = HoodieTableMetaClient.builder().setConf(jssc.hadoopConfiguration()).setBasePath(srcBasePath).setLoadActiveTimelineOnLoad(true).build();
@@ -88,15 +89,14 @@ public class IncrSourceHelper {
       }
     });
 
-    if (!beginInstantTime.equals(DEFAULT_BEGIN_TIMESTAMP)) {
+    if (missingCheckpointStrategy == MissingCheckpointStrategy.READ_LATEST || !activeCommitTimeline.isBeforeTimelineStarts(beginInstantTime)) {
       Option<HoodieInstant> nthInstant = Option.fromJavaOptional(activeCommitTimeline
           .findInstantsAfter(beginInstantTime, numInstantsPerFetch).getInstants().reduce((x, y) -> y));
-      return Pair.of(beginInstantTime, nthInstant.map(HoodieInstant::getTimestamp).orElse(beginInstantTime));
+      return Pair.of(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL(), Pair.of(beginInstantTime, nthInstant.map(HoodieInstant::getTimestamp).orElse(beginInstantTime)));
     } else {
-      // if beginInstant is DEFAULT_BEGIN_TIMESTAMP,  MissingCheckpointStrategy should be set.
-      // when MissingCheckpointStrategy is set to read everything until latest.
+      // when MissingCheckpointStrategy is set to read everything until latest, trigger snapshot query.
       Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
-      return Pair.of(beginInstantTime, lastInstant.get().getTimestamp());
+      return Pair.of(DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL(), Pair.of(beginInstantTime, lastInstant.get().getTimestamp()));
     }
   }
 
