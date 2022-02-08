@@ -248,7 +248,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
       clusteringOpsPartition.forEachRemaining(clusteringOp -> {
         try {
           Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
-          HoodieAvroFileReader<IndexedRecord> baseFileReader = HoodieFileReaderFactory.getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath()));
+          HoodieAvroFileReader baseFileReader = HoodieFileReaderFactory.getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath()));
           iteratorsForPartition.add(baseFileReader.getRecordIterator(readerSchema));
         } catch (IOException e) {
           throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()

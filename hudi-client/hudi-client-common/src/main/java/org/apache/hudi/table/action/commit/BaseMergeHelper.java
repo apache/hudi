@@ -22,6 +22,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DecoderFactory;
@@ -88,12 +89,12 @@ public abstract class BaseMergeHelper<T extends HoodieRecordPayload, I, K, O> {
    * for indexing, writing and other functionality.
    *
    */
-  protected Iterator<GenericRecord> getMergingIterator(HoodieTable<T, I, K, O> table, HoodieMergeHandle<T, I, K, O> mergeHandle,
-                                                                                               HoodieBaseFile baseFile, HoodieAvroFileReader<GenericRecord> reader,
+  protected Iterator<IndexedRecord> getMergingIterator(HoodieTable<T, I, K, O> table, HoodieMergeHandle<T, I, K, O> mergeHandle,
+                                                                                               HoodieBaseFile baseFile, HoodieAvroFileReader reader,
                                                                                                Schema readSchema, boolean externalSchemaTransformation) throws IOException {
     Path externalFilePath = new Path(baseFile.getBootstrapBaseFile().get().getPath());
     Configuration bootstrapFileConfig = new Configuration(table.getHadoopConf());
-    HoodieAvroFileReader<GenericRecord> bootstrapReader = HoodieFileReaderFactory.<GenericRecord>getFileReader(bootstrapFileConfig, externalFilePath);
+    HoodieAvroFileReader bootstrapReader = HoodieFileReaderFactory.<GenericRecord>getFileReader(bootstrapFileConfig, externalFilePath);
     Schema bootstrapReadSchema;
     if (externalSchemaTransformation) {
       bootstrapReadSchema = bootstrapReader.getSchema();
@@ -102,7 +103,7 @@ public abstract class BaseMergeHelper<T extends HoodieRecordPayload, I, K, O> {
     }
 
     return new MergingIterator<>(reader.getRecordIterator(readSchema), bootstrapReader.getRecordIterator(bootstrapReadSchema),
-        (inputRecordPair) -> HoodieAvroUtils.stitchRecords(inputRecordPair.getLeft(), inputRecordPair.getRight(), mergeHandle.getWriterSchemaWithMetaFields()));
+        (inputRecordPair) -> HoodieAvroUtils.stitchRecords((GenericRecord) inputRecordPair.getLeft(), (GenericRecord) inputRecordPair.getRight(), mergeHandle.getWriterSchemaWithMetaFields()));
   }
 
   /**

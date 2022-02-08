@@ -18,14 +18,14 @@
 
 package org.apache.hudi.client.utils;
 
-import java.util.Iterator;
-import java.util.function.Function;
-import org.apache.avro.generic.GenericRecord;
-
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
-public class MergingIterator<T extends GenericRecord> implements Iterator<T> {
+import java.util.Iterator;
+import java.util.function.Function;
+
+public class MergingIterator<T extends IndexedRecord> implements Iterator<T> {
 
   private final Iterator<T> leftIterator;
   private final Iterator<T> rightIterator;

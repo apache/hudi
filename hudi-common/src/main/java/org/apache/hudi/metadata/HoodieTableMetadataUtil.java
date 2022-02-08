@@ -18,7 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
@@ -221,7 +220,7 @@ public class HoodieTableMetadataUtil {
 
         final Path writeFilePath = new Path(dataMetaClient.getBasePath(), pathWithPartition);
         try {
-          HoodieAvroFileReader<IndexedRecord> fileReader =
+          HoodieAvroFileReader fileReader =
               HoodieFileReaderFactory.getFileReader(dataMetaClient.getHadoopConf(), writeFilePath);
           try {
             final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
@@ -635,7 +634,7 @@ public class HoodieTableMetadataUtil {
         final String pathWithPartition = partitionName + "/" + appendedFile;
         final Path appendedFilePath = new Path(dataMetaClient.getBasePath(), pathWithPartition);
         try {
-          HoodieAvroFileReader<IndexedRecord> fileReader =
+          HoodieAvroFileReader fileReader =
               HoodieFileReaderFactory.getFileReader(dataMetaClient.getHadoopConf(), appendedFilePath);
           final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
           if (fileBloomFilter == null) {
