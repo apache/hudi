@@ -78,24 +78,6 @@ public class HoodieCopyOnWriteTableInputFormat extends FileInputFormat<NullWrita
 
   protected Configuration conf;
 
-  @Nonnull
-  private static RealtimeFileStatus createRealtimeFileStatusUnchecked(HoodieBaseFile baseFile, Stream<HoodieLogFile> logFiles) {
-    List<HoodieLogFile> sortedLogFiles = logFiles.sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
-    FileStatus baseFileStatus = getFileStatusUnchecked(baseFile);
-    try {
-      RealtimeFileStatus rtFileStatus = new RealtimeFileStatus(baseFileStatus);
-      rtFileStatus.setDeltaLogFiles(sortedLogFiles);
-      rtFileStatus.setBaseFilePath(baseFile.getPath());
-      if (baseFileStatus instanceof LocatedFileStatusWithBootstrapBaseFile || baseFileStatus instanceof FileStatusWithBootstrapBaseFile) {
-        rtFileStatus.setBootStrapFileStatus(baseFileStatus);
-      }
-
-      return rtFileStatus;
-    } catch (IOException e) {
-      throw new HoodieIOException(String.format("Failed to init %s", RealtimeFileStatus.class.getSimpleName()), e);
-    }
-  }
-
   @Override
   public final Configuration getConf() {
     return conf;
@@ -376,13 +358,5 @@ public class HoodieCopyOnWriteTableInputFormat extends FileInputFormat<NullWrita
     } catch (IOException e) {
       throw new HoodieIOException(String.format("Failed to init %s", RealtimeFileStatus.class.getSimpleName()), e);
     }
-  }
-
-  private static Option<HoodieInstant> fromScala(scala.Option<HoodieInstant> opt) {
-    if (opt.isDefined()) {
-      return Option.of(opt.get());
-    }
-
-    return Option.empty();
   }
 }
