@@ -38,8 +38,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.HoodieAvroHFileReader;
 import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
-import org.apache.hudi.io.storage.HoodieHFileReader;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -74,14 +74,14 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
                               Map<HeaderMetadataType, String> header,
                               Map<HeaderMetadataType, String> footer,
                               boolean enablePointLookups) {
-    super(content, inputStream, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, HoodieHFileReader.KEY_FIELD_NAME, enablePointLookups);
+    super(content, inputStream, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, HoodieAvroHFileReader.KEY_FIELD_NAME, enablePointLookups);
     this.compressionAlgorithm = Option.empty();
   }
 
   public HoodieHFileDataBlock(List<IndexedRecord> records,
                               Map<HeaderMetadataType, String> header,
                               Compression.Algorithm compressionAlgorithm) {
-    super(records, header, new HashMap<>(), HoodieHFileReader.KEY_FIELD_NAME);
+    super(records, header, new HashMap<>(), HoodieAvroHFileReader.KEY_FIELD_NAME);
     this.compressionAlgorithm = Option.of(compressionAlgorithm);
   }
 
@@ -155,7 +155,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
     // Read the content
-    HoodieHFileReader<IndexedRecord> reader = new HoodieHFileReader<>(content);
+    HoodieAvroHFileReader reader = new HoodieAvroHFileReader(content);
     List<Pair<String, IndexedRecord>> records = reader.readAllRecords(writerSchema, readerSchema);
 
     return records.stream().map(Pair::getSecond).collect(Collectors.toList());
@@ -180,8 +180,8 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     // HFile read will be efficient if keys are sorted, since on storage, records are sorted by key. This will avoid unnecessary seeks.
     Collections.sort(keys);
 
-    try (HoodieHFileReader<IndexedRecord> reader =
-             new HoodieHFileReader<>(inlineConf, inlinePath, new CacheConfig(inlineConf), inlinePath.getFileSystem(inlineConf))) {
+    try (HoodieAvroHFileReader reader =
+             new HoodieAvroHFileReader(inlineConf, inlinePath, new CacheConfig(inlineConf), inlinePath.getFileSystem(inlineConf))) {
       // Get writer's schema from the header
       List<Pair<String, IndexedRecord>> logRecords = reader.readRecords(keys, readerSchema);
       return logRecords.stream().map(Pair::getSecond).collect(Collectors.toList());

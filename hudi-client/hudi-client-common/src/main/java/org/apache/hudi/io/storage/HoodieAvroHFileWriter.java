@@ -105,7 +105,7 @@ public class HoodieAvroHFileWriter
         .withComparator(hfileConfig.getHfileComparator())
         .create();
 
-    writer.appendFileInfo(HoodieHFileReader.KEY_SCHEMA.getBytes(), schema.toString().getBytes());
+    writer.appendFileInfo(HoodieAvroHFileReader.KEY_SCHEMA.getBytes(), schema.toString().getBytes());
   }
 
   @Override
@@ -166,11 +166,11 @@ public class HoodieAvroHFileWriter
       if (maxRecordKey == null) {
         maxRecordKey = "";
       }
-      writer.appendFileInfo(HoodieHFileReader.KEY_MIN_RECORD.getBytes(), minRecordKey.getBytes());
-      writer.appendFileInfo(HoodieHFileReader.KEY_MAX_RECORD.getBytes(), maxRecordKey.getBytes());
-      writer.appendFileInfo(HoodieHFileReader.KEY_BLOOM_FILTER_TYPE_CODE.getBytes(),
+      writer.appendFileInfo(HoodieAvroHFileReader.KEY_MIN_RECORD.getBytes(), minRecordKey.getBytes());
+      writer.appendFileInfo(HoodieAvroHFileReader.KEY_MAX_RECORD.getBytes(), maxRecordKey.getBytes());
+      writer.appendFileInfo(HoodieAvroHFileReader.KEY_BLOOM_FILTER_TYPE_CODE.getBytes(),
           bloomFilter.getBloomFilterTypeCode().toString().getBytes());
-      writer.appendMetaBlock(HoodieHFileReader.KEY_BLOOM_FILTER_META_BLOCK, new Writable() {
+      writer.appendMetaBlock(HoodieAvroHFileReader.KEY_BLOOM_FILTER_META_BLOCK, new Writable() {
         @Override
         public void write(DataOutput out) throws IOException {
           out.write(bloomFilter.serializeToString().getBytes());

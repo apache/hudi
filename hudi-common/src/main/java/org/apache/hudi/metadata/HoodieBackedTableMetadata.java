@@ -20,6 +20,7 @@ package org.apache.hudi.metadata;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
@@ -50,7 +51,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
-import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -82,7 +83,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private final boolean reuse;
 
   // Readers for the latest file slice corresponding to file groups in the metadata partition
-  private Map<Pair<String, String>, Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader>> partitionReaders =
+  private Map<Pair<String, String>, Pair<HoodieAvroFileReader, HoodieMetadataMergedLogRecordReader>> partitionReaders =
       new ConcurrentHashMap<>();
 
   public HoodieBackedTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
@@ -136,11 +137,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> result = new ArrayList<>();
     AtomicInteger fileSlicesKeysCount = new AtomicInteger();
     partitionFileSliceToKeysMap.forEach((partitionFileSlicePair, fileSliceKeys) -> {
-      Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> readers = openReadersIfNeeded(partitionName,
+      Pair<HoodieAvroFileReader, HoodieMetadataMergedLogRecordReader> readers = openReadersIfNeeded(partitionName,
           partitionFileSlicePair.getRight());
       try {
         List<Long> timings = new ArrayList<>();
-        HoodieFileReader baseFileReader = readers.getKey();
+        HoodieAvroFileReader baseFileReader = readers.getKey();
         HoodieMetadataMergedLogRecordReader logRecordScanner = readers.getRight();
 
         if (baseFileReader == null && logRecordScanner == null) {
@@ -196,7 +197,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return logRecords;
   }
 
-  private List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> readFromBaseAndMergeWithLogRecords(HoodieFileReader baseFileReader,
+  private List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> readFromBaseAndMergeWithLogRecords(HoodieAvroFileReader baseFileReader,
                                                                                                              List<String> keys, Map<String,
       Option<HoodieRecord<HoodieMetadataPayload>>> logRecords, List<Long> timings, String partitionName) throws IOException {
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> result = new ArrayList<>();
@@ -207,11 +208,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Retrieve record from base file
     if (baseFileReader != null) {
       HoodieTimer readTimer = new HoodieTimer();
-      Map<String, GenericRecord> baseFileRecords = baseFileReader.getRecordsByKeys(keys);
+      Map<String, IndexedRecord> baseFileRecords = baseFileReader.getRecordsByKeys(keys);
       for (String key : keys) {
         readTimer.startTimer();
         if (baseFileRecords.containsKey(key)) {
-          hoodieRecord = getRecord(Option.of(baseFileRecords.get(key)), partitionName);
+          hoodieRecord = getRecord(Option.of((GenericRecord) baseFileRecords.get(key)), partitionName);
           metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BASEFILE_READ_STR, readTimer.endTimer()));
           // merge base file record w/ log record if present
           if (logRecords.containsKey(key) && logRecords.get(key).isPresent()) {
@@ -279,14 +280,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * @param slice         - The file slice to open readers for
    * @return File reader and the record scanner pair for the requested file slice
    */
-  private Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> openReadersIfNeeded(String partitionName, FileSlice slice) {
+  private Pair<HoodieAvroFileReader, HoodieMetadataMergedLogRecordReader> openReadersIfNeeded(String partitionName, FileSlice slice) {
     return partitionReaders.computeIfAbsent(Pair.of(partitionName, slice.getFileId()), k -> {
       try {
         HoodieTimer timer = new HoodieTimer().startTimer();
 
         // Open base file reader
-        Pair<HoodieFileReader, Long> baseFileReaderOpenTimePair = getBaseFileReader(slice, timer);
-        HoodieFileReader baseFileReader = baseFileReaderOpenTimePair.getKey();
+        Pair<HoodieAvroFileReader, Long> baseFileReaderOpenTimePair = getBaseFileReader(slice, timer);
+        HoodieAvroFileReader baseFileReader = baseFileReaderOpenTimePair.getKey();
         final long baseFileOpenMs = baseFileReaderOpenTimePair.getValue();
 
         // Open the log record scanner using the log files from the latest file slice
@@ -303,8 +304,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     });
   }
 
-  private Pair<HoodieFileReader, Long> getBaseFileReader(FileSlice slice, HoodieTimer timer) throws IOException {
-    HoodieFileReader baseFileReader = null;
+  private Pair<HoodieAvroFileReader, Long> getBaseFileReader(FileSlice slice, HoodieTimer timer) throws IOException {
+    HoodieAvroFileReader baseFileReader = null;
     Long baseFileOpenMs;
     // If the base file is present then create a reader
     Option<HoodieBaseFile> basefile = slice.getBaseFile();
@@ -425,7 +426,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * @param partitionFileSlicePair - Partition and FileSlice
    */
   private synchronized void close(Pair<String, String> partitionFileSlicePair) {
-    Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> readers =
+    Pair<HoodieAvroFileReader, HoodieMetadataMergedLogRecordReader> readers =
         partitionReaders.remove(partitionFileSlicePair);
     if (readers != null) {
       try {

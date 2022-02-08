@@ -18,9 +18,6 @@
 
 package org.apache.hudi.io.storage;
 
-import java.io.IOException;
-import java.util.Iterator;
-import java.util.Set;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -37,12 +34,16 @@ import org.apache.orc.Reader.Options;
 import org.apache.orc.RecordReader;
 import org.apache.orc.TypeDescription;
 
-public class HoodieOrcReader<R extends IndexedRecord> implements HoodieFileReader {
+import java.io.IOException;
+import java.util.Iterator;
+import java.util.Set;
+
+public class HoodieAvroOrcReader implements HoodieAvroFileReader {
   private Path path;
   private Configuration conf;
   private final BaseFileUtils orcUtils;
 
-  public HoodieOrcReader(Configuration configuration, Path path) {
+  public HoodieAvroOrcReader(Configuration configuration, Path path) {
     this.conf = configuration;
     this.path = path;
     this.orcUtils = BaseFileUtils.getInstance(HoodieFileFormat.ORC);
@@ -64,7 +65,7 @@ public class HoodieOrcReader<R extends IndexedRecord> implements HoodieFileReade
   }
 
   @Override
-  public Iterator<R> getRecordIterator(Schema schema) throws IOException {
+  public Iterator<IndexedRecord> getRecordIterator(Schema schema) throws IOException {
     try {
       Reader reader = OrcFile.createReader(path, OrcFile.readerOptions(conf));
       TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(schema);

@@ -18,19 +18,6 @@
 
 package org.apache.hudi.io.storage;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.stream.Collectors;
-
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -58,8 +45,21 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileReader<R> {
-  private static final Logger LOG = LogManager.getLogger(HoodieHFileReader.class);
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
+
+public class HoodieAvroHFileReader implements HoodieAvroFileReader {
+  private static final Logger LOG = LogManager.getLogger(HoodieAvroHFileReader.class);
   private Path path;
   private Configuration conf;
   private HFile.Reader reader;
@@ -76,20 +76,20 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   public static final String KEY_MIN_RECORD = "minRecordKey";
   public static final String KEY_MAX_RECORD = "maxRecordKey";
 
-  public HoodieHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig) throws IOException {
+  public HoodieAvroHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig) throws IOException {
     this.conf = configuration;
     this.path = path;
     this.reader = HFile.createReader(FSUtils.getFs(path.toString(), configuration), path, cacheConfig, conf);
   }
 
-  public HoodieHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig, FileSystem fs) throws IOException {
+  public HoodieAvroHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig, FileSystem fs) throws IOException {
     this.conf = configuration;
     this.path = path;
     this.fsDataInputStream = fs.open(path);
     this.reader = HFile.createReader(fs, path, cacheConfig, configuration);
   }
 
-  public HoodieHFileReader(byte[] content) throws IOException {
+  public HoodieAvroHFileReader(byte[] content) throws IOException {
     Configuration conf = new Configuration();
     Path path = new Path("hoodie");
     SeekableByteArrayInputStream bis = new SeekableByteArrayInputStream(content);
@@ -159,7 +159,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   }
 
   @Override
-  public Map<String, R> getRecordsByKeys(List<String> rowKeys) throws IOException {
+  public Map<String, IndexedRecord> getRecordsByKeys(List<String> rowKeys) throws IOException {
     return filterRecordsImpl(new TreeSet<>(rowKeys));
   }
 
@@ -173,10 +173,10 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
    * @return Map of keys to fetched records
    * @throws IOException When the deserialization of records fail
    */
-  private synchronized Map<String, R> filterRecordsImpl(TreeSet<String> sortedCandidateRowKeys) throws IOException {
-    HashMap<String, R> filteredRecords = new HashMap<>();
+  private synchronized Map<String, IndexedRecord> filterRecordsImpl(TreeSet<String> sortedCandidateRowKeys) throws IOException {
+    HashMap<String, IndexedRecord> filteredRecords = new HashMap<>();
     for (String key : sortedCandidateRowKeys) {
-      Option<R> record = getRecordByKey(key);
+      Option<IndexedRecord> record = getRecordByKey(key);
       if (record.isPresent()) {
         filteredRecords.put(key, record.get());
       }
@@ -184,15 +184,15 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     return filteredRecords;
   }
 
-  public List<Pair<String, R>> readAllRecords(Schema writerSchema, Schema readerSchema) throws IOException {
+  public List<Pair<String, IndexedRecord>> readAllRecords(Schema writerSchema, Schema readerSchema) throws IOException {
     final Option<Schema.Field> keyFieldSchema = Option.ofNullable(readerSchema.getField(KEY_FIELD_NAME));
-    List<Pair<String, R>> recordList = new LinkedList<>();
+    List<Pair<String, IndexedRecord>> recordList = new LinkedList<>();
     try {
       final HFileScanner scanner = reader.getScanner(false, false);
       if (scanner.seekTo()) {
         do {
           Cell c = scanner.getKeyValue();
-          final Pair<String, R> keyAndRecordPair = getRecordFromCell(c, writerSchema, readerSchema, keyFieldSchema);
+          final Pair<String, IndexedRecord> keyAndRecordPair = getRecordFromCell(c, writerSchema, readerSchema, keyFieldSchema);
           recordList.add(keyAndRecordPair);
         } while (scanner.next());
       }
@@ -203,23 +203,23 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     }
   }
 
-  public List<Pair<String, R>> readAllRecords() throws IOException {
+  public List<Pair<String, IndexedRecord>> readAllRecords() throws IOException {
     Schema schema = new Schema.Parser().parse(new String(reader.loadFileInfo().get(KEY_SCHEMA.getBytes())));
     return readAllRecords(schema, schema);
   }
 
-  public List<Pair<String, R>> readRecords(List<String> keys) throws IOException {
+  public List<Pair<String, IndexedRecord>> readRecords(List<String> keys) throws IOException {
     reader.loadFileInfo();
     Schema schema = new Schema.Parser().parse(new String(reader.loadFileInfo().get(KEY_SCHEMA.getBytes())));
     return readRecords(keys, schema);
   }
 
-  public List<Pair<String, R>> readRecords(List<String> keys, Schema schema) throws IOException {
+  public List<Pair<String, IndexedRecord>> readRecords(List<String> keys, Schema schema) throws IOException {
     this.schema = schema;
     reader.loadFileInfo();
-    List<Pair<String, R>> records = new ArrayList<>();
+    List<Pair<String, IndexedRecord>> records = new ArrayList<>();
     for (String key: keys) {
-      Option<R> value = getRecordByKey(key, schema);
+      Option<IndexedRecord> value = getRecordByKey(key, schema);
       if (value.isPresent()) {
         records.add(new Pair(key, value.get()));
       }
@@ -233,8 +233,8 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     final Option<Schema.Field> keyFieldSchema = Option.ofNullable(readerSchema.getField(KEY_FIELD_NAME));
     ValidationUtils.checkState(keyFieldSchema != null,
         "Missing key field '" + KEY_FIELD_NAME + "' in the schema!");
-    return new Iterator<R>() {
-      private R next = null;
+    return new Iterator<IndexedRecord>() {
+      private IndexedRecord next = null;
       private boolean eof = false;
 
       @Override
@@ -243,7 +243,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
           // To handle when hasNext() is called multiple times for idempotency and/or the first time
           if (this.next == null && !this.eof) {
             if (!scanner.isSeeked() && scanner.seekTo()) {
-              final Pair<String, R> keyAndRecordPair = getRecordFromCell(scanner.getKeyValue(), getSchema(), readerSchema, keyFieldSchema);
+              final Pair<String, IndexedRecord> keyAndRecordPair = getRecordFromCell(scanner.getKeyValue(), getSchema(), readerSchema, keyFieldSchema);
               this.next = keyAndRecordPair.getSecond();
             }
           }
@@ -254,7 +254,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
       }
 
       @Override
-      public R next() {
+      public IndexedRecord next() {
         try {
           // To handle case when next() is called before hasNext()
           if (this.next == null) {
@@ -262,9 +262,9 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
               throw new HoodieIOException("No more records left to read from hfile");
             }
           }
-          R retVal = this.next;
+          IndexedRecord retVal = this.next;
           if (scanner.next()) {
-            final Pair<String, R> keyAndRecordPair = getRecordFromCell(scanner.getKeyValue(), getSchema(), readerSchema, keyFieldSchema);
+            final Pair<String, IndexedRecord> keyAndRecordPair = getRecordFromCell(scanner.getKeyValue(), getSchema(), readerSchema, keyFieldSchema);
             this.next = keyAndRecordPair.getSecond();
           } else {
             this.next = null;
@@ -311,17 +311,17 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     }
 
     if (value != null) {
-      R record = deserialize(key.getBytes(), value, getSchema(), readerSchema, keyFieldSchema);
+      IndexedRecord record = deserialize(key.getBytes(), value, getSchema(), readerSchema, keyFieldSchema);
       return Option.of(record);
     }
 
     return Option.empty();
   }
 
-  private Pair<String, R> getRecordFromCell(Cell cell, Schema writerSchema, Schema readerSchema, Option<Schema.Field> keyFieldSchema) throws IOException {
+  private Pair<String, IndexedRecord> getRecordFromCell(Cell cell, Schema writerSchema, Schema readerSchema, Option<Schema.Field> keyFieldSchema) throws IOException {
     final byte[] keyBytes = Arrays.copyOfRange(cell.getRowArray(), cell.getRowOffset(), cell.getRowOffset() + cell.getRowLength());
     final byte[] valueBytes = Arrays.copyOfRange(cell.getValueArray(), cell.getValueOffset(), cell.getValueOffset() + cell.getValueLength());
-    R record = deserialize(keyBytes, valueBytes, writerSchema, readerSchema, keyFieldSchema);
+    IndexedRecord record = deserialize(keyBytes, valueBytes, writerSchema, readerSchema, keyFieldSchema);
     return new Pair<>(new String(keyBytes), record);
   }
 
@@ -335,9 +335,9 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
    * @param keyFieldSchema - Key field id in the schema
    * @return Deserialized record object
    */
-  private R deserialize(final byte[] keyBytes, final byte[] valueBytes, Schema writerSchema, Schema readerSchema,
+  private IndexedRecord deserialize(final byte[] keyBytes, final byte[] valueBytes, Schema writerSchema, Schema readerSchema,
                         Option<Schema.Field> keyFieldSchema) throws IOException {
-    R record = (R) HoodieAvroUtils.bytesToAvro(valueBytes, writerSchema, readerSchema);
+    IndexedRecord record = (IndexedRecord) HoodieAvroUtils.bytesToAvro(valueBytes, writerSchema, readerSchema);
     materializeRecordIfNeeded(keyBytes, record, keyFieldSchema);
     return record;
   }
@@ -349,7 +349,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
    * @param record         - Record object to materialize
    * @param keyFieldSchema - Key field id in the schema
    */
-  private void materializeRecordIfNeeded(final byte[] keyBytes, R record, Option<Schema.Field> keyFieldSchema) {
+  private void materializeRecordIfNeeded(final byte[] keyBytes, IndexedRecord record, Option<Schema.Field> keyFieldSchema) {
     if (keyFieldSchema.isPresent()) {
       final Object keyObject = record.get(keyFieldSchema.get().pos());
       if (keyObject != null && keyObject.toString().isEmpty()) {

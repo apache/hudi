@@ -18,40 +18,40 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.util.Option;
+
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.util.Option;
+public interface HoodieAvroFileReader extends AutoCloseable {
 
-public interface HoodieFileReader<R extends IndexedRecord> extends AutoCloseable {
+  String[] readMinMaxRecordKeys();
 
-  public String[] readMinMaxRecordKeys();
+  BloomFilter readBloomFilter();
 
-  public BloomFilter readBloomFilter();
+  Set<String> filterRowKeys(Set<String> candidateRowKeys);
 
-  public Set<String> filterRowKeys(Set<String> candidateRowKeys);
-
-  default Map<String, R> getRecordsByKeys(List<String> rowKeys) throws IOException {
+  default Map<String, IndexedRecord> getRecordsByKeys(List<String> rowKeys) throws IOException {
     throw new UnsupportedOperationException();
   }
 
-  public Iterator<R> getRecordIterator(Schema readerSchema) throws IOException;
+  Iterator<IndexedRecord> getRecordIterator(Schema readerSchema) throws IOException;
 
-  default Iterator<R> getRecordIterator() throws IOException {
+  default Iterator<IndexedRecord> getRecordIterator() throws IOException {
     return getRecordIterator(getSchema());
   }
 
-  default Option<R> getRecordByKey(String key, Schema readerSchema) throws IOException {
+  default Option<IndexedRecord> getRecordByKey(String key, Schema readerSchema) throws IOException {
     throw new UnsupportedOperationException();
   }
 
-  default Option<R> getRecordByKey(String key) throws IOException {
+  default Option<IndexedRecord> getRecordByKey(String key) throws IOException {
     return getRecordByKey(key, getSchema());
   }
 

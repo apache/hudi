@@ -49,7 +49,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
-import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -221,7 +221,7 @@ public class HoodieTableMetadataUtil {
 
         final Path writeFilePath = new Path(dataMetaClient.getBasePath(), pathWithPartition);
         try {
-          HoodieFileReader<IndexedRecord> fileReader =
+          HoodieAvroFileReader<IndexedRecord> fileReader =
               HoodieFileReaderFactory.getFileReader(dataMetaClient.getHadoopConf(), writeFilePath);
           try {
             final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
@@ -635,7 +635,7 @@ public class HoodieTableMetadataUtil {
         final String pathWithPartition = partitionName + "/" + appendedFile;
         final Path appendedFilePath = new Path(dataMetaClient.getBasePath(), pathWithPartition);
         try {
-          HoodieFileReader<IndexedRecord> fileReader =
+          HoodieAvroFileReader<IndexedRecord> fileReader =
               HoodieFileReaderFactory.getFileReader(dataMetaClient.getHadoopConf(), appendedFilePath);
           final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
           if (fileBloomFilter == null) {

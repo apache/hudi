@@ -98,7 +98,7 @@ public class TestHoodieOrcReaderWriter {
     assertTrue(orcReader.getMetadataKeys().contains(AVRO_SCHEMA_METADATA_KEY));
     assertEquals(CompressionKind.ZLIB.name(), orcReader.getCompressionKind().toString());
 
-    HoodieFileReader<GenericRecord> hoodieReader = HoodieFileReaderFactory.getFileReader(conf, filePath);
+    HoodieAvroFileReader<GenericRecord> hoodieReader = HoodieFileReaderFactory.getFileReader(conf, filePath);
     BloomFilter filter = hoodieReader.readBloomFilter();
     for (int i = 0; i < 3; i++) {
       assertTrue(filter.mightContain("key" + i));
@@ -129,7 +129,7 @@ public class TestHoodieOrcReaderWriter {
     assertEquals("struct<_row_key:string,time:string,number:int>", orcReader.getSchema().toString());
     assertEquals(3, orcReader.getNumberOfRows());
 
-    HoodieFileReader<GenericRecord> hoodieReader = HoodieFileReaderFactory.getFileReader(conf, filePath);
+    HoodieAvroFileReader<GenericRecord> hoodieReader = HoodieFileReaderFactory.getFileReader(conf, filePath);
     Iterator<GenericRecord> iter = hoodieReader.getRecordIterator();
     int index = 0;
     while (iter.hasNext()) {
@@ -166,7 +166,7 @@ public class TestHoodieOrcReaderWriter {
         reader.getSchema().toString());
     assertEquals(3, reader.getNumberOfRows());
 
-    HoodieFileReader<GenericRecord> hoodieReader = HoodieFileReaderFactory.getFileReader(conf, filePath);
+    HoodieAvroFileReader<GenericRecord> hoodieReader = HoodieFileReaderFactory.getFileReader(conf, filePath);
     Iterator<GenericRecord> iter = hoodieReader.getRecordIterator();
     int index = 0;
     while (iter.hasNext()) {
@@ -197,7 +197,7 @@ public class TestHoodieOrcReaderWriter {
     writer.close();
 
     Configuration conf = new Configuration();
-    HoodieFileReader<GenericRecord> hoodieReader = HoodieFileReaderFactory.getFileReader(conf, filePath);
+    HoodieAvroFileReader<GenericRecord> hoodieReader = HoodieFileReaderFactory.getFileReader(conf, filePath);
     Schema evolvedSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleEvolvedSchema.avsc");
     Iterator<GenericRecord> iter = hoodieReader.getRecordIterator(evolvedSchema);
     int index = 0;

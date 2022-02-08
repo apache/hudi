@@ -103,7 +103,7 @@ public class TestHoodieHFileReaderWriter {
     String instantTime = "000";
 
     HoodieHFileConfig hoodieHFileConfig = new HoodieHFileConfig(conf, Compression.Algorithm.GZ, 1024 * 1024, 120 * 1024 * 1024,
-        HoodieHFileReader.KEY_FIELD_NAME, PREFETCH_ON_OPEN, CACHE_DATA_IN_L1, DROP_BEHIND_CACHE_COMPACTION, filter, HFILE_COMPARATOR);
+        HoodieAvroHFileReader.KEY_FIELD_NAME, PREFETCH_ON_OPEN, CACHE_DATA_IN_L1, DROP_BEHIND_CACHE_COMPACTION, filter, HFILE_COMPARATOR);
     return new HoodieAvroHFileWriter(instantTime, filePath, hoodieHFileConfig, avroSchema, mockTaskContextSupplier, populateMetaFields);
   }
 
@@ -134,7 +134,7 @@ public class TestHoodieHFileReaderWriter {
 
     Configuration conf = new Configuration();
     CacheConfig cacheConfig = new CacheConfig(conf);
-    HoodieHFileReader hoodieHFileReader = new HoodieHFileReader(conf, filePath, cacheConfig, filePath.getFileSystem(conf));
+    HoodieAvroHFileReader hoodieHFileReader = new HoodieAvroHFileReader(conf, filePath, cacheConfig, filePath.getFileSystem(conf));
     List<Pair<String, IndexedRecord>> records = hoodieHFileReader.readAllRecords();
     records.forEach(entry -> assertEquals(entry.getSecond(), recordMap.get(entry.getFirst())));
     hoodieHFileReader.close();
@@ -144,7 +144,7 @@ public class TestHoodieHFileReaderWriter {
       Set<String> rowsToFetch = getRandomKeys(randomRowstoFetch, keys);
       List<String> rowsList = new ArrayList<>(rowsToFetch);
       Collections.sort(rowsList);
-      hoodieHFileReader = new HoodieHFileReader(conf, filePath, cacheConfig, filePath.getFileSystem(conf));
+      hoodieHFileReader = new HoodieAvroHFileReader(conf, filePath, cacheConfig, filePath.getFileSystem(conf));
       List<Pair<String, GenericRecord>> result = hoodieHFileReader.readRecords(rowsList);
       assertEquals(result.size(), randomRowstoFetch);
       result.forEach(entry -> {
