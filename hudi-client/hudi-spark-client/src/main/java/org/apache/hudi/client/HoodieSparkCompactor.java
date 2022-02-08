@@ -52,7 +52,12 @@ public class HoodieSparkCompactor<T extends HoodieRecordPayload> extends BaseCom
     LOG.info("Compactor executing compaction " + instant);
     SparkRDDWriteClient<T> writeClient = (SparkRDDWriteClient<T>) compactionClient;
     HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(instant.getTimestamp());
-    List<HoodieWriteStat> writeStats = compactionMetadata.getCommitMetadata().get().getPartitionToWriteStats().values().stream().flatMap(Collection::stream).collect(Collectors.toList());
+    List<HoodieWriteStat> writeStats = compactionMetadata.getCommitMetadata().get()
+        .getPartitionToWriteStats()
+        .values()
+        .stream()
+        .flatMap(Collection::stream)
+        .collect(Collectors.toList());
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status");
     long numWriteErrors = writeStats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum();
     if (numWriteErrors != 0) {
