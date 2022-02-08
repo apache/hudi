@@ -40,7 +40,7 @@ public class OneToZeroDowngradeHandler implements DowngradeHandler {
   @Override
   public Map<ConfigProperty, String> downgrade(
       HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
-      BaseUpgradeDowngradeHelper upgradeDowngradeHelper) {
+      SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     // fetch pending commit info
     HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingCompaction();

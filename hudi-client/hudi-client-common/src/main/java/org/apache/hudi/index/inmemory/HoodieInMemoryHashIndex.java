@@ -25,7 +25,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
@@ -41,8 +40,8 @@ import java.util.concurrent.ConcurrentMap;
  * <p>
  * ONLY USE FOR LOCAL TESTING
  */
-public class HoodieInMemoryHashIndex<T extends HoodieRecordPayload<T>>
-    extends HoodieIndex<T, Object, Object, Object> {
+public class HoodieInMemoryHashIndex
+    extends HoodieIndex<Object, Object> {
 
   private static ConcurrentMap<HoodieKey, HoodieRecordLocation> recordLocationMap;
 
@@ -56,13 +55,13 @@ public class HoodieInMemoryHashIndex<T extends HoodieRecordPayload<T>>
   }
 
   @Override
-  public HoodieData<HoodieRecord<T>> tagLocation(
-      HoodieData<HoodieRecord<T>> records, HoodieEngineContext context,
+  public <R> HoodieData<HoodieRecord<R>> tagLocation(
+      HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
       HoodieTable hoodieTable) {
     return records.mapPartitions(hoodieRecordIterator -> {
-      List<HoodieRecord<T>> taggedRecords = new ArrayList<>();
+      List<HoodieRecord<R>> taggedRecords = new ArrayList<>();
       while (hoodieRecordIterator.hasNext()) {
-        HoodieRecord<T> record = hoodieRecordIterator.next();
+        HoodieRecord<R> record = hoodieRecordIterator.next();
         if (recordLocationMap.containsKey(record.getKey())) {
           record.unseal();
           record.setCurrentLocation(recordLocationMap.get(record.getKey()));

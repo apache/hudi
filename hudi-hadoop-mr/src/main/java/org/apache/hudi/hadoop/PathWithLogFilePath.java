@@ -31,7 +31,7 @@ import java.util.List;
  */
 public class PathWithLogFilePath extends Path {
   // a flag to mark this split is produced by incremental query or not.
-  private boolean belongToIncrementalPath = false;
+  private boolean belongsToIncrementalPath = false;
   // the log files belong this path.
   private List<HoodieLogFile> deltaLogFiles = new ArrayList<>();
   // max commit time of current path.
@@ -48,8 +48,8 @@ public class PathWithLogFilePath extends Path {
     super(parent, child);
   }
 
-  public void setBelongToIncrementalPath(boolean belongToIncrementalPath) {
-    this.belongToIncrementalPath = belongToIncrementalPath;
+  public void setBelongsToIncrementalPath(boolean belongsToIncrementalPath) {
+    this.belongsToIncrementalPath = belongsToIncrementalPath;
   }
 
   public List<HoodieLogFile> getDeltaLogFiles() {
@@ -70,6 +70,10 @@ public class PathWithLogFilePath extends Path {
 
   public String getBasePath() {
     return basePath;
+  }
+
+  public boolean getBelongsToIncrementalQuery() {
+    return belongsToIncrementalPath;
   }
 
   public void setBasePath(String basePath) {
@@ -98,7 +102,7 @@ public class PathWithLogFilePath extends Path {
 
   public BaseFileWithLogsSplit buildSplit(Path file, long start, long length, String[] hosts) {
     BaseFileWithLogsSplit bs = new BaseFileWithLogsSplit(file, start, length, hosts);
-    bs.setBelongToIncrementalSplit(belongToIncrementalPath);
+    bs.setBelongsToIncrementalQuery(belongsToIncrementalPath);
     bs.setDeltaLogFiles(deltaLogFiles);
     bs.setMaxCommitTime(maxCommitTime);
     bs.setBasePath(basePath);

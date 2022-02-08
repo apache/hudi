@@ -19,6 +19,8 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
+import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -30,7 +32,11 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.hash.ColumnIndexID;
+import org.apache.hudi.common.util.hash.FileIndexID;
+import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieMetadataException;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -39,12 +45,15 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 public abstract class BaseTableMetadata implements HoodieTableMetadata {
@@ -63,7 +72,9 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   // Directory used for Spillable Map when merging records
   protected final String spillableMapDirectory;
 
-  protected boolean enabled;
+  protected boolean isMetadataTableEnabled;
+  protected boolean isBloomFilterIndexEnabled = false;
+  protected boolean isColumnStatsIndexEnabled = false;
 
   protected BaseTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
                               String dataBasePath, String spillableMapDirectory) {
@@ -74,7 +85,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     this.spillableMapDirectory = spillableMapDirectory;
     this.metadataConfig = metadataConfig;
 
-    this.enabled = metadataConfig.enabled();
+    this.isMetadataTableEnabled = metadataConfig.enabled();
     if (metadataConfig.enableMetrics()) {
       this.metrics = Option.of(new HoodieMetadataMetrics(Registry.getRegistry("HoodieMetadata")));
     } else {
@@ -84,16 +95,15 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
   /**
    * Return the list of partitions in the dataset.
-   *
+   * <p>
    * If the Metadata Table is enabled, the listing is retrieved from the stored metadata. Otherwise, the list of
    * partitions is retrieved directly from the underlying {@code FileSystem}.
-   *
+   * <p>
    * On any errors retrieving the listing from the metadata, defaults to using the file system listings.
-   *
    */
   @Override
   public List<String> getAllPartitionPaths() throws IOException {
-    if (enabled) {
+    if (isMetadataTableEnabled) {
       try {
         return fetchAllPartitionPaths();
       } catch (Exception e) {
@@ -106,10 +116,10 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
   /**
    * Return the list of files in a partition.
-   *
+   * <p>
    * If the Metadata Table is enabled, the listing is retrieved from the stored metadata. Otherwise, the list of
    * partitions is retrieved directly from the underlying {@code FileSystem}.
-   *
+   * <p>
    * On any errors retrieving the listing from the metadata, defaults to using the file system listings.
    *
    * @param partitionPath The absolute path of the partition to list
@@ -117,7 +127,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   @Override
   public FileStatus[] getAllFilesInPartition(Path partitionPath)
       throws IOException {
-    if (enabled) {
+    if (isMetadataTableEnabled) {
       try {
         return fetchAllFilesInPartition(partitionPath);
       } catch (Exception e) {
@@ -132,7 +142,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   @Override
   public Map<String, FileStatus[]> getAllFilesInPartitions(List<String> partitions)
       throws IOException {
-    if (enabled) {
+    if (isMetadataTableEnabled) {
       try {
         List<Path> partitionPaths = partitions.stream().map(entry -> new Path(entry)).collect(Collectors.toList());
         Map<String, FileStatus[]> partitionsFilesMap = fetchAllFilesInPartitionPaths(partitionPaths);
@@ -146,12 +156,124 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
         .getAllFilesInPartitions(partitions);
   }
 
+  @Override
+  public Option<ByteBuffer> getBloomFilter(final String partitionName, final String fileName)
+      throws HoodieMetadataException {
+    if (!isBloomFilterIndexEnabled) {
+      LOG.error("Metadata bloom filter index is disabled!");
+      return Option.empty();
+    }
+
+    final Pair<String, String> partitionFileName = Pair.of(partitionName, fileName);
+    Map<Pair<String, String>, ByteBuffer> bloomFilters = getBloomFilters(Collections.singletonList(partitionFileName));
+    if (bloomFilters.isEmpty()) {
+      LOG.error("Meta index: missing bloom filter for partition: " + partitionName + ", file: " + fileName);
+      return Option.empty();
+    }
+
+    ValidationUtils.checkState(bloomFilters.containsKey(partitionFileName));
+    return Option.of(bloomFilters.get(partitionFileName));
+  }
+
+  @Override
+  public Map<Pair<String, String>, ByteBuffer> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList)
+      throws HoodieMetadataException {
+    if (!isBloomFilterIndexEnabled) {
+      LOG.error("Metadata bloom filter index is disabled!");
+      return Collections.emptyMap();
+    }
+    if (partitionNameFileNameList.isEmpty()) {
+      return Collections.emptyMap();
+    }
+
+    HoodieTimer timer = new HoodieTimer().startTimer();
+    Set<String> partitionIDFileIDSortedStrings = new TreeSet<>();
+    Map<String, Pair<String, String>> fileToKeyMap = new HashMap<>();
+    partitionNameFileNameList.forEach(partitionNameFileNamePair -> {
+          final String bloomFilterIndexKey = HoodieMetadataPayload.getBloomFilterIndexKey(
+              new PartitionIndexID(partitionNameFileNamePair.getLeft()), new FileIndexID(partitionNameFileNamePair.getRight()));
+          partitionIDFileIDSortedStrings.add(bloomFilterIndexKey);
+          fileToKeyMap.put(bloomFilterIndexKey, partitionNameFileNamePair);
+        }
+    );
+
+    List<String> partitionIDFileIDStrings = new ArrayList<>(partitionIDFileIDSortedStrings);
+    List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> hoodieRecordList =
+        getRecordsByKeys(partitionIDFileIDStrings, MetadataPartitionType.BLOOM_FILTERS.getPartitionPath());
+    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_METADATA_STR,
+        (timer.endTimer() / partitionIDFileIDStrings.size())));
+
+    Map<Pair<String, String>, ByteBuffer> partitionFileToBloomFilterMap = new HashMap<>();
+    for (final Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>> entry : hoodieRecordList) {
+      if (entry.getRight().isPresent()) {
+        final Option<HoodieMetadataBloomFilter> bloomFilterMetadata =
+            entry.getRight().get().getData().getBloomFilterMetadata();
+        if (bloomFilterMetadata.isPresent()) {
+          if (!bloomFilterMetadata.get().getIsDeleted()) {
+            ValidationUtils.checkState(fileToKeyMap.containsKey(entry.getLeft()));
+            partitionFileToBloomFilterMap.put(fileToKeyMap.get(entry.getLeft()), bloomFilterMetadata.get().getBloomFilter());
+          }
+        } else {
+          LOG.error("Meta index bloom filter missing for: " + fileToKeyMap.get(entry.getLeft()));
+        }
+      }
+    }
+    return partitionFileToBloomFilterMap;
+  }
+
+  @Override
+  public Map<Pair<String, String>, HoodieMetadataColumnStats> getColumnStats(final List<Pair<String, String>> partitionNameFileNameList, final String columnName)
+      throws HoodieMetadataException {
+    if (!isColumnStatsIndexEnabled) {
+      LOG.error("Metadata column stats index is disabled!");
+      return Collections.emptyMap();
+    }
+
+    Map<String, Pair<String, String>> columnStatKeyToFileNameMap = new HashMap<>();
+    TreeSet<String> sortedKeys = new TreeSet<>();
+    final ColumnIndexID columnIndexID = new ColumnIndexID(columnName);
+    for (Pair<String, String> partitionNameFileNamePair : partitionNameFileNameList) {
+      final String columnStatsIndexKey = HoodieMetadataPayload.getColumnStatsIndexKey(
+          new PartitionIndexID(partitionNameFileNamePair.getLeft()),
+          new FileIndexID(partitionNameFileNamePair.getRight()),
+          columnIndexID);
+      sortedKeys.add(columnStatsIndexKey);
+      columnStatKeyToFileNameMap.put(columnStatsIndexKey, partitionNameFileNamePair);
+    }
+
+    List<String> columnStatKeys = new ArrayList<>(sortedKeys);
+    HoodieTimer timer = new HoodieTimer().startTimer();
+    List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> hoodieRecordList =
+        getRecordsByKeys(columnStatKeys, MetadataPartitionType.COLUMN_STATS.getPartitionPath());
+    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_COLUMN_STATS_METADATA_STR, timer.endTimer()));
+
+    Map<Pair<String, String>, HoodieMetadataColumnStats> fileToColumnStatMap = new HashMap<>();
+    for (final Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>> entry : hoodieRecordList) {
+      if (entry.getRight().isPresent()) {
+        final Option<HoodieMetadataColumnStats> columnStatMetadata =
+            entry.getRight().get().getData().getColumnStatMetadata();
+        if (columnStatMetadata.isPresent()) {
+          if (!columnStatMetadata.get().getIsDeleted()) {
+            ValidationUtils.checkState(columnStatKeyToFileNameMap.containsKey(entry.getLeft()));
+            final Pair<String, String> partitionFileNamePair = columnStatKeyToFileNameMap.get(entry.getLeft());
+            ValidationUtils.checkState(!fileToColumnStatMap.containsKey(partitionFileNamePair));
+            fileToColumnStatMap.put(partitionFileNamePair, columnStatMetadata.get());
+          }
+        } else {
+          LOG.error("Meta index column stats missing for: " + entry.getLeft());
+        }
+      }
+    }
+    return fileToColumnStatMap;
+  }
+
   /**
    * Returns a list of all partitions.
    */
   protected List<String> fetchAllPartitionPaths() throws IOException {
     HoodieTimer timer = new HoodieTimer().startTimer();
-    Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getRecordByKey(RECORDKEY_PARTITION_LIST, MetadataPartitionType.FILES.partitionPath());
+    Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getRecordByKey(RECORDKEY_PARTITION_LIST,
+        MetadataPartitionType.FILES.getPartitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_PARTITIONS_STR, timer.endTimer()));
 
     List<String> partitions = Collections.emptyList();
@@ -181,7 +303,8 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     }
 
     HoodieTimer timer = new HoodieTimer().startTimer();
-    Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getRecordByKey(partitionName, MetadataPartitionType.FILES.partitionPath());
+    Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getRecordByKey(partitionName,
+        MetadataPartitionType.FILES.getPartitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
 
     FileStatus[] statuses = {};
@@ -215,7 +338,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
     HoodieTimer timer = new HoodieTimer().startTimer();
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> partitionsFileStatus =
-        getRecordsByKeys(new ArrayList<>(partitionInfo.keySet()), MetadataPartitionType.FILES.partitionPath());
+        getRecordsByKeys(new ArrayList<>(partitionInfo.keySet()), MetadataPartitionType.FILES.getPartitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
     Map<String, FileStatus[]> result = new HashMap<>();
 

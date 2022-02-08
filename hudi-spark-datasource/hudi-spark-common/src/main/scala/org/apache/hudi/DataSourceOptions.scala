@@ -122,6 +122,10 @@ object DataSourceReadOptions {
     .withDocumentation("Enables data-skipping allowing queries to leverage indexes to reduce the search space by " +
       "skipping over files")
 
+  val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")
+    .defaultValue("false")
+    .withDocumentation("When doing an incremental query whether we should fall back to full table scans if file does not exist.")
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
   val QUERY_TYPE_OPT_KEY = QUERY_TYPE.key()
@@ -423,6 +427,11 @@ object DataSourceWriteOptions {
   val HIVE_URL: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.jdbcurl")
     .defaultValue("jdbc:hive2://localhost:10000")
+    .withDocumentation("Hive jdbc url")
+
+  val METASTORE_URIS: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.hive_sync.metastore.uris")
+    .defaultValue("thrift://localhost:9083")
     .withDocumentation("Hive metastore url")
 
   val hivePartitionFieldsInferFunc = DataSourceOptionsHelper.scalaFunctionToJavaFunction((p: HoodieConfig) => {

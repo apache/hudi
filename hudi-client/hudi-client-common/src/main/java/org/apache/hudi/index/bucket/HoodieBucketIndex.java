@@ -24,7 +24,6 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -34,6 +33,7 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -42,10 +42,8 @@ import java.util.Map;
 
 /**
  * Hash indexing mechanism.
- * @param <T>
  */
-public class HoodieBucketIndex<T extends HoodieRecordPayload<T>>
-    extends HoodieIndex<T, Object, Object, Object> {
+public class HoodieBucketIndex extends HoodieIndex<Object, Object> {
 
   private static final Logger LOG =  LogManager.getLogger(HoodieBucketIndex.class);
 
@@ -66,14 +64,14 @@ public class HoodieBucketIndex<T extends HoodieRecordPayload<T>>
   }
 
   @Override
-  public HoodieData<HoodieRecord<T>> tagLocation(HoodieData<HoodieRecord<T>> records,
-      HoodieEngineContext context,
+  public <R> HoodieData<HoodieRecord<R>> tagLocation(
+      HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
       HoodieTable hoodieTable)
       throws HoodieIndexException {
-    HoodieData<HoodieRecord<T>> taggedRecords = records.mapPartitions(recordIter -> {
+    HoodieData<HoodieRecord<R>> taggedRecords = records.mapPartitions(recordIter -> {
       // partitionPath -> bucketId -> fileInfo
       Map<String, Map<Integer, Pair<String, String>>> partitionPathFileIDList = new HashMap<>();
-      return new LazyIterableIterator<HoodieRecord<T>, HoodieRecord<T>>(recordIter) {
+      return new LazyIterableIterator<HoodieRecord<R>, HoodieRecord<R>>(recordIter) {
 
         @Override
         protected void start() {
@@ -81,7 +79,7 @@ public class HoodieBucketIndex<T extends HoodieRecordPayload<T>>
         }
 
         @Override
-        protected HoodieRecord<T> computeNext() {
+        protected HoodieRecord<R> computeNext() {
           HoodieRecord record = recordIter.next();
           int bucketId = BucketIdentifier.getBucketId(record, config.getBucketIndexHashField(), numBuckets);
           String partitionPath = record.getPartitionPath();

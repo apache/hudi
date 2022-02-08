@@ -36,10 +36,10 @@ class AsyncCleanerService extends HoodieAsyncService {
 
   private static final Logger LOG = LogManager.getLogger(AsyncCleanerService.class);
 
-  private final AbstractHoodieWriteClient writeClient;
+  private final BaseHoodieWriteClient writeClient;
   private final transient ExecutorService executor = Executors.newSingleThreadExecutor();
 
-  protected AsyncCleanerService(AbstractHoodieWriteClient writeClient) {
+  protected AsyncCleanerService(BaseHoodieWriteClient writeClient) {
     this.writeClient = writeClient;
   }
 
@@ -53,7 +53,7 @@ class AsyncCleanerService extends HoodieAsyncService {
     }, executor), executor);
   }
 
-  public static AsyncCleanerService startAsyncCleaningIfEnabled(AbstractHoodieWriteClient writeClient) {
+  public static AsyncCleanerService startAsyncCleaningIfEnabled(BaseHoodieWriteClient writeClient) {
     AsyncCleanerService asyncCleanerService = null;
     if (writeClient.getConfig().isAutoClean() && writeClient.getConfig().isAsyncClean()) {
       asyncCleanerService = new AsyncCleanerService(writeClient);

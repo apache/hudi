@@ -60,13 +60,6 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
   private static final String APPEND_UNAVAILABLE_EXCEPTION_MESSAGE = "not sufficiently replicated yet";
 
-  /**
-   * @param fs
-   * @param logFile
-   * @param bufferSize
-   * @param replication
-   * @param sizeThreshold
-   */
   HoodieLogFormatWriter(FileSystem fs, HoodieLogFile logFile, Integer bufferSize, Short replication, Long sizeThreshold, String rolloverLogWriteToken) {
     this.fs = fs;
     this.logFile = logFile;

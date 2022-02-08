@@ -30,27 +30,140 @@
             "doc": "Type of the metadata record",
             "type": "int"
         },
-        {   "name": "filesystemMetadata",
+        {
             "doc": "Contains information about partitions and files within the dataset",
-            "type": ["null", {
-               "type": "map",
-               "values": {
+            "name": "filesystemMetadata",
+            "type": [
+                "null",
+                {
+                    "type": "map",
+                    "values": {
+                        "type": "record",
+                        "name": "HoodieMetadataFileInfo",
+                        "fields": [
+                            {
+                                "name": "size",
+                                "type": "long",
+                                "doc": "Size of the file"
+                            },
+                            {
+                                "name": "isDeleted",
+                                "type": "boolean",
+                                "doc": "True if this file has been deleted"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "doc": "Metadata Index of bloom filters for all data files in the user table",
+            "name": "BloomFilterMetadata",
+            "type": [
+                "null",
+                {
+                    "doc": "Data file bloom filter details",
+                    "name": "HoodieMetadataBloomFilter",
                     "type": "record",
-                    "name": "HoodieMetadataFileInfo",
                     "fields": [
                         {
-                            "name": "size",
-                            "type": "long",
-                            "doc": "Size of the file"
+                            "doc": "Bloom filter type code",
+                            "name": "type",
+                            "type": "string"
                         },
                         {
+                            "doc": "Instant timestamp when this metadata was created/updated",
+                            "name": "timestamp",
+                            "type": "string"
+                        },
+                        {
+                            "doc": "Bloom filter binary byte array",
+                            "name": "bloomFilter",
+                            "type": "bytes"
+                        },
+                        {
+                            "doc": "Bloom filter entry valid/deleted flag",
                             "name": "isDeleted",
-                            "type": "boolean",
-                            "doc": "True if this file has been deleted"
+                            "type": "boolean"
                         }
                     ]
                 }
-            }]
+            ]
+        },
+        {
+            "doc": "Metadata Index of column statistics for all data files in the user table",
+            "name": "ColumnStatsMetadata",
+            "type": [
+                "null",
+                {
+                    "doc": "Data file column statistics",
+                    "name": "HoodieMetadataColumnStats",
+                    "type": "record",
+                    "fields": [
+                        {
+                            "doc": "File name for which this column statistics applies",
+                            "name": "fileName",
+                            "type": [
+                                "null",
+                                "string"
+                            ]
+                        },
+                        {
+                            "doc": "Minimum value in the range. Based on user data table schema, we can convert this to appropriate type",
+                            "name": "minValue",
+                            "type": [
+                                "null",
+                                "string"
+                            ]
+                        },
+                        {
+                            "doc": "Maximum value in the range. Based on user data table schema, we can convert it to appropriate type",
+                            "name": "maxValue",
+                            "type": [
+                                "null",
+                                "string"
+                            ]
+                        },
+                        {
+                            "doc": "Total count of values",
+                            "name": "valueCount",
+                            "type": [
+                                "null",
+                                "long"
+                            ]
+                        },
+                        {
+                            "doc": "Total count of null values",
+                            "name": "nullCount",
+                            "type": [
+                                "null",
+                                "long"
+                            ]
+                        },
+                        {
+                            "doc": "Total storage size on disk",
+                            "name": "totalSize",
+                            "type": [
+                                "null",
+                                "long"
+                            ]
+                        },
+                        {
+                            "doc": "Total uncompressed storage size on disk",
+                            "name": "totalUncompressedSize",
+                            "type": [
+                                "null",
+                                "long"
+                            ]
+                        },
+                        {
+                            "doc": "Column range entry valid/deleted flag",
+                            "name": "isDeleted",
+                            "type": "boolean"
+                        }
+                    ]
+                }
+            ]
         }
     ]
 }

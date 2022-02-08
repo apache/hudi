@@ -18,11 +18,10 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.fs.FSUtils;
-
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.fs.FSUtils;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -60,7 +59,7 @@ public class HoodieLogFile implements Serializable {
   public HoodieLogFile(Path logPath) {
     this.fileStatus = null;
     this.pathStr = logPath.toString();
-    this.fileLen = 0;
+    this.fileLen = -1;
   }
 
   public HoodieLogFile(Path logPath, Long fileLen) {
