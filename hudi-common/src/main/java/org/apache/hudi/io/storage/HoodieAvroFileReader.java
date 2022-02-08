@@ -20,22 +20,17 @@ package org.apache.hudi.io.storage;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.MappingIterator;
 import org.apache.hudi.common.util.Option;
 
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.stream.Collectors;
 
-public interface HoodieAvroFileReader extends AutoCloseable {
-
-  String[] readMinMaxRecordKeys();
-
-  BloomFilter readBloomFilter();
-
-  Set<String> filterRowKeys(Set<String> candidateRowKeys);
+public interface HoodieAvroFileReader extends HoodieFileReader, AutoCloseable {
 
   default Map<String, IndexedRecord> getRecordsByKeys(List<String> rowKeys) throws IOException {
     throw new UnsupportedOperationException();
@@ -43,21 +38,24 @@ public interface HoodieAvroFileReader extends AutoCloseable {
 
   Iterator<IndexedRecord> getRecordIterator(Schema readerSchema) throws IOException;
 
-  default Iterator<IndexedRecord> getRecordIterator() throws IOException {
-    return getRecordIterator(getSchema());
-  }
-
   default Option<IndexedRecord> getRecordByKey(String key, Schema readerSchema) throws IOException {
     throw new UnsupportedOperationException();
   }
 
-  default Option<IndexedRecord> getRecordByKey(String key) throws IOException {
-    return getRecordByKey(key, getSchema());
+  @Override
+  default Map<String, HoodieRecord> getRecordsByKeys(List<String> rowKeys, HoodieRecord.Mapper mapper) throws IOException {
+    return getRecordsByKeys(rowKeys).entrySet().stream()
+        .collect(Collectors.toMap(Map.Entry::getKey, e -> mapper.apply(e.getValue())));
   }
 
-  Schema getSchema();
+  @Override
+  default Iterator<HoodieRecord> getRecordIterator(Schema schema, HoodieRecord.Mapper mapper) throws IOException {
+    return new MappingIterator<>(getRecordIterator(schema), mapper::apply);
+  }
 
-  void close();
+  @Override
+  default Option<HoodieRecord> getRecordByKey(String key, Schema readerSchema, HoodieRecord.Mapper mapper) throws IOException {
+    return getRecordByKey(key, readerSchema).map(mapper::apply);
+  }
 
-  long getTotalRecords();
 }

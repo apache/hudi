@@ -176,7 +176,7 @@ public class HoodieAvroHFileReader implements HoodieAvroFileReader {
   private synchronized Map<String, IndexedRecord> filterRecordsImpl(TreeSet<String> sortedCandidateRowKeys) throws IOException {
     HashMap<String, IndexedRecord> filteredRecords = new HashMap<>();
     for (String key : sortedCandidateRowKeys) {
-      Option<IndexedRecord> record = getRecordByKey(key);
+      Option<IndexedRecord> record = getRecordByKey(key, getSchema());
       if (record.isPresent()) {
         filteredRecords.put(key, record.get());
       }
