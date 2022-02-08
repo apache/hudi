@@ -65,10 +65,10 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
   private val conf = sqlContext.sparkContext.hadoopConfiguration
   private val jobConf = new JobConf(conf)
   // use schema from latest metadata, if not present, read schema from the data file
-  private val schemaUtil = new TableSchemaResolver(metaClient)
+  private val schemaResolver = new TableSchemaResolver(metaClient)
   private lazy val tableAvroSchema = {
     try {
-      schemaUtil.getTableAvroSchema
+      schemaResolver.getTableAvroSchema
     } catch {
       case _: Throwable => // If there is no commit in the table, we cann't get the schema
         // with schemaUtil, use the userSchema instead.

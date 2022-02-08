@@ -49,6 +49,9 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--jdbc-url"}, description = "Hive jdbc connect url")
   public String jdbcUrl;
 
+  @Parameter(names = {"--metastore-uris"}, description = "Hive metastore uris")
+  public String metastoreUris;
+
   @Parameter(names = {"--base-path"}, description = "Basepath of hoodie table to sync", required = true)
   public String basePath;
 
@@ -137,6 +140,7 @@ public class HiveSyncConfig implements Serializable {
     newConfig.partitionFields = cfg.partitionFields;
     newConfig.partitionValueExtractorClass = cfg.partitionValueExtractorClass;
     newConfig.jdbcUrl = cfg.jdbcUrl;
+    newConfig.metastoreUris = cfg.metastoreUris;
     newConfig.tableName = cfg.tableName;
     newConfig.bucketSpec = cfg.bucketSpec;
     newConfig.usePreApacheInputFormat = cfg.usePreApacheInputFormat;
@@ -164,6 +168,7 @@ public class HiveSyncConfig implements Serializable {
       + ", hiveUser='" + hiveUser + '\''
       + ", hivePass='" + hivePass + '\''
       + ", jdbcUrl='" + jdbcUrl + '\''
+      + ", metastoreUris='" + metastoreUris + '\''
       + ", basePath='" + basePath + '\''
       + ", partitionFields=" + partitionFields
       + ", partitionValueExtractorClass='" + partitionValueExtractorClass + '\''

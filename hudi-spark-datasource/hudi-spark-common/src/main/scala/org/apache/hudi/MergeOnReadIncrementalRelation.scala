@@ -74,8 +74,8 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
     optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key, lastInstant.getTimestamp))
   log.debug(s"${commitsTimelineToReturn.getInstants.iterator().toList.map(f => f.toString).mkString(",")}")
   private val commitsToReturn = commitsTimelineToReturn.getInstants.iterator().toList
-  private val schemaUtil = new TableSchemaResolver(metaClient)
-  private val tableAvroSchema = schemaUtil.getTableAvroSchema
+  private val schemaResolver = new TableSchemaResolver(metaClient)
+  private val tableAvroSchema = schemaResolver.getTableAvroSchema
   private val tableStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
   private val maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(jobConf)
   private val fileIndex = if (commitsToReturn.isEmpty) List() else buildFileIndex()

@@ -21,10 +21,12 @@ package org.apache.hudi.hadoop;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapred.FileInputFormat;
+import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hudi.common.config.TypedProperties;
@@ -65,11 +67,31 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  *   <li>Incremental mode: reading table's state as of particular timestamp (or instant, in Hudi's terms)</li>
  *   <li>External mode: reading non-Hudi partitions</li>
  * </ul>
+ *
+ * NOTE: This class is invariant of the underlying file-format of the files being read
  */
 public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWritable, ArrayWritable>
     implements Configurable {
 
   protected Configuration conf;
+
+  @Nonnull
+  private static RealtimeFileStatus createRealtimeFileStatusUnchecked(HoodieBaseFile baseFile, Stream<HoodieLogFile> logFiles) {
+    List<HoodieLogFile> sortedLogFiles = logFiles.sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
+    FileStatus baseFileStatus = getFileStatusUnchecked(baseFile);
+    try {
+      RealtimeFileStatus rtFileStatus = new RealtimeFileStatus(baseFileStatus);
+      rtFileStatus.setDeltaLogFiles(sortedLogFiles);
+      rtFileStatus.setBaseFilePath(baseFile.getPath());
+      if (baseFileStatus instanceof LocatedFileStatusWithBootstrapBaseFile || baseFileStatus instanceof FileStatusWithBootstrapBaseFile) {
+        rtFileStatus.setBootStrapFileStatus(baseFileStatus);
+      }
+
+      return rtFileStatus;
+    } catch (IOException e) {
+      throw new HoodieIOException(String.format("Failed to init %s", RealtimeFileStatus.class.getSimpleName()), e);
+    }
+  }
 
   @Override
   public final Configuration getConf() {
@@ -79,6 +101,24 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
   @Override
   public final void setConf(Configuration conf) {
     this.conf = conf;
+  }
+
+  protected abstract boolean includeLogFilesForSnapshotView();
+
+  @Override
+  protected boolean isSplitable(FileSystem fs, Path filename) {
+    return !(filename instanceof PathWithBootstrapFileStatus);
+  }
+
+  @Override
+  protected FileSplit makeSplit(Path file, long start, long length,
+                                String[] hosts) {
+    FileSplit split = new FileSplit(file, start, length, hosts);
+
+    if (file instanceof PathWithBootstrapFileStatus) {
+      return makeExternalFileSplit((PathWithBootstrapFileStatus)file, split);
+    }
+    return split;
   }
 
   @Override
@@ -121,20 +161,6 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
     return returns.toArray(new FileStatus[0]);
   }
 
-  private void validate(List<FileStatus> targetFiles, List<FileStatus> legacyFileStatuses) {
-    List<FileStatus> diff = CollectionUtils.diff(targetFiles, legacyFileStatuses);
-    checkState(diff.isEmpty(), "Should be empty");
-  }
-
-  @Nonnull
-  private static FileStatus getFileStatusUnchecked(HoodieBaseFile baseFile) {
-    try {
-      return HoodieInputFormatUtils.getFileStatus(baseFile);
-    } catch (IOException ioe) {
-      throw new HoodieIOException("Failed to get file-status", ioe);
-    }
-  }
-
   /**
    * Abstracts and exposes {@link FileInputFormat#listStatus(JobConf)} operation to subclasses that
    * lists files (returning an array of {@link FileStatus}) corresponding to the input paths specified
@@ -172,73 +198,31 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
     return HoodieInputFormatUtils.filterIncrementalFileStatus(jobContext, tableMetaClient, timeline.get(), fileStatuses, commitsToCheck.get());
   }
 
-  protected abstract boolean includeLogFilesForSnapshotView();
+  @Override
+  protected FileSplit makeSplit(Path file, long start, long length,
+                                String[] hosts, String[] inMemoryHosts) {
+    FileSplit split = new FileSplit(file, start, length, hosts, inMemoryHosts);
+    if (file instanceof PathWithBootstrapFileStatus) {
+      return makeExternalFileSplit((PathWithBootstrapFileStatus)file, split);
+    }
+    return split;
+  }
 
-  @Nonnull
-  private static RealtimeFileStatus createRealtimeFileStatusUnchecked(HoodieBaseFile baseFile,
-                                                                      Stream<HoodieLogFile> logFiles,
-                                                                      Option<HoodieInstant> latestCompletedInstantOpt,
-                                                                      HoodieTableMetaClient tableMetaClient) {
-    List<HoodieLogFile> sortedLogFiles = logFiles.sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
-    FileStatus baseFileStatus = getFileStatusUnchecked(baseFile);
+  private BootstrapBaseFileSplit makeExternalFileSplit(PathWithBootstrapFileStatus file, FileSplit split) {
     try {
-      RealtimeFileStatus rtFileStatus = new RealtimeFileStatus(baseFileStatus);
-      rtFileStatus.setDeltaLogFiles(sortedLogFiles);
-      rtFileStatus.setBaseFilePath(baseFile.getPath());
-      rtFileStatus.setBasePath(tableMetaClient.getBasePath());
-
-      if (latestCompletedInstantOpt.isPresent()) {
-        HoodieInstant latestCompletedInstant = latestCompletedInstantOpt.get();
-        checkState(latestCompletedInstant.isCompleted());
-
-        rtFileStatus.setMaxCommitTime(latestCompletedInstant.getTimestamp());
-      }
-
-      if (baseFileStatus instanceof LocatedFileStatusWithBootstrapBaseFile || baseFileStatus instanceof FileStatusWithBootstrapBaseFile) {
-        rtFileStatus.setBootStrapFileStatus(baseFileStatus);
-      }
-
-      return rtFileStatus;
+      LOG.info("Making external data split for " + file);
+      FileStatus externalFileStatus = file.getBootstrapFileStatus();
+      FileSplit externalFileSplit = makeSplit(externalFileStatus.getPath(), 0, externalFileStatus.getLen(),
+          new String[0], new String[0]);
+      return new BootstrapBaseFileSplit(split, externalFileSplit);
     } catch (IOException e) {
-      throw new HoodieIOException(String.format("Failed to init %s", RealtimeFileStatus.class.getSimpleName()), e);
+      throw new HoodieIOException(e.getMessage(), e);
     }
   }
 
   @Nonnull
   private List<FileStatus> listStatusForSnapshotModeLegacy(JobConf job, Map<String, HoodieTableMetaClient> tableMetaClientMap, List<Path> snapshotPaths) throws IOException {
     return HoodieInputFormatUtils.filterFileStatusForSnapshotMode(job, tableMetaClientMap, snapshotPaths, includeLogFilesForSnapshotView());
-  }
-
-  @Nonnull
-  private static RealtimeFileStatus createRealtimeFileStatusUnchecked(HoodieLogFile latestLogFile,
-                                                                      Stream<HoodieLogFile> logFiles,
-                                                                      Option<HoodieInstant> latestCompletedInstantOpt,
-                                                                      HoodieTableMetaClient tableMetaClient) {
-    List<HoodieLogFile> sortedLogFiles = logFiles.sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
-    try {
-      RealtimeFileStatus rtFileStatus = new RealtimeFileStatus(latestLogFile.getFileStatus());
-      rtFileStatus.setDeltaLogFiles(sortedLogFiles);
-      rtFileStatus.setBasePath(tableMetaClient.getBasePath());
-
-      if (latestCompletedInstantOpt.isPresent()) {
-        HoodieInstant latestCompletedInstant = latestCompletedInstantOpt.get();
-        checkState(latestCompletedInstant.isCompleted());
-
-        rtFileStatus.setMaxCommitTime(latestCompletedInstant.getTimestamp());
-      }
-
-      return rtFileStatus;
-    } catch (IOException e) {
-      throw new HoodieIOException(String.format("Failed to init %s", RealtimeFileStatus.class.getSimpleName()), e);
-    }
-  }
-
-  private static Option<HoodieInstant> fromScala(scala.Option<HoodieInstant> opt) {
-    if (opt.isDefined()) {
-      return Option.of(opt.get());
-    }
-
-    return Option.empty();
   }
 
   @Nonnull
@@ -316,5 +300,81 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
     validate(targetFiles, listStatusForSnapshotModeLegacy(job, tableMetaClientMap, snapshotPaths));
 
     return targetFiles;
+  }
+
+  private void validate(List<FileStatus> targetFiles, List<FileStatus> legacyFileStatuses) {
+    List<FileStatus> diff = CollectionUtils.diff(targetFiles, legacyFileStatuses);
+    checkState(diff.isEmpty(), "Should be empty");
+  }
+
+  @Nonnull
+  private static FileStatus getFileStatusUnchecked(HoodieBaseFile baseFile) {
+    try {
+      return HoodieInputFormatUtils.getFileStatus(baseFile);
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Failed to get file-status", ioe);
+    }
+  }
+
+  @Nonnull
+  private static RealtimeFileStatus createRealtimeFileStatusUnchecked(HoodieBaseFile baseFile,
+                                                                      Stream<HoodieLogFile> logFiles,
+                                                                      Option<HoodieInstant> latestCompletedInstantOpt,
+                                                                      HoodieTableMetaClient tableMetaClient) {
+    List<HoodieLogFile> sortedLogFiles = logFiles.sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
+    FileStatus baseFileStatus = getFileStatusUnchecked(baseFile);
+    try {
+      RealtimeFileStatus rtFileStatus = new RealtimeFileStatus(baseFileStatus);
+      rtFileStatus.setDeltaLogFiles(sortedLogFiles);
+      rtFileStatus.setBaseFilePath(baseFile.getPath());
+      rtFileStatus.setBasePath(tableMetaClient.getBasePath());
+
+      if (latestCompletedInstantOpt.isPresent()) {
+        HoodieInstant latestCompletedInstant = latestCompletedInstantOpt.get();
+        checkState(latestCompletedInstant.isCompleted());
+
+        rtFileStatus.setMaxCommitTime(latestCompletedInstant.getTimestamp());
+      }
+
+      if (baseFileStatus instanceof LocatedFileStatusWithBootstrapBaseFile || baseFileStatus instanceof FileStatusWithBootstrapBaseFile) {
+        rtFileStatus.setBootStrapFileStatus(baseFileStatus);
+      }
+
+      return rtFileStatus;
+    } catch (IOException e) {
+      throw new HoodieIOException(String.format("Failed to init %s", RealtimeFileStatus.class.getSimpleName()), e);
+    }
+  }
+
+  @Nonnull
+  private static RealtimeFileStatus createRealtimeFileStatusUnchecked(HoodieLogFile latestLogFile,
+                                                                      Stream<HoodieLogFile> logFiles,
+                                                                      Option<HoodieInstant> latestCompletedInstantOpt,
+                                                                      HoodieTableMetaClient tableMetaClient) {
+    List<HoodieLogFile> sortedLogFiles = logFiles.sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
+    try {
+      RealtimeFileStatus rtFileStatus = new RealtimeFileStatus(latestLogFile.getFileStatus());
+      rtFileStatus.setDeltaLogFiles(sortedLogFiles);
+      rtFileStatus.setBasePath(tableMetaClient.getBasePath());
+
+      if (latestCompletedInstantOpt.isPresent()) {
+        HoodieInstant latestCompletedInstant = latestCompletedInstantOpt.get();
+        checkState(latestCompletedInstant.isCompleted());
+
+        rtFileStatus.setMaxCommitTime(latestCompletedInstant.getTimestamp());
+      }
+
+      return rtFileStatus;
+    } catch (IOException e) {
+      throw new HoodieIOException(String.format("Failed to init %s", RealtimeFileStatus.class.getSimpleName()), e);
+    }
+  }
+
+  private static Option<HoodieInstant> fromScala(scala.Option<HoodieInstant> opt) {
+    if (opt.isDefined()) {
+      return Option.of(opt.get());
+    }
+
+    return Option.empty();
   }
 }
