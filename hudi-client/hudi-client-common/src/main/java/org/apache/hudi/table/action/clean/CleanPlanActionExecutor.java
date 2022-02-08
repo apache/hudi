@@ -81,7 +81,7 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
       int maxInlineCommitsForNextClean = config.getInlineCleaningMaxCommits();
       return numberOfCommits >= maxInlineCommitsForNextClean;
     } else {
-      throw new HoodieException("Unsupported cleaning trigger strategy: " + config.getInlineCleaningTriggerStrategy());
+      throw new HoodieException("Unsupported cleaning trigger strategy: " + config.getCleaningTriggerStrategy());
     }
   }
 
@@ -151,7 +151,7 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
 
   @Override
   public Option<HoodieCleanerPlan> execute() {
-    if (!needCleaning(config.getInlineCleaningTriggerStrategy())) {
+    if (!needCleaning(config.getCleaningTriggerStrategy())) {
       return Option.empty();
     }
     // Plan a new clean action

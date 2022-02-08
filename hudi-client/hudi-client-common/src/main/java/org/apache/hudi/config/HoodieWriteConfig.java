@@ -1111,8 +1111,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieCompactionConfig.INLINE_CLEAN_NUM_COMMITS);
   }
 
-  public CleaningTriggerStrategy getInlineCleaningTriggerStrategy() {
-    return CleaningTriggerStrategy.valueOf(getString(HoodieCompactionConfig.INLINE_CLEAN_TRIGGER_STRATEGY));
+  public CleaningTriggerStrategy getCleaningTriggerStrategy() {
+    return CleaningTriggerStrategy.valueOf(getString(HoodieCompactionConfig.CLEAN_TRIGGER_STRATEGY));
   }
 
   public boolean isAutoClean() {

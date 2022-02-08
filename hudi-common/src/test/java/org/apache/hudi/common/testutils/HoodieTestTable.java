@@ -141,12 +141,8 @@ public class HoodieTestTable {
     return new HoodieTestTable(metaClient.getBasePath(), metaClient.getRawFs(), metaClient);
   }
 
-  public static String makeNewCommitTime(int sequence) {
-    return String.format("%09d", sequence);
-  }
-
-  public static String makeNewCommitTimeInHudiFormat(int sequence) {
-    return String.format("%014d", sequence);
+  public static String makeNewCommitTime(int sequence, String instantFormat) {
+    return String.format(instantFormat, sequence);
   }
 
   public static String makeNewCommitTime() {

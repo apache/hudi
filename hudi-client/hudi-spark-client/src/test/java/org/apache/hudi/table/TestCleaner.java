@@ -116,7 +116,6 @@ import scala.Tuple3;
 
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeIncrementalCommitTimes;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
-import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTimeInHudiFormat;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.awaitility.Awaitility.await;
@@ -584,7 +583,7 @@ public class TestCleaner extends HoodieClientTestBase {
    */
   private List<HoodieCleanStat> runCleaner(HoodieWriteConfig config, boolean simulateRetryFailure, Integer firstCommitSequence, boolean needInstantInHudiFormat) throws IOException {
     SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(config);
-    String cleanInstantTs = needInstantInHudiFormat ? makeNewCommitTimeInHudiFormat(firstCommitSequence) : makeNewCommitTime(firstCommitSequence);
+    String cleanInstantTs = needInstantInHudiFormat ? makeNewCommitTime(firstCommitSequence, "%014d") : makeNewCommitTime(firstCommitSequence, "%09d");
     HoodieCleanMetadata cleanMetadata1 = writeClient.clean(cleanInstantTs);
 
     if (null == cleanMetadata1) {
@@ -768,12 +767,12 @@ public class TestCleaner extends HoodieClientTestBase {
 
     int startInstant = 1;
     for (int i = 0; i < commitCount; i++, startInstant++) {
-      String commitTime = makeNewCommitTime(startInstant);
+      String commitTime = makeNewCommitTime(startInstant, "%09d");
       HoodieTestTable.of(metaClient).addCommit(commitTime);
     }
 
     for (int i = 0; i < cleanCount; i++, startInstant++) {
-      String commitTime = makeNewCommitTime(startInstant);
+      String commitTime = makeNewCommitTime(startInstant, "%09d");
       createCleanMetadata(commitTime + "", false, true);
     }
 
@@ -788,7 +787,7 @@ public class TestCleaner extends HoodieClientTestBase {
     assertEquals(--cleanCount, timeline.getTimelineOfActions(
             CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants().countInstants());
     assertTrue(timeline.getTimelineOfActions(
-            CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().containsInstant(makeNewCommitTime(--startInstant)));
+            CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().containsInstant(makeNewCommitTime(--startInstant, "%09d")));
 
     cleanStats = runCleaner(config);
     timeline = metaClient.reloadActiveTimeline();
@@ -801,7 +800,7 @@ public class TestCleaner extends HoodieClientTestBase {
     assertEquals(--cleanCount, timeline.getTimelineOfActions(
             CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants().countInstants());
     assertTrue(timeline.getTimelineOfActions(
-            CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().containsInstant(makeNewCommitTime(--startInstant)));
+            CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().containsInstant(makeNewCommitTime(--startInstant, "%09d")));
   }
 
 
@@ -1498,7 +1497,7 @@ public class TestCleaner extends HoodieClientTestBase {
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(1).build())
             .build();
 
-    String commitTime = makeNewCommitTime(1);
+    String commitTime = makeNewCommitTime(1, "%09d");
     List<String> cleanerFileNames = Arrays.asList(
         HoodieTimeline.makeRequestedCleanerFileName(commitTime),
         HoodieTimeline.makeInflightCleanerFileName(commitTime));

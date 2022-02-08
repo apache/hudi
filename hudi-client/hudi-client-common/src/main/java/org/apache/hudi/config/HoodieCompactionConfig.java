@@ -107,7 +107,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("Controls how compaction scheduling is triggered, by time or num delta commits or combination of both. "
           + "Valid options: " + Arrays.stream(CompactionTriggerStrategy.values()).map(Enum::name).collect(Collectors.joining(",")));
 
-  public static final ConfigProperty<String> INLINE_CLEAN_TRIGGER_STRATEGY = ConfigProperty
+  public static final ConfigProperty<String> CLEAN_TRIGGER_STRATEGY = ConfigProperty
           .key("hoodie.clean.inline.trigger.strategy")
           .defaultValue(CleaningTriggerStrategy.NUM_COMMITS.name())
           .withDocumentation("Controls how cleaning is scheduled. Valid options: "
@@ -539,7 +539,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
     }
 
     public Builder withInlineCleaningTriggerStrategy(String cleaningTriggerStrategy) {
-      compactionConfig.setValue(INLINE_CLEAN_TRIGGER_STRATEGY, cleaningTriggerStrategy);
+      compactionConfig.setValue(CLEAN_TRIGGER_STRATEGY, cleaningTriggerStrategy);
       return this;
     }
 
