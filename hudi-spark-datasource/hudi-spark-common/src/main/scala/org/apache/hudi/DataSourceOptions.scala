@@ -478,6 +478,32 @@ object DataSourceWriteOptions {
       + "Use this when you are in the process of migrating from "
       + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to org.apache.hudi input format")
 
+  // spark data source write pool name. Incase of streaming sink, users might be interested to set custom scheduling configs
+  // for regular writes and async compaction. In such cases, this pool name will be used for spark datasource writes.
+  val SPARK_DATASOURCE_WRITER_POOL_NAME = "sparkdatasourcewrite"
+
+  /*
+  When async compaction is enabled (deltastreamer or streaming sink), users might be interested to set custom
+  scheduling configs for regular writes and async compaction. This is the property used to set custom scheduler config
+  file with spark. In Deltastreamer, the file is generated within hudi and set if necessary. Where as in case of streaming
+  sink, users have to set this property when they invoke spark shell.
+  Sample format of the file contents.
+  <?xml version="1.0"?>
+  <allocations>
+    <pool name="sparkdatasourcewrite">
+      <schedulingMode>FAIR</schedulingMode>
+      <weight>4</weight>
+      <minShare>2</minShare>
+    </pool>
+    <pool name="hoodiecompact">
+      <schedulingMode>FAIR</schedulingMode>
+      <weight>3</weight>
+      <minShare>1</minShare>
+    </pool>
+  </allocations>
+   */
+  val SPARK_SCHEDULER_ALLOCATION_FILE_KEY = "spark.scheduler.allocation.file"
+
   /** @deprecated Use {@link HIVE_SYNC_MODE} instead of this config from 0.9.0 */
   @Deprecated
   val HIVE_USE_JDBC: ConfigProperty[String] = ConfigProperty
