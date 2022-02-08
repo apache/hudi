@@ -49,6 +49,7 @@ import org.apache.log4j.Logger;
 import javax.annotation.Nullable;
 import java.io.EOFException;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -195,7 +196,9 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     switch (Objects.requireNonNull(blockType)) {
       case AVRO_DATA_BLOCK:
         if (nextBlockVersion.getVersion() == HoodieLogFormatVersion.DEFAULT_VERSION) {
-          return HoodieAvroDataBlock.getBlock(content.get(), readerSchema);
+          // TODO cleanup
+          // return HoodieAvroDataBlock.getBlock(content.get(), readerSchema);
+          throw new UnsupportedEncodingException("not supported");
         } else {
           return new HoodieAvroDataBlock(inputStream, content, readBlockLazily, logBlockContentLoc,
               Option.ofNullable(readerSchema), header, footer, keyField);
