@@ -153,9 +153,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    * @param predicates     The filter condition.
    * @return The Pruned partition paths.
    */
-  def prunePartition(partitionPaths: Seq[PartitionPath],
-                     predicates: Seq[Expression]): Seq[PartitionPath] = {
-
+  def prunePartition(partitionPaths: Seq[PartitionPath], predicates: Seq[Expression]): Seq[PartitionPath] = {
     val partitionColumnNames = partitionSchema.fields.map(_.name).toSet
     val partitionPruningPredicates = predicates.filter {
       _.references.map(_.name).toSet.subsetOf(partitionColumnNames)

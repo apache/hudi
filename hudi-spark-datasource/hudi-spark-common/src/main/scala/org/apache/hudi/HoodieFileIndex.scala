@@ -101,31 +101,29 @@ case class HoodieFileIndex(spark: SparkSession,
    * @param dataFilters      data columns filters
    * @return list of PartitionDirectory containing partition to base files mapping
    */
-  override def listFiles(partitionFilters: Seq[Expression],
-                         dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
+  override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
     // Look up candidate files names in the col-stats index, if all of the following conditions are true
     //    - Data-skipping is enabled
     //    - Col-Stats Index is present
     //    - List of predicates (filters) is present
     val candidateFilesNamesOpt: Option[Set[String]] =
-    lookupCandidateFilesInColStatsIndex(dataFilters) match {
-      case Success(opt) => opt
-      case Failure(e) =>
-        if (e.isInstanceOf[AnalysisException]) {
-          logDebug("Failed to relay provided data filters to Z-index lookup", e)
-        } else {
-          logError("Failed to lookup candidate files in Z-index", e)
-        }
-        Option.empty
-    }
+      lookupCandidateFilesInColStatsIndex(dataFilters) match {
+        case Success(opt) => opt
+        case Failure(e) =>
+          if (e.isInstanceOf[AnalysisException]) {
+            logDebug("Failed to relay provided data filters to Z-index lookup", e)
+          } else {
+            logError("Failed to lookup candidate files in Z-index", e)
+          }
+          Option.empty
+      }
 
     logDebug(s"Overlapping candidate files (from Z-index): ${candidateFilesNamesOpt.getOrElse(Set.empty)}")
 
     if (queryAsNonePartitionedTable) {
       // Read as Non-Partitioned table
       // Filter in candidate files based on the col-stats index lookup
-      val candidateFiles =
-      allFiles.filter(fileStatus =>
+      val candidateFiles = allFiles.filter(fileStatus =>
         // NOTE: This predicate is true when {@code Option} is empty
         candidateFilesNamesOpt.forall(_.contains(fileStatus.getPath.getName))
       )
@@ -149,10 +147,9 @@ case class HoodieFileIndex(spark: SparkSession,
             .map(_.getFileStatus)
 
         // Filter in candidate files based on the col-stats index lookup
-        val candidateFiles =
-          baseFileStatuses.filter(fs =>
-            // NOTE: This predicate is true when {@code Option} is empty
-            candidateFilesNamesOpt.forall(_.contains(fs.getPath.getName)))
+        val candidateFiles = baseFileStatuses.filter(fs =>
+          // NOTE: This predicate is true when {@code Option} is empty
+          candidateFilesNamesOpt.forall(_.contains(fs.getPath.getName)))
 
         totalFileSize += baseFileStatuses.size
         candidateFileSize += candidateFiles.size
