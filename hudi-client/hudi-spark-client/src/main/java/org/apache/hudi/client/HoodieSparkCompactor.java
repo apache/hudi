@@ -54,8 +54,7 @@ public class HoodieSparkCompactor<T extends HoodieRecordPayload> extends BaseCom
     HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(instant.getTimestamp());
     List<HoodieWriteStat> writeStats = compactionMetadata.getCommitMetadata().get()
         .getPartitionToWriteStats()
-        .values()
-        .stream()
+        .values().stream()
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status");
