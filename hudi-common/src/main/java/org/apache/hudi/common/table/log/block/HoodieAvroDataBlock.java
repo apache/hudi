@@ -106,7 +106,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   // TODO (na) - Break down content into smaller chunks of byte [] to be GC as they are used
   // TODO (na) - Implement a recordItr instead of recordList
   @Override
-  protected List<HoodieRecord> deserializeRecords(byte[] content, HoodieRecordMapper mapper) throws IOException {
+  protected List<HoodieRecord> deserializeRecords(byte[] content, HoodieRecord.Mapper mapper) throws IOException {
     checkState(readerSchema != null, "Reader's schema has to be non-null");
 
     SizeAwareDataInputStream dis =

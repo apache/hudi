@@ -150,7 +150,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   }
 
   @Override
-  protected List<HoodieRecord> deserializeRecords(byte[] content, HoodieRecordMapper mapper) throws IOException {
+  protected List<HoodieRecord> deserializeRecords(byte[] content, HoodieRecord.Mapper mapper) throws IOException {
     checkState(readerSchema != null, "Reader's schema has to be non-null");
 
     // Get schema from the header
@@ -165,7 +165,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
 
   // TODO abstract this w/in HoodieDataBlock
   @Override
-  protected List<HoodieRecord> lookupRecords(List<String> keys, HoodieRecordMapper mapper) throws IOException {
+  protected List<HoodieRecord> lookupRecords(List<String> keys, HoodieRecord.Mapper mapper) throws IOException {
     HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
 
     // NOTE: It's important to extend Hadoop configuration here to make sure configuration

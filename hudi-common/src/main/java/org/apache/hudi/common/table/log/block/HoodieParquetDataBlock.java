@@ -139,7 +139,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
    * @param mapper
    */
   @Override
-  protected List<HoodieRecord> readRecordsFromBlockPayload(HoodieRecordMapper mapper) throws IOException {
+  protected List<HoodieRecord> readRecordsFromBlockPayload(HoodieRecord.Mapper mapper) throws IOException {
     HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
 
     // NOTE: It's important to extend Hadoop configuration here to make sure configuration
@@ -166,7 +166,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
   }
 
   @Override
-  protected List<HoodieRecord> deserializeRecords(byte[] content, HoodieRecordMapper mapper) throws IOException {
+  protected List<HoodieRecord> deserializeRecords(byte[] content, HoodieRecord.Mapper mapper) throws IOException {
     throw new UnsupportedOperationException("Should not be invoked");
   }
 }

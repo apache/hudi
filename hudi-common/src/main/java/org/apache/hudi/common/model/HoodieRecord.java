@@ -20,6 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -283,6 +284,18 @@ public abstract class HoodieRecord<T> implements Serializable {
 
   public static String generateSequenceId(String instantTime, int partitionId, long recordIndex) {
     return instantTime + "_" + partitionId + "_" + recordIndex;
+  }
+
+  /**
+   * NOTE: This is temporary transition construct to be able to construct
+   *       HoodieRecord instances w/o excessive wiring into a lot of components
+   *       a lot of details that are irrelevant for these
+   * TODO remove
+   */
+  @FunctionalInterface
+  public
+  interface Mapper {
+    HoodieRecord apply(IndexedRecord avroPayload);
   }
 
   private static class EmptyRecord implements GenericRecord {

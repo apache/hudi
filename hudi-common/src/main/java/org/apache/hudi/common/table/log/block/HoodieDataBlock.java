@@ -19,7 +19,6 @@
 package org.apache.hudi.common.table.log.block;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
@@ -113,7 +112,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   /**
    * Returns all the records contained w/in this block
    */
-  public final List<HoodieRecord> getRecords(HoodieRecordMapper mapper) {
+  public final List<HoodieRecord> getRecords(HoodieRecord.Mapper mapper) {
     if (!records.isPresent()) {
       try {
         // in case records are absent, read content lazily and then convert to IndexedRecords
@@ -137,7 +136,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    * @return List of IndexedRecords for the keys of interest.
    * @throws IOException in case of failures encountered when reading/parsing records
    */
-  public final List<HoodieRecord> getRecords(List<String> keys, HoodieRecordMapper mapper) throws IOException {
+  public final List<HoodieRecord> getRecords(List<String> keys, HoodieRecord.Mapper mapper) throws IOException {
     boolean fullScan = keys.isEmpty();
     if (enablePointLookups && !fullScan) {
       return lookupRecords(keys, mapper);
@@ -156,7 +155,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
         .collect(Collectors.toList());
   }
 
-  protected List<HoodieRecord> readRecordsFromBlockPayload(HoodieRecordMapper mapper) throws IOException {
+  protected List<HoodieRecord> readRecordsFromBlockPayload(HoodieRecord.Mapper mapper) throws IOException {
     if (readBlockLazily && !getContent().isPresent()) {
       // read log block contents from disk
       inflate();
@@ -170,7 +169,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     }
   }
 
-  protected List<HoodieRecord> lookupRecords(List<String> keys, HoodieRecordMapper mapper) throws IOException {
+  protected List<HoodieRecord> lookupRecords(List<String> keys, HoodieRecord.Mapper mapper) throws IOException {
     throw new UnsupportedOperationException(
         String.format("Point lookups are not supported by this Data block type (%s)", getBlockType())
     );
@@ -178,7 +177,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
   protected abstract byte[] serializeRecords(List<HoodieRecord> records) throws IOException;
 
-  protected abstract List<HoodieRecord> deserializeRecords(byte[] content, HoodieRecordMapper mapper) throws IOException;
+  protected abstract List<HoodieRecord> deserializeRecords(byte[] content, HoodieRecord.Mapper mapper) throws IOException;
 
   public abstract HoodieLogBlockType getBlockType();
 
@@ -188,12 +187,5 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
   protected Option<String> getRecordKey(HoodieRecord record) {
     return Option.ofNullable(record.getRecordKey());
-  }
-
-  // TODO remove
-  @FunctionalInterface
-  public
-  interface HoodieRecordMapper {
-    HoodieRecord apply(IndexedRecord avroPayload);
   }
 }
