@@ -24,7 +24,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers;
-
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -164,10 +163,17 @@ public class TestKafkaOffsetGen {
     // committed offsets are not present for the consumer group
     kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("group", "string"));
     nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 300, metrics);
-    assertEquals(500, nextOffsetRanges[0].fromOffset());
-    assertEquals(500, nextOffsetRanges[0].untilOffset());
-    assertEquals(500, nextOffsetRanges[1].fromOffset());
-    assertEquals(500, nextOffsetRanges[1].untilOffset());
+    if (494 == nextOffsetRanges[0].fromOffset()) {
+      assertEquals(494, nextOffsetRanges[0].fromOffset());
+      assertEquals(494, nextOffsetRanges[0].untilOffset());
+      assertEquals(506, nextOffsetRanges[1].fromOffset());
+      assertEquals(506, nextOffsetRanges[1].untilOffset());
+    } else {
+      assertEquals(506, nextOffsetRanges[0].fromOffset());
+      assertEquals(506, nextOffsetRanges[0].untilOffset());
+      assertEquals(494, nextOffsetRanges[1].fromOffset());
+      assertEquals(494, nextOffsetRanges[1].untilOffset());
+    }
   }
 
   @Test
