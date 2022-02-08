@@ -442,10 +442,10 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
       earliestCommitToRetain = commitTimeline.nthInstant(commitTimeline.countInstants() - commitsRetained); //15 instants total, 10 commits to retain, this gives 6th instant in the list
     } else if (config.getCleanerPolicy() == HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS) {
       Instant instant = Instant.now();
-      ZonedDateTime commitDateTime = ZonedDateTime.ofInstant(instant, ZoneId.systemDefault());
-      String retainInstantsAfter = HoodieActiveTimeline.formatDate(Date.from(commitDateTime.minusHours(hoursRetained).toInstant()));
+      ZonedDateTime currentDateTime = ZonedDateTime.ofInstant(instant, ZoneId.systemDefault());
+      String earliestTimeToRetain = HoodieActiveTimeline.formatDate(Date.from(currentDateTime.minusHours(hoursRetained).toInstant()));
       earliestCommitToRetain = Option.fromJavaOptional(commitTimeline.getInstants().filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(),
-              HoodieTimeline.GREATER_THAN_OR_EQUALS, retainInstantsAfter)).findFirst());
+              HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestTimeToRetain)).findFirst());
     }
     return earliestCommitToRetain;
   }

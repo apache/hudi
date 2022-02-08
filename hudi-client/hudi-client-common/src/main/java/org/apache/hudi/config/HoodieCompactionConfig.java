@@ -540,7 +540,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder retainNumberOfHours(int cleanerHoursRetained) {
+    public Builder cleanerNumHoursRetained(int cleanerHoursRetained) {
       compactionConfig.setValue(CLEANER_HOURS_RETAINED, String.valueOf(cleanerHoursRetained));
       return this;
     }
