@@ -70,15 +70,21 @@ public class TestHoodieIncrSource extends HoodieClientTestHarness {
     Pair<String, List<HoodieRecord>> inserts = writeRecords(writeClient, true, null, "100");
     Pair<String, List<HoodieRecord>> inserts2 = writeRecords(writeClient, true, null, "200");
     Pair<String, List<HoodieRecord>> inserts3 = writeRecords(writeClient, true, null, "300");
+    Pair<String, List<HoodieRecord>> inserts4 = writeRecords(writeClient, true, null, "400");
+    Pair<String, List<HoodieRecord>> inserts5 = writeRecords(writeClient, true, null, "500");
+
 
     // read everything upto latest
-    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.empty(), 300, inserts3.getKey());
+    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.empty(), 500, inserts5.getKey());
 
-    // even if the begin timestamp is archived (100), full table scan should kick in.
-    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of("100"), 200, inserts3.getKey());
+    // even if the begin timestamp is archived (100), full table scan should kick in, but should filter for records having commit time > 100
+    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of("100"), 400, inserts5.getKey());
+
+    // even if the read upto latest is set, if begin timestamp is in active timeline, only incremental should kick in.
+    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of("400"), 100, inserts5.getKey());
 
     // read just the latest
-    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.empty(), 100, inserts3.getKey());
+    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.empty(), 100, inserts5.getKey());
   }
 
   private void readAndAssert(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy, Option<String> checkpointToPull, int expectedCount, String expectedCheckpoint) {

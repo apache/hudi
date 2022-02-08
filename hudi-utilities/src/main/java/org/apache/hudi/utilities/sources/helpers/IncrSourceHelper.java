@@ -89,12 +89,11 @@ public class IncrSourceHelper {
       }
     });
 
-    if (missingCheckpointStrategy == MissingCheckpointStrategy.READ_LATEST) {
+    if (missingCheckpointStrategy == MissingCheckpointStrategy.READ_LATEST || !activeCommitTimeline.isBeforeTimelineStarts(beginInstantTime)) {
       Option<HoodieInstant> nthInstant = Option.fromJavaOptional(activeCommitTimeline
           .findInstantsAfter(beginInstantTime, numInstantsPerFetch).getInstants().reduce((x, y) -> y));
       return Pair.of(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL(), Pair.of(beginInstantTime, nthInstant.map(HoodieInstant::getTimestamp).orElse(beginInstantTime)));
     } else {
-      // if beginInstant is DEFAULT_BEGIN_TIMESTAMP,  MissingCheckpointStrategy should be set.
       // when MissingCheckpointStrategy is set to read everything until latest, trigger snapshot query.
       Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
       return Pair.of(DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL(), Pair.of(beginInstantTime, lastInstant.get().getTimestamp()));
