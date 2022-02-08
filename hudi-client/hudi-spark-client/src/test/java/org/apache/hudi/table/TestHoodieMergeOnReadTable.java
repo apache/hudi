@@ -45,6 +45,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.deltacommit.BaseSparkDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.SparkDeleteDeltaCommitActionExecutor;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
@@ -258,7 +259,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
 
       // Do a compaction
       String compactionInstantTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
-      JavaRDD<WriteStatus> result = (JavaRDD<WriteStatus>) writeClient.compact(compactionInstantTime);
+      HoodieWriteMetadata<JavaRDD<WriteStatus>> result = writeClient.compact(compactionInstantTime);
 
       // Verify that recently written compacted data file has no log file
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -275,8 +276,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
         for (FileSlice slice : groupedLogFiles) {
           assertEquals(0, slice.getLogFiles().count(), "After compaction there should be no log files visible on a full view");
         }
-        List<WriteStatus> writeStatuses = result.collect();
-        assertTrue(writeStatuses.stream().anyMatch(writeStatus -> writeStatus.getStat().getPartitionPath().contentEquals(partitionPath)));
+        assertTrue(result.getCommitMetadata().get().getWritePartitionPaths().stream().anyMatch(part -> part.contentEquals(partitionPath)));
       }
 
       // Check the entire dataset has all records still
@@ -442,8 +442,9 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       // Test small file handling after compaction
       instantTime = "002";
       client.scheduleCompactionAtInstant(instantTime, Option.of(metadata.getExtraMetadata()));
-      statuses = (JavaRDD<WriteStatus>) client.compact(instantTime);
-      client.commitCompaction(instantTime, statuses, Option.empty());
+      HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(instantTime);
+      statuses = compactionMetadata.getWriteStatuses();
+      client.commitCompaction(instantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
 
       // Read from commit file
       table = HoodieSparkTable.create(cfg, context());

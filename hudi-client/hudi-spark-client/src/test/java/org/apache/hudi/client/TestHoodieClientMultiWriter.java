@@ -38,6 +38,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieWriteConflictException;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.hadoop.fs.Path;
@@ -364,8 +365,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       latchCountDownAndWait(runCountDownLatch, 30000);
       if (tableType == HoodieTableType.MERGE_ON_READ) {
         assertDoesNotThrow(() -> {
-          JavaRDD<WriteStatus> writeStatusJavaRDD = (JavaRDD<WriteStatus>) client2.compact("005");
-          client2.commitCompaction("005", writeStatusJavaRDD, Option.empty());
+          HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata =  client2.compact("005");
+          client2.commitCompaction("005", compactionMetadata.getCommitMetadata().get(), Option.empty());
           validInstants.add("005");
         });
       }

@@ -869,17 +869,16 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * Commit a compaction operation. Allow passing additional meta-data to be stored in commit instant file.
    *
    * @param compactionInstantTime Compaction Instant Time
-   * @param writeStatuses Collection of WriteStatus to inspect errors and counts
+   * @param metadata All the metadata that gets stored along with a commit
    * @param extraMetadata Extra Metadata to be stored
    */
-  public abstract void commitCompaction(String compactionInstantTime, O writeStatuses,
-                                        Option<Map<String, String>> extraMetadata) throws IOException;
+  public abstract void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata,
+                                        Option<Map<String, String>> extraMetadata);
 
   /**
    * Commit Compaction and track metrics.
    */
-  protected abstract void completeCompaction(HoodieCommitMetadata metadata, O writeStatuses,
-                                             HoodieTable<T, I, K, O> table, String compactionCommitTime);
+  protected abstract void completeCompaction(HoodieCommitMetadata metadata, HoodieTable<T, I, K, O> table, String compactionCommitTime);
 
   /**
    * Get inflight time line exclude compaction and clustering.

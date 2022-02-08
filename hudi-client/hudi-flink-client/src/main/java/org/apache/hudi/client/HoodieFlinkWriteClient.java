@@ -346,23 +346,21 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   @Override
   public void commitCompaction(
       String compactionInstantTime,
-      List<WriteStatus> writeStatuses,
-      Option<Map<String, String>> extraMetadata) throws IOException {
+      HoodieCommitMetadata metadata,
+      Option<Map<String, String>> extraMetadata) {
     HoodieFlinkTable<T> table = getHoodieTable();
-    HoodieCommitMetadata metadata = CompactHelpers.getInstance().createCompactionMetadata(
-        table, compactionInstantTime, HoodieList.of(writeStatuses), config.getSchema());
     extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
-    completeCompaction(metadata, writeStatuses, table, compactionInstantTime);
+    completeCompaction(metadata, table, compactionInstantTime);
   }
 
   @Override
   public void completeCompaction(
       HoodieCommitMetadata metadata,
-      List<WriteStatus> writeStatuses,
       HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
       String compactionCommitTime) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction");
-    List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
+    List<HoodieWriteStat> writeStats = metadata.getPartitionToWriteStats().entrySet().stream().flatMap(e ->
+        e.getValue().stream()).collect(Collectors.toList());
     final HoodieInstant compactionInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionCommitTime);
     try {
       this.txnManager.beginTransaction(Option.of(compactionInstant), Option.empty());
@@ -393,14 +391,9 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   @Override
   protected HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime, boolean shouldComplete) {
     // only used for metadata table, the compaction happens in single thread
-    try {
-      HoodieWriteMetadata<List<WriteStatus>> compactionMetadata = getHoodieTable().compact(context, compactionInstantTime);
-      List<WriteStatus> writeStatuses = compactionMetadata.getWriteStatuses();
-      commitCompaction(compactionInstantTime, writeStatuses, Option.empty());
-      return compactionMetadata;
-    } catch (IOException e) {
-      throw new HoodieException("Error while compacting instant: " + compactionInstantTime);
-    }
+    HoodieWriteMetadata<List<WriteStatus>> compactionMetadata = getHoodieTable().compact(context, compactionInstantTime);
+    commitCompaction(compactionInstantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
+    return compactionMetadata;
   }
 
   @Override

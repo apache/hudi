@@ -286,16 +286,14 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  public void commitCompaction(String compactionInstantTime, JavaRDD<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata) throws IOException {
+  public void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
     HoodieSparkTable<T> table = HoodieSparkTable.create(config, context);
-    HoodieCommitMetadata metadata = CompactHelpers.getInstance().createCompactionMetadata(
-        table, compactionInstantTime, HoodieJavaRDD.of(writeStatuses), config.getSchema());
     extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
-    completeCompaction(metadata, writeStatuses, table, compactionInstantTime);
+    completeCompaction(metadata, table, compactionInstantTime);
   }
 
   @Override
-  protected void completeCompaction(HoodieCommitMetadata metadata, JavaRDD<WriteStatus> writeStatuses,
+  protected void completeCompaction(HoodieCommitMetadata metadata,
                                     HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                     String compactionCommitTime) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction");
@@ -340,9 +338,8 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     compactionTimer = metrics.getCompactionCtx();
     HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata =
         table.compact(context, compactionInstantTime);
-    JavaRDD<WriteStatus> statuses = compactionMetadata.getWriteStatuses();
     if (shouldComplete && compactionMetadata.getCommitMetadata().isPresent()) {
-      completeTableService(TableServiceType.COMPACT, compactionMetadata.getCommitMetadata().get(), statuses, table, compactionInstantTime);
+      completeTableService(TableServiceType.COMPACT, compactionMetadata.getCommitMetadata().get(), table, compactionInstantTime);
     }
     return compactionMetadata;
   }
@@ -360,15 +357,14 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     clusteringTimer = metrics.getClusteringCtx();
     LOG.info("Starting clustering at " + clusteringInstant);
     HoodieWriteMetadata<JavaRDD<WriteStatus>> clusteringMetadata = table.cluster(context, clusteringInstant);
-    JavaRDD<WriteStatus> statuses = clusteringMetadata.getWriteStatuses();
     // TODO : Where is shouldComplete used ?
     if (shouldComplete && clusteringMetadata.getCommitMetadata().isPresent()) {
-      completeTableService(TableServiceType.CLUSTER, clusteringMetadata.getCommitMetadata().get(), statuses, table, clusteringInstant);
+      completeTableService(TableServiceType.CLUSTER, clusteringMetadata.getCommitMetadata().get(), table, clusteringInstant);
     }
     return clusteringMetadata;
   }
 
-  private void completeClustering(HoodieReplaceCommitMetadata metadata, JavaRDD<WriteStatus> writeStatuses,
+  private void completeClustering(HoodieReplaceCommitMetadata metadata,
                                     HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                     String clusteringCommitTime) {
 
@@ -470,16 +466,16 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   }
 
   // TODO : To enforce priority between table service and ingestion writer, use transactions here and invoke strategy
-  private void completeTableService(TableServiceType tableServiceType, HoodieCommitMetadata metadata, JavaRDD<WriteStatus> writeStatuses,
+  private void completeTableService(TableServiceType tableServiceType, HoodieCommitMetadata metadata,
                                     HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                     String commitInstant) {
 
     switch (tableServiceType) {
       case CLUSTER:
-        completeClustering((HoodieReplaceCommitMetadata) metadata, writeStatuses, table, commitInstant);
+        completeClustering((HoodieReplaceCommitMetadata) metadata, table, commitInstant);
         break;
       case COMPACT:
-        completeCompaction(metadata, writeStatuses, table, commitInstant);
+        completeCompaction(metadata, table, commitInstant);
         break;
       default:
         throw new IllegalArgumentException("This table service is not valid " + tableServiceType);

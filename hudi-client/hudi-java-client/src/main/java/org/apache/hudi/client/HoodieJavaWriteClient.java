@@ -210,14 +210,13 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   public void commitCompaction(String compactionInstantTime,
-                               List<WriteStatus> writeStatuses,
-                               Option<Map<String, String>> extraMetadata) throws IOException {
+                               HoodieCommitMetadata metadata,
+                               Option<Map<String, String>> extraMetadata) {
     throw new HoodieNotSupportedException("CommitCompaction is not supported in HoodieJavaClient");
   }
 
   @Override
   protected void completeCompaction(HoodieCommitMetadata metadata,
-                                    List<WriteStatus> writeStatuses,
                                     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
                                     String compactionCommitTime) {
     throw new HoodieNotSupportedException("CompleteCompaction is not supported in HoodieJavaClient");
