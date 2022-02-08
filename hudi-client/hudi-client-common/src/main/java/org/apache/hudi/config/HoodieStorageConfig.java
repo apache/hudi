@@ -83,14 +83,17 @@ public class HoodieStorageConfig extends HoodieConfig {
       .withDocumentation("Lower values increase the size of metadata tracked within HFile, but can offer potentially "
           + "faster lookup times.");
 
-  // used to size log files
+  public static final ConfigProperty<String> LOGFILE_DATA_BLOCK_FORMAT = ConfigProperty
+      .key("hoodie.logfile.data.block.format")
+      .noDefaultValue()
+      .withDocumentation("Format of the data block within delta logs. Following formats are currently supported \"avro\", \"hfile\", \"parquet\"");
+
   public static final ConfigProperty<String> LOGFILE_MAX_SIZE = ConfigProperty
       .key("hoodie.logfile.max.size")
       .defaultValue(String.valueOf(1024 * 1024 * 1024)) // 1 GB
       .withDocumentation("LogFile max size. This is the maximum size allowed for a log file "
           + "before it is rolled over to the next version.");
 
-  // used to size data blocks in log file
   public static final ConfigProperty<String> LOGFILE_DATA_BLOCK_MAX_SIZE = ConfigProperty
       .key("hoodie.logfile.data.block.max.size")
       .defaultValue(String.valueOf(256 * 1024 * 1024))
@@ -116,14 +119,14 @@ public class HoodieStorageConfig extends HoodieConfig {
       .withDocumentation("Whether to use dictionary encoding");
 
   public static final ConfigProperty<String> PARQUET_WRITE_LEGACY_FORMAT_ENABLED = ConfigProperty
-          .key("hoodie.parquet.writeLegacyFormat.enabled")
+          .key("hoodie.parquet.writelegacyformat.enabled")
           .defaultValue("false")
           .withDocumentation("Sets spark.sql.parquet.writeLegacyFormat. If true, data will be written in a way of Spark 1.4 and earlier. "
                   + "For example, decimal values will be written in Parquet's fixed-length byte array format which other systems such as Apache Hive and Apache Impala use. "
                   + "If false, the newer format in Parquet will be used. For example, decimals will be written in int-based format.");
 
   public static final ConfigProperty<String> PARQUET_OUTPUT_TIMESTAMP_TYPE = ConfigProperty
-          .key("hoodie.parquet.outputTimestampType")
+          .key("hoodie.parquet.outputtimestamptype")
           .defaultValue("TIMESTAMP_MILLIS")
           .withDocumentation("Sets spark.sql.parquet.outputTimestampType. Parquet timestamp type to use when Spark writes data to Parquet files.");
 

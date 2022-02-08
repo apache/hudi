@@ -239,10 +239,6 @@ alter table h2_p add columns(ext0 int);
 +----------+
 | ok       |
 +----------+
-alter table h2_p change column ext0 ext0 bigint;
-+----------+
-| ok       |
-+----------+
 
 # DROP TABLE
 drop table h0;

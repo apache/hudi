@@ -18,11 +18,14 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -38,11 +41,14 @@ import java.io.Serializable;
 import java.text.ParseException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Represents the Active Timeline for the Hoodie table. Instants for the last 12 hours (configurable) is in the
@@ -156,6 +162,18 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     createFileInMetaPath(instant.getFileName(), Option.empty(), false);
   }
 
+  public void createRequestedReplaceCommit(String instantTime, String actionType) {
+    try {
+      HoodieInstant instant = new HoodieInstant(State.REQUESTED, actionType, instantTime);
+      LOG.info("Creating a new instant " + instant);
+      // Create the request replace file
+      createFileInMetaPath(instant.getFileName(),
+              TimelineMetadataUtils.serializeRequestedReplaceMetadata(new HoodieRequestedReplaceMetadata()), false);
+    } catch (IOException e) {
+      throw new HoodieIOException("Error create requested replace commit ", e);
+    }
+  }
+
   public void saveAsComplete(HoodieInstant instant, Option<byte[]> data) {
     LOG.info("Marking instant complete " + instant);
     ValidationUtils.checkArgument(instant.isInflight(),
@@ -241,6 +259,26 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     return readDataFromPath(detailPath);
   }
 
+  /**
+   * Get the last instant with valid data, and convert this to HoodieCommitMetadata
+   */
+  public Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLastCommitMetadataWithValidData() {
+    List<HoodieInstant> completed = getCommitsTimeline().filterCompletedInstants().getInstants()
+        .sorted(Comparator.comparing(HoodieInstant::getTimestamp).reversed()).collect(Collectors.toList());
+    for (HoodieInstant instant : completed) {
+      try {
+        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
+            getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+        if (!commitMetadata.getFileIdAndRelativePaths().isEmpty()) {
+          return Option.of(Pair.of(instant, commitMetadata));
+        }
+      } catch (IOException e) {
+        LOG.warn("Failed to convert instant to HoodieCommitMetadata: " + instant.toString());
+      }
+    }
+    return Option.empty();
+  }
+
   public Option<byte[]> readCleanerInfoAsBytes(HoodieInstant instant) {
     // Cleaner metadata are always stored only in timeline .hoodie
     return readDataFromPath(new Path(metaClient.getMetaPath(), instant.getFileName()));
@@ -323,7 +361,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   private void createFileInAuxiliaryFolder(HoodieInstant instant, Option<byte[]> data) {
     // This will be removed in future release. See HUDI-546
     Path fullPath = new Path(metaClient.getMetaAuxiliaryPath(), instant.getFileName());
-    createFileInPath(fullPath, data);
+    FileIOUtils.createFileInPath(metaClient.getFs(), fullPath, data);
   }
 
   //-----------------------------------------------------------------
@@ -467,7 +505,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
             fromInstant.getFileName())));
         // Use Write Once to create Target File
         if (allowRedundantTransitions) {
-          createFileInPath(new Path(metaClient.getMetaPath(), toInstant.getFileName()), data);
+          FileIOUtils.createFileInPath(metaClient.getFs(), new Path(metaClient.getMetaPath(), toInstant.getFileName()), data);
         } else {
           createImmutableFileInPath(new Path(metaClient.getMetaPath(), toInstant.getFileName()), data);
         }
@@ -564,30 +602,9 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   private void createFileInMetaPath(String filename, Option<byte[]> content, boolean allowOverwrite) {
     Path fullPath = new Path(metaClient.getMetaPath(), filename);
     if (allowOverwrite || metaClient.getTimelineLayoutVersion().isNullVersion()) {
-      createFileInPath(fullPath, content);
+      FileIOUtils.createFileInPath(metaClient.getFs(), fullPath, content);
     } else {
       createImmutableFileInPath(fullPath, content);
-    }
-  }
-
-  private void createFileInPath(Path fullPath, Option<byte[]> content) {
-    try {
-      // If the path does not exist, create it first
-      if (!metaClient.getFs().exists(fullPath)) {
-        if (metaClient.getFs().createNewFile(fullPath)) {
-          LOG.info("Created a new file in meta path: " + fullPath);
-        } else {
-          throw new HoodieIOException("Failed to create file " + fullPath);
-        }
-      }
-
-      if (content.isPresent()) {
-        FSDataOutputStream fsout = metaClient.getFs().create(fullPath, true);
-        fsout.write(content.get());
-        fsout.close();
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to create file " + fullPath, e);
     }
   }
 

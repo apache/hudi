@@ -27,7 +27,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
@@ -39,13 +38,11 @@ import java.io.Serializable;
 /**
  * Base class for different types of indexes to determine the mapping from uuid.
  *
- * @param <T> Sub type of HoodieRecordPayload
  * @param <I> Type of inputs for deprecated APIs
- * @param <K> Type of keys for deprecated APIs
  * @param <O> Type of outputs for deprecated APIs
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
-public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implements Serializable {
+public abstract class HoodieIndex<I, O> implements Serializable {
 
   protected final HoodieWriteConfig config;
 
@@ -60,7 +57,7 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implem
   @Deprecated
   @PublicAPIMethod(maturity = ApiMaturityLevel.DEPRECATED)
   public I tagLocation(I records, HoodieEngineContext context,
-                       HoodieTable<T, I, K, O> hoodieTable) throws HoodieIndexException {
+                       HoodieTable hoodieTable) throws HoodieIndexException {
     throw new HoodieNotSupportedException("Deprecated API should not be called");
   }
 
@@ -70,7 +67,7 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implem
   @Deprecated
   @PublicAPIMethod(maturity = ApiMaturityLevel.DEPRECATED)
   public O updateLocation(O writeStatuses, HoodieEngineContext context,
-                          HoodieTable<T, I, K, O> hoodieTable) throws HoodieIndexException {
+                          HoodieTable hoodieTable) throws HoodieIndexException {
     throw new HoodieNotSupportedException("Deprecated API should not be called");
   }
 
@@ -79,8 +76,8 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implem
    * the row (if it is actually present).
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public abstract HoodieData<HoodieRecord<T>> tagLocation(
-      HoodieData<HoodieRecord<T>> records, HoodieEngineContext context,
+  public abstract <R> HoodieData<HoodieRecord<R>> tagLocation(
+      HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
       HoodieTable hoodieTable) throws HoodieIndexException;
 
   /**

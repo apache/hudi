@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.parquet.schema.PrimitiveStringifier;
-
 import java.util.Objects;
 
 /**
@@ -30,16 +28,21 @@ public class HoodieColumnRangeMetadata<T> {
   private final String columnName;
   private final T minValue;
   private final T maxValue;
-  private final long numNulls;
-  private final PrimitiveStringifier stringifier;
+  private final long nullCount;
+  private final long valueCount;
+  private final long totalSize;
+  private final long totalUncompressedSize;
 
-  public HoodieColumnRangeMetadata(final String filePath, final String columnName, final T minValue, final T maxValue, final long numNulls, final PrimitiveStringifier stringifier) {
+  public HoodieColumnRangeMetadata(final String filePath, final String columnName, final T minValue, final T maxValue,
+                                   final long nullCount, long valueCount, long totalSize, long totalUncompressedSize) {
     this.filePath = filePath;
     this.columnName = columnName;
     this.minValue = minValue;
     this.maxValue = maxValue;
-    this.numNulls = numNulls;
-    this.stringifier = stringifier;
+    this.nullCount = nullCount;
+    this.valueCount = valueCount;
+    this.totalSize = totalSize;
+    this.totalUncompressedSize = totalUncompressedSize;
   }
 
   public String getFilePath() {
@@ -58,12 +61,20 @@ public class HoodieColumnRangeMetadata<T> {
     return this.maxValue;
   }
 
-  public PrimitiveStringifier getStringifier() {
-    return stringifier;
+  public long getNullCount() {
+    return nullCount;
   }
 
-  public long getNumNulls() {
-    return numNulls;
+  public long getValueCount() {
+    return valueCount;
+  }
+
+  public long getTotalSize() {
+    return totalSize;
+  }
+
+  public long getTotalUncompressedSize() {
+    return totalUncompressedSize;
   }
 
   @Override
@@ -79,12 +90,15 @@ public class HoodieColumnRangeMetadata<T> {
         && Objects.equals(getColumnName(), that.getColumnName())
         && Objects.equals(getMinValue(), that.getMinValue())
         && Objects.equals(getMaxValue(), that.getMaxValue())
-        && Objects.equals(getNumNulls(), that.getNumNulls());
+        && Objects.equals(getNullCount(), that.getNullCount())
+        && Objects.equals(getValueCount(), that.getValueCount())
+        && Objects.equals(getTotalSize(), that.getTotalSize())
+        && Objects.equals(getTotalUncompressedSize(), that.getTotalUncompressedSize());
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getColumnName(), getMinValue(), getMaxValue(), getNumNulls());
+    return Objects.hash(getColumnName(), getMinValue(), getMaxValue(), getNullCount());
   }
 
   @Override
@@ -94,6 +108,10 @@ public class HoodieColumnRangeMetadata<T> {
         + "columnName='" + columnName + '\''
         + ", minValue=" + minValue
         + ", maxValue=" + maxValue
-        + ", numNulls=" + numNulls + '}';
+        + ", nullCount=" + nullCount
+        + ", valueCount=" + valueCount
+        + ", totalSize=" + totalSize
+        + ", totalUncompressedSize=" + totalUncompressedSize
+        + '}';
   }
 }

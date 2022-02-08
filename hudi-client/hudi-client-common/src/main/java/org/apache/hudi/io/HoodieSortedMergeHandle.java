@@ -85,7 +85,7 @@ public class HoodieSortedMergeHandle<T extends HoodieRecordPayload, I, K, O> ext
       }
 
       // This is a new insert
-      HoodieRecord<T> hoodieRecord = new HoodieRecord<>(keyToNewRecords.get(keyToPreWrite));
+      HoodieRecord<T> hoodieRecord = keyToNewRecords.get(keyToPreWrite).newInstance();
       if (writtenRecordKeys.contains(keyToPreWrite)) {
         throw new HoodieUpsertException("Insert/Update not in sorted order");
       }

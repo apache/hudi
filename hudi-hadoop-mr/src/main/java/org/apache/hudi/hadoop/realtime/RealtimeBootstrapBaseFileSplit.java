@@ -18,11 +18,11 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
-
-import org.apache.hadoop.mapred.FileSplit;
+import org.apache.hudi.hadoop.InputSplitUtils;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -33,6 +33,9 @@ import java.util.stream.Collectors;
 
 /**
  * Realtime File Split with external base file.
+ *
+ * NOTE: If you're adding fields here you need to make sure that you appropriately de-/serialize them
+ *       in {@link #readFromInput(DataInput)} and {@link #writeToOutput(DataOutput)}
  */
 public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit implements RealtimeSplit {
 
@@ -43,29 +46,42 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
 
   private String basePath;
 
+  private boolean belongsToIncrementalSplit;
+
+  /**
+   * NOTE: This ctor is necessary for Hive to be able to serialize and
+   *       then instantiate it when deserializing back
+   */
   public RealtimeBootstrapBaseFileSplit() {
     super();
   }
 
-  public RealtimeBootstrapBaseFileSplit(FileSplit baseSplit, String basePath, List<HoodieLogFile> deltaLogFiles,
-                                        String maxInstantTime, FileSplit externalFileSplit) throws IOException {
+  public RealtimeBootstrapBaseFileSplit(FileSplit baseSplit,
+                                        String basePath,
+                                        List<HoodieLogFile> deltaLogFiles,
+                                        String maxInstantTime,
+                                        FileSplit externalFileSplit,
+                                        boolean belongsToIncrementalQuery) throws IOException {
     super(baseSplit, externalFileSplit);
     this.maxInstantTime = maxInstantTime;
     this.deltaLogFiles = deltaLogFiles;
     this.deltaLogPaths = deltaLogFiles.stream().map(entry -> entry.getPath().toString()).collect(Collectors.toList());
     this.basePath = basePath;
+    this.belongsToIncrementalSplit = belongsToIncrementalQuery;
   }
 
   @Override
   public void write(DataOutput out) throws IOException {
     super.write(out);
     writeToOutput(out);
+    InputSplitUtils.writeBoolean(belongsToIncrementalSplit, out);
   }
 
   @Override
   public void readFields(DataInput in) throws IOException {
     super.readFields(in);
     readFromInput(in);
+    belongsToIncrementalSplit = InputSplitUtils.readBoolean(in);
   }
 
   @Override
@@ -91,6 +107,10 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
   @Override
   public Option<HoodieVirtualKeyInfo> getHoodieVirtualKeyInfo() {
     return Option.empty();
+  }
+
+  public boolean getBelongsToIncrementalQuery() {
+    return belongsToIncrementalSplit;
   }
 
   @Override

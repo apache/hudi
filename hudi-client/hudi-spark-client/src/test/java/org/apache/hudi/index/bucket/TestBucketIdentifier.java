@@ -18,15 +18,17 @@
 
 package org.apache.hudi.index.bucket;
 
-import java.util.Arrays;
-import java.util.List;
-
-import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
+
+import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
+
+import java.util.Arrays;
+import java.util.List;
 
 public class TestBucketIdentifier {
 
@@ -44,7 +46,7 @@ public class TestBucketIdentifier {
     String recordKeyField = "_row_key";
     String indexKeyField = "_row_key";
     GenericRecord record = KeyGeneratorTestUtilities.getRecord();
-    HoodieRecord hoodieRecord = new HoodieRecord(
+    HoodieRecord hoodieRecord = new HoodieAvroRecord(
         new HoodieKey(KeyGenUtils.getRecordKey(record, recordKeyField, false), ""), null);
     int bucketId = BucketIdentifier.getBucketId(hoodieRecord, indexKeyField, 8);
     assert bucketId == BucketIdentifier.getBucketId(
@@ -56,7 +58,7 @@ public class TestBucketIdentifier {
     List<String> recordKeyField = Arrays.asList("_row_key","ts_ms");
     String indexKeyField = "_row_key";
     GenericRecord record = KeyGeneratorTestUtilities.getRecord();
-    HoodieRecord hoodieRecord = new HoodieRecord(
+    HoodieRecord hoodieRecord = new HoodieAvroRecord(
         new HoodieKey(KeyGenUtils.getRecordKey(record, recordKeyField, false), ""), null);
     int bucketId = BucketIdentifier.getBucketId(hoodieRecord, indexKeyField, 8);
     assert bucketId == BucketIdentifier.getBucketId(

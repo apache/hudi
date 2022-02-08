@@ -19,18 +19,17 @@
 
 package org.apache.hudi.table.action.rollback;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.PathFilter;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieWriteConfig;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.PathFilter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -38,7 +37,6 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -104,22 +102,20 @@ public class ListingBasedRollbackHelper implements Serializable {
         case APPEND_ROLLBACK_BLOCK: {
           String fileId = rollbackRequest.getFileId().get();
           String latestBaseInstant = rollbackRequest.getLatestBaseInstant().get();
-          // collect all log files that is supposed to be deleted with this rollback
-          Map<FileStatus, Long> writtenLogFileSizeMap = FSUtils.getAllLogFiles(metaClient.getFs(),
-              FSUtils.getPartitionPath(config.getBasePath(), rollbackRequest.getPartitionPath()),
-              fileId, HoodieFileFormat.HOODIE_LOG.getFileExtension(), latestBaseInstant)
-              .collect(Collectors.toMap(HoodieLogFile::getFileStatus, value -> value.getFileStatus().getLen()));
-          Map<String, Long> logFilesToBeDeleted = new HashMap<>();
-          for (Map.Entry<FileStatus, Long> fileToBeDeleted : writtenLogFileSizeMap.entrySet()) {
-            logFilesToBeDeleted.put(fileToBeDeleted.getKey().getPath().toString(), fileToBeDeleted.getValue());
-          }
+          HoodieWriteStat writeStat = rollbackRequest.getWriteStat().get();
+
+          Path fullLogFilePath = FSUtils.getPartitionPath(config.getBasePath(), writeStat.getPath());
+
+          Map<String, Long> logFilesWithBlocksToRollback =
+              Collections.singletonMap(fullLogFilePath.toString(), writeStat.getTotalWriteBytes());
+
           return new HoodieRollbackRequest(rollbackRequest.getPartitionPath(), fileId, latestBaseInstant,
-              Collections.EMPTY_LIST, logFilesToBeDeleted);
+              Collections.EMPTY_LIST, logFilesWithBlocksToRollback);
         }
         default:
           throw new IllegalStateException("Unknown Rollback action " + rollbackRequest);
       }
-    }, numPartitions).stream().collect(Collectors.toList());
+    }, numPartitions);
   }
 
   private FileStatus[] getBaseFilesToBeDeleted(HoodieTableMetaClient metaClient, HoodieWriteConfig config,

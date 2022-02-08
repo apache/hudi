@@ -42,7 +42,7 @@ public class HoodieTableMetadataKeyGenerator extends BaseKeyGenerator {
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    return KeyGenUtils.getRecordKey(record, HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY, isConsistentLogicalTimestampEnabled());
+    return KeyGenUtils.getRecordKey(record, HoodieMetadataPayload.KEY_FIELD_NAME, isConsistentLogicalTimestampEnabled());
   }
 
   @Override

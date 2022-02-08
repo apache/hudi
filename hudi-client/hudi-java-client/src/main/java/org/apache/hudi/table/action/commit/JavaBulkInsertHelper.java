@@ -39,12 +39,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A java implementation of {@link AbstractBulkInsertHelper}.
+ * A java implementation of {@link BaseBulkInsertHelper}.
  *
  * @param <T>
  */
 @SuppressWarnings("checkstyle:LineLength")
-public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends AbstractBulkInsertHelper<T, List<HoodieRecord<T>>,
+public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends BaseBulkInsertHelper<T, List<HoodieRecord<T>>,
     List<HoodieKey>, List<WriteStatus>, R> {
 
   private JavaBulkInsertHelper() {

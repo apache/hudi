@@ -19,8 +19,8 @@
 
 package org.apache.hudi.async;
 
-import org.apache.hudi.client.AbstractClusteringClient;
-import org.apache.hudi.client.AbstractHoodieWriteClient;
+import org.apache.hudi.client.BaseClusterer;
+import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
@@ -44,19 +44,19 @@ public abstract class AsyncClusteringService extends HoodieAsyncService {
   private static final Logger LOG = LogManager.getLogger(AsyncClusteringService.class);
 
   private final int maxConcurrentClustering;
-  private transient AbstractClusteringClient clusteringClient;
+  private transient BaseClusterer clusteringClient;
 
-  public AsyncClusteringService(AbstractHoodieWriteClient writeClient) {
+  public AsyncClusteringService(BaseHoodieWriteClient writeClient) {
     this(writeClient, false);
   }
 
-  public AsyncClusteringService(AbstractHoodieWriteClient writeClient, boolean runInDaemonMode) {
+  public AsyncClusteringService(BaseHoodieWriteClient writeClient, boolean runInDaemonMode) {
     super(runInDaemonMode);
     this.clusteringClient = createClusteringClient(writeClient);
     this.maxConcurrentClustering = 1;
   }
 
-  protected abstract AbstractClusteringClient createClusteringClient(AbstractHoodieWriteClient client);
+  protected abstract BaseClusterer createClusteringClient(BaseHoodieWriteClient client);
 
   /**
    * Start clustering service.
@@ -94,7 +94,7 @@ public abstract class AsyncClusteringService extends HoodieAsyncService {
   /**
    * Update the write client to be used for clustering.
    */
-  public synchronized void updateWriteClient(AbstractHoodieWriteClient writeClient) {
+  public synchronized void updateWriteClient(BaseHoodieWriteClient writeClient) {
     this.clusteringClient.updateWriteClient(writeClient);
   }
 }

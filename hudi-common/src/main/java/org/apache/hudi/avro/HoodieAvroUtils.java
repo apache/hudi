@@ -18,17 +18,6 @@
 
 package org.apache.hudi.avro;
 
-import org.apache.hudi.common.config.SerializableSchema;
-import org.apache.hudi.common.model.HoodieOperation;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.SchemaCompatibilityException;
-
 import org.apache.avro.Conversions.DecimalConversion;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalTypes;
@@ -50,15 +39,22 @@ import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.specific.SpecificRecordBase;
+import org.apache.hudi.common.config.SerializableSchema;
+import org.apache.hudi.common.model.HoodieOperation;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.SchemaCompatibilityException;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -67,8 +63,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import java.util.zip.DeflaterOutputStream;
-import java.util.zip.InflaterInputStream;
 
 /**
  * Helper class to do common stuff across Avro.
@@ -343,7 +337,7 @@ public class HoodieAvroUtils {
   }
 
   /**
-   * Given a avro record with a given schema, rewrites it into the new schema while setting fields only from the new
+   * Given an Avro record with a given schema, rewrites it into the new schema while setting fields only from the new
    * schema.
    * NOTE: Here, the assumption is that you cannot go from an evolved schema (schema with (N) fields)
    * to an older schema (schema with (N-1) fields). All fields present in the older record schema MUST be present in the
@@ -377,6 +371,16 @@ public class HoodieAvroUtils {
     return newRecord;
   }
 
+  /**
+   * Converts list of {@link GenericRecord} provided into the {@link GenericRecord} adhering to the
+   * provided {@code newSchema}.
+   *
+   * To better understand conversion rules please check {@link #rewriteRecord(GenericRecord, Schema)}
+   */
+  public static List<GenericRecord> rewriteRecords(List<GenericRecord> records, Schema newSchema) {
+    return records.stream().map(r -> rewriteRecord(r, newSchema)).collect(Collectors.toList());
+  }
+
   private static void copyOldValueOrSetDefault(GenericRecord oldRecord, GenericRecord newRecord, Schema.Field f) {
     // cache the result of oldRecord.get() to save CPU expensive hash lookup
     Schema oldSchema = oldRecord.getSchema();
@@ -389,33 +393,6 @@ public class HoodieAvroUtils {
       }
     } else {
       newRecord.put(f.name(), fieldValue);
-    }
-  }
-
-  public static byte[] compress(String text) {
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    try {
-      OutputStream out = new DeflaterOutputStream(baos);
-      out.write(text.getBytes(StandardCharsets.UTF_8));
-      out.close();
-    } catch (IOException e) {
-      throw new HoodieIOException("IOException while compressing text " + text, e);
-    }
-    return baos.toByteArray();
-  }
-
-  public static String decompress(byte[] bytes) {
-    InputStream in = new InflaterInputStream(new ByteArrayInputStream(bytes));
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    try {
-      byte[] buffer = new byte[8192];
-      int len;
-      while ((len = in.read(buffer)) > 0) {
-        baos.write(buffer, 0, len);
-      }
-      return new String(baos.toByteArray(), StandardCharsets.UTF_8);
-    } catch (IOException e) {
-      throw new HoodieIOException("IOException while decompressing text", e);
     }
   }
 

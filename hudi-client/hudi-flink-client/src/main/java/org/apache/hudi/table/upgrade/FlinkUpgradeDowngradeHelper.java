@@ -29,7 +29,7 @@ import org.apache.hudi.table.HoodieTable;
 /**
  * Flink upgrade and downgrade helper.
  */
-public class FlinkUpgradeDowngradeHelper implements BaseUpgradeDowngradeHelper {
+public class FlinkUpgradeDowngradeHelper implements SupportsUpgradeDowngrade {
 
   private static final FlinkUpgradeDowngradeHelper SINGLETON_INSTANCE =
       new FlinkUpgradeDowngradeHelper();

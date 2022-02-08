@@ -42,7 +42,7 @@ public class UpgradeDowngrade {
   private static final Logger LOG = LogManager.getLogger(UpgradeDowngrade.class);
   public static final String HOODIE_UPDATED_PROPERTY_FILE = "hoodie.properties.updated";
 
-  private final BaseUpgradeDowngradeHelper upgradeDowngradeHelper;
+  private final SupportsUpgradeDowngrade upgradeDowngradeHelper;
   private HoodieTableMetaClient metaClient;
   protected HoodieWriteConfig config;
   protected HoodieEngineContext context;
@@ -52,7 +52,7 @@ public class UpgradeDowngrade {
 
   public UpgradeDowngrade(
       HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieEngineContext context,
-      BaseUpgradeDowngradeHelper upgradeDowngradeHelper) {
+      SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     this.metaClient = metaClient;
     this.config = config;
     this.context = context;

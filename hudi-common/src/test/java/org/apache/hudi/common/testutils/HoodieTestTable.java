@@ -354,7 +354,6 @@ public class HoodieTestTable {
       rollbackPartitionMetadata.setPartitionPath(entry.getKey());
       rollbackPartitionMetadata.setSuccessDeleteFiles(entry.getValue());
       rollbackPartitionMetadata.setFailedDeleteFiles(new ArrayList<>());
-      rollbackPartitionMetadata.setWrittenLogFiles(getWrittenLogFiles(instantTimeToDelete, entry));
       long rollbackLogFileSize = 50 + RANDOM.nextInt(500);
       String fileId = UUID.randomUUID().toString();
       String logFileName = logFileName(instantTimeToDelete, fileId, 0);

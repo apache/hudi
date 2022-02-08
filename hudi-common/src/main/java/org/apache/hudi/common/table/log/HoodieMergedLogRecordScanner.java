@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -144,7 +145,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       HoodieRecordPayload combinedValue = hoodieRecord.getData().preCombine(oldValue);
       boolean choosePrev = combinedValue.equals(oldValue);
       HoodieOperation operation = choosePrev ? oldRecord.getOperation() : hoodieRecord.getOperation();
-      records.put(key, new HoodieRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()), combinedValue, operation));
+      records.put(key, new HoodieAvroRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()), combinedValue, operation));
     } else {
       // Put the record as is
       records.put(key, hoodieRecord);

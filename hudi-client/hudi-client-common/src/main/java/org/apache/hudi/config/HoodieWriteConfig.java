@@ -37,9 +37,11 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
@@ -289,7 +291,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> BULK_INSERT_SORT_MODE = ConfigProperty
       .key("hoodie.bulkinsert.sort.mode")
       .defaultValue(BulkInsertSortMode.GLOBAL_SORT.toString())
-      .withDocumentation("Sorting modes to use for sorting records for bulk insert. This is user when user "
+      .withDocumentation("Sorting modes to use for sorting records for bulk insert. This is use when user "
           + BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME.key() + "is not configured. Available values are - "
           + "GLOBAL_SORT: this ensures best file sizes, with lowest memory overhead at cost of sorting. "
           + "PARTITION_SORT: Strikes a balance by only sorting within a partition, still keeping the memory overhead of writing "
@@ -1083,6 +1085,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieCompactionConfig.MIN_COMMITS_TO_KEEP);
   }
 
+  public int getArchiveMergeFilesBatchSize() {
+    return getInt(HoodieCompactionConfig.ARCHIVE_MERGE_FILES_BATCH_SIZE);
+  }
+
   public int getParquetSmallFileLimit() {
     return getInt(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT);
   }
@@ -1117,6 +1123,14 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean isAutoClean() {
     return getBoolean(HoodieCompactionConfig.AUTO_CLEAN);
+  }
+
+  public boolean getArchiveMergeEnable() {
+    return getBoolean(HoodieCompactionConfig.ARCHIVE_MERGE_ENABLE);
+  }
+
+  public long getArchiveMergeSmallFileLimitBytes() {
+    return getLong(HoodieCompactionConfig.ARCHIVE_MERGE_SMALL_FILE_LIMIT_BYTES);
   }
 
   public boolean isAutoArchive() {
@@ -1285,28 +1299,19 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS);
   }
 
-  /**
-   * Data layout optimize properties.
-   */
-  public boolean isLayoutOptimizationEnabled() {
-    return getBoolean(HoodieClusteringConfig.LAYOUT_OPTIMIZE_ENABLE);
+  public HoodieClusteringConfig.LayoutOptimizationStrategy getLayoutOptimizationStrategy() {
+    return HoodieClusteringConfig.LayoutOptimizationStrategy.fromValue(
+        getStringOrDefault(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY)
+    );
   }
 
-  public String getLayoutOptimizationStrategy() {
-    return getString(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY);
-  }
-
-  public HoodieClusteringConfig.BuildCurveStrategyType getLayoutOptimizationCurveBuildMethod() {
-    return HoodieClusteringConfig.BuildCurveStrategyType.fromValue(
-        getString(HoodieClusteringConfig.LAYOUT_OPTIMIZE_CURVE_BUILD_METHOD));
+  public HoodieClusteringConfig.SpatialCurveCompositionStrategyType getLayoutOptimizationCurveBuildMethod() {
+    return HoodieClusteringConfig.SpatialCurveCompositionStrategyType.fromValue(
+        getString(HoodieClusteringConfig.LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD));
   }
 
   public int getLayoutOptimizationSampleSize() {
     return getInt(HoodieClusteringConfig.LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE);
-  }
-
-  public boolean isDataSkippingEnabled() {
-    return getBoolean(HoodieClusteringConfig.LAYOUT_OPTIMIZE_DATA_SKIPPING_ENABLE);
   }
 
   /**
@@ -1441,6 +1446,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieIndexConfig.BLOOM_INDEX_BUCKETIZED_CHECKING);
   }
 
+  public boolean isMetadataBloomFilterIndexEnabled() {
+    return isMetadataTableEnabled() && getMetadataConfig().isBloomFilterIndexEnabled();
+  }
+
+  public boolean isMetadataIndexColumnStatsForAllColumnsEnabled() {
+    return isMetadataTableEnabled() && getMetadataConfig().isMetadataColumnStatsIndexForAllColumnsEnabled();
+  }
+
   public int getBloomIndexKeysPerBucket() {
     return getInt(HoodieIndexConfig.BLOOM_INDEX_KEYS_PER_BUCKET);
   }
@@ -1510,6 +1523,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String parquetOutputTimestampType() {
     return getString(HoodieStorageConfig.PARQUET_OUTPUT_TIMESTAMP_TYPE);
+  }
+
+  public Option<HoodieLogBlock.HoodieLogBlockType> getLogDataBlockFormat() {
+    return Option.ofNullable(getString(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT))
+        .map(HoodieLogBlock.HoodieLogBlockType::fromId);
   }
 
   public long getLogFileMaxSize() {

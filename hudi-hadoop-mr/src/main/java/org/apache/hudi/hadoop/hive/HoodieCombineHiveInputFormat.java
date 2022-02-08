@@ -20,6 +20,7 @@ package org.apache.hudi.hadoop.hive;
 
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.hadoop.HoodieFileInputFormatBase;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieCombineRealtimeRecordReader;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
@@ -876,7 +877,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
       LOG.info("Listing status in HoodieCombineHiveInputFormat.HoodieCombineFileInputFormatShim");
       List<FileStatus> result;
       if (hoodieFilter) {
-        HoodieParquetInputFormat input;
+        HoodieFileInputFormatBase input;
         if (isRealTime) {
           LOG.info("Using HoodieRealtimeInputFormat");
           input = createParquetRealtimeInputFormat();
@@ -916,7 +917,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
         job.set("hudi.hive.realtime", "true");
         InputSplit[] splits;
         if (hoodieFilter) {
-          HoodieParquetInputFormat input = createParquetRealtimeInputFormat();
+          HoodieParquetRealtimeInputFormat input = createParquetRealtimeInputFormat();
           input.setConf(job);
           splits = input.getSplits(job, numSplits);
         } else {
