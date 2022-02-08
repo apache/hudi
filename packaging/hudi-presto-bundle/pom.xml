@@ -187,14 +187,6 @@
       </exclusions>
     </dependency>
 
-    <!-- Scala -->
-    <!-- TODO(HUDI-3239) remove this dep -->
-    <dependency>
-      <groupId>org.scala-lang</groupId>
-      <artifactId>scala-library</artifactId>
-      <version>${scala.version}</version>
-    </dependency>
-
     <!-- Parquet -->
     <dependency>
       <groupId>org.apache.parquet</groupId>
