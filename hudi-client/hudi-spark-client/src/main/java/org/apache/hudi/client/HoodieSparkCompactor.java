@@ -32,8 +32,9 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 
-import java.io.IOException;
+import java.util.Collection;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class HoodieSparkCompactor<T extends HoodieRecordPayload> extends BaseCompactor<T,
     JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
@@ -47,11 +48,11 @@ public class HoodieSparkCompactor<T extends HoodieRecordPayload> extends BaseCom
   }
 
   @Override
-  public void compact(HoodieInstant instant) throws IOException {
+  public void compact(HoodieInstant instant) {
     LOG.info("Compactor executing compaction " + instant);
     SparkRDDWriteClient<T> writeClient = (SparkRDDWriteClient<T>) compactionClient;
     HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(instant.getTimestamp());
-    List<HoodieWriteStat> writeStats = compactionMetadata.getWriteStats().get();
+    List<HoodieWriteStat> writeStats = compactionMetadata.getCommitMetadata().get().getPartitionToWriteStats().values().stream().flatMap(Collection::stream).collect(Collectors.toList());
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status");
     long numWriteErrors = writeStats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum();
     if (numWriteErrors != 0) {
