@@ -160,7 +160,7 @@ public class HoodieAvroHFileReader implements HoodieAvroFileReader {
   }
 
   @Override
-  public Map<String, IndexedRecord> getRecordsByKeys(List<String> rowKeys) throws IOException {
+  public Map<String, GenericRecord> getRecordsByKeys(List<String> rowKeys) throws IOException {
     return filterRecordsImpl(new TreeSet<>(rowKeys));
   }
 
@@ -174,10 +174,10 @@ public class HoodieAvroHFileReader implements HoodieAvroFileReader {
    * @return Map of keys to fetched records
    * @throws IOException When the deserialization of records fail
    */
-  private synchronized Map<String, IndexedRecord> filterRecordsImpl(TreeSet<String> sortedCandidateRowKeys) throws IOException {
-    HashMap<String, IndexedRecord> filteredRecords = new HashMap<>();
+  private synchronized Map<String, GenericRecord> filterRecordsImpl(TreeSet<String> sortedCandidateRowKeys) throws IOException {
+    HashMap<String, GenericRecord> filteredRecords = new HashMap<>();
     for (String key : sortedCandidateRowKeys) {
-      Option<IndexedRecord> record = getRecordByKey(key);
+      Option<GenericRecord> record = getRecordByKey(key);
       if (record.isPresent()) {
         filteredRecords.put(key, record.get());
       }

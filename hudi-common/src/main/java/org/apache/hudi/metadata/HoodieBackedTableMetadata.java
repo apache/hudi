@@ -20,7 +20,6 @@ package org.apache.hudi.metadata;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
@@ -208,11 +207,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Retrieve record from base file
     if (baseFileReader != null) {
       HoodieTimer readTimer = new HoodieTimer();
-      Map<String, IndexedRecord> baseFileRecords = baseFileReader.getRecordsByKeys(keys);
+      Map<String, GenericRecord> baseFileRecords = baseFileReader.getRecordsByKeys(keys);
       for (String key : keys) {
         readTimer.startTimer();
         if (baseFileRecords.containsKey(key)) {
-          hoodieRecord = getRecord(Option.of((GenericRecord) baseFileRecords.get(key)), partitionName);
+          hoodieRecord = getRecord(Option.of(baseFileRecords.get(key)), partitionName);
           metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BASEFILE_READ_STR, readTimer.endTimer()));
           // merge base file record w/ log record if present
           if (logRecords.containsKey(key) && logRecords.get(key).isPresent()) {

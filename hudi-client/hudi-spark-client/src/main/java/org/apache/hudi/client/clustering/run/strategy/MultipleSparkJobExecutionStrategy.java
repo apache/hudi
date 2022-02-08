@@ -244,7 +244,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
   private JavaRDD<HoodieRecord<T>> readRecordsForGroupBaseFiles(JavaSparkContext jsc,
                                                                 List<ClusteringOperation> clusteringOps) {
     return jsc.parallelize(clusteringOps, clusteringOps.size()).mapPartitions(clusteringOpsPartition -> {
-      List<Iterator<IndexedRecord>> iteratorsForPartition = new ArrayList<>();
+      List<Iterator<GenericRecord>> iteratorsForPartition = new ArrayList<>();
       clusteringOpsPartition.forEachRemaining(clusteringOp -> {
         try {
           Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
