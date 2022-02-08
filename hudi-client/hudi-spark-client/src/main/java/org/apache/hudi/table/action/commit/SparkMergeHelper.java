@@ -71,7 +71,7 @@ public class SparkMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHe
     }
 
     BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
-    HoodieAvroFileReader reader = HoodieFileReaderFactory.<GenericRecord>getFileReader(cfgForHoodieFile, mergeHandle.getOldFilePath());
+    HoodieAvroFileReader reader = HoodieFileReaderFactory.getFileReader(cfgForHoodieFile, mergeHandle.getOldFilePath());
     try {
       final Iterator<IndexedRecord> readerIterator;
       if (baseFile.getBootstrapBaseFile().isPresent()) {

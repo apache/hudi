@@ -20,7 +20,6 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.SparkTaskContextSupplier;
-import org.apache.hudi.common.io.storage.HoodieFileWriter;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;

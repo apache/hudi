@@ -16,28 +16,14 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.io.storage;
+package org.apache.hudi.io.storage;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.common.model.HoodieRecord;
 
 import java.io.IOException;
-import java.util.Properties;
 
-public interface HoodieFileWriter {
-  boolean canWrite();
+public interface HoodieRecordFileWriter<R> extends HoodieFileWriter {
+  void writeWithMetadata(R newRecord, HoodieRecord record) throws IOException;
 
-  void writeWithMetadata(HoodieRecord record, Schema schema, Properties props) throws IOException;
-
-  void write(HoodieRecord record, Schema schema, Properties props) throws IOException;
-
-  void close() throws IOException;
-
-  default void writeWithMetadata(HoodieRecord record, Schema schema) throws IOException {
-    writeWithMetadata(record, schema, new Properties());
-  }
-
-  default void write(HoodieRecord record, Schema schema) throws IOException {
-    write(record, schema, new Properties());
-  }
+  void write(String key, R record) throws IOException;
 }

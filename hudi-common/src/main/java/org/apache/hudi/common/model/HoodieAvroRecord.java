@@ -24,11 +24,11 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.io.storage.HoodieFileWriter;
-import org.apache.hudi.common.io.storage.HoodieRecordFileWriter;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.io.storage.HoodieFileWriter;
+import org.apache.hudi.io.storage.HoodieRecordFileWriter;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;

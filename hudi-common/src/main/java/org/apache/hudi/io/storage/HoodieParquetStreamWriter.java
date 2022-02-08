@@ -23,7 +23,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.common.io.storage.HoodieAvroFileWriter;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.parquet.io.OutputStreamBackedOutputFile;
 import org.apache.parquet.hadoop.ParquetFileWriter;
