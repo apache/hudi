@@ -19,13 +19,14 @@
 
 package org.apache.hudi.client.transaction.lock;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.lock.LockState;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieLockException;
+
+import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
@@ -94,7 +95,7 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
     try {
       LOCK.writeLock().unlock();
     } catch (Exception e) {
-      throw new HoodieLockException(getLogMessage(LockState.FAILED_TO_RELEASE), e);
+      // throw new HoodieLockException(getLogMessage(LockState.FAILED_TO_RELEASE), e);
     }
     LOG.info(getLogMessage(LockState.RELEASED));
   }
