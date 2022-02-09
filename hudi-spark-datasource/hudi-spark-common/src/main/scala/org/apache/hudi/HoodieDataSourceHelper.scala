@@ -18,12 +18,15 @@
 
 package org.apache.hudi
 
+import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FileStatus
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, PredicateHelper, SpecificInternalRow, SubqueryExpression, UnsafeProjection}
+import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionedFile}
+import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
@@ -38,11 +41,11 @@ object HoodieDataSourceHelper extends PredicateHelper {
    * - other predicates.
    */
   def splitPartitionAndDataPredicates(
+      spark: SparkSession,
       condition: Expression,
-      partitionColumns: Seq[String],
-      spark: SparkSession): (Seq[Expression], Seq[Expression]) = {
+      partitionColumns: Seq[String]): (Seq[Expression], Seq[Expression]) = {
     splitConjunctivePredicates(condition).partition(
-      isPredicateMetadataOnly(_, partitionColumns, spark))
+      isPredicateMetadataOnly(spark, _, partitionColumns))
   }
 
   /**
@@ -50,20 +53,20 @@ object HoodieDataSourceHelper extends PredicateHelper {
    * only references partition columns and involves no subquery.
    */
   def isPredicateMetadataOnly(
+      spark: SparkSession,
       condition: Expression,
-      partitionColumns: Seq[String],
-      spark: SparkSession): Boolean = {
-    isPredicatePartitionColumnsOnly(condition, partitionColumns, spark) &&
-        !containsSubquery(condition)
+      partitionColumns: Seq[String]): Boolean = {
+    isPredicatePartitionColumnsOnly(spark, condition, partitionColumns) &&
+        !SubqueryExpression.hasSubquery(condition)
   }
 
   /**
    * Does the predicate only contains partition columns?
    */
   def isPredicatePartitionColumnsOnly(
+      spark: SparkSession,
       condition: Expression,
-      partitionColumns: Seq[String],
-      spark: SparkSession): Boolean = {
+      partitionColumns: Seq[String]): Boolean = {
     val nameEquality = spark.sessionState.analyzer.resolver
     condition.references.forall { r =>
       partitionColumns.exists(nameEquality(r.name, _))
@@ -71,20 +74,39 @@ object HoodieDataSourceHelper extends PredicateHelper {
   }
 
   /**
-   * Check if condition involves a subquery expression.
+   * Wrapper `buildReaderWithPartitionValues` of [[ParquetFileFormat]]
+   * to deal with [[ColumnarBatch]] when enable parquet vectorized reader if necessary.
    */
-  def containsSubquery(condition: Expression): Boolean = {
-    SubqueryExpression.hasSubquery(condition)
+  def buildHoodieParquetReader(
+      sparkSession: SparkSession,
+      dataSchema: StructType,
+      partitionSchema: StructType,
+      requiredSchema: StructType,
+      filters: Seq[Filter],
+      options: Map[String, String],
+      hadoopConf: Configuration): (PartitionedFile) => Iterator[InternalRow] = {
+
+    val readParquetFile: PartitionedFile => Iterator[Any] = new ParquetFileFormat().buildReaderWithPartitionValues(
+      sparkSession = sparkSession,
+      dataSchema = dataSchema,
+      partitionSchema = partitionSchema,
+      requiredSchema = requiredSchema,
+      filters = filters,
+      options = options,
+      hadoopConf = hadoopConf
+    )
+
+    file: PartitionedFile => {
+      val iter = readParquetFile(file)
+      unravelColumnarBatchIfNecessary(iter)
+    }
   }
 
   /**
-   * Wrapper `readFunction` to deal with [[ColumnarBatch]] when enable parquet vectorized reader.
+   * if is [[ColumnarBatch]], unravel it to [[InternalRow]]
    */
-  def readParquetFile(
-      file: PartitionedFile,
-      readFunction: PartitionedFile => Iterator[Any]): Iterator[InternalRow] = {
-    val fileIterator = readFunction(file)
-    val rows = fileIterator.flatMap(_ match {
+  def unravelColumnarBatchIfNecessary(iter: Iterator[Any]): Iterator[InternalRow] = {
+    val rows = iter.flatMap(_ match {
       case r: InternalRow => Seq(r)
       case b: ColumnarBatch => b.rowIterator().asScala
     })

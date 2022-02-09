@@ -33,32 +33,23 @@ import org.apache.spark.sql.types.{BooleanType, StructType}
 
 import scala.util.Try
 
+/**
+ * The implement of [[BaseRelation]], which is used to respond to query that only touches the base files(Parquet),
+ * like query COW tables in Snapshot-Query and Read_Optimized mode and MOR tables in Read_Optimized mode.
+ */
 class BaseFileOnlyViewRelation(
-    val sqlContext: SQLContext,
+    sqlContext: SQLContext,
     metaClient: HoodieTableMetaClient,
     optParams: Map[String, String],
-    userSchema: StructType
-  ) extends BaseRelation with PrunedFilteredScan {
-
-  private val sparkSession = sqlContext.sparkSession
-
-  private val tableAvroSchema = {
-    val schemaUtil = new TableSchemaResolver(metaClient)
-    Try (schemaUtil.getTableAvroSchema).getOrElse(SchemaConverters.toAvroType(userSchema))
-  }
-
-  private val tableStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
+    userSchema: Option[StructType]
+  ) extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) {
 
   private val fileIndex = HoodieFileIndex(sparkSession,
     metaClient,
-    if (userSchema == null) Option.empty[StructType] else Some(userSchema),
+    userSchema,
     optParams,
     FileStatusCache.getOrCreate(sqlContext.sparkSession)
   )
-
-  private val partitionColumns = metaClient.getTableConfig.getPartitionFields.orElse(Array.empty)
-
-  override def schema: StructType =  tableStructSchema
 
   override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
     sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "false")
@@ -68,7 +59,7 @@ class BaseFileOnlyViewRelation(
     val (partitionFilters, dataFilters) = {
       val splited = filters.map { filter =>
         HoodieDataSourceHelper.splitPartitionAndDataPredicates(
-          filterExpressions, partitionColumns, sparkSession)
+          sparkSession, filterExpressions, partitionColumns)
       }
       (splited.flatMap(_._1), splited.flatMap(_._2))
     }
@@ -87,31 +78,17 @@ class BaseFileOnlyViewRelation(
     }
     val filePartitions = HoodieDataSourceHelper.getFilePartitions(sparkSession, emptyPartitionFiles)
 
-    val requiredSchemaParquetReader =
-      new ParquetFileFormat().buildReaderWithPartitionValues(
-        sparkSession = sparkSession,
-        dataSchema = tableStructSchema,
-        partitionSchema = StructType(Nil),
-        requiredSchema = tableStructSchema,
-        filters = filters,
-        options = optParams,
-        hadoopConf = sparkSession.sessionState.newHadoopConf()
-      )
+    val requiredSchemaParquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
+      sparkSession = sparkSession,
+      dataSchema = tableStructSchema,
+      partitionSchema = StructType(Nil),
+      requiredSchema = tableStructSchema,
+      filters = filters,
+      options = optParams,
+      hadoopConf = sparkSession.sessionState.newHadoopConf()
+    )
 
     new HoodieFileScanRDD(sparkSession, requiredColumns, tableStructSchema,
       requiredSchemaParquetReader, filePartitions)
-//      val rdd = new FileScanRDD(sparkSession, readFile(filters), filePartitions)
-
-//    val unsafeProjection = UnsafeProjection.create(requiredStructSchema)
-//    val requiredFieldPosition = requiredStructSchema
-//      .map(f => tableAvroSchema.getField(f.name).pos()).toList
-//    rdd.mapPartitions { iter =>
-//      extractRequiredSchema(iter, requiredStructSchema)
-//    }.asInstanceOf[RDD[Row]]
-//    val requiredAttrs = HoodieSparkUtils.toAttribute(requiredStructSchema)
-//    val fullAttrs = HoodieSparkUtils.toAttribute(tableStructSchema)
-//    val unsafeProjection = UnsafeProjection.create(requiredStructSchema)
-//    rdd.map(unsafeProjection).asInstanceOf[RDD[Row]]
-//    rdd.asInstanceOf[RDD[Row]]
   }
 }

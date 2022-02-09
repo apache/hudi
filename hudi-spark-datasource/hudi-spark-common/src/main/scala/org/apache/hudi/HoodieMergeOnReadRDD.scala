@@ -49,8 +49,8 @@ case class HoodieMergeOnReadPartition(index: Int, split: HoodieMergeOnReadFileSp
 
 class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            @transient config: Configuration,
-                           fullSchemaFileReader: PartitionedFile => Iterator[Any],
-                           requiredSchemaFileReader: PartitionedFile => Iterator[Any],
+                           fullSchemaFileReader: PartitionedFile => Iterator[InternalRow],
+                           requiredSchemaFileReader: PartitionedFile => Iterator[InternalRow],
                            tableState: HoodieMergeOnReadTableState)
   extends RDD[InternalRow](sc, Nil) {
 
@@ -67,13 +67,15 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
 
   private val requiredSchema = tableState.requiredStructSchema
 
-  private val requiredFieldPosition = requiredSchema.map(f => tableState.tableStructSchema.fieldIndex(f.name))
+  private val requiredFieldPosition = HoodieSparkUtils.collectFieldIndexes(requiredSchema,
+    tableState.tableStructSchema
+  )
 
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
     val mergeOnReadPartition = split.asInstanceOf[HoodieMergeOnReadPartition]
     val iter = mergeOnReadPartition.split match {
       case dataFileOnlySplit if dataFileOnlySplit.logPaths.isEmpty =>
-        val rows = readParquetFile(dataFileOnlySplit.dataFile.get, requiredSchemaFileReader)
+        val rows = requiredSchemaFileReader(dataFileOnlySplit.dataFile.get)
         extractRequiredSchema(rows, requiredSchema, requiredFieldPosition)
       case logFileOnlySplit if logFileOnlySplit.dataFile.isEmpty =>
         logFileIterator(logFileOnlySplit, getConfig)
@@ -81,14 +83,14 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
         .equals(DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL) =>
         skipMergeFileIterator(
           skipMergeSplit,
-          readParquetFile(skipMergeSplit.dataFile.get, requiredSchemaFileReader),
+          requiredSchemaFileReader(skipMergeSplit.dataFile.get),
           getConfig
         )
       case payloadCombineSplit if payloadCombineSplit.mergeType
         .equals(DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL) =>
         payloadCombineFileIterator(
           payloadCombineSplit,
-          readParquetFile(payloadCombineSplit.dataFile.get, fullSchemaFileReader),
+          fullSchemaFileReader(payloadCombineSplit.dataFile.get),
           getConfig
         )
       case _ => throw new HoodieException(s"Unable to select an Iterator to read the Hoodie MOR File Split for " +

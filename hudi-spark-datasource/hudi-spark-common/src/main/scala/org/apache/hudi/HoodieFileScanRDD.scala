@@ -36,7 +36,7 @@ class HoodieFileScanRDD(
     @transient private val sparkSession: SparkSession,
     requiredColumns: Array[String],
     schema: StructType,
-    readFunction: PartitionedFile => Iterator[Any],
+    readFunction: PartitionedFile => Iterator[InternalRow],
     @transient val filePartitions: Seq[FilePartition])
   extends RDD[Row](sparkSession.sparkContext, Nil) {
 
@@ -45,7 +45,7 @@ class HoodieFileScanRDD(
     StructType(requiredColumns.map(nameToStructField))
   }
 
-  private val requiredFieldPos = requiredSchema.map(f => schema.fieldIndex(f.name))
+  private val requiredFieldPos = HoodieSparkUtils.collectFieldIndexes(requiredSchema, schema)
 
   override def compute(split: Partition, context: TaskContext): Iterator[Row] = {
     val iterator = new Iterator[Object] with AutoCloseable {
@@ -68,7 +68,7 @@ class HoodieFileScanRDD(
           currentFile = files.next()
 
           logInfo(s"Reading File $currentFile")
-          currentIterator = HoodieDataSourceHelper.readParquetFile(currentFile, readFunction)
+          currentIterator = readFunction(currentFile)
 
           try {
             hasNext

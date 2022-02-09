@@ -310,4 +310,11 @@ object HoodieSparkUtils extends SparkAdapterSupport {
       AttributeReference(field.name, field.dataType, field.nullable, field.metadata)()
     }
   }
+
+  def collectFieldIndexes(projectedSchema: StructType, originalSchema: StructType): Seq[Int] = {
+    val nameToIndex = originalSchema.fields.zipWithIndex.map{ case (field, index) =>
+      field.name -> index
+    }.toMap
+    projectedSchema.map(field => nameToIndex(field.name))
+  }
 }

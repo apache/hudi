@@ -56,32 +56,22 @@ case class HoodieMergeOnReadTableState(tableStructSchema: StructType,
                                        preCombineField: Option[String],
                                        recordKeyFieldOpt: Option[String])
 
-class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
-                                  val optParams: Map[String, String],
-                                  val userSchema: StructType,
+class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
+                                  optParams: Map[String, String],
+                                  val userSchema: Option[StructType],
                                   val globPaths: Option[Seq[Path]],
                                   val metaClient: HoodieTableMetaClient)
-  extends BaseRelation with PrunedFilteredScan with Logging {
+  extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) {
 
   private val conf = sqlContext.sparkContext.hadoopConfiguration
   private val jobConf = new JobConf(conf)
-  // use schema from latest metadata, if not present, read schema from the data file
-  private val schemaResolver = new TableSchemaResolver(metaClient)
-  private lazy val tableAvroSchema = {
-    try {
-      schemaResolver.getTableAvroSchema
-    } catch {
-      case _: Throwable => // If there is no commit in the table, we cann't get the schema
-        // with schemaUtil, use the userSchema instead.
-        SchemaConverters.toAvroType(userSchema)
-    }
-  }
 
-  private lazy val tableStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
   private val mergeType = optParams.getOrElse(
     DataSourceReadOptions.REALTIME_MERGE.key,
     DataSourceReadOptions.REALTIME_MERGE.defaultValue)
+
   private val maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(jobConf)
+
   private val preCombineField = {
     val preCombineFieldFromTableConfig = metaClient.getTableConfig.getPreCombineField
     if (preCombineFieldFromTableConfig != null) {
@@ -96,7 +86,6 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
   if (!metaClient.getTableConfig.populateMetaFields()) {
     recordKeyFieldOpt = Option(metaClient.getTableConfig.getRecordKeyFieldProp)
   }
-  override def schema: StructType = tableStructSchema
 
   override def needConversion: Boolean = false
 
@@ -119,7 +108,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
       preCombineField,
       recordKeyFieldOpt
     )
-    val fullSchemaParquetReader = new ParquetFileFormat().buildReaderWithPartitionValues(
+    val fullSchemaParquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
       sparkSession = sqlContext.sparkSession,
       dataSchema = tableStructSchema,
       partitionSchema = StructType(Nil),
@@ -128,7 +117,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
       options = optParams,
       hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
     )
-    val requiredSchemaParquetReader = new ParquetFileFormat().buildReaderWithPartitionValues(
+    val requiredSchemaParquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
       sparkSession = sqlContext.sparkSession,
       dataSchema = tableStructSchema,
       partitionSchema = StructType(Nil),

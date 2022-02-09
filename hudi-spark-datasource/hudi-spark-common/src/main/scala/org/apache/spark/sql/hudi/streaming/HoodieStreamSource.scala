@@ -161,12 +161,12 @@ class HoodieStreamSource(
       val rdd = tableType match {
         case HoodieTableType.COPY_ON_WRITE =>
           val serDe = sparkAdapter.createSparkRowSerDe(RowEncoder(schema))
-          new IncrementalRelation(sqlContext, incParams, schema, metaClient)
+          new IncrementalRelation(sqlContext, incParams, Some(schema), metaClient)
             .buildScan()
             .map(serDe.serializeRow)
         case HoodieTableType.MERGE_ON_READ =>
           val requiredColumns = schema.fields.map(_.name)
-          new MergeOnReadIncrementalRelation(sqlContext, incParams, schema, metaClient)
+          new MergeOnReadIncrementalRelation(sqlContext, incParams, Some(schema), metaClient)
             .buildScan(requiredColumns, Array.empty[Filter])
             .asInstanceOf[RDD[InternalRow]]
         case _ => throw new IllegalArgumentException(s"UnSupport tableType: $tableType")
