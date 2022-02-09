@@ -42,7 +42,7 @@ public class InMemoryKMS implements KmsClient {
   private static final Logger LOG = LoggerFactory.getLogger(InMemoryKMS.class);
 
   private static final ConfigProperty<String> KEY_LIST_PROPERTY_NAME = ConfigProperty
-      .key("hoodie.parquet.encryption.key.list")
+      .key("hoodie.parquet.encryption.keys")
       .noDefaultValue()
       .withDocumentation("hudi parquet encryption key list, example: keyName_1:value_1, keyName_2:value_2");
 

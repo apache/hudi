@@ -78,7 +78,7 @@ public class TestParquetEncryption extends HoodieClientTestBase {
     jsc.hadoopConfiguration().set("parquet.encryption.kms.client.class", InMemoryKMS.class.getName());
     jsc.hadoopConfiguration().set("parquet.encryption.footer.key", "k1");
     jsc.hadoopConfiguration().set("parquet.encryption.column.keys", "k2:rider,_row_key");
-    jsc.hadoopConfiguration().set("hoodie.parquet.encryption.key.list", "k1:AAECAwQFBgcICQoLDA0ODw==, k2:AAECAAECAAECAAECAAECAA==");
+    jsc.hadoopConfiguration().set("hoodie.parquet.encryption.keys", "k1:AAECAwQFBgcICQoLDA0ODw==, k2:AAECAAECAAECAAECAAECAA==");
 
     List<String> records1 = recordsToStrings(dataGen.generateInserts("000", 100));
     Dataset<Row> inputDF1 = spark.read().json(jsc.parallelize(records1, 2));
@@ -97,7 +97,7 @@ public class TestParquetEncryption extends HoodieClientTestBase {
     //2 has footer key, has column key
     jsc.hadoopConfiguration().set("parquet.crypto.factory.class", PropertiesDrivenCryptoFactory.class.getName());
     jsc.hadoopConfiguration().set("parquet.encryption.kms.client.class", InMemoryKMS.class.getName());
-    jsc.hadoopConfiguration().set("hoodie.parquet.encryption.key.list", "k1:AAECAwQFBgcICQoLDA0ODw==, k2:AAECAAECAAECAAECAAECAA==");
+    jsc.hadoopConfiguration().set("hoodie.parquet.encryption.keys", "k1:AAECAwQFBgcICQoLDA0ODw==, k2:AAECAAECAAECAAECAAECAA==");
     Assertions.assertEquals(100, spark.read().format("org.apache.hudi").load(basePath).count());
     Assertions.assertDoesNotThrow(() -> spark.read().format("org.apache.hudi").load(basePath).select("rider").show(1));
   }
