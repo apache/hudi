@@ -22,7 +22,11 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Random;
+import java.util.stream.Collectors;
 
 public class RetryHelper<T> {
   private static final Logger LOG = LogManager.getLogger(RetryHelper.class);
@@ -31,8 +35,23 @@ public class RetryHelper<T> {
   private long maxIntervalTime;
   private long initialIntervalTime = 100L;
   private String taskInfo = "N/A";
+  private List<? extends Class<? extends Exception>> retryExceptionsClasses;
 
   public RetryHelper() {
+  }
+
+  public RetryHelper(long maxRetryIntervalMs, int maxRetryNumbers, long initialRetryIntervalMs, String retryExceptions) {
+    this.num = maxRetryNumbers;
+    this.initialIntervalTime = initialRetryIntervalMs;
+    this.maxIntervalTime = maxRetryIntervalMs;
+    if (StringUtils.isNullOrEmpty(retryExceptions)) {
+      this.retryExceptionsClasses = new ArrayList<>();
+    } else {
+      this.retryExceptionsClasses = Arrays.stream(retryExceptions.split(","))
+          .map(exception -> (Exception) ReflectionUtils.loadClass(exception, ""))
+          .map(Exception::getClass)
+          .collect(Collectors.toList());
+    }
   }
 
   public RetryHelper(String taskInfo) {
@@ -41,26 +60,6 @@ public class RetryHelper<T> {
 
   public RetryHelper tryWith(CheckedFunction<T> func) {
     this.func = func;
-    return this;
-  }
-
-  public RetryHelper tryNum(int num) {
-    this.num = num;
-    return this;
-  }
-
-  public RetryHelper tryTaskInfo(String taskInfo) {
-    this.taskInfo = taskInfo;
-    return this;
-  }
-
-  public RetryHelper tryMaxInterval(long time) {
-    maxIntervalTime = time;
-    return this;
-  }
-
-  public RetryHelper tryInitialInterval(long time) {
-    initialIntervalTime = time;
     return this;
   }
 
@@ -74,6 +73,9 @@ public class RetryHelper<T> {
         functionResult = func.get();
         break;
       } catch (IOException | RuntimeException e) {
+        if (!checkIfExceptionInRetryList(e)) {
+          throw e;
+        }
         if (retries++ >= num) {
           LOG.error("Still failed to " + taskInfo + " after retried " + num + " times.", e);
           throw e;
@@ -91,6 +93,24 @@ public class RetryHelper<T> {
       LOG.info("Success to " + taskInfo + " after retried " + retries + " times.");
     }
     return functionResult;
+  }
+
+  private boolean checkIfExceptionInRetryList(Exception e) {
+    boolean inRetryList = false;
+
+    // if users didn't set hoodie.filesystem.operation.retry.exceptions
+    // we will retry all the IOException and RuntimeException
+    if (retryExceptionsClasses.isEmpty()) {
+      return true;
+    }
+
+    for (Class<? extends Exception> clazz : retryExceptionsClasses) {
+      if (clazz.isInstance(e)) {
+        inRetryList = true;
+        break;
+      }
+    }
+    return inRetryList;
   }
 
   private long getWaitTimeExp(int retryCount) {

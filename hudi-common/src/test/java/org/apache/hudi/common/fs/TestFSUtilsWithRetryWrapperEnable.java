@@ -28,7 +28,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.util.Progressable;
-import org.apache.hudi.common.util.RetryHelper;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,20 +46,24 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  */
 public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
 
-  public RetryHelper retryHelper;
-  public static final String EXCEPTION_MESSAGE = "Fake runtime exception here.";
+  private static final String EXCEPTION_MESSAGE = "Fake runtime exception here.";
+  private long maxRetryIntervalMs;
+  private int maxRetryNumbers;
+  private long initialRetryIntervalMs;
 
   @Override
   @BeforeEach
   public void setUp() throws IOException {
     initMetaClient();
+    basePath = "file:" + basePath;
     FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().withFileSystemActionRetryEnabled(true).build();
-    retryHelper = new RetryHelper<>()
-            .tryMaxInterval(fileSystemRetryConfig.getMaxRetryIntervalMs())
-            .tryNum(fileSystemRetryConfig.getMaxRetryNumbers())
-            .tryInitialInterval(fileSystemRetryConfig.getInitialRetryIntervalMs());
+    maxRetryIntervalMs = fileSystemRetryConfig.getMaxRetryIntervalMs();
+    maxRetryNumbers = fileSystemRetryConfig.getMaxRetryNumbers();
+    initialRetryIntervalMs = fileSystemRetryConfig.getInitialRetryIntervalMs();
+
     FakeRemoteFileSystem fakeFs = new FakeRemoteFileSystem(FSUtils.getFs(metaClient.getMetaPath(), metaClient.getHadoopConf()), 2);
-    FileSystem fileSystem = new HoodieRetryWrapperFileSystem(fakeFs, retryHelper);
+    FileSystem fileSystem = new HoodieRetryWrapperFileSystem(fakeFs, maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, "");
+
     HoodieWrapperFileSystem fs = new HoodieWrapperFileSystem(fileSystem, new NoOpConsistencyGuard());
     metaClient.setFs(fs);
   }
@@ -69,7 +72,7 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
   @Test
   public void testProcessFilesWithExceptions() throws Exception {
     FakeRemoteFileSystem fakeFs = new FakeRemoteFileSystem(FSUtils.getFs(metaClient.getMetaPath(), metaClient.getHadoopConf()), 100);
-    FileSystem fileSystem = new HoodieRetryWrapperFileSystem(fakeFs, retryHelper);
+    FileSystem fileSystem = new HoodieRetryWrapperFileSystem(fakeFs, maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, "");
     HoodieWrapperFileSystem fs = new HoodieWrapperFileSystem(fileSystem, new NoOpConsistencyGuard());
     metaClient.setFs(fs);
     List<String> folders =

@@ -25,56 +25,58 @@ import java.util.Arrays;
  */
 public enum StorageSchemes {
   // Local filesystem
-  FILE("file", false),
+  FILE("file", false, true),
   // Hadoop File System
-  HDFS("hdfs", true),
+  HDFS("hdfs", true, false),
   // Baidu Advanced File System
-  AFS("afs", true),
+  AFS("afs", true, false),
   // Mapr File System
-  MAPRFS("maprfs", true),
+  MAPRFS("maprfs", true, false),
   // Apache Ignite FS
-  IGNITE("igfs", true),
+  IGNITE("igfs", true, false),
   // AWS S3
-  S3A("s3a", false), S3("s3", false),
+  S3A("s3a", false, false), S3("s3", false, false),
   // Google Cloud Storage
-  GCS("gs", false),
+  GCS("gs", false, false),
   // Azure WASB
-  WASB("wasb", false), WASBS("wasbs", false),
+  WASB("wasb", false, false), WASBS("wasbs", false, false),
   // Azure ADLS
-  ADL("adl", false),
+  ADL("adl", false, false),
   // Azure ADLS Gen2
-  ABFS("abfs", false), ABFSS("abfss", false),
+  ABFS("abfs", false, false), ABFSS("abfss", false, false),
   // Aliyun OSS
-  OSS("oss", false),
+  OSS("oss", false, false),
   // View FS for federated setups. If federating across cloud stores, then append support is false
-  VIEWFS("viewfs", true),
+  VIEWFS("viewfs", true, false),
   //ALLUXIO
-  ALLUXIO("alluxio", false),
+  ALLUXIO("alluxio", false, false),
   // Tencent Cloud Object Storage
-  COSN("cosn", false),
+  COSN("cosn", false, true),
   // Tencent Cloud HDFS
-  CHDFS("ofs", true),
+  CHDFS("ofs", true, false),
   // Tencent Cloud CacheFileSystem
-  GOOSEFS("gfs", false),
+  GOOSEFS("gfs", false, false),
   // Databricks file system
-  DBFS("dbfs", false),
+  DBFS("dbfs", false, false),
   // IBM Cloud Object Storage
-  COS("cos", false),
+  COS("cos", false, false),
   // Huawei Cloud Object Storage
-  OBS("obs", false),
+  OBS("obs", false, false),
   // Kingsoft Standard Storage ks3
-  KS3("ks3", false),
+  KS3("ks3", false, false),
   // JuiceFileSystem
-  JFS("jfs", true),
+  JFS("jfs", true, false),
   // Baidu Object Storage
-  BOS("bos", false);
+  BOS("bos", false, false);
 
   private String scheme;
   private boolean supportsAppend;
+  private boolean supportsRetry;
 
-  StorageSchemes(String scheme, boolean supportsAppend) {
+  StorageSchemes(String scheme, boolean supportsAppend, boolean supportsRetry) {
     this.scheme = scheme;
     this.supportsAppend = supportsAppend;
+    this.supportsRetry = supportsRetry;
   }
 
   public String getScheme() {
@@ -83,6 +85,10 @@ public enum StorageSchemes {
 
   public boolean supportsAppend() {
     return supportsAppend;
+  }
+
+  public boolean supportsRetry() {
+    return supportsRetry;
   }
 
   public static boolean isSchemeSupported(String scheme) {
@@ -94,5 +100,12 @@ public enum StorageSchemes {
       throw new IllegalArgumentException("Unsupported scheme :" + scheme);
     }
     return Arrays.stream(StorageSchemes.values()).anyMatch(s -> s.supportsAppend() && s.scheme.equals(scheme));
+  }
+
+  public static boolean isRetrySupported(String scheme) {
+    if (!isSchemeSupported(scheme)) {
+      throw new IllegalArgumentException("Unsupported scheme :" + scheme);
+    }
+    return Arrays.stream(StorageSchemes.values()).anyMatch(s -> s.supportsRetry() && s.scheme.equals(scheme));
   }
 }

@@ -27,6 +27,7 @@ import org.apache.hudi.common.fs.FileSystemRetryConfig;
 import org.apache.hudi.common.fs.HoodieRetryWrapperFileSystem;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
+import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
@@ -39,7 +40,6 @@ import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
@@ -260,15 +260,14 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public HoodieWrapperFileSystem getFs() {
     if (fs == null) {
-      FileSystem fileSystem;
-      if (fileSystemRetryConfig.isFileSystemActionRetryEnable()) {
-        RetryHelper retryHelper = new RetryHelper<>()
-                .tryMaxInterval(fileSystemRetryConfig.getMaxRetryIntervalMs())
-                .tryNum(fileSystemRetryConfig.getMaxRetryNumbers())
-                .tryInitialInterval(fileSystemRetryConfig.getInitialRetryIntervalMs());
-        fileSystem = new HoodieRetryWrapperFileSystem(FSUtils.getFs(metaPath, hadoopConf.newCopy()), retryHelper);
-      } else {
-        fileSystem = FSUtils.getFs(metaPath, hadoopConf.newCopy());
+      FileSystem fileSystem = FSUtils.getFs(metaPath, hadoopConf.newCopy());
+
+      if (fileSystemRetryConfig.isFileSystemActionRetryEnable() && StorageSchemes.isRetrySupported(fileSystem.getScheme())) {
+        fileSystem = new HoodieRetryWrapperFileSystem(fileSystem,
+            fileSystemRetryConfig.getMaxRetryIntervalMs(),
+            fileSystemRetryConfig.getMaxRetryNumbers(),
+            fileSystemRetryConfig.getInitialRetryIntervalMs(),
+            fileSystemRetryConfig.getRetryExceptions());
       }
       ValidationUtils.checkArgument(!(fileSystem instanceof HoodieWrapperFileSystem),
           "File System not expected to be that of HoodieWrapperFileSystem");

@@ -60,6 +60,13 @@ public class FileSystemRetryConfig  extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("Maximum number of retry actions to perform, with exponential backoff.");
 
+  public static final ConfigProperty<String> RETRY_EXCEPTIONS = ConfigProperty
+      .key("hoodie.filesystem.operation.retry.exceptions")
+      .defaultValue("")
+      .sinceVersion("0.11.0")
+      .withDocumentation("The class name of the Exception that needs to be re-tryed, separated by commas. "
+          + "Default is empty which means retry all the IOException and RuntimeException from FileSystem");
+
   private FileSystemRetryConfig() {
     super();
   }
@@ -82,6 +89,10 @@ public class FileSystemRetryConfig  extends HoodieConfig {
 
   public static FileSystemRetryConfig.Builder newBuilder() {
     return new Builder();
+  }
+
+  public String getRetryExceptions() {
+    return getString(RETRY_EXCEPTIONS);
   }
 
   /**
