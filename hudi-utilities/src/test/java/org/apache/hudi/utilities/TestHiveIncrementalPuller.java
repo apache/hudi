@@ -103,7 +103,6 @@ public class TestHiveIncrementalPuller {
     HiveTestUtil.createCOWTable(instantTime, 5, true);
     hiveSyncProps.setProperty(HiveSyncConfig.HIVE_SYNC_MODE.key(), "jdbc");
 
-
     HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf(), fileSystem);
     tool.syncHoodieTable();
   }
@@ -118,17 +117,19 @@ public class TestHiveIncrementalPuller {
   }
 
   private TypedProperties getTargetHiveSyncConfig(String basePath) {
-    hiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key(), "tgtdb");
-    hiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_TABLE_NAME.key(), "test2");
-    hiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_BASE_PATH, basePath);
-    hiveSyncProps.setProperty(HiveSyncConfig.HIVE_SYNC_MODE.key(), "jdbc");
+    TypedProperties targetHiveSyncProps = new TypedProperties(hiveSyncProps);
+    targetHiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key(), "tgtdb");
+    targetHiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_TABLE_NAME.key(), "test2");
+    targetHiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_BASE_PATH, basePath);
+    targetHiveSyncProps.setProperty(HiveSyncConfig.HIVE_SYNC_MODE.key(), "jdbc");
 
-    return hiveSyncProps;
+    return targetHiveSyncProps;
   }
 
   private TypedProperties getAssertionSyncConfig(String databaseName) {
-    hiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key(), databaseName);
-    return hiveSyncProps;
+    TypedProperties assertHiveSyncProps = new TypedProperties(hiveSyncProps);
+    assertHiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key(), databaseName);
+    return assertHiveSyncProps;
   }
 
   private void createTables() throws IOException, URISyntaxException {
@@ -143,6 +144,7 @@ public class TestHiveIncrementalPuller {
             "select name from testdb.test1"));
     Exception e = assertThrows(HoodieIncrementalPullSQLException.class, puller::saveDelta,
             "Should fail when incremental clause not provided!");
+    System.out.println("WNI " + e.getMessage());
     assertTrue(e.getMessage().contains("Incremental SQL does not have clause `_hoodie_commit_time` > '%s', which means its not pulling incrementally"));
   }
 

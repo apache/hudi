@@ -768,8 +768,10 @@ public class TestHiveSyncTool {
     // create a replace commit to delete current partitions+
     HiveTestUtil.createReplaceCommit("101", partitiontoDelete, WriteOperationType.DELETE_PARTITION, true, true);
 
-    // sync drop partitins
+    // sync drop partitions
+    reinitHiveSyncClient();
     reSyncHiveTable();
+
     List<Partition> hivePartitions = hiveClient.scanTablePartitions(HiveTestUtil.TABLE_NAME);
     assertEquals(0, hivePartitions.size(),
         "Table should have 0 partition because of the drop the only one partition");
