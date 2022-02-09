@@ -22,7 +22,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
 
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.shaded.guava18.com.google.common.util.concurrent.RateLimiter;
+import org.apache.flink.shaded.guava30.com.google.common.util.concurrent.RateLimiter;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 

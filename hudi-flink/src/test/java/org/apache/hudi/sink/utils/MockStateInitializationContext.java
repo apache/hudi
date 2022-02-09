@@ -23,6 +23,8 @@ import org.apache.flink.runtime.state.KeyGroupStatePartitionStreamProvider;
 import org.apache.flink.runtime.state.StateInitializationContext;
 import org.apache.flink.runtime.state.StatePartitionStreamProvider;
 
+import java.util.OptionalLong;
+
 /**
  * A {@link FunctionInitializationContext} for testing purpose.
  */
@@ -37,6 +39,11 @@ public class MockStateInitializationContext implements StateInitializationContex
   @Override
   public boolean isRestored() {
     return false;
+  }
+
+  @Override
+  public OptionalLong getRestoredCheckpointId() {
+    return OptionalLong.empty();
   }
 
   @Override
