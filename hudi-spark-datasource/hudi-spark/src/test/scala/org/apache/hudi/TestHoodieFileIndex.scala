@@ -26,9 +26,9 @@ import org.apache.hudi.common.engine.EngineType
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
-import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.config.HoodieWriteConfig
@@ -213,8 +213,11 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       GreaterThanOrEqual(attribute("partition"), literal("2021/03/08")),
       LessThan(attribute("partition"), literal("2021/03/10"))
     )
-    val prunedPartitions = fileIndex.listFiles(Seq(partitionFilter2),
-      Seq.empty).map(_.values.toSeq(Seq(StringType)).mkString(",")).toList
+    val prunedPartitions = fileIndex.listFiles(Seq(partitionFilter2), Seq.empty)
+      .map(_.values.toSeq(Seq(StringType))
+      .mkString(","))
+      .toList
+      .sorted
 
     assertEquals(List("2021/03/08", "2021/03/09"), prunedPartitions)
   }

@@ -67,9 +67,6 @@
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
 
-                  <!-- TODO(HUDI-3239) remove this -->
-                  <include>org.scala-lang:scala-library</include>
-
                   <include>org.apache.parquet:parquet-avro</include>
                   <include>org.apache.avro:avro</include>
                   <include>org.codehaus.jackson:*</include>
@@ -188,14 +185,6 @@
           <artifactId>hbase-client</artifactId>
         </exclusion>
       </exclusions>
-    </dependency>
-
-    <!-- Scala -->
-    <!-- TODO(HUDI-3239) remove this dep -->
-    <dependency>
-      <groupId>org.scala-lang</groupId>
-      <artifactId>scala-library</artifactId>
-      <version>${scala.version}</version>
     </dependency>
 
     <!-- Parquet -->
