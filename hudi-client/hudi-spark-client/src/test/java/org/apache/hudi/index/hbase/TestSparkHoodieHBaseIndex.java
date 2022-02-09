@@ -21,7 +21,6 @@ package org.apache.hudi.index.hbase;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -342,8 +341,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
   public void testSimpleTagLocationAndUpdateWithRollback() throws Exception {
     // Load to memory
     HoodieWriteConfig config = getConfigBuilder(100, false, false)
-        .withRollbackUsingMarkers(false)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build()).build();
+        .withRollbackUsingMarkers(false).build();
     SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
     SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
 
@@ -431,8 +429,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
   public void testEnsureTagLocationUsesCommitTimeline() throws Exception {
     // Load to memory
     HoodieWriteConfig config = getConfigBuilder(100, false, false)
-        .withRollbackUsingMarkers(false)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build()).build();
+        .withRollbackUsingMarkers(false).build();
     SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
     SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
 

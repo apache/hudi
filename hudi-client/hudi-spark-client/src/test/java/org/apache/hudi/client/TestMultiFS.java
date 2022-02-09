@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -69,14 +68,9 @@ public class TestMultiFS extends HoodieClientTestHarness {
   }
 
   protected HoodieWriteConfig getHoodieWriteConfig(String basePath) {
-    return getHoodieWriteConfig(basePath, HoodieMetadataConfig.ENABLE.defaultValue());
-  }
-
-  protected HoodieWriteConfig getHoodieWriteConfig(String basePath, boolean enableMetadata) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withEmbeddedTimelineServerEnabled(true)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable(tableName)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata).build())
         .build();
   }
 
@@ -84,21 +78,21 @@ public class TestMultiFS extends HoodieClientTestHarness {
   public void readLocalWriteHDFS() throws Exception {
     // Initialize table and filesystem
     HoodieTableMetaClient.withPropertyBuilder()
-      .setTableType(tableType)
-      .setTableName(tableName)
-      .setPayloadClass(HoodieAvroPayload.class)
-      .initTable(hadoopConf, dfsBasePath);
+        .setTableType(tableType)
+        .setTableName(tableName)
+        .setPayloadClass(HoodieAvroPayload.class)
+        .initTable(hadoopConf, dfsBasePath);
 
     // Create write client to write some records in
-    HoodieWriteConfig cfg = getHoodieWriteConfig(dfsBasePath, false);
-    HoodieWriteConfig localConfig = getHoodieWriteConfig(tablePath, false);
+    HoodieWriteConfig cfg = getHoodieWriteConfig(dfsBasePath);
+    HoodieWriteConfig localConfig = getHoodieWriteConfig(tablePath);
 
     HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(tableType)
         .setTableName(tableName)
         .setPayloadClass(HoodieAvroPayload.class)
         .setRecordKeyFields(localConfig.getProps().getProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()))
-            .setPartitionFields(localConfig.getProps().getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()))
+        .setPartitionFields(localConfig.getProps().getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()))
         .initTable(hadoopConf, tablePath);
 
 

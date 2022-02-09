@@ -48,6 +48,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.shell.core.CommandResult;
 
 import java.io.IOException;
@@ -60,6 +61,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createCompactionCommitInMetadataTable;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -204,15 +206,16 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
   /**
    * Test case of 'commits showarchived' command.
    */
-  @Test
-  public void testShowArchivedCommits() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testShowArchivedCommits(boolean enableMetadataTable) throws Exception {
     // Generate archive
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath1)
         .withSchema(HoodieTestCommitMetadataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
         .forTable("test-trip-table").build();
 
     // generate data and metadata
@@ -227,6 +230,12 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
       Integer[] value = entry.getValue();
       HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath1, key, hadoopConf(),
           Option.of(value[0]), Option.of(value[1]));
+    }
+
+    if (enableMetadataTable) {
+      // Simulate a compaction commit in metadata table timeline
+      // so the archival in data table can happen
+      createCompactionCommitInMetadataTable(hadoopConf(), metaClient.getFs(), tablePath1, "104");
     }
 
     // archive
@@ -251,15 +260,16 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     assertEquals(expected, got);
   }
 
-  @Test
-  public void testShowArchivedCommitsWithMultiCommitsFile() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testShowArchivedCommitsWithMultiCommitsFile(boolean enableMetadataTable) throws Exception {
     // Generate archive
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath1)
         .withSchema(HoodieTestCommitMetadataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
         .forTable("test-trip-table").build();
 
     // generate data and metadata
@@ -267,6 +277,12 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
 
     for (int i = 194; i >= 154; i--) {
       data.put(String.valueOf(i), new Integer[] {i, i});
+    }
+
+    if (enableMetadataTable) {
+      // Simulate a compaction commit in metadata table timeline
+      // so the archival in data table can happen
+      createCompactionCommitInMetadataTable(hadoopConf(), metaClient.getFs(), tablePath1, "194");
     }
 
     for (Map.Entry<String, Integer[]> entry : data.entrySet()) {

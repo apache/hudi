@@ -24,12 +24,12 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.HoodieTestCommitUtilities;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -75,7 +75,6 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .forTable("test-trip-table").build();
 
     // Create six commits
@@ -89,6 +88,11 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
           new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, timestamp), hadoopConf());
       HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, timestamp, hadoopConf());
     }
+
+    // Simulate a compaction commit in metadata table timeline
+    // so the archival in data table can happen
+    HoodieTestUtils.createCompactionCommitInMetadataTable(
+        hadoopConf(), metaClient.getFs(), tablePath, "105");
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     // reload the timeline and get all the commits before archive

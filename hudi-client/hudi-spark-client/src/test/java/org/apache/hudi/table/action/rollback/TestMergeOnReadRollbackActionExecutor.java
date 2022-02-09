@@ -20,7 +20,6 @@ package org.apache.hudi.table.action.rollback;
 
 import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
 import org.apache.hudi.client.SparkRDDWriteClient;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -163,7 +162,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withRollbackUsingMarkers(false)
-        .withPath(basePath).withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build()).build();
+        .withPath(basePath).build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       client.startCommitWithTime("001");
       client.insert(jsc.emptyRDD(), "001");
