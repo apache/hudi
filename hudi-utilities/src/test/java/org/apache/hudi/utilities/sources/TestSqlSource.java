@@ -40,6 +40,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -149,7 +150,7 @@ public class TestSqlSource extends UtilitiesTestBase {
 
     InputBatch<Dataset<Row>> fetch1AsRows =
             sourceFormatAdapter.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE);
-    assertEquals("", fetch1AsRows.getCheckpointForNextBatch());
+    assertNull(fetch1AsRows.getCheckpointForNextBatch());
   }
 
   /**
