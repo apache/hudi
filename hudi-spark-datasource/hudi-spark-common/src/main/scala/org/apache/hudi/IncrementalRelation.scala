@@ -37,7 +37,7 @@ import org.apache.log4j.LogManager
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.execution.datasources.parquet.HoodieParquetFileFormat
-import org.apache.spark.sql.sources.{BaseRelation, TableScan}
+import org.apache.spark.sql.sources.{BaseRelation, PrunedScan}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 
@@ -53,7 +53,7 @@ import scala.collection.mutable
 class IncrementalRelation(val sqlContext: SQLContext,
                           val optParams: Map[String, String],
                           val userSchema: Option[StructType],
-                          val metaClient: HoodieTableMetaClient) extends BaseRelation with TableScan {
+                          val metaClient: HoodieTableMetaClient) extends BaseRelation with PrunedScan {
 
   private val log = LogManager.getLogger(classOf[IncrementalRelation])
 
@@ -122,7 +122,8 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
   override def schema: StructType = usedSchema
 
-  override def buildScan(): RDD[Row] = {
+  override def buildScan(requiredColumns: Array[String]): RDD[Row] = {
+    log.info(s"buildScan requiredColumns = ${requiredColumns.mkString(",")}")
     if (usedSchema == StructType(Nil)) {
       // if first commit in a table is an empty commit without schema, return empty RDD here
       sqlContext.sparkContext.emptyRDD[Row]
@@ -213,7 +214,17 @@ class IncrementalRelation(val sqlContext: SQLContext,
         } else {
           log.info("Additional Filters to be applied to incremental source are :" + filters.mkString("Array(", ", ", ")"))
 
-          var df: DataFrame = sqlContext.createDataFrame(sqlContext.sparkContext.emptyRDD[Row], usedSchema)
+        var prunedSchema = StructType(Seq())
+        if (!requiredColumns.contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD)) {
+          prunedSchema = prunedSchema.add(usedSchema(HoodieRecord.COMMIT_TIME_METADATA_FIELD))
+        }
+        requiredColumns.foreach(col => {
+          val field = usedSchema.find(_.name == col)
+          if (field.isDefined) {
+            prunedSchema = prunedSchema.add(field.get)
+          }
+        })
+        var df: DataFrame = sqlContext.createDataFrame(sqlContext.sparkContext.emptyRDD[Row], prunedSchema)
 
           var doFullTableScan = false
 
@@ -245,7 +256,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
             if (regularFileIdToFullPath.nonEmpty) {
               df = df.union(sqlContext.read.options(sOpts)
-                .schema(usedSchema).format(formatClassName)
+                .schema(prunedSchema).format(formatClassName)
                 .load(filteredRegularFullPaths.toList: _*)
                 .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
                   commitsToReturn.head.getTimestamp))
@@ -256,7 +267,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
           }
         }
       }
-
+      if (!requiredColumns.contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD)) {
+        df = df.toDF().drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
+      }
       filters.foldLeft(scanDf)((e, f) => e.filter(f)).rdd
     }
   }
