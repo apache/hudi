@@ -18,6 +18,16 @@
 
 package org.apache.hudi.hive.testutils;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.api.MetaException;
+import org.apache.hadoop.hive.ql.metadata.HiveException;
+import org.apache.hive.service.server.HiveServer2;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
@@ -48,17 +58,6 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 import org.apache.hudi.hive.ddl.QueryBasedDDLExecutor;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.hadoop.hive.metastore.api.MetaException;
-import org.apache.hadoop.hive.ql.metadata.HiveException;
-import org.apache.hive.service.server.HiveServer2;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -130,15 +129,24 @@ public class HiveTestUtil {
   }
 
   public static void clearIncrementalPullSetup(String path1, String path2) throws IOException, HiveException, MetaException {
-    fileSystem.delete(new Path(path1), true);
-    if (path2 != null) {
-      fileSystem.delete(new Path(path2), true);
+    if (fileSystem != null) {
+      if (path1 != null && fileSystem.exists(new Path(path1))) {
+        fileSystem.delete(new Path(path1), true);
+      }
+
+      if (path2 != null && fileSystem.exists(new Path(path2))) {
+        fileSystem.delete(new Path(path2), true);
+      }
+
+      clear();
     }
-    clear();
   }
 
   public static void clear() throws IOException, HiveException, MetaException {
-    fileSystem.delete(new Path(hiveSyncConfig.basePath), true);
+    if (hiveSyncConfig.basePath != null && fileSystem.exists(new Path(hiveSyncConfig.basePath))) {
+      fileSystem.delete(new Path(hiveSyncConfig.basePath), true);
+    }
+
     HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(hiveSyncConfig.tableName)
