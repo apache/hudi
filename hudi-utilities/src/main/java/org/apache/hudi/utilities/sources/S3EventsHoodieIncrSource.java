@@ -37,6 +37,9 @@ import org.apache.spark.sql.DataFrameReader;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.ArrayType;
+import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -110,7 +113,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
         .option(DataSourceReadOptions.BEGIN_INSTANTTIME().key(), instantEndpts.getLeft())
         .option(DataSourceReadOptions.END_INSTANTTIME().key(), instantEndpts.getRight());
     Dataset<Row> source = metaReader.load(srcPath);
-    
+
     if (source.isEmpty()) {
       return Pair.of(Option.empty(), instantEndpts.getRight());
     }
@@ -153,6 +156,26 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     Option<Dataset<Row>> dataset = Option.empty();
     if (!cloudFiles.isEmpty()) {
       dataset = Option.of(sparkSession.read().format(fileFormat).load(cloudFiles.toArray(new String[0])));
+      if (props.containsKey(HoodieIncrSource.Config.CAST_TO_STRING)) {
+        String dropColumns = props.getString(HoodieIncrSource.Config.DROP_COLUMNS);
+        dataset = dataset.map(ds -> ds.drop(dropColumns.split(",")));
+      }
+      if (props.containsKey(HoodieIncrSource.Config.CAST_TO_STRING)) {
+        Boolean castToString = props.getBoolean(HoodieIncrSource.Config.CAST_TO_STRING);
+        LOG.info("castToString property =" + castToString);
+        if (castToString) {
+          dataset = dataset.map(ds -> {
+            Dataset<Row> newDs = ds;
+            for (StructField field : ds.schema().fields()) {
+              if (field.dataType() instanceof ArrayType || field.dataType() instanceof StructType) {
+                newDs = newDs.withColumn(field.name(), org.apache.spark.sql.functions.col(field.name()).cast("string"));
+                LOG.info(String.format("Column=%s having dataType=%s is being cast str ", field.name(), field.dataType()));
+              }
+            }
+            return newDs;
+          });
+        }
+      }
     }
     return Pair.of(dataset, instantEndpts.getRight());
   }

@@ -86,6 +86,16 @@ public class HoodieIncrSource extends RowSource {
     static final String MISSING_CHECKPOINT_STRATEGY = "hoodie.deltastreamer.source.hoodieincr.missing.checkpoint.strategy";
 
     /**
+     * {@value #CAST_TO_STRING} allows type cast array or struct columns to string.
+     */
+    static final String CAST_TO_STRING = "hoodie.deltastreamer.source.hoodieincr.cast.str";
+
+    /**
+     * {@value #DROP_COLUMNS} allows to drop comma separated columns to be dropped from incoming source data
+     */
+    static final String DROP_COLUMNS = "hoodie.deltastreamer.source.hoodieincr.drop.columns";
+
+    /**
      * {@value #SOURCE_FILE_FORMAT} is passed to the reader while loading dataset. Default value is parquet.
      */
     static final String SOURCE_FILE_FORMAT = "hoodie.deltastreamer.source.hoodieincr.file.format";
