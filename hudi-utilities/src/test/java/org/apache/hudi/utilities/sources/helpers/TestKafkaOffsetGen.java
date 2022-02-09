@@ -149,7 +149,7 @@ public class TestKafkaOffsetGen {
   public void testGetNextOffsetRangesFromGroup() {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     testUtils.createTopic(TEST_TOPIC_NAME, 2);
-    testUtils.sendMessages(TEST_TOPIC_NAME, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
+    testUtils.sendMessages(TEST_TOPIC_NAME, Helpers.jsonifyRecordsByPartitions(dataGenerator.generateInserts("000", 1000), 2));
     KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("group", "string"));
     String lastCheckpointString = TEST_TOPIC_NAME + ",0:250,1:249";
     kafkaOffsetGen.commitOffsetToKafka(lastCheckpointString);
@@ -163,17 +163,10 @@ public class TestKafkaOffsetGen {
     // committed offsets are not present for the consumer group
     kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("group", "string"));
     nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 300, metrics);
-    if (494 == nextOffsetRanges[0].fromOffset()) {
-      assertEquals(494, nextOffsetRanges[0].fromOffset());
-      assertEquals(494, nextOffsetRanges[0].untilOffset());
-      assertEquals(506, nextOffsetRanges[1].fromOffset());
-      assertEquals(506, nextOffsetRanges[1].untilOffset());
-    } else {
-      assertEquals(506, nextOffsetRanges[0].fromOffset());
-      assertEquals(506, nextOffsetRanges[0].untilOffset());
-      assertEquals(494, nextOffsetRanges[1].fromOffset());
-      assertEquals(494, nextOffsetRanges[1].untilOffset());
-    }
+    assertEquals(500, nextOffsetRanges[0].fromOffset());
+    assertEquals(500, nextOffsetRanges[0].untilOffset());
+    assertEquals(500, nextOffsetRanges[1].fromOffset());
+    assertEquals(500, nextOffsetRanges[1].untilOffset());
   }
 
   @Test
