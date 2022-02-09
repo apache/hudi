@@ -24,6 +24,7 @@ import org.apache.hudi.cli.DedupeSparkJob;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -439,7 +440,7 @@ public class SparkMain {
       LOG.info(String.format("The commit \"%s\" rolled back.", savepointTime));
       return 0;
     } catch (Exception e) {
-      LOG.warn(String.format("The commit \"%s\" failed to roll back.", savepointTime));
+      LOG.warn(String.format("The commit \"%s\" failed to roll back.", savepointTime), e);
       return -1;
     }
   }
@@ -451,7 +452,7 @@ public class SparkMain {
       LOG.info(String.format("Savepoint \"%s\" deleted.", savepointTime));
       return 0;
     } catch (Exception e) {
-      LOG.warn(String.format("Failed: Could not delete savepoint \"%s\".", savepointTime));
+      LOG.warn(String.format("Failed: Could not delete savepoint \"%s\".", savepointTime), e);
       return -1;
     }
   }
@@ -494,6 +495,7 @@ public class SparkMain {
   private static HoodieWriteConfig getWriteConfig(String basePath, Boolean rollbackUsingMarkers) {
     return HoodieWriteConfig.newBuilder().withPath(basePath)
         .withRollbackUsingMarkers(rollbackUsingMarkers)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
   }
 }
