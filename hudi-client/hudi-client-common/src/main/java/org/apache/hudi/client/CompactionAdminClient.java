@@ -61,7 +61,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_AC
 /**
  * Client to perform admin operations related to compaction.
  */
-public class CompactionAdminClient extends AbstractHoodieClient {
+public class CompactionAdminClient extends BaseHoodieClient {
 
   private static final Logger LOG = LogManager.getLogger(CompactionAdminClient.class);
 

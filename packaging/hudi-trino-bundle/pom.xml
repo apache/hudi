@@ -68,14 +68,17 @@
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
 
+                  <!-- TODO(HUDI-3239) remove this -->
+                  <include>org.scala-lang:scala-library</include>
+
                   <include>org.apache.parquet:parquet-avro</include>
                   <include>org.apache.avro:avro</include>
                   <include>org.codehaus.jackson:*</include>
                   <include>com.esotericsoftware:kryo-shaded</include>
                   <include>org.objenesis:objenesis</include>
                   <include>com.esotericsoftware:minlog</include>
-                  <include>org.apache.hbase:hbase-client</include>
                   <include>org.apache.hbase:hbase-common</include>
+                  <include>org.apache.hbase:hbase-client</include>
                   <include>org.apache.hbase:hbase-protocol</include>
                   <include>org.apache.hbase:hbase-server</include>
                   <include>org.apache.hbase:hbase-annotations</include>
@@ -186,21 +189,31 @@
       </exclusions>
     </dependency>
 
-    <!-- https://mvnrepository.com/artifact/org.apache.hbase/hbase-shaded-client -->
+    <!-- Scala -->
+    <!-- TODO(HUDI-3239) remove this dep -->
+    <dependency>
+      <groupId>org.scala-lang</groupId>
+      <artifactId>scala-library</artifactId>
+      <version>${scala.version}</version>
+    </dependency>
+
+    <!-- HBase -->
     <dependency>
       <groupId>org.apache.hbase</groupId>
-      <artifactId>hbase-shaded-client</artifactId>
+      <artifactId>hbase-common</artifactId>
       <version>${hbase.version}</version>
-      <scope>test</scope>
     </dependency>
 
     <dependency>
       <groupId>org.apache.hbase</groupId>
-      <artifactId>hbase-shaded-server</artifactId>
+      <artifactId>hbase-server</artifactId>
       <version>${hbase.version}</version>
-      <!-- Unfortunately, HFile is packaged ONLY under hbase-server -->
       <scope>compile</scope>
       <exclusions>
+        <exclusion>
+          <groupId>org.apache.hbase</groupId>
+          <artifactId>hbase-common</artifactId>
+        </exclusion>
         <exclusion>
           <groupId>javax.servlet</groupId>
           <artifactId>*</artifactId>
@@ -224,12 +237,15 @@
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
+      <version>${parquet.version}</version>
       <scope>compile</scope>
     </dependency>
 
+    <!-- Avro -->
     <dependency>
       <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>
+      <version>${avro.version}</version>
       <scope>compile</scope>
     </dependency>
 

@@ -26,8 +26,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-import org.apache.hudi.keygen.parser.AbstractHoodieDateTimeParser;
-import org.apache.hudi.keygen.parser.HoodieDateTimeParserImpl;
+import org.apache.hudi.keygen.parser.BaseHoodieDateTimeParser;
+import org.apache.hudi.keygen.parser.HoodieDateTimeParser;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormat;
@@ -36,6 +36,7 @@ import org.joda.time.format.DateTimeFormatter;
 import java.io.IOException;
 import java.io.Serializable;
 import java.math.BigDecimal;
+import java.sql.Timestamp;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
@@ -55,7 +56,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
   private final String outputDateFormat;
   private transient Option<DateTimeFormatter> inputFormatter;
   private transient DateTimeFormatter partitionFormatter;
-  private final AbstractHoodieDateTimeParser parser;
+  private final BaseHoodieDateTimeParser parser;
 
   // TimeZone detailed settings reference
   // https://docs.oracle.com/javase/8/docs/api/java/util/TimeZone.html
@@ -98,7 +99,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
 
   TimestampBasedAvroKeyGenerator(TypedProperties config, String recordKeyField, String partitionPathField) throws IOException {
     super(config, recordKeyField, partitionPathField);
-    String dateTimeParserClass = config.getString(Config.DATE_TIME_PARSER_PROP, HoodieDateTimeParserImpl.class.getName());
+    String dateTimeParserClass = config.getString(Config.DATE_TIME_PARSER_PROP, HoodieDateTimeParser.class.getName());
     this.parser = KeyGenUtils.createDateTimeParser(config, dateTimeParserClass);
     this.inputDateTimeZone = parser.getInputDateTimeZone();
     this.outputDateTimeZone = parser.getOutputDateTimeZone();
@@ -125,7 +126,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
 
   @Override
   public String getPartitionPath(GenericRecord record) {
-    Object partitionVal = HoodieAvroUtils.getNestedFieldVal(record, getPartitionPathFields().get(0), true);
+    Object partitionVal = HoodieAvroUtils.getNestedFieldVal(record, getPartitionPathFields().get(0), true, isConsistentLogicalTimestampEnabled());
     if (partitionVal == null) {
       partitionVal = getDefaultPartitionVal();
     }
@@ -191,6 +192,8 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
       timeMs = convertLongTimeToMillis(((Float) partitionVal).longValue());
     } else if (partitionVal instanceof Long) {
       timeMs = convertLongTimeToMillis((Long) partitionVal);
+    } else if (partitionVal instanceof Timestamp && isConsistentLogicalTimestampEnabled()) {
+      timeMs = ((Timestamp) partitionVal).getTime();
     } else if (partitionVal instanceof Integer) {
       timeMs = convertLongTimeToMillis(((Integer) partitionVal).longValue());
     } else if (partitionVal instanceof BigDecimal) {
@@ -225,5 +228,4 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
     }
     return MILLISECONDS.convert(partitionVal, timeUnit);
   }
-
 }

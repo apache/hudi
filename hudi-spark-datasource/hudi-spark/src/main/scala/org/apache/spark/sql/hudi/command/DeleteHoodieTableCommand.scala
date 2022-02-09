@@ -22,20 +22,18 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
-
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.plans.logical.DeleteFromTable
-import org.apache.spark.sql.execution.command.RunnableCommand
-import org.apache.spark.sql.hudi.HoodieSqlUtils._
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.types.StructType
 
-case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends RunnableCommand
+case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends HoodieLeafRunnableCommand
   with SparkAdapterSupport {
 
   private val table = deleteTable.table
 
-  private val tableId = getTableIdentify(table)
+  private val tableId = getTableIdentifier(table)
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     logInfo(s"start execute delete command for $tableId")
@@ -63,13 +61,13 @@ case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends Runnab
     val tableSchema = hoodieCatalogTable.tableSchema
     val partitionColumns = tableConfig.getPartitionFieldProp.split(",").map(_.toLowerCase)
     val partitionSchema = StructType(tableSchema.filter(f => partitionColumns.contains(f.name)))
-    val primaryColumns = tableConfig.getRecordKeyFields.get()
 
-    assert(primaryColumns.nonEmpty,
+    assert(hoodieCatalogTable.primaryKeys.nonEmpty,
       s"There are no primary key defined in table $tableId, cannot execute delete operator")
     withSparkConf(sparkSession, hoodieCatalogTable.catalogProperties) {
       Map(
         "path" -> path,
+        RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
         TBL_NAME.key -> tableConfig.getTableName,
         HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
         URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,

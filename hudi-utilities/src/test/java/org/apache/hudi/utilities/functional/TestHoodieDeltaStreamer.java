@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.functional;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
@@ -752,6 +753,38 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       TestHelpers.assertAtLeastNReplaceCommits(1, tableBasePath, dfs);
       return true;
     });
+  }
+
+  @Test
+  public void testDeltaSyncWithPendingClustering() throws Exception {
+    String tableBasePath = dfsBasePath + "/inlineClusteringPending";
+    // ingest data
+    int totalRecords = 2000;
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT);
+    cfg.continuousMode = false;
+    cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
+    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
+    ds.sync();
+    // assert ingest successful
+    TestHelpers.assertAtLeastNCommits(1, tableBasePath, dfs);
+
+    // schedule a clustering job to build a clustering plan and transition to inflight
+    HoodieClusteringJob clusteringJob = initialHoodieClusteringJob(tableBasePath, null, false, "schedule");
+    clusteringJob.cluster(0);
+    HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(dfs.getConf()).setBasePath(tableBasePath).build();
+    List<HoodieInstant> hoodieClusteringInstants = meta.getActiveTimeline().filterPendingReplaceTimeline().getInstants().collect(Collectors.toList());
+    HoodieInstant clusteringRequest = hoodieClusteringInstants.get(0);
+    meta.getActiveTimeline().transitionReplaceRequestedToInflight(clusteringRequest, Option.empty());
+
+    // do another ingestion with inline clustering enabled
+    cfg.configs.addAll(getAsyncServicesConfigs(totalRecords, "false", "true", "2", "", ""));
+    cfg.retryLastPendingInlineClusteringJob = true;
+    HoodieDeltaStreamer ds2 = new HoodieDeltaStreamer(cfg, jsc);
+    ds2.sync();
+    String completeClusteringTimeStamp = meta.reloadActiveTimeline().getCompletedReplaceTimeline().lastInstant().get().getTimestamp();
+    assertEquals(clusteringRequest.getTimestamp(), completeClusteringTimeStamp);
+    TestHelpers.assertAtLeastNCommits(2, tableBasePath, dfs);
+    TestHelpers.assertAtLeastNReplaceCommits(1, tableBasePath, dfs);
   }
 
   @ParameterizedTest
@@ -1708,6 +1741,54 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @Test
+  public void testHoodieIncrFallback() throws Exception {
+    String tableBasePath = dfsBasePath + "/incr_test_table";
+    String downstreamTableBasePath = dfsBasePath + "/incr_test_downstream_table";
+
+    insertInTable(tableBasePath, 1, WriteOperationType.BULK_INSERT);
+    HoodieDeltaStreamer.Config downstreamCfg =
+        TestHelpers.makeConfigForHudiIncrSrc(tableBasePath, downstreamTableBasePath,
+            WriteOperationType.BULK_INSERT, true, null);
+    new HoodieDeltaStreamer(downstreamCfg, jsc).sync();
+
+    insertInTable(tableBasePath, 9, WriteOperationType.UPSERT);
+    //No change as this fails with Path not exist error
+    assertThrows(org.apache.spark.sql.AnalysisException.class, () -> new HoodieDeltaStreamer(downstreamCfg, jsc).sync());
+    TestHelpers.assertRecordCount(1000, downstreamTableBasePath + "/*/*", sqlContext);
+
+    if (downstreamCfg.configs == null) {
+      downstreamCfg.configs = new ArrayList<>();
+    }
+
+    downstreamCfg.configs.add(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().key() + "=true");
+    //Adding this conf to make testing easier :)
+    downstreamCfg.configs.add("hoodie.deltastreamer.source.hoodieincr.num_instants=10");
+    downstreamCfg.operation = WriteOperationType.UPSERT;
+    new HoodieDeltaStreamer(downstreamCfg, jsc).sync();
+    new HoodieDeltaStreamer(downstreamCfg, jsc).sync();
+
+    long baseTableRecords = sqlContext.read().format("org.apache.hudi").load(tableBasePath + "/*/*.parquet").count();
+    long downStreamTableRecords = sqlContext.read().format("org.apache.hudi").load(downstreamTableBasePath + "/*/*.parquet").count();
+    assertEquals(baseTableRecords, downStreamTableRecords);
+  }
+
+  private void insertInTable(String tableBasePath, int count, WriteOperationType operationType) throws Exception {
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, operationType,
+        Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false);
+    if (cfg.configs == null) {
+      cfg.configs = new ArrayList<>();
+    }
+    cfg.configs.add("hoodie.cleaner.commits.retained=3");
+    cfg.configs.add("hoodie.keep.min.commits=4");
+    cfg.configs.add("hoodie.keep.max.commits=5");
+    cfg.configs.add("hoodie.test.source.generate.inserts=true");
+
+    for (int i = 0; i < count; i++) {
+      new HoodieDeltaStreamer(cfg, jsc).sync();
+    }
+  }
+
+  @Test
   public void testInsertOverwrite() throws Exception {
     testDeltaStreamerWithSpecifiedOperation(dfsBasePath + "/insert_overwrite", WriteOperationType.INSERT_OVERWRITE);
   }
@@ -1758,14 +1839,20 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     extraMetadata.put(HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY, "abc");
     addCommitToTimeline(metaClient, extraMetadata);
     metaClient.reloadActiveTimeline();
-    assertEquals(testDeltaSync.getPreviousCheckpoint(metaClient.getActiveTimeline().getCommitsTimeline()).get(), "abc");
+    assertEquals(testDeltaSync.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
+        .getCommitsTimeline()).get().getMetadata(CHECKPOINT_KEY), "abc");
 
-    addCommitToTimeline(metaClient, Collections.emptyMap());
-    metaClient.reloadActiveTimeline();
     extraMetadata.put(HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY, "def");
     addCommitToTimeline(metaClient, extraMetadata);
     metaClient.reloadActiveTimeline();
-    assertEquals(testDeltaSync.getPreviousCheckpoint(metaClient.getActiveTimeline().getCommitsTimeline()).get(), "def");
+    assertEquals(testDeltaSync.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
+        .getCommitsTimeline()).get().getMetadata(CHECKPOINT_KEY), "def");
+
+    // add a replace commit which does not have CEHCKPOINT_KEY. Deltastreamer should be able to go back and pick the right checkpoint.
+    addReplaceCommitToTimeline(metaClient, Collections.emptyMap());
+    metaClient.reloadActiveTimeline();
+    assertEquals(testDeltaSync.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
+        .getCommitsTimeline()).get().getMetadata(CHECKPOINT_KEY), "def");
   }
 
   class TestDeltaSync extends DeltaSync {
@@ -1776,8 +1863,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       super(cfg, sparkSession, schemaProvider, props, jssc, fs, conf, onInitializingHoodieWriteClient);
     }
 
-    protected Option<String> getPreviousCheckpoint(HoodieTimeline timeline) throws IOException {
-      return super.getPreviousCheckpoint(timeline);
+    protected Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
+      return super.getLatestCommitMetadataWithValidCheckpointInfo(timeline);
     }
   }
 

@@ -46,6 +46,7 @@ import java.util.UUID;
  */
 public class HoodieTestUtils {
 
+  public static final String HOODIE_DATABASE = "test_incremental";
   public static final String RAW_TRIPS_TEST_NAME = "raw_trips";
   public static final String DEFAULT_WRITE_TOKEN = "1-0-1";
   public static final int DEFAULT_LOG_VERSION = 1;
@@ -92,6 +93,14 @@ public class HoodieTestUtils {
   }
 
   public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
+                                           HoodieFileFormat baseFileFormat, String databaseName)
+      throws IOException {
+    Properties properties = new Properties();
+    properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.toString());
+    return init(hadoopConf, basePath, tableType, properties, databaseName);
+  }
+
+  public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
                                            HoodieFileFormat baseFileFormat)
       throws IOException {
     Properties properties = new Properties();
@@ -103,6 +112,19 @@ public class HoodieTestUtils {
                                            Properties properties)
       throws IOException {
     properties = HoodieTableMetaClient.withPropertyBuilder()
+      .setTableName(RAW_TRIPS_TEST_NAME)
+      .setTableType(tableType)
+      .setPayloadClass(HoodieAvroPayload.class)
+      .fromProperties(properties)
+      .build();
+    return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
+  }
+
+  public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
+                                           Properties properties, String databaseName)
+      throws IOException {
+    properties = HoodieTableMetaClient.withPropertyBuilder()
+      .setDatabaseName(databaseName)
       .setTableName(RAW_TRIPS_TEST_NAME)
       .setTableType(tableType)
       .setPayloadClass(HoodieAvroPayload.class)

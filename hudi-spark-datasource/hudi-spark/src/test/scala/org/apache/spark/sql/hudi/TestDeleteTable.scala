@@ -64,4 +64,91 @@ class TestDeleteTable extends TestHoodieSqlBase {
       }
     }
   }
+
+  test("Test Delete Table On Non-PK Condition") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach {tableType =>
+        /** non-partitioned table */
+        val tableName = generateTableName
+        // create table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+          """.stripMargin)
+
+        // insert data to table
+        spark.sql(
+          s"""
+             |insert into $tableName
+             |values (1, 'a1', 10.0, 1000), (2, 'a2', 20.0, 1000), (3, 'a2', 30.0, 1000)
+          """.stripMargin)
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000),
+          Seq(2, "a2", 20.0, 1000),
+          Seq(3, "a2", 30.0, 1000)
+        )
+
+        // delete data on non-pk condition
+        spark.sql(s"delete from $tableName where name = 'a2'")
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000)
+        )
+
+        /** partitioned table */
+        val ptTableName = generateTableName + "_pt"
+        // create table
+        spark.sql(
+          s"""
+             |create table $ptTableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  pt string
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$ptTableName'
+             | tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+             | partitioned by (pt)
+          """.stripMargin)
+
+        // insert data to table
+        spark.sql(
+          s"""
+             |insert into $ptTableName
+             |values (1, 'a1', 10.0, 1000, "2021"), (2, 'a2', 20.0, 1000, "2021"), (3, 'a2', 30.0, 1000, "2022")
+          """.stripMargin)
+        checkAnswer(s"select id, name, price, ts, pt from $ptTableName")(
+          Seq(1, "a1", 10.0, 1000, "2021"),
+          Seq(2, "a2", 20.0, 1000, "2021"),
+          Seq(3, "a2", 30.0, 1000, "2022")
+        )
+
+        // delete data on non-pk condition
+        spark.sql(s"delete from $ptTableName where name = 'a2'")
+        checkAnswer(s"select id, name, price, ts, pt from $ptTableName")(
+          Seq(1, "a1", 10.0, 1000, "2021")
+        )
+
+        spark.sql(s"delete from $ptTableName where pt = '2021'")
+        checkAnswer(s"select id, name, price, ts, pt from $ptTableName")(
+          Seq.empty: _*
+        )
+      }
+    }
+  }
 }

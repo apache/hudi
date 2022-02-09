@@ -66,8 +66,8 @@ public class CloudObjectsSelector {
   static final String S3_FILE_PATH = "filePath";
   public final String queueUrl;
   public final int longPollWait;
-  public final int maxMessagesPerRequest;
   public final int maxMessagePerBatch;
+  public final int maxMessagesPerRequest;
   public final int visibilityTimeout;
   public final TypedProperties props;
   public final String fsName;
@@ -84,8 +84,8 @@ public class CloudObjectsSelector {
     this.fsName = props.getString(Config.S3_SOURCE_QUEUE_FS, "s3").toLowerCase();
     this.longPollWait = props.getInteger(Config.S3_QUEUE_LONG_POLL_WAIT, 20);
     this.maxMessagePerBatch = props.getInteger(Config.S3_SOURCE_QUEUE_MAX_MESSAGES_PER_BATCH, 5);
+    this.maxMessagesPerRequest = props.getInteger(Config.S3_SOURCE_QUEUE_MAX_MESSAGES_PER_REQUEST, 10);
     this.visibilityTimeout = props.getInteger(Config.S3_SOURCE_QUEUE_VISIBILITY_TIMEOUT, 30);
-    this.maxMessagesPerRequest = 10;
   }
 
   /**
@@ -263,6 +263,12 @@ public class CloudObjectsSelector {
      */
     public static final String S3_SOURCE_QUEUE_MAX_MESSAGES_PER_BATCH =
         HOODIE_DELTASTREAMER_S3_SOURCE + ".queue.max.messages.per.batch";
+
+    /**
+     * {@value #S3_SOURCE_QUEUE_MAX_MESSAGES_PER_REQUEST} is max messages for each request.
+     */
+    public static final String S3_SOURCE_QUEUE_MAX_MESSAGES_PER_REQUEST =
+        HOODIE_DELTASTREAMER_S3_SOURCE + ".queue.max.messages.per.request";
 
     /**
      * {@value #S3_SOURCE_QUEUE_VISIBILITY_TIMEOUT} is visibility timeout for messages in queue. After we

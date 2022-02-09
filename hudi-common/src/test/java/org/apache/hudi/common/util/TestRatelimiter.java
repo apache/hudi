@@ -20,6 +20,7 @@ package org.apache.hudi.common.util;
 
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 

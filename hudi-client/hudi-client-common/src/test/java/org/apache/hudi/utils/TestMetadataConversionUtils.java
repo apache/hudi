@@ -188,7 +188,6 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     rollbackPartitionMetadata.setPartitionPath("p1");
     rollbackPartitionMetadata.setSuccessDeleteFiles(Arrays.asList("f1"));
     rollbackPartitionMetadata.setFailedDeleteFiles(new ArrayList<>());
-    rollbackPartitionMetadata.setWrittenLogFiles(new HashMap<>());
     rollbackPartitionMetadata.setRollbackLogFiles(new HashMap<>());
     Map<String, HoodieRollbackPartitionMetadata> partitionMetadataMap = new HashMap<>();
     partitionMetadataMap.put("p1", rollbackPartitionMetadata);

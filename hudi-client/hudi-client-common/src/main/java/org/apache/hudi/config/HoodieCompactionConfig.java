@@ -200,7 +200,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> COMPACTION_LAZY_BLOCK_READ_ENABLE = ConfigProperty
       .key("hoodie.compaction.lazy.block.read")
-      .defaultValue("false")
+      .defaultValue("true")
       .withDocumentation("When merging the delta log files, this config helps to choose whether the log blocks "
           + "should be read lazily or not. Choose true to use lazy block reading (low memory usage, but incurs seeks to each block"
           + " header) or false for immediate block read (higher memory usage)");
@@ -223,6 +223,12 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .defaultValue("10")
       .withDocumentation("Used by org.apache.hudi.io.compact.strategy.DayBasedCompactionStrategy to denote the number of "
           + "latest partitions to compact during a compaction run.");
+
+  public static final ConfigProperty<Boolean> PRESERVE_COMMIT_METADATA = ConfigProperty
+      .key("hoodie.compaction.preserve.commit.metadata")
+      .defaultValue(false)
+      .sinceVersion("0.11.0")
+      .withDocumentation("When rewriting data, preserves existing hoodie_commit_time");
 
   /**
    * Configs related to specific table types.
@@ -248,6 +254,22 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("The average record size. If not explicitly specified, hudi will compute the "
           + "record size estimate compute dynamically based on commit metadata. "
           + " This is critical in computing the insert parallelism and bin-packing inserts into small files.");
+
+  public static final ConfigProperty<Integer> ARCHIVE_MERGE_FILES_BATCH_SIZE = ConfigProperty
+      .key("hoodie.archive.merge.files.batch.size")
+      .defaultValue(10)
+      .withDocumentation("The number of small archive files to be merged at once.");
+
+  public static final ConfigProperty<Long> ARCHIVE_MERGE_SMALL_FILE_LIMIT_BYTES = ConfigProperty
+      .key("hoodie.archive.merge.small.file.limit.bytes")
+      .defaultValue(20L * 1024 * 1024)
+      .withDocumentation("This config sets the archive file size limit below which an archive file becomes a candidate to be selected as such a small file.");
+
+  public static final ConfigProperty<Boolean> ARCHIVE_MERGE_ENABLE = ConfigProperty
+      .key("hoodie.archive.merge.enable")
+      .defaultValue(false)
+      .withDocumentation("When enable, hoodie will auto merge several small archive files into larger one. It's"
+          + " useful when storage scheme doesn't support append operation.");
 
   /** @deprecated Use {@link #CLEANER_POLICY} and its methods instead */
   @Deprecated
@@ -541,6 +563,21 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withArchiveMergeFilesBatchSize(int number) {
+      compactionConfig.setValue(ARCHIVE_MERGE_FILES_BATCH_SIZE, String.valueOf(number));
+      return this;
+    }
+
+    public Builder withArchiveMergeSmallFileLimit(long size) {
+      compactionConfig.setValue(ARCHIVE_MERGE_SMALL_FILE_LIMIT_BYTES, String.valueOf(size));
+      return this;
+    }
+
+    public Builder withArchiveMergeEnable(boolean enable) {
+      compactionConfig.setValue(ARCHIVE_MERGE_ENABLE, String.valueOf(enable));
+      return this;
+    }
+
     public Builder compactionSmallFileSize(long smallFileLimitBytes) {
       compactionConfig.setValue(PARQUET_SMALL_FILE_LIMIT, String.valueOf(smallFileLimitBytes));
       return this;
@@ -618,6 +655,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withLogFileSizeThresholdBasedCompaction(long logFileSizeThreshold) {
       compactionConfig.setValue(COMPACTION_LOG_FILE_SIZE_THRESHOLD, String.valueOf(logFileSizeThreshold));
+      return this;
+    }
+
+    public Builder withPreserveCommitMetadata(boolean preserveCommitMetadata) {
+      compactionConfig.setValue(PRESERVE_COMMIT_METADATA, String.valueOf(preserveCommitMetadata));
       return this;
     }
 

@@ -49,6 +49,9 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--jdbc-url"}, description = "Hive jdbc connect url")
   public String jdbcUrl;
 
+  @Parameter(names = {"--metastore-uris"}, description = "Hive metastore uris")
+  public String metastoreUris;
+
   @Parameter(names = {"--base-path"}, description = "Basepath of hoodie table to sync", required = true)
   public String basePath;
 
@@ -69,6 +72,9 @@ public class HiveSyncConfig implements Serializable {
           + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to "
           + "org.apache.hudi input format.")
   public Boolean usePreApacheInputFormat = false;
+
+  @Parameter(names = {"--bucket-spec"}, description = "bucket spec stored in metastore", required = false)
+  public String bucketSpec;
 
   @Deprecated
   @Parameter(names = {"--use-jdbc"}, description = "Hive jdbc connect url")
@@ -134,7 +140,9 @@ public class HiveSyncConfig implements Serializable {
     newConfig.partitionFields = cfg.partitionFields;
     newConfig.partitionValueExtractorClass = cfg.partitionValueExtractorClass;
     newConfig.jdbcUrl = cfg.jdbcUrl;
+    newConfig.metastoreUris = cfg.metastoreUris;
     newConfig.tableName = cfg.tableName;
+    newConfig.bucketSpec = cfg.bucketSpec;
     newConfig.usePreApacheInputFormat = cfg.usePreApacheInputFormat;
     newConfig.useFileListingFromMetadata = cfg.useFileListingFromMetadata;
     newConfig.supportTimestamp = cfg.supportTimestamp;
@@ -155,10 +163,12 @@ public class HiveSyncConfig implements Serializable {
     return "HiveSyncConfig{"
       + "databaseName='" + databaseName + '\''
       + ", tableName='" + tableName + '\''
+      + ", bucketSpec='" + bucketSpec + '\''
       + ", baseFileFormat='" + baseFileFormat + '\''
       + ", hiveUser='" + hiveUser + '\''
       + ", hivePass='" + hivePass + '\''
       + ", jdbcUrl='" + jdbcUrl + '\''
+      + ", metastoreUris='" + metastoreUris + '\''
       + ", basePath='" + basePath + '\''
       + ", partitionFields=" + partitionFields
       + ", partitionValueExtractorClass='" + partitionValueExtractorClass + '\''
@@ -180,5 +190,9 @@ public class HiveSyncConfig implements Serializable {
       + ", withOperationField=" + withOperationField
       + ", isConditionalSync=" + isConditionalSync
       + '}';
+  }
+
+  public static String getBucketSpec(String bucketCols, int bucketNum) {
+    return "CLUSTERED BY (" + bucketCols + " INTO " + bucketNum + " BUCKETS";
   }
 }

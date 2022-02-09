@@ -138,7 +138,7 @@ public class SparkValidatorUtils {
   }
 
   /**
-   * Get reads from paritions modified including any inflight commits.
+   * Get reads from partitions modified including any inflight commits.
    * Note that this only works for COW tables
    */
   public static Dataset<Row> getRecordsFromPendingCommits(SQLContext sqlContext, 

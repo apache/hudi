@@ -45,6 +45,6 @@ public class JavaInsertCommitActionExecutor<T extends HoodieRecordPayload<T>> ex
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
     return JavaWriteHelper.newInstance().write(instantTime, inputRecords, context, table,
-        config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, false);
+        config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, operationType);
   }
 }

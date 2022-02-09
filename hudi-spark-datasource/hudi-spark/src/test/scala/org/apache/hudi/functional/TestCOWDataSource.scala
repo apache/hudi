@@ -34,7 +34,8 @@ import org.apache.spark.sql.functions.{col, concat, lit, udf}
 import org.apache.spark.sql.types._
 import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue, fail}
+import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
@@ -245,12 +246,12 @@ class TestCOWDataSource extends HoodieClientTestBase {
     spark.sql(String.format("select count(*) from tmpTable")).show()
 
     // step4: Query the rows count from hoodie table for partition1 DEFAULT_FIRST_PARTITION_PATH
-    val recordCountForParititon1 = spark.sql(String.format("select count(*) from tmpTable where partition = '%s'", HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).collect()
-    assertEquals("6", recordCountForParititon1(0).get(0).toString)
+    val recordCountForPartition1 = spark.sql(String.format("select count(*) from tmpTable where partition = '%s'", HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).collect()
+    assertEquals("6", recordCountForPartition1(0).get(0).toString)
 
     // step5: Query the rows count from hoodie table for partition2 DEFAULT_SECOND_PARTITION_PATH
-    val recordCountForParititon2 = spark.sql(String.format("select count(*) from tmpTable where partition = '%s'", HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)).collect()
-    assertEquals("7", recordCountForParititon2(0).get(0).toString)
+    val recordCountForPartition2 = spark.sql(String.format("select count(*) from tmpTable where partition = '%s'", HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)).collect()
+    assertEquals("7", recordCountForPartition2(0).get(0).toString)
 
     // step6: Query the rows count from hoodie table for partition2 DEFAULT_SECOND_PARTITION_PATH using spark.collect and then filter mode
     val recordsForPartitionColumn = spark.sql(String.format("select partition from tmpTable")).collect()
@@ -292,12 +293,12 @@ class TestCOWDataSource extends HoodieClientTestBase {
     spark.sql(String.format("select count(*) from tmpTable")).show()
 
     // step3: Query the rows count from hoodie table for partition1 DEFAULT_FIRST_PARTITION_PATH
-    val recordCountForParititon1 = spark.sql(String.format("select count(*) from tmpTable where partition = '%s'", HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).collect()
-    assertEquals("0", recordCountForParititon1(0).get(0).toString)
+    val recordCountForPartition1 = spark.sql(String.format("select count(*) from tmpTable where partition = '%s'", HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).collect()
+    assertEquals("0", recordCountForPartition1(0).get(0).toString)
 
     // step4: Query the rows count from hoodie table for partition2 DEFAULT_SECOND_PARTITION_PATH
-    val recordCountForParititon2 = spark.sql(String.format("select count(*) from tmpTable where partition = '%s'", HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)).collect()
-    assertEquals("7", recordCountForParititon2(0).get(0).toString)
+    val recordCountForPartition2 = spark.sql(String.format("select count(*) from tmpTable where partition = '%s'", HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)).collect()
+    assertEquals("7", recordCountForPartition2(0).get(0).toString)
 
     // step5: Query the rows count from hoodie table
     val recordCount = spark.sql(String.format("select count(*) from tmpTable")).collect()
@@ -417,7 +418,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .mode(SaveMode.Overwrite)
   }
 
-  @Test def testSparkPartitonByWithCustomKeyGenerator(): Unit = {
+  @Test def testSparkPartitionByWithCustomKeyGenerator(): Unit = {
     // Without fieldType, the default is SIMPLE
     var writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName)
     writer.partitionBy("current_ts")
@@ -465,7 +466,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     }
   }
 
-  @Test def testSparkPartitonByWithSimpleKeyGenerator() {
+  @Test def testSparkPartitionByWithSimpleKeyGenerator() {
     // Use the `driver` field as the partition key
     var writer = getDataFrameWriter(classOf[SimpleKeyGenerator].getName)
     writer.partitionBy("driver")
@@ -484,7 +485,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("default")).count() == 0)
   }
 
-  @Test def testSparkPartitonByWithComplexKeyGenerator() {
+  @Test def testSparkPartitionByWithComplexKeyGenerator() {
     // Use the `driver` field as the partition key
     var writer = getDataFrameWriter(classOf[ComplexKeyGenerator].getName)
     writer.partitionBy("driver")
@@ -503,7 +504,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= concat(col("driver"), lit("/"), col("rider"))).count() == 0)
   }
 
-  @Test def testSparkPartitonByWithTimestampBasedKeyGenerator() {
+  @Test def testSparkPartitionByWithTimestampBasedKeyGenerator() {
     val writer = getDataFrameWriter(classOf[TimestampBasedKeyGenerator].getName)
     writer.partitionBy("current_ts")
       .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
@@ -517,7 +518,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= udf_date_format(col("current_ts"))).count() == 0)
   }
 
-  @Test def testSparkPartitonByWithGlobalDeleteKeyGenerator() {
+  @Test def testSparkPartitionByWithGlobalDeleteKeyGenerator() {
     val writer = getDataFrameWriter(classOf[GlobalDeleteKeyGenerator].getName)
     writer.partitionBy("driver")
       .mode(SaveMode.Overwrite)
@@ -528,7 +529,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("")).count() == 0)
   }
 
-  @Test def testSparkPartitonByWithNonpartitionedKeyGenerator() {
+  @Test def testSparkPartitionByWithNonpartitionedKeyGenerator() {
     // Empty string column
     var writer = getDataFrameWriter(classOf[NonpartitionedKeyGenerator].getName)
     writer.partitionBy("")
@@ -706,6 +707,90 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val snapshotDF2 = spark.read.format("org.apache.hudi")
       .load(basePath + "/*/*/*/*")
     assertEquals(numRecords - numRecordsToDelete, snapshotDF2.count())
+  }
+
+  @Test def testFailEarlyForIncrViewQueryForNonExistingFiles(): Unit = {
+    // Create 10 commits
+    for (i <- 1 to 10) {
+      val records = recordsToStrings(dataGen.generateInserts("%05d".format(i), 100)).toList
+      val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+      inputDF.write.format("org.apache.hudi")
+        .options(commonOpts)
+        .option("hoodie.cleaner.commits.retained", "3")
+        .option("hoodie.keep.min.commits", "4")
+        .option("hoodie.keep.max.commits", "5")
+        .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+        .option(HoodieMetadataConfig.ENABLE.key(), value = false)
+        .mode(SaveMode.Append)
+        .save(basePath)
+    }
+
+    val hoodieMetaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build()
+    /**
+      * State of timeline after 10 commits
+      * +------------------+--------------------------------------+
+      * |     Archived     |            Active Timeline           |
+      * +------------------+--------------+-----------------------+
+      * | C0   C1   C2  C3 |    C4   C5   |   C6    C7   C8   C9  |
+      * +------------------+--------------+-----------------------+
+      * |          Data cleaned           |  Data exists in table |
+      * +---------------------------------+-----------------------+
+      */
+
+    val completedCommits = hoodieMetaClient.getCommitsTimeline.filterCompletedInstants() // C4 to C9
+    //Anything less than 2 is a valid commit in the sense no cleanup has been done for those commit files
+    var startTs = completedCommits.nthInstant(0).get().getTimestamp //C4
+    var endTs = completedCommits.nthInstant(1).get().getTimestamp //C5
+
+    //Calling without the fallback should result in Path does not exist
+    var hoodieIncViewDF = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), startTs)
+      .option(DataSourceReadOptions.END_INSTANTTIME.key(), endTs)
+      .load(basePath)
+
+    val msg = "Should fail with Path does not exist"
+    assertThrows(classOf[AnalysisException], new Executable {
+      override def execute(): Unit = {
+        hoodieIncViewDF.count()
+      }
+    }, msg)
+
+    //Should work with fallback enabled
+    hoodieIncViewDF = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), startTs)
+      .option(DataSourceReadOptions.END_INSTANTTIME.key(), endTs)
+      .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.key(), "true")
+      .load(basePath)
+    assertEquals(100, hoodieIncViewDF.count())
+
+    //Test out for archived commits
+    val archivedInstants = hoodieMetaClient.getArchivedTimeline.getInstants.distinct().toArray
+    startTs = archivedInstants(0).asInstanceOf[HoodieInstant].getTimestamp //C0
+    endTs = completedCommits.nthInstant(1).get().getTimestamp //C5
+
+    //Calling without the fallback should result in Path does not exist
+    hoodieIncViewDF = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), startTs)
+      .option(DataSourceReadOptions.END_INSTANTTIME.key(), endTs)
+      .load(basePath)
+
+    assertThrows(classOf[AnalysisException], new Executable {
+      override def execute(): Unit = {
+        hoodieIncViewDF.count()
+      }
+    }, msg)
+
+    //Should work with fallback enabled
+    hoodieIncViewDF = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), startTs)
+      .option(DataSourceReadOptions.END_INSTANTTIME.key(), endTs)
+      .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.key(), "true")
+      .load(basePath)
+    assertEquals(500, hoodieIncViewDF.count())
   }
 
   def copyOnWriteTableSelect(enableDropPartitionColumns: Boolean): Boolean = {

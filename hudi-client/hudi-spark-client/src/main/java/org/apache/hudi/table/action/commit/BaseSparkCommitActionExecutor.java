@@ -216,7 +216,10 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   }
 
   protected Partitioner getPartitioner(WorkloadProfile profile) {
-    if (WriteOperationType.isChangingRecords(operationType)) {
+    Option<String> layoutPartitionerClass = table.getStorageLayout().layoutPartitionerClass();
+    if (layoutPartitionerClass.isPresent()) {
+      return getLayoutPartitioner(profile, layoutPartitionerClass.get());
+    } else if (WriteOperationType.isChangingRecords(operationType)) {
       return getUpsertPartitioner(profile);
     } else {
       return getInsertPartitioner(profile);
@@ -271,6 +274,13 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   }
 
   @Override
+  protected void setCommitMetadata(HoodieWriteMetadata<JavaRDD<WriteStatus>> result) {
+    result.setCommitMetadata(Option.of(CommitUtils.buildMetadata(result.getWriteStatuses().map(WriteStatus::getStat).collect(),
+        result.getPartitionToReplaceFileIds(),
+        extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType())));
+  }
+
+  @Override
   protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<JavaRDD<WriteStatus>> result) {
     context.setJobStatus(this.getClass().getSimpleName(), "Commit write status collect");
     commit(extraMetadata, result, result.getWriteStatuses().map(WriteStatus::getStat).collect());
@@ -285,8 +295,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     finalizeWrite(instantTime, writeStats, result);
     try {
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-      HoodieCommitMetadata metadata = CommitUtils.buildMetadata(writeStats, result.getPartitionToReplaceFileIds(),
-          extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType());
+      HoodieCommitMetadata metadata = result.getCommitMetadata().get();
       writeTableMetadata(metadata, actionType);
       activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
@@ -305,7 +314,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   @SuppressWarnings("unchecked")
   protected Iterator<List<WriteStatus>> handleUpsertPartition(String instantTime, Integer partition, Iterator recordItr,
                                                               Partitioner partitioner) {
-    UpsertPartitioner upsertPartitioner = (UpsertPartitioner) partitioner;
+    SparkHoodiePartitioner upsertPartitioner = (SparkHoodiePartitioner) partitioner;
     BucketInfo binfo = upsertPartitioner.getBucketInfo(partition);
     BucketType btype = binfo.bucketType;
     try {
@@ -392,6 +401,12 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
 
   public Partitioner getInsertPartitioner(WorkloadProfile profile) {
     return getUpsertPartitioner(profile);
+  }
+
+  public Partitioner getLayoutPartitioner(WorkloadProfile profile, String layoutPartitionerClass) {
+    return (Partitioner) ReflectionUtils.loadClass(layoutPartitionerClass,
+        new Class[] { WorkloadProfile.class, HoodieEngineContext.class, HoodieTable.class, HoodieWriteConfig.class },
+        profile, context, table, config);
   }
 
   @Override

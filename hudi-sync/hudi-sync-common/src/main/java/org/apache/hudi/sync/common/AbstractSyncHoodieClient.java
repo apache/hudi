@@ -18,6 +18,8 @@
 
 package org.apache.hudi.sync.common;
 
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -29,9 +31,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
@@ -149,11 +148,7 @@ public abstract class AbstractSyncHoodieClient {
    */
   public MessageType getDataSchema() {
     try {
-      if (withOperationField) {
-        return new TableSchemaResolver(metaClient, true).getTableParquetSchema();
-      } else {
-        return new TableSchemaResolver(metaClient).getTableParquetSchema();
-      }
+      return new TableSchemaResolver(metaClient).getTableParquetSchema();
     } catch (Exception e) {
       throw new HoodieSyncException("Failed to read data schema", e);
     }
@@ -162,11 +157,7 @@ public abstract class AbstractSyncHoodieClient {
   public boolean isDropPartition() {
     try {
       Option<HoodieCommitMetadata> hoodieCommitMetadata;
-      if (withOperationField) {
-        hoodieCommitMetadata = new TableSchemaResolver(metaClient, true).getLatestCommitMetadata();
-      } else {
-        hoodieCommitMetadata = new TableSchemaResolver(metaClient).getLatestCommitMetadata();
-      }
+      hoodieCommitMetadata = new TableSchemaResolver(metaClient).getLatestCommitMetadata();
 
       if (hoodieCommitMetadata.isPresent()
           && WriteOperationType.DELETE_PARTITION.equals(hoodieCommitMetadata.get().getOperationType())) {

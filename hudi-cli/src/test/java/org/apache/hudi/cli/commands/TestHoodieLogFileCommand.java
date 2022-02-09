@@ -108,7 +108,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, INSTANT_TIME);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-      dataBlock = new HoodieAvroDataBlock(records, header);
+      dataBlock = new HoodieAvroDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       writer.appendBlock(dataBlock);
     }
   }
@@ -188,7 +188,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, INSTANT_TIME);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-      HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records1, header);
+      HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records1, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       writer.appendBlock(dataBlock);
     } finally {
       if (writer != null) {

@@ -25,7 +25,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.io.HoodieKeyLookupHandle;
-import org.apache.hudi.io.HoodieKeyLookupHandle.KeyLookupResult;
+import org.apache.hudi.io.HoodieKeyLookupResult;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.api.java.function.Function2;
@@ -40,7 +40,7 @@ import scala.Tuple2;
  * Function performing actual checking of RDD partition containing (fileId, hoodieKeys) against the actual files.
  */
 public class HoodieBloomIndexCheckFunction
-    implements Function2<Integer, Iterator<Tuple2<String, HoodieKey>>, Iterator<List<KeyLookupResult>>> {
+    implements Function2<Integer, Iterator<Tuple2<String, HoodieKey>>, Iterator<List<HoodieKeyLookupResult>>> {
 
   private final HoodieTable hoodieTable;
 
@@ -52,12 +52,12 @@ public class HoodieBloomIndexCheckFunction
   }
 
   @Override
-  public Iterator<List<KeyLookupResult>> call(Integer partition,
-      Iterator<Tuple2<String, HoodieKey>> fileParitionRecordKeyTripletItr) {
-    return new LazyKeyCheckIterator(fileParitionRecordKeyTripletItr);
+  public Iterator<List<HoodieKeyLookupResult>> call(Integer partition,
+                                                    Iterator<Tuple2<String, HoodieKey>> filePartitionRecordKeyTripletItr) {
+    return new LazyKeyCheckIterator(filePartitionRecordKeyTripletItr);
   }
 
-  class LazyKeyCheckIterator extends LazyIterableIterator<Tuple2<String, HoodieKey>, List<KeyLookupResult>> {
+  class LazyKeyCheckIterator extends LazyIterableIterator<Tuple2<String, HoodieKey>, List<HoodieKeyLookupResult>> {
 
     private HoodieKeyLookupHandle keyLookupHandle;
 
@@ -70,9 +70,9 @@ public class HoodieBloomIndexCheckFunction
     }
 
     @Override
-    protected List<HoodieKeyLookupHandle.KeyLookupResult> computeNext() {
+    protected List<HoodieKeyLookupResult> computeNext() {
 
-      List<HoodieKeyLookupHandle.KeyLookupResult> ret = new ArrayList<>();
+      List<HoodieKeyLookupResult> ret = new ArrayList<>();
       try {
         // process one file in each go.
         while (inputItr.hasNext()) {
@@ -88,7 +88,7 @@ public class HoodieBloomIndexCheckFunction
           }
 
           // if continue on current file
-          if (keyLookupHandle.getPartitionPathFilePair().equals(partitionPathFilePair)) {
+          if (keyLookupHandle.getPartitionPathFileIDPair().equals(partitionPathFilePair)) {
             keyLookupHandle.addKey(recordKey);
           } else {
             // do the actual checking of file & break out

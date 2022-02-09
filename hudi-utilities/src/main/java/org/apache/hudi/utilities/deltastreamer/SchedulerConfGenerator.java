@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.async.AsyncCompactService;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
@@ -46,7 +47,6 @@ public class SchedulerConfGenerator {
   public static final String COMPACT_POOL_NAME = AsyncCompactService.COMPACT_POOL_NAME;
   public static final String SPARK_SCHEDULER_MODE_KEY = "spark.scheduler.mode";
   public static final String SPARK_SCHEDULER_FAIR_MODE = "FAIR";
-  public static final String SPARK_SCHEDULER_ALLOCATION_FILE_KEY = "spark.scheduler.allocation.file";
 
   private static final String SPARK_SCHEDULING_PATTERN =
       "<?xml version=\"1.0\"?>\n<allocations>\n  <pool name=\"%s\">\n"
@@ -85,7 +85,7 @@ public class SchedulerConfGenerator {
         && cfg.continuousMode && cfg.tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
       String sparkSchedulingConfFile = generateAndStoreConfig(cfg.deltaSyncSchedulingWeight,
           cfg.compactSchedulingWeight, cfg.deltaSyncSchedulingMinShare, cfg.compactSchedulingMinShare);
-      additionalSparkConfigs.put(SPARK_SCHEDULER_ALLOCATION_FILE_KEY, sparkSchedulingConfFile);
+      additionalSparkConfigs.put(DataSourceWriteOptions.SPARK_SCHEDULER_ALLOCATION_FILE_KEY(), sparkSchedulingConfFile);
     } else {
       LOG.warn("Job Scheduling Configs will not be in effect as spark.scheduler.mode "
           + "is not set to FAIR at instantiation time. Continuing without scheduling configs");

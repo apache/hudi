@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -30,6 +31,7 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
@@ -174,11 +176,11 @@ public abstract class AbstractHoodieLogRecordReader {
     return this.simpleKeyGenFields.get().getKey();
   }
 
-  public void scan() {
+  public synchronized void scan() {
     scan(Option.empty());
   }
 
-  public void scan(Option<List<String>> keys) {
+  public synchronized void scan(Option<List<String>> keys) {
     currentInstantLogBlocks = new ArrayDeque<>();
     progress = 0.0f;
     totalLogFiles = new AtomicLong(0);
@@ -230,6 +232,7 @@ public abstract class AbstractHoodieLogRecordReader {
         switch (logBlock.getBlockType()) {
           case HFILE_DATA_BLOCK:
           case AVRO_DATA_BLOCK:
+          case PARQUET_DATA_BLOCK:
             LOG.info("Reading a data block from file " + logFile.getPath() + " at instant "
                 + logBlock.getLogBlockHeader().get(INSTANT_TIME));
             if (isNewInstantBlock(logBlock) && !readBlocksLazily) {
@@ -382,7 +385,7 @@ public abstract class AbstractHoodieLogRecordReader {
    * @param partitionName      - Partition name
    * @return HoodieRecord created from the IndexedRecord
    */
-  protected HoodieRecord<?> createHoodieRecord(final IndexedRecord rec, final HoodieTableConfig hoodieTableConfig,
+  protected HoodieAvroRecord<?> createHoodieRecord(final IndexedRecord rec, final HoodieTableConfig hoodieTableConfig,
                                                final String payloadClassFQN, final String preCombineField,
                                                final boolean withOperationField,
                                                final Option<Pair<String, String>> simpleKeyGenFields,
@@ -425,6 +428,9 @@ public abstract class AbstractHoodieLogRecordReader {
           break;
         case HFILE_DATA_BLOCK:
           processDataBlock((HoodieHFileDataBlock) lastBlock, keys);
+          break;
+        case PARQUET_DATA_BLOCK:
+          processDataBlock((HoodieParquetDataBlock) lastBlock, keys);
           break;
         case DELETE_BLOCK:
           Arrays.stream(((HoodieDeleteBlock) lastBlock).getKeysToDelete()).forEach(this::processNextDeletedKey);

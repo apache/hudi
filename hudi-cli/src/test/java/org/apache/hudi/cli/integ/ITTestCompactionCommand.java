@@ -141,6 +141,33 @@ public class ITTestCompactionCommand extends AbstractShellIntegrationTest {
   }
 
   /**
+   * Test case for command 'compaction scheduleAndExecute'.
+   */
+  @Test
+  public void testCompactScheduleAndExecute() throws IOException {
+    // generate commits
+    generateCommits();
+
+    String schemaPath = Paths.get(basePath, "compaction.schema").toString();
+    writeSchemaToTmpFile(schemaPath);
+
+    CommandResult cr2 = getShell().executeCommand(
+        String.format("compaction scheduleAndExecute --parallelism %s --schemaFilePath %s --sparkMaster %s",
+            2, schemaPath, "local"));
+
+    assertAll("Command run failed",
+        () -> assertTrue(cr2.isSuccess()),
+        () -> assertTrue(
+            cr2.getResult().toString().startsWith("Schedule and execute compaction successfully completed")));
+
+    // assert compaction complete
+    assertTrue(HoodieCLI.getTableMetaClient().getActiveTimeline().reload()
+            .filterCompletedInstants().getInstants()
+            .map(HoodieInstant::getTimestamp).count() > 0,
+        "Completed compaction couldn't be 0");
+  }
+
+  /**
    * Test case for command 'compaction validate'.
    */
   @Test

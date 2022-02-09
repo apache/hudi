@@ -29,6 +29,7 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineServerHelper;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -55,7 +56,9 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.sync.common.AbstractSyncTool;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
@@ -64,6 +67,7 @@ import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallback
 import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Config;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
+import org.apache.hudi.utilities.exception.HoodieSourceTimeoutException;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaSet;
@@ -189,6 +193,9 @@ public class DeltaSync implements Serializable {
    */
   private transient Option<HoodieTimeline> commitTimelineOpt;
 
+  // all commits timeline
+  private transient Option<HoodieTimeline> allCommitsTimelineOpt;
+
   /**
    * Tracks whether new schema is being seen and creates client accordingly.
    */
@@ -206,6 +213,8 @@ public class DeltaSync implements Serializable {
   private transient SparkRDDWriteClient writeClient;
 
   private transient HoodieDeltaStreamerMetrics metrics;
+
+  private transient HoodieMetrics hoodieMetrics;
 
   public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
                    TypedProperties props, JavaSparkContext jssc, FileSystem fs, Configuration conf,
@@ -227,6 +236,7 @@ public class DeltaSync implements Serializable {
     this.transformer = UtilHelpers.createTransformer(cfg.transformerClassNames);
 
     this.metrics = new HoodieDeltaStreamerMetrics(getHoodieClientConfig(this.schemaProvider));
+    this.hoodieMetrics = new HoodieMetrics(getHoodieClientConfig(this.schemaProvider));
 
     this.formatAdapter = new SourceFormatAdapter(
         UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics));
@@ -244,15 +254,18 @@ public class DeltaSync implements Serializable {
       switch (meta.getTableType()) {
         case COPY_ON_WRITE:
           this.commitTimelineOpt = Option.of(meta.getActiveTimeline().getCommitTimeline().filterCompletedInstants());
+          this.allCommitsTimelineOpt = Option.of(meta.getActiveTimeline().getAllCommitsTimeline());
           break;
         case MERGE_ON_READ:
           this.commitTimelineOpt = Option.of(meta.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants());
+          this.allCommitsTimelineOpt = Option.of(meta.getActiveTimeline().getAllCommitsTimeline());
           break;
         default:
           throw new HoodieException("Unsupported table type :" + meta.getTableType());
       }
     } else {
       this.commitTimelineOpt = Option.empty();
+      this.allCommitsTimelineOpt = Option.empty();
       String partitionColumns = HoodieSparkUtils.getPartitionColumns(keyGenerator, props);
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)
@@ -305,6 +318,14 @@ public class DeltaSync implements Serializable {
         }
       }
 
+      // complete the pending clustering before writing to sink
+      if (cfg.retryLastPendingInlineClusteringJob && getHoodieClientConfig(this.schemaProvider).inlineClusteringEnabled()) {
+        Option<String> pendingClusteringInstant = getLastPendingClusteringInstant(allCommitsTimelineOpt);
+        if (pendingClusteringInstant.isPresent()) {
+          writeClient.cluster(pendingClusteringInstant.get(), true);
+        }
+      }
+
       result = writeToSink(srcRecordsWithCkpt.getRight().getRight(),
           srcRecordsWithCkpt.getRight().getLeft(), metrics, overallTimerContext);
     }
@@ -314,6 +335,14 @@ public class DeltaSync implements Serializable {
     // Clear persistent RDDs
     jssc.getPersistentRDDs().values().forEach(JavaRDD::unpersist);
     return result;
+  }
+
+  private Option<String> getLastPendingClusteringInstant(Option<HoodieTimeline> commitTimelineOpt) {
+    if (commitTimelineOpt.isPresent()) {
+      Option<HoodieInstant> pendingClusteringInstant = commitTimelineOpt.get().filterPendingReplaceTimeline().lastInstant();
+      return pendingClusteringInstant.isPresent() ? Option.of(pendingClusteringInstant.get().getTimestamp()) : Option.empty();
+    }
+    return Option.empty();
   }
 
   /**
@@ -328,35 +357,7 @@ public class DeltaSync implements Serializable {
     // Retrieve the previous round checkpoints, if any
     Option<String> resumeCheckpointStr = Option.empty();
     if (commitTimelineOpt.isPresent()) {
-      Option<HoodieInstant> lastCommit = commitTimelineOpt.get().lastInstant();
-      if (lastCommit.isPresent()) {
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-            .fromBytes(commitTimelineOpt.get().getInstantDetails(lastCommit.get()).get(), HoodieCommitMetadata.class);
-        if (cfg.checkpoint != null && (StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))
-                || !cfg.checkpoint.equals(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY)))) {
-          resumeCheckpointStr = Option.of(cfg.checkpoint);
-        } else if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
-          //if previous checkpoint is an empty string, skip resume use Option.empty()
-          resumeCheckpointStr = Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
-        } else if (HoodieTimeline.compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
-            HoodieTimeline.LESSER_THAN, lastCommit.get().getTimestamp())) {
-          // if previous commit metadata did not have the checkpoint key, try traversing previous commits until we find one.
-          Option<String> prevCheckpoint = getPreviousCheckpoint(commitTimelineOpt.get());
-          if (prevCheckpoint.isPresent()) {
-            resumeCheckpointStr = prevCheckpoint;
-          } else {
-            throw new HoodieDeltaStreamerException(
-                "Unable to find previous checkpoint. Please double check if this table "
-                    + "was indeed built via delta streamer. Last Commit :" + lastCommit + ", Instants :"
-                    + commitTimelineOpt.get().getInstants().collect(Collectors.toList()) + ", CommitMetadata="
-                    + commitMetadata.toJsonString());
-          }
-        }
-        // KAFKA_CHECKPOINT_TYPE will be honored only for first batch.
-        if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
-          props.remove(KafkaOffsetGen.Config.KAFKA_CHECKPOINT_TYPE.key());
-        }
-      }
+      resumeCheckpointStr = getCheckpointToResume(commitTimelineOpt);
     } else {
       // initialize the table for the first time.
       String partitionColumns = HoodieSparkUtils.getPartitionColumns(keyGenerator, props);
@@ -375,11 +376,35 @@ public class DeltaSync implements Serializable {
           .initTable(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath);
     }
 
+    LOG.debug("Checkpoint from config: " + cfg.checkpoint);
     if (!resumeCheckpointStr.isPresent() && cfg.checkpoint != null) {
       resumeCheckpointStr = Option.of(cfg.checkpoint);
     }
     LOG.info("Checkpoint to resume from : " + resumeCheckpointStr);
 
+    int maxRetryCount = cfg.retryOnSourceFailures ? cfg.maxRetryCount : 1;
+    int curRetryCount = 0;
+    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> sourceDataToSync = null;
+    while (curRetryCount++ < maxRetryCount && sourceDataToSync == null) {
+      try {
+        sourceDataToSync = fetchFromSource(resumeCheckpointStr);
+      } catch (HoodieSourceTimeoutException e) {
+        if (curRetryCount >= maxRetryCount) {
+          throw e;
+        }
+        try {
+          LOG.error("Exception thrown while fetching data from source. Msg : " + e.getMessage() + ", class : " + e.getClass() + ", cause : " + e.getCause());
+          LOG.error("Sleeping for " + (cfg.retryIntervalSecs) + " before retrying again. Current retry count " + curRetryCount + ", max retry count " + cfg.maxRetryCount);
+          Thread.sleep(cfg.retryIntervalSecs * 1000);
+        } catch (InterruptedException ex) {
+          LOG.error("Ignoring InterruptedException while waiting to retry on source failure " + e.getMessage());
+        }
+      }
+    }
+    return sourceDataToSync;
+  }
+
+  private Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchFromSource(Option<String> resumeCheckpointStr) {
     final Option<JavaRDD<GenericRecord>> avroRDDOptional;
     final String checkpointStr;
     SchemaProvider schemaProvider;
@@ -418,7 +443,7 @@ public class DeltaSync implements Serializable {
                     targetSchemaProvider = UtilHelpers.createRowBasedSchemaProvider(r.schema(), props, jssc);
                   }
                   return (SchemaProvider) new DelegatingSchemaProvider(props, jssc,
-                    dataAndCheckpoint.getSchemaProvider(), targetSchemaProvider); })
+                      dataAndCheckpoint.getSchemaProvider(), targetSchemaProvider); })
                 .orElse(dataAndCheckpoint.getSchemaProvider());
         avroRDDOptional = transformed
             .map(t -> HoodieSparkUtils.createRdd(
@@ -437,7 +462,9 @@ public class DeltaSync implements Serializable {
 
     if (Objects.equals(checkpointStr, resumeCheckpointStr.orElse(null))) {
       LOG.info("No new data, source checkpoint has not changed. Nothing to commit. Old checkpoint=("
-           + resumeCheckpointStr + "). New Checkpoint=(" + checkpointStr + ")");
+          + resumeCheckpointStr + "). New Checkpoint=(" + checkpointStr + ")");
+      String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
+      hoodieMetrics.updateMetricsForEmptyData(commitActionType);
       return null;
     }
 
@@ -451,20 +478,66 @@ public class DeltaSync implements Serializable {
     JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
     JavaRDD<HoodieRecord> records = avroRDD.map(gr -> {
       HoodieRecordPayload payload = shouldCombine ? DataSourceUtils.createPayload(cfg.payloadClassName, gr,
-          (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false))
+          (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false, props.getBoolean(
+              KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+              Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()))))
           : DataSourceUtils.createPayload(cfg.payloadClassName, gr);
-      return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
+      return new HoodieAvroRecord<>(keyGenerator.getKey(gr), payload);
     });
 
     return Pair.of(schemaProvider, Pair.of(checkpointStr, records));
   }
 
-  protected Option<String> getPreviousCheckpoint(HoodieTimeline timeline) throws IOException {
-    return timeline.getReverseOrderedInstants().map(instant -> {
+  /**
+   * Process previous commit metadata and checkpoint configs set by user to determine the checkpoint to resume from.
+   * @param commitTimelineOpt commit timeline of interest.
+   * @return the checkpoint to resume from if applicable.
+   * @throws IOException
+   */
+  private Option<String> getCheckpointToResume(Option<HoodieTimeline> commitTimelineOpt) throws IOException {
+    Option<String> resumeCheckpointStr = Option.empty();
+    Option<HoodieInstant> lastCommit = commitTimelineOpt.get().lastInstant();
+    if (lastCommit.isPresent()) {
+      // if previous commit metadata did not have the checkpoint key, try traversing previous commits until we find one.
+      Option<HoodieCommitMetadata> commitMetadataOption = getLatestCommitMetadataWithValidCheckpointInfo(commitTimelineOpt.get());
+      if (commitMetadataOption.isPresent()) {
+        HoodieCommitMetadata commitMetadata = commitMetadataOption.get();
+        LOG.debug("Checkpoint reset from metadata: " + commitMetadata.getMetadata(CHECKPOINT_RESET_KEY));
+        if (cfg.checkpoint != null && (StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))
+            || !cfg.checkpoint.equals(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY)))) {
+          resumeCheckpointStr = Option.of(cfg.checkpoint);
+        } else if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
+          //if previous checkpoint is an empty string, skip resume use Option.empty()
+          resumeCheckpointStr = Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
+        } else if (HoodieTimeline.compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
+            HoodieTimeline.LESSER_THAN, lastCommit.get().getTimestamp())) {
+          throw new HoodieDeltaStreamerException(
+              "Unable to find previous checkpoint. Please double check if this table "
+                  + "was indeed built via delta streamer. Last Commit :" + lastCommit + ", Instants :"
+                  + commitTimelineOpt.get().getInstants().collect(Collectors.toList()) + ", CommitMetadata="
+                  + commitMetadata.toJsonString());
+        }
+        // KAFKA_CHECKPOINT_TYPE will be honored only for first batch.
+        if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
+          props.remove(KafkaOffsetGen.Config.KAFKA_CHECKPOINT_TYPE.key());
+        }
+      } else if (cfg.checkpoint != null) { // getLatestCommitMetadataWithValidCheckpointInfo(commitTimelineOpt.get()) will never return a commit metadata w/o any checkpoint key set.
+        resumeCheckpointStr = Option.of(cfg.checkpoint);
+      }
+    }
+    return resumeCheckpointStr;
+  }
+
+  protected Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
+    return (Option<HoodieCommitMetadata>) timeline.getReverseOrderedInstants().map(instant -> {
       try {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
             .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-        return Option.ofNullable(commitMetadata.getMetadata(CHECKPOINT_KEY));
+        if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY)) || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
+          return Option.of(commitMetadata);
+        } else {
+          return Option.empty();
+        }
       } catch (IOException e) {
         throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
       }
@@ -637,9 +710,10 @@ public class DeltaSync implements Serializable {
 
   public void syncHive() {
     HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, cfg.targetBasePath, cfg.baseFileFormat);
-    LOG.info("Syncing target hoodie table with hive table(" + hiveSyncConfig.tableName + "). Hive metastore URL :"
-        + hiveSyncConfig.jdbcUrl + ", basePath :" + cfg.targetBasePath);
     HiveConf hiveConf = new HiveConf(conf, HiveConf.class);
+    if (StringUtils.isNullOrEmpty(hiveConf.get(HiveConf.ConfVars.METASTOREURIS.varname))) {
+      hiveConf.set(HiveConf.ConfVars.METASTOREURIS.varname, hiveSyncConfig.metastoreUris);
+    }
     LOG.info("Hive Conf => " + hiveConf.getAllProperties().toString());
     LOG.info("Hive Sync Conf => " + hiveSyncConfig.toString());
     new HiveSyncTool(hiveSyncConfig, hiveConf, fs).syncHoodieTable();

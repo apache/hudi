@@ -18,31 +18,31 @@
 
 package org.apache.hudi.metadata;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.table.log.InstantRange;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SpillableMapUtils;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
-
-import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.table.log.InstantRange;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.ExternalSpillableMap;
-import org.apache.hudi.common.util.collection.Pair;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
 
 /**
  * A {@code HoodieMergedLogRecordScanner} implementation which only merged records matching providing keys. This is
@@ -87,7 +87,7 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
   }
 
   @Override
-  protected HoodieRecord<?> createHoodieRecord(final IndexedRecord rec, final HoodieTableConfig hoodieTableConfig,
+  protected HoodieAvroRecord<?> createHoodieRecord(final IndexedRecord rec, final HoodieTableConfig hoodieTableConfig,
                                                final String payloadClassFQN, final String preCombineField,
                                                final boolean withOperationField,
                                                final Option<Pair<String, String>> simpleKeyGenFields,
@@ -116,11 +116,14 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
    * @param key Key of the record to retrieve
    * @return {@code HoodieRecord} if key was found else {@code Option.empty()}
    */
-  public List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordByKey(String key) {
+  public synchronized List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordByKey(String key) {
     return Collections.singletonList(Pair.of(key, Option.ofNullable((HoodieRecord) records.get(key))));
   }
 
-  public List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> keys) {
+  public synchronized List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> keys) {
+    // Following operations have to be atomic, otherwise concurrent
+    // readers would race with each other and could crash when
+    // processing log block records as part of scan.
     records.clear();
     scan(Option.of(keys));
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> metadataRecords = new ArrayList<>();
@@ -136,7 +139,7 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
 
   @Override
   protected String getKeyField() {
-    return HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY;
+    return HoodieMetadataPayload.KEY_FIELD_NAME;
   }
 
   /**
