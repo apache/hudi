@@ -43,7 +43,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Random;
 import java.util.stream.Collectors;
 
 /**
@@ -230,7 +229,7 @@ public class FileIOUtils {
    */
   public static void killJVMIfDesired(String signalFilePath, String msg, int denom) {
     try {
-      boolean kill = new Random().nextInt(denom) == 0;
+      boolean kill = false;//new Random().nextInt(denom) == 0;
       if (kill) {
         System.out.println("Killing the jvm at " + signalFilePath + " Reason: " + msg);
         System.exit(1);
