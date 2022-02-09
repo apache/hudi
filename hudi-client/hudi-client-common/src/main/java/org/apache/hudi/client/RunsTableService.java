@@ -16,29 +16,22 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.model;
+package org.apache.hudi.client;
 
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.config.HoodieWriteConfig;
 
-/**
- * Supported runtime table services.
- */
-public enum TableServiceType {
-  ARCHIVE, COMPACT, CLUSTER, CLEAN;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
-  public String getAction() {
-    switch (this) {
-      case ARCHIVE:
-        // for table service type completeness; there is no timeline action associated with archive
-        return "NONE";
-      case COMPACT:
-        return HoodieTimeline.COMPACTION_ACTION;
-      case CLEAN:
-        return HoodieTimeline.CLEAN_ACTION;
-      case CLUSTER:
-        return HoodieTimeline.REPLACE_COMMIT_ACTION;
-      default:
-        throw new IllegalArgumentException("Unknown table service " + this);
+public interface RunsTableService {
+
+  Logger LOG = LogManager.getLogger(RunsTableService.class);
+
+  default boolean tableServicesEnabled(HoodieWriteConfig config) {
+    boolean enabled = config.areTableServicesEnabled();
+    if (!enabled) {
+      LOG.warn(String.format("Table services are disabled. Set `%s` to enable.", HoodieWriteConfig.TABLE_SERVICES_ENABLED));
     }
+    return enabled;
   }
 }

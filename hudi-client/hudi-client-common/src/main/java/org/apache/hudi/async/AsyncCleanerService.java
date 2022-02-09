@@ -35,7 +35,7 @@ import java.util.concurrent.Executors;
 /**
  * Async clean service to run concurrently with write operation.
  */
-public class AsyncCleanerService extends HoodieAsyncService {
+public class AsyncCleanerService extends HoodieAsyncTableService {
 
   private static final Logger LOG = LogManager.getLogger(AsyncCleanerService.class);
 
@@ -43,6 +43,7 @@ public class AsyncCleanerService extends HoodieAsyncService {
   private final transient ExecutorService executor = Executors.newSingleThreadExecutor();
 
   protected AsyncCleanerService(BaseHoodieWriteClient writeClient) {
+    super(writeClient.getConfig());
     this.writeClient = writeClient;
   }
 
