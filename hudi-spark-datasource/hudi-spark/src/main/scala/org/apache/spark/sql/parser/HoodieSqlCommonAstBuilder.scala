@@ -61,20 +61,20 @@ class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface
     CompactionTable(table, operation, timestamp)
   }
 
-  override def visitCompactionOnPath (ctx: CompactionOnPathContext): LogicalPlan = withOrigin(ctx) {
+  override def visitCompactionOnPath(ctx: CompactionOnPathContext): LogicalPlan = withOrigin(ctx) {
     val path = string(ctx.path)
     val operation = CompactionOperation.withName(ctx.operation.getText.toUpperCase)
     val timestamp = if (ctx.instantTimestamp != null) Some(ctx.instantTimestamp.getText.toLong) else None
     CompactionPath(path, operation, timestamp)
   }
 
-  override def visitShowCompactionOnTable (ctx: ShowCompactionOnTableContext): LogicalPlan = withOrigin(ctx) {
+  override def visitShowCompactionOnTable(ctx: ShowCompactionOnTableContext): LogicalPlan = withOrigin(ctx) {
     val table = ctx.tableIdentifier().accept(this).asInstanceOf[LogicalPlan]
-   if (ctx.limit != null) {
-     CompactionShowOnTable(table, ctx.limit.getText.toInt)
-   } else {
-     CompactionShowOnTable(table)
-   }
+    if (ctx.limit != null) {
+      CompactionShowOnTable(table, ctx.limit.getText.toInt)
+    } else {
+      CompactionShowOnTable(table)
+    }
   }
 
   override def visitShowCompactionOnPath(ctx: ShowCompactionOnPathContext): LogicalPlan = withOrigin(ctx) {
