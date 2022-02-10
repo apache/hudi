@@ -18,17 +18,41 @@
 
 package org.apache.hudi
 
-import org.apache.avro.{JsonProperties, Schema}
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedRecord}
+import org.apache.avro.{JsonProperties, Schema}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer, SchemaConverters}
+import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.sql.{Dataset, Row, SparkSession}
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
 object AvroConversionUtils {
+
+  /**
+   * Creates converter to transform Avro payload into Spark's Catalyst one
+   *
+   * @param rootAvroType Avro [[Schema]] to be transformed from
+   * @param rootCatalystType Catalyst [[DataType]] to be transformed into
+   * @return converter accepting Avro payload and transforming it into a Catalyst one (in the form of [[Row]])
+   */
+  def createAvroToRowConverter(rootAvroType: Schema, rootCatalystType: DataType): Any => Option[Any] = {
+    HoodieAvroDeserializer(rootAvroType, rootCatalystType).deserializeData
+  }
+
+  /**
+   * Creates converter to transform Catalyst payload into Avro one
+   *
+   * @param rootCatalystType Catalyst [[DataType]] to be transformed from
+   * @param rootAvroType Avro [[Schema]] to be transformed into
+   * @param nullable whether Avro record is nullable
+   * @return converter accepting Catalyst payload (in the form of [[Row]]) and transforming it into an Avro one
+   */
+  def createRowToAvroConverter(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): Any => Any = {
+    HoodieAvroSerializer(rootCatalystType, rootAvroType, nullable).serialize
+  }
 
   def createDataFrame(rdd: RDD[GenericRecord], schemaStr: String, ss: SparkSession): Dataset[Row] = {
     if (rdd.isEmpty()) {
@@ -39,8 +63,8 @@ object AvroConversionUtils {
         else {
           val schema = new Schema.Parser().parse(schemaStr)
           val dataType = convertAvroSchemaToStructType(schema)
-          val convertor = HoodieAvroDeserializer().createConverterToRow(schema, dataType)
-          records.map { x => convertor(x).asInstanceOf[Row] }
+          val deserializer = HoodieAvroDeserializer(schema, dataType)
+          records.map { x => deserializer.deserializeData(x).asInstanceOf[Row] }
         }
       }, convertAvroSchemaToStructType(new Schema.Parser().parse(schemaStr)))
     }
@@ -55,7 +79,7 @@ object AvroConversionUtils {
     * @param recordNamespace  Avro record namespace.
     * @return                 Avro schema corresponding to given struct type.
     */
-  def convertStructTypeToAvroSchema(structType: StructType,
+  def convertStructTypeToAvroSchema(structType: DataType,
                                     structName: String,
                                     recordNamespace: String): Schema = {
     getAvroSchemaWithDefaults(SchemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace))

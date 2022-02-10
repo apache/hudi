@@ -24,6 +24,8 @@ import org.apache.spark.sql.types.DataType
 /**
  * This is to be compatible with the type returned by Spark 3.1
  * and other spark versions for AvroDeserializer
+ *
+ * TODO move to SparkAdapter
  */
 case class HoodieAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType) {
 
@@ -37,10 +39,10 @@ case class HoodieAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataTy
     constructor.newInstance(rootAvroType, rootCatalystType)
   }
 
-  def deserializeData(data: Any): Any = {
+  def deserializeData(data: Any): Option[Any] = {
     avroDeserializer.deserialize(data) match {
-      case Some(r) => r // As of Spark 3.1, this will return data wrapped with Option, so we fetch the data
-      case o => o       // For other Spark versions, return the data as is
+      case opt if opt.isInstanceOf[Option] => opt   // As of Spark 3.1, this will return data wrapped with Option, so we fetch the data
+      case row => Some(row)                         // For other Spark versions, return the data as is
     }
   }
 }
