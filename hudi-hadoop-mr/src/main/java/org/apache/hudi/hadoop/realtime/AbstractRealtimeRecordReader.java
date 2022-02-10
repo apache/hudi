@@ -65,7 +65,11 @@ public abstract class AbstractRealtimeRecordReader {
     LOG.info("columnIds ==> " + job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
     LOG.info("partitioningColumns ==> " + job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, ""));
     try {
-      this.usesCustomPayload = usesCustomPayload();
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jobConf).setBasePath(split.getBasePath()).build();
+      if (metaClient.getTableConfig().getPreCombineField() != null) {
+        this.payloadProps.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, metaClient.getTableConfig().getPreCombineField());
+      }
+      this.usesCustomPayload = usesCustomPayload(metaClient);
       LOG.info("usesCustomPayload ==> " + this.usesCustomPayload);
       init();
     } catch (IOException e) {
@@ -73,11 +77,7 @@ public abstract class AbstractRealtimeRecordReader {
     }
   }
 
-  private boolean usesCustomPayload() {
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jobConf).setBasePath(split.getBasePath()).build();
-    if (metaClient.getTableConfig().getPreCombineField() != null) {
-      this.payloadProps.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, metaClient.getTableConfig().getPreCombineField());
-    }
+  private boolean usesCustomPayload(HoodieTableMetaClient metaClient) {
     return !(metaClient.getTableConfig().getPayloadClass().contains(HoodieAvroPayload.class.getName())
         || metaClient.getTableConfig().getPayloadClass().contains("org.apache.hudi.OverwriteWithLatestAvroPayload"));
   }
