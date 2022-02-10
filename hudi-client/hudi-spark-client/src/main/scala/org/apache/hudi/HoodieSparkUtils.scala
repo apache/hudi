@@ -18,13 +18,9 @@
 
 package org.apache.hudi
 
-import java.util.Properties
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
-
 import org.apache.hadoop.fs.{FileSystem, Path}
-
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.HoodieRecord
@@ -32,7 +28,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenerator}
-
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
@@ -42,6 +37,7 @@ import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
+import java.util.Properties
 import scala.collection.JavaConverters._
 import scala.collection.JavaConverters.asScalaBufferConverter
 
@@ -159,8 +155,7 @@ object HoodieSparkUtils extends SparkAdapterSupport {
     // Note: deserializer.deserializeRow(row) is not capable of handling evolved schema. i.e. if Row was serialized in
     // old schema, but deserializer was created with an encoder with evolved schema, deserialization fails.
     // Hence we always need to deserialize in the same schema as serialized schema.
-    df.queryExecution.toRdd.map(row => deserializer.deserializeRow(row))
-      .mapPartitions { records =>
+    df.queryExecution.toRdd.mapPartitions { records =>
         if (records.isEmpty) Iterator.empty
         else {
           val convertor = AvroConversionHelper.createConverterToAvro(reconciledDataType, structName, recordNamespace)
