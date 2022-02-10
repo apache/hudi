@@ -117,23 +117,19 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       partitionSchema = StructType(Nil),
       requiredSchema = requiredStructSchema,
       tableAvroSchema = tableAvroSchema.toString,
-      requiredAvroSchema = requiredAvroSchema.toString,
+      requiredAvroSchema = requiredAvroSchema.toString
     )
     val tableState = HoodieMergeOnReadTableState(tableSchemas, fileIndex, preCombineField, recordKeyFieldOpt)
     val fullSchemaParquetReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
-      tableSchema = tableStructSchema,
-      partitionSchema = StructType(Nil),
-      requiredSchema = requiredStructSchema,
+      tableSchemas = tableSchemas,
       filters = filters,
       options = optParams,
       hadoopConf = conf
     )
     val requiredSchemaParquetReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
-      tableSchema = tableStructSchema,
-      partitionSchema = StructType(Nil),
-      requiredSchema = requiredStructSchema,
+      tableSchemas = tableSchemas,
       filters = filters,
       options = optParams,
       hadoopConf = conf

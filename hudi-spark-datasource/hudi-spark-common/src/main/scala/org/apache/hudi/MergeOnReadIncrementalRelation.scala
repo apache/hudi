@@ -19,6 +19,7 @@ package org.apache.hudi
 
 import org.apache.hadoop.fs.{GlobPattern, Path}
 import org.apache.hadoop.mapred.JobConf
+import org.apache.hudi.HoodieBaseRelation.createBaseFileReader
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
@@ -118,30 +119,24 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
       val (requiredAvroSchema, requiredStructSchema) =
         HoodieSparkUtils.getRequiredSchema(tableAvroSchema, requiredColumns)
 
-      val hoodieTableState = HoodieMergeOnReadTableState(
-        tableStructSchema,
-        requiredStructSchema,
-        tableAvroSchema.toString,
-        requiredAvroSchema.toString,
-        fileIndex,
-        preCombineField,
-        Option.empty
-      )
-      val fullSchemaParquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
-        sparkSession = sqlContext.sparkSession,
-        dataSchema = tableStructSchema,
+      val tableSchemas = HoodieTableSchemas(
+        tableSchema = tableStructSchema,
         partitionSchema = StructType(Nil),
-        requiredSchema = tableStructSchema,
+        requiredSchema = requiredStructSchema,
+        tableAvroSchema = tableAvroSchema.toString,
+        requiredAvroSchema = requiredAvroSchema.toString
+      )
+      val hoodieTableState = HoodieMergeOnReadTableState(tableSchemas, fileIndex, preCombineField, Option.empty)
+      val fullSchemaParquetReader = createBaseFileReader(
+        spark = sqlContext.sparkSession,
+        tableSchemas = tableSchemas,
         filters = pushDownFilter,
         options = optParams,
         hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
       )
-
-      val requiredSchemaParquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
-        sparkSession = sqlContext.sparkSession,
-        dataSchema = tableStructSchema,
-        partitionSchema = StructType(Nil),
-        requiredSchema = tableStructSchema,
+      val requiredSchemaParquetReader = createBaseFileReader(
+        spark = sqlContext.sparkSession,
+        tableSchemas = tableSchemas,
         filters = pushDownFilter,
         options = optParams,
         hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
