@@ -269,6 +269,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
           }
         }
       }
+
+      // COMMIT_TIME_METADATA_FIELD is previously added to the schema to do incremental read
+      // now remove COMMIT_TIME_METADATA_FIELD from the data frame if it is not requested by the user
       if (!requiredColumns.contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD)) {
         df = df.toDF().drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
       }
