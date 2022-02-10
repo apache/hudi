@@ -98,11 +98,13 @@ object HoodieBaseRelation {
     )
 
     partitionedFile => {
-      FSUtils.getFileExtension(partitionedFile.filePath) match {
-        case HoodieFileFormat.PARQUET.getFileExtension => parquetReader.apply(partitionedFile)
-        case HoodieFileFormat.HFILE.getFileExtension => hfileReader.apply(partitionedFile)
-        case _ =>
-          throw new UnsupportedOperationException(s"Base file format not supported by Spark DataSource ($partitionedFile)")
+      val extension = FSUtils.getFileExtension(partitionedFile.filePath)
+      if (HoodieFileFormat.PARQUET.getFileExtension.equals(extension)) {
+        parquetReader.apply(partitionedFile)
+      } else if (HoodieFileFormat.HFILE.getFileExtension.equals(extension)) {
+        hfileReader.apply(partitionedFile)
+      } else {
+        throw new UnsupportedOperationException(s"Base file format not supported by Spark DataSource ($partitionedFile)")
       }
     }
   }
@@ -124,7 +126,6 @@ object HoodieBaseRelation {
       // NOTE: Schema has to be parsed at this point, since Avro's [[Schema]] aren't serializable
       //       to be passed from driver to executor
       val requiredAvroSchema = new Schema.Parser().parse(tableSchemas.requiredAvroSchema)
-
       val avroToRowConverter = AvroConversionUtils.createAvroToRowConverter(requiredAvroSchema, requiredSchema)
 
       reader.getRecordIterator(requiredAvroSchema).asScala
