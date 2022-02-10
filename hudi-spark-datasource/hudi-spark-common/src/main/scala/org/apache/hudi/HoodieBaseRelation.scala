@@ -115,13 +115,15 @@ object HoodieBaseRelation {
     val hadoopConfBroadcast =
       spark.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
 
-    val requiredSchema = tableSchemas.requiredSchema
-    val requiredAvroSchema = new Schema.Parser().parse(tableSchemas.requiredAvroSchema)
-
     partitionedFile => {
       val hadoopConf = hadoopConfBroadcast.value.value
       val reader = new HoodieHFileReader[GenericRecord](hadoopConf, new Path(partitionedFile.filePath),
         new CacheConfig(hadoopConf))
+
+      val requiredSchema = tableSchemas.requiredSchema
+      // NOTE: Schema has to be parsed at this point, since Avro's [[Schema]] aren't serializable
+      //       to be passed from driver to executor
+      val requiredAvroSchema = new Schema.Parser().parse(tableSchemas.requiredAvroSchema)
 
       val avroToRowConverter = AvroConversionUtils.createAvroToRowConverter(requiredAvroSchema, requiredSchema)
 
