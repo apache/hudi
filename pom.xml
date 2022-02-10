@@ -117,7 +117,7 @@
     <http.version>4.4.1</http.version>
     <spark.version>${spark2.version}</spark.version>
     <sparkbundle.version></sparkbundle.version>
-    <flink.version>1.13.1</flink.version>
+    <flink.version>1.14.3</flink.version>
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.2.0</spark3.version>
     <hudi.spark.module>hudi-spark2</hudi.spark.module>

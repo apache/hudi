@@ -172,7 +172,7 @@ public class StreamWriteITCase extends TestLogger {
     DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream);
     Pipelines.clean(conf, pipeline);
     Pipelines.compact(conf, pipeline);
-    JobClient client = execEnv.executeAsync(execEnv.getStreamGraph(conf.getString(FlinkOptions.TABLE_NAME)));
+    JobClient client = execEnv.executeAsync(execEnv.getStreamGraph());
     if (client.getJobStatus().get() != JobStatus.FAILED) {
       try {
         TimeUnit.SECONDS.sleep(20); // wait long enough for the compaction to finish
@@ -229,7 +229,7 @@ public class StreamWriteITCase extends TestLogger {
     DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream);
     execEnv.addOperator(pipeline.getTransformation());
 
-    JobClient client = execEnv.executeAsync(execEnv.getStreamGraph(conf.getString(FlinkOptions.TABLE_NAME)));
+    JobClient client = execEnv.executeAsync(conf.getString(FlinkOptions.TABLE_NAME));
     // wait for the streaming job to finish
     client.getJobExecutionResult().get();
 
