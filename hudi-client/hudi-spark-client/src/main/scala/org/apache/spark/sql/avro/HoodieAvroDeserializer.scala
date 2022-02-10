@@ -18,9 +18,7 @@
 package org.apache.spark.sql.avro
 
 import org.apache.avro.Schema
-
 import org.apache.hudi.HoodieSparkUtils
-
 import org.apache.spark.sql.types.DataType
 
 /**
@@ -41,8 +39,8 @@ case class HoodieAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataTy
 
   def deserializeData(data: Any): Any = {
     avroDeserializer.deserialize(data) match {
-      case Some(r) => r // As of spark 3.1, this will return data wrapped with Option, so we fetch the data.
-      case o => o // for other spark version, return the data directly.
+      case Some(r) => r // As of Spark 3.1, this will return data wrapped with Option, so we fetch the data
+      case o => o       // For other Spark versions, return the data as is
     }
   }
 }

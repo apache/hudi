@@ -17,12 +17,9 @@
 
 package org.apache.spark.sql.hudi.command.payload
 
-import org.apache.avro.generic.IndexedRecord
 import org.apache.avro.Schema
-
+import org.apache.avro.generic.IndexedRecord
 import org.apache.hudi.AvroConversionUtils
-
-import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
 
 /**

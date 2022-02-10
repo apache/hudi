@@ -18,26 +18,22 @@
 
 package org.apache.hudi
 
-import java.nio.ByteBuffer
-import java.sql.{Date, Timestamp}
-import java.time.Instant
-
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.LogicalTypes.{TimestampMicros, TimestampMillis}
 import org.apache.avro.Schema.Type._
 import org.apache.avro.generic.GenericData.{Fixed, Record}
 import org.apache.avro.generic.{GenericData, GenericFixed, GenericRecord}
 import org.apache.avro.{LogicalTypes, Schema}
-
+import org.apache.hudi.AvroConversionUtils._
+import org.apache.hudi.exception.HoodieIncompatibleSchemaException
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.expressions.GenericRow
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.types._
 
-import org.apache.hudi.AvroConversionUtils._
-import org.apache.hudi.exception.HoodieIncompatibleSchemaException
-
+import java.nio.ByteBuffer
+import java.sql.{Date, Timestamp}
+import java.time.Instant
 import scala.collection.JavaConverters._
 
 object AvroConversionHelper {

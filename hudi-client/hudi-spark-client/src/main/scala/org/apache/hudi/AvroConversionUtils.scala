@@ -18,17 +18,15 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
-import org.apache.avro.JsonProperties
+import org.apache.avro.{JsonProperties, Schema}
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedRecord}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Dataset, Row, SparkSession}
 
-import scala.collection.JavaConverters._
 import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 object AvroConversionUtils {
 
@@ -41,7 +39,7 @@ object AvroConversionUtils {
         else {
           val schema = new Schema.Parser().parse(schemaStr)
           val dataType = convertAvroSchemaToStructType(schema)
-          val convertor = AvroConversionHelper.createConverterToRow(schema, dataType)
+          val convertor = HoodieAvroDeserializer().createConverterToRow(schema, dataType)
           records.map { x => convertor(x).asInstanceOf[Row] }
         }
       }, convertAvroSchemaToStructType(new Schema.Parser().parse(schemaStr)))
