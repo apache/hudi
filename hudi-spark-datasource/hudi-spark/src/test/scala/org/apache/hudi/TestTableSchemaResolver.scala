@@ -190,8 +190,6 @@ class TestTableSchemaResolver {
   @ParameterizedTest
   @CsvSource(Array("COPY_ON_WRITE,parquet","COPY_ON_WRITE,orc","MERGE_ON_READ,parquet","MERGE_ON_READ,orc"))
   def testTableSchemaResolver(tableType: String, baseFileFormat: String): Unit = {
-  val tableType = "MERGE_ON_READ"
-  val baseFileFormat = "parquet"
   val schema = DataSourceTestUtils.getStructTypeExampleSchema
 
   //create a new table
