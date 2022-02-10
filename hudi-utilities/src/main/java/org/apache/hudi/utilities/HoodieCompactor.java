@@ -303,11 +303,11 @@ public class HoodieCompactor {
         e.getValue().stream()).collect(Collectors.toList());
     long errorsCount = writeStats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum();
     if (errorsCount == 0) {
-      LOG.info(String.format("Table imported into hoodie with %s instant time.", instantTime));
+      LOG.info(String.format("Finish compaction with %s instant time.", instantTime));
       return 0;
     }
 
-    LOG.error(String.format("Import failed with %d errors.", errorsCount));
+    LOG.error(String.format("Compaction failed with %d errors.", errorsCount));
     return -1;
   }
 }

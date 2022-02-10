@@ -58,7 +58,6 @@ public class HoodieSparkCompactor<T extends HoodieRecordPayload> extends BaseCom
         .stream()
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
-    this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status");
     long numWriteErrors = writeStats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum();
     if (numWriteErrors != 0) {
       // We treat even a single error in compaction as fatal
