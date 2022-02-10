@@ -83,7 +83,7 @@ public class TableSchemaResolver {
     try {
       switch (metaClient.getTableType()) {
         case COPY_ON_WRITE:
-          // For COW table, the file has data written must be in parquet format currently.
+          // For COW table, the file has data written must be in parquet or orc format currently.
           if (instantAndCommitMetadata.isPresent()) {
             HoodieCommitMetadata commitMetadata = instantAndCommitMetadata.get().getRight();
             String filePath = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream().findAny().get();
@@ -93,7 +93,7 @@ public class TableSchemaResolver {
                 + "so could not get schema for table " + metaClient.getBasePath());
           }
         case MERGE_ON_READ:
-          // For MOR table, the file has data written may be a parquet file or .log file.
+          // For MOR table, the file has data written may be a parquet file, .log file, orc file or hfile.
           // Determine the file format based on the file name, and then extract schema from it.
           if (instantAndCommitMetadata.isPresent()) {
             HoodieCommitMetadata commitMetadata = instantAndCommitMetadata.get().getRight();
