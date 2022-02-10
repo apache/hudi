@@ -30,7 +30,7 @@ class SqlTypedRecord(val record: IndexedRecord) extends IndexedRecord {
 
   private lazy val sqlType = AvroConversionUtils.convertAvroSchemaToStructType(getSchema)
   private lazy val avroDeserializer = HoodieAvroDeserializer(record.getSchema, sqlType)
-  private lazy val sqlRow = avroDeserializer.deserializeData(record).asInstanceOf[InternalRow]
+  private lazy val sqlRow = avroDeserializer.deserializeData(record).get.asInstanceOf[InternalRow]
 
   override def put(i: Int, v: Any): Unit = {
     record.put(i, v)

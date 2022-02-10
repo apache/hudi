@@ -141,9 +141,10 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
             // delete record found, skipping
             this.hasNext
           } else {
-            val requiredAvroRecord = AvroConversionUtils
-              .buildAvroRecordBySchema(curAvroRecord.get(), requiredAvroSchema, requiredFieldPosition, recordBuilder)
-            recordToLoad = unsafeProjection(deserializer.deserializeData(requiredAvroRecord).asInstanceOf[InternalRow])
+            val requiredAvroRecord = AvroConversionUtils.buildAvroRecordBySchema(curAvroRecord.get(), requiredAvroSchema,
+              requiredFieldPosition, recordBuilder)
+            val rowOpt = deserializer.deserializeData(requiredAvroRecord)
+            recordToLoad = unsafeProjection(rowOpt.get.asInstanceOf[InternalRow])
             true
           }
         } else {
@@ -195,9 +196,10 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
               // delete record found, skipping
               this.hasNext
             } else {
-              val requiredAvroRecord = AvroConversionUtils
-                .buildAvroRecordBySchema(curAvroRecord.get(), requiredAvroSchema, requiredFieldPosition, recordBuilder)
-              recordToLoad = unsafeProjection(deserializer.deserializeData(requiredAvroRecord).asInstanceOf[InternalRow])
+              val requiredAvroRecord = AvroConversionUtils.buildAvroRecordBySchema(curAvroRecord.get(), requiredAvroSchema,
+                requiredFieldPosition, recordBuilder)
+              val rowOpt = deserializer.deserializeData(requiredAvroRecord)
+              recordToLoad = unsafeProjection(rowOpt.get.asInstanceOf[InternalRow])
               true
             }
           } else {
@@ -253,15 +255,10 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
               this.hasNext
             } else {
               // load merged record as InternalRow with required schema
-              val requiredAvroRecord = AvroConversionUtils
-                .buildAvroRecordBySchema(
-                  mergedAvroRecord.get(),
-                  requiredAvroSchema,
-                  requiredFieldPosition,
-                  recordBuilder
-                )
-              recordToLoad = unsafeProjection(requiredDeserializer
-                .deserializeData(requiredAvroRecord).asInstanceOf[InternalRow])
+              val requiredAvroRecord = AvroConversionUtils.buildAvroRecordBySchema(mergedAvroRecord.get(), requiredAvroSchema,
+                requiredFieldPosition, recordBuilder)
+              val rowOpt = requiredDeserializer.deserializeData(requiredAvroRecord)
+              recordToLoad = unsafeProjection(rowOpt.get.asInstanceOf[InternalRow])
               true
             }
           } else {
@@ -287,8 +284,8 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                     requiredFieldPosition,
                     recordBuilder
                   )
-                recordToLoad = unsafeProjection(requiredDeserializer
-                  .deserializeData(requiredAvroRecord).asInstanceOf[InternalRow])
+                val rowOpt = requiredDeserializer.deserializeData(requiredAvroRecord)
+                recordToLoad = unsafeProjection(rowOpt.get.asInstanceOf[InternalRow])
                 true
               }
             }
