@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.callback.HoodieWriteCommitCallback;
@@ -690,16 +691,21 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     Timer.Context timerContext = metrics.getRollbackCtx();
     try {
       HoodieTable<T, I, K, O> table = createTable(config, hadoopConf, config.isMetadataTableEnabled());
-      HoodieRestoreMetadata restoreMetadata = table.restore(context, restoreInstantTime, instantTime);
-      if (timerContext != null) {
-        final long durationInMs = metrics.getDurationInMs(timerContext.stop());
-        final long totalFilesDeleted = restoreMetadata.getHoodieRestoreMetadata().values().stream()
-            .flatMap(Collection::stream)
-            .mapToLong(HoodieRollbackMetadata::getTotalFilesDeleted)
-            .sum();
-        metrics.updateRollbackMetrics(durationInMs, totalFilesDeleted);
+      Option<HoodieRestorePlan> restorePlanOption = table.scheduleRestore(context, restoreInstantTime, instantTime);
+      if (restorePlanOption.isPresent()) {
+        HoodieRestoreMetadata restoreMetadata = table.restore(context, restoreInstantTime, instantTime);
+        if (timerContext != null) {
+          final long durationInMs = metrics.getDurationInMs(timerContext.stop());
+          final long totalFilesDeleted = restoreMetadata.getHoodieRestoreMetadata().values().stream()
+              .flatMap(Collection::stream)
+              .mapToLong(HoodieRollbackMetadata::getTotalFilesDeleted)
+              .sum();
+          metrics.updateRollbackMetrics(durationInMs, totalFilesDeleted);
+        }
+        return restoreMetadata;
+      } else {
+        throw new HoodieRestoreException("Failed to restore " + config.getBasePath() + " to commit " + instantTime);
       }
-      return restoreMetadata;
     } catch (Exception e) {
       throw new HoodieRestoreException("Failed to restore to " + instantTime, e);
     }

@@ -29,6 +29,7 @@ import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
@@ -347,6 +348,13 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   }
 
   /**
+   * Get restore timeline.
+   */
+  public HoodieTimeline getRestoreTimeline() {
+    return getActiveTimeline().getRestoreTimeline();
+  }
+
+  /**
    * Get only the completed (no-inflights) savepoint timeline.
    */
   public HoodieTimeline getCompletedSavepointTimeline() {
@@ -496,6 +504,13 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   public abstract HoodieRestoreMetadata restore(HoodieEngineContext context,
                                                 String restoreInstantTime,
                                                 String instantToRestore);
+
+  /**
+   * Schedules Restore for the table to the given instant.
+   */
+  public abstract Option<HoodieRestorePlan> scheduleRestore(HoodieEngineContext context,
+                                                    String restoreInstantTime,
+                                                    String instantToRestore);
 
   /**
    * Rollback failed compactions. Inflight rollbacks for compactions revert the .inflight file
