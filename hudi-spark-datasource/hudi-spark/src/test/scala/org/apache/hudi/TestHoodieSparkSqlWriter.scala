@@ -658,7 +658,7 @@ class TestHoodieSparkSqlWriter {
   }
 
   @Test
-  def testTableSchemaResolver(): Unit = {
+  def testTableSchemaResolverInMetadataTable(): Unit = {
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
     //create a new table
     val tableName = hoodieFooTableName
