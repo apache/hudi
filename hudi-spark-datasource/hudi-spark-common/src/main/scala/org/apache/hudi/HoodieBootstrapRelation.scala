@@ -113,7 +113,7 @@ class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
       partitionSchema = StructType(Seq.empty),
       requiredSchema = requiredDataSchema,
       filters = if (requiredSkeletonSchema.isEmpty) filters else Seq() ,
-      options = Map.empty,
+      options = optParams,
       hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf()
     )
 
@@ -123,7 +123,7 @@ class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
       partitionSchema = StructType(Seq.empty),
       requiredSchema = requiredSkeletonSchema,
       filters = if (requiredDataSchema.isEmpty) filters else Seq(),
-      options = Map.empty,
+      options = optParams,
       hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf()
     )
 
@@ -133,7 +133,7 @@ class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
       partitionSchema = StructType(Seq.empty),
       requiredSchema = requiredColsSchema,
       filters = filters,
-      options = Map.empty,
+      options = optParams,
       hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf()
     )
 

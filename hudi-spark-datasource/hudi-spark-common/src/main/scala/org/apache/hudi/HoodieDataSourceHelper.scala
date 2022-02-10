@@ -98,19 +98,12 @@ object HoodieDataSourceHelper extends PredicateHelper {
 
     file: PartitionedFile => {
       val iter = readParquetFile(file)
-      unravelColumnarBatchIfNecessary(iter)
+      val rows = iter.flatMap(_ match {
+        case r: InternalRow => Seq(r)
+        case b: ColumnarBatch => b.rowIterator().asScala
+      })
+      rows
     }
-  }
-
-  /**
-   * if is [[ColumnarBatch]], unravel it to [[InternalRow]]
-   */
-  def unravelColumnarBatchIfNecessary(iter: Iterator[Any]): Iterator[InternalRow] = {
-    val rows = iter.flatMap(_ match {
-      case r: InternalRow => Seq(r)
-      case b: ColumnarBatch => b.rowIterator().asScala
-    })
-    rows
   }
 
   /**
@@ -162,6 +155,9 @@ object HoodieDataSourceHelper extends PredicateHelper {
     }
   }
 
+  /**
+   * This is a copy of org.apache.spark.sql.execution.datasources.FilePartition#getFilePartitions from Spark 3.2.
+   */
   def getFilePartitions(
       sparkSession: SparkSession,
       partitionedFiles: Seq[PartitionedFile]): Seq[FilePartition] = {

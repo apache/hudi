@@ -117,6 +117,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       options = optParams,
       hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
     )
+
     val requiredSchemaParquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
       sparkSession = sqlContext.sparkSession,
       dataSchema = tableStructSchema,
