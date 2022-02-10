@@ -1377,6 +1377,40 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testInlineScheduleClustering(boolean scheduleInlineClustering) throws IOException {
+    testInsertTwoBatches(true);
+
+    // setup clustering config.
+    HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
+        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withInlineClustering(false).withScheduleInlineClustering(scheduleInlineClustering)
+        .withPreserveHoodieCommitMetadata(true).build();
+
+    HoodieWriteConfig config = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY).withAutoCommit(false)
+        .withClusteringConfig(clusteringConfig)
+        .withProps(getPropertiesForKeyGen()).build();
+    SparkRDDWriteClient client = getHoodieWriteClient(config);
+    dataGen = new HoodieTestDataGenerator(new String[] {"2015/03/16"});
+    String commitTime1 = HoodieActiveTimeline.createNewInstantTime();
+    List<HoodieRecord> records1 = dataGen.generateInserts(commitTime1, 200);
+    client.startCommitWithTime(commitTime1);
+    JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(records1, 2);
+    JavaRDD<WriteStatus> statuses = client.upsert(insertRecordsRDD1, commitTime1);
+    List<WriteStatus> statusList = statuses.collect();
+    assertNoWriteErrors(statusList);
+    client.commit(commitTime1, statuses);
+
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    List<Pair<HoodieInstant, HoodieClusteringPlan>> pendingClusteringPlans =
+        ClusteringUtils.getAllPendingClusteringPlans(metaClient).collect(Collectors.toList());
+    if (scheduleInlineClustering) {
+      assertEquals(1, pendingClusteringPlans.size());
+    } else {
+      assertEquals(0, pendingClusteringPlans.size());
+    }
+  }
+
+  @ParameterizedTest
   @MethodSource("populateMetaFieldsAndPreserveMetadataParams")
   public void testClusteringWithSortColumns(boolean populateMetaFields, boolean preserveCommitMetadata) throws Exception {
     // setup clustering config.
@@ -1529,7 +1563,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     Pair<Pair<List<HoodieRecord>, List<String>>, Set<HoodieFileGroupId>> allRecords = testInsertTwoBatches(populateMetaFields);
     testClustering(clusteringConfig, populateMetaFields, completeClustering, assertSameFileIds, validatorClasses, sqlQueryForEqualityValidation, sqlQueryForSingleResultValidation, allRecords);
     return allRecords.getLeft().getLeft();
-
   }
 
   /**

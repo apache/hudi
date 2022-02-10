@@ -1140,6 +1140,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieCompactionConfig.INLINE_COMPACT);
   }
 
+  public boolean scheduleInlineCompaction() {
+    return getBoolean(HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT);
+  }
+
   public CompactionTriggerStrategy getInlineCompactTriggerStrategy() {
     return CompactionTriggerStrategy.valueOf(getString(HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY));
   }
@@ -1178,6 +1182,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean inlineClusteringEnabled() {
     return getBoolean(HoodieClusteringConfig.INLINE_CLUSTERING);
+  }
+
+  public boolean scheduleInlineClustering() {
+    return getBoolean(HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING);
   }
 
   public boolean isAsyncClusteringEnabled() {
@@ -1859,11 +1867,11 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   /**
-   * Are any table services configured to run inline?
+   * Are any table services configured to run inline for both scheduling and execution?
    *
    * @return True if any table services are configured to run inline, false otherwise.
    */
-  public Boolean areAnyTableServicesInline() {
+  public Boolean areAnyTableServicesExecutedInline() {
     return inlineClusteringEnabled() || inlineCompactionEnabled() || isAutoClean();
   }
 
@@ -1874,6 +1882,10 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   public Boolean areAnyTableServicesAsync() {
     return isAsyncClusteringEnabled() || !inlineCompactionEnabled() || isAsyncClean();
+  }
+
+  public Boolean areAnyTableServicesScheduledInline() {
+    return scheduleInlineCompaction() || scheduleInlineClustering();
   }
 
   public String getPreCommitValidators() {

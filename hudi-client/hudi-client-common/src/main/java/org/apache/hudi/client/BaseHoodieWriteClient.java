@@ -464,7 +464,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   }
 
   protected void runTableServicesInline(HoodieTable<T, I, K, O> table, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
-    if (config.areAnyTableServicesInline()) {
+    if (config.areAnyTableServicesExecutedInline() || config.areAnyTableServicesScheduledInline()) {
       if (config.isMetadataTableEnabled()) {
         table.getHoodieView().sync();
       }
@@ -472,18 +472,34 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       if (config.inlineCompactionEnabled()) {
         runAnyPendingCompactions(table);
         metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
-        inlineCompact(extraMetadata);
+        inlineCompaction(extraMetadata);
       } else {
         metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT.key(), "false");
+      }
+
+      // if just inline schedule is enabled
+      if (!config.inlineCompactionEnabled() && config.scheduleInlineCompaction()
+          && !table.getActiveTimeline().getWriteTimeline().filterPendingCompactionTimeline().getInstants().findAny().isPresent()) {
+        // proceed only if there are no pending compactions
+        metadata.addMetadata(HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT.key(), "true");
+        inlineScheduleCompaction(extraMetadata);
       }
 
       // Do an inline clustering if enabled
       if (config.inlineClusteringEnabled()) {
         runAnyPendingClustering(table);
         metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true");
-        inlineCluster(extraMetadata);
+        inlineClustering(extraMetadata);
       } else {
         metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "false");
+      }
+
+      // if just inline schedule is enabled
+      if (!config.inlineClusteringEnabled() && config.scheduleInlineClustering()
+          && !table.getActiveTimeline().filterPendingReplaceTimeline().getInstants().findAny().isPresent()) {
+        // proceed only if there are no pending clustering
+        metadata.addMetadata(HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING.key(), "true");
+        inlineScheduleClustering(extraMetadata);
       }
     }
   }
@@ -1005,14 +1021,24 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
 
   /**
    * Performs a compaction operation on a table, serially before or after an insert/upsert action.
+   * Scheduling and execution is done inline.
    */
-  protected Option<String> inlineCompact(Option<Map<String, String>> extraMetadata) {
-    Option<String> compactionInstantTimeOpt = scheduleCompaction(extraMetadata);
+  protected Option<String> inlineCompaction(Option<Map<String, String>> extraMetadata) {
+    Option<String> compactionInstantTimeOpt = inlineScheduleCompaction(extraMetadata);
     compactionInstantTimeOpt.ifPresent(compactInstantTime -> {
       // inline compaction should auto commit as the user is never given control
       compact(compactInstantTime, true);
     });
     return compactionInstantTimeOpt;
+  }
+
+  /***
+   * Schedules compaction inline.
+   * @param extraMetadata extrametada to be used.
+   * @return compaction instant if scheduled.
+   */
+  protected Option<String> inlineScheduleCompaction(Option<Map<String, String>> extraMetadata) {
+    return scheduleCompaction(extraMetadata);
   }
 
   /**
@@ -1116,14 +1142,24 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
 
   /**
    * Executes a clustering plan on a table, serially before or after an insert/upsert action.
+   * Schedules and executes clustering inline.
    */
-  protected Option<String> inlineCluster(Option<Map<String, String>> extraMetadata) {
-    Option<String> clusteringInstantOpt = scheduleClustering(extraMetadata);
+  protected Option<String> inlineClustering(Option<Map<String, String>> extraMetadata) {
+    Option<String> clusteringInstantOpt = inlineScheduleClustering(extraMetadata);
     clusteringInstantOpt.ifPresent(clusteringInstant -> {
       // inline cluster should auto commit as the user is never given control
       cluster(clusteringInstant, true);
     });
     return clusteringInstantOpt;
+  }
+
+  /**
+   * Schedules clustering inline.
+   * @param extraMetadata extrametadata to use.
+   * @return clustering instant if scheduled.
+   */
+  protected Option<String> inlineScheduleClustering(Option<Map<String, String>> extraMetadata) {
+    return scheduleClustering(extraMetadata);
   }
 
   protected void rollbackInflightClustering(HoodieInstant inflightInstant, HoodieTable<T, I, K, O> table) {
