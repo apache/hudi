@@ -215,6 +215,8 @@ class IncrementalRelation(val sqlContext: SQLContext,
           log.info("Additional Filters to be applied to incremental source are :" + filters.mkString("Array(", ", ", ")"))
 
         var prunedSchema = StructType(Seq())
+        // COMMIT_TIME_METADATA_FIELD is required in the schema even if it is not requested by the user
+        // because this field is used to filter the data that is in the time window of the incremental read
         if (!requiredColumns.contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD)) {
           prunedSchema = prunedSchema.add(usedSchema(HoodieRecord.COMMIT_TIME_METADATA_FIELD))
         }
