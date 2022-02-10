@@ -1587,6 +1587,7 @@
         <scalatest.version>3.1.0</scalatest.version>
         <kafka.version>2.4.1</kafka.version>
         <parquet.version>1.12.1</parquet.version>
+        <avro.version>1.10.2</avro.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>

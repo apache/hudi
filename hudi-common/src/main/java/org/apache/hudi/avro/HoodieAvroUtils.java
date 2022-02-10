@@ -18,6 +18,7 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Conversions.DecimalConversion;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalTypes;
@@ -39,6 +40,7 @@ import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.specific.SpecificRecordBase;
+
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -277,7 +279,7 @@ public class HoodieAvroUtils {
 
     for (Schema.Field schemaField: fileSchema.getFields()) {
       if (fields.contains(schemaField.name())) {
-        toBeAddedFields.add(new Schema.Field(schemaField.name(), schemaField.schema(), schemaField.doc(), schemaField.defaultValue()));
+        toBeAddedFields.add(new Schema.Field(schemaField.name(), schemaField.schema(), schemaField.doc(), schemaField.defaultVal()));
       }
     }
     recordSchema.setFields(toBeAddedFields);
@@ -434,23 +436,32 @@ public class HoodieAvroUtils {
     String[] parts = fieldName.split("\\.");
     GenericRecord valueNode = record;
     int i = 0;
-    for (; i < parts.length; i++) {
-      String part = parts[i];
-      Object val = valueNode.get(part);
-      if (val == null) {
-        break;
-      }
-
-      // return, if last part of name
-      if (i == parts.length - 1) {
-        Schema fieldSchema = valueNode.getSchema().getField(part).schema();
-        return convertValueForSpecificDataTypes(fieldSchema, val, consistentLogicalTimestampEnabled);
-      } else {
-        // VC: Need a test here
-        if (!(val instanceof GenericRecord)) {
-          throw new HoodieException("Cannot find a record at part value :" + part);
+    try {
+      for (; i < parts.length; i++) {
+        String part = parts[i];
+        Object val = valueNode.get(part);
+        if (val == null) {
+          break;
         }
-        valueNode = (GenericRecord) val;
+
+        // return, if last part of name
+        if (i == parts.length - 1) {
+          Schema fieldSchema = valueNode.getSchema().getField(part).schema();
+          return convertValueForSpecificDataTypes(fieldSchema, val, consistentLogicalTimestampEnabled);
+        } else {
+          // VC: Need a test here
+          if (!(val instanceof GenericRecord)) {
+            throw new HoodieException("Cannot find a record at part value :" + part);
+          }
+          valueNode = (GenericRecord) val;
+        }
+      }
+    } catch (AvroRuntimeException e) {
+      // Since avro 1.10, arvo will throw AvroRuntimeException("Not a valid schema field: " + key)
+      // rather than return null like the previous version if if record doesn't contain this key.
+      // So when returnNullIfNotFound is true, catch this exception.
+      if (!returnNullIfNotFound) {
+        throw e;
       }
     }
 
