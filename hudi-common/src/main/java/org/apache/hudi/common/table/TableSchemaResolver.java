@@ -46,7 +46,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.io.storage.HoodieHFileReader;
-import org.apache.hudi.io.storage.HoodieOrcReader;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
