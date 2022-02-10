@@ -55,6 +55,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.hive.HiveExternalCatalog;
 import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
@@ -318,6 +319,9 @@ public class DataSourceUtils {
         (boolean) DataSourceWriteOptions.HIVE_SYNC_BUCKET_SYNC().defaultValue())
         ? HiveSyncConfig.getBucketSpec(props.getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key()),
             props.getInteger(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key())) : null;
+    if (props.containsKey(HiveExternalCatalog.CREATED_SPARK_VERSION())) {
+      hiveSyncConfig.sparkVersion = props.getString(HiveExternalCatalog.CREATED_SPARK_VERSION());
+    }
     return hiveSyncConfig;
   }
 

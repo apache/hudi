@@ -47,7 +47,9 @@ import org.apache.hudi.table.BulkInsertPartitioner
 
 import org.apache.log4j.LogManager
 
+import org.apache.spark.SPARK_VERSION
 import org.apache.spark.api.java.JavaSparkContext
+import org.apache.spark.sql.hive.HiveExternalCatalog
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.types.StructType
@@ -582,6 +584,7 @@ object HoodieSparkSqlWriter {
     hiveSyncConfig.syncMode = hoodieConfig.getString(HIVE_SYNC_MODE)
     hiveSyncConfig.serdeProperties = hoodieConfig.getString(HIVE_TABLE_SERDE_PROPERTIES)
     hiveSyncConfig.tableProperties = hoodieConfig.getString(HIVE_TABLE_PROPERTIES)
+    hiveSyncConfig.sparkVersion = SPARK_VERSION
     hiveSyncConfig
   }
 
