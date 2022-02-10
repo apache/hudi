@@ -21,6 +21,7 @@ import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hudi.sql.IExpressionEvaluator
 import org.apache.spark.executor.InputMetrics
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.avro.AvroSerializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.codegen.Block.BlockHelper
 import org.apache.spark.sql.catalyst.expressions.codegen._

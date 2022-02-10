@@ -41,8 +41,8 @@ case class HoodieAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataTy
 
   def deserializeData(data: Any): Option[Any] = {
     avroDeserializer.deserialize(data) match {
-      case opt if opt.isInstanceOf[Option] => opt   // As of Spark 3.1, this will return data wrapped with Option, so we fetch the data
-      case row => Some(row)                         // For other Spark versions, return the data as is
+      case opt if opt.isInstanceOf[Option[_]] => opt  // As of Spark 3.1, this will return data wrapped with Option, so we fetch the data
+      case row => Some(row)                           // For other Spark versions, return the data as is
     }
   }
 }
