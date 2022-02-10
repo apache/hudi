@@ -53,10 +53,7 @@ case class HoodieMergeOnReadFileSplit(dataFile: Option[PartitionedFile],
                                       maxCompactionMemoryInBytes: Long,
                                       mergeType: String)
 
-case class HoodieMergeOnReadTableState(tableStructSchema: StructType,
-                                       requiredStructSchema: StructType,
-                                       tableAvroSchema: String,
-                                       requiredAvroSchema: String,
+case class HoodieMergeOnReadTableState(schemas: HoodieTableSchemas,
                                        hoodieRealtimeFileSplits: List[HoodieMergeOnReadFileSplit],
                                        preCombineField: Option[String],
                                        recordKeyFieldOpt: Option[String])
@@ -115,15 +112,14 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
     val (requiredAvroSchema, requiredStructSchema) =
       HoodieSparkUtils.getRequiredSchema(tableAvroSchema, requiredColumns)
     val fileIndex = buildFileIndex(filters)
-    val hoodieTableState = HoodieMergeOnReadTableState(
-      tableStructSchema,
-      requiredStructSchema,
-      tableAvroSchema.toString,
-      requiredAvroSchema.toString,
-      fileIndex,
-      preCombineField,
-      recordKeyFieldOpt
+    val tableSchemas = HoodieTableSchemas(
+      tableSchema = tableStructSchema,
+      partitionSchema = StructType(Nil),
+      requiredSchema = requiredStructSchema,
+      tableAvroSchema = tableAvroSchema.toString,
+      requiredAvroSchema = requiredAvroSchema.toString,
     )
+    val tableState = HoodieMergeOnReadTableState(tableSchemas, fileIndex, preCombineField, recordKeyFieldOpt)
     val fullSchemaParquetReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
       tableSchema = tableStructSchema,
@@ -148,7 +144,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       jobConf,
       fullSchemaParquetReader,
       requiredSchemaParquetReader,
-      hoodieTableState
+      tableState
     )
     rdd.asInstanceOf[RDD[Row]]
   }

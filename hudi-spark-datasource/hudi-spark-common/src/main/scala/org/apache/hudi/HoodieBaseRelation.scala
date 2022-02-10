@@ -38,6 +38,12 @@ import org.apache.spark.util.SerializableConfiguration
 import scala.collection.JavaConverters._
 import scala.util.Try
 
+case class HoodieTableSchemas(tableSchema: StructType,
+                              partitionSchema: StructType,
+                              requiredSchema: StructType,
+                              tableAvroSchema: String,
+                              requiredAvroSchema: String)
+
 /**
  * Hoodie BaseRelation which extends [[PrunedFilteredScan]].
  */
@@ -68,26 +74,22 @@ object HoodieBaseRelation {
    * TODO
    */
   def createBaseFileReader(spark: SparkSession,
-                           tableSchema: StructType,
-                           partitionSchema: StructType,
-                           requiredSchema: StructType,
+                           tableSchemas: HoodieTableSchemas,
                            filters: Array[Filter],
                            options: Map[String, String],
                            hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
     val hfileReader = createHFileReader(
       spark = spark,
-      tableSchema = tableSchema,
-      partitionSchema = partitionSchema,
-      requiredSchema = requiredSchema,
+      tableSchemas = tableSchemas,
       filters = filters,
       options = options,
       hadoopConf = hadoopConf
     )
     val parquetReader = new ParquetFileFormat().buildReaderWithPartitionValues(
       sparkSession = spark,
-      dataSchema = tableSchema,
-      partitionSchema = partitionSchema,
-      requiredSchema = requiredSchema,
+      dataSchema = tableSchemas.tableSchema,
+      partitionSchema = tableSchemas.partitionSchema,
+      requiredSchema = tableSchemas.requiredSchema,
       filters = filters,
       options = options,
       hadoopConf = hadoopConf
@@ -104,14 +106,15 @@ object HoodieBaseRelation {
   }
 
   private def createHFileReader(spark: SparkSession,
-                                tableSchema: StructType,
-                                partitionSchema: StructType,
-                                requiredSchema: StructType,
+                                tableSchemas: HoodieTableSchemas,
                                 filters: Array[Filter],
                                 options: Map[String, String],
                                 hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
     val hadoopConfBroadcast =
       spark.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
+
+    val requiredSchema = tableSchemas.requiredSchema
+    val requiredAvroSchema = new Schema.Parser().parse(tableSchemas.requiredAvroSchema)
 
     partitionedFile => {
       val hadoopConf = hadoopConfBroadcast.value.value
