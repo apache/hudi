@@ -85,16 +85,4 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
       throw new HoodieException("Error closing metadata file system view.", e);
     }
   }
-
-  @Override
-  public void sync() {
-    // Sync the tableMetadata first as super.sync() may call listPartition
-    if (tableMetadata != null) {
-      BaseTableMetadata baseMetadata = (BaseTableMetadata)tableMetadata;
-      tableMetadata = HoodieTableMetadata.create(baseMetadata.getEngineContext(), baseMetadata.getMetadataConfig(),
-          metaClient.getBasePath(), FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
-    }
-
-    super.sync();
-  }
 }

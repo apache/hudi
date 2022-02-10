@@ -1740,14 +1740,20 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   }
 
   /**
-   * Test a single cleaner running previous leftover clean before initiating a new clean.
+   * Tests no more than 1 clean is scheduled/executed if HoodieCompactionConfig.allowMultipleCleanSchedule config is disabled.
    */
   @Test
   public void testMultiClean() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
-    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false).withEmbeddedTimelineServerEnabled(false).build();
+    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024)
+            .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1)
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
+            .allowMultipleCleans(false)
+            .withAutoClean(false).retainCommits(1).retainFileVersions(1).build())
+        .withEmbeddedTimelineServerEnabled(false).build();
 
     int index = 0;
     String cleanInstantTime;
@@ -1780,8 +1786,19 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // due to the commit above.
       String newCleanInstantTime = "00" + index++;
       HoodieCleanMetadata cleanMetadata = client.clean(newCleanInstantTime);
-      // 1 partition should be cleaned
-      assertEquals(cleanMetadata.getPartitionMetadata().size(), 1);
+      // subsequent clean should not be triggered since allowMultipleCleanSchedules is set to false
+      assertNull(cleanMetadata);
+
+      // let the old clean complete
+      table = HoodieSparkTable.create(writeConfig, engineContext);
+      cleanMetadata = table.clean(context, cleanInstantTime, false);
+      assertNotNull(cleanMetadata);
+
+      // any new clean should go ahead
+      cleanMetadata = client.clean(newCleanInstantTime);
+      // subsequent clean should not be triggered since allowMultipleCleanSchedules is set to false
+      assertNotNull(cleanMetadata);
+
       // 1 file cleaned
       assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getSuccessDeleteFiles().size(), 1);
       assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getFailedDeleteFiles().size(), 0);
