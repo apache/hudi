@@ -290,7 +290,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         final long baseFileOpenMs = baseFileReaderOpenTimePair.getValue();
 
         // Open the log record scanner using the log files from the latest file slice
-        Pair<HoodieMetadataMergedLogRecordReader, Long> logRecordScannerOpenTimePair = getLogRecordScanner(slice, partitionName);
+        List<HoodieLogFile> logFiles = slice.getLogFiles().collect(Collectors.toList());
+        Pair<HoodieMetadataMergedLogRecordReader, Long> logRecordScannerOpenTimePair =
+            getLogRecordScanner(logFiles, partitionName);
         HoodieMetadataMergedLogRecordReader logRecordScanner = logRecordScannerOpenTimePair.getKey();
         final long logScannerOpenMs = logRecordScannerOpenTimePair.getValue();
 
@@ -343,9 +345,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return validInstantTimestamps;
   }
 
-  private Pair<HoodieMetadataMergedLogRecordReader, Long> getLogRecordScanner(FileSlice slice, String partitionName) {
+  public Pair<HoodieMetadataMergedLogRecordReader, Long> getLogRecordScanner(List<HoodieLogFile> logFiles, String partitionName) {
     HoodieTimer timer = new HoodieTimer().startTimer();
-    List<String> logFilePaths = slice.getLogFiles()
+    List<String> sortedLogFilePaths = logFiles.stream()
         .sorted(HoodieLogFile.getLogFileComparator())
         .map(o -> o.getPath().toString())
         .collect(Collectors.toList());
@@ -363,7 +365,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     HoodieMetadataMergedLogRecordReader logRecordScanner = HoodieMetadataMergedLogRecordReader.newBuilder()
         .withFileSystem(metadataMetaClient.getFs())
         .withBasePath(metadataBasePath)
-        .withLogFilePaths(logFilePaths)
+        .withLogFilePaths(sortedLogFilePaths)
         .withReaderSchema(schema)
         .withLatestInstantTime(latestMetadataInstantTime)
         .withMaxMemorySizeInBytes(MAX_MEMORY_SIZE_IN_BYTES)
@@ -378,7 +380,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
     Long logScannerOpenMs = timer.endTimer();
     LOG.info(String.format("Opened %d metadata log files (dataset instant=%s, metadata instant=%s) in %d ms",
-        logFilePaths.size(), getLatestDataInstantTime(), latestMetadataInstantTime, logScannerOpenMs));
+        sortedLogFilePaths.size(), getLatestDataInstantTime(), latestMetadataInstantTime, logScannerOpenMs));
     return Pair.of(logRecordScanner, logScannerOpenMs);
   }
 

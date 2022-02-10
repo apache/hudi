@@ -18,19 +18,28 @@
 
 package org.apache.hudi
 
+import org.apache.avro.Schema
+import org.apache.hadoop.fs.Path
+import org.apache.hadoop.mapred.JobConf
+import org.apache.hudi.HoodieBaseRelation.createBaseFileReader
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.createBaseFileReader
 import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
+import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
+import org.apache.spark.sql.sources.{Filter, PrunedFilteredScan}
+import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{Row, SQLContext}
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Row, SQLContext}
@@ -38,7 +47,7 @@ import org.apache.spark.sql.{Row, SQLContext}
 import scala.collection.JavaConverters._
 
 case class HoodieMergeOnReadFileSplit(dataFile: Option[PartitionedFile],
-                                      logPaths: Option[List[String]],
+                                      logPaths: Option[List[HoodieLogFile]],
                                       latestCommit: String,
                                       tablePath: String,
                                       maxCompactionMemoryInBytes: Long,
@@ -61,6 +70,17 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
 
   private val conf = sqlContext.sparkContext.hadoopConfiguration
   private val jobConf = new JobConf(conf)
+  // use schema from latest metadata, if not present, read schema from the data file
+  private val schemaResolver = new TableSchemaResolver(metaClient)
+  private lazy val tableAvroSchema = {
+    try {
+      schemaResolver.getTableAvroSchema(metaClient.getTableConfig.populateMetaFields)
+    } catch {
+      case _: Throwable => // If there is no commit in the table, we cann't get the schema
+        // with schemaUtil, use the userSchema instead.
+        SchemaConverters.toAvroType(userSchema)
+    }
+  }
 
   private val mergeType = optParams.getOrElse(
     DataSourceReadOptions.REALTIME_MERGE.key,
@@ -209,8 +229,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
             Option.empty
           }
 
-          val logPaths = fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala
-            .map(logFile => MergeOnReadSnapshotRelation.getFilePath(logFile.getPath)).toList
+          val logPaths = fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList
           val logPathsOptional = if (logPaths.isEmpty) Option.empty else Option(logPaths)
 
           HoodieMergeOnReadFileSplit(partitionedFile, logPathsOptional, queryInstant, metaClient.getBasePath,

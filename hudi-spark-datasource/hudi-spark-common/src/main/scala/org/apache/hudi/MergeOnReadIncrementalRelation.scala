@@ -35,10 +35,10 @@ import org.apache.spark.sql.{Row, SQLContext}
 import scala.collection.JavaConversions._
 
 /**
-  * Experimental.
-  * Relation, that implements the Hoodie incremental view for Merge On Read table.
-  *
-  */
+ * Experimental.
+ * Relation, that implements the Hoodie incremental view for Merge On Read table.
+ *
+ */
 class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
                                      val optParams: Map[String, String],
                                      val userSchema: Option[StructType],
@@ -206,10 +206,9 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
       }
 
       val logPath = if (f.getLatestFileSlice.isPresent) {
-        //If log path doesn't exist, we still include an empty path to avoid using
+        // If log path doesn't exist, we still include an empty path to avoid using
         // the default parquet reader to ensure the push down filter will be applied.
-        Option(f.getLatestFileSlice.get().getLogFiles.iterator().toList
-          .map(logfile => logfile.getPath.toString))
+        Option(f.getLatestFileSlice.get().getLogFiles.iterator().toList)
       }
       else {
         Option.empty
