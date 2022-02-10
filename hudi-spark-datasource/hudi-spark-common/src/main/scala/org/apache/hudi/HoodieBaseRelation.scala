@@ -22,7 +22,6 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.hbase.io.hfile.CacheConfig
-import org.apache.hudi.AvroConversionUtils.convertStructTypeToAvroSchema
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.io.storage.HoodieHFileReader
 import org.apache.spark.internal.Logging
@@ -121,15 +120,10 @@ object HoodieBaseRelation {
       val reader = new HoodieHFileReader[GenericRecord](hadoopConf, new Path(partitionedFile.filePath),
         new CacheConfig(hadoopConf))
 
-      // TODO
-      //      val readerSchema = convertStructTypeToAvroSchema(requiredSchema, "MetadataProjectedRecord", "org.apache.hoodie")
+      val avroToRowConverter = AvroConversionUtils.createAvroToRowConverter(requiredAvroSchema, requiredSchema)
 
-      val tableAvroSchema = convertStructTypeToAvroSchema(tableSchema, "MetadataRecord", "org.apache.hoodie")
-      val avroToRowConverter = AvroConversionUtils.createAvroToRowConverter(tableAvroSchema, tableSchema)
-
-      reader.getRecordIterator(tableAvroSchema).asScala
+      reader.getRecordIterator(requiredAvroSchema).asScala
         .map(record => {
-          // TODO projection
           avroToRowConverter.apply(record).get.asInstanceOf[InternalRow]
         })
     }
