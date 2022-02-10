@@ -19,8 +19,6 @@
 package org.apache.hudi.client.functional;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.avro.model.HoodieCleanMetadata;
-import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -1735,75 +1733,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertNoWriteErrors(writeStatuses);
 
       // Post rollback commit and metadata should be valid
-      validateMetadata(client);
-    }
-  }
-
-  /**
-   * Tests no more than 1 clean is scheduled/executed if HoodieCompactionConfig.allowMultipleCleanSchedule config is disabled.
-   */
-  @Test
-  public void testMultiClean() throws Exception {
-    init(HoodieTableType.COPY_ON_WRITE);
-    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-
-    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024)
-            .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1)
-            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
-            .allowMultipleCleans(false)
-            .withAutoClean(false).retainCommits(1).retainFileVersions(1).build())
-        .withEmbeddedTimelineServerEnabled(false).build();
-
-    int index = 0;
-    String cleanInstantTime;
-    final String partition = "2015/03/16";
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
-      // Three writes so we can initiate a clean
-      for (; index < 3; ++index) {
-        String newCommitTime = "00" + index;
-        List<HoodieRecord> records = dataGen.generateInsertsForPartition(newCommitTime, 1, partition);
-        client.startCommitWithTime(newCommitTime);
-        client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
-      }
-    }
-
-    // mimic failed/leftover clean by scheduling a clean but not performing it
-    cleanInstantTime = "00" + index++;
-    HoodieTable table = HoodieSparkTable.create(writeConfig, engineContext);
-    Option<HoodieCleanerPlan> cleanPlan = table.scheduleCleaning(context, cleanInstantTime, Option.empty());
-    assertEquals(cleanPlan.get().getFilePathsToBeDeletedPerPartition().get(partition).size(), 1);
-    assertEquals(metaClient.reloadActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().countInstants(), 1);
-
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
-      // Next commit. This is required so that there is an additional file version to clean.
-      String newCommitTime = "00" + index++;
-      List<HoodieRecord> records = dataGen.generateInsertsForPartition(newCommitTime, 1, partition);
-      client.startCommitWithTime(newCommitTime);
-      client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
-
-      // Initiate another clean. The previous leftover clean will be attempted first, followed by another clean
-      // due to the commit above.
-      String newCleanInstantTime = "00" + index++;
-      HoodieCleanMetadata cleanMetadata = client.clean(newCleanInstantTime);
-      // subsequent clean should not be triggered since allowMultipleCleanSchedules is set to false
-      assertNull(cleanMetadata);
-
-      // let the old clean complete
-      table = HoodieSparkTable.create(writeConfig, engineContext);
-      cleanMetadata = table.clean(context, cleanInstantTime, false);
-      assertNotNull(cleanMetadata);
-
-      // any new clean should go ahead
-      cleanMetadata = client.clean(newCleanInstantTime);
-      // subsequent clean should not be triggered since allowMultipleCleanSchedules is set to false
-      assertNotNull(cleanMetadata);
-
-      // 1 file cleaned
-      assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getSuccessDeleteFiles().size(), 1);
-      assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getFailedDeleteFiles().size(), 0);
-      assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getDeletePathPatterns().size(), 1);
-
       validateMetadata(client);
     }
   }

@@ -36,7 +36,7 @@ import java.io.IOException;
  */
 public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
 
-  private HoodieTableMetadata tableMetadata;
+  private final HoodieTableMetadata tableMetadata;
 
   public HoodieMetadataFileSystemView(HoodieTableMetaClient metaClient,
                                       HoodieTimeline visibleActiveTimeline,
