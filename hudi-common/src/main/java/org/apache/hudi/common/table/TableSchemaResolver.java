@@ -45,6 +45,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.io.storage.HoodieHFileReader;
 import org.apache.hudi.io.storage.HoodieOrcReader;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -441,17 +442,17 @@ public class TableSchemaResolver {
   /**
    * Read the parquet schema from a HFile.
    */
-  public MessageType readSchemaFromHFileBaseFile(Path HFilePath) throws IOException {
-    LOG.info("Reading schema from " + HFilePath);
+  public MessageType readSchemaFromHFileBaseFile(Path hFilePath) throws IOException {
+    LOG.info("Reading schema from " + hFilePath);
 
     FileSystem fs = metaClient.getRawFs();
-    if (!fs.exists(HFilePath)) {
+    if (!fs.exists(hFilePath)) {
       throw new IllegalArgumentException(
-          "Failed to read schema from data file " + HFilePath + ". File does not exist.");
+          "Failed to read schema from data file " + hFilePath + ". File does not exist.");
     }
 
     CacheConfig cacheConfig = new CacheConfig(fs.getConf());
-    HoodieHFileReader<IndexedRecord> hFileReader = new HoodieHFileReader<>(fs.getConf(), HFilePath, cacheConfig);
+    HoodieHFileReader<IndexedRecord> hFileReader = new HoodieHFileReader<>(fs.getConf(), hFilePath, cacheConfig);
 
     return convertAvroSchemaToParquet(hFileReader.getSchema());
   }
@@ -460,15 +461,15 @@ public class TableSchemaResolver {
   /**
    * Read the parquet schema from a ORC file.
    */
-  public MessageType readSchemaFromORCBaseFile(Path ORCFilePath) throws IOException {
-    LOG.info("Reading schema from " + ORCFilePath);
+  public MessageType readSchemaFromORCBaseFile(Path orcFilePath) throws IOException {
+    LOG.info("Reading schema from " + orcFilePath);
 
     FileSystem fs = metaClient.getRawFs();
-    if (!fs.exists(ORCFilePath)) {
+    if (!fs.exists(orcFilePath)) {
       throw new IllegalArgumentException(
-          "Failed to read schema from data file " + ORCFilePath + ". File does not exist.");
+          "Failed to read schema from data file " + orcFilePath + ". File does not exist.");
     }
-    HoodieOrcReader<IndexedRecord> orcReader = new HoodieOrcReader<>(fs.getConf(), ORCFilePath);
+    HoodieOrcReader<IndexedRecord> orcReader = new HoodieOrcReader<>(fs.getConf(), orcFilePath);
 
     return convertAvroSchemaToParquet(orcReader.getSchema());
   }
