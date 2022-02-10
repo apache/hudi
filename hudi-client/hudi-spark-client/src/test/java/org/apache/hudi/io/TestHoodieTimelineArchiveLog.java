@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.utils.MetadataConversionUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -52,6 +51,7 @@ import org.apache.hudi.table.HoodieTimelineArchiveLog;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -655,7 +655,8 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
   public void testArchiveTableWithCleanCommits(boolean enableMetadata) throws Exception {
     HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 2, 4, 2);
 
-    // min archival commits is 2 and max archival commits is 4(either clean commits has to be > 4 or commits has to be greater than 4.
+    // min archival commits is 2 and max archival commits is 4
+    // (either clean commits has to be > 4 or commits has to be greater than 4)
     // and so, after 5th commit, 3 commits will be archived.
     // 1,2,3,4,5,6 : after archival -> 1,5,6 (because, 2,3,4,5 and 6 are clean commits and are eligible for archival)
     // after 7th and 8th commit no-op wrt archival.

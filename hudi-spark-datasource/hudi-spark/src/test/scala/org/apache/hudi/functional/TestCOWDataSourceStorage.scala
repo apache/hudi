@@ -99,9 +99,9 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     var updateDf: DataFrame = null
     if (classOf[TimestampBasedKeyGenerator].getName.equals(keyGenClass)) {
       // update current_ts to be same as original record so that partition path does not change with timestamp based key gen
-      val orignalRow = inputDF1.filter(col("_row_key") === verificationRowKey).collectAsList().get(0)
+      val originalRow = inputDF1.filter(col("_row_key") === verificationRowKey).collectAsList().get(0)
       updateDf = snapshotDF1.filter(col("_row_key") === verificationRowKey).withColumn(verificationCol, lit(updatedVerificationVal))
-        .withColumn("current_ts", lit(orignalRow.getAs("current_ts")))
+        .withColumn("current_ts", lit(originalRow.getAs("current_ts")))
     } else {
       updateDf = snapshotDF1.filter(col("_row_key") === verificationRowKey).withColumn(verificationCol, lit(updatedVerificationVal))
     }

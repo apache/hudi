@@ -274,7 +274,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         HoodieMetadataBloomFilter combineBloomFilterMetadata = combineBloomFilterMetadata(previousRecord);
         return new HoodieMetadataPayload(key, type, combineBloomFilterMetadata);
       case METADATA_TYPE_COLUMN_STATS:
-        return new HoodieMetadataPayload(key, type, combineColumnStatsMetadatat(previousRecord));
+        return new HoodieMetadataPayload(key, type, combineColumnStatsMetadata(previousRecord));
       default:
         throw new HoodieMetadataException("Unknown type of HoodieMetadataPayload: " + type);
     }
@@ -284,7 +284,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return this.bloomFilterMetadata;
   }
 
-  private HoodieMetadataColumnStats combineColumnStatsMetadatat(HoodieMetadataPayload previousRecord) {
+  private HoodieMetadataColumnStats combineColumnStatsMetadata(HoodieMetadataPayload previousRecord) {
     return this.columnStatMetadata;
   }
 

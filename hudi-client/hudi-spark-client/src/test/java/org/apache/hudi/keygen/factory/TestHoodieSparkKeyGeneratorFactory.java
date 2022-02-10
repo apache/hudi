@@ -25,8 +25,8 @@ import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.TestComplexKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -58,7 +58,7 @@ public class TestHoodieSparkKeyGeneratorFactory {
     // set both class name and keyGenerator type
     props.put(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), KeyGeneratorType.CUSTOM.name());
     KeyGenerator keyGenerator3 = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
-    // KEYGENERATOR_TYPE_PROP was overitten by KEYGENERATOR_CLASS_PROP
+    // KEYGENERATOR_TYPE_PROP was overwritten by KEYGENERATOR_CLASS_PROP
     Assertions.assertEquals(SimpleKeyGenerator.class.getName(), keyGenerator3.getClass().getName());
 
     // set wrong class name

@@ -18,8 +18,6 @@
 
 package org.apache.hudi.table.action.compact;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -32,6 +30,9 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
 
@@ -204,8 +205,8 @@ public class TestAsyncCompaction extends CompactionTestBase {
     String compactionInstantTime = "006";
     int numRecs = 2000;
 
-    final List<HoodieRecord> initalRecords = dataGen.generateInserts(firstInstantTime, numRecs);
-    final List<HoodieRecord> records = runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), initalRecords, cfg, true,
+    final List<HoodieRecord> initialRecords = dataGen.generateInserts(firstInstantTime, numRecs);
+    final List<HoodieRecord> records = runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), initialRecords, cfg, true,
         new ArrayList<>());
 
     // Schedule compaction but do not run them
