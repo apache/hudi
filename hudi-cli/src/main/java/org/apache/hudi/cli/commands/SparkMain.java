@@ -92,8 +92,8 @@ public class SparkMain {
     try {
       switch (cmd) {
         case ROLLBACK:
-          assert (args.length == 5);
-          returnCode = rollback(jsc, args[3], args[4]);
+          assert (args.length == 6);
+          returnCode = rollback(jsc, args[3], args[4], Boolean.parseBoolean(args[5]));
           break;
         case DEDUPLICATE:
           assert (args.length == 8);
@@ -408,8 +408,8 @@ public class SparkMain {
     return 0;
   }
 
-  private static int rollback(JavaSparkContext jsc, String instantTime, String basePath) throws Exception {
-    SparkRDDWriteClient client = createHoodieClient(jsc, basePath);
+  private static int rollback(JavaSparkContext jsc, String instantTime, String basePath, Boolean rollbackUsingMarkers) throws Exception {
+    SparkRDDWriteClient client = createHoodieClient(jsc, basePath, rollbackUsingMarkers);
     if (client.rollback(instantTime)) {
       LOG.info(String.format("The commit \"%s\" rolled back.", instantTime));
       return 0;
@@ -466,7 +466,7 @@ public class SparkMain {
    * @throws Exception
    */
   protected static int upgradeOrDowngradeTable(JavaSparkContext jsc, String basePath, String toVersion) {
-    HoodieWriteConfig config = getWriteConfig(basePath);
+    HoodieWriteConfig config = getWriteConfig(basePath, Boolean.parseBoolean(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE.defaultValue()));
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(false).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
@@ -482,13 +482,18 @@ public class SparkMain {
     }
   }
 
-  private static SparkRDDWriteClient createHoodieClient(JavaSparkContext jsc, String basePath) throws Exception {
-    HoodieWriteConfig config = getWriteConfig(basePath);
+  private static SparkRDDWriteClient createHoodieClient(JavaSparkContext jsc, String basePath, Boolean rollbackUsingMarkers) throws Exception {
+    HoodieWriteConfig config = getWriteConfig(basePath, rollbackUsingMarkers);
     return new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), config);
   }
 
-  private static HoodieWriteConfig getWriteConfig(String basePath) {
+  private static SparkRDDWriteClient createHoodieClient(JavaSparkContext jsc, String basePath) throws Exception {
+    return createHoodieClient(jsc, basePath, Boolean.parseBoolean(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE.defaultValue()));
+  }
+
+  private static HoodieWriteConfig getWriteConfig(String basePath, Boolean rollbackUsingMarkers) {
     return HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withRollbackUsingMarkers(rollbackUsingMarkers)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
   }
 }
