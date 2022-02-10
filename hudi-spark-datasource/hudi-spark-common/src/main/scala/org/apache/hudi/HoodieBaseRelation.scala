@@ -22,6 +22,8 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.hbase.io.hfile.CacheConfig
+import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.io.storage.HoodieHFileReader
 import org.apache.spark.internal.Logging
@@ -70,7 +72,8 @@ abstract class HoodieBaseRelation(
 object HoodieBaseRelation {
 
   /**
-   * TODO
+   * Returns file-reader routine accepting [[PartitionedFile]] and returning an [[Iterator]]
+   * over [[InternalRow]]
    */
   def createBaseFileReader(spark: SparkSession,
                            tableSchemas: HoodieTableSchemas,
@@ -95,12 +98,12 @@ object HoodieBaseRelation {
     )
 
     partitionedFile => {
-      if (partitionedFile.filePath.endsWith(".parquet"))
-        parquetReader.apply(partitionedFile)
-      else if (partitionedFile.filePath.endsWith(".hfile"))
-        hfileReader.apply(partitionedFile)
-      else
-        throw new UnsupportedOperationException(s"Base file format not supported by Spark DataSource ($partitionedFile)")
+      FSUtils.getFileExtension(partitionedFile.filePath) match {
+        case HoodieFileFormat.PARQUET.getFileExtension => parquetReader.apply(partitionedFile)
+        case HoodieFileFormat.HFILE.getFileExtension => hfileReader.apply(partitionedFile)
+        case _ =>
+          throw new UnsupportedOperationException(s"Base file format not supported by Spark DataSource ($partitionedFile)")
+      }
     }
   }
 
@@ -128,5 +131,4 @@ object HoodieBaseRelation {
         })
     }
   }
-
 }
