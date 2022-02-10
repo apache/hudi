@@ -297,6 +297,8 @@ object HoodieSparkUtils extends SparkAdapterSupport {
   def getRequiredSchema(tableAvroSchema: Schema, requiredColumns: Array[String]): (Schema, StructType) = {
     // First get the required avro-schema, then convert the avro-schema to spark schema.
     val name2Fields = tableAvroSchema.getFields.asScala.map(f => f.name() -> f).toMap
+    // Here have to create a new Schema.Field object
+    // to prevent throwing exceptions like "org.apache.avro.AvroRuntimeException: Field already used".
     val requiredFields = requiredColumns.map(c => name2Fields(c))
       .map(f => new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal(), f.order())).toList
     val requiredAvroSchema = Schema.createRecord(tableAvroSchema.getName, tableAvroSchema.getDoc,

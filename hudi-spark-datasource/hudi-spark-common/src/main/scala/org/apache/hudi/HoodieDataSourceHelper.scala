@@ -157,11 +157,12 @@ object HoodieDataSourceHelper extends PredicateHelper {
 
   /**
    * This is a copy of org.apache.spark.sql.execution.datasources.FilePartition#getFilePartitions from Spark 3.2.
+   * And this will be called only in Spark 2.
    */
   def getFilePartitions(
       sparkSession: SparkSession,
-      partitionedFiles: Seq[PartitionedFile]): Seq[FilePartition] = {
-    val maxSplitBytes = sparkSession.sessionState.conf.filesMaxPartitionBytes
+      partitionedFiles: Seq[PartitionedFile],
+      maxSplitBytes: Long): Seq[FilePartition] = {
     val partitions = new ArrayBuffer[FilePartition]
     val currentFiles = new ArrayBuffer[PartitionedFile]
     var currentSize = 0L

@@ -17,8 +17,9 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.hudi.Spark2RowSerDe
+import org.apache.hudi.{HoodieDataSourceHelper, Spark2RowSerDe}
 import org.apache.hudi.client.utils.SparkRowSerDe
+
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.{Expression, Like}
@@ -26,7 +27,7 @@ import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoTable, Join, LogicalPlan}
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
-import org.apache.spark.sql.execution.datasources.{Spark2ParsePartitionUtil, SparkParsePartitionUtil}
+import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionedFile, Spark2ParsePartitionUtil, SparkParsePartitionUtil}
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
 import org.apache.spark.sql.internal.SQLConf
@@ -85,5 +86,15 @@ class Spark2Adapter extends SparkAdapter {
 
   override def parseMultipartIdentifier(parser: ParserInterface, sqlText: String): Seq[String] = {
     throw new IllegalStateException(s"Should not call ParserInterface#parseMultipartIdentifier for spark2")
+  }
+
+  /**
+   * Combine [[PartitionedFile]] to [[FilePartition]] according to `maxSplitBytes`.
+   */
+  override def getFilePartitions(
+      sparkSession: SparkSession,
+      partitionedFiles: Seq[PartitionedFile],
+      maxSplitBytes: Long): Seq[FilePartition] = {
+    HoodieDataSourceHelper.getFilePartitions(sparkSession, partitionedFiles, maxSplitBytes)
   }
 }

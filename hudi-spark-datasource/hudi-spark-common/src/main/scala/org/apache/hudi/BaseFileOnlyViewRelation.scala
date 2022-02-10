@@ -42,7 +42,7 @@ class BaseFileOnlyViewRelation(
     metaClient: HoodieTableMetaClient,
     optParams: Map[String, String],
     userSchema: Option[StructType]
-  ) extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) {
+  ) extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) with SparkAdapterSupport {
 
   private val fileIndex = HoodieFileIndex(sparkSession,
     metaClient,
@@ -76,7 +76,8 @@ class BaseFileOnlyViewRelation(
     val emptyPartitionFiles = partitionFiles.map{ f =>
       PartitionedFile(InternalRow.empty, f.filePath, f.start, f.length)
     }
-    val filePartitions = HoodieDataSourceHelper.getFilePartitions(sparkSession, emptyPartitionFiles)
+    val maxSplitBytes = sparkSession.sessionState.conf.filesMaxPartitionBytes
+    val filePartitions = sparkAdapter.getFilePartitions(sparkSession, emptyPartitionFiles, maxSplitBytes)
 
     val requiredSchemaParquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
       sparkSession = sparkSession,
