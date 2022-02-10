@@ -630,4 +630,31 @@ class TestInsertTable extends TestHoodieSqlBase {
       }
     }
   }
+
+  test("Test insert for bucket index") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      spark.sql(
+        s"""
+          |create table $tableName (
+          |id int, comb int, col1 string
+          |) using hudi
+          |location '${tablePath}'
+          |options (
+          |primaryKey = 'id,col1',
+          |preCombineField = 'comb',
+          |hoodie.index.type = 'BUCKET',
+          |hoodie.bucket.index.num.buckets = '100',
+          |hoodie.storage.layout.type = 'BUCKET'
+          |)
+        """.stripMargin)
+
+      spark.sql(
+        s"""
+          |insert into $tableName values
+          |(1, 1, ':::')
+        """.stripMargin)
+    }
+  }
 }

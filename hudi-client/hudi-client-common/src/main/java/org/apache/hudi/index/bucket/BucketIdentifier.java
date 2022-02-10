@@ -43,7 +43,7 @@ public class BucketIdentifier {
     } else {
       Map<String, String> recordKeyPairs = Arrays.stream(hoodieKey.getRecordKey().split(","))
           .map(p -> p.split(":"))
-          .collect(Collectors.toMap(p -> p[0], p -> p[1]));
+          .collect(Collectors.toMap(p -> p[0], p -> p.length == 1 ? "" : p[1]));
       hashKeyFields = Arrays.stream(indexKeyFields.split(","))
           .map(f -> recordKeyPairs.get(f))
           .collect(Collectors.toList());
