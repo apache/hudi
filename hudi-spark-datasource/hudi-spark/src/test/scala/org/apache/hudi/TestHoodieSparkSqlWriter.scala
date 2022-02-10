@@ -47,15 +47,10 @@ import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{spy, times, verify}
 import org.scalatest.Assertions.assertThrows
 import org.scalatest.Matchers.{assertResult, be, convertToAnyShouldWrapper, intercept}
+
 import java.io.IOException
 import java.time.Instant
 import java.util.{Collections, Date, UUID}
-
-import org.apache.avro.Schema
-import org.apache.hadoop.conf.Configuration
-import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.avro.model.HoodieMetadataRecord
-
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters
 
@@ -655,59 +650,6 @@ class TestHoodieSparkSqlWriter {
     val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(hoodieFooTableName)
     val expectedSchema = AvroConversionUtils.convertStructTypeToAvroSchema(evolStructType, structName, nameSpace)
     assertEquals(expectedSchema, actualSchema)
-  }
-
-  @Test
-  def testTableSchemaResolverInMetadataTable(): Unit = {
-    val schema = DataSourceTestUtils.getStructTypeExampleSchema
-    //create a new table
-    val tableName = hoodieFooTableName
-    val fooTableModifier = Map("path" -> tempPath.toAbsolutePath.toString,
-      HoodieWriteConfig.TBL_NAME.key -> tableName,
-      "hoodie.avro.schema" -> schema.toString(),
-      "hoodie.insert.shuffle.parallelism" -> "1",
-      "hoodie.upsert.shuffle.parallelism" -> "1",
-      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.SimpleKeyGenerator",
-      "hoodie.metadata.compact.max.delta.commits" -> "2",
-      HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key -> "true"
-    )
-
-    // generate the inserts
-    val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
-    val records = DataSourceTestUtils.generateRandomRows(10)
-    val recordsSeq = convertRowListToSeq(records)
-    val df1 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
-    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, fooTableModifier, df1)
-
-    // do update
-    val metadataTablePath = tempPath.toAbsolutePath.toString + "/.hoodie/metadata"
-    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, df1)
-    val metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(metadataTablePath)
-      .setConf(spark.sessionState.newHadoopConf())
-      .build()
-
-    // Delete latest metadata table deltacommit
-    // Get schema from metadata table hfile format base file.
-    val latestInstant = metaClient.getActiveTimeline.getCommitsTimeline.getReverseOrderedInstants.findFirst()
-    val path = new Path(metadataTablePath + "/.hoodie", latestInstant.get().getFileName)
-    val fs = path.getFileSystem(new Configuration())
-    fs.delete(path, false)
-    metaClient.reloadActiveTimeline()
-
-    var ori: Exception = null
-    try {
-      val schemaFromData = new TableSchemaResolver(metaClient).getTableAvroSchemaFromDataFile
-      val structFromData = AvroConversionUtils.convertAvroSchemaToStructType(HoodieAvroUtils.removeMetadataFields(schemaFromData))
-      val schemeDesign = new Schema.Parser().parse(HoodieMetadataRecord.getClassSchema.toString())
-      val structDesign = AvroConversionUtils.convertAvroSchemaToStructType(schemeDesign)
-      assertEquals(structFromData, structDesign)
-    } catch {
-      case e: Exception => ori = e;
-    }
-    assert(ori == null)
   }
 
   /**
