@@ -31,7 +31,7 @@ import org.junit.jupiter.api.{Tag, Test}
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
 @Tag("functional")
-class TestMetadataTable extends SparkClientFunctionalTestHarness {
+class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarness {
 
   val hudi = "org.apache.hudi"
   var commonOpts = Map(
@@ -46,7 +46,7 @@ class TestMetadataTable extends SparkClientFunctionalTestHarness {
   )
 
   @Test
-  def test(): Unit = {
+  def testReadability(): Unit = {
     val dataGen = new HoodieTestDataGenerator()
 
     val opts: Map[String, String] = commonOpts ++ Map(
@@ -79,7 +79,17 @@ class TestMetadataTable extends SparkClientFunctionalTestHarness {
     // Smoke test
     metadataDF.show()
 
+    // Query w/ 0 requested columns should be working fine
     assertEquals(4, metadataDF.count())
+
+    val expectedKeys = Seq("2015/03/16", "2015/03/17", "2016/03/15", "__all_partitions__")
+    val keys = metadataDF.select("key")
+      .collect()
+      .map(_.getString(0))
+      .toSeq
+      .sorted
+
+    assertEquals(expectedKeys, keys)
   }
 
   private def parseRecords(records: Seq[String]) = {
