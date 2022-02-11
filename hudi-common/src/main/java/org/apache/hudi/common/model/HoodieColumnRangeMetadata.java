@@ -20,6 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.ValidationUtils;
 
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Objects;
@@ -28,7 +29,7 @@ import java.util.function.BiFunction;
 /**
  * Hoodie Range metadata.
  */
-public class HoodieColumnRangeMetadata<T> {
+public class HoodieColumnRangeMetadata<T> implements Serializable {
   private final String filePath;
   private final String columnName;
   private final T minValue;
