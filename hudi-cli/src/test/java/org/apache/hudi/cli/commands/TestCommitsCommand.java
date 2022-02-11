@@ -40,7 +40,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.hudi.table.HoodieTimelineArchiveLog;
+import org.apache.hudi.client.HoodieTimelineArchiver;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.BeforeEach;
@@ -232,8 +232,8 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     // archive
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
     HoodieSparkTable table = HoodieSparkTable.create(cfg, context(), metaClient);
-    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, table);
-    archiveLog.archiveIfRequired(context());
+    HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(cfg, table);
+    archiver.archiveIfRequired(context());
 
     CommandResult cr = shell().executeCommand(String.format("commits showarchived --startTs %s --endTs %s", "100", "104"));
     assertTrue(cr.isSuccess());
@@ -279,8 +279,8 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
       HoodieSparkTable table = HoodieSparkTable.create(cfg, context(), metaClient);
 
       // need to create multi archive files
-      HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, table);
-      archiveLog.archiveIfRequired(context());
+      HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(cfg, table);
+      archiver.archiveIfRequired(context());
     }
 
     CommandResult cr = shell().executeCommand(String.format("commits showarchived --startTs %s --endTs %s", "160", "174"));

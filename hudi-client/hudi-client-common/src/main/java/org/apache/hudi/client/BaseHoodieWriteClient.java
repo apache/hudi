@@ -18,6 +18,8 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.async.AsyncArchiveService;
+import org.apache.hudi.async.AsyncCleanerService;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -67,7 +69,6 @@ import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.HoodieTimelineArchiveLog;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.rollback.RollbackUtils;
 import org.apache.hudi.table.action.savepoint.SavepointHelpers;
@@ -115,6 +116,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   private transient WriteOperationType operationType;
   private transient HoodieWriteCommitCallback commitCallback;
   protected transient AsyncCleanerService asyncCleanerService;
+  protected transient AsyncArchiveService asyncArchiveService;
   protected final TransactionManager txnManager;
   protected Option<Pair<HoodieInstant, Map<String, String>>> lastCompletedTxnAndMetadata = Option.empty();
 
@@ -431,6 +433,11 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     } else {
       this.asyncCleanerService.start(null);
     }
+    if (null == this.asyncArchiveService) {
+      this.asyncArchiveService = AsyncArchiveService.startAsyncArchiveIfEnabled(this);
+    } else {
+      this.asyncArchiveService.start(null);
+    }
   }
 
   /**
@@ -456,9 +463,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
       autoCleanOnCommit();
-      if (config.isAutoArchive()) {
-        archive(table);
-      }
+      autoArchiveOnCommit(table);
     } finally {
       this.heartbeatClient.stop(instantTime);
     }
@@ -523,22 +528,34 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     });
   }
 
-  /**
-   * Handle auto clean during commit.
-   *
-   */
   protected void autoCleanOnCommit() {
-    if (config.isAutoClean()) {
-      // Call clean to cleanup if there is anything to cleanup after the commit,
-      if (config.isAsyncClean()) {
-        LOG.info("Cleaner has been spawned already. Waiting for it to finish");
-        AsyncCleanerService.waitForCompletion(asyncCleanerService);
-        LOG.info("Cleaner has finished");
-      } else {
-        // Do not reuse instantTime for clean as metadata table requires all changes to have unique instant timestamps.
-        LOG.info("Auto cleaning is enabled. Running cleaner now");
-        clean(true);
-      }
+    if (!config.isAutoClean()) {
+      return;
+    }
+
+    if (config.isAsyncClean()) {
+      LOG.info("Async cleaner has been spawned. Waiting for it to finish");
+      AsyncCleanerService.waitForCompletion(asyncCleanerService);
+      LOG.info("Async cleaner has finished");
+    } else {
+      LOG.info("Start to clean synchronously.");
+      // Do not reuse instantTime for clean as metadata table requires all changes to have unique instant timestamps.
+      clean(true);
+    }
+  }
+
+  protected void autoArchiveOnCommit(HoodieTable<T, I, K, O> table) {
+    if (!config.isAutoArchive()) {
+      return;
+    }
+
+    if (config.isAsyncArchive()) {
+      LOG.info("Async archiver has been spawned. Waiting for it to finish");
+      AsyncArchiveService.waitForCompletion(asyncArchiveService);
+      LOG.info("Async archiver has finished");
+    } else {
+      LOG.info("Start to archive synchronously.");
+      archive(table);
     }
   }
 
@@ -784,8 +801,8 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   protected void archive(HoodieTable<T, I, K, O> table) {
     try {
       // We cannot have unbounded commit files. Archive commits if we have to archive
-      HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, table);
-      archiveLog.archiveIfRequired(context);
+      HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(config, table);
+      archiver.archiveIfRequired(context);
     } catch (IOException ioe) {
       throw new HoodieIOException("Failed to archive", ioe);
     }
@@ -1249,7 +1266,8 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
 
   @Override
   public void close() {
-    // release AsyncCleanerService
+    AsyncArchiveService.forceShutdown(asyncArchiveService);
+    asyncArchiveService = null;
     AsyncCleanerService.forceShutdown(asyncCleanerService);
     asyncCleanerService = null;
     // Stop timeline-server if running

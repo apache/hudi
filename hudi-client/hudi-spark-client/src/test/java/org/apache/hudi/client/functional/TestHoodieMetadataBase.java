@@ -52,7 +52,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.HoodieTimelineArchiveLog;
+import org.apache.hudi.client.HoodieTimelineArchiver;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -286,8 +286,8 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
 
   protected void archiveDataTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) throws IOException {
     HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
-    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(writeConfig, table);
-    archiveLog.archiveIfRequired(context);
+    HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(writeConfig, table);
+    archiver.archiveIfRequired(context);
   }
 
   protected void validateMetadata(HoodieTestTable testTable) throws IOException {

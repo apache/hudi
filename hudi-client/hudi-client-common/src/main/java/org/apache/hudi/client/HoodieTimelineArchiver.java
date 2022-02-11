@@ -7,16 +7,17 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
-package org.apache.hudi.table;
+package org.apache.hudi.client;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -52,6 +53,7 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
@@ -79,9 +81,9 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_O
 /**
  * Archiver to bound the growth of files under .hoodie meta path.
  */
-public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
+public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieTimelineArchiveLog.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieTimelineArchiver.class);
 
   private final Path archiveFilePath;
   private final HoodieWriteConfig config;
@@ -91,7 +93,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
   private final HoodieTable<T, I, K, O> table;
   private final HoodieTableMetaClient metaClient;
 
-  public HoodieTimelineArchiveLog(HoodieWriteConfig config, HoodieTable<T, I, K, O> table) {
+  public HoodieTimelineArchiver(HoodieWriteConfig config, HoodieTable<T, I, K, O> table) {
     this.config = config;
     this.table = table;
     this.metaClient = table.getMetaClient();

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.async.AsyncCleanerService;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -332,10 +333,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
       // Delete the marker directory for the instant.
       WriteMarkersFactory.get(config.getMarkersType(), createTable(config, hadoopConf), instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
-      if (config.isAutoArchive()) {
-        // We cannot have unbounded commit files. Archive commits if we have to archive
-        archive(table);
-      }
+      autoArchiveOnCommit(table);
     } finally {
       this.heartbeatClient.stop(instantTime);
     }
