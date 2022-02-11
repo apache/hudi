@@ -216,7 +216,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
     return super.makeSplit(file, start, length, hosts, inMemoryHosts);
   }
 
-  private List<FileStatus> collectAllIncrementalFiles(List<HoodieFileGroup> fileGroups,
+  private static List<FileStatus> collectAllIncrementalFiles(List<HoodieFileGroup> fileGroups,
                                                       String maxCommitTime,
                                                       String basePath,
                                                       Map<String, FileStatus> candidateFileStatus,
@@ -288,7 +288,6 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
     return fileSplits.stream().filter(HoodieRealtimeInputFormatUtils::doesBelongToIncrementalQuery)
         .collect(Collectors.toList());
   }
-
 
   private static HoodieRealtimeFileSplit createRealtimeFileSplit(HoodieRealtimePath path, long start, long length, String[] hosts) {
     try {

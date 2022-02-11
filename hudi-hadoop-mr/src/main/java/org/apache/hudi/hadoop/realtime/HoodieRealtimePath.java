@@ -88,7 +88,6 @@ public class HoodieRealtimePath extends Path {
     return belongsToIncrementalQuery;
   }
 
-
   public boolean isSplitable() {
     return !toString().isEmpty();
   }
