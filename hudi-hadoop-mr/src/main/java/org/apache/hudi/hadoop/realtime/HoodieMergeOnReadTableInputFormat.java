@@ -202,7 +202,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
     fileGroups.stream().forEach(f -> {
       try {
         List<FileSlice> baseFiles = f.getAllFileSlices().filter(slice -> slice.getBaseFile().isPresent()).collect(Collectors.toList());
-        Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt = HoodieVirtualKeyInfo.compose(tableMetaClient);
+        Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt = HoodieRealtimeInputFormatUtils.getHoodieVirtualKeyInfo(tableMetaClient);
         if (!baseFiles.isEmpty()) {
           FileStatus baseFileStatus = HoodieInputFormatUtils.getFileStatus(baseFiles.get(0).getBaseFile().get());
           String baseFilePath = baseFileStatus.getPath().toUri().toString();

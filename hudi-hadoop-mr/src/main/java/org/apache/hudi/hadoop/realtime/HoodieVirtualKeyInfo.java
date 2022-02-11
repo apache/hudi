@@ -18,10 +18,6 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Option;
-
 import java.io.Serializable;
 
 /**
@@ -39,18 +35,6 @@ public class HoodieVirtualKeyInfo implements Serializable {
     this.partitionPathField = partitionPathField;
     this.recordKeyFieldIndex = recordKeyFieldIndex;
     this.partitionPathFieldIndex = partitionPathFieldIndex;
-  }
-
-  public static Option<HoodieVirtualKeyInfo> compose(HoodieTableMetaClient metaClient) {
-    HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    if (tableConfig.populateMetaFields()) {
-      return Option.empty();
-    }
-
-    return Option.of(
-        new HoodieVirtualKeyInfo(tableConfig.getRecordKeyFieldProp(), tableConfig.getPartitionFieldProp(),
-        )
-    );
   }
 
   public String getRecordKeyField() {

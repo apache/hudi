@@ -47,6 +47,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
@@ -316,7 +317,7 @@ public class HoodieCopyOnWriteTableInputFormat extends FileInputFormat<NullWrita
                                                                       HoodieTableMetaClient tableMetaClient) {
     FileStatus baseFileStatus = getFileStatusUnchecked(baseFile);
     List<HoodieLogFile> sortedLogFiles = logFiles.sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
-    Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt = HoodieVirtualKeyInfo.compose(tableMetaClient);
+    Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt = HoodieRealtimeInputFormatUtils.getHoodieVirtualKeyInfo(tableMetaClient);
 
     try {
       RealtimeFileStatus rtFileStatus = new RealtimeFileStatus(baseFileStatus, tableMetaClient.getBasePath(), sortedLogFiles,
