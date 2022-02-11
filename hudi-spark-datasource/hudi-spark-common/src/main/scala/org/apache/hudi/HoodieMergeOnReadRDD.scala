@@ -40,7 +40,6 @@ import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskContext}
 
 import java.io.Closeable
-import java.util.Properties
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.util.Try
@@ -57,19 +56,12 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
   private val confBroadcast = sc.broadcast(new SerializableWritable(config))
   private val preCombineField = tableState.preCombineField
   private val recordKeyField = tableState.recordKeyField
-  private val payloadProps = if (preCombineField.isDefined) {
-    HoodiePayloadConfig.newBuilder
-      .withPayloadOrderingField(preCombineField.get)
+  private val payloadProps = HoodiePayloadConfig.newBuilder
+      .withPayloadOrderingField(preCombineField)
       .build.getProps
-  } else {
-    new Properties()
-  }
 
-  private val requiredSchema = tableState.requiredStructSchema
-
-  private val requiredFieldPosition = HoodieSparkUtils.collectFieldIndexes(requiredSchema,
-    tableState.tableStructSchema
-  )
+  private val requiredSchema = tableState.schemas.requiredSchema
+  private val requiredFieldPosition = HoodieSparkUtils.collectFieldIndexes(requiredSchema, tableState.schemas.tableSchema)
 
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
     val mergeOnReadPartition = split.asInstanceOf[HoodieMergeOnReadPartition]

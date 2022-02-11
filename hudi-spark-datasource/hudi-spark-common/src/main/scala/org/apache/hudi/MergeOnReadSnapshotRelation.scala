@@ -46,7 +46,7 @@ case class HoodieMergeOnReadFileSplit(dataFile: Option[PartitionedFile],
 
 case class HoodieMergeOnReadTableState(schemas: HoodieTableSchemas,
                                        hoodieRealtimeFileSplits: List[HoodieMergeOnReadFileSplit],
-                                       preCombineField: Option[String],
+                                       preCombineField: String,
                                        recordKeyField: String)
 
 class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
