@@ -56,6 +56,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.TypeUtils.unsafeCast;
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_LIST;
 
 /**
@@ -148,32 +150,42 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
       if (type == METADATA_TYPE_BLOOM_FILTER) {
         GenericRecord bloomFilterRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_BLOOM_FILTER);
+        // NOTE: Only legitimate reason for {@code BloomFilterMetadata} to not be present is when
+        //       it's not been read from the storage (ie it's not been a part of projected schema).
+        //       Otherwise, it has to be present or the record would be considered invalid
         if (bloomFilterRecord == null) {
-          throw new HoodieMetadataException("Valid " + SCHEMA_FIELD_ID_BLOOM_FILTER + " record expected for type: " + METADATA_TYPE_BLOOM_FILTER);
+          checkArgument(record.getSchema().getField(SCHEMA_FIELD_ID_BLOOM_FILTER) == null,
+              String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_BLOOM_FILTER, METADATA_TYPE_COLUMN_STATS));
+        } else {
+          bloomFilterMetadata = new HoodieMetadataBloomFilter(
+              (String) bloomFilterRecord.get(BLOOM_FILTER_FIELD_TYPE),
+              (String) bloomFilterRecord.get(BLOOM_FILTER_FIELD_TIMESTAMP),
+              (ByteBuffer) bloomFilterRecord.get(BLOOM_FILTER_FIELD_BLOOM_FILTER),
+              (Boolean) bloomFilterRecord.get(BLOOM_FILTER_FIELD_IS_DELETED)
+          );
         }
-        bloomFilterMetadata = new HoodieMetadataBloomFilter(
-            (String) bloomFilterRecord.get(BLOOM_FILTER_FIELD_TYPE),
-            (String) bloomFilterRecord.get(BLOOM_FILTER_FIELD_TIMESTAMP),
-            (ByteBuffer) bloomFilterRecord.get(BLOOM_FILTER_FIELD_BLOOM_FILTER),
-            (Boolean) bloomFilterRecord.get(BLOOM_FILTER_FIELD_IS_DELETED)
-        );
       }
 
       if (type == METADATA_TYPE_COLUMN_STATS) {
         GenericRecord columnStatsRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_COLUMN_STATS);
+        // NOTE: Only legitimate reason for {@code ColumnStatsMetadata} to not be present is when
+        //       it's not been read from the storage (ie it's not been a part of projected schema).
+        //       Otherwise, it has to be present or the record would be considered invalid
         if (columnStatsRecord == null) {
-          throw new HoodieMetadataException("Valid " + SCHEMA_FIELD_ID_COLUMN_STATS + " record expected for type: " + METADATA_TYPE_COLUMN_STATS);
+          checkArgument(record.getSchema().getField(SCHEMA_FIELD_ID_COLUMN_STATS) == null,
+              String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_COLUMN_STATS, METADATA_TYPE_COLUMN_STATS));
+        } else {
+          columnStatMetadata = HoodieMetadataColumnStats.newBuilder()
+              .setFileName((String) columnStatsRecord.get(COLUMN_STATS_FIELD_RESOURCE_NAME))
+              .setMinValue((String) columnStatsRecord.get(COLUMN_STATS_FIELD_MIN_VALUE))
+              .setMaxValue((String) columnStatsRecord.get(COLUMN_STATS_FIELD_MAX_VALUE))
+              .setValueCount((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_VALUE_COUNT))
+              .setNullCount((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_NULL_COUNT))
+              .setTotalSize((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_TOTAL_SIZE))
+              .setTotalUncompressedSize((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_TOTAL_UNCOMPRESSED_SIZE))
+              .setIsDeleted((Boolean) columnStatsRecord.get(COLUMN_STATS_FIELD_IS_DELETED))
+          .build();
         }
-        columnStatMetadata = HoodieMetadataColumnStats.newBuilder()
-            .setFileName((String) columnStatsRecord.get(COLUMN_STATS_FIELD_RESOURCE_NAME))
-            .setMinValue((String) columnStatsRecord.get(COLUMN_STATS_FIELD_MIN_VALUE))
-            .setMaxValue((String) columnStatsRecord.get(COLUMN_STATS_FIELD_MAX_VALUE))
-            .setValueCount((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_VALUE_COUNT))
-            .setNullCount((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_NULL_COUNT))
-            .setTotalSize((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_TOTAL_SIZE))
-            .setTotalUncompressedSize((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_TOTAL_UNCOMPRESSED_SIZE))
-            .setIsDeleted((Boolean) columnStatsRecord.get(COLUMN_STATS_FIELD_IS_DELETED))
-            .build();
       }
     }
   }
@@ -182,12 +194,12 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     this(key, type, filesystemMetadata, null, null);
   }
 
-  private HoodieMetadataPayload(String key, int type, HoodieMetadataBloomFilter metadataBloomFilter) {
-    this(key, type, null, metadataBloomFilter, null);
+  private HoodieMetadataPayload(String key, HoodieMetadataBloomFilter metadataBloomFilter) {
+    this(key, METADATA_TYPE_BLOOM_FILTER, null, metadataBloomFilter, null);
   }
 
-  private HoodieMetadataPayload(String key, int type, HoodieMetadataColumnStats columnStats) {
-    this(key, type, null, null, columnStats);
+  private HoodieMetadataPayload(String key, HoodieMetadataColumnStats columnStats) {
+    this(key, METADATA_TYPE_COLUMN_STATS, null, null, columnStats);
   }
 
   protected HoodieMetadataPayload(String key, int type,
@@ -264,7 +276,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         new HoodieMetadataBloomFilter(BloomFilterTypeCode.DYNAMIC_V0.name(),
             timestamp, bloomFilter, isDeleted);
     HoodieMetadataPayload metadataPayload = new HoodieMetadataPayload(key.getRecordKey(),
-        HoodieMetadataPayload.METADATA_TYPE_BLOOM_FILTER, metadataBloomFilter);
+        metadataBloomFilter);
     return new HoodieAvroRecord<>(key, metadataPayload);
   }
 
@@ -280,9 +292,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         return new HoodieMetadataPayload(key, type, combinedFileInfo);
       case METADATA_TYPE_BLOOM_FILTER:
         HoodieMetadataBloomFilter combineBloomFilterMetadata = combineBloomFilterMetadata(previousRecord);
-        return new HoodieMetadataPayload(key, type, combineBloomFilterMetadata);
+        return new HoodieMetadataPayload(key, combineBloomFilterMetadata);
       case METADATA_TYPE_COLUMN_STATS:
-        return new HoodieMetadataPayload(key, type, combineColumnStatsMetadata(previousRecord));
+        return new HoodieMetadataPayload(key, combineColumnStatsMetadata(previousRecord));
       default:
         throw new HoodieMetadataException("Unknown type of HoodieMetadataPayload: " + type);
     }
@@ -453,7 +465,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return columnRangeMetadataList.stream().map(columnRangeMetadata -> {
       HoodieKey key = new HoodieKey(getColumnStatsIndexKey(partitionName, columnRangeMetadata),
           MetadataPartitionType.COLUMN_STATS.getPartitionPath());
-      HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_COLUMN_STATS,
+      HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(),
           HoodieMetadataColumnStats.newBuilder()
               .setFileName(new Path(columnRangeMetadata.getFilePath()).getName())
               .setMinValue(columnRangeMetadata.getMinValue() == null ? null :
@@ -480,7 +492,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     sb.append("creations=").append(Arrays.toString(getFilenames().toArray())).append(", ");
     sb.append("deletions=").append(Arrays.toString(getDeletions().toArray())).append(", ");
     if (type == METADATA_TYPE_BLOOM_FILTER) {
-      ValidationUtils.checkState(getBloomFilterMetadata().isPresent());
+      checkState(getBloomFilterMetadata().isPresent());
       sb.append("BloomFilter: {");
       sb.append("bloom size: " + getBloomFilterMetadata().get().getBloomFilter().array().length).append(", ");
       sb.append("timestamp: " + getBloomFilterMetadata().get().getTimestamp()).append(", ");
@@ -488,7 +500,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       sb.append("}");
     }
     if (type == METADATA_TYPE_COLUMN_STATS) {
-      ValidationUtils.checkState(getColumnStatMetadata().isPresent());
+      checkState(getColumnStatMetadata().isPresent());
       sb.append("ColStats: {");
       sb.append(getColumnStatMetadata().get());
       sb.append("}");

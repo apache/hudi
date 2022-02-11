@@ -75,10 +75,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
 
   private lazy val mandatoryColumns = {
     if (isMetadataTable(metaClient)) {
-      Seq(HoodieMetadataPayload.KEY_FIELD_NAME,
-        HoodieMetadataPayload.SCHEMA_FIELD_NAME_TYPE,
-        HoodieMetadataPayload.SCHEMA_FIELD_ID_BLOOM_FILTER,
-        HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS)
+      Seq(HoodieMetadataPayload.KEY_FIELD_NAME, HoodieMetadataPayload.SCHEMA_FIELD_NAME_TYPE)
     } else {
       Seq(recordKeyField) ++ preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
     }
