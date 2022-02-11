@@ -36,7 +36,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -44,10 +43,8 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
-import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
@@ -59,7 +56,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -202,6 +198,16 @@ public class HoodieCopyOnWriteTableInputFormat extends FileInputFormat<NullWrita
     return HoodieInputFormatUtils.filterIncrementalFileStatus(jobContext, tableMetaClient, timeline.get(), fileStatuses, commitsToCheck.get());
   }
 
+  protected FileStatus createFileStatusUnchecked(FileSlice fileSlice, HiveHoodieTableFileIndex fileIndex, HoodieTableMetaClient tableMetaClient) {
+    Option<HoodieBaseFile> baseFileOpt = fileSlice.getBaseFile();
+
+    if (baseFileOpt.isPresent()) {
+      return getFileStatusUnchecked(baseFileOpt.get());
+    } else {
+      throw new IllegalStateException("Invalid state: base-file has to be present");
+    }
+  }
+
   private BootstrapBaseFileSplit makeExternalFileSplit(PathWithBootstrapFileStatus file, FileSplit split) {
     try {
       LOG.info("Making external data split for " + file);
@@ -259,30 +265,7 @@ public class HoodieCopyOnWriteTableInputFormat extends FileInputFormat<NullWrita
           partitionedFileSlices.values()
               .stream()
               .flatMap(Collection::stream)
-              .map(fileSlice -> {
-                Option<HoodieBaseFile> baseFileOpt = fileSlice.getBaseFile();
-                Option<HoodieLogFile> latestLogFileOpt = fileSlice.getLatestLogFile();
-                Stream<HoodieLogFile> logFiles = fileSlice.getLogFiles();
-
-                Option<HoodieInstant> latestCompletedInstantOpt = fileIndex.getLatestCompletedInstant();
-
-                // Check if we're reading a MOR table
-                if (includeLogFilesForSnapshotView()) {
-                  if (baseFileOpt.isPresent()) {
-                    return createRealtimeFileStatusUnchecked(baseFileOpt.get(), logFiles, latestCompletedInstantOpt, tableMetaClient);
-                  } else if (latestLogFileOpt.isPresent()) {
-                    return createRealtimeFileStatusUnchecked(latestLogFileOpt.get(), logFiles, latestCompletedInstantOpt, tableMetaClient);
-                  } else {
-                    throw new IllegalStateException("Invalid state: either base-file or log-file has to be present");
-                  }
-                } else {
-                  if (baseFileOpt.isPresent()) {
-                    return getFileStatusUnchecked(baseFileOpt.get());
-                  } else {
-                    throw new IllegalStateException("Invalid state: base-file has to be present");
-                  }
-                }
-              })
+              .map(fileSlice -> createFileStatusUnchecked(fileSlice, fileIndex, tableMetaClient))
               .collect(Collectors.toList())
       );
     }
@@ -299,69 +282,11 @@ public class HoodieCopyOnWriteTableInputFormat extends FileInputFormat<NullWrita
   }
 
   @Nonnull
-  private static FileStatus getFileStatusUnchecked(HoodieBaseFile baseFile) {
+  protected static FileStatus getFileStatusUnchecked(HoodieBaseFile baseFile) {
     try {
       return HoodieInputFormatUtils.getFileStatus(baseFile);
     } catch (IOException ioe) {
       throw new HoodieIOException("Failed to get file-status", ioe);
-    }
-  }
-
-  /**
-   * Creates {@link RealtimeFileStatus} for the file-slice where base file is present
-   */
-  @Nonnull
-  private static RealtimeFileStatus createRealtimeFileStatusUnchecked(HoodieBaseFile baseFile,
-                                                                      Stream<HoodieLogFile> logFiles,
-                                                                      Option<HoodieInstant> latestCompletedInstantOpt,
-                                                                      HoodieTableMetaClient tableMetaClient) {
-    FileStatus baseFileStatus = getFileStatusUnchecked(baseFile);
-    List<HoodieLogFile> sortedLogFiles = logFiles.sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
-    Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt = HoodieRealtimeInputFormatUtils.getHoodieVirtualKeyInfo(tableMetaClient);
-
-    try {
-      RealtimeFileStatus rtFileStatus = new RealtimeFileStatus(baseFileStatus, tableMetaClient.getBasePath(), sortedLogFiles,
-          false, virtualKeyInfoOpt);
-
-      if (latestCompletedInstantOpt.isPresent()) {
-        HoodieInstant latestCompletedInstant = latestCompletedInstantOpt.get();
-        checkState(latestCompletedInstant.isCompleted());
-
-        rtFileStatus.setMaxCommitTime(latestCompletedInstant.getTimestamp());
-      }
-
-      if (baseFileStatus instanceof LocatedFileStatusWithBootstrapBaseFile || baseFileStatus instanceof FileStatusWithBootstrapBaseFile) {
-        rtFileStatus.setBootStrapFileStatus(baseFileStatus);
-      }
-
-      return rtFileStatus;
-    } catch (IOException e) {
-      throw new HoodieIOException(String.format("Failed to init %s", RealtimeFileStatus.class.getSimpleName()), e);
-    }
-  }
-
-  /**
-   * Creates {@link RealtimeFileStatus} for the file-slice where base file is NOT present
-   */
-  @Nonnull
-  private static RealtimeFileStatus createRealtimeFileStatusUnchecked(HoodieLogFile latestLogFile,
-                                                                      Stream<HoodieLogFile> logFiles,
-                                                                      Option<HoodieInstant> latestCompletedInstantOpt,
-                                                                      HoodieTableMetaClient tableMetaClient) {
-    List<HoodieLogFile> sortedLogFiles = logFiles.sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
-    try {
-      RealtimeFileStatus rtFileStatus = new RealtimeFileStatus(latestLogFile.getFileStatus(), tableMetaClient.getBasePath(), sortedLogFiles);
-
-      if (latestCompletedInstantOpt.isPresent()) {
-        HoodieInstant latestCompletedInstant = latestCompletedInstantOpt.get();
-        checkState(latestCompletedInstant.isCompleted());
-
-        rtFileStatus.setMaxCommitTime(latestCompletedInstant.getTimestamp());
-      }
-
-      return rtFileStatus;
-    } catch (IOException e) {
-      throw new HoodieIOException(String.format("Failed to init %s", RealtimeFileStatus.class.getSimpleName()), e);
     }
   }
 }
