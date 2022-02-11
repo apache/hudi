@@ -65,8 +65,6 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -133,7 +131,6 @@ public class HoodieTestTable {
   public static final String PHONY_TABLE_SCHEMA =
       "{\"namespace\": \"org.apache.hudi.avro.model\", \"type\": \"record\", \"name\": \"PhonyRecord\", \"fields\": []}";
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieTestTable.class);
   private static final Random RANDOM = new Random();
 
   protected static HoodieTestTableState testTableState;
@@ -144,7 +141,7 @@ public class HoodieTestTable {
   protected HoodieTableMetaClient metaClient;
   protected String currentInstantTime;
 
-  protected HoodieTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient) {
+  protected HoodieTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClieInstantient) {
     ValidationUtils.checkArgument(Objects.equals(basePath, metaClient.getBasePath()));
     ValidationUtils.checkArgument(Objects.equals(fs, metaClient.getRawFs()));
     this.basePath = basePath;

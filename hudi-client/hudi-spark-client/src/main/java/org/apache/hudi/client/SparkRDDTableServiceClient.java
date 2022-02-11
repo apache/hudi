@@ -20,6 +20,7 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -257,6 +258,11 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
       this.txnManager.beginTransaction(Option.of(clusteringInstant), Option.empty());
 
       finalizeWrite(table, clusteringCommitTime, writeStats);
+      // Do conflict resolution checks for clustering if SparkAllowUpdateStrategy is used.
+      // By using this UpdateStrategy implementation, Ingestion writers are given preference over clustering re-writers.
+      if (this.config.getClusteringUpdatesStrategyClass().equals(SparkAllowUpdateStrategy.class.getName())) {
+        preCommit(metadata);
+      }
       // Update table's metadata (table)
       updateTableMetadata(table, metadata, clusteringInstant);
 

@@ -19,7 +19,6 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.util.StringUtils;
-
 import org.apache.hadoop.fs.FileStatus;
 
 import java.io.Serializable;
@@ -108,7 +107,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   private final State state;
   private final String action;
   private final String timestamp;
-  private final String stateTransitionTime;
+  private String stateTransitionTime;
 
   /**
    * Load the instant from the meta FileStatus.
@@ -267,6 +266,30 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   public String getStateTransitionTime() {
     return stateTransitionTime;
   }
+
+  /*
+  public String getStateTransitionTime(HoodieTableMetaClient metaClient) {
+    // if state transition timestamp is already cached, use it.
+    if (this.stateTransitionTime == null) {
+      setStateTransitionTimestamp(metaClient);
+    }
+    return this.stateTransitionTime;
+  }
+
+  public void setStateTransitionTimestamp(HoodieTableMetaClient metaClient) {
+    // if file exists, get modification timestamp of the file and update the cache, otherwise use the instant's timestamp.
+    try {
+      Path filePath = new Path(metaClient.getMetaPath(), getFileName());
+      FileSystem fs = metaClient.getFs();
+      if (fs.exists(filePath)) {
+        stateTransitionTime =
+            HoodieInstantTimeGenerator.formatDate(new Date(fs.getFileStatus(filePath).getModificationTime()));
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException(String.format("Unable to read file associated with the instant %s", timestamp));
+    }
+  }
+   */
 
   @Override
   public int hashCode() {

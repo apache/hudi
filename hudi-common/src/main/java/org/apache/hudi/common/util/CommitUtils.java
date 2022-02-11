@@ -145,6 +145,15 @@ public class CommitUtils {
     return partitionTofileId;
   }
 
+  public static Set<Pair<String, String>> flattenPartitionToReplaceFileIds(Map<String, List<String>> partitionToReplaceFileIds) {
+    Set<Pair<String, String>> partitionTofileId = new HashSet<>();
+    // list all partitions paths
+    for (Map.Entry<String, List<String>> entry : partitionToReplaceFileIds.entrySet()) {
+      entry.getValue().forEach(replaceFileId -> partitionTofileId.add(Pair.of(entry.getKey(), replaceFileId)));
+    }
+    return partitionTofileId;
+  }
+
   /**
    * Process previous commits metadata in the timeline to determine the checkpoint given a checkpoint key.
    * NOTE: This is very similar in intent to DeltaSync#getLatestCommitMetadataWithValidCheckpointInfo except that
