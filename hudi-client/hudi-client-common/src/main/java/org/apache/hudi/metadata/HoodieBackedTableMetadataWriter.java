@@ -349,15 +349,13 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   /**
    * Bootstrap the metadata table if needed.
    *
-   * @param engineContext            - Engine context
    * @param dataMetaClient           - Meta client for the data table
    * @param actionMetadata           - Optional action metadata
    * @param <T>                      - Action metadata types extending Avro generated SpecificRecordBase
    * @param inflightInstantTimestamp - Timestamp of an instant in progress on the dataset. This instant is ignored
    * @throws IOException
    */
-  protected <T extends SpecificRecordBase> void initializeIfNeeded(HoodieEngineContext engineContext,
-                                                                   HoodieTableMetaClient dataMetaClient,
+  protected <T extends SpecificRecordBase> void initializeIfNeeded(HoodieTableMetaClient dataMetaClient,
                                                                    Option<T> actionMetadata,
                                                                    Option<String> inflightInstantTimestamp) throws IOException {
     HoodieTimer timer = new HoodieTimer().startTimer();
@@ -386,7 +384,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     if (!exists) {
       // Initialize for the first time by listing partitions and files directly from the file system
-      if (initializeFromFilesystem(engineContext, dataMetaClient, inflightInstantTimestamp)) {
+      if (initializeFromFilesystem(dataMetaClient, inflightInstantTimestamp)) {
         metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.INITIALIZE_STR, timer.endTimer()));
       }
     }
@@ -451,9 +449,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       case HoodieTimeline.ROLLBACK_ACTION:
         List<HoodieInstantInfo> rollbackedInstants =
             ((HoodieRollbackMetadata) actionMetadata.get()).getInstantsRollback();
-        affectedInstantTimestamps = rollbackedInstants.stream().map(instant -> {
-          return instant.getCommitTime().toString();
-        }).collect(Collectors.toList());
+        affectedInstantTimestamps = rollbackedInstants.stream().map(HoodieInstantInfo::getCommitTime).collect(Collectors.toList());
 
         if (affectedInstantTimestamps.contains(latestMetadataInstantTimestamp)) {
           return true;
@@ -462,9 +458,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       case HoodieTimeline.RESTORE_ACTION:
         List<HoodieInstantInfo> restoredInstants =
             ((HoodieRestoreMetadata) actionMetadata.get()).getRestoreInstantInfo();
-        affectedInstantTimestamps = restoredInstants.stream().map(instant -> {
-          return instant.getCommitTime().toString();
-        }).collect(Collectors.toList());
+        affectedInstantTimestamps = restoredInstants.stream().map(HoodieInstantInfo::getCommitTime).collect(Collectors.toList());
 
         if (affectedInstantTimestamps.contains(latestMetadataInstantTimestamp)) {
           return true;
@@ -483,7 +477,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * @param dataMetaClient           - {@code HoodieTableMetaClient} for the dataset.
    * @param inflightInstantTimestamp - Current action instant responsible for this initialization
    */
-  private boolean initializeFromFilesystem(HoodieEngineContext engineContext, HoodieTableMetaClient dataMetaClient,
+  private boolean initializeFromFilesystem(HoodieTableMetaClient dataMetaClient,
                                            Option<String> inflightInstantTimestamp) throws IOException {
     ValidationUtils.checkState(enabled, "Metadata table cannot be initialized as it is not enabled");
 
@@ -856,7 +850,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       partitions.add(partitionName);
       totalFiles.addAndGet(p.getTotalFiles());
       return Pair.of(partitionName, p.getFileNameToSizeMap());
-    }).collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue()));
+    }).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
     final Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
 
     // Record which saves the list of all partitions
@@ -916,7 +910,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // Relative path of the directory (relative to the base directory)
     private final String relativePath;
     // Map of filenames within this partition to their respective sizes
-    private HashMap<String, Long> filenameToSizeMap;
+    private final HashMap<String, Long> filenameToSizeMap;
     // List of directories within this partition
     private final List<Path> subDirectories = new ArrayList<>();
     // Is this a hoodie partition

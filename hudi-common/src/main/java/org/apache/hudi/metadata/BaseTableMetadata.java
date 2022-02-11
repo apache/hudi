@@ -147,9 +147,8 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
       throws IOException {
     if (isMetadataTableEnabled) {
       try {
-        List<Path> partitionPaths = partitions.stream().map(entry -> new Path(entry)).collect(Collectors.toList());
-        Map<String, FileStatus[]> partitionsFilesMap = fetchAllFilesInPartitionPaths(partitionPaths);
-        return partitionsFilesMap;
+        List<Path> partitionPaths = partitions.stream().map(Path::new).collect(Collectors.toList());
+        return fetchAllFilesInPartitionPaths(partitionPaths);
       } catch (Exception e) {
         throw new HoodieMetadataException("Failed to retrieve files in partition from metadata", e);
       }
@@ -277,7 +276,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   /**
    * Returns a list of all partitions.
    */
-  protected List<String> fetchAllPartitionPaths() throws IOException {
+  protected List<String> fetchAllPartitionPaths() {
     HoodieTimer timer = new HoodieTimer().startTimer();
     Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getRecordByKey(RECORDKEY_PARTITION_LIST,
         MetadataPartitionType.FILES.getPartitionPath());

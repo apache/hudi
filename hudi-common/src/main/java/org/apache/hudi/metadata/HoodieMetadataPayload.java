@@ -131,10 +131,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         }
         return new HoodieMetadataColumnStats(
             newColumnStats.getFileName(),
-            Arrays.asList(oldColumnStats.getMinValue(), newColumnStats.getMinValue())
-                .stream().filter(Objects::nonNull).min(Comparator.naturalOrder()).orElse(null),
-            Arrays.asList(oldColumnStats.getMinValue(), newColumnStats.getMinValue())
-                .stream().filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null),
+            Stream.of(oldColumnStats.getMinValue(), newColumnStats.getMinValue()).filter(Objects::nonNull).min(Comparator.naturalOrder()).orElse(null),
+            Stream.of(oldColumnStats.getMinValue(), newColumnStats.getMinValue()).filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null),
             oldColumnStats.getNullCount() + newColumnStats.getNullCount(),
             oldColumnStats.getValueCount() + newColumnStats.getValueCount(),
             oldColumnStats.getTotalSize() + newColumnStats.getTotalSize(),
@@ -157,7 +155,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         filesystemMetadata = (Map<String, HoodieMetadataFileInfo>) record.get().get("filesystemMetadata");
         filesystemMetadata.keySet().forEach(k -> {
           GenericRecord v = filesystemMetadata.get(k);
-          filesystemMetadata.put(k.toString(), new HoodieMetadataFileInfo((Long) v.get("size"), (Boolean) v.get("isDeleted")));
+          filesystemMetadata.put(k, new HoodieMetadataFileInfo((Long) v.get("size"), (Boolean) v.get("isDeleted")));
         });
       }
 
@@ -347,7 +345,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * Returns the list of filenames added as part of this record.
    */
   public List<String> getFilenames() {
-    return filterFileInfoEntries(false).map(e -> e.getKey()).sorted().collect(Collectors.toList());
+    return filterFileInfoEntries(false).map(Map.Entry::getKey).sorted().collect(Collectors.toList());
   }
 
   /**
@@ -416,9 +414,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
             combinedFileInfo.remove(filename);
           } else {
             // file appends.
-            combinedFileInfo.merge(filename, fileInfo, (oldFileInfo, newFileInfo) -> {
-              return new HoodieMetadataFileInfo(oldFileInfo.getSize() + newFileInfo.getSize(), false);
-            });
+            combinedFileInfo.merge(filename, fileInfo, (oldFileInfo, newFileInfo) -> new HoodieMetadataFileInfo(oldFileInfo.getSize() + newFileInfo.getSize(), false));
           }
         }
       });
@@ -499,9 +495,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     if (type == METADATA_TYPE_BLOOM_FILTER) {
       ValidationUtils.checkState(getBloomFilterMetadata().isPresent());
       sb.append("BloomFilter: {");
-      sb.append("bloom size: " + getBloomFilterMetadata().get().getBloomFilter().array().length).append(", ");
-      sb.append("timestamp: " + getBloomFilterMetadata().get().getTimestamp()).append(", ");
-      sb.append("deleted: " + getBloomFilterMetadata().get().getIsDeleted());
+      sb.append("bloom size: ").append(getBloomFilterMetadata().get().getBloomFilter().array().length).append(", ");
+      sb.append("timestamp: ").append(getBloomFilterMetadata().get().getTimestamp()).append(", ");
+      sb.append("deleted: ").append(getBloomFilterMetadata().get().getIsDeleted());
       sb.append("}");
     }
     if (type == METADATA_TYPE_COLUMN_STATS) {

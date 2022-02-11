@@ -113,7 +113,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       });
 
       if (enabled) {
-        initializeIfNeeded(engineContext, dataMetaClient, actionMetadata, inflightInstantTimestamp);
+        initializeIfNeeded(dataMetaClient, actionMetadata, inflightInstantTimestamp);
       }
     } catch (IOException e) {
       LOG.error("Failed to initialize metadata table. Disabling the writer.", e);

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -53,6 +54,7 @@ import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.table.HoodieTable;
 
@@ -330,8 +332,35 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
    */
   private void getRecordsStats(final String filePath, List<IndexedRecord> recordList,
                                Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap) {
-    recordList.forEach(record -> {
-      HoodieAvroUtils.accumulateColumnRanges(record, writeSchemaWithMetaFields, filePath, columnRangeMap);
+    recordList.forEach(record -> accumulateColumnRanges(record, writeSchemaWithMetaFields, filePath, columnRangeMap, config.isConsistentLogicalTimestampEnabled()));
+  }
+
+  /**
+   * Accumulate column range statistics for the requested record.
+   *
+   * @param record   - Record to get the column range statistics for
+   * @param schema   - Schema for the record
+   * @param filePath - File that record belongs to
+   */
+  private static void accumulateColumnRanges(IndexedRecord record, Schema schema, String filePath,
+          Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap, boolean consistentLogicalTimestampEnabled) {
+    if (!(record instanceof GenericRecord)) {
+      throw new HoodieIOException("Record is not a generic type to get column range metadata!");
+    }
+    schema.getFields().forEach(field -> {
+      final String fieldVal = HoodieAvroUtils.getNestedFieldValAsString((GenericRecord) record, field.name(), true, consistentLogicalTimestampEnabled);
+      final int fieldSize = fieldVal == null ? 0 : fieldVal.length();
+      final HoodieColumnRangeMetadata<Comparable> fieldRange = new HoodieColumnRangeMetadata<>(
+              filePath,
+              field.name(),
+              fieldVal,
+              fieldVal,
+              fieldVal == null ? 1 : 0, // null count
+              fieldVal == null ? 0 : 1, // value count
+              fieldSize,
+              fieldSize
+      );
+      columnRangeMap.merge(field.name(), fieldRange, HoodieColumnRangeMetadata.COLUMN_RANGE_MERGE_FUNCTION);
     });
   }
 

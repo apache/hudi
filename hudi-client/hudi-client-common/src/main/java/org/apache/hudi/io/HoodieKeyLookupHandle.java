@@ -21,7 +21,6 @@ package org.apache.hudi.io;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
@@ -57,12 +56,11 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload, I, K, O> exten
   }
 
   private BloomFilter getBloomFilter() {
-    HoodieTimer timer = new HoodieTimer().startTimer();
     try (HoodieFileReader reader = createNewFileReader()) {
-      LOG.debug(String.format("Read bloom filter from %s in %d ms", partitionPathFileIDPair, timer.endTimer()));
+      LOG.debug(String.format("Read bloom filter from %s", partitionPathFileIDPair));
       return reader.readBloomFilter();
     } catch (IOException e) {
-      throw new HoodieIndexException(String.format("Error reading bloom filter from %s", getPartitionPathFileIDPair(), e));
+      throw new HoodieIndexException(String.format("Error reading bloom filter from %s", getPartitionPathFileIDPair()), e);
     }
   }
 
