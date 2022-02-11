@@ -437,9 +437,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
                 //       FS operations (since they are not atomic), therefore MT record merging should be a
                 //       _commutative_ & _associative_ operation (ie one that would work even in case records
                 //       will get re-ordered), which is
-                // 		      - Possible for file-sizes (since file-sizes will ever grow, we can simply
-                // 		      take max of the old and new records)
-                // 		      - Not possible for is-deleted flags*
+                //          - Possible for file-sizes (since file-sizes will ever grow, we can simply
+                //          take max of the old and new records)
+                //          - Not possible for is-deleted flags*
                 //
                 //       *However, we’re assuming that the case of concurrent write and deletion of the same
                 //       file is _impossible_ -- it would only be possible with concurrent upsert and
