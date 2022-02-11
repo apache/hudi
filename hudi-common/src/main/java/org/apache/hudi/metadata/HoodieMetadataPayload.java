@@ -95,8 +95,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static final String KEY_FIELD_NAME = HoodieHFileReader.KEY_FIELD_NAME;
   public static final String SCHEMA_FIELD_NAME_TYPE = "type";
   public static final String SCHEMA_FIELD_NAME_METADATA = "filesystemMetadata";
-  private static final String SCHEMA_FIELD_ID_COLUMN_STATS = "ColumnStatsMetadata";
-  private static final String SCHEMA_FIELD_ID_BLOOM_FILTER = "BloomFilterMetadata";
+  public static final String SCHEMA_FIELD_ID_COLUMN_STATS = "ColumnStatsMetadata";
+  public static final String SCHEMA_FIELD_ID_BLOOM_FILTER = "BloomFilterMetadata";
 
   // HoodieMetadata bloom filter payload field ids
   private static final String FIELD_IS_DELETED = "isDeleted";

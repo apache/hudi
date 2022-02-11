@@ -74,10 +74,14 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       .orElse(optParams.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key))
 
   private lazy val mandatoryColumns = {
-    if (isMetadataTable(metaClient))
-      Seq(HoodieMetadataPayload.KEY_FIELD_NAME, HoodieMetadataPayload.SCHEMA_FIELD_NAME_TYPE)
-    else
+    if (isMetadataTable(metaClient)) {
+      Seq(HoodieMetadataPayload.KEY_FIELD_NAME,
+        HoodieMetadataPayload.SCHEMA_FIELD_NAME_TYPE,
+        HoodieMetadataPayload.SCHEMA_FIELD_ID_BLOOM_FILTER,
+        HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS)
+    } else {
       Seq(recordKeyField) ++ preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
+    }
   }
 
   override def needConversion: Boolean = false
