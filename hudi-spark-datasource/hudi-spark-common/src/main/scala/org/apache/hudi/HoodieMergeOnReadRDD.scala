@@ -319,8 +319,8 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
 
       private def mergeRowWithLog(curRow: InternalRow, curKey: String) = {
         val historyAvroRecord = requiredSerializer.serialize(curRow).asInstanceOf[GenericRecord]
-        logRecords.get(curKey).getData.combineAndGetUpdateValue(
-          historyAvroRecord, tableAvroSchema, payloadProps)
+        logRecords.get(curKey).getData
+          .combineAndGetUpdateValue(historyAvroRecord, requiredAvroSchema, payloadProps)
       }
     }
 }
