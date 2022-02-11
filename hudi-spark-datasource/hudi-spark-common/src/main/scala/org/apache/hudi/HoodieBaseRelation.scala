@@ -26,7 +26,6 @@ import org.apache.hudi.common.config.SerializableConfiguration
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.io.storage.HoodieHFileReader
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.spark.internal.Logging
@@ -37,7 +36,6 @@ import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{SQLContext, SparkSession}
-import org.apache.spark.util.SerializableConfiguration
 
 import scala.collection.JavaConverters._
 import scala.util.Try
@@ -71,11 +69,12 @@ abstract class HoodieBaseRelation(
 
   override def schema: StructType = userSchema.getOrElse(tableStructSchema)
 
-  def isMetadataTable(metaClient: HoodieTableMetaClient) =
-    HoodieTableMetadata.isMetadataTable(metaClient.getBasePath)
 }
 
 object HoodieBaseRelation {
+
+  def isMetadataTable(metaClient: HoodieTableMetaClient) =
+    HoodieTableMetadata.isMetadataTable(metaClient.getBasePath)
 
   /**
    * Returns file-reader routine accepting [[PartitionedFile]] and returning an [[Iterator]]
