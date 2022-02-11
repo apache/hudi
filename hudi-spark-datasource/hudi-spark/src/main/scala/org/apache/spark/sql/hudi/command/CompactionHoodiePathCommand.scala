@@ -99,7 +99,7 @@ case class CompactionHoodiePathCommand(path: String,
           timer.startTimer()
           willCompactionInstants.foreach {compactionInstant =>
             val writeResponse = client.compact(compactionInstant)
-            handlerResponse(writeResponse.getCommitMetadata.get())
+            handleResponse(writeResponse.getCommitMetadata.get())
             client.commitCompaction(compactionInstant, writeResponse.getCommitMetadata.get(), HOption.empty())
           }
           logInfo(s"Finish Run compaction at instants: [${willCompactionInstants.mkString(",")}]," +
@@ -110,7 +110,7 @@ case class CompactionHoodiePathCommand(path: String,
     }
   }
 
-  private def handlerResponse(metadata: HoodieCommitMetadata): Unit = {
+  private def handleResponse(metadata: HoodieCommitMetadata): Unit = {
 
     // Handle error
     val writeStats = metadata.getPartitionToWriteStats.entrySet().flatMap(e => e.getValue).toList
