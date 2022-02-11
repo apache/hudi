@@ -321,8 +321,8 @@ public class HiveSyncTool extends AbstractSyncTool {
 
     Map<String, String> sparkProperties = new HashMap<>();
     sparkProperties.put("spark.sql.sources.provider", "hudi");
-    if (!StringUtils.isNullOrEmpty(cfg.sparkVersion)) {
-      sparkProperties.put("spark.sql.create.version", cfg.sparkVersion);
+    if (!StringUtils.isNullOrEmpty(hiveSyncConfig.sparkVersion)) {
+      sparkProperties.put("spark.sql.create.version", hiveSyncConfig.sparkVersion);
     }
     // Split the schema string to multi-parts according the schemaLengthThreshold size.
     String schemaString = Parquet2SparkSchemaUtils.convertToSparkSchemaJson(reOrderedType);

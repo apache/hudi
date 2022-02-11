@@ -66,6 +66,9 @@ public class HoodieSyncConfig extends HoodieConfig {
   @Parameter(names = {"--conditional-sync"}, description = "If true, only sync on conditions like schema change or partition change.")
   public Boolean isConditionalSync;
 
+  @Parameter(names = {"--spark-version"}, description = "The spark version", required = false)
+  public String sparkVersion;
+
   public static final ConfigProperty<String> META_SYNC_ENABLED = ConfigProperty
       .key("hoodie.datasource.meta.sync.enable")
       .defaultValue("false")
@@ -141,6 +144,11 @@ public class HoodieSyncConfig extends HoodieConfig {
       .defaultValue(false)
       .withDocumentation("If true, only sync on conditions like schema change or partition change.");
 
+  public static final ConfigProperty<String> META_SYNC_SPARK_VERSION = ConfigProperty
+      .key("hoodie.meta_sync.spark.version")
+      .defaultValue("")
+      .withDocumentation("The spark version used when syncing with a metastore.");
+
   public HoodieSyncConfig(TypedProperties props) {
     super(props);
 
@@ -153,5 +161,6 @@ public class HoodieSyncConfig extends HoodieConfig {
     this.assumeDatePartitioning = getBooleanOrDefault(META_SYNC_ASSUME_DATE_PARTITION);
     this.decodePartition = getBooleanOrDefault(KeyGeneratorOptions.URL_ENCODE_PARTITIONING);
     this.isConditionalSync = getBooleanOrDefault(META_SYNC_CONDITIONAL_SYNC);
+    this.sparkVersion = getStringOrDefault(META_SYNC_SPARK_VERSION);
   }
 }

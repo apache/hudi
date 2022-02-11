@@ -21,6 +21,7 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.HoodieAvroUtils
@@ -30,7 +31,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.{CommitUtils, ReflectionUtils, StringUtils}
+import org.apache.hudi.common.util.{CommitUtils, StringUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME}
 import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
@@ -40,15 +41,15 @@ import org.apache.hudi.index.SparkHoodieIndexFactory
 import org.apache.hudi.internal.DataSourceInternalWriterHelper
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.sync.common.util.SyncUtilHelpers
-import org.apache.hudi.sync.common.{AbstractSyncTool, HoodieSyncConfig}
+import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.table.BulkInsertPartitioner
 import org.apache.log4j.LogManager
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
+import org.apache.spark.sql.internal.StaticSQLConf
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql._
-import org.apache.spark.SparkContext
+import org.apache.spark.{SPARK_VERSION, SparkContext}
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable
@@ -544,9 +545,17 @@ object HoodieSparkSqlWriter {
       val properties = new TypedProperties()
       properties.putAll(hoodieConfig.getProps)
       properties.put(HiveSyncConfig.HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD, spark.sessionState.conf.getConf(StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD).toString)
+      properties.put(HoodieSyncConfig.META_SYNC_SPARK_VERSION, SPARK_VERSION)
+      properties.put(HoodieMetadataConfig.ENABLE, hoodieConfig.getBoolean(HoodieMetadataConfig.ENABLE))
+
+      val hiveConf: HiveConf = new HiveConf()
+      hiveConf.addResource(fs.getConf)
+      if (StringUtils.isNullOrEmpty(hiveConf.get(HiveConf.ConfVars.METASTOREURIS.varname))) {
+        hiveConf.set(HiveConf.ConfVars.METASTOREURIS.varname, hoodieConfig.getStringOrDefault(HiveSyncConfig.METASTORE_URIS))
+      }
 
       syncClientToolClassSet.foreach(impl => {
-        SyncUtilHelpers.createAndSyncHoodieMeta(impl.trim, properties, fs.getConf(), fs, basePath.toString, HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.defaultValue)
+        SyncUtilHelpers.createAndSyncHoodieMeta(impl.trim, properties, hiveConf, fs, basePath.toString, HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.defaultValue)
       })
     }
     true

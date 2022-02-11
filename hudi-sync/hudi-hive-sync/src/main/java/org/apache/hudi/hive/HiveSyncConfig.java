@@ -99,8 +99,6 @@ public class HiveSyncConfig extends HoodieSyncConfig {
   @Parameter(names = {"--with-operation-field"}, description = "Whether to include the '_hoodie_operation' field in the metadata fields")
   public Boolean withOperationField = false;
 
-  @Parameter(names = {"--spark-version"}, description = "The spark version", required = false)
-  public String sparkVersion;
 
   // HIVE SYNC SPECIFIC CONFIGS
   // NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
@@ -227,7 +225,8 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     this.autoCreateDatabase = getBooleanOrDefault(HIVE_AUTO_CREATE_DATABASE);
     this.ignoreExceptions = getBooleanOrDefault(HIVE_IGNORE_EXCEPTIONS);
     this.skipROSuffix = getBooleanOrDefault(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE);
-    this.useFileListingFromMetadata = HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
+    this.useFileListingFromMetadata = props.getBoolean(HoodieMetadataConfig.ENABLE.key(),
+        HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS);
     this.tableProperties = getString(HIVE_TABLE_PROPERTIES);
     this.serdeProperties = getString(HIVE_TABLE_SERDE_PROPERTIES);
     this.supportTimestamp = getBooleanOrDefault(HIVE_SUPPORT_TIMESTAMP_TYPE);
@@ -235,7 +234,6 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     this.syncAsSparkDataSourceTable = getBooleanOrDefault(HIVE_SYNC_AS_DATA_SOURCE_TABLE);
     this.sparkSchemaLengthThreshold = getIntOrDefault(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD);
     this.createManagedTable = getBooleanOrDefault(HIVE_CREATE_MANAGED_TABLE);
-
   }
 
   // enhance the similar function in child class
@@ -299,6 +297,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
       + ", sparkSchemaLengthThreshold=" + sparkSchemaLengthThreshold
       + ", withOperationField=" + withOperationField
       + ", isConditionalSync=" + isConditionalSync
+      + ", sparkVersion=" + sparkVersion
       + '}';
   }
 
