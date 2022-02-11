@@ -51,8 +51,8 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.Properties;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -432,7 +432,27 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
             //          - First we merge records from all of the delta log-files
             //          - Then we merge records from base-files with the delta ones (coming as a result
             //          of the previous step)
-            (oldFileInfo, newFileInfo) -> newFileInfo.getIsDeleted() ? null : newFileInfo);
+            (oldFileInfo, newFileInfo) ->
+                // NOTE: We can’t assume that MT update records will be ordered the same way as actual
+                //       FS operations (since they are not atomic), therefore MT record merging should be a
+                //       _commutative_ & _associative_ operation (ie one that would work even in case records
+                //       will get re-ordered), which is
+                // 		      - Possible for file-sizes (since file-sizes will ever grow, we can simply
+                // 		      take max of the old and new records)
+                // 		      - Not possible for is-deleted flags*
+                //
+                //       *However, we’re assuming that the case of concurrent write and deletion of the same
+                //       file is _impossible_ -- it would only be possible with concurrent upsert and
+                //       rollback operation (affecting the same log-file), which is implausible, b/c either
+                //       of the following have to be true:
+                //          - We’re appending to failed log-file (then the other writer is trying to
+                //          rollback it concurrently, before it’s own write)
+                //          - Rollback (of completed instant) is running concurrently with append (meaning
+                //          that restore is running concurrently with a write, which is also nut supported
+                //          currently)
+                newFileInfo.getIsDeleted()
+                    ? null
+                    : new HoodieMetadataFileInfo(Math.max(newFileInfo.getSize(), oldFileInfo.getSize()), false));
       });
     }
 
