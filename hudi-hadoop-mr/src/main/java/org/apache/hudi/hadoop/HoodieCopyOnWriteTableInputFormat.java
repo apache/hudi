@@ -44,6 +44,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 
@@ -313,13 +314,13 @@ public class HoodieCopyOnWriteTableInputFormat extends FileInputFormat<NullWrita
                                                                       Stream<HoodieLogFile> logFiles,
                                                                       Option<HoodieInstant> latestCompletedInstantOpt,
                                                                       HoodieTableMetaClient tableMetaClient) {
-    List<HoodieLogFile> sortedLogFiles = logFiles.sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
     FileStatus baseFileStatus = getFileStatusUnchecked(baseFile);
+    List<HoodieLogFile> sortedLogFiles = logFiles.sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
+    Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt = HoodieVirtualKeyInfo.compose(tableMetaClient);
+
     try {
-      RealtimeFileStatus rtFileStatus = new RealtimeFileStatus(baseFileStatus);
-      rtFileStatus.setDeltaLogFiles(sortedLogFiles);
-      rtFileStatus.setBaseFilePath(baseFile.getPath());
-      rtFileStatus.setBasePath(tableMetaClient.getBasePath());
+      RealtimeFileStatus rtFileStatus = new RealtimeFileStatus(baseFileStatus, tableMetaClient.getBasePath(), sortedLogFiles,
+          false, virtualKeyInfoOpt);
 
       if (latestCompletedInstantOpt.isPresent()) {
         HoodieInstant latestCompletedInstant = latestCompletedInstantOpt.get();
@@ -348,9 +349,7 @@ public class HoodieCopyOnWriteTableInputFormat extends FileInputFormat<NullWrita
                                                                       HoodieTableMetaClient tableMetaClient) {
     List<HoodieLogFile> sortedLogFiles = logFiles.sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
     try {
-      RealtimeFileStatus rtFileStatus = new RealtimeFileStatus(latestLogFile.getFileStatus());
-      rtFileStatus.setDeltaLogFiles(sortedLogFiles);
-      rtFileStatus.setBasePath(tableMetaClient.getBasePath());
+      RealtimeFileStatus rtFileStatus = new RealtimeFileStatus(latestLogFile.getFileStatus(), tableMetaClient.getBasePath(), sortedLogFiles);
 
       if (latestCompletedInstantOpt.isPresent()) {
         HoodieInstant latestCompletedInstant = latestCompletedInstantOpt.get();

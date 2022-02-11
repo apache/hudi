@@ -18,34 +18,6 @@
 
 package org.apache.hudi.hadoop.utils;
 
-import org.apache.hadoop.mapreduce.JobContext;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodiePartitionMetadata;
-import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.FileSystemViewManager;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.table.view.TableFileSystemView;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.HoodieHFileInputFormat;
-import org.apache.hudi.hadoop.HoodieParquetInputFormat;
-import org.apache.hudi.hadoop.RealtimeFileStatus;
-import org.apache.hudi.hadoop.LocatedFileStatusWithBootstrapBaseFile;
-import org.apache.hudi.hadoop.FileStatusWithBootstrapBaseFile;
-import org.apache.hudi.hadoop.realtime.HoodieHFileRealtimeInputFormat;
-import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -59,6 +31,33 @@ import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
 import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.JobContext;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.table.view.TableFileSystemView;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.FileStatusWithBootstrapBaseFile;
+import org.apache.hudi.hadoop.HoodieHFileInputFormat;
+import org.apache.hudi.hadoop.HoodieParquetInputFormat;
+import org.apache.hudi.hadoop.LocatedFileStatusWithBootstrapBaseFile;
+import org.apache.hudi.hadoop.RealtimeFileStatus;
+import org.apache.hudi.hadoop.realtime.HoodieHFileRealtimeInputFormat;
+import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -490,8 +489,7 @@ public class HoodieInputFormatUtils {
         }
 
         for (Map.Entry<FileStatus, List<HoodieLogFile>> filterLogEntry : filteredLogs.entrySet()) {
-          RealtimeFileStatus rs = new RealtimeFileStatus(filterLogEntry.getKey());
-          rs.setDeltaLogFiles(filterLogEntry.getValue());
+          RealtimeFileStatus rs = new RealtimeFileStatus(filterLogEntry.getKey(), "", filterLogEntry.getValue(), false, Option.empty());
           returns.add(rs);
         }
       }

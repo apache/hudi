@@ -26,7 +26,6 @@ import org.apache.hudi.hadoop.realtime.HoodieRealtimePath;
 import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -37,22 +36,22 @@ import java.util.List;
  */
 public class RealtimeFileStatus extends FileStatus {
   /**
-   * Marks whether this path produced as part of Incremental Query
+   * Base path of the table this path belongs to
    */
-  private boolean belongsToIncrementalQuery = false;
+  private final String basePath;
   /**
    * List of delta log-files holding updated records for this base-file
    */
-  private List<HoodieLogFile> deltaLogFiles = new ArrayList<>();
+  private final List<HoodieLogFile> deltaLogFiles;
+  /**
+   * Marks whether this path produced as part of Incremental Query
+   */
+  private final boolean belongsToIncrementalQuery;
   /**
    * Latest commit instant available at the time of the query in which all of the files
    * pertaining to this split are represented
    */
   private String maxCommitTime = "";
-  /**
-   * Base path of the table this path belongs to
-   */
-  private String basePath = "";
   /**
    * File status for the Bootstrap file (only relevant if this table is a bootstrapped table
    */
@@ -60,22 +59,30 @@ public class RealtimeFileStatus extends FileStatus {
   /**
    * Virtual key configuration of the table this split belongs to
    */
-  private Option<HoodieVirtualKeyInfo> virtualKeyInfo = Option.empty();
+  private final Option<HoodieVirtualKeyInfo> virtualKeyInfo;
 
-  public RealtimeFileStatus(FileStatus fileStatus) throws IOException {
+  public RealtimeFileStatus(FileStatus fileStatus,
+                            String basePath,
+                            List<HoodieLogFile> deltaLogFiles,
+                            boolean belongsToIncrementalQuery,
+                            Option<HoodieVirtualKeyInfo> virtualKeyInfo) throws IOException {
     super(fileStatus);
+    this.basePath = basePath;
+    this.deltaLogFiles = deltaLogFiles;
+    this.belongsToIncrementalQuery = belongsToIncrementalQuery;
+    this.virtualKeyInfo = virtualKeyInfo;
+  }
+
+  public RealtimeFileStatus(FileStatus fileStatus, String basePath, List<HoodieLogFile> deltaLogFiles) throws IOException {
+    this(fileStatus, basePath, deltaLogFiles, false, Option.empty());
   }
 
   @Override
   public Path getPath() {
     Path path = super.getPath();
 
-    HoodieRealtimePath realtimePath = new HoodieRealtimePath(path.getParent(), path.getName());
-    realtimePath.setBelongsToIncrementalQuery(belongsToIncrementalQuery);
-    realtimePath.setDeltaLogFiles(deltaLogFiles);
-    realtimePath.setMaxCommitTime(maxCommitTime);
-    realtimePath.setBasePath(basePath);
-    realtimePath.setVirtualKeyInfo(virtualKeyInfo);
+    HoodieRealtimePath realtimePath = new HoodieRealtimePath(path.getParent(), path.getName(), basePath,
+        deltaLogFiles, maxCommitTime, belongsToIncrementalQuery, virtualKeyInfo);
 
     if (bootStrapFileStatus != null) {
       realtimePath.setPathWithBootstrapFileStatus((PathWithBootstrapFileStatus)bootStrapFileStatus.getPath());
@@ -84,16 +91,12 @@ public class RealtimeFileStatus extends FileStatus {
     return realtimePath;
   }
 
-  public void setBelongToIncrementalFileStatus(boolean belongToIncrementalFileStatus) {
-    this.belongsToIncrementalQuery = belongToIncrementalFileStatus;
+  public String getBasePath() {
+    return basePath;
   }
 
   public List<HoodieLogFile> getDeltaLogFiles() {
     return deltaLogFiles;
-  }
-
-  public void setDeltaLogFiles(List<HoodieLogFile> deltaLogFiles) {
-    this.deltaLogFiles = deltaLogFiles;
   }
 
   public String getMaxCommitTime() {
@@ -104,19 +107,7 @@ public class RealtimeFileStatus extends FileStatus {
     this.maxCommitTime = maxCommitTime;
   }
 
-  public String getBasePath() {
-    return basePath;
-  }
-
-  public void setBasePath(String basePath) {
-    this.basePath = basePath;
-  }
-
   public void setBootStrapFileStatus(FileStatus bootStrapFileStatus) {
     this.bootStrapFileStatus = bootStrapFileStatus;
-  }
-
-  public void setVirtualKeyInfo(Option<HoodieVirtualKeyInfo> virtualKeyInfo) {
-    this.virtualKeyInfo = virtualKeyInfo;
   }
 }

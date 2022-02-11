@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.PathWithBootstrapFileStatus;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -35,64 +34,60 @@ public class HoodieRealtimePath extends Path {
   /**
    * Marks whether this path produced as part of Incremental Query
    */
-  private boolean belongsToIncrementalQuery = false;
+  private final boolean belongsToIncrementalQuery;
   /**
    * List of delta log-files holding updated records for this base-file
    */
-  private List<HoodieLogFile> deltaLogFiles = new ArrayList<>();
+  private final List<HoodieLogFile> deltaLogFiles;
   /**
    * Latest commit instant available at the time of the query in which all of the files
    * pertaining to this split are represented
    */
-  private String maxCommitTime = "";
+  private final String maxCommitTime;
   /**
    * Base path of the table this path belongs to
    */
-  private String basePath = "";
+  private final String basePath;
+  /**
+   * Virtual key configuration of the table this split belongs to
+   */
+  private final Option<HoodieVirtualKeyInfo> virtualKeyInfo;
   /**
    * File status for the Bootstrap file (only relevant if this table is a bootstrapped table
    */
   private PathWithBootstrapFileStatus pathWithBootstrapFileStatus;
-  /**
-   * Virtual key configuration of the table this split belongs to
-   */
-  private Option<HoodieVirtualKeyInfo> virtualKeyInfo = Option.empty();
 
-  public HoodieRealtimePath(Path parent, String child) {
+  public HoodieRealtimePath(Path parent,
+                            String child,
+                            String basePath,
+                            List<HoodieLogFile> deltaLogFiles,
+                            String maxCommitTime,
+                            boolean belongsToIncrementalQuery,
+                            Option<HoodieVirtualKeyInfo> virtualKeyInfo) {
     super(parent, child);
+    this.basePath = basePath;
+    this.deltaLogFiles = deltaLogFiles;
+    this.maxCommitTime = maxCommitTime;
+    this.belongsToIncrementalQuery = belongsToIncrementalQuery;
+    this.virtualKeyInfo = virtualKeyInfo;
   }
 
   public List<HoodieLogFile> getDeltaLogFiles() {
     return deltaLogFiles;
   }
 
-  public void setDeltaLogFiles(List<HoodieLogFile> deltaLogFiles) {
-    this.deltaLogFiles = deltaLogFiles;
-  }
-
   public String getMaxCommitTime() {
     return maxCommitTime;
-  }
-
-  public void setMaxCommitTime(String maxCommitTime) {
-    this.maxCommitTime = maxCommitTime;
   }
 
   public String getBasePath() {
     return basePath;
   }
 
-  public void setBasePath(String basePath) {
-    this.basePath = basePath;
-  }
-
   public boolean getBelongsToIncrementalQuery() {
     return belongsToIncrementalQuery;
   }
 
-  public void setBelongsToIncrementalQuery(boolean belongsToIncrementalQuery) {
-    this.belongsToIncrementalQuery = belongsToIncrementalQuery;
-  }
 
   public boolean isSplitable() {
     return !toString().isEmpty();
@@ -112,9 +107,5 @@ public class HoodieRealtimePath extends Path {
 
   public Option<HoodieVirtualKeyInfo> getVirtualKeyInfo() {
     return virtualKeyInfo;
-  }
-
-  public void setVirtualKeyInfo(Option<HoodieVirtualKeyInfo> virtualKeyInfo) {
-    this.virtualKeyInfo = virtualKeyInfo;
   }
 }

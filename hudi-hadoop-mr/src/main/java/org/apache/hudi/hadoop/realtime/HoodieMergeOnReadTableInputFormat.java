@@ -156,7 +156,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
 
     String maxCommitTime = fsView.getLastInstant().get().getTimestamp();
     // step6
-    result.addAll(collectAllIncrementalFiles(fileGroups, maxCommitTime, basePath.toString(), candidateFileStatus));
+    result.addAll(collectAllIncrementalFiles(fileGroups, maxCommitTime, basePath.toString(), candidateFileStatus, tableMetaClient));
     return result;
   }
 
@@ -193,25 +193,28 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
     return super.makeSplit(file, start, length, hosts, inMemoryHosts);
   }
 
-  private List<FileStatus> collectAllIncrementalFiles(List<HoodieFileGroup> fileGroups, String maxCommitTime, String basePath, Map<String, FileStatus> candidateFileStatus) {
+  private List<FileStatus> collectAllIncrementalFiles(List<HoodieFileGroup> fileGroups,
+                                                      String maxCommitTime,
+                                                      String basePath,
+                                                      Map<String, FileStatus> candidateFileStatus,
+                                                      HoodieTableMetaClient tableMetaClient) {
     List<FileStatus> result = new ArrayList<>();
     fileGroups.stream().forEach(f -> {
       try {
         List<FileSlice> baseFiles = f.getAllFileSlices().filter(slice -> slice.getBaseFile().isPresent()).collect(Collectors.toList());
+        Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt = HoodieVirtualKeyInfo.compose(tableMetaClient);
         if (!baseFiles.isEmpty()) {
           FileStatus baseFileStatus = HoodieInputFormatUtils.getFileStatus(baseFiles.get(0).getBaseFile().get());
           String baseFilePath = baseFileStatus.getPath().toUri().toString();
           if (!candidateFileStatus.containsKey(baseFilePath)) {
             throw new HoodieException("Error obtaining fileStatus for file: " + baseFilePath);
           }
+          List<HoodieLogFile> deltaLogFiles = f.getLatestFileSlice().get().getLogFiles().collect(Collectors.toList());
           // We cannot use baseFileStatus.getPath() here, since baseFileStatus.getPath() missing file size information.
           // So we use candidateFileStatus.get(baseFileStatus.getPath()) to get a correct path.
-          RealtimeFileStatus fileStatus = new RealtimeFileStatus(candidateFileStatus.get(baseFilePath));
+          RealtimeFileStatus fileStatus = new RealtimeFileStatus(candidateFileStatus.get(baseFilePath),
+              basePath, deltaLogFiles, true, virtualKeyInfoOpt);
           fileStatus.setMaxCommitTime(maxCommitTime);
-          fileStatus.setBelongToIncrementalFileStatus(true);
-          fileStatus.setBasePath(basePath);
-          fileStatus.setDeltaLogFiles(f.getLatestFileSlice().get().getLogFiles().collect(Collectors.toList()));
-          // try to set bootstrapfileStatus
           if (baseFileStatus instanceof LocatedFileStatusWithBootstrapBaseFile || baseFileStatus instanceof FileStatusWithBootstrapBaseFile) {
             fileStatus.setBootStrapFileStatus(baseFileStatus);
           }
@@ -221,11 +224,10 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
         if (f.getLatestFileSlice().isPresent() && baseFiles.isEmpty()) {
           List<FileStatus> logFileStatus = f.getLatestFileSlice().get().getLogFiles().map(logFile -> logFile.getFileStatus()).collect(Collectors.toList());
           if (logFileStatus.size() > 0) {
-            RealtimeFileStatus fileStatus = new RealtimeFileStatus(logFileStatus.get(0));
-            fileStatus.setBelongToIncrementalFileStatus(true);
-            fileStatus.setDeltaLogFiles(logFileStatus.stream().map(l -> new HoodieLogFile(l.getPath(), l.getLen())).collect(Collectors.toList()));
+            List<HoodieLogFile> deltaLogFiles = logFileStatus.stream().map(l -> new HoodieLogFile(l.getPath(), l.getLen())).collect(Collectors.toList());
+            RealtimeFileStatus fileStatus = new RealtimeFileStatus(logFileStatus.get(0), basePath,
+                deltaLogFiles, true, virtualKeyInfoOpt);
             fileStatus.setMaxCommitTime(maxCommitTime);
-            fileStatus.setBasePath(basePath);
             result.add(fileStatus);
           }
         }

@@ -768,10 +768,11 @@ public class TestHoodieRealtimeRecordReader {
       FileCreateUtils.createDeltaCommit(basePath.toString(), instantTime);
       // create a split with new log file(s)
       fileSlice.addLogFile(new HoodieLogFile(writer.getLogFile().getPath(), size));
-      RealtimeFileStatus realtimeFileStatus = new RealtimeFileStatus(new FileStatus(writer.getLogFile().getFileSize(), false, 1, 1, 0, writer.getLogFile().getPath()));
+      RealtimeFileStatus realtimeFileStatus = new RealtimeFileStatus(
+          new FileStatus(writer.getLogFile().getFileSize(), false, 1, 1, 0, writer.getLogFile().getPath()),
+          basePath.toString(),
+          fileSlice.getLogFiles().collect(Collectors.toList()));
       realtimeFileStatus.setMaxCommitTime(instantTime);
-      realtimeFileStatus.setBasePath(basePath.toString());
-      realtimeFileStatus.setDeltaLogFiles(fileSlice.getLogFiles().collect(Collectors.toList()));
       HoodieRealtimePath realtimePath = (HoodieRealtimePath) realtimeFileStatus.getPath();
       HoodieRealtimeFileSplit split =
           new HoodieRealtimeFileSplit(new FileSplit(realtimePath, 0, 0, new String[] {""}), realtimePath);

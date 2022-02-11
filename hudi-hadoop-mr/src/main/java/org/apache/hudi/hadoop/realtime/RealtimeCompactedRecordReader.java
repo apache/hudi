@@ -54,7 +54,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
 
   private final Set<String> deltaRecordKeys;
   private final HoodieMergedLogRecordScanner mergedLogRecordScanner;
-  private int recordKeyIndex = HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS;
+  private final int recordKeyIndex;
   private Iterator<String> deltaItr;
 
   public RealtimeCompactedRecordReader(RealtimeSplit split, JobConf job,
@@ -64,9 +64,9 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     this.mergedLogRecordScanner = getMergedLogRecordScanner();
     this.deltaRecordMap = mergedLogRecordScanner.getRecords();
     this.deltaRecordKeys = new HashSet<>(this.deltaRecordMap.keySet());
-    if (split.getVirtualKeyInfo().isPresent()) {
-      this.recordKeyIndex = split.getVirtualKeyInfo().get().getRecordKeyFieldIndex();
-    }
+    this.recordKeyIndex = split.getVirtualKeyInfo()
+        .map(HoodieVirtualKeyInfo::getRecordKeyFieldIndex)
+        .orElse(HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS);
   }
 
   /**
