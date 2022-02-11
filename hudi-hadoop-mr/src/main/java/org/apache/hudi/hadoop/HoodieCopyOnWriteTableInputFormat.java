@@ -37,14 +37,19 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieTableQueryType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+import org.apache.parquet.schema.MessageType;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
@@ -198,7 +203,7 @@ public class HoodieCopyOnWriteTableInputFormat extends FileInputFormat<NullWrita
     return HoodieInputFormatUtils.filterIncrementalFileStatus(jobContext, tableMetaClient, timeline.get(), fileStatuses, commitsToCheck.get());
   }
 
-  protected FileStatus createFileStatusUnchecked(FileSlice fileSlice, HiveHoodieTableFileIndex fileIndex, HoodieTableMetaClient tableMetaClient) {
+  protected FileStatus createFileStatusUnchecked(FileSlice fileSlice, HiveHoodieTableFileIndex fileIndex, Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt) {
     Option<HoodieBaseFile> baseFileOpt = fileSlice.getBaseFile();
 
     if (baseFileOpt.isPresent()) {
@@ -261,11 +266,13 @@ public class HoodieCopyOnWriteTableInputFormat extends FileInputFormat<NullWrita
 
       Map<String, List<FileSlice>> partitionedFileSlices = fileIndex.listFileSlices();
 
+      Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt = getHoodieVirtualKeyInfo(tableMetaClient);
+
       targetFiles.addAll(
           partitionedFileSlices.values()
               .stream()
               .flatMap(Collection::stream)
-              .map(fileSlice -> createFileStatusUnchecked(fileSlice, fileIndex, tableMetaClient))
+              .map(fileSlice -> createFileStatusUnchecked(fileSlice, fileIndex, virtualKeyInfoOpt))
               .collect(Collectors.toList())
       );
     }
@@ -287,6 +294,23 @@ public class HoodieCopyOnWriteTableInputFormat extends FileInputFormat<NullWrita
       return HoodieInputFormatUtils.getFileStatus(baseFile);
     } catch (IOException ioe) {
       throw new HoodieIOException("Failed to get file-status", ioe);
+    }
+  }
+
+  protected static Option<HoodieVirtualKeyInfo> getHoodieVirtualKeyInfo(HoodieTableMetaClient metaClient) {
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    if (tableConfig.populateMetaFields()) {
+      return Option.empty();
+    }
+
+    TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
+    try {
+      MessageType parquetSchema = tableSchemaResolver.getTableParquetSchema();
+      return Option.of(new HoodieVirtualKeyInfo(tableConfig.getRecordKeyFieldProp(),
+          tableConfig.getPartitionFieldProp(), parquetSchema.getFieldIndex(tableConfig.getRecordKeyFieldProp()),
+          parquetSchema.getFieldIndex(tableConfig.getPartitionFieldProp())));
+    } catch (Exception exception) {
+      throw new HoodieException("Fetching table schema failed with exception ", exception);
     }
   }
 }

@@ -143,6 +143,13 @@ public abstract class BaseHoodieTableFileIndex {
   }
 
   /**
+   * Returns table's base-path
+   */
+  public String getBasePath() {
+    return metaClient.getBasePath();
+  }
+
+  /**
    * Fetch list of latest base files and log files per partition.
    *
    * @return mapping from string partition paths to its base/log files

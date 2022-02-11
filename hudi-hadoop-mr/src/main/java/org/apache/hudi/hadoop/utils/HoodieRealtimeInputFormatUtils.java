@@ -28,9 +28,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
@@ -42,7 +40,6 @@ import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.parquet.schema.MessageType;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -68,23 +65,6 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
     }
 
     return false;
-  }
-
-  public static Option<HoodieVirtualKeyInfo> getHoodieVirtualKeyInfo(HoodieTableMetaClient metaClient) {
-    HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    if (tableConfig.populateMetaFields()) {
-      return Option.empty();
-    }
-
-    TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
-    try {
-      MessageType parquetSchema = tableSchemaResolver.getTableParquetSchema();
-      return Option.of(new HoodieVirtualKeyInfo(tableConfig.getRecordKeyFieldProp(),
-          tableConfig.getPartitionFieldProp(), parquetSchema.getFieldIndex(tableConfig.getRecordKeyFieldProp()),
-          parquetSchema.getFieldIndex(tableConfig.getPartitionFieldProp())));
-    } catch (Exception exception) {
-      throw new HoodieException("Fetching table schema failed with exception ", exception);
-    }
   }
 
   // Return parquet file with a list of log files in the same file group.

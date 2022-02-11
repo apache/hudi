@@ -771,7 +771,9 @@ public class TestHoodieRealtimeRecordReader {
       RealtimeFileStatus realtimeFileStatus = new RealtimeFileStatus(
           new FileStatus(writer.getLogFile().getFileSize(), false, 1, 1, 0, writer.getLogFile().getPath()),
           basePath.toString(),
-          fileSlice.getLogFiles().collect(Collectors.toList()));
+          fileSlice.getLogFiles().collect(Collectors.toList()),
+          false,
+          Option.empty());
       realtimeFileStatus.setMaxCommitTime(instantTime);
       HoodieRealtimePath realtimePath = (HoodieRealtimePath) realtimeFileStatus.getPath();
       HoodieRealtimeFileSplit split =

@@ -69,7 +69,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  *   <li>Incremental mode: reading table's state as of particular timestamp (or instant, in Hudi's terms)</li>
  *   <li>External mode: reading non-Hudi partitions</li>
  * </ul>
- *
+ * <p>
  * NOTE: This class is invariant of the underlying file-format of the files being read
  */
 public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInputFormat implements Configurable {
@@ -85,18 +85,19 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
   }
 
   @Override
-  protected FileStatus createFileStatusUnchecked(FileSlice fileSlice, HiveHoodieTableFileIndex fileIndex, HoodieTableMetaClient tableMetaClient) {
+  protected FileStatus createFileStatusUnchecked(FileSlice fileSlice, HiveHoodieTableFileIndex fileIndex, Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt) {
     Option<HoodieBaseFile> baseFileOpt = fileSlice.getBaseFile();
     Option<HoodieLogFile> latestLogFileOpt = fileSlice.getLatestLogFile();
     Stream<HoodieLogFile> logFiles = fileSlice.getLogFiles();
 
     Option<HoodieInstant> latestCompletedInstantOpt = fileIndex.getLatestCompletedInstant();
+    String tableBasePath = fileIndex.getBasePath();
 
     // Check if we're reading a MOR table
     if (baseFileOpt.isPresent()) {
-      return createRealtimeFileStatusUnchecked(baseFileOpt.get(), logFiles, latestCompletedInstantOpt, tableMetaClient);
+      return createRealtimeFileStatusUnchecked(baseFileOpt.get(), logFiles, tableBasePath, latestCompletedInstantOpt, virtualKeyInfoOpt);
     } else if (latestLogFileOpt.isPresent()) {
-      return createRealtimeFileStatusUnchecked(latestLogFileOpt.get(), logFiles, latestCompletedInstantOpt, tableMetaClient);
+      return createRealtimeFileStatusUnchecked(latestLogFileOpt.get(), logFiles, tableBasePath, latestCompletedInstantOpt, virtualKeyInfoOpt);
     } else {
       throw new IllegalStateException("Invalid state: either base-file or log-file has to be present");
     }
@@ -177,9 +178,10 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
       candidateFileStatus.put(key, fileStatuses[i]);
     }
 
+    Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt = getHoodieVirtualKeyInfo(tableMetaClient);
     String maxCommitTime = fsView.getLastInstant().get().getTimestamp();
     // step6
-    result.addAll(collectAllIncrementalFiles(fileGroups, maxCommitTime, basePath.toString(), candidateFileStatus, tableMetaClient));
+    result.addAll(collectAllIncrementalFiles(fileGroups, maxCommitTime, basePath.toString(), candidateFileStatus, virtualKeyInfoOpt));
     return result;
   }
 
@@ -191,7 +193,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
   @Override
   protected boolean isSplitable(FileSystem fs, Path filename) {
     if (filename instanceof HoodieRealtimePath) {
-      return ((HoodieRealtimePath)filename).isSplitable();
+      return ((HoodieRealtimePath) filename).isSplitable();
     }
 
     return super.isSplitable(fs, filename);
@@ -217,15 +219,15 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
   }
 
   private static List<FileStatus> collectAllIncrementalFiles(List<HoodieFileGroup> fileGroups,
-                                                      String maxCommitTime,
-                                                      String basePath,
-                                                      Map<String, FileStatus> candidateFileStatus,
-                                                      HoodieTableMetaClient tableMetaClient) {
+                                                             String maxCommitTime,
+                                                             String basePath,
+                                                             Map<String, FileStatus> candidateFileStatus,
+                                                             Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt) {
+
     List<FileStatus> result = new ArrayList<>();
     fileGroups.stream().forEach(f -> {
       try {
         List<FileSlice> baseFiles = f.getAllFileSlices().filter(slice -> slice.getBaseFile().isPresent()).collect(Collectors.toList());
-        Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt = HoodieRealtimeInputFormatUtils.getHoodieVirtualKeyInfo(tableMetaClient);
         if (!baseFiles.isEmpty()) {
           FileStatus baseFileStatus = HoodieInputFormatUtils.getFileStatus(baseFiles.get(0).getBaseFile().get());
           String baseFilePath = baseFileStatus.getPath().toUri().toString();
@@ -322,14 +324,14 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
    */
   private static RealtimeFileStatus createRealtimeFileStatusUnchecked(HoodieBaseFile baseFile,
                                                                       Stream<HoodieLogFile> logFiles,
+                                                                      String basePath,
                                                                       Option<HoodieInstant> latestCompletedInstantOpt,
-                                                                      HoodieTableMetaClient tableMetaClient) {
+                                                                      Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt) {
     FileStatus baseFileStatus = getFileStatusUnchecked(baseFile);
     List<HoodieLogFile> sortedLogFiles = logFiles.sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
-    Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt = HoodieRealtimeInputFormatUtils.getHoodieVirtualKeyInfo(tableMetaClient);
 
     try {
-      RealtimeFileStatus rtFileStatus = new RealtimeFileStatus(baseFileStatus, tableMetaClient.getBasePath(), sortedLogFiles,
+      RealtimeFileStatus rtFileStatus = new RealtimeFileStatus(baseFileStatus, basePath, sortedLogFiles,
           false, virtualKeyInfoOpt);
 
       if (latestCompletedInstantOpt.isPresent()) {
@@ -354,11 +356,13 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
    */
   private static RealtimeFileStatus createRealtimeFileStatusUnchecked(HoodieLogFile latestLogFile,
                                                                       Stream<HoodieLogFile> logFiles,
+                                                                      String basePath,
                                                                       Option<HoodieInstant> latestCompletedInstantOpt,
-                                                                      HoodieTableMetaClient tableMetaClient) {
+                                                                      Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt) {
     List<HoodieLogFile> sortedLogFiles = logFiles.sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
     try {
-      RealtimeFileStatus rtFileStatus = new RealtimeFileStatus(latestLogFile.getFileStatus(), tableMetaClient.getBasePath(), sortedLogFiles);
+      RealtimeFileStatus rtFileStatus = new RealtimeFileStatus(latestLogFile.getFileStatus(), basePath,
+          sortedLogFiles, false, virtualKeyInfoOpt);
 
       if (latestCompletedInstantOpt.isPresent()) {
         HoodieInstant latestCompletedInstant = latestCompletedInstantOpt.get();
