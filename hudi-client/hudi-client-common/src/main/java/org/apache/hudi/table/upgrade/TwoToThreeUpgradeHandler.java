@@ -35,7 +35,7 @@ import java.util.Map;
  */
 public class TwoToThreeUpgradeHandler implements UpgradeHandler {
   @Override
-  public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, BaseUpgradeDowngradeHelper upgradeDowngradeHelper) {
+  public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     if (config.isMetadataTableEnabled()) {
       // Metadata Table in version 2 is asynchronous and in version 3 is synchronous. Synchronous table will not
       // sync any instants not already synced. So its simpler to re-bootstrap the table. Also, the schema for the

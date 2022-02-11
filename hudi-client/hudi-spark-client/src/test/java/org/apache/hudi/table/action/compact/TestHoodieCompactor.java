@@ -175,7 +175,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
 
       List<HoodieRecord> updatedRecords = dataGen.generateUpdates(newCommitTime, records);
       JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
-      HoodieIndex index = new HoodieBloomIndex<>(config, SparkHoodieBloomIndexHelper.getInstance());
+      HoodieIndex index = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
       JavaRDD<HoodieRecord> updatedTaggedRecordsRDD = tagLocation(index, updatedRecordsRDD, table);
 
       writeClient.startCommitWithTime(newCommitTime);

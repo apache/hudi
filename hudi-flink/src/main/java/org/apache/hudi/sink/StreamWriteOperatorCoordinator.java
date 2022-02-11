@@ -415,13 +415,11 @@ public class StreamWriteOperatorCoordinator
     CompletableFuture<?>[] futures = Arrays.stream(this.gateways).filter(Objects::nonNull)
         .map(gw -> gw.sendEvent(CommitAckEvent.getInstance(checkpointId)))
         .toArray(CompletableFuture<?>[]::new);
-    try {
-      CompletableFuture.allOf(futures).get();
-    } catch (Throwable throwable) {
-      if (!sendToFinishedTasks(throwable)) {
-        throw new HoodieException("Error while waiting for the commit ack events to finish sending", throwable);
+    CompletableFuture.allOf(futures).whenComplete((resp, error) -> {
+      if (!sendToFinishedTasks(error)) {
+        throw new HoodieException("Error while waiting for the commit ack events to finish sending", error);
       }
-    }
+    });
   }
 
   /**

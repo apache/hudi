@@ -70,7 +70,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       SAVEPOINT_EXTENSION, INFLIGHT_SAVEPOINT_EXTENSION,
       CLEAN_EXTENSION, REQUESTED_CLEAN_EXTENSION, INFLIGHT_CLEAN_EXTENSION,
       INFLIGHT_COMPACTION_EXTENSION, REQUESTED_COMPACTION_EXTENSION,
-      INFLIGHT_RESTORE_EXTENSION, RESTORE_EXTENSION,
+      REQUESTED_RESTORE_EXTENSION, INFLIGHT_RESTORE_EXTENSION, RESTORE_EXTENSION,
       ROLLBACK_EXTENSION, REQUESTED_ROLLBACK_EXTENSION, INFLIGHT_ROLLBACK_EXTENSION,
       REQUESTED_REPLACE_COMMIT_EXTENSION, INFLIGHT_REPLACE_COMMIT_EXTENSION, REPLACE_COMMIT_EXTENSION));
   private static final Logger LOG = LogManager.getLogger(HoodieActiveTimeline.class);
@@ -289,6 +289,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     return readDataFromPath(new Path(metaClient.getMetaPath(), instant.getFileName()));
   }
 
+  public Option<byte[]> readRestoreInfoAsBytes(HoodieInstant instant) {
+    // Rollback metadata are always stored only in timeline .hoodie
+    return readDataFromPath(new Path(metaClient.getMetaPath(), instant.getFileName()));
+  }
+
   //-----------------------------------------------------------------
   //      BEGIN - COMPACTION RELATED META-DATA MANAGEMENT.
   //-----------------------------------------------------------------
@@ -425,6 +430,21 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION));
     ValidationUtils.checkArgument(requestedInstant.isRequested());
     HoodieInstant inflight = new HoodieInstant(State.INFLIGHT, ROLLBACK_ACTION, requestedInstant.getTimestamp());
+    transitionState(requestedInstant, inflight, Option.empty());
+    return inflight;
+  }
+
+  /**
+   * Transition Restore State from requested to inflight.
+   *
+   * @param requestedInstant requested instant
+   * @return commit instant
+   */
+  public HoodieInstant transitionRestoreRequestedToInflight(HoodieInstant requestedInstant) {
+    ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.RESTORE_ACTION), "Transition to inflight requested for a restore instant with diff action "
+        + requestedInstant.toString());
+    ValidationUtils.checkArgument(requestedInstant.isRequested(), "Transition to inflight requested for an instant not in requested state " + requestedInstant.toString());
+    HoodieInstant inflight = new HoodieInstant(State.INFLIGHT, RESTORE_ACTION, requestedInstant.getTimestamp());
     transitionState(requestedInstant, inflight, Option.empty());
     return inflight;
   }
@@ -594,6 +614,13 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   public void saveToRollbackRequested(HoodieInstant instant, Option<byte[]> content) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION));
+    ValidationUtils.checkArgument(instant.getState().equals(State.REQUESTED));
+    // Plan is stored in meta path
+    createFileInMetaPath(instant.getFileName(), content, false);
+  }
+
+  public void saveToRestoreRequested(HoodieInstant instant, Option<byte[]> content) {
+    ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.RESTORE_ACTION));
     ValidationUtils.checkArgument(instant.getState().equals(State.REQUESTED));
     // Plan is stored in meta path
     createFileInMetaPath(instant.getFileName(), content, false);

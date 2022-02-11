@@ -41,12 +41,12 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
- * A spark implementation of {@link AbstractBulkInsertHelper}.
+ * A spark implementation of {@link BaseBulkInsertHelper}.
  *
  * @param <T>
  */
 @SuppressWarnings("checkstyle:LineLength")
-public class SparkBulkInsertHelper<T extends HoodieRecordPayload, R> extends AbstractBulkInsertHelper<T, JavaRDD<HoodieRecord<T>>,
+public class SparkBulkInsertHelper<T extends HoodieRecordPayload, R> extends BaseBulkInsertHelper<T, JavaRDD<HoodieRecord<T>>,
     JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, R> {
 
   private SparkBulkInsertHelper() {

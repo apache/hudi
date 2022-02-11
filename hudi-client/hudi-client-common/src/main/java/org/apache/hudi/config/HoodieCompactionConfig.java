@@ -90,6 +90,16 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("When set to true, compaction service is triggered after each write. While being "
           + " simpler operationally, this adds extra latency on the write path.");
 
+  public static final ConfigProperty<String> SCHEDULE_INLINE_COMPACT = ConfigProperty
+      .key("hoodie.compact.schedule.inline")
+      .defaultValue("false")
+      .withDocumentation("When set to true, compaction service will be attempted for inline scheduling after each write. Users have to ensure "
+          + "they have a separate job to run async compaction(execution) for the one scheduled by this writer. Users can choose to set both "
+          + "`hoodie.compact.inline` and `hoodie.compact.schedule.inline` to false and have both scheduling and execution triggered by any async process. "
+          + "But if `hoodie.compact.inline` is set to false, and `hoodie.compact.schedule.inline` is set to true, regular writers will schedule compaction inline, "
+          + "but users are expected to trigger async job for execution. If `hoodie.compact.inline` is set to true, regular writers will do both scheduling and "
+          + "execution inline for compaction");
+
   public static final ConfigProperty<String> INLINE_COMPACT_NUM_DELTA_COMMITS = ConfigProperty
       .key("hoodie.compact.inline.max.delta.commits")
       .defaultValue("5")
@@ -200,7 +210,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> COMPACTION_LAZY_BLOCK_READ_ENABLE = ConfigProperty
       .key("hoodie.compaction.lazy.block.read")
-      .defaultValue("false")
+      .defaultValue("true")
       .withDocumentation("When merging the delta log files, this config helps to choose whether the log blocks "
           + "should be read lazily or not. Choose true to use lazy block reading (low memory usage, but incurs seeks to each block"
           + " header) or false for immediate block read (higher memory usage)");
@@ -537,6 +547,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withScheduleInlineCompaction(Boolean scheduleAsyncCompaction) {
+      compactionConfig.setValue(SCHEDULE_INLINE_COMPACT, String.valueOf(scheduleAsyncCompaction));
+      return this;
+    }
+
     public Builder withInlineCompactionTriggerStrategy(CompactionTriggerStrategy compactionTriggerStrategy) {
       compactionConfig.setValue(INLINE_COMPACT_TRIGGER_STRATEGY, compactionTriggerStrategy.name());
       return this;
@@ -700,6 +715,12 @@ public class HoodieCompactionConfig extends HoodieConfig {
                   + "missing data from few instants.",
               HoodieCompactionConfig.MIN_COMMITS_TO_KEEP.key(), minInstantsToKeep,
               HoodieCompactionConfig.CLEANER_COMMITS_RETAINED.key(), cleanerCommitsRetained));
+
+      boolean inlineCompact = compactionConfig.getBoolean(HoodieCompactionConfig.INLINE_COMPACT);
+      boolean inlineCompactSchedule = compactionConfig.getBoolean(HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT);
+      ValidationUtils.checkArgument(!(inlineCompact && inlineCompactSchedule), String.format("Either of inline compaction (%s) or "
+              + "schedule inline compaction (%s) can be enabled. Both can't be set to true at the same time. %s, %s", HoodieCompactionConfig.INLINE_COMPACT.key(),
+          HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT.key(), inlineCompact, inlineCompactSchedule));
       return compactionConfig;
     }
   }

@@ -24,7 +24,7 @@ import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
-import org.apache.hudi.client.AbstractHoodieWriteClient;
+import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -93,7 +93,7 @@ public class TestRollbacksCommand extends CLIFunctionalTestHarness {
         .withRollbackUsingMarkers(false)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
-    try (AbstractHoodieWriteClient client = new SparkRDDWriteClient(context(), config)) {
+    try (BaseHoodieWriteClient client = new SparkRDDWriteClient(context(), config)) {
       // Rollback inflight commit3 and commit2
       client.rollback("102");
       client.rollback("101");

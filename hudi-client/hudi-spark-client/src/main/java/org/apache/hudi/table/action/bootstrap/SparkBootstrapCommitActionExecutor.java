@@ -182,6 +182,11 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
   }
 
   @Override
+  protected void setCommitMetadata(HoodieWriteMetadata<JavaRDD<WriteStatus>> result) {
+    result.setCommitMetadata(Option.of(new HoodieCommitMetadata()));
+  }
+
+  @Override
   protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<JavaRDD<WriteStatus>> result) {
     // Perform bootstrap index write and then commit. Make sure both record-key and bootstrap-index
     // is all done in a single job DAG.

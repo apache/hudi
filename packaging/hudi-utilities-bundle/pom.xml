@@ -83,6 +83,9 @@
                   <resource>META-INF/LICENSE</resource>
                   <file>target/classes/META-INF/LICENSE</file>
                 </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                  <resource>META-INF/services/org.apache.spark.sql.sources.DataSourceRegister</resource>
+                </transformer>
               </transformers>
               <artifactSet>
                 <includes>

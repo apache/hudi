@@ -26,8 +26,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-import org.apache.hudi.keygen.parser.AbstractHoodieDateTimeParser;
-import org.apache.hudi.keygen.parser.HoodieDateTimeParserImpl;
+import org.apache.hudi.keygen.parser.BaseHoodieDateTimeParser;
+import org.apache.hudi.keygen.parser.HoodieDateTimeParser;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormat;
@@ -56,7 +56,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
   private final String outputDateFormat;
   private transient Option<DateTimeFormatter> inputFormatter;
   private transient DateTimeFormatter partitionFormatter;
-  private final AbstractHoodieDateTimeParser parser;
+  private final BaseHoodieDateTimeParser parser;
 
   // TimeZone detailed settings reference
   // https://docs.oracle.com/javase/8/docs/api/java/util/TimeZone.html
@@ -99,7 +99,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
 
   TimestampBasedAvroKeyGenerator(TypedProperties config, String recordKeyField, String partitionPathField) throws IOException {
     super(config, recordKeyField, partitionPathField);
-    String dateTimeParserClass = config.getString(Config.DATE_TIME_PARSER_PROP, HoodieDateTimeParserImpl.class.getName());
+    String dateTimeParserClass = config.getString(Config.DATE_TIME_PARSER_PROP, HoodieDateTimeParser.class.getName());
     this.parser = KeyGenUtils.createDateTimeParser(config, dateTimeParserClass);
     this.inputDateTimeZone = parser.getInputDateTimeZone();
     this.outputDateTimeZone = parser.getOutputDateTimeZone();

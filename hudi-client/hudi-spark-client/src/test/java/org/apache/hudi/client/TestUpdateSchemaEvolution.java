@@ -19,6 +19,7 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -82,7 +83,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
       for (String recordStr : recordsStrs) {
         RawTripTestPayload rowChange = new RawTripTestPayload(recordStr);
         insertRecords
-            .add(new HoodieRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange));
+            .add(new HoodieAvroRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange));
       }
       Map<String, HoodieRecord> insertRecordMap = insertRecords.stream()
           .collect(Collectors.toMap(r -> r.getRecordKey(), Function.identity()));
@@ -147,7 +148,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
     List<HoodieRecord> updateRecords = new ArrayList<>();
     RawTripTestPayload rowChange = new RawTripTestPayload(recordStr);
     HoodieRecord record =
-        new HoodieRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange);
+        new HoodieAvroRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange);
     record.setCurrentLocation(new HoodieRecordLocation("101", insertFileId));
     record.seal();
     updateRecords.add(record);

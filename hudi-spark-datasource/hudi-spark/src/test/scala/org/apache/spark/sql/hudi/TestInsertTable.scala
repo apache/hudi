@@ -17,8 +17,12 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.DataSourceWriteOptions.{KEYGENERATOR_CLASS_NAME, MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieDuplicateKeyException
+import org.apache.hudi.keygen.ComplexKeyGenerator
+import org.apache.spark.sql.SaveMode
 
 import java.io.File
 
@@ -582,8 +586,48 @@ class TestInsertTable extends TestHoodieSqlBase {
       checkAnswer(s"select id, name, price, ts from $tableName")(
         Seq(1, "a1", 11.0, 1000)
       )
-
     }
   }
 
+  test("Test For read operation's field") {
+      withTempDir { tmp => {
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        import spark.implicits._
+        val day = "2021-08-02"
+        val df = Seq((1, "a1", 10, 1000, day, 12)).toDF("id", "name", "value", "ts", "day", "hh")
+        // Write a table by spark dataframe.
+        df.write.format("hudi")
+          .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+          .option(TABLE_TYPE.key, MOR_TABLE_TYPE_OPT_VAL)
+          .option(RECORDKEY_FIELD.key, "id")
+          .option(PRECOMBINE_FIELD.key, "ts")
+          .option(PARTITIONPATH_FIELD.key, "day,hh")
+          .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
+          .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+          .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
+          .option(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key, "true")
+          .mode(SaveMode.Overwrite)
+          .save(tablePath)
+
+        val metaClient = HoodieTableMetaClient.builder()
+          .setBasePath(tablePath)
+          .setConf(spark.sessionState.newHadoopConf())
+          .build()
+
+        assertResult(true)(new TableSchemaResolver(metaClient).isHasOperationField)
+
+        spark.sql(
+          s"""
+             |create table $tableName using hudi
+             |location '${tablePath}'
+             |""".stripMargin)
+
+        // Note: spark sql batch write currently does not write actual content to the operation field
+        checkAnswer(s"select id, _hoodie_operation from $tableName")(
+          Seq(1, null)
+        )
+      }
+    }
+  }
 }

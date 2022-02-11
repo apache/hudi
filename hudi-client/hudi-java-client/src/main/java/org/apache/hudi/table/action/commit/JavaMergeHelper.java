@@ -44,7 +44,7 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 
-public class JavaMergeHelper<T extends HoodieRecordPayload> extends AbstractMergeHelper<T, List<HoodieRecord<T>>,
+public class JavaMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHelper<T, List<HoodieRecord<T>>,
     List<HoodieKey>, List<WriteStatus>> {
 
   private JavaMergeHelper() {

@@ -19,16 +19,18 @@ package org.apache.hudi
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.conf.HiveConf
+
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
 import org.apache.hudi.common.config.{HoodieConfig, HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType, HoodieTimelineTimeZone, WriteOperationType}
+import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{CommitUtils, ReflectionUtils, StringUtils}
@@ -42,12 +44,16 @@ import org.apache.hudi.internal.DataSourceInternalWriterHelper
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.sync.common.AbstractSyncTool
 import org.apache.hudi.table.BulkInsertPartitioner
+
 import org.apache.log4j.LogManager
+
+import org.apache.spark.SPARK_VERSION
 import org.apache.spark.api.java.JavaSparkContext
+import org.apache.spark.sql.hive.HiveExternalCatalog
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SaveMode, SparkSession}
+import org.apache.spark.sql._
 import org.apache.spark.SparkContext
 
 import java.util.Properties
@@ -113,6 +119,11 @@ object HoodieSparkSqlWriter {
     }
 
     val jsc = new JavaSparkContext(sparkContext)
+    if (asyncCompactionTriggerFn.isDefined) {
+      if (jsc.getConf.getOption(DataSourceWriteOptions.SPARK_SCHEDULER_ALLOCATION_FILE_KEY).isDefined) {
+        jsc.setLocalProperty("spark.scheduler.pool", DataSourceWriteOptions.SPARK_DATASOURCE_WRITER_POOL_NAME)
+      }
+    }
     val instantTime = HoodieActiveTimeline.createNewInstantTime()
     val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(hoodieConfig.getProps))
 
@@ -535,6 +546,9 @@ object HoodieSparkSqlWriter {
     val hiveSyncConfig: HiveSyncConfig = buildSyncConfig(basePath, hoodieConfig, sqlConf)
     val hiveConf: HiveConf = new HiveConf()
     hiveConf.addResource(fs.getConf)
+    if (StringUtils.isNullOrEmpty(hiveConf.get(HiveConf.ConfVars.METASTOREURIS.varname))) {
+      hiveConf.set(HiveConf.ConfVars.METASTOREURIS.varname, hiveSyncConfig.metastoreUris)
+    }
     new HiveSyncTool(hiveSyncConfig, hiveConf, fs).syncHoodieTable()
     true
   }
@@ -550,6 +564,7 @@ object HoodieSparkSqlWriter {
     hiveSyncConfig.hiveUser = hoodieConfig.getString(HIVE_USER)
     hiveSyncConfig.hivePass = hoodieConfig.getString(HIVE_PASS)
     hiveSyncConfig.jdbcUrl = hoodieConfig.getString(HIVE_URL)
+    hiveSyncConfig.metastoreUris = hoodieConfig.getStringOrDefault(METASTORE_URIS)
     hiveSyncConfig.skipROSuffix = hoodieConfig.getStringOrDefault(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE,
       DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.defaultValue).toBoolean
     hiveSyncConfig.partitionFields =
@@ -569,6 +584,7 @@ object HoodieSparkSqlWriter {
     hiveSyncConfig.syncMode = hoodieConfig.getString(HIVE_SYNC_MODE)
     hiveSyncConfig.serdeProperties = hoodieConfig.getString(HIVE_TABLE_SERDE_PROPERTIES)
     hiveSyncConfig.tableProperties = hoodieConfig.getString(HIVE_TABLE_PROPERTIES)
+    hiveSyncConfig.sparkVersion = SPARK_VERSION
     hiveSyncConfig
   }
 
@@ -729,6 +745,11 @@ object HoodieSparkSqlWriter {
       tableConfig.getProps.foreach { case (key, value) =>
         mergedParams(key) = value
       }
+    }
+
+    // use preCombineField to fill in PAYLOAD_ORDERING_FIELD_PROP_KEY
+    if (mergedParams.contains(PRECOMBINE_FIELD.key())) {
+      mergedParams.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, mergedParams(PRECOMBINE_FIELD.key()))
     }
     val params = mergedParams.toMap
     (params, HoodieWriterUtils.convertMapToHoodieConfig(params))

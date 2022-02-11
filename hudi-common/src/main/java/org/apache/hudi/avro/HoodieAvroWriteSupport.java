@@ -18,11 +18,10 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
 import org.apache.hudi.common.util.Option;
-
-import org.apache.avro.Schema;
 import org.apache.parquet.avro.AvroWriteSupport;
 import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.parquet.schema.MessageType;

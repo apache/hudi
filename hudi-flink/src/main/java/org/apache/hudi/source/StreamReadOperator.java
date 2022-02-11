@@ -21,6 +21,7 @@ package org.apache.hudi.source;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 
+import org.apache.flink.api.common.operators.MailboxExecutor;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.runtime.state.JavaSerializer;
@@ -29,7 +30,6 @@ import org.apache.flink.runtime.state.StateSnapshotContext;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperatorFactory;
-import org.apache.flink.streaming.api.operators.MailboxExecutor;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
 import org.apache.flink.streaming.api.operators.StreamOperator;
@@ -54,7 +54,7 @@ import java.util.concurrent.LinkedBlockingDeque;
  * StreamReadMonitoringFunction}. Contrary to the {@link StreamReadMonitoringFunction} which has a parallelism of 1,
  * this operator can have multiple parallelism.
  *
- * <p>As soon as an input split {@link MergeOnReadInputSplit} is received, it is put in a queue,
+ * <p>As soon as an input split {@link MergeOnReadInputSplit} is received, it is put into a queue,
  * the {@link MailboxExecutor} read the actual data of the split.
  * This architecture allows the separation of split reading from processing the checkpoint barriers,
  * thus removing any potential back-pressure.
@@ -118,10 +118,10 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
         getOperatorConfig().getTimeCharacteristic(),
         getProcessingTimeService(),
         new Object(), // no actual locking needed
-        getContainingTask().getStreamStatusMaintainer(),
         output,
         getRuntimeContext().getExecutionConfig().getAutoWatermarkInterval(),
-        -1);
+        -1,
+        true);
 
     // Enqueue to process the recovered input splits.
     enqueueProcessSplits();
@@ -205,8 +205,8 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
   }
 
   @Override
-  public void dispose() throws Exception {
-    super.dispose();
+  public void close() throws Exception {
+    super.close();
 
     if (format != null) {
       format.close();
@@ -218,8 +218,8 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
   }
 
   @Override
-  public void close() throws Exception {
-    super.close();
+  public void finish() throws Exception {
+    super.finish();
     output.close();
     if (sourceContext != null) {
       sourceContext.emitWatermark(Watermark.MAX_WATERMARK);

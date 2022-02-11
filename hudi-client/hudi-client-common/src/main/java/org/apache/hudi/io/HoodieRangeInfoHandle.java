@@ -21,6 +21,7 @@ package org.apache.hudi.io;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.IOException;
@@ -32,10 +33,12 @@ public class HoodieRangeInfoHandle<T extends HoodieRecordPayload, I, K, O> exten
 
   public HoodieRangeInfoHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
       Pair<String, String> partitionPathFilePair) {
-    super(config, null, hoodieTable, partitionPathFilePair);
+    super(config, hoodieTable, partitionPathFilePair);
   }
 
   public String[] getMinMaxKeys() throws IOException {
-    return createNewFileReader().readMinMaxRecordKeys();
+    try (HoodieFileReader reader = createNewFileReader()) {
+      return reader.readMinMaxRecordKeys();
+    }
   }
 }

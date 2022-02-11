@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -44,7 +45,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
-import org.apache.hudi.table.action.deltacommit.AbstractSparkDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.deltacommit.BaseSparkDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.SparkDeleteDeltaCommitActionExecutor;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
@@ -189,8 +190,10 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
 
       assertTrue(fileIdToNewSize.entrySet().stream().anyMatch(entry -> fileIdToSize.get(entry.getKey()) < entry.getValue()));
 
-      List<String> dataFiles = roView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
-      List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), dataFiles,
+      List<String> inputPaths = roView.getLatestBaseFiles()
+          .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
+          .collect(Collectors.toList());
+      List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), inputPaths,
           basePath(), new JobConf(hadoopConf()), true, false);
       // Wrote 20 records in 2 batches
       assertEquals(40, recordsRead.size(), "Must contain 40 records");
@@ -552,7 +555,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
 
       // initialize partitioner
       hoodieTable.getHoodieView().sync();
-      AbstractSparkDeltaCommitActionExecutor actionExecutor = new SparkDeleteDeltaCommitActionExecutor(context(), cfg, hoodieTable,
+      BaseSparkDeltaCommitActionExecutor actionExecutor = new SparkDeleteDeltaCommitActionExecutor(context(), cfg, hoodieTable,
           newDeleteTime, deleteRDD);
       actionExecutor.getUpsertPartitioner(new WorkloadProfile(buildProfile(deleteRDD)));
       final List<List<WriteStatus>> deleteStatus = jsc().parallelize(Arrays.asList(1)).map(x -> {
