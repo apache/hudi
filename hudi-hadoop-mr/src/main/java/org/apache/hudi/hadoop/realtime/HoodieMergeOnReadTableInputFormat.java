@@ -210,7 +210,6 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
           fileStatus.setMaxCommitTime(maxCommitTime);
           fileStatus.setBelongToIncrementalFileStatus(true);
           fileStatus.setBasePath(basePath);
-          fileStatus.setBaseFilePath(baseFilePath);
           fileStatus.setDeltaLogFiles(f.getLatestFileSlice().get().getLogFiles().collect(Collectors.toList()));
           // try to set bootstrapfileStatus
           if (baseFileStatus instanceof LocatedFileStatusWithBootstrapBaseFile || baseFileStatus instanceof FileStatusWithBootstrapBaseFile) {
@@ -248,10 +247,12 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
           path.getBasePath(),
           path.getDeltaLogFiles(),
           path.getMaxCommitTime(),
-          path.getBelongsToIncrementalQuery());
+          path.getBelongsToIncrementalQuery(),
+          path.getVirtualKeyInfo()
+      );
     }
 
-    return path.buildSplit(path, start, length, hosts);
+    return createRealtimeFileSplit(path, start, length, hosts);
   }
 
   private static boolean containsIncrementalQuerySplits(List<FileSplit> fileSplits) {
@@ -263,11 +264,21 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
         .collect(Collectors.toList());
   }
 
+
+  private static HoodieRealtimeFileSplit createRealtimeFileSplit(HoodieRealtimePath path, long start, long length, String[] hosts) {
+    try {
+      return new HoodieRealtimeFileSplit(new FileSplit(path, start, length, hosts), path);
+    } catch (IOException e) {
+      throw new HoodieIOException(String.format("Failed to create instance of %s", HoodieRealtimeFileSplit.class.getName()), e);
+    }
+  }
+
   private static HoodieRealtimeBootstrapBaseFileSplit createRealtimeBoostrapBaseFileSplit(BootstrapBaseFileSplit split,
                                                                                           String basePath,
                                                                                           List<HoodieLogFile> logFiles,
                                                                                           String maxInstantTime,
-                                                                                          boolean belongsToIncrementalQuery) {
+                                                                                          boolean belongsToIncrementalQuery,
+                                                                                          Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt) {
     try {
       String[] hosts = split.getLocationInfo() != null ? Arrays.stream(split.getLocationInfo())
           .filter(x -> !x.isInMemory()).toArray(String[]::new) : new String[0];
@@ -275,7 +286,8 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
           .filter(SplitLocationInfo::isInMemory).toArray(String[]::new) : new String[0];
       FileSplit baseSplit = new FileSplit(split.getPath(), split.getStart(), split.getLength(),
           hosts, inMemoryHosts);
-      return new HoodieRealtimeBootstrapBaseFileSplit(baseSplit, basePath, logFiles, maxInstantTime, split.getBootstrapFileSplit(), belongsToIncrementalQuery);
+      return new HoodieRealtimeBootstrapBaseFileSplit(baseSplit, basePath, logFiles, maxInstantTime, split.getBootstrapFileSplit(),
+          belongsToIncrementalQuery, virtualKeyInfoOpt);
     } catch (IOException e) {
       throw new HoodieIOException("Error creating hoodie real time split ", e);
     }

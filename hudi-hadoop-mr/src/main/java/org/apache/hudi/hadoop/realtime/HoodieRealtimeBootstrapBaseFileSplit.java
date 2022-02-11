@@ -69,12 +69,14 @@ public class HoodieRealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit
                                               List<HoodieLogFile> deltaLogFiles,
                                               String maxInstantTime,
                                               FileSplit externalFileSplit,
-                                              boolean belongsToIncrementalQuery) throws IOException {
+                                              boolean belongsToIncrementalQuery,
+                                              Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt) throws IOException {
     super(baseSplit, externalFileSplit);
     this.maxCommitTime = maxInstantTime;
     this.deltaLogFiles = deltaLogFiles;
     this.basePath = basePath;
     this.belongsToIncrementalQuery = belongsToIncrementalQuery;
+    this.virtualKeyInfo = virtualKeyInfoOpt;
   }
 
   @Override

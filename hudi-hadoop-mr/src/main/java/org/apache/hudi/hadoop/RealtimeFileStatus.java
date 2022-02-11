@@ -21,7 +21,9 @@ package org.apache.hudi.hadoop;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimePath;
+import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -34,19 +36,31 @@ import java.util.List;
  * in Path.
  */
 public class RealtimeFileStatus extends FileStatus {
-  // a flag to mark this split is produced by incremental query or not.
-  private boolean belongToIncrementalFileStatus = false;
-  // the log files belong this fileStatus.
+  /**
+   * Marks whether this path produced as part of Incremental Query
+   */
+  private boolean belongsToIncrementalQuery = false;
+  /**
+   * List of delta log-files holding updated records for this base-file
+   */
   private List<HoodieLogFile> deltaLogFiles = new ArrayList<>();
-  // max commit time of current fileStatus.
+  /**
+   * Latest commit instant available at the time of the query in which all of the files
+   * pertaining to this split are represented
+   */
   private String maxCommitTime = "";
-  // the basePath of current hoodie table.
+  /**
+   * Base path of the table this path belongs to
+   */
   private String basePath = "";
-  // the base file belong to this status;
-  private String baseFilePath = "";
-  // the bootstrap file belong to this status.
-  // only if current query table is bootstrap table, this field is used.
+  /**
+   * File status for the Bootstrap file (only relevant if this table is a bootstrapped table
+   */
   private FileStatus bootStrapFileStatus;
+  /**
+   * Virtual key configuration of the table this split belongs to
+   */
+  private Option<HoodieVirtualKeyInfo> virtualKeyInfo = Option.empty();
 
   public RealtimeFileStatus(FileStatus fileStatus) throws IOException {
     super(fileStatus);
@@ -55,19 +69,23 @@ public class RealtimeFileStatus extends FileStatus {
   @Override
   public Path getPath() {
     Path path = super.getPath();
+
     HoodieRealtimePath realtimePath = new HoodieRealtimePath(path.getParent(), path.getName());
-    realtimePath.setBelongsToIncrementalQuery(belongToIncrementalFileStatus);
+    realtimePath.setBelongsToIncrementalQuery(belongsToIncrementalQuery);
     realtimePath.setDeltaLogFiles(deltaLogFiles);
     realtimePath.setMaxCommitTime(maxCommitTime);
     realtimePath.setBasePath(basePath);
+    realtimePath.setVirtualKeyInfo(virtualKeyInfo);
+
     if (bootStrapFileStatus != null) {
       realtimePath.setPathWithBootstrapFileStatus((PathWithBootstrapFileStatus)bootStrapFileStatus.getPath());
     }
+
     return realtimePath;
   }
 
   public void setBelongToIncrementalFileStatus(boolean belongToIncrementalFileStatus) {
-    this.belongToIncrementalFileStatus = belongToIncrementalFileStatus;
+    this.belongsToIncrementalQuery = belongToIncrementalFileStatus;
   }
 
   public List<HoodieLogFile> getDeltaLogFiles() {
@@ -94,11 +112,11 @@ public class RealtimeFileStatus extends FileStatus {
     this.basePath = basePath;
   }
 
-  public void setBaseFilePath(String baseFilePath) {
-    this.baseFilePath = baseFilePath;
-  }
-
   public void setBootStrapFileStatus(FileStatus bootStrapFileStatus) {
     this.bootStrapFileStatus = bootStrapFileStatus;
+  }
+
+  public void setVirtualKeyInfo(Option<HoodieVirtualKeyInfo> virtualKeyInfo) {
+    this.virtualKeyInfo = virtualKeyInfo;
   }
 }

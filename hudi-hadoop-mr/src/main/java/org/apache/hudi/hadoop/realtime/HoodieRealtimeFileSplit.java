@@ -18,7 +18,6 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
@@ -66,20 +65,32 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
 
   public HoodieRealtimeFileSplit() {}
 
-  HoodieRealtimeFileSplit(Path file, long start, long length, String[] hosts) {
-    super(file, start, length, hosts);
+  public HoodieRealtimeFileSplit(FileSplit baseSplit,
+                                 HoodieRealtimePath path)
+      throws IOException {
+    this(baseSplit,
+        path.getBasePath(),
+        path.getDeltaLogFiles(),
+        path.getMaxCommitTime(),
+        path.getBelongsToIncrementalQuery(),
+        path.getVirtualKeyInfo());
   }
 
   /**
-   * @deprecated
+   * @VisibleInTesting
    */
-  public HoodieRealtimeFileSplit(FileSplit baseSplit, String basePath, List<HoodieLogFile> deltaLogFiles, String maxCommitTime,
+  public HoodieRealtimeFileSplit(FileSplit baseSplit,
+                                 String basePath,
+                                 List<HoodieLogFile> deltaLogFiles,
+                                 String maxCommitTime,
+                                 boolean belongsToIncrementalQuery,
                                  Option<HoodieVirtualKeyInfo> virtualKeyInfo)
       throws IOException {
     super(baseSplit.getPath(), baseSplit.getStart(), baseSplit.getLength(), baseSplit.getLocations());
     this.deltaLogFiles = deltaLogFiles;
     this.maxCommitTime = maxCommitTime;
     this.basePath = basePath;
+    this.belongsToIncrementalQuery = belongsToIncrementalQuery;
     this.virtualKeyInfo = virtualKeyInfo;
   }
 

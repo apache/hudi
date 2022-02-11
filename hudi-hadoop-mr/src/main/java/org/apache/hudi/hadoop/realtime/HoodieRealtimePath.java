@@ -20,6 +20,7 @@ package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.PathWithBootstrapFileStatus;
 
 import java.util.ArrayList;
@@ -52,6 +53,10 @@ public class HoodieRealtimePath extends Path {
    * File status for the Bootstrap file (only relevant if this table is a bootstrapped table
    */
   private PathWithBootstrapFileStatus pathWithBootstrapFileStatus;
+  /**
+   * Virtual key configuration of the table this split belongs to
+   */
+  private Option<HoodieVirtualKeyInfo> virtualKeyInfo = Option.empty();
 
   public HoodieRealtimePath(Path parent, String child) {
     super(parent, child);
@@ -105,12 +110,11 @@ public class HoodieRealtimePath extends Path {
     return pathWithBootstrapFileStatus != null;
   }
 
-  public HoodieRealtimeFileSplit buildSplit(Path file, long start, long length, String[] hosts) {
-    HoodieRealtimeFileSplit bs = new HoodieRealtimeFileSplit(file, start, length, hosts);
-    bs.setBelongsToIncrementalQuery(belongsToIncrementalQuery);
-    bs.setDeltaLogFiles(deltaLogFiles);
-    bs.setMaxCommitTime(maxCommitTime);
-    bs.setBasePath(basePath);
-    return bs;
+  public Option<HoodieVirtualKeyInfo> getVirtualKeyInfo() {
+    return virtualKeyInfo;
+  }
+
+  public void setVirtualKeyInfo(Option<HoodieVirtualKeyInfo> virtualKeyInfo) {
+    this.virtualKeyInfo = virtualKeyInfo;
   }
 }
