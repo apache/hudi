@@ -495,7 +495,6 @@ public class SparkMain {
   private static HoodieWriteConfig getWriteConfig(String basePath, Boolean rollbackUsingMarkers) {
     return HoodieWriteConfig.newBuilder().withPath(basePath)
         .withRollbackUsingMarkers(rollbackUsingMarkers)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
   }
 }
