@@ -76,17 +76,14 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
 
   private val maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(jobConf)
 
-  private val preCombineField = {
-    val preCombineFieldFromTableConfig = metaClient.getTableConfig.getPreCombineField
-    if (preCombineFieldFromTableConfig != null) {
-      Some(preCombineFieldFromTableConfig)
-    } else {
+  private val preCombineField =
+    Option(metaClient.getTableConfig.getPreCombineField)
       // get preCombineFiled from the options if this is a old table which have not store
       // the field to hoodie.properties
-      optParams.get(DataSourceReadOptions.READ_PRE_COMBINE_FIELD.key)
-    }
-  }
+      .getOrElse(optParams.getOrElse(DataSourceWriteOptions.PRECOMBINE_FIELD.key, DataSourceWriteOptions.PRECOMBINE_FIELD.defaultValue))
   private val recordKeyField = metaClient.getTableConfig.getRecordKeyFieldProp
+
+  private val mandatoryColumns = Seq(recordKeyField, preCombineField)
 
   override def needConversion: Boolean = false
 
@@ -102,8 +99,10 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
     //          - Merging could be performed correctly
     //          - In case 0 columns are to be fetched (for ex, when doing {@code count()} on Spark's [[Dataset]],
     //          Spark still fetches all the rows to execute the query correctly
-    val fetchedColumns: Array[String] =
-      requiredColumns ++ (if (requiredColumns.contains(recordKeyField)) Seq() else Seq(recordKeyField))
+    //
+    //       It's okay to return columns that have not been requested by the caller, as those nevertheless will be
+    //       filtered out upstream
+    val fetchedColumns: Array[String] = appendMandatoryColumns(requiredColumns)
 
     val (requiredAvroSchema, requiredStructSchema) =
       HoodieSparkUtils.getRequiredSchema(tableAvroSchema, fetchedColumns)
@@ -226,6 +225,11 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
         fileSplits
       }
     }
+  }
+
+  private def appendMandatoryColumns(requestedColumns: Array[String]): Array[String] = {
+    val missing = mandatoryColumns.filter(col => !requestedColumns.contains(col))
+    requestedColumns ++ missing
   }
 }
 
