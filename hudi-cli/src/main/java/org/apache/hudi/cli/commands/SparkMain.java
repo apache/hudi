@@ -439,7 +439,7 @@ public class SparkMain {
       LOG.info(String.format("The commit \"%s\" rolled back.", savepointTime));
       return 0;
     } catch (Exception e) {
-      LOG.warn(String.format("The commit \"%s\" failed to roll back.", savepointTime));
+      LOG.warn(String.format("The commit \"%s\" failed to roll back.", savepointTime), e);
       return -1;
     }
   }
@@ -451,7 +451,7 @@ public class SparkMain {
       LOG.info(String.format("Savepoint \"%s\" deleted.", savepointTime));
       return 0;
     } catch (Exception e) {
-      LOG.warn(String.format("Failed: Could not delete savepoint \"%s\".", savepointTime));
+      LOG.warn(String.format("Failed: Could not delete savepoint \"%s\".", savepointTime), e);
       return -1;
     }
   }
