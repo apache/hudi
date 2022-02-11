@@ -46,8 +46,8 @@ case class HoodieMergeOnReadFileSplit(dataFile: Option[PartitionedFile],
 
 case class HoodieMergeOnReadTableState(schemas: HoodieTableSchemas,
                                        hoodieRealtimeFileSplits: List[HoodieMergeOnReadFileSplit],
-                                       preCombineField: String,
-                                       recordKeyField: String)
+                                       recordKeyField: String,
+                                       preCombineFieldOpt: Option[String])
 
 class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
                                   optParams: Map[String, String],
@@ -76,14 +76,14 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
 
   private val maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(jobConf)
 
-  private val preCombineField =
+  private val recordKeyField = metaClient.getTableConfig.getRecordKeyFieldProp
+  private val preCombineFieldOpt =
     Option(metaClient.getTableConfig.getPreCombineField)
       // get preCombineFiled from the options if this is a old table which have not store
       // the field to hoodie.properties
-      .getOrElse(optParams.getOrElse(DataSourceWriteOptions.PRECOMBINE_FIELD.key, DataSourceWriteOptions.PRECOMBINE_FIELD.defaultValue))
-  private val recordKeyField = metaClient.getTableConfig.getRecordKeyFieldProp
+      .orElse(optParams.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key))
 
-  private val mandatoryColumns = Seq(recordKeyField, preCombineField)
+  private val mandatoryColumns = Seq(recordKeyField) ++ preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
 
   override def needConversion: Boolean = false
 
@@ -114,7 +114,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       tableAvroSchema = tableAvroSchema.toString,
       requiredAvroSchema = requiredAvroSchema.toString
     )
-    val tableState = HoodieMergeOnReadTableState(tableSchemas, fileIndex, preCombineField, recordKeyField)
+    val tableState = HoodieMergeOnReadTableState(tableSchemas, fileIndex, recordKeyField, preCombineFieldOpt)
     val fullSchemaParquetReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
       tableSchemas = tableSchemas,

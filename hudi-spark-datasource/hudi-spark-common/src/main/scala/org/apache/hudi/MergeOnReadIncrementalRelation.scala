@@ -76,11 +76,11 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
 
   private val fileIndex = if (commitsToReturn.isEmpty) List() else buildFileIndex()
 
-  private val preCombineField =
+  private val preCombineFieldOpt =
     Option(metaClient.getTableConfig.getPreCombineField)
       // get preCombineFiled from the options if this is a old table which have not store
       // the field to hoodie.properties
-      .getOrElse(optParams.getOrElse(DataSourceWriteOptions.PRECOMBINE_FIELD.key, DataSourceWriteOptions.PRECOMBINE_FIELD.defaultValue))
+      .orElse(optParams.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key))
 
   override def schema: StructType = tableStructSchema
 
@@ -123,7 +123,7 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
         tableAvroSchema = tableAvroSchema.toString,
         requiredAvroSchema = requiredAvroSchema.toString
       )
-      val hoodieTableState = HoodieMergeOnReadTableState(tableSchemas, fileIndex, preCombineField, HoodieRecord.RECORD_KEY_METADATA_FIELD)
+      val hoodieTableState = HoodieMergeOnReadTableState(tableSchemas, fileIndex, HoodieRecord.RECORD_KEY_METADATA_FIELD, preCombineFieldOpt)
       val fullSchemaParquetReader = createBaseFileReader(
         spark = sqlContext.sparkSession,
         tableSchemas = tableSchemas,
