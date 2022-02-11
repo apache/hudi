@@ -58,17 +58,23 @@ abstract class HoodieBaseRelation(
 
   protected val sparkSession: SparkSession = sqlContext.sparkSession
 
-  protected val tableAvroSchema: Schema = {
+  protected lazy val tableAvroSchema: Schema = {
     val schemaUtil = new TableSchemaResolver(metaClient)
-    Try (schemaUtil.getTableAvroSchema).getOrElse(SchemaConverters.toAvroType(userSchema.get))
+    Try(schemaUtil.getTableAvroSchema).getOrElse(
+      // If there is no commit in the table, we can't get the schema
+      // t/h [[TableSchemaResolver]], fallback to provided the [[userSchema]] instead.
+      userSchema match {
+        case Some(s) => SchemaConverters.toAvroType(s)
+        case _ => throw new IllegalArgumentException("User-provided schema is required in case the table is empty")
+      }
+    )
   }
 
   protected val tableStructSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
 
   protected val partitionColumns: Array[String] = metaClient.getTableConfig.getPartitionFields.orElse(Array.empty)
 
-  override def schema: StructType = userSchema.getOrElse(tableStructSchema)
-
+  override def schema: StructType = tableStructSchema
 }
 
 object HoodieBaseRelation {

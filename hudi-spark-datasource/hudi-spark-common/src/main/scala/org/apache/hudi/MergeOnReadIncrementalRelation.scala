@@ -82,8 +82,6 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
       // the field to hoodie.properties
       .orElse(optParams.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key))
 
-  override def schema: StructType = tableStructSchema
-
   override def needConversion: Boolean = false
 
   override def unhandledFilters(filters: Array[Filter]): Array[Filter] = {

@@ -22,13 +22,12 @@ import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.{createBaseFileReader, isMetadataTable}
 import org.apache.hudi.common.model.HoodieLogFile
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.hudi.metadata.HoodieMetadataPayload
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile}
@@ -60,21 +59,6 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
 
   private val conf = sqlContext.sparkContext.hadoopConfiguration
   private val jobConf = new JobConf(conf)
-
-  private lazy val tableAvroSchema = {
-    try {
-      val schemaResolver = new TableSchemaResolver(metaClient)
-      schemaResolver.getTableAvroSchema(metaClient.getTableConfig.populateMetaFields)
-    } catch {
-      // If there is no commit in the table, we can't get the schema
-      // t/h [[TableSchemaResolver]], fallback to provided the [[userSchema]] instead.
-      case _: Throwable =>
-        userSchema match {
-          case Some(s) => SchemaConverters.toAvroType(s)
-          case _ => throw new IllegalArgumentException("User-provided schema is required in case the table is empty")
-        }
-    }
-  }
 
   private val mergeType = optParams.getOrElse(
     DataSourceReadOptions.REALTIME_MERGE.key,
