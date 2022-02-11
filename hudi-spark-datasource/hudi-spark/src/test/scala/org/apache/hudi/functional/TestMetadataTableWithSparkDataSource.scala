@@ -28,7 +28,7 @@ import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{Tag, Test}
 
-import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
+import scala.collection.JavaConverters._
 
 @Tag("functional")
 class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarness {
@@ -56,7 +56,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     // Insert records
     val newRecords = dataGen.generateInserts("001", 100)
-    val newRecordsDF = parseRecords(recordsToStrings(newRecords).toSeq)
+    val newRecordsDF = parseRecords(recordsToStrings(newRecords).asScala)
 
     newRecordsDF.write.format(hudi)
       .options(opts)
@@ -66,7 +66,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     // Update records
     val updatedRecords = dataGen.generateUpdates("002", newRecords)
-    val updatedRecordsDF = parseRecords(recordsToStrings(updatedRecords).toSeq)
+    val updatedRecordsDF = parseRecords(recordsToStrings(updatedRecords).asScala)
 
     updatedRecordsDF.write.format(hudi)
       .options(opts)
