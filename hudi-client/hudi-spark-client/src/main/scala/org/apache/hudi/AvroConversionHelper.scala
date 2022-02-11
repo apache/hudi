@@ -41,7 +41,7 @@ object AvroConversionHelper {
                             structName: String,
                             recordNamespace: String): Any => Any = {
     val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataType, structName, recordNamespace)
-    // NOTE: We're conservatively assuming that the record might be nullable
-    AvroConversionUtils.createRowToAvroConverter(dataType, avroSchema, nullable = true)
+    // NOTE: We're conservatively assuming that the record have to be NON-nullable
+    AvroConversionUtils.createRowToAvroConverter(dataType, avroSchema, nullable = false)
   }
 }
