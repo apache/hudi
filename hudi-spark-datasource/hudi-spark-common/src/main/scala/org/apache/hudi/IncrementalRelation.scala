@@ -48,7 +48,7 @@ import scala.collection.mutable
  */
 class IncrementalRelation(val sqlContext: SQLContext,
                           val optParams: Map[String, String],
-                          val userSchema: StructType,
+                          val userSchema: Option[StructType],
                           val metaClient: HoodieTableMetaClient) extends BaseRelation with TableScan {
 
   private val log = LogManager.getLogger(classOf[IncrementalRelation])

@@ -25,9 +25,12 @@ import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.listAffectedFilesForC
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getCommitMetadata
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getWritePartitionPaths
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
+
 import org.apache.hadoop.fs.{GlobPattern, Path}
 import org.apache.hadoop.mapred.JobConf
+
 import org.apache.log4j.LogManager
+
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
@@ -43,15 +46,15 @@ import scala.collection.JavaConversions._
   * Relation, that implements the Hoodie incremental view for Merge On Read table.
   *
   */
-class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
+class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
                                      val optParams: Map[String, String],
-                                     val userSchema: StructType,
+                                     val userSchema: Option[StructType],
                                      val metaClient: HoodieTableMetaClient)
-  extends BaseRelation with PrunedFilteredScan {
+  extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) {
 
-  private val log = LogManager.getLogger(classOf[MergeOnReadIncrementalRelation])
   private val conf = sqlContext.sparkContext.hadoopConfiguration
   private val jobConf = new JobConf(conf)
+
   private val commitTimeline = metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants()
   if (commitTimeline.empty()) {
     throw new HoodieException("No instants to incrementally pull")
@@ -72,13 +75,13 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
   private val commitsTimelineToReturn = commitTimeline.findInstantsInRange(
     optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
     optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key, lastInstant.getTimestamp))
-  log.debug(s"${commitsTimelineToReturn.getInstants.iterator().toList.map(f => f.toString).mkString(",")}")
+  logDebug(s"${commitsTimelineToReturn.getInstants.iterator().toList.map(f => f.toString).mkString(",")}")
   private val commitsToReturn = commitsTimelineToReturn.getInstants.iterator().toList
-  private val schemaResolver = new TableSchemaResolver(metaClient)
-  private val tableAvroSchema = schemaResolver.getTableAvroSchema
-  private val tableStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
+
   private val maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(jobConf)
+
   private val fileIndex = if (commitsToReturn.isEmpty) List() else buildFileIndex()
+
   private val preCombineField = {
     val preCombineFieldFromTableConfig = metaClient.getTableConfig.getPreCombineField
     if (preCombineFieldFromTableConfig != null) {
@@ -89,7 +92,6 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
       optParams.get(DataSourceReadOptions.READ_PRE_COMBINE_FIELD.key)
     }
   }
-  override def schema: StructType = tableStructSchema
 
   override def needConversion: Boolean = false
 
@@ -108,8 +110,8 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
     if (fileIndex.isEmpty) {
       sqlContext.sparkContext.emptyRDD[Row]
     } else {
-      log.debug(s"buildScan requiredColumns = ${requiredColumns.mkString(",")}")
-      log.debug(s"buildScan filters = ${filters.mkString(",")}")
+      logDebug(s"buildScan requiredColumns = ${requiredColumns.mkString(",")}")
+      logDebug(s"buildScan filters = ${filters.mkString(",")}")
       // config to ensure the push down filter for parquet will be applied.
       sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.filterPushdown", "true")
       sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.recordLevelFilter.enabled", "true")
@@ -121,7 +123,7 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
         filters :+ isNotNullFilter :+ largerThanFilter :+ lessThanFilter
       }
       val (requiredAvroSchema, requiredStructSchema) =
-        MergeOnReadSnapshotRelation.getRequiredSchema(tableAvroSchema, requiredColumns)
+        HoodieSparkUtils.getRequiredSchema(tableAvroSchema, requiredColumns)
 
       val hoodieTableState = HoodieMergeOnReadTableState(
         tableStructSchema,
@@ -132,7 +134,7 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
         preCombineField,
         Option.empty
       )
-      val fullSchemaParquetReader = new ParquetFileFormat().buildReaderWithPartitionValues(
+      val fullSchemaParquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
         sparkSession = sqlContext.sparkSession,
         dataSchema = tableStructSchema,
         partitionSchema = StructType(Nil),
@@ -141,7 +143,8 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
         options = optParams,
         hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
       )
-      val requiredSchemaParquetReader = new ParquetFileFormat().buildReaderWithPartitionValues(
+
+      val requiredSchemaParquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
         sparkSession = sqlContext.sparkSession,
         dataSchema = tableStructSchema,
         partitionSchema = StructType(Nil),
@@ -173,7 +176,7 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
     ).toList
     val latestCommit = fsView.getLastInstant.get.getTimestamp
     if (log.isDebugEnabled) {
-      fileGroups.foreach(f => log.debug(s"current file group id: " +
+      fileGroups.foreach(f => logDebug(s"current file group id: " +
         s"${f.getFileGroupId} and file slices ${f.getLatestFileSlice.get.toString}"))
     }
 
