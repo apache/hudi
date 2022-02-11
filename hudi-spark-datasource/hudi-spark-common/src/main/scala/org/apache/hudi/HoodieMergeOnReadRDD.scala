@@ -241,7 +241,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       private val requiredFieldPosition =
         tableState.schemas.requiredSchema
           .map(f => tableAvroSchema.getField(f.name).pos()).toList
-      private val serializer = HoodieAvroSerializer(tableState.schemas.tableSchema, tableAvroSchema, false)
+      private val requiredSerializer = HoodieAvroSerializer(tableState.schemas.requiredSchema, requiredAvroSchema, nullable = false)
       private val requiredDeserializer = HoodieAvroDeserializer(requiredAvroSchema, tableState.schemas.requiredSchema)
       private val recordBuilder = new GenericRecordBuilder(requiredAvroSchema)
       private val unsafeProjection = UnsafeProjection.create(tableState.schemas.requiredSchema)
@@ -320,7 +320,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       }
 
       private def mergeRowWithLog(curRow: InternalRow, curKey: String) = {
-        val historyAvroRecord = serializer.serialize(curRow).asInstanceOf[GenericRecord]
+        val historyAvroRecord = requiredSerializer.serialize(curRow).asInstanceOf[GenericRecord]
         logRecords.get(curKey).getData.combineAndGetUpdateValue(
           historyAvroRecord, tableAvroSchema, payloadProps)
       }
