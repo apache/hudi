@@ -42,22 +42,22 @@ import java.util.List;
  */
 public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit {
   /**
-   * Marks whether this path produced as part of Incremental Query
-   */
-  private boolean belongsToIncrementalQuery = false;
-  /**
    * List of delta log-files holding updated records for this base-file
    */
   private List<HoodieLogFile> deltaLogFiles = new ArrayList<>();
+  /**
+   * Base path of the table this path belongs to
+   */
+  private String basePath;
   /**
    * Latest commit instant available at the time of the query in which all of the files
    * pertaining to this split are represented
    */
   private String maxCommitTime;
   /**
-   * Base path of the table this path belongs to
+   * Marks whether this path produced as part of Incremental Query
    */
-  private String basePath;
+  private boolean belongsToIncrementalQuery = false;
   /**
    * Virtual key configuration of the table this split belongs to
    */
@@ -88,8 +88,8 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
       throws IOException {
     super(baseSplit.getPath(), baseSplit.getStart(), baseSplit.getLength(), baseSplit.getLocations());
     this.deltaLogFiles = deltaLogFiles;
-    this.maxCommitTime = maxCommitTime;
     this.basePath = basePath;
+    this.maxCommitTime = maxCommitTime;
     this.belongsToIncrementalQuery = belongsToIncrementalQuery;
     this.virtualKeyInfo = virtualKeyInfo;
   }

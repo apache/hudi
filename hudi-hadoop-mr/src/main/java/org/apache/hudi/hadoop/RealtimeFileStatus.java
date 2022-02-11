@@ -73,10 +73,6 @@ public class RealtimeFileStatus extends FileStatus {
     this.virtualKeyInfo = virtualKeyInfo;
   }
 
-  public RealtimeFileStatus(FileStatus fileStatus, String basePath, List<HoodieLogFile> deltaLogFiles) throws IOException {
-    this(fileStatus, basePath, deltaLogFiles, false, Option.empty());
-  }
-
   @Override
   public Path getPath() {
     Path path = super.getPath();
@@ -89,10 +85,6 @@ public class RealtimeFileStatus extends FileStatus {
     }
 
     return realtimePath;
-  }
-
-  public String getBasePath() {
-    return basePath;
   }
 
   public List<HoodieLogFile> getDeltaLogFiles() {
