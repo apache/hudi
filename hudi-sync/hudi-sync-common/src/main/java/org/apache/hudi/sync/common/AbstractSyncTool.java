@@ -29,15 +29,12 @@ import org.apache.hadoop.fs.FileSystem;
 public abstract class AbstractSyncTool {
   protected final Configuration conf;
   protected final FileSystem fs;
-  protected final HoodieSyncConfig syncConfig;
   protected TypedProperties props;
 
   public AbstractSyncTool(TypedProperties props, Configuration conf, FileSystem fs) {
     this.props = props;
     this.conf = conf;
     this.fs = fs;
-
-    this.syncConfig = new HoodieSyncConfig(props);
   }
 
   public abstract void syncHoodieTable();

@@ -79,17 +79,17 @@ public class HiveSyncTool extends AbstractSyncTool {
   public HiveSyncTool(TypedProperties props, Configuration conf, FileSystem fs) {
     super(props, conf, fs);
     this.hiveSyncConfig = new HiveSyncConfig(props);
-    init(hiveSyncConfig, new HiveConf(conf, HiveConf.class), fs);
+    init(hiveSyncConfig, new HiveConf(conf, HiveConf.class));
   }
 
   // ToDo Make private once Flink moves to first API.
   public HiveSyncTool(HiveSyncConfig hiveSyncConfig, HiveConf hiveConf, FileSystem fs) {
     super(hiveSyncConfig.getProps(), hiveConf, fs);
     this.hiveSyncConfig = hiveSyncConfig;
-    init(hiveSyncConfig, hiveConf, fs);
+    init(hiveSyncConfig, hiveConf);
   }
 
-  private void init(HiveSyncConfig hiveSyncConfig, HiveConf hiveConf, FileSystem fs) {
+  private void init(HiveSyncConfig hiveSyncConfig, HiveConf hiveConf) {
     try {
       this.hoodieHiveClient = new HoodieHiveClient(hiveSyncConfig, hiveConf, fs);
     } catch (RuntimeException e) {
@@ -105,6 +105,9 @@ public class HiveSyncTool extends AbstractSyncTool {
       LOG.warn("Set partitionFields to empty, since the NonPartitionedExtractor is used");
       hiveSyncConfig.partitionFields = new ArrayList<>();
     }
+
+    System.out.println("WNI VIMP " + hiveSyncConfig.toString());
+
     if (hoodieHiveClient != null) {
       switch (hoodieHiveClient.getTableType()) {
         case COPY_ON_WRITE:
