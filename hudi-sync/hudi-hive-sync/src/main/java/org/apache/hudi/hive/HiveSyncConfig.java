@@ -227,7 +227,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     this.autoCreateDatabase = getBooleanOrDefault(HIVE_AUTO_CREATE_DATABASE);
     this.ignoreExceptions = getBooleanOrDefault(HIVE_IGNORE_EXCEPTIONS);
     this.skipROSuffix = getBooleanOrDefault(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE);
-    this.useFileListingFromMetadata = getBooleanOrDefault(HoodieMetadataConfig.ENABLE);
+    this.useFileListingFromMetadata = HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
     this.tableProperties = getString(HIVE_TABLE_PROPERTIES);
     this.serdeProperties = getString(HIVE_TABLE_SERDE_PROPERTIES);
     this.supportTimestamp = getBooleanOrDefault(HIVE_SUPPORT_TIMESTAMP_TYPE);

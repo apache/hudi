@@ -105,9 +105,6 @@ public class HiveSyncTool extends AbstractSyncTool {
       LOG.warn("Set partitionFields to empty, since the NonPartitionedExtractor is used");
       hiveSyncConfig.partitionFields = new ArrayList<>();
     }
-
-    System.out.println("WNI VIMP " + hiveSyncConfig.toString());
-
     if (hoodieHiveClient != null) {
       switch (hoodieHiveClient.getTableType()) {
         case COPY_ON_WRITE:
