@@ -21,19 +21,15 @@ package org.apache.hudi
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder}
 import org.apache.hadoop.conf.Configuration
-import org.apache.hudi.MergeOnReadSnapshotRelation.getFilePath
-import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.engine.HoodieLocalEngineContext
-
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieDataSourceHelper._
+import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
 import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
-import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS
-
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.spark.rdd.RDD
@@ -60,7 +56,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
 
   private val confBroadcast = sc.broadcast(new SerializableWritable(config))
   private val preCombineField = tableState.preCombineField
-  private val recordKeyFieldOpt = tableState.recordKeyFieldOpt
+  private val recordKeyField = tableState.recordKeyField
   private val payloadProps = if (preCombineField.isDefined) {
     HoodiePayloadConfig.newBuilder
       .withPayloadOrderingField(preCombineField.get)
@@ -253,7 +249,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       private val logRecords = logScanner.getRecords
       private val logRecordsKeyIterator = logRecords.keySet().iterator().asScala
       private val keyToSkip = mutable.Set.empty[String]
-      private val recordKeyPosition = if (recordKeyFieldOpt.isEmpty) HOODIE_RECORD_KEY_COL_POS else tableState.schemas.tableSchema.fieldIndex(recordKeyFieldOpt.get)
+      private val recordKeyPosition = tableState.schemas.tableSchema.fieldIndex(recordKeyField)
 
       private var recordToLoad: InternalRow = _
 

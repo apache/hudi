@@ -126,7 +126,7 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
         tableAvroSchema = tableAvroSchema.toString,
         requiredAvroSchema = requiredAvroSchema.toString
       )
-      val hoodieTableState = HoodieMergeOnReadTableState(tableSchemas, fileIndex, preCombineField, Option.empty)
+      val hoodieTableState = HoodieMergeOnReadTableState(tableSchemas, fileIndex, preCombineField, HoodieRecord.RECORD_KEY_METADATA_FIELD)
       val fullSchemaParquetReader = createBaseFileReader(
         spark = sqlContext.sparkSession,
         tableSchemas = tableSchemas,

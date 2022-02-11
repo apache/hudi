@@ -18,28 +18,19 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
-import org.apache.hadoop.fs.Path
-import org.apache.hadoop.mapred.JobConf
-import org.apache.hudi.HoodieBaseRelation.createBaseFileReader
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.createBaseFileReader
 import org.apache.hudi.common.model.HoodieLogFile
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
-import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
-import org.apache.spark.sql.sources.{Filter, PrunedFilteredScan}
-import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{Row, SQLContext}
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Row, SQLContext}
@@ -56,7 +47,7 @@ case class HoodieMergeOnReadFileSplit(dataFile: Option[PartitionedFile],
 case class HoodieMergeOnReadTableState(schemas: HoodieTableSchemas,
                                        hoodieRealtimeFileSplits: List[HoodieMergeOnReadFileSplit],
                                        preCombineField: Option[String],
-                                       recordKeyFieldOpt: Option[String])
+                                       recordKeyField: String)
 
 class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
                                   optParams: Map[String, String],
@@ -95,10 +86,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       optParams.get(DataSourceReadOptions.READ_PRE_COMBINE_FIELD.key)
     }
   }
-  private var recordKeyFieldOpt = Option.empty[String]
-  if (!metaClient.getTableConfig.populateMetaFields()) {
-    recordKeyFieldOpt = Option(metaClient.getTableConfig.getRecordKeyFieldProp)
-  }
+  private val recordKeyField = metaClient.getTableConfig.getRecordKeyFieldProp
 
   override def needConversion: Boolean = false
 
@@ -109,8 +97,16 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
     log.debug(s" buildScan requiredColumns = ${requiredColumns.mkString(",")}")
     log.debug(s" buildScan filters = ${filters.mkString(",")}")
 
+    // NOTE: In case list of requested columns doesn't contain the Primary Key one, we
+    //       have to add it explicitly so that
+    //          - Merging could be performed correctly
+    //          - In case 0 columns are to be fetched (for ex, when doing {@code count()} on Spark's [[Dataset]],
+    //          Spark still fetches all the rows to execute the query correctly
+    val fetchedColumns: Array[String] =
+      requiredColumns ++ (if (requiredColumns.contains(recordKeyField)) Seq() else Seq(recordKeyField))
+
     val (requiredAvroSchema, requiredStructSchema) =
-      HoodieSparkUtils.getRequiredSchema(tableAvroSchema, requiredColumns)
+      HoodieSparkUtils.getRequiredSchema(tableAvroSchema, fetchedColumns)
     val fileIndex = buildFileIndex(filters)
     val tableSchemas = HoodieTableSchemas(
       tableSchema = tableStructSchema,
@@ -119,7 +115,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       tableAvroSchema = tableAvroSchema.toString,
       requiredAvroSchema = requiredAvroSchema.toString
     )
-    val tableState = HoodieMergeOnReadTableState(tableSchemas, fileIndex, preCombineField, recordKeyFieldOpt)
+    val tableState = HoodieMergeOnReadTableState(tableSchemas, fileIndex, preCombineField, recordKeyField)
     val fullSchemaParquetReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
       tableSchemas = tableSchemas,
