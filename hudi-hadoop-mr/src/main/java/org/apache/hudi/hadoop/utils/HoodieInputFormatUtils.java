@@ -532,12 +532,12 @@ public class HoodieInputFormatUtils {
    *
    * @return the affected file status array
    */
-  public static FileStatus[] listAffectedFilesForCommits(Path basePath, List<HoodieCommitMetadata> metadataList) {
+  public static FileStatus[] listAffectedFilesForCommits(Configuration hadoopConf, Path basePath, List<HoodieCommitMetadata> metadataList) {
     // TODO: Use HoodieMetaTable to extract affected file directly.
     HashMap<String, FileStatus> fullPathToFileStatus = new HashMap<>();
     // Iterate through the given commits.
     for (HoodieCommitMetadata metadata: metadataList) {
-      fullPathToFileStatus.putAll(metadata.getFullPathToFileStatus(basePath.toString()));
+      fullPathToFileStatus.putAll(metadata.getFullPathToFileStatus(hadoopConf, basePath.toString()));
     }
     return fullPathToFileStatus.values().toArray(new FileStatus[0]);
   }

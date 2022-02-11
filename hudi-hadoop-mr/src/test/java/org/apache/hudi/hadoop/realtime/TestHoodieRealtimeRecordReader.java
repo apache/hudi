@@ -614,7 +614,7 @@ public class TestHoodieRealtimeRecordReader {
       HoodieParquetRealtimeInputFormat inputFormat =  new HoodieParquetRealtimeInputFormat();
       inputFormat.setConf(baseJobConf);
       InputSplit[] splits = inputFormat.getSplits(baseJobConf, 1);
-      assertTrue(splits.length == 1);
+      assertEquals(1, splits.length);
       JobConf newJobConf = new JobConf(baseJobConf);
       List<Schema.Field> fields = schema.getFields();
       setHiveColumnNameProps(fields, newJobConf, false);
