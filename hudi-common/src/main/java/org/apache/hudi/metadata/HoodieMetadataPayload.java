@@ -18,6 +18,13 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
@@ -37,14 +44,6 @@ import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.io.storage.HoodieHFileReader;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -56,6 +55,7 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.TypeUtils.unsafeCast;
 import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_LIST;
 
 /**
@@ -125,47 +125,54 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     this(Option.of(record));
   }
 
-  public HoodieMetadataPayload(Option<GenericRecord> record) {
-    if (record.isPresent()) {
+  public HoodieMetadataPayload(Option<GenericRecord> recordOpt) {
+    if (recordOpt.isPresent()) {
+      GenericRecord record = recordOpt.get();
       // This can be simplified using SpecificData.deepcopy once this bug is fixed
       // https://issues.apache.org/jira/browse/AVRO-1811
-      key = record.get().get(KEY_FIELD_NAME).toString();
-      type = (int) record.get().get(SCHEMA_FIELD_NAME_TYPE);
-      if (record.get().get(SCHEMA_FIELD_NAME_METADATA) != null) {
-        filesystemMetadata = (Map<String, HoodieMetadataFileInfo>) record.get().get("filesystemMetadata");
+      //
+      // NOTE: {@code HoodieMetadataRecord} has to always carry both "key" nad "type" fields
+      //       for it to be handled appropriately, therefore these fields have to be reflected
+      //       in any (read-)projected schema
+      key = record.get(KEY_FIELD_NAME).toString();
+      type = (int) record.get(SCHEMA_FIELD_NAME_TYPE);
+
+      Map<String, HoodieMetadataFileInfo> metadata = getNestedFieldValue(record, SCHEMA_FIELD_NAME_METADATA);
+      if (metadata != null) {
+        filesystemMetadata = metadata;
         filesystemMetadata.keySet().forEach(k -> {
           GenericRecord v = filesystemMetadata.get(k);
-          filesystemMetadata.put(k.toString(), new HoodieMetadataFileInfo((Long) v.get("size"), (Boolean) v.get("isDeleted")));
+          filesystemMetadata.put(k, new HoodieMetadataFileInfo((Long) v.get("size"), (Boolean) v.get("isDeleted")));
         });
       }
 
       if (type == METADATA_TYPE_BLOOM_FILTER) {
-        final GenericRecord metadataRecord = (GenericRecord) record.get().get(SCHEMA_FIELD_ID_BLOOM_FILTER);
-        if (metadataRecord == null) {
+        GenericRecord bloomFilterRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_BLOOM_FILTER);
+        if (bloomFilterRecord == null) {
           throw new HoodieMetadataException("Valid " + SCHEMA_FIELD_ID_BLOOM_FILTER + " record expected for type: " + METADATA_TYPE_BLOOM_FILTER);
         }
         bloomFilterMetadata = new HoodieMetadataBloomFilter(
-            (String) metadataRecord.get(BLOOM_FILTER_FIELD_TYPE),
-            (String) metadataRecord.get(BLOOM_FILTER_FIELD_TIMESTAMP),
-            (ByteBuffer) metadataRecord.get(BLOOM_FILTER_FIELD_BLOOM_FILTER),
-            (Boolean) metadataRecord.get(BLOOM_FILTER_FIELD_IS_DELETED)
+            (String) bloomFilterRecord.get(BLOOM_FILTER_FIELD_TYPE),
+            (String) bloomFilterRecord.get(BLOOM_FILTER_FIELD_TIMESTAMP),
+            (ByteBuffer) bloomFilterRecord.get(BLOOM_FILTER_FIELD_BLOOM_FILTER),
+            (Boolean) bloomFilterRecord.get(BLOOM_FILTER_FIELD_IS_DELETED)
         );
       }
 
       if (type == METADATA_TYPE_COLUMN_STATS) {
-        GenericRecord v = (GenericRecord) record.get().get(SCHEMA_FIELD_ID_COLUMN_STATS);
-        if (v == null) {
+        GenericRecord columnStatsRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_COLUMN_STATS);
+        if (columnStatsRecord == null) {
           throw new HoodieMetadataException("Valid " + SCHEMA_FIELD_ID_COLUMN_STATS + " record expected for type: " + METADATA_TYPE_COLUMN_STATS);
         }
         columnStatMetadata = HoodieMetadataColumnStats.newBuilder()
-            .setFileName((String) v.get(COLUMN_STATS_FIELD_RESOURCE_NAME))
-            .setMinValue((String) v.get(COLUMN_STATS_FIELD_MIN_VALUE))
-            .setMaxValue((String) v.get(COLUMN_STATS_FIELD_MAX_VALUE))
-            .setValueCount((Long) v.get(COLUMN_STATS_FIELD_VALUE_COUNT))
-            .setNullCount((Long) v.get(COLUMN_STATS_FIELD_NULL_COUNT))
-            .setTotalSize((Long) v.get(COLUMN_STATS_FIELD_TOTAL_SIZE))
-            .setTotalUncompressedSize((Long) v.get(COLUMN_STATS_FIELD_TOTAL_UNCOMPRESSED_SIZE))
-            .setIsDeleted((Boolean) v.get(COLUMN_STATS_FIELD_IS_DELETED))
+            .setFileName((String) columnStatsRecord.get(COLUMN_STATS_FIELD_RESOURCE_NAME))
+            .setMinValue((String) columnStatsRecord.get(COLUMN_STATS_FIELD_MIN_VALUE))
+            .setMaxValue((String) columnStatsRecord.get(COLUMN_STATS_FIELD_MAX_VALUE))
+            .setValueCount((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_VALUE_COUNT))
+            .setNullCount((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_NULL_COUNT))
+            .setTotalSize((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_TOTAL_SIZE))
+            .setTotalUncompressedSize((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_TOTAL_UNCOMPRESSED_SIZE))
+            .setIsDeleted((Boolean) columnStatsRecord.get(COLUMN_STATS_FIELD_IS_DELETED))
             .build();
       }
     }
@@ -488,5 +495,14 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     }
     sb.append('}');
     return sb.toString();
+  }
+
+  private static <T> T getNestedFieldValue(GenericRecord record, String fieldName) {
+    // NOTE: This routine is more lightweight than {@code HoodieAvroUtils.getNestedFieldVal}
+    if (record.getSchema().getField(fieldName) == null) {
+      return null;
+    }
+
+    return unsafeCast(record.get(fieldName));
   }
 }
