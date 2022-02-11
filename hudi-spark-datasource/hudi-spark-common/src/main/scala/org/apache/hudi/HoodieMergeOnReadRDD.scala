@@ -153,7 +153,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       override def hasNext: Boolean = {
         if (logRecordsKeyIterator.hasNext) {
           val curAvrokey = logRecordsKeyIterator.next()
-          val curAvroRecord = logRecords.get(curAvrokey).getData.getInsertValue(tableAvroSchema)
+          val curAvroRecord = logRecords.get(curAvrokey).getData.getInsertValue(tableAvroSchema, payloadProps)
           if (!curAvroRecord.isPresent) {
             // delete record found, skipping
             this.hasNext
@@ -210,7 +210,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
         } else {
           if (logRecordsKeyIterator.hasNext) {
             val curAvrokey = logRecordsKeyIterator.next()
-            val curAvroRecord = logRecords.get(curAvrokey).getData.getInsertValue(tableAvroSchema)
+            val curAvroRecord =logRecords.get(curAvrokey).getData.getInsertValue(tableAvroSchema, payloadProps)
             if (!curAvroRecord.isPresent) {
               // delete record found, skipping
               this.hasNext
@@ -298,8 +298,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
             if (keyToSkip.contains(curKey)) {
               this.hasNext
             } else {
-              val insertAvroRecord =
-                logRecords.get(curKey).getData.getInsertValue(tableAvroSchema)
+              val insertAvroRecord = logRecords.get(curKey).getData.getInsertValue(tableAvroSchema, payloadProps)
               if (!insertAvroRecord.isPresent) {
                 // stand alone delete record, skipping
                 this.hasNext
