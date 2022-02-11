@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.hudi.{HoodieDataSourceHelper, Spark2RowSerDe}
+import org.apache.hudi.Spark2RowSerDe
 import org.apache.hudi.client.utils.SparkRowSerDe
 
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
@@ -32,6 +32,8 @@ import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.{Row, SparkSession}
+
+import scala.collection.mutable.ArrayBuffer
 
 /**
  * The adapter for spark2.
@@ -90,11 +92,41 @@ class Spark2Adapter extends SparkAdapter {
 
   /**
    * Combine [[PartitionedFile]] to [[FilePartition]] according to `maxSplitBytes`.
+   *
+   * This is a copy of org.apache.spark.sql.execution.datasources.FilePartition#getFilePartitions from Spark 3.2.
+   * And this will be called only in Spark 2.
    */
   override def getFilePartitions(
       sparkSession: SparkSession,
       partitionedFiles: Seq[PartitionedFile],
       maxSplitBytes: Long): Seq[FilePartition] = {
-    HoodieDataSourceHelper.getFilePartitions(sparkSession, partitionedFiles, maxSplitBytes)
+
+    val partitions = new ArrayBuffer[FilePartition]
+    val currentFiles = new ArrayBuffer[PartitionedFile]
+    var currentSize = 0L
+
+    /** Close the current partition and move to the next. */
+    def closePartition(): Unit = {
+      if (currentFiles.nonEmpty) {
+        // Copy to a new Array.
+        val newPartition = FilePartition(partitions.size, currentFiles.toArray)
+        partitions += newPartition
+      }
+      currentFiles.clear()
+      currentSize = 0
+    }
+
+    val openCostInBytes = sparkSession.sessionState.conf.filesOpenCostInBytes
+    // Assign files to partitions using "Next Fit Decreasing"
+    partitionedFiles.foreach { file =>
+      if (currentSize + file.length > maxSplitBytes) {
+        closePartition()
+      }
+      // Add the given file to the current partition.
+      currentSize += file.length + openCostInBytes
+      currentFiles += file
+    }
+    closePartition()
+    partitions.toSeq
   }
 }

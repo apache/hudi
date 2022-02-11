@@ -155,40 +155,4 @@ object HoodieDataSourceHelper extends PredicateHelper {
     }
   }
 
-  /**
-   * This is a copy of org.apache.spark.sql.execution.datasources.FilePartition#getFilePartitions from Spark 3.2.
-   * And this will be called only in Spark 2.
-   */
-  def getFilePartitions(
-      sparkSession: SparkSession,
-      partitionedFiles: Seq[PartitionedFile],
-      maxSplitBytes: Long): Seq[FilePartition] = {
-    val partitions = new ArrayBuffer[FilePartition]
-    val currentFiles = new ArrayBuffer[PartitionedFile]
-    var currentSize = 0L
-
-    /** Close the current partition and move to the next. */
-    def closePartition(): Unit = {
-      if (currentFiles.nonEmpty) {
-        // Copy to a new Array.
-        val newPartition = FilePartition(partitions.size, currentFiles.toArray)
-        partitions += newPartition
-      }
-      currentFiles.clear()
-      currentSize = 0
-    }
-
-    val openCostInBytes = sparkSession.sessionState.conf.filesOpenCostInBytes
-    // Assign files to partitions using "Next Fit Decreasing"
-    partitionedFiles.foreach { file =>
-      if (currentSize + file.length > maxSplitBytes) {
-        closePartition()
-      }
-      // Add the given file to the current partition.
-      currentSize += file.length + openCostInBytes
-      currentFiles += file
-    }
-    closePartition()
-    partitions.toSeq
-  }
 }
