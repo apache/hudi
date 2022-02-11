@@ -35,10 +35,12 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * All the metadata that gets stored along with a commit.
@@ -87,6 +89,10 @@ public class HoodieCommitMetadata implements Serializable {
 
   public Map<String, List<HoodieWriteStat>> getPartitionToWriteStats() {
     return partitionToWriteStats;
+  }
+
+  public List<HoodieWriteStat> getWriteStats() {
+    return partitionToWriteStats.values().stream().flatMap(Collection::stream).collect(Collectors.toList());
   }
 
   public String getMetadata(String metaKey) {

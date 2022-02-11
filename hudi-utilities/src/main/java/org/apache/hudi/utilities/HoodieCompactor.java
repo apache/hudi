@@ -23,9 +23,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -51,7 +49,6 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 public class HoodieCompactor {
 
@@ -271,7 +268,7 @@ public class HoodieCompactor {
         }
       }
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(cfg.compactionInstantTime);
-      return handleErrors(compactionMetadata.getCommitMetadata().get(), cfg.compactionInstantTime);
+      return UtilHelpers.handleErrors(compactionMetadata.getCommitMetadata().get(), cfg.compactionInstantTime);
     }
   }
 
@@ -296,18 +293,5 @@ public class HoodieCompactor {
     }
     Schema schema = schemaUtil.getTableAvroSchema(false);
     return schema.toString();
-  }
-
-  private int handleErrors(HoodieCommitMetadata metadata, String instantTime) {
-    List<HoodieWriteStat> writeStats = metadata.getPartitionToWriteStats().entrySet().stream().flatMap(e ->
-        e.getValue().stream()).collect(Collectors.toList());
-    long errorsCount = writeStats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum();
-    if (errorsCount == 0) {
-      LOG.info(String.format("Finish compaction with %s instant time.", instantTime));
-      return 0;
-    }
-
-    LOG.error(String.format("Compaction failed with %d errors.", errorsCount));
-    return -1;
   }
 }

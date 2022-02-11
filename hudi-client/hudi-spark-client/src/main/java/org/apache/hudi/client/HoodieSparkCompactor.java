@@ -32,9 +32,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 
-import java.util.Collection;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class HoodieSparkCompactor<T extends HoodieRecordPayload> extends BaseCompactor<T,
     JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
@@ -52,12 +50,7 @@ public class HoodieSparkCompactor<T extends HoodieRecordPayload> extends BaseCom
     LOG.info("Compactor executing compaction " + instant);
     SparkRDDWriteClient<T> writeClient = (SparkRDDWriteClient<T>) compactionClient;
     HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(instant.getTimestamp());
-    List<HoodieWriteStat> writeStats = compactionMetadata.getCommitMetadata().get()
-        .getPartitionToWriteStats()
-        .values()
-        .stream()
-        .flatMap(Collection::stream)
-        .collect(Collectors.toList());
+    List<HoodieWriteStat> writeStats = compactionMetadata.getCommitMetadata().get().getWriteStats();
     long numWriteErrors = writeStats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum();
     if (numWriteErrors != 0) {
       // We treat even a single error in compaction as fatal
