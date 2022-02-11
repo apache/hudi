@@ -32,7 +32,6 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{SQLContext, SparkSession}
@@ -98,7 +97,7 @@ object HoodieBaseRelation {
       options = options,
       hadoopConf = hadoopConf
     )
-    val parquetReader = new ParquetFileFormat().buildReaderWithPartitionValues(
+    val parquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
       sparkSession = spark,
       dataSchema = tableSchemas.tableSchema,
       partitionSchema = tableSchemas.partitionSchema,
