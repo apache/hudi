@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.format;
 
+import org.apache.flink.configuration.DelegatingConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -55,6 +56,8 @@ import java.util.Map;
  * Utilities for format.
  */
 public class FormatUtils {
+  public static final  String PARQUET_PREFIX = "parquet.";
+
   private FormatUtils() {
   }
 
@@ -254,10 +257,10 @@ public class FormatUtils {
   public static org.apache.hadoop.conf.Configuration getParquetConf(
       org.apache.flink.configuration.Configuration options,
       org.apache.hadoop.conf.Configuration hadoopConf) {
-    final String prefix = "parquet.";
     org.apache.hadoop.conf.Configuration copy = new org.apache.hadoop.conf.Configuration(hadoopConf);
-    Map<String, String> parquetOptions = FlinkOptions.getPropertiesWithPrefix(options.toMap(), prefix);
-    parquetOptions.forEach((k, v) -> copy.set(prefix + k, v));
+    DelegatingConfiguration delegatingConf = new DelegatingConfiguration(options, PARQUET_PREFIX);
+    Map<String, String> parquetOptions = delegatingConf.toMap();
+    parquetOptions.forEach((k, v) -> copy.set(PARQUET_PREFIX + k, v));
     return copy;
   }
 }

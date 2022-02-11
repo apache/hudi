@@ -18,6 +18,7 @@
 
 package org.apache.hudi.util;
 
+import org.apache.flink.configuration.DelegatingConfiguration;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
@@ -90,6 +91,8 @@ public class StreamerUtil {
 
   private static final Logger LOG = LoggerFactory.getLogger(StreamerUtil.class);
 
+  public static final String HADOOP_PREFIX = "hadoop.";
+
   public static TypedProperties appendKafkaProps(FlinkStreamerConfig config) {
     TypedProperties properties = getProps(config);
     properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.kafkaBootstrapServers);
@@ -102,7 +105,7 @@ public class StreamerUtil {
       return new TypedProperties();
     }
     return readConfig(
-            getHadoopConf(cfg),
+        getHadoopConf(cfg),
         new Path(cfg.propsFilePath), cfg.configs).getProps();
   }
 
@@ -141,18 +144,20 @@ public class StreamerUtil {
     return conf;
   }
 
+  // Keep the redundant to avoid too many modifications.
+  @Deprecated
   public static org.apache.hadoop.conf.Configuration getHadoopConf() {
-    return getHadoopConf(null);
+    return getHadoopConf(new Configuration());
   }
 
   // Keep the redundant to avoid too many modifications.
-  public static org.apache.hadoop.conf.Configuration getHadoopConf(Configuration configuration) {
-    if (configuration == null) {
+  public static org.apache.hadoop.conf.Configuration getHadoopConf(Configuration conf) {
+    if (conf == null) {
       return FlinkClientUtil.getHadoopConf();
     } else {
-      final String prefix = "hadoop.";
       org.apache.hadoop.conf.Configuration hadoopConf = FlinkClientUtil.getHadoopConf();
-      Map<String, String> options = FlinkOptions.getPropertiesWithPrefix(configuration.toMap(), prefix);
+      DelegatingConfiguration delegatingConf = new DelegatingConfiguration(conf, HADOOP_PREFIX);
+      Map<String, String> options = delegatingConf.toMap();
       options.forEach((k, v) -> hadoopConf.set(k, v));
       return hadoopConf;
     }

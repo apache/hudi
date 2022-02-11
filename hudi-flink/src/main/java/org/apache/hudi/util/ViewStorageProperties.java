@@ -63,10 +63,10 @@ public class ViewStorageProperties {
   /**
    * Read the {@link FileSystemViewStorageConfig} with given table base path.
    */
-  public static FileSystemViewStorageConfig loadFromProperties(String basePath, Configuration configuration) {
+  public static FileSystemViewStorageConfig loadFromProperties(String basePath, Configuration conf) {
     Path propertyPath = getPropertiesFilePath(basePath);
     LOG.info("Loading filesystem view storage properties from " + propertyPath);
-    FileSystem fs = FSUtils.getFs(basePath, StreamerUtil.getHadoopConf(configuration));
+    FileSystem fs = FSUtils.getFs(basePath, StreamerUtil.getHadoopConf(conf));
     Properties props = new Properties();
     try {
       try (FSDataInputStream inputStream = fs.open(propertyPath)) {
