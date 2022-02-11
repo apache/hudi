@@ -26,6 +26,8 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
+import org.apache.hudi.metadata.HoodieMetadataPayload
+import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -83,7 +85,12 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       // the field to hoodie.properties
       .orElse(optParams.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key))
 
-  private val mandatoryColumns = Seq(recordKeyField) ++ preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
+  private lazy val mandatoryColumns = {
+    if (isMetadataTable(metaClient))
+      Seq(HoodieMetadataPayload.KEY_FIELD_NAME, HoodieMetadataPayload.SCHEMA_FIELD_NAME_TYPE)
+    else
+      Seq(recordKeyField) ++ preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
+  }
 
   override def needConversion: Boolean = false
 

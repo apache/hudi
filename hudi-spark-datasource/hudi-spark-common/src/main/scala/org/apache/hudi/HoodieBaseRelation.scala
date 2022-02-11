@@ -25,7 +25,9 @@ import org.apache.hadoop.hbase.io.hfile.CacheConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.io.storage.HoodieHFileReader
+import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
@@ -67,6 +69,9 @@ abstract class HoodieBaseRelation(
   protected val partitionColumns: Array[String] = metaClient.getTableConfig.getPartitionFields.orElse(Array.empty)
 
   override def schema: StructType = userSchema.getOrElse(tableStructSchema)
+
+  def isMetadataTable(metaClient: HoodieTableMetaClient) =
+    HoodieTableMetadata.isMetadataTable(metaClient.getBasePath)
 }
 
 object HoodieBaseRelation {
