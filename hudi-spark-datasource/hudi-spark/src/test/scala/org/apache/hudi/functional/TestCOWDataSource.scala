@@ -157,7 +157,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     val snapshotDF2 = spark.read.format("org.apache.hudi")
       .load(basePath + "/*/*/*/*")
-    assertEquals(snapshotDF1.count() - inputDF2.count(), snapshotDF2.count())
+    assertEquals(snapshotDF2.count(), 80)
   }
 
   @Test def testOverWriteModeUseReplaceAction(): Unit = {

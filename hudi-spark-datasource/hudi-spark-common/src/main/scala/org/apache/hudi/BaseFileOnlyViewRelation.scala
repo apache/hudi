@@ -18,20 +18,18 @@
 
 package org.apache.hudi
 
+import org.apache.hadoop.fs.Path
+
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.TableSchemaResolver
+import org.apache.hudi.hadoop.HoodieROTablePathFilter
 
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.Literal
-import org.apache.spark.sql.execution.datasources.{PartitionedFile, _}
-import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
+import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
+import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile}
 import org.apache.spark.sql.{Row, SQLContext}
-import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
+import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.{BooleanType, StructType}
-
-import scala.util.Try
 
 /**
  * The implement of [[BaseRelation]], which is used to respond to query that only touches the base files(Parquet),
@@ -41,15 +39,9 @@ class BaseFileOnlyViewRelation(
     sqlContext: SQLContext,
     metaClient: HoodieTableMetaClient,
     optParams: Map[String, String],
-    userSchema: Option[StructType]
+    userSchema: Option[StructType],
+    globPaths: Seq[Path]
   ) extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) with SparkAdapterSupport {
-
-  private val fileIndex = HoodieFileIndex(sparkSession,
-    metaClient,
-    userSchema,
-    optParams,
-    FileStatusCache.getOrCreate(sqlContext.sparkSession)
-  )
 
   override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
     sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "false")
@@ -63,21 +55,10 @@ class BaseFileOnlyViewRelation(
       }
       (splited.flatMap(_._1), splited.flatMap(_._2))
     }
+    val partitionFiles = getPartitionFiles(partitionFilters, dataFilters)
 
-    val partitionFiles = fileIndex.listFiles(partitionFilters, dataFilters).flatMap { partition =>
-      partition.files.flatMap { file =>
-        HoodieDataSourceHelper.splitFiles(
-          sparkSession = sparkSession,
-          file = file,
-          partitionValues = partition.values
-        )
-      }
-    }
-    val emptyPartitionFiles = partitionFiles.map{ f =>
-      PartitionedFile(InternalRow.empty, f.filePath, f.start, f.length)
-    }
     val maxSplitBytes = sparkSession.sessionState.conf.filesMaxPartitionBytes
-    val filePartitions = sparkAdapter.getFilePartitions(sparkSession, emptyPartitionFiles, maxSplitBytes)
+    val filePartitions = sparkAdapter.getFilePartitions(sparkSession, partitionFiles, maxSplitBytes)
 
     val requiredSchemaParquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
       sparkSession = sparkSession,
@@ -91,5 +72,35 @@ class BaseFileOnlyViewRelation(
 
     new HoodieFileScanRDD(sparkSession, requiredColumns, tableStructSchema,
       requiredSchemaParquetReader, filePartitions)
+  }
+
+  private def getPartitionFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionedFile] = {
+    val partitionDirectories = if (globPaths.isEmpty) {
+      val hoodieFileIndex = HoodieFileIndex(sparkSession, metaClient, userSchema, optParams,
+        FileStatusCache.getOrCreate(sqlContext.sparkSession))
+      hoodieFileIndex.listFiles(partitionFilters, dataFilters)
+    } else {
+      sqlContext.sparkContext.hadoopConfiguration.setClass(
+        "mapreduce.input.pathFilter.class",
+        classOf[HoodieROTablePathFilter],
+        classOf[org.apache.hadoop.fs.PathFilter])
+
+      val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(sparkSession, globPaths)
+      inMemoryFileIndex.listFiles(partitionFilters, dataFilters)
+    }
+
+    val partitionFiles = partitionDirectories.flatMap { partition =>
+      partition.files.flatMap { file =>
+        HoodieDataSourceHelper.splitFiles(
+          sparkSession = sparkSession,
+          file = file,
+          partitionValues = partition.values
+        )
+      }
+    }
+
+    partitionFiles.map{ f =>
+      PartitionedFile(InternalRow.empty, f.filePath, f.start, f.length)
+    }
   }
 }
