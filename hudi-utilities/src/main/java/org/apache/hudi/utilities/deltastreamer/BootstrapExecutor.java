@@ -30,6 +30,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
@@ -159,9 +160,16 @@ public class BootstrapExecutor implements Serializable {
    */
   private void syncHive() {
     if (cfg.enableHiveSync || cfg.enableMetaSync) {
-      props.put(HoodieSyncConfig.META_SYNC_BASE_PATH, cfg.targetBasePath);
-      props.put(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT, cfg.baseFileFormat);
-      new HiveSyncTool(props, configuration, fs).syncHoodieTable();
+      TypedProperties metaProps = new TypedProperties();
+      metaProps.putAll(props);
+      metaProps.put(HoodieSyncConfig.META_SYNC_BASE_PATH, cfg.targetBasePath);
+      metaProps.put(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT, cfg.baseFileFormat);
+      metaProps.put(HiveSyncConfig.HIVE_SYNC_BUCKET_SYNC_SPEC, props.getBoolean(HiveSyncConfig.HIVE_SYNC_BUCKET_SYNC.key(),
+          HiveSyncConfig.HIVE_SYNC_BUCKET_SYNC.defaultValue())
+          ? HiveSyncConfig.getBucketSpec(props.getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key()),
+          props.getInteger(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key())) : null);
+
+      new HiveSyncTool(metaProps, configuration, fs).syncHoodieTable();
     }
   }
 

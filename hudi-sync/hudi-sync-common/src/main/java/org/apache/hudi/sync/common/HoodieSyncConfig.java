@@ -20,6 +20,7 @@ package org.apache.hudi.sync.common;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
@@ -62,6 +63,9 @@ public class HoodieSyncConfig extends HoodieConfig {
 
   @Parameter(names = {"--decode-partition"}, description = "Decode the partition value if the partition has encoded during writing")
   public Boolean decodePartition;
+
+  @Parameter(names = {"--use-file-listing-from-metadata"}, description = "Fetch file listing from Hudi's metadata")
+  public Boolean useFileListingFromMetadata;
 
   @Parameter(names = {"--conditional-sync"}, description = "If true, only sync on conditions like schema change or partition change.")
   public Boolean isConditionalSync;
@@ -139,6 +143,12 @@ public class HoodieSyncConfig extends HoodieConfig {
       .defaultValue("false")
       .withDocumentation("Assume partitioning is yyyy/mm/dd");
 
+  public static final ConfigProperty<Boolean> META_SYNC_USE_FILE_LISTING_FROM_METADATA = ConfigProperty
+      .key("hoodie.meta.sync.metadata_file_listing")
+      .defaultValue(HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS)
+      .withDocumentation("Enable the internal metadata table for file listing for syncing with metastores");
+
+
   public static final ConfigProperty<Boolean> META_SYNC_CONDITIONAL_SYNC = ConfigProperty
       .key("hoodie.datasource.meta_sync.condition.sync")
       .defaultValue(false)
@@ -160,6 +170,7 @@ public class HoodieSyncConfig extends HoodieConfig {
     this.partitionValueExtractorClass = getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS);
     this.assumeDatePartitioning = getBooleanOrDefault(META_SYNC_ASSUME_DATE_PARTITION);
     this.decodePartition = getBooleanOrDefault(KeyGeneratorOptions.URL_ENCODE_PARTITIONING);
+    this.useFileListingFromMetadata = getBooleanOrDefault(META_SYNC_USE_FILE_LISTING_FROM_METADATA);
     this.isConditionalSync = getBooleanOrDefault(META_SYNC_CONDITIONAL_SYNC);
     this.sparkVersion = getStringOrDefault(META_SYNC_SPARK_VERSION);
   }

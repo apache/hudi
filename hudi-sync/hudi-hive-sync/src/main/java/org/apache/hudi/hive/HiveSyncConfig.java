@@ -19,7 +19,6 @@
 package org.apache.hudi.hive;
 
 import org.apache.hudi.common.config.ConfigProperty;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 
@@ -67,9 +66,6 @@ public class HiveSyncConfig extends HoodieSyncConfig {
 
   @Parameter(names = {"--skip-ro-suffix"}, description = "Skip the `_ro` suffix for Read optimized table, when registering")
   public Boolean skipROSuffix;
-
-  @Parameter(names = {"--use-file-listing-from-metadata"}, description = "Fetch file listing from Hudi's metadata")
-  public Boolean useFileListingFromMetadata;
 
   @Parameter(names = {"--table-properties"}, description = "Table properties to hive table")
   public String tableProperties;
@@ -208,13 +204,18 @@ public class HiveSyncConfig extends HoodieSyncConfig {
       .withDocumentation("Whether sync hive metastore bucket specification when using bucket index."
           + "The specification is 'CLUSTERED BY (trace_id) SORTED BY (trace_id ASC) INTO 65536 BUCKETS'");
 
+  public static final ConfigProperty<String> HIVE_SYNC_BUCKET_SYNC_SPEC = ConfigProperty
+      .key("hoodie.datasource.hive_sync.bucket_sync_spec")
+      .defaultValue("")
+      .withDocumentation("The hive metastore bucket specification when using bucket index."
+          + "The specification is 'CLUSTERED BY (trace_id) SORTED BY (trace_id ASC) INTO 65536 BUCKETS'");
+
   public HiveSyncConfig() {
     this(new TypedProperties());
   }
 
   public HiveSyncConfig(TypedProperties props) {
     super(props);
-
     this.hiveUser = getStringOrDefault(HIVE_USER);
     this.hivePass = getStringOrDefault(HIVE_PASS);
     this.jdbcUrl = getStringOrDefault(HIVE_URL);
@@ -225,8 +226,6 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     this.autoCreateDatabase = getBooleanOrDefault(HIVE_AUTO_CREATE_DATABASE);
     this.ignoreExceptions = getBooleanOrDefault(HIVE_IGNORE_EXCEPTIONS);
     this.skipROSuffix = getBooleanOrDefault(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE);
-    this.useFileListingFromMetadata = props.getBoolean(HoodieMetadataConfig.ENABLE.key(),
-        HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS);
     this.tableProperties = getString(HIVE_TABLE_PROPERTIES);
     this.serdeProperties = getString(HIVE_TABLE_SERDE_PROPERTIES);
     this.supportTimestamp = getBooleanOrDefault(HIVE_SUPPORT_TIMESTAMP_TYPE);
@@ -234,6 +233,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     this.syncAsSparkDataSourceTable = getBooleanOrDefault(HIVE_SYNC_AS_DATA_SOURCE_TABLE);
     this.sparkSchemaLengthThreshold = getIntOrDefault(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD);
     this.createManagedTable = getBooleanOrDefault(HIVE_CREATE_MANAGED_TABLE);
+    this.bucketSpec = getString(HIVE_SYNC_BUCKET_SYNC_SPEC);
   }
 
   // enhance the similar function in child class

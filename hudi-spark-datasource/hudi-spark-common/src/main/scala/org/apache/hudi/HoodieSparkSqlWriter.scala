@@ -546,7 +546,7 @@ object HoodieSparkSqlWriter {
       properties.putAll(hoodieConfig.getProps)
       properties.put(HiveSyncConfig.HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD, spark.sessionState.conf.getConf(StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD).toString)
       properties.put(HoodieSyncConfig.META_SYNC_SPARK_VERSION, SPARK_VERSION)
-      properties.put(HoodieMetadataConfig.ENABLE, hoodieConfig.getBoolean(HoodieMetadataConfig.ENABLE))
+      properties.put(HoodieSyncConfig.META_SYNC_USE_FILE_LISTING_FROM_METADATA, hoodieConfig.getBoolean(HoodieMetadataConfig.ENABLE))
 
       val hiveConf: HiveConf = new HiveConf()
       hiveConf.addResource(fs.getConf)

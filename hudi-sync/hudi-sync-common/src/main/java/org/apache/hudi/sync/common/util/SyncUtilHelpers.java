@@ -8,8 +8,9 @@ import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 
-import java.io.IOException;
-
+/**
+ * Helper class for syncing Hudi commit data with external metastores.
+ */
 public class SyncUtilHelpers {
 
   /**
@@ -21,12 +22,15 @@ public class SyncUtilHelpers {
    * @param hadoopConfig   Hadoop confs.
    * @param fs             Filesystem used.
    * @param targetBasePath The target base path that contains the hoodie table.
-   * @param baseFileFormat The file format used by the hoodie table (defauls to PARQUET).
+   * @param baseFileFormat The file format used by the hoodie table (defaults to PARQUET).
    * @return
-   * @throws IOException
    */
-  public static void createAndSyncHoodieMeta(String metaSyncClass, TypedProperties props, Configuration hadoopConfig, FileSystem fs,
-                                             String targetBasePath, String baseFileFormat) {
+  public static void createAndSyncHoodieMeta(String metaSyncClass,
+                                             TypedProperties props,
+                                             Configuration hadoopConfig,
+                                             FileSystem fs,
+                                             String targetBasePath,
+                                             String baseFileFormat) {
     TypedProperties properties = new TypedProperties();
     properties.putAll(props);
     properties.put(HoodieSyncConfig.META_SYNC_BASE_PATH, targetBasePath);
