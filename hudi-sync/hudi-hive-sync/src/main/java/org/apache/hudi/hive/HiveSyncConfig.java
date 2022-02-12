@@ -233,7 +233,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     this.syncAsSparkDataSourceTable = getBooleanOrDefault(HIVE_SYNC_AS_DATA_SOURCE_TABLE);
     this.sparkSchemaLengthThreshold = getIntOrDefault(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD);
     this.createManagedTable = getBooleanOrDefault(HIVE_CREATE_MANAGED_TABLE);
-    this.bucketSpec = getString(HIVE_SYNC_BUCKET_SYNC_SPEC);
+    this.bucketSpec = props.getString(HIVE_SYNC_BUCKET_SYNC_SPEC.key(), null);
   }
 
   // enhance the similar function in child class

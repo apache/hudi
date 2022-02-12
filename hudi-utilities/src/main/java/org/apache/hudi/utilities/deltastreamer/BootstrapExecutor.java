@@ -164,10 +164,10 @@ public class BootstrapExecutor implements Serializable {
       metaProps.putAll(props);
       metaProps.put(HoodieSyncConfig.META_SYNC_BASE_PATH, cfg.targetBasePath);
       metaProps.put(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT, cfg.baseFileFormat);
-      metaProps.put(HiveSyncConfig.HIVE_SYNC_BUCKET_SYNC_SPEC, props.getBoolean(HiveSyncConfig.HIVE_SYNC_BUCKET_SYNC.key(),
-          HiveSyncConfig.HIVE_SYNC_BUCKET_SYNC.defaultValue())
-          ? HiveSyncConfig.getBucketSpec(props.getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key()),
-          props.getInteger(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key())) : null);
+      if (props.getBoolean(HiveSyncConfig.HIVE_SYNC_BUCKET_SYNC.key(), HiveSyncConfig.HIVE_SYNC_BUCKET_SYNC.defaultValue())) {
+        metaProps.put(HiveSyncConfig.HIVE_SYNC_BUCKET_SYNC_SPEC, HiveSyncConfig.getBucketSpec(props.getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key()),
+            props.getInteger(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key())));
+      }
 
       new HiveSyncTool(metaProps, configuration, fs).syncHoodieTable();
     }

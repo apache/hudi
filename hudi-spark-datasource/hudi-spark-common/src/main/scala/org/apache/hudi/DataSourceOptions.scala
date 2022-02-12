@@ -390,7 +390,7 @@ object DataSourceWriteOptions {
   @Deprecated
   val HIVE_DATABASE: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_DATABASE_NAME
   @Deprecated
-  val hiveTableOptKeyInferFunc = HoodieSyncConfig.TABLE_NAME_INFERENCE_FUNCTION
+  val hiveTableOptKeyInferFunc: JavaFunction[HoodieConfig, Option[String]] = HoodieSyncConfig.TABLE_NAME_INFERENCE_FUNCTION
   @Deprecated
   val HIVE_TABLE: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_TABLE_NAME
   @Deprecated
@@ -404,11 +404,11 @@ object DataSourceWriteOptions {
   @Deprecated
   val METASTORE_URIS: ConfigProperty[String] = HiveSyncConfig.METASTORE_URIS
   @Deprecated
-  val hivePartitionFieldsInferFunc = HoodieSyncConfig.PARTITION_FIELDS_INFERENCE_FUNCTION
+  val hivePartitionFieldsInferFunc: JavaFunction[HoodieConfig, Option[String]] = HoodieSyncConfig.PARTITION_FIELDS_INFERENCE_FUNCTION
   @Deprecated
   val HIVE_PARTITION_FIELDS: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_PARTITION_FIELDS
   @Deprecated
-  val hivePartitionExtractorInferFunc = HoodieSyncConfig.PARTITION_EXTRACTOR_CLASS_FUNCTION
+  val hivePartitionExtractorInferFunc: JavaFunction[HoodieConfig, Option[String]] = HoodieSyncConfig.PARTITION_EXTRACTOR_CLASS_FUNCTION
   @Deprecated
   val HIVE_PARTITION_EXTRACTOR_CLASS: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS
   @Deprecated
@@ -422,15 +422,15 @@ object DataSourceWriteOptions {
 
   /** @deprecated Use {@link HIVE_SYNC_MODE} instead of this config from 0.9.0 */
   @Deprecated
-  val HIVE_USE_JDBC: ConfigProperty[String] = HiveSyncConfig.HIVE_URL
+  val HIVE_USE_JDBC: ConfigProperty[String] = HiveSyncConfig.HIVE_USE_JDBC
   @Deprecated
-  val HIVE_AUTO_CREATE_DATABASE: ConfigProperty[String] = HiveSyncConfig.HIVE_URL
+  val HIVE_AUTO_CREATE_DATABASE: ConfigProperty[String] = HiveSyncConfig.HIVE_AUTO_CREATE_DATABASE
   @Deprecated
-  val HIVE_IGNORE_EXCEPTIONS: ConfigProperty[String] = HiveSyncConfig.HIVE_URL
+  val HIVE_IGNORE_EXCEPTIONS: ConfigProperty[String] = HiveSyncConfig.HIVE_IGNORE_EXCEPTIONS
   @Deprecated
-  val HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE: ConfigProperty[String] = HiveSyncConfig.HIVE_URL
+  val HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE: ConfigProperty[String] = HiveSyncConfig.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE
   @Deprecated
-  val HIVE_SUPPORT_TIMESTAMP_TYPE: ConfigProperty[String] = HiveSyncConfig.HIVE_URL
+  val HIVE_SUPPORT_TIMESTAMP_TYPE: ConfigProperty[String] = HiveSyncConfig.HIVE_SUPPORT_TIMESTAMP_TYPE
 
   /**
    * Flag to indicate whether to use conditional syncing in HiveSync.
