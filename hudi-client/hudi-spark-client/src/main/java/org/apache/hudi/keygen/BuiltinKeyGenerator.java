@@ -18,6 +18,7 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.AvroConversionHelper;
 import org.apache.hudi.HoodieSparkUtils;
@@ -26,19 +27,16 @@ import org.apache.hudi.client.utils.SparkRowSerDe;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieKeyException;
-
-import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
+import scala.Function1;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import scala.Function1;
 
 /**
  * Base class for the built-in key generators. Contains methods structured for
@@ -48,7 +46,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
 
   private static final String STRUCT_NAME = "hoodieRowTopLevelField";
   private static final String NAMESPACE = "hoodieRow";
-  private transient Function1<Object, Object> converterFn = null;
+  private transient Function1<Row, GenericRecord> converterFn = null;
   private SparkRowSerDe sparkRowSerDe;
   protected StructType structType;
 

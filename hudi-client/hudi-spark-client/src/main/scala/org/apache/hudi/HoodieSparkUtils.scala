@@ -126,11 +126,10 @@ object HoodieSparkUtils extends SparkAdapterSupport {
   def createRdd(df: DataFrame, structName: String, recordNamespace: String, reconcileToLatestSchema: Boolean,
                 latestTableSchema: org.apache.hudi.common.util.Option[Schema] = org.apache.hudi.common.util.Option.empty()): RDD[GenericRecord] = {
     val latestTableSchemaConverted = if (latestTableSchema.isPresent) Some(latestTableSchema.get()) else None
-    createRdd(df, structName, recordNamespace, reconcileToLatestSchema, latestTableSchemaConverted)
+    createRdd(df, structName, recordNamespace, latestTableSchemaConverted)
   }
 
-  def createRdd(df: DataFrame, structName: String, recordNamespace: String, reconcileToLatestSchema: Boolean,
-                latestTableSchema: Option[Schema] = None): RDD[GenericRecord] = {
+  def createRdd(df: DataFrame, structName: String, recordNamespace: String, latestTableSchema: Option[Schema]): RDD[GenericRecord] = {
     val writerSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, recordNamespace)
     val (readerSchema, sameSchema) = latestTableSchema.map((_, false)).getOrElse((writerSchema, true))
     val (nullable, _) = resolveAvroTypeNullability(readerSchema)

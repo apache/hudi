@@ -18,18 +18,16 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.AvroConversionHelper;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
-
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema;
@@ -37,11 +35,10 @@ import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import scala.Function1;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-
-import scala.Function1;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -82,8 +79,8 @@ public class TestTimestampBasedKeyGenerator {
   }
 
   private Row genericRecordToRow(GenericRecord baseRecord) {
-    Function1<Object, Object> convertor = AvroConversionHelper.createConverterToRow(baseRecord.getSchema(), structType);
-    Row row = (Row) convertor.apply(baseRecord);
+    Function1<GenericRecord, Row> convertor = AvroConversionHelper.createConverterToRow(baseRecord.getSchema(), structType);
+    Row row = convertor.apply(baseRecord);
     int fieldCount = structType.fieldNames().length;
     Object[] values = new Object[fieldCount];
     for (int i = 0; i < fieldCount; i++) {
