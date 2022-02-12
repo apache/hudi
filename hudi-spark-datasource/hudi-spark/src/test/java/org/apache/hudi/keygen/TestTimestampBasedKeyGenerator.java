@@ -18,6 +18,8 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.avro.Conversions;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.AvroConversionHelper;
@@ -29,6 +31,7 @@ import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.avro.HoodieAvroSerializer;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema;
 import org.apache.spark.sql.types.StructType;
@@ -36,6 +39,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import scala.Function1;
+import scala.Tuple2;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -66,7 +70,10 @@ public class TestTimestampBasedKeyGenerator {
     properties.setProperty(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(), "false");
   }
 
-  private TypedProperties getBaseKeyConfig(String timestampType, String dateFormat, String timezone, String scalarType) {
+  private TypedProperties getBaseKeyConfig(String partitionPathField, String timestampType, String dateFormat, String timezone, String scalarType) {
+    TypedProperties properties = new TypedProperties(this.properties);
+
+    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), partitionPathField);
     properties.setProperty(KeyGeneratorOptions.Config.TIMESTAMP_TYPE_FIELD_PROP, timestampType);
     properties.setProperty(KeyGeneratorOptions.Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, dateFormat);
     properties.setProperty(KeyGeneratorOptions.Config.TIMESTAMP_TIMEZONE_FORMAT_PROP, timezone);
@@ -115,7 +122,7 @@ public class TestTimestampBasedKeyGenerator {
   public void testTimestampBasedKeyGenerator() throws IOException {
     // timezone is GMT+8:00
     baseRecord.put("createTime", 1578283932000L);
-    properties = getBaseKeyConfig("EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT+8:00", null);
+    properties = getBaseKeyConfig("createTime", "EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT+8:00", null);
     TimestampBasedKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk1 = keyGen.getKey(baseRecord);
     assertEquals("2020-01-06 12", hk1.getPartitionPath());
@@ -125,8 +132,11 @@ public class TestTimestampBasedKeyGenerator {
     assertEquals("2020-01-06 12", keyGen.getPartitionPath(internalRow, baseRow.schema()));
 
     // timezone is GMT+8:00, createTime is BigDecimal
-    baseRecord.put("createTime", new BigDecimal(1578283932000.00001));
-    properties = getBaseKeyConfig("EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT+8:00", null);
+    BigDecimal decimal = new BigDecimal(1578283932000.00001);
+    Conversions.DecimalConversion conversion = new Conversions.DecimalConversion();
+    Tuple2<Object, Schema> resolvedNullableSchema = HoodieAvroSerializer.resolveAvroTypeNullability(schema.getField("createTimeDecimal").schema());
+    baseRecord.put("createTimeDecimal", conversion.toFixed(decimal, resolvedNullableSchema._2, LogicalTypes.decimal(20, 4)));
+    properties = getBaseKeyConfig("createTimeDecimal", "EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT+8:00", null);
     keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey bigDecimalKey = keyGen.getKey(baseRecord);
     assertEquals("2020-01-06 12", bigDecimalKey.getPartitionPath());
@@ -136,7 +146,7 @@ public class TestTimestampBasedKeyGenerator {
     assertEquals("2020-01-06 12", keyGen.getPartitionPath(baseRow));
 
     // timezone is GMT
-    properties = getBaseKeyConfig("EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT", null);
+    properties = getBaseKeyConfig("createTime", "EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT", null);
     keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk2 = keyGen.getKey(baseRecord);
     assertEquals("2020-01-06 04", hk2.getPartitionPath());
@@ -146,7 +156,7 @@ public class TestTimestampBasedKeyGenerator {
 
     // timestamp is DATE_STRING, timezone is GMT+8:00
     baseRecord.put("createTime", "2020-01-06 12:12:12");
-    properties = getBaseKeyConfig("DATE_STRING", "yyyy-MM-dd hh", "GMT+8:00", null);
+    properties = getBaseKeyConfig("createTime", "DATE_STRING", "yyyy-MM-dd hh", "GMT+8:00", null);
     properties.setProperty("hoodie.deltastreamer.keygen.timebased.input.dateformat", "yyyy-MM-dd hh:mm:ss");
     keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk3 = keyGen.getKey(baseRecord);
@@ -157,7 +167,7 @@ public class TestTimestampBasedKeyGenerator {
     assertEquals("2020-01-06 12", keyGen.getPartitionPath(baseRow));
 
     // timezone is GMT
-    properties = getBaseKeyConfig("DATE_STRING", "yyyy-MM-dd hh", "GMT", null);
+    properties = getBaseKeyConfig("createTime", "DATE_STRING", "yyyy-MM-dd hh", "GMT", null);
     keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk4 = keyGen.getKey(baseRecord);
     assertEquals("2020-01-06 12", hk4.getPartitionPath());
@@ -167,7 +177,7 @@ public class TestTimestampBasedKeyGenerator {
 
     // timezone is GMT+8:00, createTime is null
     baseRecord.put("createTime", null);
-    properties = getBaseKeyConfig("EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT+8:00", null);
+    properties = getBaseKeyConfig("createTime", "EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT+8:00", null);
     keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk5 = keyGen.getKey(baseRecord);
     assertEquals("1970-01-01 08", hk5.getPartitionPath());
@@ -180,7 +190,7 @@ public class TestTimestampBasedKeyGenerator {
 
     // timestamp is DATE_STRING, timezone is GMT, createTime is null
     baseRecord.put("createTime", null);
-    properties = getBaseKeyConfig("DATE_STRING", "yyyy-MM-dd hh:mm:ss", "GMT", null);
+    properties = getBaseKeyConfig("createTime", "DATE_STRING", "yyyy-MM-dd hh:mm:ss", "GMT", null);
     properties.setProperty("hoodie.deltastreamer.keygen.timebased.input.dateformat", "yyyy-MM-dd hh:mm:ss");
     keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk6 = keyGen.getKey(baseRecord);
@@ -199,7 +209,7 @@ public class TestTimestampBasedKeyGenerator {
     baseRecord.put("createTime", 20000L);
 
     // timezone is GMT
-    properties = getBaseKeyConfig("SCALAR", "yyyy-MM-dd hh", "GMT", "days");
+    properties = getBaseKeyConfig("createTime", "SCALAR", "yyyy-MM-dd hh", "GMT", "days");
     TimestampBasedKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk1 = keyGen.getKey(baseRecord);
     assertEquals(hk1.getPartitionPath(), "2024-10-04 12");
@@ -212,7 +222,7 @@ public class TestTimestampBasedKeyGenerator {
 
     // timezone is GMT, createTime is null
     baseRecord.put("createTime", null);
-    properties = getBaseKeyConfig("SCALAR", "yyyy-MM-dd hh", "GMT", "days");
+    properties = getBaseKeyConfig("createTime", "SCALAR", "yyyy-MM-dd hh", "GMT", "days");
     keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk2 = keyGen.getKey(baseRecord);
     assertEquals("1970-01-02 12", hk2.getPartitionPath());
@@ -225,7 +235,7 @@ public class TestTimestampBasedKeyGenerator {
 
     // timezone is GMT. number of days store integer in mysql
     baseRecord.put("createTime", 18736);
-    properties = getBaseKeyConfig("SCALAR", "yyyy-MM-dd", "GMT", "DAYS");
+    properties = getBaseKeyConfig("createTime", "SCALAR", "yyyy-MM-dd", "GMT", "DAYS");
     keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey scalarSecondsKey = keyGen.getKey(baseRecord);
     assertEquals("2021-04-19", scalarSecondsKey.getPartitionPath());
@@ -242,7 +252,7 @@ public class TestTimestampBasedKeyGenerator {
     baseRecord = SchemaTestUtil.generateAvroRecordFromJson(schema, 1, "001", "f1");
     baseRecord.put("createTime", 1638513806000000L);
 
-    properties = getBaseKeyConfig("SCALAR", "yyyy/MM/dd", "GMT", "MICROSECONDS");
+    properties = getBaseKeyConfig("createTime", "SCALAR", "yyyy/MM/dd", "GMT", "MICROSECONDS");
     properties.setProperty(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "true");
     TimestampBasedKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk1 = keyGen.getKey(baseRecord);
@@ -256,7 +266,7 @@ public class TestTimestampBasedKeyGenerator {
 
     // timezone is GMT, createTime is null
     baseRecord.put("createTime", null);
-    properties = getBaseKeyConfig("SCALAR", "yyyy/MM/dd", "GMT", "MICROSECONDS");
+    properties = getBaseKeyConfig("createTime", "SCALAR", "yyyy/MM/dd", "GMT", "MICROSECONDS");
     properties.setProperty(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "true");
     keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk2 = keyGen.getKey(baseRecord);

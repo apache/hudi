@@ -20,7 +20,35 @@
   "type": "record",
   "name": "User",
   "fields": [
-    {"name": "field1", "type": ["null", "string"], "default": null},
-    {"name": "createTime", "type": ["null", "long"], "default": null}
+    {
+      "name": "field1",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "createTime",
+      "type": [
+        "null",
+        "long"
+      ],
+      "default": null
+    },
+    {
+      "name": "createTimeDecimal",
+      "type": [
+        "null",
+        {
+          "name": "decimalFixed",
+          "type": "fixed",
+          "logicalType": "decimal",
+          "precision": 20,
+          "scale": 4,
+          "size": 10
+        }
+      ]
+    }
   ]
 }
