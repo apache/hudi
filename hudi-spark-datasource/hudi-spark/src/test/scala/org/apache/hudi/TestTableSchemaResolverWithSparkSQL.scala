@@ -31,16 +31,17 @@ import org.apache.spark.SparkContext
 import org.apache.spark.sql._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
 import scala.collection.JavaConverters
 
 /**
- * Test suite for SparkSqlWriter class.
+ * Test suite for TableSchemaResolver with SparkSqlWriter.
  */
-class TestTableSchemaResolver {
+@Tag("functional")
+class TestTableSchemaResolverWithSparkSQL {
   var spark: SparkSession = _
   var sqlContext: SQLContext = _
   var sc: SparkContext = _
@@ -49,6 +50,7 @@ class TestTableSchemaResolver {
   var hoodieFooTableName = "hoodie_foo_tbl"
   var tempBasePath: String = _
   var commonTableModifier: Map[String, String] = Map()
+
   case class StringLongTest(uuid: String, ts: Long)
 
   /**
@@ -111,7 +113,7 @@ class TestTableSchemaResolver {
    * @param path               Path for hoodie table
    * @param hoodieFooTableName Name of hoodie table
    * @param tableType          Type of table
-   * @return                   Map of common params
+   * @return Map of common params
    */
   def getCommonParams(path: java.nio.file.Path, hoodieFooTableName: String, tableType: String): Map[String, String] = {
     Map("path" -> path.toAbsolutePath.toString,
@@ -172,53 +174,63 @@ class TestTableSchemaResolver {
     val path = new Path(metadataTablePath + "/.hoodie", latestInstant.get().getFileName)
     val fs = path.getFileSystem(new Configuration())
     fs.delete(path, false)
-    metaClient.reloadActiveTimeline()
-
-    var ori: Exception = null
-    try {
-      val schemaFromData = new TableSchemaResolver(metaClient).getTableAvroSchemaFromDataFile
-      val structFromData = AvroConversionUtils.convertAvroSchemaToStructType(HoodieAvroUtils.removeMetadataFields(schemaFromData))
-      val schemeDesign = new Schema.Parser().parse(HoodieMetadataRecord.getClassSchema.toString())
-      val structDesign = AvroConversionUtils.convertAvroSchemaToStructType(schemeDesign)
-      assertEquals(structFromData, structDesign)
-    } catch {
-      case e: Exception => ori = e;
-    }
-    assert(ori == null)
+    schemaValuationBasedOnDataFile(metaClient, HoodieMetadataRecord.getClassSchema.toString())
   }
 
   @ParameterizedTest
-  @CsvSource(Array("COPY_ON_WRITE,parquet","COPY_ON_WRITE,orc","MERGE_ON_READ,parquet","MERGE_ON_READ,orc"))
+  @CsvSource(Array("COPY_ON_WRITE,parquet", "COPY_ON_WRITE,orc", "COPY_ON_WRITE,hfile",
+    "MERGE_ON_READ,parquet", "MERGE_ON_READ,orc", "MERGE_ON_READ,hfile"))
   def testTableSchemaResolver(tableType: String, baseFileFormat: String): Unit = {
-  val schema = DataSourceTestUtils.getStructTypeExampleSchema
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
 
-  //create a new table
-  val tableName = hoodieFooTableName
-  val fooTableModifier = Map("path" -> tempPath.toAbsolutePath.toString,
-    HoodieWriteConfig.BASE_FILE_FORMAT.key -> baseFileFormat,
-    DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
-    HoodieWriteConfig.TBL_NAME.key -> tableName,
-    "hoodie.avro.schema" -> schema.toString(),
-    "hoodie.insert.shuffle.parallelism" -> "1",
-    "hoodie.upsert.shuffle.parallelism" -> "1",
-    DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-    DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-    DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.SimpleKeyGenerator",
-    HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key -> "true"
-  )
+    //create a new table
+    val tableName = hoodieFooTableName
+    val fooTableModifier = Map("path" -> tempPath.toAbsolutePath.toString,
+      HoodieWriteConfig.BASE_FILE_FORMAT.key -> baseFileFormat,
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
+      HoodieWriteConfig.TBL_NAME.key -> tableName,
+      "hoodie.avro.schema" -> schema.toString(),
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.SimpleKeyGenerator",
+      HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key -> "true"
+    )
 
-  // generate the inserts
-  val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
-  val records = DataSourceTestUtils.generateRandomRows(10)
-  val recordsSeq = convertRowListToSeq(records)
-  val df1 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
-  HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, fooTableModifier, df1)
+    // generate the inserts
+    val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+    val records = DataSourceTestUtils.generateRandomRows(10)
+    val recordsSeq = convertRowListToSeq(records)
+    val df1 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, fooTableModifier, df1)
 
-  val metaClient = HoodieTableMetaClient.builder()
-    .setBasePath(tempPath.toAbsolutePath.toString)
-    .setConf(spark.sessionState.newHadoopConf())
-    .build()
+    val metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(tempPath.toAbsolutePath.toString)
+      .setConf(spark.sessionState.newHadoopConf())
+      .build()
 
-  assertTrue(new TableSchemaResolver(metaClient).isHasOperationField)
+    assertTrue(new TableSchemaResolver(metaClient).isHasOperationField)
+    schemaValuationBasedOnDataFile(metaClient, schema.toString())
+  }
+
+  /**
+   * Test and valuate schema read from data file --> getTableAvroSchemaFromDataFile
+   * @param metaClient
+   * @param schemaString
+   */
+  def schemaValuationBasedOnDataFile(metaClient: HoodieTableMetaClient, schemaString: String): Unit = {
+    metaClient.reloadActiveTimeline()
+    var tableSchemaResolverParsingException: Exception = null
+    try {
+      val schemaFromData = new TableSchemaResolver(metaClient).getTableAvroSchemaFromDataFile
+      val structFromData = AvroConversionUtils.convertAvroSchemaToStructType(HoodieAvroUtils.removeMetadataFields(schemaFromData))
+      val schemeDesign = new Schema.Parser().parse(schemaString)
+      val structDesign = AvroConversionUtils.convertAvroSchemaToStructType(schemeDesign)
+      assertEquals(structFromData, structDesign)
+    } catch {
+      case e: Exception => tableSchemaResolverParsingException = e;
+    }
+    assert(tableSchemaResolverParsingException == null)
   }
 }

@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -222,8 +223,15 @@ public class OrcUtils extends BaseFileUtils {
   public Schema readAvroSchema(Configuration conf, Path orcFilePath) {
     try {
       Reader reader = OrcFile.createReader(orcFilePath, OrcFile.readerOptions(conf));
-      TypeDescription orcSchema = reader.getSchema();
-      return AvroOrcUtils.createAvroSchema(orcSchema);
+      if (reader.hasMetadataValue("orc.avro.schema")) {
+        ByteBuffer metadataValue = reader.getMetadataValue("orc.avro.schema");
+        byte[] bytes = new byte[metadataValue.remaining()];
+        metadataValue.get(bytes);
+        return new Schema.Parser().parse(new String(bytes));
+      } else {
+        TypeDescription orcSchema = reader.getSchema();
+        return AvroOrcUtils.createAvroSchema(orcSchema);
+      }
     } catch (IOException io) {
       throw new HoodieIOException("Unable to get Avro schema for ORC file:" + orcFilePath, io);
     }

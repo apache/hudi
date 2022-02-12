@@ -37,20 +37,17 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.Functions.Function1;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.io.storage.HoodieHFileReader;
 
+import org.apache.hudi.io.storage.HoodieOrcReader;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.orc.OrcFile;
-import org.apache.orc.TypeDescription;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
@@ -58,7 +55,6 @@ import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 
 /**
  * Helper class to read schema from data files and log files and to convert it between different formats.
@@ -91,7 +87,7 @@ public class TableSchemaResolver {
           if (instantAndCommitMetadata.isPresent()) {
             HoodieCommitMetadata commitMetadata = instantAndCommitMetadata.get().getRight();
             String filePath = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream().findAny().get();
-            return getMessageType(filePath);
+            return readSchemaFromBaseFile(filePath);
           } else {
             throw new IllegalArgumentException("Could not find any data file written for commit, "
                 + "so could not get schema for table " + metaClient.getBasePath());
@@ -106,7 +102,7 @@ public class TableSchemaResolver {
               // this is a log file
               return readSchemaFromLogFile(new Path(filePath));
             } else {
-              return getMessageType(filePath);
+              return readSchemaFromBaseFile(filePath);
             }
           } else {
             throw new IllegalArgumentException("Could not find any data file written for commit, "
@@ -121,7 +117,7 @@ public class TableSchemaResolver {
     }
   }
 
-  private MessageType getMessageType(String filePath) throws IOException {
+  private MessageType readSchemaFromBaseFile(String filePath) throws IOException {
     if (filePath.contains(HoodieFileFormat.PARQUET.getFileExtension())) {
       // this is a parquet file
       return readSchemaFromParquetBaseFile(new Path(filePath));
@@ -434,10 +430,6 @@ public class TableSchemaResolver {
     LOG.info("Reading schema from " + parquetFilePath);
 
     FileSystem fs = metaClient.getRawFs();
-    if (!fs.exists(parquetFilePath)) {
-      throw new IllegalArgumentException(
-          "Failed to read schema from data file " + parquetFilePath + ". File does not exist.");
-    }
     ParquetMetadata fileFooter =
         ParquetFileReader.readFooter(fs.getConf(), parquetFilePath, ParquetMetadataConverter.NO_FILTER);
     return fileFooter.getFileMetaData().getSchema();
@@ -450,11 +442,6 @@ public class TableSchemaResolver {
     LOG.info("Reading schema from " + hFilePath);
 
     FileSystem fs = metaClient.getRawFs();
-    if (!fs.exists(hFilePath)) {
-      throw new IllegalArgumentException(
-          "Failed to read schema from data file " + hFilePath + ". File does not exist.");
-    }
-
     CacheConfig cacheConfig = new CacheConfig(fs.getConf());
     HoodieHFileReader<IndexedRecord> hFileReader = new HoodieHFileReader<>(fs.getConf(), hFilePath, cacheConfig);
 
@@ -469,27 +456,9 @@ public class TableSchemaResolver {
     LOG.info("Reading schema from " + orcFilePath);
 
     FileSystem fs = metaClient.getRawFs();
-    if (!fs.exists(orcFilePath)) {
-      throw new IllegalArgumentException(
-          "Failed to read schema from data file " + orcFilePath + ". File does not exist.");
-    }
-    Schema schema;
-    try {
-      org.apache.orc.Reader reader = OrcFile.createReader(orcFilePath, OrcFile.readerOptions(fs.getConf()));
-      if (reader.hasMetadataValue("orc.avro.schema")) {
-        ByteBuffer metadataValue = reader.getMetadataValue("orc.avro.schema");
-        byte[] bytes = new byte[metadataValue.remaining()];
-        metadataValue.get(bytes);
-        schema = new Schema.Parser().parse(new String(bytes));
-      } else {
-        TypeDescription orcSchema = reader.getSchema();
-        schema = AvroOrcUtils.createAvroSchema(orcSchema);
-      }
-    } catch (IOException io) {
-      throw new HoodieIOException("Unable to get Avro schema for ORC file:" + orcFilePath, io);
-    }
+    HoodieOrcReader<IndexedRecord> orcReader = new HoodieOrcReader<>(fs.getConf(), orcFilePath);
 
-    return convertAvroSchemaToParquet(schema);
+    return convertAvroSchemaToParquet(orcReader.getSchema());
   }
 
   /**
@@ -508,7 +477,7 @@ public class TableSchemaResolver {
     String filePath = compactionMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream().findAny()
         .orElseThrow(() -> new IllegalArgumentException("Could not find any data file written for compaction "
             + lastCompactionCommit + ", could not get schema for table " + metaClient.getBasePath()));
-    return getMessageType(filePath);
+    return readSchemaFromBaseFile(filePath);
   }
 
   /**
