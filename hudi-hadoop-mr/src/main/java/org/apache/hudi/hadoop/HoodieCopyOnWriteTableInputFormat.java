@@ -18,8 +18,6 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hadoop.conf.Configurable;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -76,20 +74,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  *
  * NOTE: This class is invariant of the underlying file-format of the files being read
  */
-public class HoodieCopyOnWriteTableInputFormat extends FileInputFormat<NullWritable, ArrayWritable>
-    implements Configurable {
-
-  protected Configuration conf;
-
-  @Override
-  public final Configuration getConf() {
-    return conf;
-  }
-
-  @Override
-  public final void setConf(Configuration conf) {
-    this.conf = conf;
-  }
+public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
 
   @Override
   protected boolean isSplitable(FileSystem fs, Path filename) {
