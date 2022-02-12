@@ -37,6 +37,14 @@
       "default": null
     },
     {
+      "name": "createTimeString",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
       "name": "createTimeDecimal",
       "type": [
         "null",

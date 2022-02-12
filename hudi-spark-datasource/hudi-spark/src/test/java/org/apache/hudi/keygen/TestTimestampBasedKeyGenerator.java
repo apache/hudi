@@ -21,6 +21,7 @@ package org.apache.hudi.keygen;
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.AvroConversionHelper;
 import org.apache.hudi.AvroConversionUtils;
@@ -135,13 +136,12 @@ public class TestTimestampBasedKeyGenerator {
     BigDecimal decimal = new BigDecimal(1578283932000.00001);
     Conversions.DecimalConversion conversion = new Conversions.DecimalConversion();
     Tuple2<Object, Schema> resolvedNullableSchema = HoodieAvroSerializer.resolveAvroTypeNullability(schema.getField("createTimeDecimal").schema());
-    baseRecord.put("createTimeDecimal", conversion.toFixed(decimal, resolvedNullableSchema._2, LogicalTypes.decimal(20, 4)));
+    GenericFixed avroDecimal = conversion.toFixed(decimal, resolvedNullableSchema._2, LogicalTypes.decimal(20, 4));
+    baseRecord.put("createTimeDecimal", avroDecimal);
     properties = getBaseKeyConfig("createTimeDecimal", "EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT+8:00", null);
     keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey bigDecimalKey = keyGen.getKey(baseRecord);
     assertEquals("2020-01-06 12", bigDecimalKey.getPartitionPath());
-
-    // test w/ Row
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("2020-01-06 12", keyGen.getPartitionPath(baseRow));
 
@@ -150,29 +150,23 @@ public class TestTimestampBasedKeyGenerator {
     keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk2 = keyGen.getKey(baseRecord);
     assertEquals("2020-01-06 04", hk2.getPartitionPath());
-
-    // test w/ Row
     assertEquals("2020-01-06 04", keyGen.getPartitionPath(baseRow));
 
     // timestamp is DATE_STRING, timezone is GMT+8:00
-    baseRecord.put("createTime", "2020-01-06 12:12:12");
-    properties = getBaseKeyConfig("createTime", "DATE_STRING", "yyyy-MM-dd hh", "GMT+8:00", null);
+    baseRecord.put("createTimeString", "2020-01-06 12:12:12");
+    properties = getBaseKeyConfig("createTimeString", "DATE_STRING", "yyyy-MM-dd hh", "GMT+8:00", null);
     properties.setProperty("hoodie.deltastreamer.keygen.timebased.input.dateformat", "yyyy-MM-dd hh:mm:ss");
     keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk3 = keyGen.getKey(baseRecord);
     assertEquals("2020-01-06 12", hk3.getPartitionPath());
-
-    // test w/ Row
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("2020-01-06 12", keyGen.getPartitionPath(baseRow));
 
     // timezone is GMT
-    properties = getBaseKeyConfig("createTime", "DATE_STRING", "yyyy-MM-dd hh", "GMT", null);
+    properties = getBaseKeyConfig("createTimeString", "DATE_STRING", "yyyy-MM-dd hh", "GMT", null);
     keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk4 = keyGen.getKey(baseRecord);
     assertEquals("2020-01-06 12", hk4.getPartitionPath());
-
-    // test w/ Row
     assertEquals("2020-01-06 12", keyGen.getPartitionPath(baseRow));
 
     // timezone is GMT+8:00, createTime is null
@@ -181,22 +175,18 @@ public class TestTimestampBasedKeyGenerator {
     keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk5 = keyGen.getKey(baseRecord);
     assertEquals("1970-01-01 08", hk5.getPartitionPath());
-
-    // test w/ Row
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("1970-01-01 08", keyGen.getPartitionPath(baseRow));
     internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow);
     assertEquals("1970-01-01 08", keyGen.getPartitionPath(internalRow, baseRow.schema()));
 
     // timestamp is DATE_STRING, timezone is GMT, createTime is null
-    baseRecord.put("createTime", null);
+    baseRecord.put("createTimeString", null);
     properties = getBaseKeyConfig("createTime", "DATE_STRING", "yyyy-MM-dd hh:mm:ss", "GMT", null);
     properties.setProperty("hoodie.deltastreamer.keygen.timebased.input.dateformat", "yyyy-MM-dd hh:mm:ss");
     keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk6 = keyGen.getKey(baseRecord);
     assertEquals("1970-01-01 12:00:00", hk6.getPartitionPath());
-
-    // test w/ Row
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("1970-01-01 12:00:00", keyGen.getPartitionPath(baseRow));
     internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow);
