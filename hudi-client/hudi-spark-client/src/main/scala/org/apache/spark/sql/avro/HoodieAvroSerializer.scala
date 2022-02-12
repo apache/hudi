@@ -17,8 +17,8 @@
 
 package org.apache.spark.sql.avro
 
-import org.apache.avro.Schema
 import org.apache.avro.Schema.Type
+import org.apache.avro.{AvroRuntimeException, Schema}
 import org.apache.spark.sql.types.DataType
 
 import scala.collection.JavaConverters._
@@ -43,7 +43,7 @@ object HoodieAvroSerializer {
       val fields = avroType.getTypes.asScala
       val actualType = fields.filter(_.getType != Type.NULL)
       if (fields.length != 2 || actualType.length != 1) {
-        throw new UnsupportedAvroTypeException(
+        throw new AvroRuntimeException(
           s"Unsupported Avro UNION type $avroType: Only UNION of a null type and a non-null " +
             "type is supported")
       }

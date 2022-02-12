@@ -31,8 +31,9 @@ import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomK
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.HoodieAvroSerializer.resolveAvroTypeNullability
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Literal, Projection, UnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Literal, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, InMemoryFileIndex}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
@@ -142,7 +143,8 @@ object HoodieSparkUtils extends SparkAdapterSupport {
       } else {
         // Since caller might request to get records in a different projected schema, we might need to
         // project the row first, before converting it into Avro
-        val project: Projection = if (sameSchema) identity else UnsafeProjection.create(rowReaderSchema)
+        val project: InternalRow => InternalRow =
+          if (sameSchema) identity else UnsafeProjection.create(rowReaderSchema)
         val convert = AvroConversionUtils.createRowToAvroConverter(rowReaderSchema, readerSchema, nullable = nullable)
         rows.map { r => convert(project(r)) }
       }
