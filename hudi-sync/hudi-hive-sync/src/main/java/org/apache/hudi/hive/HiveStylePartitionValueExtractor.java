@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sync.common;
+package org.apache.hudi.hive;
 
 import java.util.Collections;
 import java.util.List;

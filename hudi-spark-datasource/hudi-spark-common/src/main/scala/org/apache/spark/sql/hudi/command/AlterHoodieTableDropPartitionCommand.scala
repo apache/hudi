@@ -22,9 +22,9 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
-import org.apache.hudi.hive.HiveSyncConfig
+import org.apache.hudi.hive.{HiveSyncConfig, MultiPartKeysValueExtractor}
 import org.apache.hudi.hive.ddl.HiveSyncMode
-import org.apache.hudi.sync.common.{HoodieSyncConfig, MultiPartKeysValueExtractor}
+import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkSqlWriter}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.Resolver

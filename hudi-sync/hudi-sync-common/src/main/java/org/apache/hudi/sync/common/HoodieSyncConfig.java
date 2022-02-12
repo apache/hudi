@@ -30,6 +30,7 @@ import com.beust.jcommander.Parameter;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 
 /**
  * Configs needed to sync data into external meta stores, catalogs, etc.
@@ -85,18 +86,19 @@ public class HoodieSyncConfig extends HoodieConfig {
       .withDocumentation("The name of the destination database that we should sync the hudi table to.");
 
   // If the table name for the metastore destination is not provided, pick it up from write or table configs.
+  public static final Function<HoodieConfig, Option<String>> TABLE_NAME_INFERENCE_FUNCTION = cfg -> {
+    if (cfg.contains(HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY)) {
+      return Option.of(cfg.getString(HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY));
+    } else if (cfg.contains(HoodieTableConfig.HOODIE_TABLE_NAME_KEY)) {
+      return Option.of(cfg.getString(HoodieTableConfig.HOODIE_TABLE_NAME_KEY));
+    } else {
+      return Option.empty();
+    }
+  };
   public static final ConfigProperty<String> META_SYNC_TABLE_NAME = ConfigProperty
       .key("hoodie.datasource.hive_sync.table")
       .defaultValue("unknown")
-      .withInferFunction(cfg -> {
-        if (cfg.contains(HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY)) {
-          return Option.of(cfg.getString(HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY));
-        } else if (cfg.contains(HoodieTableConfig.HOODIE_TABLE_NAME_KEY)) {
-          return Option.of(cfg.getString(HoodieTableConfig.HOODIE_TABLE_NAME_KEY));
-        } else {
-          return Option.empty();
-        }
-      })
+      .withInferFunction(TABLE_NAME_INFERENCE_FUNCTION)
       .withDocumentation("The name of the destination table that we should sync the hudi table to.");
 
   public static final ConfigProperty<String> META_SYNC_BASE_FILE_FORMAT = ConfigProperty
@@ -105,36 +107,38 @@ public class HoodieSyncConfig extends HoodieConfig {
       .withDocumentation("Base file format for the sync.");
 
   // If partition fields are not explicitly provided, obtain from the KeyGeneration Configs
+  public static final Function<HoodieConfig, Option<String>> PARTITION_FIELDS_INFERENCE_FUNCTION = cfg -> {
+    if (cfg.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)) {
+      return Option.of(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME));
+    } else {
+      return Option.empty();
+    }
+  };
   public static final ConfigProperty<String> META_SYNC_PARTITION_FIELDS = ConfigProperty
       .key("hoodie.datasource.hive_sync.partition_fields")
       .defaultValue("")
-      .withInferFunction(cfg -> {
-        if (cfg.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)) {
-          return Option.of(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME));
-        } else {
-          return Option.empty();
-        }
-      })
+      .withInferFunction(PARTITION_FIELDS_INFERENCE_FUNCTION)
       .withDocumentation("Field in the table to use for determining hive partition columns.");
 
   // If partition value extraction class is not explicitly provided, configure based on the partition fields.
+  public static final Function<HoodieConfig, Option<String>> PARTITION_EXTRACTOR_CLASS_FUNCTION = cfg -> {
+    if (!cfg.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)) {
+      return Option.of("org.apache.hudi.hive.NonPartitionedExtractor");
+    } else {
+      int numOfPartFields = cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME).split(",").length;
+      if (numOfPartFields == 1
+          && cfg.contains(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE)
+          && cfg.getString(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE).equals("true")) {
+        return Option.of("org.apache.hudi.hive.HiveStylePartitionValueExtractor");
+      } else {
+        return Option.of("org.apache.hudi.hive.MultiPartKeysValueExtractor");
+      }
+    }
+  };
   public static final ConfigProperty<String> META_SYNC_PARTITION_EXTRACTOR_CLASS = ConfigProperty
       .key("hoodie.datasource.hive_sync.partition_extractor_class")
-      .defaultValue(SlashEncodedDayPartitionValueExtractor.class.getName())
-      .withInferFunction(cfg -> {
-        if (!cfg.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)) {
-          return Option.of(NonPartitionedExtractor.class.getName());
-        } else {
-          int numOfPartFields = cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME).split(",").length;
-          if (numOfPartFields == 1
-              && cfg.contains(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE)
-              && cfg.getString(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE).equals("true")) {
-            return Option.of(HiveStylePartitionValueExtractor.class.getName());
-          } else {
-            return Option.of(MultiPartKeysValueExtractor.class.getName());
-          }
-        }
-      })
+      .defaultValue("org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor")
+      .withInferFunction(PARTITION_EXTRACTOR_CLASS_FUNCTION)
       .withDocumentation("Class which implements PartitionValueExtractor to extract the partition values, "
           + "default 'SlashEncodedDayPartitionValueExtractor'.");
 
@@ -148,10 +152,9 @@ public class HoodieSyncConfig extends HoodieConfig {
       .defaultValue(HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS)
       .withDocumentation("Enable the internal metadata table for file listing for syncing with metastores");
 
-
-  public static final ConfigProperty<Boolean> META_SYNC_CONDITIONAL_SYNC = ConfigProperty
+  public static final ConfigProperty<String> META_SYNC_CONDITIONAL_SYNC = ConfigProperty
       .key("hoodie.datasource.meta_sync.condition.sync")
-      .defaultValue(false)
+      .defaultValue("false")
       .withDocumentation("If true, only sync on conditions like schema change or partition change.");
 
   public static final ConfigProperty<String> META_SYNC_SPARK_VERSION = ConfigProperty

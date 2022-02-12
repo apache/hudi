@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sync.common;
+package org.apache.hudi.hive;
 
 import org.junit.jupiter.api.Test;
 import java.util.ArrayList;

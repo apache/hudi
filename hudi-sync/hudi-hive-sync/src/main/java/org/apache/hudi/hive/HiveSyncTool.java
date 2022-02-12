@@ -39,7 +39,6 @@ import org.apache.hudi.hive.util.Parquet2SparkSchemaUtils;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent.PartitionEventType;
 import org.apache.hudi.sync.common.AbstractSyncTool;
-import org.apache.hudi.sync.common.NonPartitionedExtractor;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;

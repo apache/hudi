@@ -21,11 +21,11 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
-import org.apache.hudi.hive.HiveSyncConfig
+import org.apache.hudi.hive.{HiveSyncConfig, MultiPartKeysValueExtractor}
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.sql.InsertMode
-import org.apache.hudi.sync.common.{HoodieSyncConfig, MultiPartKeysValueExtractor}
+import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkSqlWriter}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}

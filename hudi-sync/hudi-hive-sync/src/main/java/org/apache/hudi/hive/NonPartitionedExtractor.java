@@ -16,18 +16,18 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sync.common;
+package org.apache.hudi.hive;
 
-import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * HDFS Path contain hive partition values for the keys it is partitioned on. This mapping is not straight forward and
- * requires a pluggable implementation to extract the partition value from HDFS path.
- * <p>
- * e.g. Hive table partitioned by datestr=yyyy-mm-dd and hdfs path /app/hoodie/dataset1/YYYY=[yyyy]/MM=[mm]/DD=[dd]
+ * Extractor for Non-partitioned hive tables.
  */
-public interface PartitionValueExtractor extends Serializable {
+public class NonPartitionedExtractor implements PartitionValueExtractor {
 
-  List<String> extractPartitionValuesInPath(String partitionPath);
+  @Override
+  public List<String> extractPartitionValuesInPath(String partitionPath) {
+    return new ArrayList<>();
+  }
 }

@@ -25,7 +25,7 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hive.util.ConfigUtils
-import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
+import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool, MultiPartKeysValueExtractor, NonPartitionedExtractor, SlashEncodedDayPartitionValueExtractor}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
@@ -377,9 +377,94 @@ object DataSourceWriteOptions {
       + "evolved, this config will upgrade the records to leverage latest table schema(default values will be "
       + "injected to missing fields). If not, the write batch would fail.")
 
+  // HIVE SYNC SPECIFIC CONFIGS
+  // NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
+  // unexpected issues with config getting reset
+  /**
+   * @deprecated Hive Specific Configs are moved to {@link HiveSyncConfig}
+   */
+  @Deprecated
+  val HIVE_SYNC_ENABLED: ConfigProperty[String] = HiveSyncConfig.HIVE_SYNC_ENABLED
+  @Deprecated
+  val META_SYNC_ENABLED: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_ENABLED
+  @Deprecated
+  val HIVE_DATABASE: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_DATABASE_NAME
+  @Deprecated
+  val hiveTableOptKeyInferFunc = HoodieSyncConfig.TABLE_NAME_INFERENCE_FUNCTION
+  @Deprecated
+  val HIVE_TABLE: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_TABLE_NAME
+  @Deprecated
+  val HIVE_BASE_FILE_FORMAT: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT
+  @Deprecated
+  val HIVE_USER: ConfigProperty[String] = HiveSyncConfig.HIVE_USER
+  @Deprecated
+  val HIVE_PASS: ConfigProperty[String] = HiveSyncConfig.HIVE_PASS
+  @Deprecated
+  val HIVE_URL: ConfigProperty[String] = HiveSyncConfig.HIVE_URL
+  @Deprecated
+  val METASTORE_URIS: ConfigProperty[String] = HiveSyncConfig.METASTORE_URIS
+  @Deprecated
+  val hivePartitionFieldsInferFunc = HoodieSyncConfig.PARTITION_FIELDS_INFERENCE_FUNCTION
+  @Deprecated
+  val HIVE_PARTITION_FIELDS: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_PARTITION_FIELDS
+  @Deprecated
+  val hivePartitionExtractorInferFunc = HoodieSyncConfig.PARTITION_EXTRACTOR_CLASS_FUNCTION
+  @Deprecated
+  val HIVE_PARTITION_EXTRACTOR_CLASS: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS
+  @Deprecated
+  val HIVE_ASSUME_DATE_PARTITION: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION
+  @Deprecated
+  val HIVE_USE_PRE_APACHE_INPUT_FORMAT: ConfigProperty[String] = HiveSyncConfig.HIVE_USE_PRE_APACHE_INPUT_FORMAT
+
   // spark data source write pool name. Incase of streaming sink, users might be interested to set custom scheduling configs
   // for regular writes and async compaction. In such cases, this pool name will be used for spark datasource writes.
   val SPARK_DATASOURCE_WRITER_POOL_NAME = "sparkdatasourcewrite"
+
+  /** @deprecated Use {@link HIVE_SYNC_MODE} instead of this config from 0.9.0 */
+  @Deprecated
+  val HIVE_USE_JDBC: ConfigProperty[String] = HiveSyncConfig.HIVE_URL
+  @Deprecated
+  val HIVE_AUTO_CREATE_DATABASE: ConfigProperty[String] = HiveSyncConfig.HIVE_URL
+  @Deprecated
+  val HIVE_IGNORE_EXCEPTIONS: ConfigProperty[String] = HiveSyncConfig.HIVE_URL
+  @Deprecated
+  val HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE: ConfigProperty[String] = HiveSyncConfig.HIVE_URL
+  @Deprecated
+  val HIVE_SUPPORT_TIMESTAMP_TYPE: ConfigProperty[String] = HiveSyncConfig.HIVE_URL
+
+  /**
+   * Flag to indicate whether to use conditional syncing in HiveSync.
+   * If set true, the Hive sync procedure will only run if partition or schema changes are detected.
+   * By default true.
+   */
+  @Deprecated
+  val HIVE_CONDITIONAL_SYNC: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_CONDITIONAL_SYNC
+  @Deprecated
+  val HIVE_TABLE_PROPERTIES: ConfigProperty[String] = HiveSyncConfig.HIVE_TABLE_PROPERTIES
+  @Deprecated
+  val HIVE_TABLE_SERDE_PROPERTIES: ConfigProperty[String] = HiveSyncConfig.HIVE_TABLE_SERDE_PROPERTIES
+  @Deprecated
+  val HIVE_SYNC_AS_DATA_SOURCE_TABLE: ConfigProperty[String] = HiveSyncConfig.HIVE_SYNC_AS_DATA_SOURCE_TABLE
+
+  // Create table as managed table
+  @Deprecated
+  val HIVE_CREATE_MANAGED_TABLE: ConfigProperty[Boolean] = ConfigProperty
+    .key(HiveSyncConfig.HIVE_CREATE_MANAGED_TABLE.key())
+    .defaultValue(HiveSyncConfig.HIVE_CREATE_MANAGED_TABLE.defaultValue().booleanValue())
+    .withDocumentation("Whether to sync the table as managed table.")
+  @Deprecated
+  val HIVE_BATCH_SYNC_PARTITION_NUM: ConfigProperty[Int] = ConfigProperty
+    .key(HiveSyncConfig.HIVE_BATCH_SYNC_PARTITION_NUM.key())
+    .defaultValue(HiveSyncConfig.HIVE_BATCH_SYNC_PARTITION_NUM.defaultValue().intValue())
+    .withDocumentation("The number of partitions one batch when synchronous partitions to hive.")
+  @Deprecated
+  val HIVE_SYNC_MODE: ConfigProperty[String] = HiveSyncConfig.HIVE_SYNC_MODE
+  @Deprecated
+  val HIVE_SYNC_BUCKET_SYNC: ConfigProperty[Boolean] = ConfigProperty
+    .key(HiveSyncConfig.HIVE_SYNC_BUCKET_SYNC.key())
+    .defaultValue(HiveSyncConfig.HIVE_SYNC_BUCKET_SYNC.defaultValue().booleanValue())
+    .withDocumentation("Whether sync hive metastore bucket specification when using bucket index." +
+      "The specification is 'CLUSTERED BY (trace_id) SORTED BY (trace_id ASC) INTO 65536 BUCKETS'")
 
   /*
   When async compaction is enabled (deltastreamer or streaming sink), users might be interested to set custom

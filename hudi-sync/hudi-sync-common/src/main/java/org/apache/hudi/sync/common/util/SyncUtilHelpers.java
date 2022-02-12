@@ -2,11 +2,14 @@ package org.apache.hudi.sync.common.util;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sync.common.AbstractSyncTool;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
+
+import java.util.Properties;
 
 /**
  * Helper class for syncing Hudi commit data with external metastores.
@@ -35,8 +38,17 @@ public class SyncUtilHelpers {
     properties.putAll(props);
     properties.put(HoodieSyncConfig.META_SYNC_BASE_PATH, targetBasePath);
     properties.put(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT, baseFileFormat);
-    ((AbstractSyncTool) ReflectionUtils.loadClass(metaSyncClass,
-        new Class<?>[] {TypedProperties.class, Configuration.class, FileSystem.class},
-        properties, hadoopConfig, fs)).syncHoodieTable();
+
+    try {
+      ((AbstractSyncTool) ReflectionUtils.loadClass(metaSyncClass,
+          new Class<?>[] {TypedProperties.class, Configuration.class, FileSystem.class},
+          properties, hadoopConfig, fs)).syncHoodieTable();
+    } catch (HoodieException e) {
+      // fallback to old interface
+      ((AbstractSyncTool) ReflectionUtils.loadClass(metaSyncClass,
+          new Class<?>[] {Properties.class, FileSystem.class}, properties, fs)).syncHoodieTable();
+    } catch (Throwable e) {
+      throw new HoodieException("Could not load meta sync class " + metaSyncClass, e);
+    }
   }
 }

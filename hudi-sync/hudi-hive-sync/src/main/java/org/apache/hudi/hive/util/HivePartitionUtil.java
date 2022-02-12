@@ -21,7 +21,7 @@ package org.apache.hudi.hive.util;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
-import org.apache.hudi.sync.common.PartitionValueExtractor;
+import org.apache.hudi.hive.PartitionValueExtractor;
 
 import java.util.ArrayList;
 import java.util.List;
