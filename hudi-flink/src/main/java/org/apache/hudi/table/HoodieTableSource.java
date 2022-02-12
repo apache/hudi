@@ -93,8 +93,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.configuration.FlinkOptions.getParquetConf;
 import static org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes;
-import static org.apache.hudi.table.format.FormatUtils.getParquetConf;
 
 /**
  * Hoodie batch table source that always read the latest snapshot of the underneath table.
@@ -157,7 +157,7 @@ public class HoodieTableSource implements
         : requiredPos;
     this.limit = limit == null ? NO_LIMIT_CONSTANT : limit;
     this.filters = filters == null ? Collections.emptyList() : filters;
-    this.hadoopConf = StreamerUtil.getHadoopConf(conf);
+    this.hadoopConf = FlinkOptions.getHadoopConf(conf);
     this.metaClient = StreamerUtil.metaClientForReader(conf, hadoopConf);
     this.maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(new JobConf(this.hadoopConf));
   }

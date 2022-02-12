@@ -23,7 +23,6 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.table.format.FilePathUtils;
-import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -53,7 +52,7 @@ public class HiveSyncContext {
 
   public static HiveSyncContext create(Configuration conf) {
     HiveSyncConfig syncConfig = buildSyncConfig(conf);
-    org.apache.hadoop.conf.Configuration hadoopConf = StreamerUtil.getHadoopConf(conf);
+    org.apache.hadoop.conf.Configuration hadoopConf = FlinkOptions.getHadoopConf(conf);
     String path = conf.getString(FlinkOptions.PATH);
     FileSystem fs = FSUtils.getFs(path, hadoopConf);
     HiveConf hiveConf = new HiveConf();

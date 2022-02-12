@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -52,10 +51,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
-import static org.apache.hudi.configuration.FlinkOptions.PROPERTIES_PREFIX;
-import static org.apache.hudi.table.format.FormatUtils.PARQUET_PREFIX;
-import static org.apache.hudi.util.StreamerUtil.HADOOP_PREFIX;
-
 /**
  * Hoodie data source/sink factory.
  */
@@ -66,9 +61,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
   @Override
   public DynamicTableSource createDynamicTableSource(Context context) {
-    FactoryUtil.TableFactoryHelper helper = FactoryUtil.createTableFactoryHelper(this, context);
-    helper.validateExcept(HADOOP_PREFIX, PARQUET_PREFIX, PROPERTIES_PREFIX);
-    Configuration conf = (Configuration) helper.getOptions();
+    Configuration conf = Configuration.fromMap(context.getCatalogTable().getOptions());
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     sanityCheck(conf, schema);
     setupConfOptions(conf, context.getObjectIdentifier().getObjectName(), context.getCatalogTable(), schema);
@@ -85,9 +78,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
   @Override
   public DynamicTableSink createDynamicTableSink(Context context) {
-    FactoryUtil.TableFactoryHelper helper = FactoryUtil.createTableFactoryHelper(this, context);
-    helper.validateExcept(HADOOP_PREFIX, PARQUET_PREFIX, PROPERTIES_PREFIX);
-    Configuration conf = (Configuration) helper.getOptions();
+    Configuration conf = Configuration.fromMap(context.getCatalogTable().getOptions());
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     sanityCheck(conf, schema);
     setupConfOptions(conf, context.getObjectIdentifier().getObjectName(), context.getCatalogTable(), schema);

@@ -18,13 +18,11 @@
 
 package org.apache.hudi.configuration;
 
-import org.apache.flink.configuration.DelegatingConfiguration;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
@@ -34,6 +32,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
+import org.apache.hudi.util.FlinkClientUtil;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -660,14 +659,65 @@ public class FlinkOptions extends HoodieConfig {
   // -------------------------------------------------------------------------
 
   // Prefix for Hoodie specific properties.
-  public static final String PROPERTIES_PREFIX = "properties.";
+  private static final String PROPERTIES_PREFIX = "properties.";
+  private static final String HADOOP_PREFIX = "hadoop.";
+  private static final  String PARQUET_PREFIX = "parquet.";
+
+  /**
+   * Collects the config options that start with specified prefix {@code prefix} into a 'key'='value' list.
+   */
+  public static Map<String, String> getPropertiesWithPrefix(Map<String, String> options, String prefix) {
+    final Map<String, String> hoodieProperties = new HashMap<>();
+    if (hasPropertyOptions(options, prefix)) {
+      options.keySet().stream()
+          .filter(key -> key.startsWith(prefix))
+          .forEach(key -> {
+            final String value = options.get(key);
+            final String subKey = key.substring(prefix.length());
+            hoodieProperties.put(subKey, value);
+          });
+    }
+    return hoodieProperties;
+  }
+
+  public static org.apache.hadoop.conf.Configuration getParquetConf(
+          org.apache.flink.configuration.Configuration options,
+          org.apache.hadoop.conf.Configuration hadoopConf) {
+    org.apache.hadoop.conf.Configuration copy = new org.apache.hadoop.conf.Configuration(hadoopConf);
+    Map<String, String> parquetOptions = getPropertiesWithPrefix(options.toMap(), PARQUET_PREFIX);
+    parquetOptions.forEach((k, v) -> copy.set(PARQUET_PREFIX + k, v));
+    return copy;
+  }
+
+  // Keep the redundant to avoid too many modifications.
+  public static org.apache.hadoop.conf.Configuration getHadoopConf(Configuration conf) {
+    if (conf == null) {
+      return FlinkClientUtil.getHadoopConf();
+    } else {
+      org.apache.hadoop.conf.Configuration hadoopConf = FlinkClientUtil.getHadoopConf();
+      Map<String, String> options = getPropertiesWithPrefix(conf.toMap(), HADOOP_PREFIX);
+      options.forEach((k, v) -> hadoopConf.set(k, v));
+      return hadoopConf;
+    }
+  }
 
   /**
    * Collects all the config options, the 'properties.' prefix would be removed if the option key starts with it.
    */
   public static Configuration flatOptions(Configuration conf) {
-    DelegatingConfiguration delegatingConf = new DelegatingConfiguration(conf, PROPERTIES_PREFIX);
-    return Configuration.fromMap(delegatingConf.toMap());
+    final Map<String, String> propsMap = new HashMap<>();
+
+    conf.toMap().forEach((key, value) -> {
+      final String subKey = key.startsWith(PROPERTIES_PREFIX)
+          ? key.substring((PROPERTIES_PREFIX).length())
+          : key;
+      propsMap.put(subKey, value);
+    });
+    return Configuration.fromMap(propsMap);
+  }
+
+  private static boolean hasPropertyOptions(Map<String, String> options, String prefix) {
+    return options.keySet().stream().anyMatch(k -> k.startsWith(prefix));
   }
 
   /**

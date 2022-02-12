@@ -18,7 +18,6 @@
 
 package org.apache.hudi.util;
 
-import org.apache.flink.configuration.DelegatingConfiguration;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
@@ -76,7 +75,6 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
@@ -91,8 +89,6 @@ public class StreamerUtil {
 
   private static final Logger LOG = LoggerFactory.getLogger(StreamerUtil.class);
 
-  public static final String HADOOP_PREFIX = "hadoop.";
-
   public static TypedProperties appendKafkaProps(FlinkStreamerConfig config) {
     TypedProperties properties = getProps(config);
     properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.kafkaBootstrapServers);
@@ -105,7 +101,7 @@ public class StreamerUtil {
       return new TypedProperties();
     }
     return readConfig(
-        getHadoopConf(cfg),
+        FlinkOptions.getHadoopConf(cfg),
         new Path(cfg.propsFilePath), cfg.configs).getProps();
   }
 
@@ -144,23 +140,13 @@ public class StreamerUtil {
     return conf;
   }
 
-  // Keep the redundant to avoid too many modifications.
+  /**
+   * Keep the redundant to avoid too many modifications.
+   * @deprecated Use {@link FlinkOptions#getHadoopConf(Configuration)} instead.
+   */
   @Deprecated
   public static org.apache.hadoop.conf.Configuration getHadoopConf() {
-    return getHadoopConf(new Configuration());
-  }
-
-  // Keep the redundant to avoid too many modifications.
-  public static org.apache.hadoop.conf.Configuration getHadoopConf(Configuration conf) {
-    if (conf == null) {
-      return FlinkClientUtil.getHadoopConf();
-    } else {
-      org.apache.hadoop.conf.Configuration hadoopConf = FlinkClientUtil.getHadoopConf();
-      DelegatingConfiguration delegatingConf = new DelegatingConfiguration(conf, HADOOP_PREFIX);
-      Map<String, String> options = delegatingConf.toMap();
-      options.forEach((k, v) -> hadoopConf.set(k, v));
-      return hadoopConf;
-    }
+    return FlinkOptions.getHadoopConf(new Configuration());
   }
 
   /**
@@ -272,7 +258,7 @@ public class StreamerUtil {
    */
   public static HoodieTableMetaClient initTableIfNotExists(Configuration conf) throws IOException {
     final String basePath = conf.getString(FlinkOptions.PATH);
-    final org.apache.hadoop.conf.Configuration hadoopConf = StreamerUtil.getHadoopConf(conf);
+    final org.apache.hadoop.conf.Configuration hadoopConf = FlinkOptions.getHadoopConf(conf);
     if (!tableExists(basePath, hadoopConf)) {
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.withPropertyBuilder()
           .setTableCreateSchema(conf.getString(FlinkOptions.SOURCE_AVRO_SCHEMA))
@@ -399,7 +385,7 @@ public class StreamerUtil {
   public static HoodieFlinkWriteClient createWriteClient(Configuration conf, RuntimeContext runtimeContext, boolean loadFsViewStorageConfig) {
     HoodieFlinkEngineContext context =
         new HoodieFlinkEngineContext(
-            new SerializableConfiguration(StreamerUtil.getHadoopConf(conf)),
+            new SerializableConfiguration(FlinkOptions.getHadoopConf(conf)),
             new FlinkTaskContextSupplier(runtimeContext));
 
     HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, loadFsViewStorageConfig);

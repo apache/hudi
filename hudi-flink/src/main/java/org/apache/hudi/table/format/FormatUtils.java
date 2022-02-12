@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.format;
 
-import org.apache.flink.configuration.DelegatingConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -30,7 +29,6 @@ import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueProducer;
 import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
@@ -50,14 +48,11 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 /**
  * Utilities for format.
  */
 public class FormatUtils {
-  public static final  String PARQUET_PREFIX = "parquet.";
-
   private FormatUtils() {
   }
 
@@ -252,15 +247,5 @@ public class FormatUtils {
 
   private static Boolean string2Boolean(String s) {
     return "true".equals(s.toLowerCase(Locale.ROOT));
-  }
-
-  public static org.apache.hadoop.conf.Configuration getParquetConf(
-      org.apache.flink.configuration.Configuration options,
-      org.apache.hadoop.conf.Configuration hadoopConf) {
-    org.apache.hadoop.conf.Configuration copy = new org.apache.hadoop.conf.Configuration(hadoopConf);
-    DelegatingConfiguration delegatingConf = new DelegatingConfiguration(options, PARQUET_PREFIX);
-    Map<String, String> parquetOptions = delegatingConf.toMap();
-    parquetOptions.forEach((k, v) -> copy.set(PARQUET_PREFIX + k, v));
-    return copy;
   }
 }

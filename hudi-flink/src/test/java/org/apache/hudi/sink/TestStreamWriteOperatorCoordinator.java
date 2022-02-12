@@ -103,7 +103,7 @@ public class TestStreamWriteOperatorCoordinator {
 
   @Test
   public void testTableInitialized() throws IOException {
-    final org.apache.hadoop.conf.Configuration hadoopConf = StreamerUtil.getHadoopConf(new Configuration());
+    final org.apache.hadoop.conf.Configuration hadoopConf = FlinkOptions.getHadoopConf(new Configuration());
     String basePath = tempFile.getAbsolutePath();
     try (FileSystem fs = FSUtils.getFs(basePath, hadoopConf)) {
       assertTrue(fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME)));

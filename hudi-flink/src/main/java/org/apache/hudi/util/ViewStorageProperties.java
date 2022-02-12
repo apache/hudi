@@ -21,6 +21,7 @@ package org.apache.hudi.util;
 import org.apache.flink.configuration.Configuration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -52,7 +53,7 @@ public class ViewStorageProperties {
       FileSystemViewStorageConfig config,
       Configuration flinkConf) throws IOException {
     Path propertyPath = getPropertiesFilePath(basePath);
-    FileSystem fs = FSUtils.getFs(basePath, StreamerUtil.getHadoopConf(flinkConf));
+    FileSystem fs = FSUtils.getFs(basePath, FlinkOptions.getHadoopConf(flinkConf));
     fs.delete(propertyPath, false);
     try (FSDataOutputStream outputStream = fs.create(propertyPath)) {
       config.getProps().store(outputStream,
@@ -66,7 +67,7 @@ public class ViewStorageProperties {
   public static FileSystemViewStorageConfig loadFromProperties(String basePath, Configuration conf) {
     Path propertyPath = getPropertiesFilePath(basePath);
     LOG.info("Loading filesystem view storage properties from " + propertyPath);
-    FileSystem fs = FSUtils.getFs(basePath, StreamerUtil.getHadoopConf(conf));
+    FileSystem fs = FSUtils.getFs(basePath, FlinkOptions.getHadoopConf(conf));
     Properties props = new Properties();
     try {
       try (FSDataInputStream inputStream = fs.open(propertyPath)) {
