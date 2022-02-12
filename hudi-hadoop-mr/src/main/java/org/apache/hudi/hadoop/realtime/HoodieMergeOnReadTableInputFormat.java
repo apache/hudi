@@ -186,11 +186,6 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
   }
 
   @Override
-  protected boolean includeLogFilesForSnapshotView() {
-    return true;
-  }
-
-  @Override
   protected boolean isSplitable(FileSystem fs, Path filename) {
     if (filename instanceof HoodieRealtimePath) {
       return ((HoodieRealtimePath) filename).isSplitable();

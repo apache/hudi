@@ -162,10 +162,6 @@ public class HoodieCopyOnWriteTableInputFormat extends FileInputFormat<NullWrita
     throw new UnsupportedEncodingException("not implemented");
   }
 
-  protected boolean includeLogFilesForSnapshotView() {
-    return false;
-  }
-
   /**
    * Abstracts and exposes {@link FileInputFormat#listStatus(JobConf)} operation to subclasses that
    * lists files (returning an array of {@link FileStatus}) corresponding to the input paths specified
@@ -226,11 +222,6 @@ public class HoodieCopyOnWriteTableInputFormat extends FileInputFormat<NullWrita
   }
 
   @Nonnull
-  private List<FileStatus> listStatusForSnapshotModeLegacy(JobConf job, Map<String, HoodieTableMetaClient> tableMetaClientMap, List<Path> snapshotPaths) throws IOException {
-    return HoodieInputFormatUtils.filterFileStatusForSnapshotMode(job, tableMetaClientMap, snapshotPaths, includeLogFilesForSnapshotView());
-  }
-
-  @Nonnull
   private List<FileStatus> listStatusForSnapshotMode(JobConf job,
                                                      Map<String, HoodieTableMetaClient> tableMetaClientMap,
                                                      List<Path> snapshotPaths) throws IOException {
@@ -276,9 +267,6 @@ public class HoodieCopyOnWriteTableInputFormat extends FileInputFormat<NullWrita
               .collect(Collectors.toList())
       );
     }
-
-    // TODO(HUDI-3280) cleanup
-    validate(targetFiles, listStatusForSnapshotModeLegacy(job, tableMetaClientMap, snapshotPaths));
 
     return targetFiles;
   }

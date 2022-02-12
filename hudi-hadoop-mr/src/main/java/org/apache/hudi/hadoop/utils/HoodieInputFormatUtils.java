@@ -29,23 +29,18 @@ import org.apache.hadoop.hive.ql.io.orc.OrcSerde;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
 import org.apache.hadoop.mapred.FileInputFormat;
-import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
@@ -55,7 +50,6 @@ import org.apache.hudi.hadoop.FileStatusWithBootstrapBaseFile;
 import org.apache.hudi.hadoop.HoodieHFileInputFormat;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.LocatedFileStatusWithBootstrapBaseFile;
-import org.apache.hudi.hadoop.RealtimeFileStatus;
 import org.apache.hudi.hadoop.realtime.HoodieHFileRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.log4j.LogManager;
@@ -434,69 +428,6 @@ public class HoodieInputFormatUtils {
     return HoodieMetadataConfig.newBuilder()
         .enable(conf.getBoolean(ENABLE.key(), DEFAULT_METADATA_ENABLE_FOR_READERS))
         .build();
-  }
-
-  /**
-   * @deprecated
-   */
-  public static List<FileStatus> filterFileStatusForSnapshotMode(JobConf job, Map<String, HoodieTableMetaClient> tableMetaClientMap,
-                                                                 List<Path> snapshotPaths, boolean includeLogFiles) throws IOException {
-    HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(job);
-    List<FileStatus> returns = new ArrayList<>();
-
-    Map<HoodieTableMetaClient, List<Path>> groupedPaths =
-        HoodieInputFormatUtils.groupSnapshotPathsByMetaClient(tableMetaClientMap.values(), snapshotPaths);
-
-    Map<HoodieTableMetaClient, HoodieTableFileSystemView> fsViewCache = new HashMap<>();
-
-    LOG.info("Found a total of " + groupedPaths.size() + " groups");
-
-    try {
-      for (Map.Entry<HoodieTableMetaClient, List<Path>> entry : groupedPaths.entrySet()) {
-        HoodieTableMetaClient metaClient = entry.getKey();
-        if (LOG.isDebugEnabled()) {
-          LOG.debug("Hoodie Metadata initialized with completed commit instant as :" + metaClient);
-        }
-
-        HoodieTimeline timeline = HoodieHiveUtils.getTableTimeline(metaClient.getTableConfig().getTableName(), job, metaClient);
-
-        HoodieTableFileSystemView fsView = fsViewCache.computeIfAbsent(metaClient, tableMetaClient ->
-            FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext, tableMetaClient, buildMetadataConfig(job), timeline));
-        List<HoodieBaseFile> filteredBaseFiles = new ArrayList<>();
-        Map<FileStatus, List<HoodieLogFile>> filteredLogs = new HashMap<>();
-        for (Path p : entry.getValue()) {
-          String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), p);
-          List<HoodieBaseFile> matched = fsView.getLatestBaseFiles(relativePartitionPath).collect(Collectors.toList());
-          filteredBaseFiles.addAll(matched);
-          if (includeLogFiles) {
-            List<FileSlice> logMatched = fsView.getLatestFileSlices(relativePartitionPath)
-                .filter(f -> !f.getBaseFile().isPresent() && f.getLatestLogFile().isPresent())
-                .collect(Collectors.toList());
-            logMatched.forEach(f -> {
-              List<HoodieLogFile> logPathSizePairs = f.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
-              filteredLogs.put(f.getLatestLogFile().get().getFileStatus(), logPathSizePairs);
-            });
-          }
-        }
-
-        LOG.info("Total paths to process after hoodie filter " + filteredBaseFiles.size());
-        for (HoodieBaseFile filteredFile : filteredBaseFiles) {
-          if (LOG.isDebugEnabled()) {
-            LOG.debug("Processing latest hoodie file - " + filteredFile.getPath());
-          }
-          filteredFile = refreshFileStatus(job, filteredFile);
-          returns.add(getFileStatus(filteredFile));
-        }
-
-        for (Map.Entry<FileStatus, List<HoodieLogFile>> filterLogEntry : filteredLogs.entrySet()) {
-          RealtimeFileStatus rs = new RealtimeFileStatus(filterLogEntry.getKey(), "", filterLogEntry.getValue(), false, Option.empty());
-          returns.add(rs);
-        }
-      }
-    } finally {
-      fsViewCache.forEach(((metaClient, fsView) -> fsView.close()));
-    }
-    return returns;
   }
 
   /**
