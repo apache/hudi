@@ -243,7 +243,7 @@ class TestDataSourceDefaults {
     val partitionPathProp: String = props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD.key)
     val STRUCT_NAME: String = "hoodieRowTopLevelField"
     val NAMESPACE: String = "hoodieRow"
-    var converterFn: Function1[Any, Any] = _
+    var converterFn: Function1[Row, GenericRecord] = _
 
     override def getKey(record: GenericRecord): HoodieKey = {
       new HoodieKey(HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyProp, true, false),

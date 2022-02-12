@@ -140,7 +140,7 @@ object HoodieBaseRelation {
 
       reader.getRecordIterator(requiredAvroSchema).asScala
         .map(record => {
-          avroToRowConverter.apply(record).get.asInstanceOf[InternalRow]
+          avroToRowConverter.apply(record.asInstanceOf[GenericRecord]).get
         })
     }
   }
