@@ -178,6 +178,7 @@ class TestMORDataSource extends HoodieClientTestBase {
       .options(commonOpts)
       .mode(SaveMode.Append)
       .save(basePath)
+    val commit3Time = HoodieDataSourceHelpers.latestCommit(fs, basePath)
     val hudiSnapshotDF3 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .load(basePath + "/*/*/*/*")
@@ -218,6 +219,7 @@ class TestMORDataSource extends HoodieClientTestBase {
       .options(commonOpts)
       .mode(SaveMode.Append)
       .save(basePath)
+    val commit4Time = HoodieDataSourceHelpers.latestCommit(fs, basePath)
     val hudiSnapshotDF4 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .load(basePath + "/*/*/*/*")
@@ -270,6 +272,18 @@ class TestMORDataSource extends HoodieClientTestBase {
       .load(basePath)
     // compaction updated 150 rows + inserted 2 new row, but only 2 new records upsert between commit5Time and commit6Time
     assertEquals(2, hudiIncDF6.count())
+
+    // Test taht compaction can't update _hoodie_commit_time.
+    val snapshot = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+      .load(basePath)
+    assertEquals(snapshot.where(s"_hoodie_commit_time = $commit2Time").count(), 50)
+    assertEquals(snapshot.where(s"_hoodie_commit_time = $commit3Time").count(), 50)
+    assertEquals(snapshot.where(s"_hoodie_commit_time = $commit4Time").count(), 50)
+    assertEquals(snapshot.where(s"_hoodie_commit_time = $commit5Time").count(), 50)
+
+    // Test that compaction should update _hoodie_file_name. There are 150 rows compacted.
+    assertEquals(snapshot.where(s"_hoodie_file_name like '%$commit6Time%'").count(), 150)
   }
 
   @Test

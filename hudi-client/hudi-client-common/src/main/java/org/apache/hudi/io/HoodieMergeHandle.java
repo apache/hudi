@@ -291,6 +291,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       if (indexedRecord.isPresent() && !isDelete) {
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
         IndexedRecord recordWithMetadataInSchema = rewriteRecord((GenericRecord) indexedRecord.get());
+        // do not preserve FILENAME_METADATA_FIELD
+        recordWithMetadataInSchema.put(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.FILENAME_METADATA_FIELD), newFilePath.getName());
         fileWriter.writeAvro(hoodieRecord.getRecordKey(), recordWithMetadataInSchema);
         recordsWritten++;
       } else {
