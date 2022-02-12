@@ -22,6 +22,7 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.spark.sql.Row
+import org.apache.spark.sql.avro.HoodieAvroSerializer.resolveAvroTypeNullability
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.types._
 
@@ -49,8 +50,9 @@ object AvroConversionHelper {
     val encoder = RowEncoder.apply(sourceSqlType).resolveAndBind()
     val serde = sparkAdapter.createSparkRowSerDe(encoder)
     val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(sourceSqlType, structName, recordNamespace)
-    // NOTE: We're conservatively assuming that the record have to be non-nullable
-    val converter = AvroConversionUtils.createRowToAvroConverter(sourceSqlType, avroSchema, nullable = false)
+    val (nullable, _) = resolveAvroTypeNullability(avroSchema)
+
+    val converter = AvroConversionUtils.createRowToAvroConverter(sourceSqlType, avroSchema, nullable)
 
     row => converter.apply(serde.serializeRow(row))
   }

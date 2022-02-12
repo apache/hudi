@@ -30,6 +30,7 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenerator}
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.avro.HoodieAvroSerializer.resolveAvroTypeNullability
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Literal, Projection, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, InMemoryFileIndex}
@@ -132,6 +133,7 @@ object HoodieSparkUtils extends SparkAdapterSupport {
                 latestTableSchema: Option[Schema] = None): RDD[GenericRecord] = {
     val writerSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, recordNamespace)
     val (readerSchema, sameSchema) = latestTableSchema.map((_, false)).getOrElse((writerSchema, true))
+    val (nullable, _) = resolveAvroTypeNullability(readerSchema)
 
     val rowReaderSchema = AvroConversionUtils.convertAvroSchemaToStructType(readerSchema)
 
@@ -142,7 +144,7 @@ object HoodieSparkUtils extends SparkAdapterSupport {
         // Since caller might request to get records in a different projected schema, we might need to
         // project the row first, before converting it into Avro
         val project: Projection = if (sameSchema) identity else UnsafeProjection.create(rowReaderSchema)
-        val convert = AvroConversionUtils.createRowToAvroConverter(rowReaderSchema, readerSchema, nullable = ?)
+        val convert = AvroConversionUtils.createRowToAvroConverter(rowReaderSchema, readerSchema, nullable = nullable)
         rows.map { r => convert(project(r)) }
       }
     }
