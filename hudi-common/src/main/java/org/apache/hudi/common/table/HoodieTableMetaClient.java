@@ -262,7 +262,7 @@ public class HoodieTableMetaClient implements Serializable {
     if (fs == null) {
       FileSystem fileSystem = FSUtils.getFs(metaPath, hadoopConf.newCopy());
 
-      if (fileSystemRetryConfig.isFileSystemActionRetryEnable() && StorageSchemes.isRetrySupported(fileSystem.getScheme())) {
+      if (fileSystemRetryConfig.isFileSystemActionRetryEnable()) {
         fileSystem = new HoodieRetryWrapperFileSystem(fileSystem,
             fileSystemRetryConfig.getMaxRetryIntervalMs(),
             fileSystemRetryConfig.getMaxRetryNumbers(),
