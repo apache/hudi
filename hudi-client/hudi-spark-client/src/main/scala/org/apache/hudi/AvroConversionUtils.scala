@@ -23,6 +23,7 @@ import org.apache.avro.{JsonProperties, Schema}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer, SchemaConverters}
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.sql.{Dataset, Row, SparkSession}
 
@@ -35,23 +36,26 @@ object AvroConversionUtils {
    * Creates converter to transform Avro payload into Spark's Catalyst one
    *
    * @param rootAvroType Avro [[Schema]] to be transformed from
-   * @param rootCatalystType Catalyst [[DataType]] to be transformed into
-   * @return converter accepting Avro payload and transforming it into a Catalyst one (in the form of [[Row]])
+   * @param rootCatalystType Catalyst [[StructType]] to be transformed into
+   * @return converter accepting Avro payload and transforming it into a Catalyst one (in the form of [[InternalRow]])
    */
-  def createAvroToRowConverter(rootAvroType: Schema, rootCatalystType: DataType): Any => Option[Any] = {
-    HoodieAvroDeserializer(rootAvroType, rootCatalystType).deserializeData
-  }
+  def createAvroToRowConverter(rootAvroType: Schema, rootCatalystType: StructType): GenericRecord => Option[InternalRow] =
+    record => HoodieAvroDeserializer(rootAvroType, rootCatalystType)
+      .deserializeData(record)
+      .map(_.asInstanceOf[InternalRow])
 
   /**
    * Creates converter to transform Catalyst payload into Avro one
    *
-   * @param rootCatalystType Catalyst [[DataType]] to be transformed from
+   * @param rootCatalystType Catalyst [[StructType]] to be transformed from
    * @param rootAvroType Avro [[Schema]] to be transformed into
    * @param nullable whether Avro record is nullable
-   * @return converter accepting Catalyst payload (in the form of [[Row]]) and transforming it into an Avro one
+   * @return converter accepting Catalyst payload (in the form of [[InternalRow]]) and transforming it into an Avro one
    */
-  def createRowToAvroConverter(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): Any => Any = {
-    HoodieAvroSerializer(rootCatalystType, rootAvroType, nullable).serialize
+  def createRowToAvroConverter(rootCatalystType: StructType, rootAvroType: Schema, nullable: Boolean): InternalRow => GenericRecord = {
+    row => HoodieAvroSerializer(rootCatalystType, rootAvroType, nullable)
+      .serialize(row)
+      .asInstanceOf[GenericRecord]
   }
 
   def createDataFrame(rdd: RDD[GenericRecord], schemaStr: String, ss: SparkSession): Dataset[Row] = {
