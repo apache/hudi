@@ -143,20 +143,13 @@ object HoodieSparkUtils extends SparkAdapterSupport {
 
   def createRddInternal(df: DataFrame, writeSchema: Schema, latestTableSchema: Schema, structName: String, recordNamespace: String)
   : RDD[GenericRecord] = {
-    // Use the write avro schema to derive the StructType which has the correct nullability information
-    val writeDataType = AvroConversionUtils.convertAvroSchemaToStructType(writeSchema)
-    // if records were serialized with old schema, but an evolved schema was passed in with latestTableSchema, we need
-    // latestTableSchema equivalent datatype to be passed in to AvroConversionHelper.createConverterToAvro()
-    val reconciledDataType =
-      if (latestTableSchema != null) AvroConversionUtils.convertAvroSchemaToStructType(latestTableSchema) else writeDataType
-    // Note: deserializer.deserializeRow(row) is not capable of handling evolved schema. i.e. if Row was serialized in
-    // old schema, but deserializer was created with an encoder with evolved schema, deserialization fails.
-    // Hence we always need to deserialize in the same schema as serialized schema.
-    df.queryExecution.toRdd.mapPartitions { records =>
-        if (records.isEmpty) Iterator.empty
+    // We use original writer's schema to deserialize rows. Schema projection would be
+    val rowSchema = AvroConversionUtils.convertAvroSchemaToStructType(writeSchema)
+    df.queryExecution.toRdd.mapPartitions { rows =>
+        if (rows.isEmpty) Iterator.empty
         else {
-          val convertor = AvroConversionHelper.createConverterToAvro(reconciledDataType, structName, recordNamespace)
-          records.map { x => convertor(x).asInstanceOf[GenericRecord] }
+          val convertor = AvroConversionUtils.createRowToAvroConverter(rowSchema, latestTableSchema)
+          rows.map { x => convertor(x) }
         }
       }
   }
