@@ -31,7 +31,7 @@ import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomK
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Literal}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Literal, Projection, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, InMemoryFileIndex}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
@@ -122,36 +122,30 @@ object HoodieSparkUtils extends SparkAdapterSupport {
     new InMemoryFileIndex(sparkSession, globbedPaths, Map(), Option.empty, fileStatusCache)
   }
 
-  def createRdd(df: DataFrame, structName: String, recordNamespace: String, reconcileToLatestSchema: Boolean, latestTableSchema:
-  org.apache.hudi.common.util.Option[Schema] = org.apache.hudi.common.util.Option.empty()): RDD[GenericRecord] = {
-    val dfWriteSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, recordNamespace)
-    var writeSchema : Schema = null;
-    var toReconcileSchema : Schema = null;
-    if (reconcileToLatestSchema && latestTableSchema.isPresent) {
-      // if reconcileToLatestSchema is set to true and latestSchema is present, then try to leverage latestTableSchema.
-      // this code path will handle situations where records are serialized in odl schema, but callers wish to convert
-      // to Rdd[GenericRecord] using different schema(could be evolved schema or could be latest table schema)
-      writeSchema = dfWriteSchema
-      toReconcileSchema = latestTableSchema.get()
-    } else {
-      // there are paths where callers wish to use latestTableSchema to convert to Rdd[GenericRecords] and not use
-      // row's schema. So use latestTableSchema if present. if not available, fallback to using row's schema.
-      writeSchema = if (latestTableSchema.isPresent) { latestTableSchema.get()} else { dfWriteSchema}
-    }
-    createRddInternal(df, writeSchema, toReconcileSchema, structName, recordNamespace)
+  def createRdd(df: DataFrame, structName: String, recordNamespace: String, reconcileToLatestSchema: Boolean,
+                latestTableSchema: org.apache.hudi.common.util.Option[Schema] = org.apache.hudi.common.util.Option.empty()): RDD[GenericRecord] = {
+    val latestTableSchemaConverted = if (latestTableSchema.isPresent) Some(latestTableSchema.get()) else None
+    createRdd(df, structName, recordNamespace, reconcileToLatestSchema, latestTableSchemaConverted)
   }
 
-  def createRddInternal(df: DataFrame, writeSchema: Schema, latestTableSchema: Schema, structName: String, recordNamespace: String)
-  : RDD[GenericRecord] = {
-    // We use original writer's schema to deserialize rows. Schema projection would be
-    val rowSchema = AvroConversionUtils.convertAvroSchemaToStructType(writeSchema)
+  def createRdd(df: DataFrame, structName: String, recordNamespace: String, reconcileToLatestSchema: Boolean,
+                latestTableSchema: Option[Schema] = None): RDD[GenericRecord] = {
+    val writerSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, recordNamespace)
+    val (readerSchema, sameSchema) = latestTableSchema.map((_, false)).getOrElse((writerSchema, true))
+
+    val rowReaderSchema = AvroConversionUtils.convertAvroSchemaToStructType(readerSchema)
+
     df.queryExecution.toRdd.mapPartitions { rows =>
-        if (rows.isEmpty) Iterator.empty
-        else {
-          val convertor = AvroConversionUtils.createRowToAvroConverter(rowSchema, latestTableSchema)
-          rows.map { x => convertor(x) }
-        }
+      if (rows.isEmpty) {
+        Iterator.empty
+      } else {
+        // Since caller might request to get records in a different projected schema, we might need to
+        // project the row first, before converting it into Avro
+        val project: Projection = if (sameSchema) identity else UnsafeProjection.create(rowReaderSchema)
+        val convert = AvroConversionUtils.createRowToAvroConverter(rowReaderSchema, readerSchema, nullable = ?)
+        rows.map { r => convert(project(r)) }
       }
+    }
   }
 
   def getDeserializer(structType: StructType) : SparkRowSerDe = {
