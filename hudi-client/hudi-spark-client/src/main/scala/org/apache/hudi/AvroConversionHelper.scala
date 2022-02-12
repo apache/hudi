@@ -19,29 +19,39 @@
 package org.apache.hudi
 
 import org.apache.avro.Schema
+import org.apache.avro.generic.GenericRecord
+import org.apache.hudi.HoodieSparkUtils.sparkAdapter
+import org.apache.spark.sql.Row
+import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.types._
 
 object AvroConversionHelper {
 
   /**
-    * @deprecated please use [[AvroConversionUtils.createRowToAvroConverter]]
-    */
+   * @deprecated please use [[AvroConversionUtils.createRowToAvroConverter]]
+   */
   def createConverterToRow(sourceAvroSchema: Schema,
-                           targetSqlType: DataType): AnyRef => Any = {
+                           targetSqlType: StructType): GenericRecord => Row = {
 
+    val encoder = RowEncoder.apply(targetSqlType).resolveAndBind()
+    val serde = sparkAdapter.createSparkRowSerDe(encoder)
     val converter = AvroConversionUtils.createAvroToRowConverter(sourceAvroSchema, targetSqlType)
 
-    avro => converter.apply(avro).get
+    avro => converter.apply(avro).map(serde.deserializeRow).get
   }
 
   /**
    * @deprecated please use [[AvroConversionUtils.createRowToAvroConverter]]
    */
-  def createConverterToAvro(dataType: DataType,
+  def createConverterToAvro(sourceSqlType: StructType,
                             structName: String,
-                            recordNamespace: String): Any => Any = {
-    val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataType, structName, recordNamespace)
-    // NOTE: We're conservatively assuming that the record have to be NON-nullable
-    AvroConversionUtils.createRowToAvroConverter(dataType, avroSchema, nullable = false)
+                            recordNamespace: String): Row => GenericRecord = {
+    val encoder = RowEncoder.apply(sourceSqlType).resolveAndBind()
+    val serde = sparkAdapter.createSparkRowSerDe(encoder)
+    val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(sourceSqlType, structName, recordNamespace)
+    // NOTE: We're conservatively assuming that the record have to be non-nullable
+    val converter = AvroConversionUtils.createRowToAvroConverter(sourceSqlType, avroSchema, nullable = false)
+
+    row => converter.apply(serde.serializeRow(row))
   }
 }

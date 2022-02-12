@@ -39,7 +39,6 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
 
 import java.util.Properties
 import scala.collection.JavaConverters._
-import scala.collection.JavaConverters.asScalaBufferConverter
 
 object HoodieSparkUtils extends SparkAdapterSupport {
 
@@ -146,8 +145,6 @@ object HoodieSparkUtils extends SparkAdapterSupport {
   : RDD[GenericRecord] = {
     // Use the write avro schema to derive the StructType which has the correct nullability information
     val writeDataType = AvroConversionUtils.convertAvroSchemaToStructType(writeSchema)
-    val encoder = RowEncoder.apply(writeDataType).resolveAndBind()
-    val deserializer = sparkAdapter.createSparkRowSerDe(encoder)
     // if records were serialized with old schema, but an evolved schema was passed in with latestTableSchema, we need
     // latestTableSchema equivalent datatype to be passed in to AvroConversionHelper.createConverterToAvro()
     val reconciledDataType =
