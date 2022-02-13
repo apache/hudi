@@ -270,6 +270,9 @@ public class DataSourceUtils {
     return dropDuplicates(jssc, incomingHoodieRecords, writeConfig);
   }
 
+  /** @deprecated Use {@link HiveSyncConfig} constructor directly and provide the props,
+   * and set  {@link HoodieSyncConfig.META_SYNC_BASE_PATH} and {@link HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT}*/
+  @Deprecated
   public static HiveSyncConfig buildHiveSyncConfig(TypedProperties props, String basePath, String baseFileFormat) {
     checkRequiredProperties(props, Collections.singletonList(DataSourceWriteOptions.HIVE_TABLE().key()));
     HiveSyncConfig hiveSyncConfig = new HiveSyncConfig();

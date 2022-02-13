@@ -104,7 +104,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final String DELTASTREAMER_CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
 
   public static final ConfigProperty<String> TBL_NAME = ConfigProperty
-      .key("hoodie.table.name")
+      .key(HoodieTableConfig.HOODIE_TABLE_NAME_KEY)
       .noDefaultValue()
       .withDocumentation("Table name that will be used for registering with metastores like HMS. Needs to be same across runs.");
 

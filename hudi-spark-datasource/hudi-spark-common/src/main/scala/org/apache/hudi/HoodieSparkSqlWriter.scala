@@ -19,7 +19,6 @@ package org.apache.hudi
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
-import org.apache.avro.reflect.AvroSchema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.conf.HiveConf
@@ -32,7 +31,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.{CommitUtils, ReflectionUtils, StringUtils}
+import org.apache.hudi.common.util.{CommitUtils, StringUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME}
 import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
@@ -40,24 +39,21 @@ import org.apache.hudi.execution.bulkinsert.{BulkInsertInternalPartitionerWithRo
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
 import org.apache.hudi.index.SparkHoodieIndexFactory
 import org.apache.hudi.internal.DataSourceInternalWriterHelper
-import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
-import org.apache.hudi.sync.common.AbstractSyncTool
+import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.hudi.sync.common.HoodieSyncConfig
+import org.apache.hudi.sync.common.util.SyncUtilHelpers
 import org.apache.hudi.table.BulkInsertPartitioner
 import org.apache.log4j.LogManager
-import org.apache.spark.SPARK_VERSION
+import org.apache.spark.{SPARK_VERSION, SparkContext}
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.hive.HiveExternalCatalog
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
-import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql._
-import org.apache.spark.SparkContext
+import org.apache.spark.sql.internal.StaticSQLConf
+import org.apache.spark.sql.types.StructType
 
-import java.util.Properties
 import scala.collection.JavaConversions._
 import scala.collection.mutable
-import scala.collection.mutable.ListBuffer
 
 object HoodieSparkSqlWriter {
 
@@ -512,14 +508,7 @@ object HoodieSparkSqlWriter {
         + " To use row writer please switch to spark 2 or spark 3")
     }
     val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(params)
-    val hiveSyncEnabled = hoodieConfig.getStringOrDefault(HIVE_SYNC_ENABLED).toBoolean
-    val metaSyncEnabled = hoodieConfig.getStringOrDefault(META_SYNC_ENABLED).toBoolean
-    val syncHiveSuccess =
-      if (hiveSyncEnabled || metaSyncEnabled) {
-        metaSync(sqlContext.sparkSession, hoodieConfig, basePath, df.schema)
-      } else {
-        true
-      }
+    val syncHiveSuccess = metaSync(sqlContext.sparkSession, hoodieConfig, basePath, df.schema)
     (syncHiveSuccess, common.util.Option.ofNullable(instantTime))
   }
 
@@ -558,57 +547,10 @@ object HoodieSparkSqlWriter {
     }
   }
 
-  private def syncHive(basePath: Path, fs: FileSystem, hoodieConfig: HoodieConfig, sqlConf: SQLConf): Boolean = {
-    val hiveSyncConfig: HiveSyncConfig = buildSyncConfig(basePath, hoodieConfig, sqlConf)
-    val hiveConf: HiveConf = new HiveConf()
-    hiveConf.addResource(fs.getConf)
-    if (StringUtils.isNullOrEmpty(hiveConf.get(HiveConf.ConfVars.METASTOREURIS.varname))) {
-      hiveConf.set(HiveConf.ConfVars.METASTOREURIS.varname, hiveSyncConfig.metastoreUris)
-    }
-    new HiveSyncTool(hiveSyncConfig, hiveConf, fs).syncHoodieTable()
-    true
-  }
-
-  private def buildSyncConfig(basePath: Path, hoodieConfig: HoodieConfig, sqlConf: SQLConf): HiveSyncConfig = {
-    val hiveSyncConfig: HiveSyncConfig = new HiveSyncConfig()
-    hiveSyncConfig.basePath = basePath.toString
-    hiveSyncConfig.baseFileFormat = hoodieConfig.getString(HIVE_BASE_FILE_FORMAT)
-    hiveSyncConfig.usePreApacheInputFormat =
-      hoodieConfig.getStringOrDefault(HIVE_USE_PRE_APACHE_INPUT_FORMAT).toBoolean
-    hiveSyncConfig.databaseName = hoodieConfig.getString(HIVE_DATABASE)
-    hiveSyncConfig.tableName = hoodieConfig.getString(HIVE_TABLE)
-    hiveSyncConfig.hiveUser = hoodieConfig.getString(HIVE_USER)
-    hiveSyncConfig.hivePass = hoodieConfig.getString(HIVE_PASS)
-    hiveSyncConfig.jdbcUrl = hoodieConfig.getString(HIVE_URL)
-    hiveSyncConfig.metastoreUris = hoodieConfig.getStringOrDefault(METASTORE_URIS)
-    hiveSyncConfig.skipROSuffix = hoodieConfig.getStringOrDefault(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE,
-      DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.defaultValue).toBoolean
-    hiveSyncConfig.partitionFields =
-      ListBuffer(hoodieConfig.getString(HIVE_PARTITION_FIELDS).split(",").map(_.trim).filter(!_.isEmpty).toList: _*)
-    hiveSyncConfig.partitionValueExtractorClass = hoodieConfig.getString(HIVE_PARTITION_EXTRACTOR_CLASS)
-    hiveSyncConfig.useJdbc = hoodieConfig.getBoolean(HIVE_USE_JDBC)
-    hiveSyncConfig.useFileListingFromMetadata = hoodieConfig.getBoolean(HoodieMetadataConfig.ENABLE)
-    hiveSyncConfig.ignoreExceptions = hoodieConfig.getStringOrDefault(HIVE_IGNORE_EXCEPTIONS).toBoolean
-    hiveSyncConfig.supportTimestamp = hoodieConfig.getStringOrDefault(HIVE_SUPPORT_TIMESTAMP_TYPE).toBoolean
-    hiveSyncConfig.autoCreateDatabase = hoodieConfig.getStringOrDefault(HIVE_AUTO_CREATE_DATABASE).toBoolean
-    hiveSyncConfig.decodePartition = hoodieConfig.getStringOrDefault(URL_ENCODE_PARTITIONING).toBoolean
-    hiveSyncConfig.batchSyncNum = hoodieConfig.getStringOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM).toInt
-
-    hiveSyncConfig.syncAsSparkDataSourceTable = hoodieConfig.getStringOrDefault(HIVE_SYNC_AS_DATA_SOURCE_TABLE).toBoolean
-    hiveSyncConfig.sparkSchemaLengthThreshold = sqlConf.getConf(StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD)
-    hiveSyncConfig.createManagedTable = hoodieConfig.getBoolean(HIVE_CREATE_MANAGED_TABLE)
-    hiveSyncConfig.syncMode = hoodieConfig.getString(HIVE_SYNC_MODE)
-    hiveSyncConfig.serdeProperties = hoodieConfig.getString(HIVE_TABLE_SERDE_PROPERTIES)
-    hiveSyncConfig.tableProperties = hoodieConfig.getString(HIVE_TABLE_PROPERTIES)
-    hiveSyncConfig.sparkVersion = SPARK_VERSION
-    hiveSyncConfig.syncComment = hoodieConfig.getStringOrDefault(HIVE_SYNC_COMMENT).toBoolean
-    hiveSyncConfig
-  }
-
   private def metaSync(spark: SparkSession, hoodieConfig: HoodieConfig, basePath: Path,
                        schema: StructType): Boolean = {
-    val hiveSyncEnabled = hoodieConfig.getStringOrDefault(HIVE_SYNC_ENABLED).toBoolean
-    var metaSyncEnabled = hoodieConfig.getStringOrDefault(META_SYNC_ENABLED).toBoolean
+    val hiveSyncEnabled = hoodieConfig.getStringOrDefault(HiveSyncConfig.HIVE_SYNC_ENABLED).toBoolean
+    var metaSyncEnabled = hoodieConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_ENABLED).toBoolean
     var syncClientToolClassSet = scala.collection.mutable.Set[String]()
     hoodieConfig.getString(META_SYNC_CLIENT_TOOL_CLASS_NAME).split(",").foreach(syncClass => syncClientToolClassSet += syncClass)
 
@@ -617,29 +559,23 @@ object HoodieSparkSqlWriter {
       metaSyncEnabled = true
       syncClientToolClassSet += classOf[HiveSyncTool].getName
     }
-    var metaSyncSuccess = true
+
     if (metaSyncEnabled) {
       val fs = basePath.getFileSystem(spark.sessionState.newHadoopConf())
+      val properties = new TypedProperties()
+      properties.putAll(hoodieConfig.getProps)
+      properties.put(HiveSyncConfig.HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD, spark.sessionState.conf.getConf(StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD).toString)
+      properties.put(HoodieSyncConfig.META_SYNC_SPARK_VERSION, SPARK_VERSION)
+      properties.put(HoodieSyncConfig.META_SYNC_USE_FILE_LISTING_FROM_METADATA, hoodieConfig.getBoolean(HoodieMetadataConfig.ENABLE))
+
+      val hiveConf: HiveConf = new HiveConf()
+      hiveConf.addResource(fs.getConf)
+
       syncClientToolClassSet.foreach(impl => {
-        val syncSuccess = impl.trim match {
-          case "org.apache.hudi.hive.HiveSyncTool" => {
-            log.info("Syncing to Hive Metastore (URL: " + hoodieConfig.getString(HIVE_URL) + ")")
-            syncHive(basePath, fs, hoodieConfig, spark.sessionState.conf)
-            true
-          }
-          case _ => {
-            val properties = new Properties()
-            properties.putAll(hoodieConfig.getProps)
-            properties.put("basePath", basePath.toString)
-            val syncHoodie = ReflectionUtils.loadClass(impl.trim, Array[Class[_]](classOf[Properties], classOf[FileSystem]), properties, fs).asInstanceOf[AbstractSyncTool]
-            syncHoodie.syncHoodieTable()
-            true
-          }
-        }
-        metaSyncSuccess = metaSyncSuccess && syncSuccess
+        SyncUtilHelpers.createAndSyncHoodieMeta(impl.trim, properties, hiveConf, fs, basePath.toString, HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.defaultValue)
       })
     }
-    metaSyncSuccess
+    true
   }
 
   /**

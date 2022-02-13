@@ -18,12 +18,12 @@
 
 package org.apache.hudi.dla.util;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.dla.DLASyncConfig;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Properties;
 
 public class Utils {
   public static String DLA_DATABASE_OPT_KEY = "hoodie.datasource.dla_sync.database";
@@ -39,8 +39,8 @@ public class Utils {
   public static String DLA_SKIP_RT_SYNC = "hoodie.datasource.dla_sync.skip_rt_sync";
   public static String DLA_SYNC_HIVE_STYLE_PARTITIONING = "hoodie.datasource.dla_sync.hive.style.partitioning";
 
-  public static Properties configToProperties(DLASyncConfig cfg) {
-    Properties properties = new Properties();
+  public static TypedProperties configToProperties(DLASyncConfig cfg) {
+    TypedProperties properties = new TypedProperties();
     properties.put(DLA_DATABASE_OPT_KEY, cfg.databaseName);
     properties.put(DLA_TABLE_OPT_KEY, cfg.tableName);
     properties.put(DLA_USER_OPT_KEY, cfg.dlaUser);
@@ -54,7 +54,7 @@ public class Utils {
     return properties;
   }
 
-  public static DLASyncConfig propertiesToConfig(Properties properties) {
+  public static DLASyncConfig propertiesToConfig(TypedProperties properties) {
     DLASyncConfig config = new DLASyncConfig();
     config.databaseName = properties.getProperty(DLA_DATABASE_OPT_KEY);
     config.tableName = properties.getProperty(DLA_TABLE_OPT_KEY);
