@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
 
@@ -55,6 +56,7 @@ import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.OptionalLong;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -489,8 +491,8 @@ public class HoodieTableMetaClient implements Serializable {
    * @return List of Hoodie Instants generated
    * @throws IOException in case of failure
    */
-  public List<HoodieInstant> scanHoodieInstantsFromFileSystem(Set<String> includedExtensions,
-      boolean applyLayoutVersionFilters) throws IOException {
+  public Pair<List<HoodieInstant>, Long> scanHoodieInstantsFromFileSystem(Set<String> includedExtensions,
+                                                                          boolean applyLayoutVersionFilters) throws IOException {
     return scanHoodieInstantsFromFileSystem(new Path(metaPath), includedExtensions, applyLayoutVersionFilters);
   }
 
@@ -504,20 +506,22 @@ public class HoodieTableMetaClient implements Serializable {
    * @return List of Hoodie Instants generated
    * @throws IOException in case of failure
    */
-  public List<HoodieInstant> scanHoodieInstantsFromFileSystem(Path timelinePath, Set<String> includedExtensions,
+  public Pair<List<HoodieInstant>, Long> scanHoodieInstantsFromFileSystem(Path timelinePath, Set<String> includedExtensions,
       boolean applyLayoutVersionFilters) throws IOException {
-    Stream<HoodieInstant> instantStream = Arrays.stream(
-        HoodieTableMetaClient
-            .scanFiles(getFs(), timelinePath, path -> {
-              // Include only the meta files with extensions that needs to be included
-              String extension = HoodieInstant.getTimelineFileExtension(path.getName());
-              return includedExtensions.contains(extension);
-            })).map(HoodieInstant::new);
+
+    FileStatus[] instantsFileStatus = HoodieTableMetaClient
+        .scanFiles(getFs(), timelinePath, path -> {
+          // Include only the meta files with extensions that needs to be included
+          String extension = HoodieInstant.getTimelineFileExtension(path.getName());
+          return includedExtensions.contains(extension);
+        });
+    OptionalLong lastUpdatedTime = Arrays.stream(instantsFileStatus).mapToLong(FileStatus::getModificationTime).max();
+    Stream<HoodieInstant> instantStream = Arrays.stream(instantsFileStatus).map(HoodieInstant::new);
 
     if (applyLayoutVersionFilters) {
       instantStream = TimelineLayout.getLayout(getTimelineLayoutVersion()).filterHoodieInstants(instantStream);
     }
-    return instantStream.sorted().collect(Collectors.toList());
+    return Pair.of(instantStream.sorted().collect(Collectors.toList()), lastUpdatedTime.orElse(0L));
   }
 
   @Override

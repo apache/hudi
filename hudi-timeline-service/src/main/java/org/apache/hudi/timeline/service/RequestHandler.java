@@ -121,11 +121,15 @@ public class RequestHandler {
     String lastKnownInstantFromClient =
         ctx.queryParam(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS, HoodieTimeline.INVALID_INSTANT_TS);
     String timelineHashFromClient = ctx.queryParam(RemoteHoodieTableFileSystemView.TIMELINE_HASH, "");
+    long timelineLastUpdatedTime =
+        Long.parseLong(ctx.queryParam(RemoteHoodieTableFileSystemView.TIMELINE_LAST_UPDATED_TIME,
+                Long.toString(Long.MAX_VALUE)));
     HoodieTimeline localTimeline =
         viewManager.getFileSystemView(basePath).getTimeline().filterCompletedAndCompactionInstants();
     if (LOG.isDebugEnabled()) {
       LOG.debug("Client [ LastTs=" + lastKnownInstantFromClient + ", TimelineHash=" + timelineHashFromClient
-          + "], localTimeline=" + localTimeline.getInstants().collect(Collectors.toList()));
+          + ", LastUpdatedTime=" + timelineLastUpdatedTime + "], localTimeline="
+          + localTimeline.getInstants().collect(Collectors.toList()));
     }
 
     if ((localTimeline.getInstants().count() == 0)
@@ -134,7 +138,8 @@ public class RequestHandler {
     }
 
     String localTimelineHash = localTimeline.getTimelineHash();
-    if (!localTimelineHash.equals(timelineHashFromClient)) {
+    // refresh if timeline hash mismatches and if local's local updated time is < client's last updated time for timeline
+    if (!localTimelineHash.equals(timelineHashFromClient) && localTimeline.getLastUpdateTime() < timelineLastUpdatedTime) {
       return true;
     }
 

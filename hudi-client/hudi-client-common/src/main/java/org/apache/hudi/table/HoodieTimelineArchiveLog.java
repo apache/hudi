@@ -491,7 +491,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
           metaClient.scanHoodieInstantsFromFileSystem(
               new Path(metaClient.getMetaAuxiliaryPath()),
               HoodieActiveTimeline.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE,
-              false);
+              false).getKey();
     } catch (FileNotFoundException e) {
       /*
        * On some FSs deletion of all files in the directory can auto remove the directory itself.

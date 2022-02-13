@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.generic.GenericRecord;
@@ -90,7 +91,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
    */
   public HoodieArchivedTimeline(HoodieTableMetaClient metaClient) {
     this.metaClient = metaClient;
-    setInstants(this.loadInstants(false));
+    Pair<List<HoodieInstant>, Long> instantsResult = this.loadInstants(false);
+    setInstants(instantsResult.getKey(), instantsResult.getValue());
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
     this.details = (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
@@ -196,15 +198,15 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
     }
   }
 
-  private List<HoodieInstant> loadInstants(boolean loadInstantDetails) {
+  private Pair<List<HoodieInstant>, Long> loadInstants(boolean loadInstantDetails) {
     return loadInstants(null, loadInstantDetails);
   }
 
-  private List<HoodieInstant> loadInstants(String startTs, String endTs) {
+  private Pair<List<HoodieInstant>, Long> loadInstants(String startTs, String endTs) {
     return loadInstants(new TimeRangeFilter(startTs, endTs), true);
   }
 
-  private List<HoodieInstant> loadInstants(TimeRangeFilter filter, boolean loadInstantDetails) {
+  private Pair<List<HoodieInstant>, Long> loadInstants(TimeRangeFilter filter, boolean loadInstantDetails) {
     return loadInstants(filter, loadInstantDetails, record -> true);
   }
 
@@ -214,18 +216,21 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
    * If filter is specified, only the filtered instants are loaded
    * If commitsFilter is specified, only the filtered records are loaded
    */
-  private List<HoodieInstant> loadInstants(TimeRangeFilter filter, boolean loadInstantDetails,
+  private Pair<List<HoodieInstant>, Long> loadInstants(TimeRangeFilter filter, boolean loadInstantDetails,
        Function<GenericRecord, Boolean> commitsFilter) {
     try {
       // List all files
       FileStatus[] fsStatuses = metaClient.getFs().globStatus(
               new Path(metaClient.getArchivePath() + "/.commits_.archive*"));
 
+      long lastUpdateTime = 0L;
       // Sort files by version suffix in reverse (implies reverse chronological order)
       Arrays.sort(fsStatuses, new ArchiveFileVersionComparator());
 
       Set<HoodieInstant> instantsInRange = new HashSet<>();
       for (FileStatus fs : fsStatuses) {
+        // update lastUpdateTime
+        lastUpdateTime = Math.max(lastUpdateTime, fs.getModificationTime());
         // Read the archived file
         try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient.getFs(),
             new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema())) {
@@ -279,7 +284,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
 
       ArrayList<HoodieInstant> result = new ArrayList<>(instantsInRange);
       Collections.sort(result);
-      return result;
+      return Pair.of(result, lastUpdateTime);
     } catch (IOException e) {
       throw new HoodieIOException(
               "Could not load archived commit timeline from path " + metaClient.getArchivePath(), e);
@@ -331,6 +336,6 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
     Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
     return new HoodieDefaultTimeline(getInstants().filter(i ->
         readCommits.keySet().contains(i.getTimestamp()))
-        .filter(s -> validActions.contains(s.getAction())), details);
+        .filter(s -> validActions.contains(s.getAction())), details, getLastUpdateTime());
   }
 }

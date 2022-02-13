@@ -37,15 +37,19 @@ public class TimelineDTO {
   @JsonProperty("instants")
   List<InstantDTO> instants;
 
+  @JsonProperty("lastUpdatedTime")
+  Long lastUpdatedTime;
+
   public static TimelineDTO fromTimeline(HoodieTimeline timeline) {
     TimelineDTO dto = new TimelineDTO();
     dto.instants = timeline.getInstants().map(InstantDTO::fromInstant).collect(Collectors.toList());
+    dto.lastUpdatedTime = timeline.getLastUpdateTime();
     return dto;
   }
 
   public static HoodieTimeline toTimeline(TimelineDTO dto, HoodieTableMetaClient metaClient) {
     // TODO: For Now, we will assume, only active-timeline will be transferred.
     return new HoodieDefaultTimeline(dto.instants.stream().map(InstantDTO::toInstant),
-        metaClient.getActiveTimeline()::getInstantDetails);
+        metaClient.getActiveTimeline()::getInstantDetails, dto.lastUpdatedTime);
   }
 }

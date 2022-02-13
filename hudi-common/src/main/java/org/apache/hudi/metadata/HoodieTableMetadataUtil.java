@@ -748,7 +748,7 @@ public class HoodieTableMetadataUtil {
     if (timeline.empty()) {
       final HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION,
           HoodieActiveTimeline.createNewInstantTime());
-      timeline = new HoodieDefaultTimeline(Arrays.asList(instant).stream(), metaClient.getActiveTimeline()::getInstantDetails);
+      timeline = new HoodieDefaultTimeline(Arrays.asList(instant).stream(), metaClient.getActiveTimeline()::getInstantDetails, metaClient.getActiveTimeline().getLastUpdateTime());
     }
     return new HoodieTableFileSystemView(metaClient, timeline);
   }

@@ -269,7 +269,7 @@ public class FileSystemViewCommand implements CommandMarker {
     }
 
     HoodieTimeline filteredTimeline = new HoodieDefaultTimeline(instantsStream,
-        (Function<HoodieInstant, Option<byte[]>> & Serializable) metaClient.getActiveTimeline()::getInstantDetails);
+        (Function<HoodieInstant, Option<byte[]>> & Serializable) metaClient.getActiveTimeline()::getInstantDetails, timeline.getLastUpdateTime());
     return new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses.toArray(new FileStatus[0]));
   }
 }

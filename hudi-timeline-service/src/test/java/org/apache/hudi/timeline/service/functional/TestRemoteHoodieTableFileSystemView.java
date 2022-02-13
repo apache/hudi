@@ -42,9 +42,6 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
 
   private static final Logger LOG = LogManager.getLogger(TestRemoteHoodieTableFileSystemView.class);
 
-  private TimelineService server;
-  private RemoteHoodieTableFileSystemView view;
-
   protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline) {
     FileSystemViewStorageConfig sConf =
         FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.SPILLABLE_DISK).build();
@@ -52,6 +49,7 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
     HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().build();
     HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
 
+    TimelineService server;
     try {
       server = new TimelineService(localEngineContext, new Configuration(),
           TimelineService.Config.builder().serverPort(0).build(), FileSystem.get(new Configuration()),
@@ -61,7 +59,6 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
       throw new RuntimeException(ex);
     }
     LOG.info("Connecting to Timeline Server :" + server.getServerPort());
-    view = new RemoteHoodieTableFileSystemView("localhost", server.getServerPort(), metaClient);
-    return view;
+    return new RemoteHoodieTableFileSystemView("localhost", server.getServerPort(), metaClient);
   }
 }

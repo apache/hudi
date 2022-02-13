@@ -118,7 +118,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     // Filter all the filter in the metapath and include only the extensions passed and
     // convert them into HoodieInstant
     try {
-      this.setInstants(metaClient.scanHoodieInstantsFromFileSystem(includedExtensions, applyLayoutFilters));
+      Pair<List<HoodieInstant>, Long> instantsResult = metaClient.scanHoodieInstantsFromFileSystem(includedExtensions, applyLayoutFilters);
+      this.setInstants(instantsResult.getKey(), instantsResult.getValue());
     } catch (IOException e) {
       throw new HoodieIOException("Failed to scan metadata", e);
     }
