@@ -81,7 +81,7 @@ public class HiveSyncTool extends AbstractSyncTool {
     init(hiveSyncConfig, new HiveConf(conf, HiveConf.class));
   }
 
-  // ToDo Make private once Flink moves to first API.
+  @Deprecated
   public HiveSyncTool(HiveSyncConfig hiveSyncConfig, HiveConf hiveConf, FileSystem fs) {
     super(hiveSyncConfig.getProps(), hiveConf, fs);
     this.hiveSyncConfig = hiveSyncConfig;
