@@ -172,7 +172,7 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
   }
 
   @Test
-  public void testMetadataBootstrapUnpartitionedCOW() throws Exception {
+  public void testMetadataBootstrapNonpartitionedCOW() throws Exception {
     testBootstrapCommon(false, false, EffectiveMode.METADATA_BOOTSTRAP_MODE);
   }
 
@@ -222,7 +222,7 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
         bootstrapInstants = Arrays.asList(bootstrapCommitInstantTs);
         break;
       default:
-        bootstrapModeSelectorClass = TestRandomBootstapModeSelector.class.getName();
+        bootstrapModeSelectorClass = TestRandomBootstrapModeSelector.class.getName();
         bootstrapCommitInstantTs = HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS;
         checkNumRawFiles = false;
         isBootstrapIndexCreated = true;
@@ -438,10 +438,10 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
     }).collect(Collectors.toList()));
   }
 
-  public static class TestRandomBootstapModeSelector extends BootstrapModeSelector {
+  public static class TestRandomBootstrapModeSelector extends BootstrapModeSelector {
     private int currIdx = new Random().nextInt(2);
 
-    public TestRandomBootstapModeSelector(HoodieWriteConfig writeConfig) {
+    public TestRandomBootstrapModeSelector(HoodieWriteConfig writeConfig) {
       super(writeConfig);
     }
 

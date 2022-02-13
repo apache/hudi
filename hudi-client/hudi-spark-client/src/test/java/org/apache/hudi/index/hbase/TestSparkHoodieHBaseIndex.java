@@ -191,7 +191,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
     final String newCommitTime = "001";
     final int numRecords = 10;
     final String oldPartitionPath = "1970/01/01";
-    final String emptyHoodieRecordPayloadClasssName = EmptyHoodieRecordPayload.class.getName();
+    final String emptyHoodieRecordPayloadClassName = EmptyHoodieRecordPayload.class.getName();
 
     List<HoodieRecord> newRecords = dataGen.generateInserts(newCommitTime, numRecords);
     List<HoodieRecord> oldRecords = new LinkedList();
@@ -226,7 +226,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
       assertEquals(numRecords * 2L, taggedRecords.stream().count());
       // Verify the number of deleted records
       assertEquals(numRecords, taggedRecords.stream().filter(record -> record.getKey().getPartitionPath().equals(oldPartitionPath)
-          && record.getData().getClass().getName().equals(emptyHoodieRecordPayloadClasssName)).count());
+          && record.getData().getClass().getName().equals(emptyHoodieRecordPayloadClassName)).count());
       // Verify the number of inserted records
       assertEquals(numRecords, taggedRecords.stream().filter(record -> !record.getKey().getPartitionPath().equals(oldPartitionPath)).count());
 

@@ -106,7 +106,7 @@ public class TestUpgradeDowngradeCommand extends CLIFunctionalTestHarness {
     assertEquals(metaClient.getTableConfig().getTableVersion().versionCode(), HoodieTableVersion.ZERO.versionCode());
     assertTableVersionFromPropertyFile();
 
-    // verify marker files are non existant
+    // verify marker files are non existent
     for (String partitionPath : DEFAULT_PARTITION_PATHS) {
       assertEquals(0, FileCreateUtils.getTotalMarkerFileCount(tablePath, partitionPath, "101", IOType.MERGE));
     }
