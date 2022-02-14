@@ -334,7 +334,10 @@ private object HoodieMergeOnReadRDD {
     if (HoodieTableMetadata.isMetadataTable(split.tablePath)) {
       val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build()
       val dataTableBasePath = getDataTableBasePathFromMetadataTable(split.tablePath)
-      val metadataTable = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(config), metadataConfig, dataTableBasePath, "/tmp")
+      val metadataTable = new HoodieBackedTableMetadata(
+        new HoodieLocalEngineContext(config), metadataConfig,
+        dataTableBasePath,
+        config.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP, HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
 
       // NOTE: In case of Metadata Table partition path equates to partition name (since there's just one level
       //       of indirection among MT partitions)
