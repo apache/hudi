@@ -71,6 +71,17 @@ public class TestTimestampBasedKeyGenerator {
     properties.setProperty(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(), "false");
   }
 
+  private Row genericRecordToRow(GenericRecord baseRecord) {
+    Function1<GenericRecord, Row> convertor = AvroConversionHelper.createConverterToRow(baseRecord.getSchema(), structType);
+    Row row = convertor.apply(baseRecord);
+    int fieldCount = structType.fieldNames().length;
+    Object[] values = new Object[fieldCount];
+    for (int i = 0; i < fieldCount; i++) {
+      values[i] = row.get(i);
+    }
+    return new GenericRowWithSchema(values, structType);
+  }
+
   private TypedProperties getBaseKeyConfig(String partitionPathField, String timestampType, String dateFormat, String timezone, String scalarType) {
     TypedProperties properties = new TypedProperties(this.properties);
 
@@ -86,18 +97,17 @@ public class TestTimestampBasedKeyGenerator {
     return properties;
   }
 
-  private Row genericRecordToRow(GenericRecord baseRecord) {
-    Function1<GenericRecord, Row> convertor = AvroConversionHelper.createConverterToRow(baseRecord.getSchema(), structType);
-    Row row = convertor.apply(baseRecord);
-    int fieldCount = structType.fieldNames().length;
-    Object[] values = new Object[fieldCount];
-    for (int i = 0; i < fieldCount; i++) {
-      values[i] = row.get(i);
-    }
-    return new GenericRowWithSchema(values, structType);
-  }
+  private TypedProperties getBaseKeyConfig(String partitionPathField,
+                                           String timestampType,
+                                           String inputFormatList,
+                                           String inputFormatDelimiterRegex,
+                                           String inputTimezone,
+                                           String outputFormat,
+                                           String outputTimezone) {
+    TypedProperties properties = new TypedProperties(this.properties);
 
-  private TypedProperties getBaseKeyConfig(String timestampType, String inputFormatList, String inputFormatDelimiterRegex, String inputTimezone, String outputFormat, String outputTimezone) {
+    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), partitionPathField);
+
     if (timestampType != null) {
       properties.setProperty(KeyGeneratorOptions.Config.TIMESTAMP_TYPE_FIELD_PROP, timestampType);
     }
@@ -224,7 +234,7 @@ public class TestTimestampBasedKeyGenerator {
     assertEquals("1970-01-02 12", keyGen.getPartitionPath(internalRow, baseRow.schema()));
 
     // timezone is GMT. number of days store integer in mysql
-    baseRecord.put("createTime", 18736);
+    baseRecord.put("createTime", 18736L);
     properties = getBaseKeyConfig("createTime", "SCALAR", "yyyy-MM-dd", "GMT", "DAYS");
     keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey scalarSecondsKey = keyGen.getKey(baseRecord);
@@ -271,8 +281,9 @@ public class TestTimestampBasedKeyGenerator {
 
   @Test
   public void test_ExpectsMatch_SingleInputFormat_ISO8601WithMsZ_OutputTimezoneAsUTC() throws IOException {
-    baseRecord.put("createTime", "2020-04-01T13:01:33.428Z");
+    baseRecord.put("createTimeString", "2020-04-01T13:01:33.428Z");
     properties = this.getBaseKeyConfig(
+        "createTimeString",
         "DATE_STRING",
         "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
         "",
@@ -289,8 +300,9 @@ public class TestTimestampBasedKeyGenerator {
 
   @Test
   public void test_ExpectsMatch_SingleInputFormats_ISO8601WithMsZ_OutputTimezoneAsInputDateTimeZone() throws IOException {
-    baseRecord.put("createTime", "2020-04-01T13:01:33.428Z");
+    baseRecord.put("createTimeString", "2020-04-01T13:01:33.428Z");
     properties = this.getBaseKeyConfig(
+        "createTimeString",
         "DATE_STRING",
         "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
         "",
@@ -307,8 +319,9 @@ public class TestTimestampBasedKeyGenerator {
 
   @Test
   public void test_ExpectsMatch_MultipleInputFormats_ISO8601WithMsZ_OutputTimezoneAsUTC() throws IOException {
-    baseRecord.put("createTime", "2020-04-01T13:01:33.428Z");
+    baseRecord.put("createTimeString", "2020-04-01T13:01:33.428Z");
     properties = this.getBaseKeyConfig(
+        "createTimeString",
         "DATE_STRING",
         "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ",
         "",
@@ -325,8 +338,9 @@ public class TestTimestampBasedKeyGenerator {
 
   @Test
   public void test_ExpectsMatch_MultipleInputFormats_ISO8601NoMsZ_OutputTimezoneAsUTC() throws IOException {
-    baseRecord.put("createTime", "2020-04-01T13:01:33Z");
+    baseRecord.put("createTimeString", "2020-04-01T13:01:33Z");
     properties = this.getBaseKeyConfig(
+        "createTimeString",
         "DATE_STRING",
         "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ",
         "",
@@ -343,8 +357,9 @@ public class TestTimestampBasedKeyGenerator {
 
   @Test
   public void test_ExpectsMatch_MultipleInputFormats_ISO8601NoMsWithOffset_OutputTimezoneAsUTC() throws IOException {
-    baseRecord.put("createTime", "2020-04-01T13:01:33-05:00");
+    baseRecord.put("createTimeString", "2020-04-01T13:01:33-05:00");
     properties = this.getBaseKeyConfig(
+        "createTimeString",
         "DATE_STRING",
         "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ",
         "",
@@ -361,8 +376,9 @@ public class TestTimestampBasedKeyGenerator {
 
   @Test
   public void test_ExpectsMatch_MultipleInputFormats_ISO8601WithMsWithOffset_OutputTimezoneAsUTC() throws IOException {
-    baseRecord.put("createTime", "2020-04-01T13:01:33.123-05:00");
+    baseRecord.put("createTimeString", "2020-04-01T13:01:33.123-05:00");
     properties = this.getBaseKeyConfig(
+        "createTimeString",
         "DATE_STRING",
         "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ",
         "",
@@ -379,8 +395,9 @@ public class TestTimestampBasedKeyGenerator {
 
   @Test
   public void test_ExpectsMatch_MultipleInputFormats_ISO8601WithMsZ_OutputTimezoneAsEST() throws IOException {
-    baseRecord.put("createTime", "2020-04-01T13:01:33.123Z");
+    baseRecord.put("createTimeString", "2020-04-01T13:01:33.123Z");
     properties = this.getBaseKeyConfig(
+        "createTimeString",
         "DATE_STRING",
         "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ",
         "",
@@ -397,8 +414,9 @@ public class TestTimestampBasedKeyGenerator {
 
   @Test
   public void test_Throws_MultipleInputFormats_InputDateNotMatchingFormats() throws IOException {
-    baseRecord.put("createTime", "2020-04-01 13:01:33.123-05:00");
+    baseRecord.put("createTimeString", "2020-04-01 13:01:33.123-05:00");
     properties = this.getBaseKeyConfig(
+        "createTimeString",
         "DATE_STRING",
         "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ",
         "",
@@ -414,8 +432,9 @@ public class TestTimestampBasedKeyGenerator {
 
   @Test
   public void test_ExpectsMatch_MultipleInputFormats_ShortDate_OutputCustomDate() throws IOException {
-    baseRecord.put("createTime", "20200401");
+    baseRecord.put("createTimeString", "20200401");
     properties = this.getBaseKeyConfig(
+        "createTimeString",
         "DATE_STRING",
         "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ,yyyyMMdd",
         "",
