@@ -377,51 +377,54 @@ object HoodieSparkSqlWriter {
       schema = HoodieAvroUtils.getNullSchema.toString
     }
 
-    // Handle various save modes
     if (mode == SaveMode.Ignore && tableExists) {
       log.warn(s"hoodie table at $basePath already exists. Ignoring & not performing actual writes.")
+      if (!hoodieWriteClient.isEmpty) {
+        hoodieWriteClient.get.close()
+      }
       false
     } else {
+      // Handle various save modes
       handleSaveModes(sqlContext.sparkSession, mode, basePath, tableConfig, tableName, WriteOperationType.BOOTSTRAP, fs)
-    }
 
-    if (!tableExists) {
-      val archiveLogFolder = hoodieConfig.getStringOrDefault(HoodieTableConfig.ARCHIVELOG_FOLDER)
-      val partitionColumns = HoodieWriterUtils.getPartitionColumns(parameters)
-      val recordKeyFields = hoodieConfig.getString(DataSourceWriteOptions.RECORDKEY_FIELD)
-      val keyGenProp = hoodieConfig.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME)
-      val populateMetaFields = parameters.getOrElse(HoodieTableConfig.POPULATE_META_FIELDS.key(), HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()).toBoolean
-      val baseFileFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.BASE_FILE_FORMAT)
+      if (!tableExists) {
+        val archiveLogFolder = hoodieConfig.getStringOrDefault(HoodieTableConfig.ARCHIVELOG_FOLDER)
+        val partitionColumns = HoodieWriterUtils.getPartitionColumns(parameters)
+        val recordKeyFields = hoodieConfig.getString(DataSourceWriteOptions.RECORDKEY_FIELD)
+        val keyGenProp = hoodieConfig.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME)
+        val populateMetaFields = parameters.getOrElse(HoodieTableConfig.POPULATE_META_FIELDS.key(), HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()).toBoolean
+        val baseFileFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.BASE_FILE_FORMAT)
 
-      HoodieTableMetaClient.withPropertyBuilder()
-        .setTableType(HoodieTableType.valueOf(tableType))
-        .setTableName(tableName)
-        .setRecordKeyFields(recordKeyFields)
-        .setArchiveLogFolder(archiveLogFolder)
-        .setPayloadClassName(hoodieConfig.getStringOrDefault(PAYLOAD_CLASS_NAME))
-        .setPreCombineField(hoodieConfig.getStringOrDefault(PRECOMBINE_FIELD, null))
-        .setBootstrapIndexClass(bootstrapIndexClass)
-        .setBaseFileFormat(baseFileFormat)
-        .setBootstrapBasePath(bootstrapBasePath)
-        .setPartitionFields(partitionColumns)
-        .setPopulateMetaFields(populateMetaFields)
-        .setKeyGeneratorClassProp(keyGenProp)
-        .setHiveStylePartitioningEnable(hoodieConfig.getBoolean(HIVE_STYLE_PARTITIONING))
-        .setUrlEncodePartitioning(hoodieConfig.getBoolean(URL_ENCODE_PARTITIONING))
-        .setCommitTimezone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_TIMEZONE)))
-        .initTable(sparkContext.hadoopConfiguration, path)
-    }
+        HoodieTableMetaClient.withPropertyBuilder()
+          .setTableType(HoodieTableType.valueOf(tableType))
+          .setTableName(tableName)
+          .setRecordKeyFields(recordKeyFields)
+          .setArchiveLogFolder(archiveLogFolder)
+          .setPayloadClassName(hoodieConfig.getStringOrDefault(PAYLOAD_CLASS_NAME))
+          .setPreCombineField(hoodieConfig.getStringOrDefault(PRECOMBINE_FIELD, null))
+          .setBootstrapIndexClass(bootstrapIndexClass)
+          .setBaseFileFormat(baseFileFormat)
+          .setBootstrapBasePath(bootstrapBasePath)
+          .setPartitionFields(partitionColumns)
+          .setPopulateMetaFields(populateMetaFields)
+          .setKeyGeneratorClassProp(keyGenProp)
+          .setHiveStylePartitioningEnable(hoodieConfig.getBoolean(HIVE_STYLE_PARTITIONING))
+          .setUrlEncodePartitioning(hoodieConfig.getBoolean(URL_ENCODE_PARTITIONING))
+          .setCommitTimezone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_TIMEZONE)))
+          .initTable(sparkContext.hadoopConfiguration, path)
+      }
 
-    val jsc = new JavaSparkContext(sqlContext.sparkContext)
-    val writeClient = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
-      schema, path, tableName, mapAsJavaMap(parameters)))
-    try {
-      writeClient.bootstrap(org.apache.hudi.common.util.Option.empty())
-    } finally {
-      writeClient.close()
+      val jsc = new JavaSparkContext(sqlContext.sparkContext)
+      val writeClient = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
+        schema, path, tableName, mapAsJavaMap(parameters)))
+      try {
+        writeClient.bootstrap(org.apache.hudi.common.util.Option.empty())
+      } finally {
+        writeClient.close()
+      }
+      val metaSyncSuccess = metaSync(sqlContext.sparkSession, hoodieConfig, basePath, df.schema)
+      metaSyncSuccess
     }
-    val metaSyncSuccess = metaSync(sqlContext.sparkSession, hoodieConfig, basePath, df.schema)
-    metaSyncSuccess
   }
 
   def bulkInsertAsRow(sqlContext: SQLContext,

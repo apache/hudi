@@ -543,6 +543,12 @@ class TestHoodieSparkSqlWriter {
 
       // Verify that HoodieWriteClient is closed correctly
       verify(client, times(1)).close()
+
+      val ignoreResult = HoodieSparkSqlWriter.bootstrap(sqlContext, SaveMode.Ignore, fooTableModifier, spark.emptyDataFrame, Option.empty,
+        Option(client))
+      assertFalse(ignoreResult)
+      verify(client, times(2)).close()
+
       // fetch all records from parquet files generated from write to hudi
       val actualDf = sqlContext.read.parquet(tempBasePath)
       assert(actualDf.count == 100)
