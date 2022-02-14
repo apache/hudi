@@ -205,14 +205,14 @@ public class TableSchemaResolver {
   }
 
   /**
-   * Gets the schema for a hoodie table in Avro format from the HoodieCommitMetadata of the last commit.
+   * Gets the schema for a hoodie table in Avro format from the HoodieCommitMetadata of the last commit with valid data.
    *
    * @return Avro schema for this table
    */
   private Option<Schema> getTableSchemaFromCommitMetadata(boolean includeMetadataFields) {
-    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    if (timeline.lastInstant().isPresent()) {
-      return getTableSchemaFromCommitMetadata(timeline.lastInstant().get(), includeMetadataFields);
+    Option<Pair<HoodieInstant, HoodieCommitMetadata>> instantAndCommitMetadata = metaClient.getActiveTimeline().getLastCommitMetadataWithValidData();
+    if (instantAndCommitMetadata.isPresent()) {
+      return getTableSchemaFromCommitMetadata(instantAndCommitMetadata.get().getKey(), includeMetadataFields);
     } else {
       return Option.empty();
     }
