@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table;
 
-
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
