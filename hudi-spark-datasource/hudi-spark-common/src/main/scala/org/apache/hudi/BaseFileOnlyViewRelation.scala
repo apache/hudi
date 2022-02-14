@@ -24,14 +24,14 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
+import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile}
 import org.apache.spark.sql.{Row, SQLContext}
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
-import org.apache.spark.sql.types.{BooleanType, StructType}
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Row, SQLContext}
 
 /**
@@ -72,11 +72,8 @@ class BaseFileOnlyViewRelation(sqlContext: SQLContext,
     val (requiredAvroSchema, requiredStructSchema) =
       HoodieSparkUtils.getRequiredSchema(tableAvroSchema, fetchedColumns)
 
-    val filterExpressions = HoodieSparkUtils.convertToCatalystExpressions(filters, tableStructSchema)
-      .getOrElse(Literal(true, BooleanType))
-
-    val (partitionFilters, dataFilters) = HoodieDataSourceHelper.splitPartitionAndDataPredicates(
-      sparkSession, filterExpressions, partitionColumns)
+    val filterExpressions = convertToExpressions(filters)
+    val (partitionFilters, dataFilters) = filterExpressions.partition(isPartitionPredicate)
 
     val filePartitions = getPartitions(partitionFilters, dataFilters)
 
@@ -100,7 +97,7 @@ class BaseFileOnlyViewRelation(sqlContext: SQLContext,
       baseFileReader, filePartitions)
   }
 
-  private def getPartitions(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionedFile] = {
+  private def getPartitions(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FilePartition] = {
     val partitionDirectories = if (globPaths.isEmpty) {
       val hoodieFileIndex = HoodieFileIndex(sparkSession, metaClient, userSchema, optParams,
         FileStatusCache.getOrCreate(sqlContext.sparkSession))
@@ -115,7 +112,7 @@ class BaseFileOnlyViewRelation(sqlContext: SQLContext,
       inMemoryFileIndex.listFiles(partitionFilters, dataFilters)
     }
 
-    partitionDirectories.flatMap { partition =>
+    val partitions = partitionDirectories.flatMap { partition =>
       partition.files.flatMap { file =>
         // TODO move to adapter
         // TODO fix, currently assuming parquet as underlying format
@@ -127,5 +124,34 @@ class BaseFileOnlyViewRelation(sqlContext: SQLContext,
         )
       }
     }
+
+    val maxSplitBytes = sparkSession.sessionState.conf.filesMaxPartitionBytes
+
+    sparkAdapter.getFilePartitions(sparkSession, partitions, maxSplitBytes)
   }
+
+  private def convertToExpressions(filters: Array[Filter]): Array[Expression] = {
+    val catalystExpressions = HoodieSparkUtils.convertToCatalystExpressions(filters, tableStructSchema)
+
+    val failedExprs = catalystExpressions.zipWithIndex.filter { case (opt, _) => opt.isEmpty }
+    if (failedExprs.nonEmpty) {
+      val failedFilters = failedExprs.map(p => filters(p._2))
+      logWarning(s"Failed to convert Filters into Catalyst expressions (${failedFilters.map(_.toString)})")
+    }
+
+    catalystExpressions.filter(_.isDefined).map(_.get).toArray
+  }
+
+  /**
+   * Checks whether given expression only references only references partition columns
+   * (and involves no sub-query)
+   */
+  private def isPartitionPredicate(condition: Expression): Boolean = {
+    // Validates that the provided names both resolve to the same entity
+    val resolvedNameEquals = sparkSession.sessionState.analyzer.resolver
+
+    condition.references.forall { r => partitionColumns.exists(resolvedNameEquals(r.name, _)) } &&
+      !SubqueryExpression.hasSubquery(condition)
+  }
+
 }
