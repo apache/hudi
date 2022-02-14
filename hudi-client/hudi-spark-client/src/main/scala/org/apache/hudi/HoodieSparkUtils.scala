@@ -53,7 +53,17 @@ object HoodieSparkUtils extends SparkAdapterSupport {
 
   def isSpark3_0: Boolean = SPARK_VERSION.startsWith("3.0")
 
+  def isSpark3_1: Boolean = SPARK_VERSION.startsWith("3.1")
+
   def isSpark3_2: Boolean = SPARK_VERSION.startsWith("3.2")
+
+  def beforeSpark3_2(): Boolean = {
+    if (isSpark2 || isSpark3_0 || isSpark3_1) {
+      true
+    } else {
+      false
+    }
+  }
 
   def getMetaSchema: StructType = {
     StructType(HoodieRecord.HOODIE_META_COLUMNS.asScala.map(col => {
