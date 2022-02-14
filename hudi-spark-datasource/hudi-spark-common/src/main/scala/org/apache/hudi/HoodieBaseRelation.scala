@@ -22,17 +22,20 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.hbase.io.hfile.CacheConfig
+import org.apache.hadoop.mapred.JobConf
+import org.apache.hudi.HoodieBaseRelation.isMetadataTable
 import org.apache.hudi.common.config.SerializableConfiguration
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.io.storage.HoodieHFileReader
-import org.apache.hudi.metadata.HoodieTableMetadata
+import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{SQLContext, SparkSession}
@@ -53,6 +56,28 @@ abstract class HoodieBaseRelation(
   extends BaseRelation with PrunedFilteredScan with Logging{
 
   protected val sparkSession: SparkSession = sqlContext.sparkSession
+
+  protected lazy val conf: Configuration = sqlContext.sparkContext.hadoopConfiguration
+  protected lazy val jobConf = new JobConf(conf)
+
+  protected lazy val recordKeyField: String = metaClient.getTableConfig.getRecordKeyFieldProp
+  protected lazy val preCombineFieldOpt: Option[String] =
+    Option(metaClient.getTableConfig.getPreCombineField)
+      // get preCombineFiled from the options if this is a old table which have not store
+      // the field to hoodie.properties
+      .orElse(optParams.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key))
+
+  protected lazy val mandatoryColumns: Seq[String] = {
+    if (isMetadataTable(metaClient)) {
+      Seq(HoodieMetadataPayload.KEY_FIELD_NAME, HoodieMetadataPayload.SCHEMA_FIELD_NAME_TYPE)
+    } else {
+      Seq(recordKeyField) ++ preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
+    }
+  }
+
+  protected lazy val specifiedQueryInstant: Option[String] =
+    optParams.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key)
+      .map(HoodieSqlCommonUtils.formatQueryInstant)
 
   protected lazy val tableAvroSchema: Schema = {
     val schemaUtil = new TableSchemaResolver(metaClient)
@@ -81,6 +106,11 @@ abstract class HoodieBaseRelation(
     }
 
   override def schema: StructType = tableStructSchema
+
+  protected def appendMandatoryColumns(requestedColumns: Array[String]): Array[String] = {
+    val missing = mandatoryColumns.filter(col => !requestedColumns.contains(col))
+    requestedColumns ++ missing
+  }
 }
 
 object HoodieBaseRelation {
