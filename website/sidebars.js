@@ -70,6 +70,7 @@ module.exports = {
                 'deployment',
                 'cli',
                 'metrics',
+                'encryption',
                 'troubleshooting',
                 'tuning-guide',
                 {
