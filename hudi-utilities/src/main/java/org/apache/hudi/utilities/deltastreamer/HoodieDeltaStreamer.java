@@ -378,6 +378,10 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--max-retry-count"}, description = "the max retry count if --retry-on-source-failures is enabled")
     public Integer maxRetryCount = 3;
 
+    @Parameter(names = {"--allow-commit-on-no-checkpoint-change"}, description = "allow commits even if checkpoint has not changed before and after fetch data"
+        + "from souce. This might be useful in sources like SqlSource where there is not checkpoint. And is not recommended to enable in continuous mode.")
+    public Boolean allowCommitOnNoCheckpointChange = false;
+
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
 

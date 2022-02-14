@@ -61,6 +61,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   static final String PROPS_FILENAME_TEST_PARQUET = "test-parquet-dfs-source.properties";
   static final String PROPS_FILENAME_TEST_ORC = "test-orc-dfs-source.properties";
   static final String PROPS_FILENAME_TEST_JSON_KAFKA = "test-json-kafka-dfs-source.properties";
+  static final String PROPS_FILENAME_TEST_SQL_SOURCE = "test-sql-source-source.properties";
   static final String PROPS_FILENAME_TEST_MULTI_WRITER = "test-multi-writer.properties";
   static final String FIRST_PARQUET_FILE_NAME = "1.parquet";
   static final String FIRST_ORC_FILE_NAME = "1.orc";
@@ -71,6 +72,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   static final int ORC_NUM_RECORDS = 5;
   static final int CSV_NUM_RECORDS = 3;
   static final int JSON_KAFKA_NUM_RECORDS = 5;
+  static final int SQL_SOURCE_NUM_RECORDS = 1000;
   String kafkaCheckpointType = "string";
   // Required fields
   static final String TGT_BASE_PATH_PARAM = "--target-base-path";
