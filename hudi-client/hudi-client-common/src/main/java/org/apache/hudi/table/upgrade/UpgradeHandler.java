@@ -35,10 +35,10 @@ public interface UpgradeHandler {
    * @param config                 instance of {@link HoodieWriteConfig} to be used.
    * @param context                instance of {@link HoodieEngineContext} to be used.
    * @param instantTime            current instant time that should not be touched.
-   * @param upgradeDowngradeHelper instance of {@link BaseUpgradeDowngradeHelper} to be used.
+   * @param upgradeDowngradeHelper instance of {@link SupportsUpgradeDowngrade} to be used.
    * @return Map of config properties and its values to be added to table properties.
    */
   Map<ConfigProperty, String> upgrade(
       HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
-      BaseUpgradeDowngradeHelper upgradeDowngradeHelper);
+      SupportsUpgradeDowngrade upgradeDowngradeHelper);
 }

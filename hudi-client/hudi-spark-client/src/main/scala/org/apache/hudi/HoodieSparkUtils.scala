@@ -38,11 +38,11 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Literal}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, InMemoryFileIndex}
-import org.apache.spark.sql.functions._
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
+import scala.collection.JavaConverters._
 import scala.collection.JavaConverters.asScalaBufferConverter
 
 object HoodieSparkUtils extends SparkAdapterSupport {
@@ -292,5 +292,31 @@ object HoodieSparkUtils extends SparkAdapterSupport {
     assert(field.isDefined, s"Cannot find column: $columnName, Table Columns are: " +
       s"${tableSchema.fieldNames.mkString(",")}")
     AttributeReference(columnName, field.get.dataType, field.get.nullable)()
+  }
+
+  def getRequiredSchema(tableAvroSchema: Schema, requiredColumns: Array[String]): (Schema, StructType) = {
+    // First get the required avro-schema, then convert the avro-schema to spark schema.
+    val name2Fields = tableAvroSchema.getFields.asScala.map(f => f.name() -> f).toMap
+    // Here have to create a new Schema.Field object
+    // to prevent throwing exceptions like "org.apache.avro.AvroRuntimeException: Field already used".
+    val requiredFields = requiredColumns.map(c => name2Fields(c))
+      .map(f => new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal(), f.order())).toList
+    val requiredAvroSchema = Schema.createRecord(tableAvroSchema.getName, tableAvroSchema.getDoc,
+      tableAvroSchema.getNamespace, tableAvroSchema.isError, requiredFields.asJava)
+    val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
+    (requiredAvroSchema, requiredStructSchema)
+  }
+
+  def toAttribute(tableSchema: StructType): Seq[AttributeReference] = {
+    tableSchema.map { field =>
+      AttributeReference(field.name, field.dataType, field.nullable, field.metadata)()
+    }
+  }
+
+  def collectFieldIndexes(projectedSchema: StructType, originalSchema: StructType): Seq[Int] = {
+    val nameToIndex = originalSchema.fields.zipWithIndex.map{ case (field, index) =>
+      field.name -> index
+    }.toMap
+    projectedSchema.map(field => nameToIndex(field.name))
   }
 }

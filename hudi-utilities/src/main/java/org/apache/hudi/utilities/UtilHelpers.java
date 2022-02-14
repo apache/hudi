@@ -220,7 +220,7 @@ public class UtilHelpers {
     return new String(buf.array());
   }
 
-  private static SparkConf buildSparkConf(String appName, String defaultMaster) {
+  public static SparkConf buildSparkConf(String appName, String defaultMaster) {
     return buildSparkConf(appName, defaultMaster, new HashMap<>());
   }
 

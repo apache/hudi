@@ -19,6 +19,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.client.utils.SparkRowSerDe
+
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -26,7 +27,7 @@ import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
-import org.apache.spark.sql.execution.datasources.SparkParsePartitionUtil
+import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionedFile, SparkParsePartitionUtil}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.{Row, SparkSession}
 
@@ -92,4 +93,10 @@ trait SparkAdapter extends Serializable {
    * ParserInterface#parseMultipartIdentifier is supported since spark3, for spark2 this should not be called.
    */
   def parseMultipartIdentifier(parser: ParserInterface, sqlText: String): Seq[String]
+
+  /**
+   * Combine [[PartitionedFile]] to [[FilePartition]] according to `maxSplitBytes`.
+   */
+  def getFilePartitions(sparkSession: SparkSession, partitionedFiles: Seq[PartitionedFile],
+      maxSplitBytes: Long): Seq[FilePartition]
 }

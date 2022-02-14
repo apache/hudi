@@ -18,17 +18,7 @@
 
 package org.apache.hudi.avro;
 
-import org.apache.hudi.common.config.SerializableSchema;
-import org.apache.hudi.common.model.HoodieOperation;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.SchemaCompatibilityException;
-
+import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Conversions.DecimalConversion;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalTypes;
@@ -51,14 +41,22 @@ import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.specific.SpecificRecordBase;
 
+import org.apache.hudi.common.config.SerializableSchema;
+import org.apache.hudi.common.model.HoodieOperation;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.SchemaCompatibilityException;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -67,8 +65,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import java.util.zip.DeflaterOutputStream;
-import java.util.zip.InflaterInputStream;
 
 /**
  * Helper class to do common stuff across Avro.
@@ -283,7 +279,7 @@ public class HoodieAvroUtils {
 
     for (Schema.Field schemaField: fileSchema.getFields()) {
       if (fields.contains(schemaField.name())) {
-        toBeAddedFields.add(new Schema.Field(schemaField.name(), schemaField.schema(), schemaField.doc(), schemaField.defaultValue()));
+        toBeAddedFields.add(new Schema.Field(schemaField.name(), schemaField.schema(), schemaField.doc(), schemaField.defaultVal()));
       }
     }
     recordSchema.setFields(toBeAddedFields);
@@ -343,7 +339,7 @@ public class HoodieAvroUtils {
   }
 
   /**
-   * Given a avro record with a given schema, rewrites it into the new schema while setting fields only from the new
+   * Given an Avro record with a given schema, rewrites it into the new schema while setting fields only from the new
    * schema.
    * NOTE: Here, the assumption is that you cannot go from an evolved schema (schema with (N) fields)
    * to an older schema (schema with (N-1) fields). All fields present in the older record schema MUST be present in the
@@ -377,6 +373,16 @@ public class HoodieAvroUtils {
     return newRecord;
   }
 
+  /**
+   * Converts list of {@link GenericRecord} provided into the {@link GenericRecord} adhering to the
+   * provided {@code newSchema}.
+   *
+   * To better understand conversion rules please check {@link #rewriteRecord(GenericRecord, Schema)}
+   */
+  public static List<GenericRecord> rewriteRecords(List<GenericRecord> records, Schema newSchema) {
+    return records.stream().map(r -> rewriteRecord(r, newSchema)).collect(Collectors.toList());
+  }
+
   private static void copyOldValueOrSetDefault(GenericRecord oldRecord, GenericRecord newRecord, Schema.Field f) {
     // cache the result of oldRecord.get() to save CPU expensive hash lookup
     Schema oldSchema = oldRecord.getSchema();
@@ -389,33 +395,6 @@ public class HoodieAvroUtils {
       }
     } else {
       newRecord.put(f.name(), fieldValue);
-    }
-  }
-
-  public static byte[] compress(String text) {
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    try {
-      OutputStream out = new DeflaterOutputStream(baos);
-      out.write(text.getBytes(StandardCharsets.UTF_8));
-      out.close();
-    } catch (IOException e) {
-      throw new HoodieIOException("IOException while compressing text " + text, e);
-    }
-    return baos.toByteArray();
-  }
-
-  public static String decompress(byte[] bytes) {
-    InputStream in = new InflaterInputStream(new ByteArrayInputStream(bytes));
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    try {
-      byte[] buffer = new byte[8192];
-      int len;
-      while ((len = in.read(buffer)) > 0) {
-        baos.write(buffer, 0, len);
-      }
-      return new String(baos.toByteArray(), StandardCharsets.UTF_8);
-    } catch (IOException e) {
-      throw new HoodieIOException("IOException while decompressing text", e);
     }
   }
 
@@ -457,23 +436,32 @@ public class HoodieAvroUtils {
     String[] parts = fieldName.split("\\.");
     GenericRecord valueNode = record;
     int i = 0;
-    for (; i < parts.length; i++) {
-      String part = parts[i];
-      Object val = valueNode.get(part);
-      if (val == null) {
-        break;
-      }
-
-      // return, if last part of name
-      if (i == parts.length - 1) {
-        Schema fieldSchema = valueNode.getSchema().getField(part).schema();
-        return convertValueForSpecificDataTypes(fieldSchema, val, consistentLogicalTimestampEnabled);
-      } else {
-        // VC: Need a test here
-        if (!(val instanceof GenericRecord)) {
-          throw new HoodieException("Cannot find a record at part value :" + part);
+    try {
+      for (; i < parts.length; i++) {
+        String part = parts[i];
+        Object val = valueNode.get(part);
+        if (val == null) {
+          break;
         }
-        valueNode = (GenericRecord) val;
+
+        // return, if last part of name
+        if (i == parts.length - 1) {
+          Schema fieldSchema = valueNode.getSchema().getField(part).schema();
+          return convertValueForSpecificDataTypes(fieldSchema, val, consistentLogicalTimestampEnabled);
+        } else {
+          // VC: Need a test here
+          if (!(val instanceof GenericRecord)) {
+            throw new HoodieException("Cannot find a record at part value :" + part);
+          }
+          valueNode = (GenericRecord) val;
+        }
+      }
+    } catch (AvroRuntimeException e) {
+      // Since avro 1.10, arvo will throw AvroRuntimeException("Not a valid schema field: " + key)
+      // rather than return null like the previous version if if record doesn't contain this key.
+      // So when returnNullIfNotFound is true, catch this exception.
+      if (!returnNullIfNotFound) {
+        throw e;
       }
     }
 

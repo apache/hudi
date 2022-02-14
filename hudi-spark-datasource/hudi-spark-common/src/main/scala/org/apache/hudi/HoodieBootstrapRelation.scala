@@ -52,7 +52,7 @@ import scala.collection.JavaConverters._
   * @param optParams DataSource options passed by the user
   */
 class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
-                              val userSchema: StructType,
+                              val userSchema: Option[StructType],
                               val globPaths: Option[Seq[Path]],
                               val metaClient: HoodieTableMetaClient,
                               val optParams: Map[String, String]) extends BaseRelation
@@ -107,37 +107,35 @@ class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
     })
 
     // Prepare readers for reading data file and skeleton files
-    val dataReadFunction = new ParquetFileFormat()
-        .buildReaderWithPartitionValues(
-          sparkSession = _sqlContext.sparkSession,
-          dataSchema = dataSchema,
-          partitionSchema = StructType(Seq.empty),
-          requiredSchema = requiredDataSchema,
-          filters = if (requiredSkeletonSchema.isEmpty) filters else Seq() ,
-          options = Map.empty,
-          hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf()
-        )
+    val dataReadFunction = HoodieDataSourceHelper.buildHoodieParquetReader(
+      sparkSession = _sqlContext.sparkSession,
+      dataSchema = dataSchema,
+      partitionSchema = StructType(Seq.empty),
+      requiredSchema = requiredDataSchema,
+      filters = if (requiredSkeletonSchema.isEmpty) filters else Seq() ,
+      options = optParams,
+      hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf()
+    )
 
-    val skeletonReadFunction = new ParquetFileFormat()
-      .buildReaderWithPartitionValues(
-        sparkSession = _sqlContext.sparkSession,
-        dataSchema = skeletonSchema,
-        partitionSchema = StructType(Seq.empty),
-        requiredSchema = requiredSkeletonSchema,
-        filters = if (requiredDataSchema.isEmpty) filters else Seq(),
-        options = Map.empty,
-        hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf()
-      )
+    val skeletonReadFunction = HoodieDataSourceHelper.buildHoodieParquetReader(
+      sparkSession = _sqlContext.sparkSession,
+      dataSchema = skeletonSchema,
+      partitionSchema = StructType(Seq.empty),
+      requiredSchema = requiredSkeletonSchema,
+      filters = if (requiredDataSchema.isEmpty) filters else Seq(),
+      options = optParams,
+      hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf()
+    )
 
-    val regularReadFunction = new ParquetFileFormat()
-      .buildReaderWithPartitionValues(
-        sparkSession = _sqlContext.sparkSession,
-        dataSchema = fullSchema,
-        partitionSchema = StructType(Seq.empty),
-        requiredSchema = requiredColsSchema,
-        filters = filters,
-        options = Map.empty,
-        hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf())
+    val regularReadFunction = HoodieDataSourceHelper.buildHoodieParquetReader(
+      sparkSession = _sqlContext.sparkSession,
+      dataSchema = fullSchema,
+      partitionSchema = StructType(Seq.empty),
+      requiredSchema = requiredColsSchema,
+      filters = filters,
+      options = optParams,
+      hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf()
+    )
 
     val rdd = new HoodieBootstrapRDD(_sqlContext.sparkSession, dataReadFunction, skeletonReadFunction,
       regularReadFunction, requiredDataSchema, requiredSkeletonSchema, requiredColumns, tableState)

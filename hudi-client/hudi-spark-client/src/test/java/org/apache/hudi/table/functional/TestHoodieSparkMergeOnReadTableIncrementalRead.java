@@ -118,7 +118,7 @@ public class TestHoodieSparkMergeOnReadTableIncrementalRead extends SparkClientF
       String updateTime = "004";
       client.startCommitWithTime(updateTime);
       List<HoodieRecord> records004 = dataGen.generateUpdates(updateTime, 100);
-      updateRecordsInMORTable(metaClient, records004, client, cfg, updateTime);
+      updateRecordsInMORTable(metaClient, records004, client, cfg, updateTime, false);
 
       // verify RO incremental reads - only one base file shows up because updates to into log files
       incrementalROFiles = getROIncrementalFiles(partitionPath, false);

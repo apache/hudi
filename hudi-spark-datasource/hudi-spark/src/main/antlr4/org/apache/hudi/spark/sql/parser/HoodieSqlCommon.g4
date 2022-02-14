@@ -20,7 +20,7 @@ grammar HoodieSqlCommon;
     : statement EOF
     ;
 
-statement
+ statement
     : compactionStatement                                              #compactionCommand
     | .*?                                                              #passThrough
     ;
@@ -50,10 +50,10 @@ statement
     ;
 
  IDENTIFIER
-     : (LETTER | DIGIT | '_')+
-     ;
+    : (LETTER | DIGIT | '_')+
+    ;
 
-STRING
+ STRING
     : '\'' ( ~('\''|'\\') | ('\\' .) )* '\''
     | '"' ( ~('"'|'\\') | ('\\' .) )* '"'
     ;

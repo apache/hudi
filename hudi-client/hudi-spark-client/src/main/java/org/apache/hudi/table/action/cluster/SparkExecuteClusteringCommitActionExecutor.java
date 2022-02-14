@@ -116,7 +116,7 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata) {
     Set<HoodieFileGroupId> newFilesWritten = writeMetadata.getWriteStats().get().stream()
         .map(s -> new HoodieFileGroupId(s.getPartitionPath(), s.getFileId())).collect(Collectors.toSet());
-    // for the below execution strategy, new filegroup id would be same as old filegroup id
+    // for the below execution strategy, new file group id would be same as old file group id
     if (SparkSingleFileSortExecutionStrategy.class.getName().equals(config.getClusteringExecutionStrategyClass())) {
       return ClusteringUtils.getFileGroupsFromClusteringPlan(clusteringPlan)
           .collect(Collectors.groupingBy(fg -> fg.getPartitionPath(), Collectors.mapping(fg -> fg.getFileId(), Collectors.toList())));

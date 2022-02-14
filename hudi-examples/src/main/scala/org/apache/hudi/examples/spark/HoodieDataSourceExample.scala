@@ -82,7 +82,7 @@ object HoodieDataSourceExample {
       option(PARTITIONPATH_FIELD.key, "partitionpath").
       option(TBL_NAME.key, tableName).
       mode(Overwrite).
-        save(tablePath)
+      save(tablePath)
   }
 
   /**
@@ -127,7 +127,7 @@ object HoodieDataSourceExample {
       option(PARTITIONPATH_FIELD.key, "partitionpath").
       option(TBL_NAME.key, tableName).
       mode(Append).
-        save(tablePath)
+      save(tablePath)
   }
 
   /**

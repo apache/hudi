@@ -171,7 +171,7 @@ public class TestClientRollback extends HoodieClientTestBase {
   }
 
   /**
-   * Test Cases for effects of rollbacking completed/inflight commits.
+   * Test Cases for effects of rolling back completed/inflight commits.
    */
   @Test
   public void testRollbackCommit() throws Exception {

@@ -40,9 +40,9 @@ import java.util.stream.IntStream;
 
 import scala.Option;
 
-import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_PARTITION_PATH_SEPARATOR;
 import static org.apache.hudi.keygen.KeyGenUtils.EMPTY_RECORDKEY_PLACEHOLDER;
+import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.keygen.KeyGenUtils.NULL_RECORDKEY_PLACEHOLDER;
 
 /**
@@ -230,9 +230,10 @@ public class RowKeyGeneratorHelper {
 
   /**
    * Generate the tree style positions for the field requested for as per the defined struct type.
-   * @param structType schema of interest
-   * @param field field of interest for which the positions are requested for
-   * @param isRecordKey {@code true} if the field requested for is a record key. {@code false} incase of a partition path.
+   *
+   * @param structType  schema of interest
+   * @param field       field of interest for which the positions are requested for
+   * @param isRecordKey {@code true} if the field requested for is a record key. {@code false} in case of a partition path.
    * @return the positions of the field as per the struct type.
    */
   public static List<Integer> getNestedFieldIndices(StructType structType, String field, boolean isRecordKey) {

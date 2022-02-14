@@ -35,13 +35,14 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.specific.SpecificData;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
@@ -69,8 +70,8 @@ public class ExportCommand implements CommandMarker {
   @CliCommand(value = "export instants", help = "Export Instants and their metadata from the Timeline")
   public String exportInstants(
       @CliOption(key = {"limit"}, help = "Limit Instants", unspecifiedDefaultValue = "-1") final Integer limit,
-      @CliOption(key = {"actions"}, help = "Comma seperated list of Instant actions to export",
-        unspecifiedDefaultValue = "clean,commit,deltacommit,rollback,savepoint,restore") final String filter,
+      @CliOption(key = {"actions"}, help = "Comma separated list of Instant actions to export",
+          unspecifiedDefaultValue = "clean,commit,deltacommit,rollback,savepoint,restore") final String filter,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
       @CliOption(key = {"localFolder"}, help = "Local Folder to export to", mandatory = true) String localFolder)
       throws Exception {

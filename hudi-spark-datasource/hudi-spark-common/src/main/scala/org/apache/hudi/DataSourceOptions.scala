@@ -119,8 +119,13 @@ object DataSourceReadOptions {
     .key("hoodie.enable.data.skipping")
     .defaultValue(true)
     .sinceVersion("0.10.0")
-    .withDocumentation("enable data skipping to boost query after doing z-order optimize for current table")
+    .withDocumentation("Enables data-skipping allowing queries to leverage indexes to reduce the search space by " +
+      "skipping over files")
 
+  val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")
+    .defaultValue("false")
+    .withDocumentation("When doing an incremental query whether we should fall back to full table scans if file does not exist.")
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
   val QUERY_TYPE_OPT_KEY = QUERY_TYPE.key()
@@ -422,6 +427,11 @@ object DataSourceWriteOptions {
   val HIVE_URL: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.jdbcurl")
     .defaultValue("jdbc:hive2://localhost:10000")
+    .withDocumentation("Hive jdbc url")
+
+  val METASTORE_URIS: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.hive_sync.metastore.uris")
+    .defaultValue("thrift://localhost:9083")
     .withDocumentation("Hive metastore url")
 
   val hivePartitionFieldsInferFunc = DataSourceOptionsHelper.scalaFunctionToJavaFunction((p: HoodieConfig) => {
@@ -467,6 +477,32 @@ object DataSourceWriteOptions {
     .withDocumentation("Flag to choose InputFormat under com.uber.hoodie package instead of org.apache.hudi package. "
       + "Use this when you are in the process of migrating from "
       + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to org.apache.hudi input format")
+
+  // spark data source write pool name. Incase of streaming sink, users might be interested to set custom scheduling configs
+  // for regular writes and async compaction. In such cases, this pool name will be used for spark datasource writes.
+  val SPARK_DATASOURCE_WRITER_POOL_NAME = "sparkdatasourcewrite"
+
+  /*
+  When async compaction is enabled (deltastreamer or streaming sink), users might be interested to set custom
+  scheduling configs for regular writes and async compaction. This is the property used to set custom scheduler config
+  file with spark. In Deltastreamer, the file is generated within hudi and set if necessary. Where as in case of streaming
+  sink, users have to set this property when they invoke spark shell.
+  Sample format of the file contents.
+  <?xml version="1.0"?>
+  <allocations>
+    <pool name="sparkdatasourcewrite">
+      <schedulingMode>FAIR</schedulingMode>
+      <weight>4</weight>
+      <minShare>2</minShare>
+    </pool>
+    <pool name="hoodiecompact">
+      <schedulingMode>FAIR</schedulingMode>
+      <weight>3</weight>
+      <minShare>1</minShare>
+    </pool>
+  </allocations>
+   */
+  val SPARK_SCHEDULER_ALLOCATION_FILE_KEY = "spark.scheduler.allocation.file"
 
   /** @deprecated Use {@link HIVE_SYNC_MODE} instead of this config from 0.9.0 */
   @Deprecated

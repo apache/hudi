@@ -62,12 +62,25 @@ public class CollectionUtils {
 
 
   /**
-   * Combines provided {@link List}s into one
+   * Combines provided {@link List}s into one, returning new instance of {@link ArrayList}
    */
   public static <E> List<E> combine(List<E> one, List<E> another) {
     ArrayList<E> combined = new ArrayList<>(one.size() + another.size());
     combined.addAll(one);
     combined.addAll(another);
+    return combined;
+  }
+
+  /**
+   * Combines provided {@link Map}s into one, returning new instance of {@link HashMap}.
+   *
+   * NOTE: That values associated with overlapping keys from the second map, will override
+   *       values from the first one
+   */
+  public static <K, V> Map<K, V> combine(Map<K, V> one, Map<K, V> another) {
+    Map<K, V> combined = new HashMap<>(one.size() + another.size());
+    combined.putAll(one);
+    combined.putAll(another);
     return combined;
   }
 

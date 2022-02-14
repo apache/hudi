@@ -112,7 +112,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
       assertTrue(meta.getSuccessDeleteFiles() == null || meta.getSuccessDeleteFiles().size() == 0);
     }
 
-    //4. assert filegroup after rollback, and compare to the rollbackstat
+    //4. assert file group after rollback, and compare to the rollbackstat
     // assert the first partition data and log file size
     List<HoodieFileGroup> firstPartitionRollBack1FileGroups = table.getFileSystemView().getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
     assertEquals(1, firstPartitionRollBack1FileGroups.size());

@@ -20,7 +20,6 @@ package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.exception.HoodieIOException;
@@ -47,7 +46,7 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
     this.keysToDelete = keysToDelete;
   }
 
-  private HoodieDeleteBlock(Option<byte[]> content, FSDataInputStream inputStream, boolean readBlockLazily,
+  public HoodieDeleteBlock(Option<byte[]> content, FSDataInputStream inputStream, boolean readBlockLazily,
       Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
       Map<HeaderMetadataType, String> footer) {
     super(header, footer, blockContentLocation, content, inputStream, readBlockLazily);
@@ -55,11 +54,12 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
 
   @Override
   public byte[] getContentBytes() throws IOException {
+    Option<byte[]> content = getContent();
 
     // In case this method is called before realizing keys from content
-    if (getContent().isPresent()) {
-      return getContent().get();
-    } else if (readBlockLazily && !getContent().isPresent() && keysToDelete == null) {
+    if (content.isPresent()) {
+      return content.get();
+    } else if (readBlockLazily && keysToDelete == null) {
       // read block lazily
       getKeysToDelete();
     }
@@ -100,11 +100,4 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
     return HoodieLogBlockType.DELETE_BLOCK;
   }
 
-  public static HoodieLogBlock getBlock(HoodieLogFile logFile, FSDataInputStream inputStream, Option<byte[]> content,
-      boolean readBlockLazily, long position, long blockSize, long blockEndPos, Map<HeaderMetadataType, String> header,
-      Map<HeaderMetadataType, String> footer) throws IOException {
-
-    return new HoodieDeleteBlock(content, inputStream, readBlockLazily,
-        Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)), header, footer);
-  }
 }

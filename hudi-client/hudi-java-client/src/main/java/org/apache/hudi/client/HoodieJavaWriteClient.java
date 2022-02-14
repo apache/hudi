@@ -50,7 +50,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
-    AbstractHoodieWriteClient<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
+    BaseHoodieWriteClient<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
 
   public HoodieJavaWriteClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
     super(context, clientConfig);

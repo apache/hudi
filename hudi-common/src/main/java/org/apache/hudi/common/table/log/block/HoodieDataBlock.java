@@ -18,25 +18,24 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
-
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FSDataInputStream;
-
-import javax.annotation.Nonnull;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieIOException;
 
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
  * DataBlock contains a list of records serialized using formats compatible with the base file format.
  * For each base file format there is a corresponding DataBlock format.
- *
+ * <p>
  * The Datablock contains:
  *   1. Data Block version
  *   2. Total number of records in the block
@@ -44,125 +43,151 @@ import java.util.Map;
  */
 public abstract class HoodieDataBlock extends HoodieLogBlock {
 
-  protected List<IndexedRecord> records;
-  protected Schema schema;
-  protected String keyField;
+  // TODO rebase records/content to leverage Either to warrant
+  //      that they are mutex (used by read/write flows respectively)
+  private Option<List<IndexedRecord>> records;
 
-  public HoodieDataBlock(@Nonnull Map<HeaderMetadataType, String> logBlockHeader,
-      @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
-      @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation, @Nonnull Option<byte[]> content,
-      FSDataInputStream inputStream, boolean readBlockLazily) {
-    super(logBlockHeader, logBlockFooter, blockContentLocation, content, inputStream, readBlockLazily);
-    this.keyField = HoodieRecord.RECORD_KEY_METADATA_FIELD;
-  }
+  /**
+   * Key field's name w/in the record's schema
+   */
+  private final String keyFieldName;
 
-  public HoodieDataBlock(@Nonnull List<IndexedRecord> records, @Nonnull Map<HeaderMetadataType, String> header,
-                         @Nonnull Map<HeaderMetadataType, String> footer, String keyField) {
-    this(header, footer, Option.empty(), Option.empty(), null, false);
-    this.records = records;
-    this.schema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
-    this.keyField = keyField;
-  }
+  private final boolean enablePointLookups;
 
-  protected HoodieDataBlock(Option<byte[]> content, @Nonnull FSDataInputStream inputStream, boolean readBlockLazily,
-                            Option<HoodieLogBlockContentLocation> blockContentLocation, Schema readerSchema,
-                            @Nonnull Map<HeaderMetadataType, String> headers, @Nonnull Map<HeaderMetadataType,
-      String> footer, String keyField) {
-    this(headers, footer, blockContentLocation, content, inputStream, readBlockLazily);
-    this.schema = readerSchema;
-    this.keyField = keyField;
+  protected final Schema readerSchema;
+
+  /**
+   * NOTE: This ctor is used on the write-path (ie when records ought to be written into the log)
+   */
+  public HoodieDataBlock(List<IndexedRecord> records,
+                         Map<HeaderMetadataType, String> header,
+                         Map<HeaderMetadataType, String> footer,
+                         String keyFieldName) {
+    super(header, footer, Option.empty(), Option.empty(), null, false);
+    this.records = Option.of(records);
+    this.keyFieldName = keyFieldName;
+    // If no reader-schema has been provided assume writer-schema as one
+    this.readerSchema = getWriterSchema(super.getLogBlockHeader());
+    this.enablePointLookups = false;
   }
 
   /**
-   * Util method to get a data block for the requested type.
-   *
-   * @param logDataBlockFormat - Data block type
-   * @param recordList         - List of records that goes in the data block
-   * @param header             - data block header
-   * @return Data block of the requested type.
+   * NOTE: This ctor is used on the write-path (ie when records ought to be written into the log)
    */
-  public static HoodieLogBlock getBlock(HoodieLogBlockType logDataBlockFormat, List<IndexedRecord> recordList,
-                                        Map<HeaderMetadataType, String> header) {
-    return getBlock(logDataBlockFormat, recordList, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
-  }
-
-  /**
-   * Util method to get a data block for the requested type.
-   *
-   * @param logDataBlockFormat - Data block type
-   * @param recordList         - List of records that goes in the data block
-   * @param header             - data block header
-   * @param keyField           - FieldId to get the key from the records
-   * @return Data block of the requested type.
-   */
-  public static HoodieLogBlock getBlock(HoodieLogBlockType logDataBlockFormat, List<IndexedRecord> recordList,
-                                        Map<HeaderMetadataType, String> header, String keyField) {
-    switch (logDataBlockFormat) {
-      case AVRO_DATA_BLOCK:
-        return new HoodieAvroDataBlock(recordList, header, keyField);
-      case HFILE_DATA_BLOCK:
-        return new HoodieHFileDataBlock(recordList, header, keyField);
-      default:
-        throw new HoodieException("Data block format " + logDataBlockFormat + " not implemented");
-    }
+  protected HoodieDataBlock(Option<byte[]> content,
+                            FSDataInputStream inputStream,
+                            boolean readBlockLazily,
+                            Option<HoodieLogBlockContentLocation> blockContentLocation,
+                            Option<Schema> readerSchema,
+                            Map<HeaderMetadataType, String> headers,
+                            Map<HeaderMetadataType, String> footer,
+                            String keyFieldName,
+                            boolean enablePointLookups) {
+    super(headers, footer, blockContentLocation, content, inputStream, readBlockLazily);
+    this.records = Option.empty();
+    this.keyFieldName = keyFieldName;
+    // If no reader-schema has been provided assume writer-schema as one
+    this.readerSchema = readerSchema.orElseGet(() -> getWriterSchema(super.getLogBlockHeader()));
+    this.enablePointLookups = enablePointLookups;
   }
 
   @Override
   public byte[] getContentBytes() throws IOException {
     // In case this method is called before realizing records from content
-    if (getContent().isPresent()) {
-      return getContent().get();
-    } else if (readBlockLazily && !getContent().isPresent() && records == null) {
-      // read block lazily
-      createRecordsFromContentBytes();
+    Option<byte[]> content = getContent();
+
+    checkState(content.isPresent() || records.isPresent(), "Block is in invalid state");
+
+    if (content.isPresent()) {
+      return content.get();
     }
 
-    return serializeRecords();
+    return serializeRecords(records.get());
   }
 
-  public abstract HoodieLogBlockType getBlockType();
+  protected static Schema getWriterSchema(Map<HeaderMetadataType, String> logBlockHeader) {
+    return new Schema.Parser().parse(logBlockHeader.get(HeaderMetadataType.SCHEMA));
+  }
 
-  public List<IndexedRecord> getRecords() {
-    if (records == null) {
+  /**
+   * Returns all the records contained w/in this block
+   */
+  public final List<IndexedRecord> getRecords() {
+    if (!records.isPresent()) {
       try {
         // in case records are absent, read content lazily and then convert to IndexedRecords
-        createRecordsFromContentBytes();
+        records = Option.of(readRecordsFromBlockPayload());
       } catch (IOException io) {
         throw new HoodieIOException("Unable to convert content bytes to records", io);
       }
     }
-    return records;
+    return records.get();
+  }
+
+  public Schema getSchema() {
+    return readerSchema;
   }
 
   /**
    * Batch get of keys of interest. Implementation can choose to either do full scan and return matched entries or
    * do a seek based parsing and return matched entries.
+   *
    * @param keys keys of interest.
    * @return List of IndexedRecords for the keys of interest.
-   * @throws IOException
+   * @throws IOException in case of failures encountered when reading/parsing records
    */
-  public List<IndexedRecord> getRecords(List<String> keys) throws IOException {
-    throw new UnsupportedOperationException("On demand batch get based on interested keys not supported");
-  }
-
-  public Schema getSchema() {
-    // if getSchema was invoked before converting byte [] to records
-    if (records == null) {
-      getRecords();
+  public final List<IndexedRecord> getRecords(List<String> keys) throws IOException {
+    boolean fullScan = keys.isEmpty();
+    if (enablePointLookups && !fullScan) {
+      return lookupRecords(keys);
     }
-    return schema;
+
+    // Otherwise, we fetch all the records and filter out all the records, but the
+    // ones requested
+    List<IndexedRecord> allRecords = getRecords();
+    if (fullScan) {
+      return allRecords;
+    }
+
+    HashSet<String> keySet = new HashSet<>(keys);
+    return allRecords.stream()
+        .filter(record -> keySet.contains(getRecordKey(record).orElse(null)))
+        .collect(Collectors.toList());
   }
 
-  protected void createRecordsFromContentBytes() throws IOException {
+  protected List<IndexedRecord> readRecordsFromBlockPayload() throws IOException {
     if (readBlockLazily && !getContent().isPresent()) {
       // read log block contents from disk
       inflate();
     }
 
-    deserializeRecords();
+    try {
+      return deserializeRecords(getContent().get());
+    } finally {
+      // Free up content to be GC'd by deflating the block
+      deflate();
+    }
   }
 
-  protected abstract byte[] serializeRecords() throws IOException;
+  protected List<IndexedRecord> lookupRecords(List<String> keys) throws IOException {
+    throw new UnsupportedOperationException(
+        String.format("Point lookups are not supported by this Data block type (%s)", getBlockType())
+    );
+  }
 
-  protected abstract void deserializeRecords() throws IOException;
+  protected abstract byte[] serializeRecords(List<IndexedRecord> records) throws IOException;
+
+  protected abstract List<IndexedRecord> deserializeRecords(byte[] content) throws IOException;
+
+  public abstract HoodieLogBlockType getBlockType();
+
+  protected Option<Schema.Field> getKeyField(Schema schema) {
+    return Option.ofNullable(schema.getField(keyFieldName));
+  }
+
+  protected Option<String> getRecordKey(IndexedRecord record) {
+    return getKeyField(record.getSchema())
+        .map(keyField -> record.get(keyField.pos()))
+        .map(Object::toString);
+  }
 }

@@ -22,9 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
@@ -37,11 +35,8 @@ import java.util.List;
 
 /**
  * Hoodie index implementation backed by flink state.
- *
- * @param <T> type of payload
  */
-public class FlinkInMemoryStateIndex<T extends HoodieRecordPayload<T>>
-    extends HoodieIndex<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
+public class FlinkInMemoryStateIndex extends HoodieIndex<List<HoodieRecord>, List<WriteStatus>> {
 
   private static final Logger LOG = LogManager.getLogger(FlinkInMemoryStateIndex.class);
 
@@ -50,8 +45,8 @@ public class FlinkInMemoryStateIndex<T extends HoodieRecordPayload<T>>
   }
 
   @Override
-  public HoodieData<HoodieRecord<T>> tagLocation(
-      HoodieData<HoodieRecord<T>> records, HoodieEngineContext context,
+  public <R> HoodieData<HoodieRecord<R>> tagLocation(
+      HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
       HoodieTable hoodieTable) throws HoodieIndexException {
     throw new UnsupportedOperationException("No need to tag location for FlinkInMemoryStateIndex");
   }
