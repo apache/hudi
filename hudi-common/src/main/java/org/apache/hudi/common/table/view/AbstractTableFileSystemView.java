@@ -387,11 +387,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param baseFile base File
    */
   protected boolean isBaseFileDueToPendingClustering(HoodieBaseFile baseFile) {
-    final String partitionPath = getPartitionPathFromFilePath(baseFile.getPath());
-    Option<HoodieInstant> pendingClusteringInstant = getPendingClusteringInstant(new HoodieFileGroupId(partitionPath, baseFile.getFileId()));
-
-    return (pendingClusteringInstant.isPresent()) && (null != pendingClusteringInstant.get().getTimestamp())
-        && baseFile.getCommitTime().equals(pendingClusteringInstant.get().getTimestamp());
+    List<String> pendingReplaceInstants =
+        metaClient.getActiveTimeline().filterPendingReplaceTimeline().getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+    return pendingReplaceInstants.isEmpty() || pendingReplaceInstants.contains(baseFile.getCommitTime());
   }
 
   /**
