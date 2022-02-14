@@ -39,7 +39,7 @@ import org.apache.spark.sql.{Row, SQLContext}
 import scala.collection.JavaConverters._
 
 case class HoodieMergeOnReadFileSplit(dataFile: Option[PartitionedFile],
-                                      logPaths: Option[List[HoodieLogFile]],
+                                      logFiles: Option[List[HoodieLogFile]],
                                       latestCommit: String,
                                       tablePath: String,
                                       maxCompactionMemoryInBytes: Long,

@@ -72,7 +72,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
     val mergeOnReadPartition = split.asInstanceOf[HoodieMergeOnReadPartition]
     val iter = mergeOnReadPartition.split match {
-      case dataFileOnlySplit if dataFileOnlySplit.logPaths.isEmpty =>
+      case dataFileOnlySplit if dataFileOnlySplit.logFiles.isEmpty =>
         val rows = requiredSchemaFileReader(dataFileOnlySplit.dataFile.get)
         extractRequiredSchema(rows, requiredSchema, requiredFieldPosition)
       case logFileOnlySplit if logFileOnlySplit.dataFile.isEmpty =>
@@ -93,7 +93,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
         )
       case _ => throw new HoodieException(s"Unable to select an Iterator to read the Hoodie MOR File Split for " +
         s"file path: ${mergeOnReadPartition.split.dataFile.get.filePath}" +
-        s"log paths: ${mergeOnReadPartition.split.logPaths.toString}" +
+        s"log paths: ${mergeOnReadPartition.split.logFiles.toString}" +
         s"hoodie table path: ${mergeOnReadPartition.split.tablePath}" +
         s"spark partition Index: ${mergeOnReadPartition.index}" +
         s"merge type: ${mergeOnReadPartition.split.mergeType}")
@@ -336,7 +336,10 @@ private object HoodieMergeOnReadRDD {
       val dataTableBasePath = getDataTableBasePathFromMetadataTable(split.tablePath)
       val metadataTable = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(config), metadataConfig, dataTableBasePath, "/tmp")
 
-      metadataTable.getLogRecordScanner(split.logPaths.get.asJava, "blah").getLeft
+      // NOTE: In case of Metadata Table partition path equates to partition name (since there's just one level
+      //       of indirection among MT partitions)
+      val relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(split.tablePath), getPartitionPath(split))
+      metadataTable.getLogRecordScanner(split.logFiles.get.asJava, relativePartitionPath).getLeft
     } else {
       val partitionPath: String = if (split.logPaths.isEmpty || split.logPaths.get.asJava.isEmpty) {
         null
@@ -346,7 +349,7 @@ private object HoodieMergeOnReadRDD {
       val logRecordScannerBuilder = HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
         .withBasePath(split.tablePath)
-        .withLogFilePaths(split.logPaths.get.asJava)
+        .withLogFilePaths(split.logFiles.get.asJava)
         .withReaderSchema(logSchema)
         .withLatestInstantTime(split.latestCommit)
         .withReadBlocksLazily(
@@ -366,5 +369,14 @@ private object HoodieMergeOnReadRDD {
       }
       logRecordScannerBuilder.build()
     }
+  }
+
+  private def getPartitionPath(split: HoodieMergeOnReadFileSplit): Path = {
+    // Determine partition path as an immediate parent folder of either
+    //    - The base file
+    //    - Some log file
+    split.dataFile.map(baseFile => new Path(baseFile.filePath))
+      .getOrElse(split.logFiles.get.head.getPath)
+      .getParent
   }
 }
