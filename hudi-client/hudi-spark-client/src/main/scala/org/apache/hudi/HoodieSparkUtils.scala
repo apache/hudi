@@ -131,21 +131,27 @@ object HoodieSparkUtils extends SparkAdapterSupport {
   }
 
   def createRdd(df: DataFrame, structName: String, recordNamespace: String, latestTableSchema: Option[Schema]): RDD[GenericRecord] = {
-    val writerSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, recordNamespace)
-    val (readerSchema, sameSchema) = latestTableSchema.map((_, false)).getOrElse((writerSchema, true))
-    val (nullable, _) = resolveAvroTypeNullability(readerSchema)
+    val writerAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, recordNamespace)
+    val (readerAvroSchema, sameSchema) = latestTableSchema.map((_, false)).getOrElse((writerAvroSchema, true))
+    val (nullable, _) = resolveAvroTypeNullability(readerAvroSchema)
 
-    val rowReaderSchema = AvroConversionUtils.convertAvroSchemaToStructType(readerSchema)
+    val readerStructType = AvroConversionUtils.convertAvroSchemaToStructType(readerAvroSchema)
+    // NOTE: We have to serialize Avro schema, and then subsequently parse it on the executor node, since Spark
+    //       serializer is not able to digest it
+    val readerAvroSchemaStr = readerAvroSchema.toString
 
     df.queryExecution.toRdd.mapPartitions { rows =>
       if (rows.isEmpty) {
         Iterator.empty
       } else {
+        val readerAvroSchema = new Schema.Parser().parse(readerAvroSchemaStr)
+        val convert = AvroConversionUtils.createRowToAvroConverter(readerStructType, readerAvroSchema, nullable = nullable)
+
         // Since caller might request to get records in a different projected schema, we might need to
         // project the row first, before converting it into Avro
         val project: InternalRow => InternalRow =
-          if (sameSchema) identity else UnsafeProjection.create(rowReaderSchema)
-        val convert = AvroConversionUtils.createRowToAvroConverter(rowReaderSchema, readerSchema, nullable = nullable)
+          if (sameSchema) identity else UnsafeProjection.create(readerStructType)
+
         rows.map { r => convert(project(r)) }
       }
     }
