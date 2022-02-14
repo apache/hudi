@@ -19,62 +19,88 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
-
+import org.apache.hudi.HoodieBaseRelation.createBaseFileReader
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
-
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile}
 import org.apache.spark.sql.{Row, SQLContext}
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
+import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
+import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.{BooleanType, StructType}
+import org.apache.spark.sql.{Row, SQLContext}
 
 /**
- * The implement of [[BaseRelation]], which is used to respond to query that only touches the base files(Parquet),
- * like query COW tables in Snapshot-Query and Read_Optimized mode and MOR tables in Read_Optimized mode.
+ * [[BaseRelation]] implementation only reading Base files of Hudi tables, essentially supporting following querying
+ * modes:
+ * <ul>
+ * <li>For COW tables: Snapshot</li>
+ * <li>For MOR tables: Read-optimized</li>
+ * </ul>
+ *
+ * NOTE: The reason this Relation is used in liue of Spark's default [[HadoopFsRelation]] is primarily due to the
+ * fact that it injects real partition's path as the value of the partition field, which Hudi ultimately persists
+ * as part of the record payload. In some cases, however, partition path might not necessarily be equal to the
+ * verbatim value of the partition path field (when custom [[KeyGenerator]] is used) therefore leading to incorrect
+ * partition field values being written
  */
-class BaseFileOnlyViewRelation(
-    sqlContext: SQLContext,
-    metaClient: HoodieTableMetaClient,
-    optParams: Map[String, String],
-    userSchema: Option[StructType],
-    globPaths: Seq[Path]
-  ) extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) with SparkAdapterSupport {
+class BaseFileOnlyViewRelation(sqlContext: SQLContext,
+                               metaClient: HoodieTableMetaClient,
+                               optParams: Map[String, String],
+                               userSchema: Option[StructType],
+                               globPaths: Seq[Path])
+  extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) with SparkAdapterSupport {
+
+  private val fileIndex = HoodieFileIndex(sparkSession, metaClient, userSchema, optParams,
+    FileStatusCache.getOrCreate(sqlContext.sparkSession))
 
   override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
-    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "false")
+    // NOTE: In case list of requested columns doesn't contain the Primary Key one, we
+    //       have to add it explicitly so that
+    //          - Merging could be performed correctly
+    //          - In case 0 columns are to be fetched (for ex, when doing {@code count()} on Spark's [[Dataset]],
+    //          Spark still fetches all the rows to execute the query correctly
+    //
+    //       It's okay to return columns that have not been requested by the caller, as those nevertheless will be
+    //       filtered out upstream
+    val fetchedColumns: Array[String] = appendMandatoryColumns(requiredColumns)
+
+    val (requiredAvroSchema, requiredStructSchema) =
+      HoodieSparkUtils.getRequiredSchema(tableAvroSchema, fetchedColumns)
 
     val filterExpressions = HoodieSparkUtils.convertToCatalystExpressions(filters, tableStructSchema)
       .getOrElse(Literal(true, BooleanType))
-    val (partitionFilters, dataFilters) = {
-      val splited = filters.map { filter =>
-        HoodieDataSourceHelper.splitPartitionAndDataPredicates(
-          sparkSession, filterExpressions, partitionColumns)
-      }
-      (splited.flatMap(_._1), splited.flatMap(_._2))
-    }
-    val partitionFiles = getPartitionFiles(partitionFilters, dataFilters)
 
-    val maxSplitBytes = sparkSession.sessionState.conf.filesMaxPartitionBytes
-    val filePartitions = sparkAdapter.getFilePartitions(sparkSession, partitionFiles, maxSplitBytes)
+    val (partitionFilters, dataFilters) = HoodieDataSourceHelper.splitPartitionAndDataPredicates(
+      sparkSession, filterExpressions, partitionColumns)
 
-    val requiredSchemaParquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
-      sparkSession = sparkSession,
-      dataSchema = tableStructSchema,
+    val filePartitions = getPartitions(partitionFilters, dataFilters)
+
+    val tableSchemas = HoodieTableSchemas(
+      tableSchema = tableStructSchema,
       partitionSchema = StructType(Nil),
-      requiredSchema = tableStructSchema,
+      requiredSchema = requiredStructSchema,
+      tableAvroSchema = tableAvroSchema.toString,
+      requiredAvroSchema = requiredAvroSchema.toString
+    )
+
+    val baseFileReader = createBaseFileReader(
+      spark = sparkSession,
+      tableSchemas = tableSchemas,
       filters = filters,
       options = optParams,
       hadoopConf = sparkSession.sessionState.newHadoopConf()
     )
 
     new HoodieFileScanRDD(sparkSession, requiredColumns, tableStructSchema,
-      requiredSchemaParquetReader, filePartitions)
+      baseFileReader, filePartitions)
   }
 
-  private def getPartitionFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionedFile] = {
+  private def getPartitions(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionedFile] = {
     val partitionDirectories = if (globPaths.isEmpty) {
       val hoodieFileIndex = HoodieFileIndex(sparkSession, metaClient, userSchema, optParams,
         FileStatusCache.getOrCreate(sqlContext.sparkSession))
@@ -89,18 +115,17 @@ class BaseFileOnlyViewRelation(
       inMemoryFileIndex.listFiles(partitionFilters, dataFilters)
     }
 
-    val partitionFiles = partitionDirectories.flatMap { partition =>
+    partitionDirectories.flatMap { partition =>
       partition.files.flatMap { file =>
+        // TODO move to adapter
+        // TODO fix, currently assuming parquet as underlying format
         HoodieDataSourceHelper.splitFiles(
           sparkSession = sparkSession,
           file = file,
-          partitionValues = partition.values
+          // TODO clarify why this is required
+          partitionValues = InternalRow.empty
         )
       }
-    }
-
-    partitionFiles.map{ f =>
-      PartitionedFile(InternalRow.empty, f.filePath, f.start, f.length)
     }
   }
 }
