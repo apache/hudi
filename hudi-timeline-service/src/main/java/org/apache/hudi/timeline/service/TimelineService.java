@@ -105,8 +105,8 @@ public class TimelineService {
     @Parameter(names = {"--threads", "-t"}, description = "Number of threads to use for serving requests")
     public int numThreads = DEFAULT_NUM_THREADS;
 
-    @Parameter(names = {"--async"}, description = "Use asyncronous request processing")
-    public boolean async = false;
+    @Parameter(names = {"--async"}, description = "Use asynchronous request processing")
+    public boolean async = true;
 
     @Parameter(names = {"--compress"}, description = "Compress output using gzip")
     public boolean compress = true;
@@ -141,7 +141,7 @@ public class TimelineService {
       private String baseStorePathForFileGroups = FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue();
       private String rocksDBPath = FileSystemViewStorageConfig.ROCKSDB_BASE_PATH.defaultValue();
       private int numThreads = DEFAULT_NUM_THREADS;
-      private boolean async = false;
+      private boolean async = true;
       private boolean compress = true;
       private boolean enableMarkerRequests = false;
       private int markerBatchNumThreads = 20;
