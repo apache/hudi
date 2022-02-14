@@ -98,59 +98,102 @@ right now only bulk_insert operation is supported.
 Spark provides a complete V2 api, such as `CatalogPlugin`, `SupportsWrite`, `SupportsRead`, and various pushdown filters,  
 such as `SupportsPushDownFilters`, `SupportsPushDownAggregates`, `SupportsPushDownRequiredColumns`
 
-We would Define the key abstraction of call `HoodieDatasourceTable`, which inherits the `Table`, `SupportsWrite`, `SupportsRead` 
+We would define the key abstraction of call `HoodieInternalV2Table`, which inherits the `Table`, `SupportsWrite`, `SupportsRead` 
 interfaces to provide writing and reading capabilities.
 
 ### Writing Path
 
-Hudi relies heavily on some RDD APIs on the write path, such as the indexing to determine where the record is update or insert, 
-this refactoring work is relatively large under datasource v2 api, so we can firstly falllback to write to v1 
-since Spark provides the V1WriteBuilder interface to bridge the V1 and V2 api, we could implement this in the first stage 
-and perform further reconstruction after there is a better way to deal with indexing and repartitoining with RDD api later. 
-The workflow of writing process of the Datasource V2 can refer to the following figure, 
-where the `DataWriterFactory` is in the Driver and the `DataWriter` that performs writing in the Executor.
+Hudi relies heavily on some RDD APIs on write path, such as the indexing to determine where the record is update or insert, 
+this refactoring work is relatively large or impossible to migrate to v2 write path under datasource v2 api. 
+So we can fallback to write to v1 since Spark provides the `V1Write` interface to bridge the V1 and V2 api in 3.2.0
 
-![](./1.png)
-
-The writing path code sample is below
+The writing path code snippet is below
 
 ```scala
-class HoodieDatasourceTable extends Table with SupportsWrite {
+class HoodieInternalV2Table extends Table with SupportsWrite with V2TableWithV1Fallback {
 
-override def name(): String = {
-//
+  override def name(): String = {
+    //
+  }
+
+  override def schema(): StructType = {
+    // get hudi table schema
+  }
+
+  override def partitioning(): Array[Transform] = {
+    // get partitioning of hudi table.
+  }
+
+  override def capabilities(): Set[TableCapability] = {
+    // Set(BATCH_WRITE, BATCH_READ,TRUNCATE,...)
+  }
+
+  override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder = {
+    // HoodieV1WriteBuilder
+  }
 }
+```
 
-override def schema(): StructType = {
-// get hudi table schema
-}
+The definition of `HoodieV1WriteBuilder` shows below.
 
-override def partitioning(): Array[Transform] = {
-// get partitioning of hudi table.
-}
+```scala
+private class HoodieV1WriteBuilder(writeOptions: CaseInsensitiveStringMap,
+                                     hoodieCatalogTable: HoodieCatalogTable,
+                                     spark: SparkSession)
+  extends SupportsTruncate with SupportsOverwrite with ProvidesHoodieConfig {
 
-override def capabilities(): Set[TableCapability] = {
-// Set(BATCH_WRITE, BATCH_READ,TRUNCATE,...)
-}
+  override def truncate(): HoodieV1WriteBuilder = {
+    this
+  }
 
-override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder = {
-// V1WriteBuilder
-}
+  override def overwrite(filters: Array[Filter]): WriteBuilder = {
+    this
+  }
 
-override def newScanBuilder(CaseInsensitiveStringMap options): ScanBuilder = {
-// HoodieScanBuilder
-}
-
+  override def build(): V1Write = new V1Write {
+    override def toInsertableRelation: InsertableRelation = {
+      //IntertableRelation
+    }
+  }
 }
 ```
 
 ### Querying path
 
-For querying, we define `HoodieBatchScanBuilder` to provide querying capability. 
-The workflow of querying process is shown in below figure.  
+For v2 querying, Spark provides various pushdown filters, such as `SupportsPushDownFilters`, `SupportsPushDownAggregates`, 
+`SupportsPushDownRequiredColumns`, `SupportsRuntimeFiltering` and so on, which is more clear and flexible than v1 interface.
+Also, v2 interface provides the capability to read the columnar format file such as parquet and orc format file, one more thing 
+is that v2 interface provides the capability to split and define the number of partitions for users, which provides the possibility
+to split more accurate splits and accelerate query speed on Hudi side.
+However, for querying, in first stage we also fallback to v1 read path, which means we need convert 
+`DataSourceV2Relation` to `DefaultSource` in analysis stage to make the changes well controlled.
+The code snippet shows below, the `HoodieSpark3Analysis` should be injected if spark version is equal or larger than 3.2.0.
+
+```scala
+
+case class HoodieSpark3Analysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
+  with SparkAdapterSupport with ProvidesHoodieConfig {
+
+  override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsDown {
+    case dsv2@DataSourceV2Relation(d: HoodieInternalV2Table, _, _, _, _) =>
+      val output = dsv2.output
+      val catalogTable = if (d.catalogTable.isDefined) {
+        Some(d.v1Table)
+      } else {
+        None
+      }
+      val relation = new DefaultSource().createRelation(new SQLContext(sparkSession),
+        buildHoodieConfig(d.hoodieCatalogTable))
+      LogicalRelation(relation, output, catalogTable, isStreaming = false)
+  }
+}
+
+```
+In the second stage, we would make use of v2 reading interface and define `HoodieBatchScanBuilder` to provide querying 
+capability. The workflow of querying process is shown in below figure.  
 `PartitionReaderFactory` located in the Driver and the `PartitionReader` located in the Executor.
 
-![](./2.png)
+![](./1.png)
 
 The querying path code sample is below
 
