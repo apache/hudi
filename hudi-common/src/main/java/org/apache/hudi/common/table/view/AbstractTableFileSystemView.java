@@ -401,7 +401,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   protected FileSlice filterBaseFileAfterPendingCompaction(FileSlice fileSlice) {
     if (isFileSliceAfterPendingCompaction(fileSlice)) {
-      LOG.info("File Slice (" + fileSlice + ") is in pending compaction");
+      LOG.debug("File Slice (" + fileSlice + ") is in pending compaction");
       // Base file is filtered out of the file-slice as the corresponding compaction
       // instant not completed yet.
       FileSlice transformed =
