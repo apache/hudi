@@ -125,6 +125,10 @@ public abstract class HoodieAsyncService implements Serializable {
    * @param onShutdownCallback
    */
   public void start(Function<Boolean, Boolean> onShutdownCallback) {
+    if (started) {
+      LOG.warn("The async service already started.");
+      return;
+    }
     Pair<CompletableFuture, ExecutorService> res = startService();
     future = res.getKey();
     executor = res.getValue();
