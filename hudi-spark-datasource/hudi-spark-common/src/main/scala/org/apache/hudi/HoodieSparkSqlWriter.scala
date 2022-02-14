@@ -379,6 +379,9 @@ object HoodieSparkSqlWriter {
 
     if (mode == SaveMode.Ignore && tableExists) {
       log.warn(s"hoodie table at $basePath already exists. Ignoring & not performing actual writes.")
+      if (!hoodieWriteClient.isEmpty) {
+        hoodieWriteClient.get.close()
+      }
       false
     } else {
       // Handle various save modes
