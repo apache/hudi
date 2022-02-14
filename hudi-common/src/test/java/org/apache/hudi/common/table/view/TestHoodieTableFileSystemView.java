@@ -1700,7 +1700,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertTrue(allBaseFiles.contains(fileId4));
 
     // could see fileId3 because clustering is committed.
-    latestBaseFiles = fsView.getLatestBaseFiles().map(HoodieBaseFile::getFileId).collect(Collectors.toList());;
+    latestBaseFiles = fsView.getLatestBaseFiles().map(HoodieBaseFile::getFileId).collect(Collectors.toList());
     assertEquals(2, latestBaseFiles.size());
     assertTrue(allBaseFiles.contains(fileId3));
     assertTrue(allBaseFiles.contains(fileId4));
@@ -1737,7 +1737,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertTrue(allBaseFiles.contains(fileId4));
 
     // couldn't see fileId3 because clustering is not committed.
-    latestBaseFiles = fsView.getLatestBaseFiles().map(HoodieBaseFile::getFileId).collect(Collectors.toList());;
+    latestBaseFiles = fsView.getLatestBaseFiles().map(HoodieBaseFile::getFileId).collect(Collectors.toList());
     assertEquals(3, latestBaseFiles.size());
     assertTrue(allBaseFiles.contains(fileId1));
     assertTrue(allBaseFiles.contains(fileId2));
