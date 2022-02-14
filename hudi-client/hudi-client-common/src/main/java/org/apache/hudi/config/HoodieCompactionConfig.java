@@ -60,6 +60,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<String> ASYNC_ARCHIVE = ConfigProperty
       .key("hoodie.archive.async")
       .defaultValue("false")
+      .sinceVersion("0.11.0")
       .withDocumentation("Only applies when " + AUTO_ARCHIVE.key() + " is turned on. "
           + "When turned on runs archiver async with writing, which can speed up overall write performance.");
 
