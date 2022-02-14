@@ -1575,7 +1575,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
    *  2. getBaseFileOn
    *  3. getLatestBaseFilesInRange
    *  4. getAllBaseFiles
-   *  5. getLatestBaseFile
+   *  5. getLatestBaseFiles
    *
    * Then remove 2.replacecommit, 1.commit, 1.commit.requested, 1.inflight to simulate
    * pending clustering at the earliest position in the active timeline and test these APIs again.
@@ -1588,7 +1588,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     Option<HoodieBaseFile> baseFileOn;
     List<String> latestBaseFilesInRange;
     List<String> allBaseFiles;
-    Option<HoodieBaseFile> latestBaseFile;
+    List<String> latestBaseFiles;
     String partitionPath = "2020/06/27";
     new File(basePath + "/" + partitionPath).mkdirs();
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
@@ -1700,9 +1700,10 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertTrue(allBaseFiles.contains(fileId4));
 
     // could see fileId3 because clustering is committed.
-    latestBaseFile = fsView.getLatestBaseFile(partitionPath, fileId3);
-    assertTrue(latestBaseFile.isPresent());
-    assertEquals(latestBaseFile.get().getFileId(), fileId3);
+    latestBaseFiles = fsView.getLatestBaseFiles().map(HoodieBaseFile::getFileId).collect(Collectors.toList());;
+    assertEquals(2, latestBaseFiles.size());
+    assertTrue(allBaseFiles.contains(fileId3));
+    assertTrue(allBaseFiles.contains(fileId4));
 
     HoodieWrapperFileSystem fs = metaClient.getFs();
     fs.delete(new Path(basePath + "/.hoodie", "1.commit"), false);
@@ -1736,8 +1737,11 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertTrue(allBaseFiles.contains(fileId4));
 
     // couldn't see fileId3 because clustering is not committed.
-    latestBaseFile = fsView.getLatestBaseFile(partitionPath, fileId3);
-    assertFalse(latestBaseFile.isPresent());
+    latestBaseFiles = fsView.getLatestBaseFiles().map(HoodieBaseFile::getFileId).collect(Collectors.toList());;
+    assertEquals(3, latestBaseFiles.size());
+    assertTrue(allBaseFiles.contains(fileId1));
+    assertTrue(allBaseFiles.contains(fileId2));
+    assertTrue(allBaseFiles.contains(fileId4));
 
   }
 
