@@ -37,7 +37,7 @@ object HoodieSpark3SqlUtils {
         bucketSpec = Some(BucketSpec(numBuckets, col :: Nil, Nil))
 
       case _ =>
-        throw new HoodieException(s"Partitioning by expressions")
+        throw new HoodieException(s"Partitioning by expressions is not supported.")
     }
 
     (identityCols, bucketSpec)

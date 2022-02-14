@@ -53,7 +53,7 @@ class HoodieCatalog extends DelegatingCatalogExtension
     if (sparkAdapter.isHoodieTable(properties)) {
       HoodieStagedTable(ident, this, schema, partitions, properties, TableCreationMode.STAGE_CREATE)
     } else {
-      BaseStagedTable(
+      BasicStagedTable(
         ident,
         super.createTable(ident, schema, partitions, properties),
         this)
@@ -65,7 +65,7 @@ class HoodieCatalog extends DelegatingCatalogExtension
       HoodieStagedTable(ident, this, schema, partitions, properties, TableCreationMode.STAGE_REPLACE)
     } else {
       super.dropTable(ident)
-      BaseStagedTable(
+      BasicStagedTable(
         ident,
         super.createTable(ident, schema, partitions, properties),
         this)
@@ -83,7 +83,7 @@ class HoodieCatalog extends DelegatingCatalogExtension
       try super.dropTable(ident) catch {
         case _: NoSuchTableException => // ignore the exception
       }
-      BaseStagedTable(
+      BasicStagedTable(
         ident,
         super.createTable(ident, schema, partitions, properties),
         this)

@@ -31,13 +31,13 @@ import java.util
  * @param table table
  * @param catalog table catalog
  */
-case class BaseStagedTable(ident: Identifier,
-                           table: Table,
-                           catalog: TableCatalog) extends SupportsWrite with StagedTable {
+case class BasicStagedTable(ident: Identifier,
+                            table: Table,
+                            catalog: TableCatalog) extends SupportsWrite with StagedTable {
   override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder = {
     info match {
       case supportsWrite: SupportsWrite => supportsWrite.newWriteBuilder(info)
-      case _ => throw new HoodieException(s"Table implementation does not support writes: $ident.name")
+      case _ => throw new HoodieException(s"Table `${ident.name}` does not support writes.")
     }
   }
 

@@ -39,7 +39,7 @@ class Spark3DefaultSource extends DefaultSource with DataSourceRegister with Tab
                         properties: java.util.Map[String, String]): Table = {
     val options = new CaseInsensitiveStringMap(properties)
     val path = options.get("path")
-    if (path == null) throw new HoodieException("path is null")
+    if (path == null) throw new HoodieException("'path' cannot be null, missing 'path' from table properties")
 
     HoodieInternalV2Table(SparkSession.active, path)
   }
