@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -41,6 +42,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
@@ -56,6 +58,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Properties;
 import java.util.stream.Collectors;
@@ -307,11 +310,12 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       assertTrue(numLogFiles > 0);
       // Do a compaction
       String instantTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
-      statuses = (JavaRDD<WriteStatus>) writeClient.compact(instantTime);
+      HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(instantTime);
       String extension = table.getBaseFileExtension();
-      assertEquals(numLogFiles, statuses.map(status -> status.getStat().getPath().contains(extension)).count());
-      assertEquals(numLogFiles, statuses.count());
-      writeClient.commitCompaction(instantTime, statuses, Option.empty());
+      Collection<List<HoodieWriteStat>> stats = compactionMetadata.getCommitMetadata().get().getPartitionToWriteStats().values();
+      assertEquals(numLogFiles, stats.stream().flatMap(Collection::stream).filter(state -> state.getPath().contains(extension)).count());
+      assertEquals(numLogFiles, stats.stream().mapToLong(Collection::size).sum());
+      writeClient.commitCompaction(instantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
     }
   }
 }

@@ -26,7 +26,9 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Functions.Function1;
@@ -300,6 +302,18 @@ public class UtilHelpers {
       return 0;
     }
     LOG.error(String.format("Import failed with %d errors.", errors.value()));
+    return -1;
+  }
+
+  public static int handleErrors(HoodieCommitMetadata metadata, String instantTime) {
+    List<HoodieWriteStat> writeStats = metadata.getWriteStats();
+    long errorsCount = writeStats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum();
+    if (errorsCount == 0) {
+      LOG.info(String.format("Finish job with %s instant time.", instantTime));
+      return 0;
+    }
+
+    LOG.error(String.format("Job failed with %d errors.", errorsCount));
     return -1;
   }
 
