@@ -61,9 +61,9 @@ import org.apache.hudi.table.RandomFileIdPrefixProvider;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
+import org.apache.hudi.table.storage.HoodieStorageLayout;
 
 import org.apache.hadoop.hbase.io.compress.Compression;
-import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.orc.CompressionKind;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
@@ -439,6 +439,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(RandomFileIdPrefixProvider.class.getName())
       .sinceVersion("0.10.0")
       .withDocumentation("File Id Prefix provider class, that implements `org.apache.hudi.fileid.FileIdPrefixProvider`");
+
+  public static final ConfigProperty<Boolean> TABLE_SERVICES_ENABLED = ConfigProperty
+      .key("hoodie.table.services.enabled")
+      .defaultValue(true)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Master control to disable all table services including archive, clean, compact, cluster, etc.");
 
   private ConsistencyGuardConfig consistencyGuardConfig;
 
@@ -1920,6 +1926,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(FILEID_PREFIX_PROVIDER_CLASS);
   }
 
+  public boolean areTableServicesEnabled() {
+    return getBooleanOrDefault(TABLE_SERVICES_ENABLED);
+  }
+
   /**
    * Layout configs.
    */
@@ -2282,6 +2292,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withFileIdPrefixProviderClassName(String fileIdPrefixProviderClassName) {
       writeConfig.setValue(FILEID_PREFIX_PROVIDER_CLASS, fileIdPrefixProviderClassName);
+      return this;
+    }
+
+    public Builder withTableServicesEnabled(boolean enabled) {
+      writeConfig.setValue(TABLE_SERVICES_ENABLED, Boolean.toString(enabled));
       return this;
     }
 

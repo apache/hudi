@@ -100,7 +100,8 @@ import java.util.stream.Stream;
  * @param <K> Type of keys
  * @param <O> Type of outputs
  */
-public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K, O> extends BaseHoodieClient {
+public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K, O> extends BaseHoodieClient
+    implements RunsTableService {
 
   protected static final String LOOKUP_STR = "lookup";
   private static final long serialVersionUID = 1L;
@@ -470,6 +471,9 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   }
 
   protected void runTableServicesInline(HoodieTable<T, I, K, O> table, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
+    if (!tableServicesEnabled(config)) {
+      return;
+    }
     if (config.areAnyTableServicesExecutedInline() || config.areAnyTableServicesScheduledInline()) {
       if (config.isMetadataTableEnabled()) {
         table.getHoodieView().sync();
@@ -760,6 +764,9 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * @param skipLocking if this is triggered by another parent transaction, locking can be skipped.
    */
   public HoodieCleanMetadata clean(String cleanInstantTime, boolean scheduleInline, boolean skipLocking) throws HoodieIOException {
+    if (!tableServicesEnabled(config)) {
+      return null;
+    }
     if (scheduleInline) {
       scheduleTableServiceInternal(cleanInstantTime, Option.empty(), TableServiceType.CLEAN);
     }
@@ -799,6 +806,9 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * @param table table to commit on.
    */
   protected void archive(HoodieTable<T, I, K, O> table) {
+    if (!tableServicesEnabled(config)) {
+      return;
+    }
     try {
       // We cannot have unbounded commit files. Archive commits if we have to archive
       HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(config, table);
@@ -1141,7 +1151,13 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
 
   private Option<String> scheduleTableServiceInternal(String instantTime, Option<Map<String, String>> extraMetadata,
                                                       TableServiceType tableServiceType) {
+    if (!tableServicesEnabled(config)) {
+      return Option.empty();
+    }
     switch (tableServiceType) {
+      case ARCHIVE:
+        LOG.info("Scheduling archiving is not supported. Skipping.");
+        return Option.empty();
       case CLUSTER:
         LOG.info("Scheduling clustering at instant time :" + instantTime);
         Option<HoodieClusteringPlan> clusteringPlan = createTable(config, hadoopConf, config.isMetadataTableEnabled())
