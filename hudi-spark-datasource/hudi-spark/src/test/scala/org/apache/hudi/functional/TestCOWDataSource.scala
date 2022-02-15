@@ -62,7 +62,8 @@ class TestCOWDataSource extends HoodieClientTestBase {
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
+    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+    HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "1"
   )
 
   val verificationCol: String = "driver"
@@ -465,15 +466,10 @@ class TestCOWDataSource extends HoodieClientTestBase {
   }
 
   private def getDataFrameWriter(keyGenerator: String): DataFrameWriter[Row] = {
-    getDataFrameWriter(keyGenerator, true)
-  }
-
-  private def getDataFrameWriter(keyGenerator: String, enableMetadata: Boolean): DataFrameWriter[Row] = {
     val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
-    val opts = commonOpts ++ Map(HoodieMetadataConfig.ENABLE.key() -> String.valueOf(enableMetadata))
     inputDF.write.format("hudi")
-      .options(opts)
+      .options(commonOpts)
       .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, keyGenerator)
       .mode(SaveMode.Overwrite)
   }
@@ -501,7 +497,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= udf_date_format(col("current_ts"))).count() == 0)
 
     // Mixed fieldType
-    writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName, false)
+    writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName)
     writer.partitionBy("driver", "rider:SIMPLE", "current_ts:TIMESTAMP")
       .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
       .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyyMMdd")
@@ -513,7 +509,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
       concat(col("driver"), lit("/"), col("rider"), lit("/"), udf_date_format(col("current_ts")))).count() == 0)
 
     // Test invalid partitionKeyType
-    writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName, false)
+    writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName)
     writer = writer.partitionBy("current_ts:DUMMY")
       .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
       .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyyMMdd")
@@ -780,7 +776,6 @@ class TestCOWDataSource extends HoodieClientTestBase {
         .option("hoodie.keep.min.commits", "4")
         .option("hoodie.keep.max.commits", "5")
         .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-        .option(HoodieMetadataConfig.ENABLE.key(), value = false)
         .mode(SaveMode.Append)
         .save(basePath)
     }

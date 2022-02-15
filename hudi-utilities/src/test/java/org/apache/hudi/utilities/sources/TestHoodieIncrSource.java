@@ -64,7 +64,11 @@ public class TestHoodieIncrSource extends HoodieClientTestHarness {
   @Test
   public void testHoodieIncrSource() throws IOException {
     HoodieWriteConfig writeConfig = getConfigBuilder(basePath)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().archiveCommitsWith(2,3).retainCommits(1).build()).withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build()).build();
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .archiveCommitsWith(2, 3).retainCommits(1).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .build();
 
     SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context, writeConfig);
     Pair<String, List<HoodieRecord>> inserts = writeRecords(writeClient, true, null, "100");

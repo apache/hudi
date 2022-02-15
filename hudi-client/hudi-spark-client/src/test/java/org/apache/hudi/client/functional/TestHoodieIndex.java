@@ -19,7 +19,6 @@
 package org.apache.hudi.client.functional;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -105,10 +104,10 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   private HoodieWriteConfig config;
 
   private void setUp(IndexType indexType, boolean populateMetaFields) throws Exception {
-    setUp(indexType, populateMetaFields, true, true);
+    setUp(indexType, populateMetaFields, true);
   }
 
-  private void setUp(IndexType indexType, boolean populateMetaFields, boolean enableMetadata, boolean rollbackUsingMarkers) throws Exception {
+  private void setUp(IndexType indexType, boolean populateMetaFields, boolean rollbackUsingMarkers) throws Exception {
     this.indexType = indexType;
     initPath();
     initSparkContexts();
@@ -122,8 +121,8 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     config = getConfigBuilder()
         .withProperties(populateMetaFields ? new Properties() : getPropertiesForKeyGen())
         .withRollbackUsingMarkers(rollbackUsingMarkers)
-        .withIndexConfig(indexBuilder
-            .build()).withAutoCommit(false).withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata).build())
+        .withIndexConfig(indexBuilder.build())
+        .withAutoCommit(false)
         .withLayoutConfig(HoodieLayoutConfig.newBuilder().fromProperties(indexBuilder.build().getProps())
             .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build()).build();
     writeClient = getHoodieWriteClient(config);
@@ -238,7 +237,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   @ParameterizedTest
   @MethodSource("indexTypeParams")
   public void testSimpleTagLocationAndUpdateWithRollback(IndexType indexType, boolean populateMetaFields) throws Exception {
-    setUp(indexType, populateMetaFields, true, false);
+    setUp(indexType, populateMetaFields, false);
     String newCommitTime = writeClient.startCommit();
     int totalRecords = 20 + random.nextInt(20);
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
@@ -385,8 +384,6 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
             .withGlobalSimpleIndexUpdatePartitionPath(true)
             .withBloomIndexUpdatePartitionPath(true)
             .build())
-        .withMetadataConfig(
-            HoodieMetadataConfig.newBuilder().enable(true).build())
         .build();
     writeClient = getHoodieWriteClient(config);
     index = writeClient.getIndex();

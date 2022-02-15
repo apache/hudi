@@ -155,7 +155,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
                 HoodieMetadataConfig.newBuilder()
                     .enable(false)
                     .build());
-
+    
     addConfigsForPopulateMetaFields(cfgBuilder, true);
     HoodieWriteConfig cfg = cfgBuilder.build();
 
@@ -325,8 +325,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     boolean populateMetaFields = true;
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false)
         // Timeline-server-based markers are not used for multi-rollback tests
-        .withMarkersType(MarkerType.DIRECT.name())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build());
+        .withMarkersType(MarkerType.DIRECT.name());
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
 
@@ -387,8 +386,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       // WriteClient with custom config (disable small file handling)
       HoodieWriteConfig smallFileWriteConfig = getHoodieWriteConfigWithSmallFileHandlingOffBuilder(populateMetaFields)
           // Timeline-server-based markers are not used for multi-rollback tests
-          .withMarkersType(MarkerType.DIRECT.name())
-          .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build()).build();
+          .withMarkersType(MarkerType.DIRECT.name()).build();
       try (SparkRDDWriteClient nClient = getHoodieWriteClient(smallFileWriteConfig)) {
         nClient.startCommitWithTime(newCommitTime);
 
@@ -519,8 +517,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
   void testMORTableRestore(boolean restoreAfterCompaction) throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false)
         // Timeline-server-based markers are not used for multi-rollback tests
-        .withMarkersType(MarkerType.DIRECT.name())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build());
+        .withMarkersType(MarkerType.DIRECT.name());
     HoodieWriteConfig cfg = cfgBuilder.build();
 
     Properties properties = new Properties();

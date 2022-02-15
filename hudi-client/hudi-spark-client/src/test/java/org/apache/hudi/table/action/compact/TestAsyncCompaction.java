@@ -20,7 +20,6 @@ package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -53,7 +52,6 @@ public class TestAsyncCompaction extends CompactionTestBase {
 
   private HoodieWriteConfig getConfig(Boolean autoCommit) {
     return getConfigBuilder(autoCommit)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
         .build();
   }
 
