@@ -778,10 +778,9 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       // proceed only if multiple clean schedules are enabled or if there are no pending cleans.
       if (scheduleInline) {
         scheduleTableServiceInternal(cleanInstantTime, Option.empty(), TableServiceType.CLEAN);
-        table.getMetaClient().reloadActiveTimeline();
-        metadata = table.clean(context, cleanInstantTime, skipLocking);
       }
 
+      metadata = table.clean(context, cleanInstantTime, skipLocking);
       if (timerContext != null && metadata != null) {
         long durationMs = metrics.getDurationInMs(timerContext.stop());
         metrics.updateCleanMetrics(durationMs, metadata.getTotalFilesDeleted());
