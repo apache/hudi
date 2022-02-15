@@ -19,7 +19,6 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{GlobPattern, Path}
-import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.createBaseFileReader
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -46,9 +45,6 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
                                      val userSchema: Option[StructType],
                                      val metaClient: HoodieTableMetaClient)
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) {
-
-  private val conf = new Configuration(sqlContext.sparkContext.hadoopConfiguration)
-  private val jobConf = new JobConf(conf)
 
   private val commitTimeline = metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants()
   if (commitTimeline.empty()) {
@@ -88,14 +84,12 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
     Seq(isNotNullFilter, largerThanFilter, lessThanFilter)
   }
 
-  private lazy val mandatoryColumns = {
+  protected override lazy val mandatoryColumns: Seq[String] = {
     // NOTE: This columns are required for Incremental flow to be able to handle the rows properly, even in
     //       cases when no columns are requested to be fetched (for ex, when using {@code count()} API)
     Seq(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD) ++
       preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
   }
-
-  override def needConversion: Boolean = false
 
   override def doBuildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[InternalRow] = {
     if (fileIndex.isEmpty) {
@@ -148,7 +142,7 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
         hadoopConf = new Configuration(conf)
       )
 
-      val hoodieTableState = HoodieMergeOnReadTableState(fileIndex, HoodieRecord.RECORD_KEY_METADATA_FIELD, preCombineFieldOpt)
+      val hoodieTableState = HoodieTableState(HoodieRecord.RECORD_KEY_METADATA_FIELD, preCombineFieldOpt)
 
       // TODO implement incremental span record filtering w/in RDD to make sure returned iterator is appropriately
       //      filtered, since file-reader might not be capable to perform filtering
