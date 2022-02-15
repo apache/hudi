@@ -60,6 +60,7 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.junit.jupiter.api.BeforeEach;
@@ -1589,6 +1590,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     List<String> latestBaseFilesInRange;
     List<String> allBaseFiles;
     List<String> latestBaseFiles;
+    List<String> latestBaseFilesPerPartition;
     String partitionPath = "2020/06/27";
     new File(basePath + "/" + partitionPath).mkdirs();
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
@@ -1705,6 +1707,12 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertTrue(allBaseFiles.contains(fileId3));
     assertTrue(allBaseFiles.contains(fileId4));
 
+    // could see fileId3 because clustering is committed.
+    latestBaseFilesPerPartition = fsView.getLatestBaseFiles(partitionPath).map(HoodieBaseFile::getFileId).collect(Collectors.toList());
+    assertEquals(2, latestBaseFiles.size());
+    assertTrue(latestBaseFilesPerPartition.contains(fileId3));
+    assertTrue(latestBaseFilesPerPartition.contains(fileId4));
+
     HoodieWrapperFileSystem fs = metaClient.getFs();
     fs.delete(new Path(basePath + "/.hoodie", "1.commit"), false);
     fs.delete(new Path(basePath + "/.hoodie", "1.inflight"), false);
@@ -1743,6 +1751,12 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertTrue(allBaseFiles.contains(fileId2));
     assertTrue(allBaseFiles.contains(fileId4));
 
+    // couldn't see fileId3 because clustering is not committed.
+    latestBaseFilesPerPartition = fsView.getLatestBaseFiles(partitionPath).map(HoodieBaseFile::getFileId).collect(Collectors.toList());
+    assertEquals(3, latestBaseFiles.size());
+    assertTrue(latestBaseFilesPerPartition.contains(fileId1));
+    assertTrue(latestBaseFilesPerPartition.contains(fileId2));
+    assertTrue(latestBaseFilesPerPartition.contains(fileId4));
   }
 
 
