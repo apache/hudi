@@ -25,15 +25,12 @@ import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionedFil
 import org.apache.spark.{Partition, TaskContext}
 
 /**
- * Similar to [[org.apache.spark.sql.execution.datasources.FileScanRDD]].
- *
- * This class will extract the fields needed according to [[requiredColumns]] and
- * return iterator of [[org.apache.spark.sql.Row]] directly.
+ * TODO eval if we actually need it
  */
 class HoodieFileScanRDD(@transient private val sparkSession: SparkSession,
                         readFunction: PartitionedFile => Iterator[InternalRow],
                         @transient fileSplits: Seq[FilePartition])
-  extends HoodieBaseRDD(sparkSession.sparkContext, fileSplits) {
+  extends HoodieBaseRDD(sparkSession.sparkContext) {
 
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
     val iterator = new Iterator[InternalRow] with AutoCloseable {

@@ -56,7 +56,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
                                   metaClient: HoodieTableMetaClient,
                                   optParams: Map[String, String],
                                   userSchema: Option[StructType])
-  extends BaseRelation with PrunedFilteredScan with Logging{
+  extends BaseRelation with PrunedFilteredScan with Logging {
 
   protected val sparkSession: SparkSession = sqlContext.sparkSession
 
