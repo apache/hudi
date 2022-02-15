@@ -53,7 +53,7 @@ import scala.collection.JavaConverters._
   */
 class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
                               val userSchema: Option[StructType],
-                              val globPaths: Option[Seq[Path]],
+                              val globPaths: Seq[Path],
                               val metaClient: HoodieTableMetaClient,
                               val optParams: Map[String, String]) extends BaseRelation
   with PrunedFilteredScan with Logging {
@@ -155,9 +155,9 @@ class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
 
   def buildFileIndex(): HoodieBootstrapFileIndex = {
     logInfo("Building file index..")
-    val fileStatuses  = if (globPaths.isDefined) {
+    val fileStatuses  = if (globPaths.nonEmpty) {
       // Load files from the global paths if it has defined to be compatible with the original mode
-      val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(_sqlContext.sparkSession, globPaths.get)
+      val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(_sqlContext.sparkSession, globPaths)
       inMemoryFileIndex.allFiles()
     } else { // Load files by the HoodieFileIndex.
         HoodieFileIndex(sqlContext.sparkSession, metaClient, Some(schema), optParams,

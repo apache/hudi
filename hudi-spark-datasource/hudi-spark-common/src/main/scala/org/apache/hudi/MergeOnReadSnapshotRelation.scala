@@ -59,7 +59,7 @@ case class HoodieMergeOnReadTableState(tableStructSchema: StructType,
 class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
                                   optParams: Map[String, String],
                                   val userSchema: Option[StructType],
-                                  val globPaths: Option[Seq[Path]],
+                                  val globPaths: Seq[Path],
                                   val metaClient: HoodieTableMetaClient)
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) {
 
@@ -139,9 +139,9 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
   }
 
   def buildFileIndex(filters: Array[Filter]): List[HoodieMergeOnReadFileSplit] = {
-    if (globPaths.isDefined) {
+    if (globPaths.nonEmpty) {
       // Load files from the global paths if it has defined to be compatible with the original mode
-      val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(sqlContext.sparkSession, globPaths.get)
+      val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(sqlContext.sparkSession, globPaths)
       val fsView = new HoodieTableFileSystemView(metaClient,
         // file-slice after pending compaction-requested instant-time is also considered valid
         metaClient.getCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants,

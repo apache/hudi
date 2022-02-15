@@ -222,14 +222,21 @@ public class TableSchemaResolver {
   }
 
   /**
-   * Gets the schema for a hoodie table in Avro format from the HoodieCommitMetadata of the last commit.
+   * Gets the schema for a hoodie table in Avro format from the HoodieCommitMetadata of the last commit with valid schema.
    *
    * @return Avro schema for this table
    */
   private Option<Schema> getTableSchemaFromCommitMetadata(boolean includeMetadataFields) {
-    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    if (timeline.lastInstant().isPresent()) {
-      return getTableSchemaFromCommitMetadata(timeline.lastInstant().get(), includeMetadataFields);
+    Option<Pair<HoodieInstant, HoodieCommitMetadata>> instantAndCommitMetadata =
+        metaClient.getActiveTimeline().getLastCommitMetadataWithValidSchema();
+    if (instantAndCommitMetadata.isPresent()) {
+      HoodieCommitMetadata commitMetadata = instantAndCommitMetadata.get().getRight();
+      String schemaStr = commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
+      Schema schema = new Schema.Parser().parse(schemaStr);
+      if (includeMetadataFields) {
+        schema = HoodieAvroUtils.addMetadataFields(schema, hasOperationField);
+      }
+      return Option.of(schema);
     } else {
       return Option.empty();
     }
@@ -519,7 +526,6 @@ public class TableSchemaResolver {
       Schema tableAvroSchema = getTableAvroSchemaFromDataFile();
       return tableAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null;
     } catch (Exception e) {
-      LOG.warn("Failed to read operation field from avro schema", e);
       return false;
     }
   }

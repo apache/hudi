@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
@@ -257,6 +258,26 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     Path detailPath = new Path(metaClient.getMetaPath(), instant.getFileName());
     return readDataFromPath(detailPath);
+  }
+
+  /**
+   * Get the last instant with valid schema, and convert this to HoodieCommitMetadata
+   */
+  public Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLastCommitMetadataWithValidSchema() {
+    List<HoodieInstant> completed = getCommitsTimeline().filterCompletedInstants().getInstants()
+        .sorted(Comparator.comparing(HoodieInstant::getTimestamp).reversed()).collect(Collectors.toList());
+    for (HoodieInstant instant : completed) {
+      try {
+        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
+            getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+        if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY))) {
+          return Option.of(Pair.of(instant, commitMetadata));
+        }
+      } catch (IOException e) {
+        LOG.warn("Failed to convert instant to HoodieCommitMetadata: " + instant.toString());
+      }
+    }
+    return Option.empty();
   }
 
   /**
