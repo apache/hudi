@@ -191,7 +191,7 @@ class TestHoodieSparkUtils {
     val genRecRDD3 = HoodieSparkUtils.createRdd(df1, "test_struct_name", "test_namespace", true,
       org.apache.hudi.common.util.Option.of(schema2))
     assert(genRecRDD3.collect()(0).getSchema.equals(schema2))
-    genRecRDD3.foreach(entry => assertNull(entry.get("nonNullableInnerStruct2")))
+    genRecRDD3.foreach(entry => assertNull(entry.get("nullableInnerStruct2")))
 
     val innerStruct3 = new StructType().add("innerKey","string",false).add("innerValue", "long", true)
       .add("new_nested_col","string",true)
