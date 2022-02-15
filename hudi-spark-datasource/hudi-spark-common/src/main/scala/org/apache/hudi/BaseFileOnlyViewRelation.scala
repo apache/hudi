@@ -23,6 +23,7 @@ import org.apache.hudi.HoodieBaseRelation.createBaseFileReader
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile}
@@ -32,7 +33,6 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{Row, SQLContext}
 
 /**
  * [[BaseRelation]] implementation only reading Base files of Hudi tables, essentially supporting following querying
@@ -58,7 +58,7 @@ class BaseFileOnlyViewRelation(sqlContext: SQLContext,
   private val fileIndex = HoodieFileIndex(sparkSession, metaClient, userSchema, optParams,
     FileStatusCache.getOrCreate(sqlContext.sparkSession))
 
-  override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
+  override def doBuildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[InternalRow] = {
     // NOTE: In case list of requested columns doesn't contain the Primary Key one, we
     //       have to add it explicitly so that
     //          - Merging could be performed correctly
@@ -93,8 +93,7 @@ class BaseFileOnlyViewRelation(sqlContext: SQLContext,
       hadoopConf = sparkSession.sessionState.newHadoopConf()
     )
 
-    new HoodieFileScanRDD(sparkSession, requiredColumns, tableStructSchema,
-      baseFileReader, filePartitions)
+    new HoodieFileScanRDD(sparkSession, baseFileReader, filePartitions)
   }
 
   private def getPartitions(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FilePartition] = {

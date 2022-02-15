@@ -28,11 +28,11 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.{getCommitMetadata, getWritePartitionPaths, listAffectedFilesForCommits}
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{Row, SQLContext}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{Row, SQLContext}
 
 import scala.collection.JavaConversions._
 
@@ -97,9 +97,9 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
 
   override def needConversion: Boolean = false
 
-  override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
+  override def doBuildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[InternalRow] = {
     if (fileIndex.isEmpty) {
-      sqlContext.sparkContext.emptyRDD[Row]
+      sqlContext.sparkContext.emptyRDD[InternalRow]
     } else {
       logDebug(s"buildScan requiredColumns = ${requiredColumns.mkString(",")}")
       logDebug(s"buildScan filters = ${filters.mkString(",")}")
@@ -152,16 +152,16 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
 
       // TODO implement incremental span record filtering w/in RDD to make sure returned iterator is appropriately
       //      filtered, since file-reader might not be capable to perform filtering
-      val rdd = new HoodieMergeOnReadRDD(
+      new HoodieMergeOnReadRDD(
         sqlContext.sparkContext,
         jobConf,
         fullSchemaParquetReader,
         requiredSchemaParquetReader,
         hoodieTableState,
         tableSchema,
-        requiredSchema
+        requiredSchema,
+        fileIndex
       )
-      rdd.asInstanceOf[RDD[Row]]
     }
   }
 
