@@ -18,9 +18,6 @@
 
 package org.apache.hudi.client.transaction.lock;
 
-import java.io.Serializable;
-import java.util.concurrent.TimeUnit;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.lock.LockProvider;
@@ -28,8 +25,13 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieLockException;
+
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.Serializable;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;
@@ -84,8 +86,8 @@ public class LockManager implements Serializable, AutoCloseable {
   }
 
   /**
-   * We need to take care of the scenarios that current thread may not the holder of this lock
-   * and trying to call unlock()
+   * We need to take care of the scenarios that current thread may not be the holder of this lock
+   * and tries to call unlock()
    */
   public void unlock() {
     if (writeConfig.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
