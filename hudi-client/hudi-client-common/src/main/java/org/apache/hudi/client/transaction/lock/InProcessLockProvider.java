@@ -92,7 +92,9 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
   public void unlock() {
     LOG.info(getLogMessage(LockState.RELEASING));
     try {
-      LOCK.writeLock().unlock();
+      if (LOCK.isWriteLockedByCurrentThread()) {
+        LOCK.writeLock().unlock();
+      }
     } catch (Exception e) {
       throw new HoodieLockException(getLogMessage(LockState.FAILED_TO_RELEASE), e);
     }
