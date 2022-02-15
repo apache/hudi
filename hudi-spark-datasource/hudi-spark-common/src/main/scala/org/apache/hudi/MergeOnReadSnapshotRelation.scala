@@ -187,10 +187,12 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       val partitionFilters = filters.filter(f => f.references.forall(p => partitionColumns.contains(p)))
       val partitionFilterExpression =
         HoodieSparkUtils.convertToCatalystExpressions(partitionFilters, tableStructSchema)
+      val convertedPartitionFilterExpression =
+        HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilterExpression.toSeq)
 
       // If convert success to catalyst expression, use the partition prune
-      val fileSlices = if (partitionFilterExpression.isDefined) {
-        hoodieFileIndex.listFileSlices(Seq(partitionFilterExpression.get))
+      val fileSlices = if (convertedPartitionFilterExpression.nonEmpty) {
+        hoodieFileIndex.listFileSlices(convertedPartitionFilterExpression)
       } else {
         hoodieFileIndex.listFileSlices(Seq.empty[Expression])
       }
