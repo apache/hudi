@@ -36,7 +36,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
 /**
- * Base Class for running clean/delta-sync/compaction/clustering in separate thread and controlling their life-cycle.
+ * Base Class for running archive/clean/delta-sync/compaction/clustering in separate thread and controlling their life-cycles.
  */
 public abstract class HoodieAsyncService implements Serializable {
 
@@ -70,11 +70,15 @@ public abstract class HoodieAsyncService implements Serializable {
     this.runInDaemonMode = runInDaemonMode;
   }
 
-  protected boolean isShutdownRequested() {
+  public boolean isStarted() {
+    return started;
+  }
+
+  public boolean isShutdownRequested() {
     return shutdownRequested;
   }
 
-  protected boolean isShutdown() {
+  public boolean isShutdown() {
     return shutdown;
   }
 
@@ -138,8 +142,6 @@ public abstract class HoodieAsyncService implements Serializable {
 
   /**
    * Service implementation.
-   * 
-   * @return
    */
   protected abstract Pair<CompletableFuture, ExecutorService> startService();
 

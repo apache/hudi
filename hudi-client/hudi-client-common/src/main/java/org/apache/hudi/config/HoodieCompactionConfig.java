@@ -50,19 +50,26 @@ import java.util.stream.Collectors;
         + "cleaning (reclamation of older/unused file groups/slices).")
 public class HoodieCompactionConfig extends HoodieConfig {
 
-  public static final ConfigProperty<String> AUTO_CLEAN = ConfigProperty
-      .key("hoodie.clean.automatic")
-      .defaultValue("true")
-      .withDocumentation("When enabled, the cleaner table service is invoked immediately after each commit,"
-          + " to delete older file slices. It's recommended to enable this, to ensure metadata and data storage"
-          + " growth is bounded.");
-
   public static final ConfigProperty<String> AUTO_ARCHIVE = ConfigProperty
       .key("hoodie.archive.automatic")
       .defaultValue("true")
       .withDocumentation("When enabled, the archival table service is invoked immediately after each commit,"
           + " to archive commits if we cross a maximum value of commits."
           + " It's recommended to enable this, to ensure number of active commits is bounded.");
+
+  public static final ConfigProperty<String> ASYNC_ARCHIVE = ConfigProperty
+      .key("hoodie.archive.async")
+      .defaultValue("false")
+      .sinceVersion("0.11.0")
+      .withDocumentation("Only applies when " + AUTO_ARCHIVE.key() + " is turned on. "
+          + "When turned on runs archiver async with writing, which can speed up overall write performance.");
+
+  public static final ConfigProperty<String> AUTO_CLEAN = ConfigProperty
+      .key("hoodie.clean.automatic")
+      .defaultValue("true")
+      .withDocumentation("When enabled, the cleaner table service is invoked immediately after each commit,"
+          + " to delete older file slices. It's recommended to enable this, to ensure metadata and data storage"
+          + " growth is bounded.");
 
   public static final ConfigProperty<String> ASYNC_CLEAN = ConfigProperty
       .key("hoodie.clean.async")
@@ -522,6 +529,16 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withAutoArchive(Boolean autoArchive) {
+      compactionConfig.setValue(AUTO_ARCHIVE, String.valueOf(autoArchive));
+      return this;
+    }
+
+    public Builder withAsyncArchive(Boolean asyncArchive) {
+      compactionConfig.setValue(ASYNC_ARCHIVE, String.valueOf(asyncArchive));
+      return this;
+    }
+
     public Builder withAutoClean(Boolean autoClean) {
       compactionConfig.setValue(AUTO_CLEAN, String.valueOf(autoClean));
       return this;
@@ -529,11 +546,6 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withAsyncClean(Boolean asyncClean) {
       compactionConfig.setValue(ASYNC_CLEAN, String.valueOf(asyncClean));
-      return this;
-    }
-
-    public Builder withAutoArchive(Boolean autoArchive) {
-      compactionConfig.setValue(AUTO_ARCHIVE, String.valueOf(autoArchive));
       return this;
     }
 

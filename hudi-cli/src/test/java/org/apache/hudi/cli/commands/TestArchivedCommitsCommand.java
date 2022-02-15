@@ -33,7 +33,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.hudi.table.HoodieTimelineArchiveLog;
+import org.apache.hudi.client.HoodieTimelineArchiver;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -96,8 +96,8 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
 
     // archive
     HoodieSparkTable table = HoodieSparkTable.create(cfg, context(), metaClient);
-    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, table);
-    archiveLog.archiveIfRequired(context());
+    HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(cfg, table);
+    archiver.archiveIfRequired(context());
   }
 
   /**

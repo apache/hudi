@@ -102,7 +102,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
     HoodieWriteConfig writeConfig = getConfigBuilder()
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(false).build())
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .withAutoArchive(false).withAutoClean(false).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         // Timeline-server-based markers are not used for multi-writer tests
         .withMarkersType(MarkerType.DIRECT.name())

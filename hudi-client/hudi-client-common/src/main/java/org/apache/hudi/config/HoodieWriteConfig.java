@@ -1112,10 +1112,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieCompactionConfig.CLEANER_PARALLELISM_VALUE);
   }
 
-  public boolean isAutoClean() {
-    return getBoolean(HoodieCompactionConfig.AUTO_CLEAN);
-  }
-
   public boolean getArchiveMergeEnable() {
     return getBoolean(HoodieCompactionConfig.ARCHIVE_MERGE_ENABLE);
   }
@@ -1126,6 +1122,14 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean isAutoArchive() {
     return getBoolean(HoodieCompactionConfig.AUTO_ARCHIVE);
+  }
+
+  public boolean isAsyncArchive() {
+    return getBoolean(HoodieCompactionConfig.ASYNC_ARCHIVE);
+  }
+
+  public boolean isAutoClean() {
+    return getBoolean(HoodieCompactionConfig.AUTO_CLEAN);
   }
 
   public boolean isAsyncClean() {
@@ -1872,7 +1876,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    * @return True if any table services are configured to run inline, false otherwise.
    */
   public Boolean areAnyTableServicesExecutedInline() {
-    return inlineClusteringEnabled() || inlineCompactionEnabled() || isAutoClean();
+    return inlineClusteringEnabled() || inlineCompactionEnabled() || isAutoClean() || isAutoArchive();
   }
 
   /**
@@ -1881,7 +1885,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    * @return True if any table services are configured to run async, false otherwise.
    */
   public Boolean areAnyTableServicesAsync() {
-    return isAsyncClusteringEnabled() || !inlineCompactionEnabled() || isAsyncClean();
+    return isAsyncClusteringEnabled() || !inlineCompactionEnabled() || isAsyncClean() || isAsyncArchive();
   }
 
   public Boolean areAnyTableServicesScheduledInline() {
