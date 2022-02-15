@@ -114,35 +114,39 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
       val (requiredAvroSchema, requiredStructSchema) =
         HoodieSparkUtils.getRequiredSchema(tableAvroSchema, requiredColumns)
 
-      val tableSchemas = HoodieTableSchemas(
-        tableSchema = tableStructSchema,
-        partitionSchema = StructType(Nil),
-        requiredSchema = requiredStructSchema,
-        tableAvroSchemaStr = tableAvroSchema.toString,
-        requiredAvroSchema = requiredAvroSchema.toString
-      )
-      val hoodieTableState = HoodieMergeOnReadTableState(tableSchemas, fileIndex, HoodieRecord.RECORD_KEY_METADATA_FIELD, preCombineFieldOpt)
+      val partitionSchema = StructType(Nil)
+      val tableSchema = HoodieTableSchema(tableStructSchema, tableAvroSchema.toString)
+      val requiredSchema = HoodieTableSchema(requiredStructSchema, requiredAvroSchema.toString)
+
       val fullSchemaParquetReader = createBaseFileReader(
         spark = sqlContext.sparkSession,
-        tableSchemas = tableSchemas,
+        partitionSchema = partitionSchema,
+        tableSchema = tableSchema,
+        requiredSchema = tableSchema,
         filters = pushDownFilter,
         options = optParams,
         hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
       )
       val requiredSchemaParquetReader = createBaseFileReader(
         spark = sqlContext.sparkSession,
-        tableSchemas = tableSchemas,
+        partitionSchema = partitionSchema,
+        tableSchema = tableSchema,
+        requiredSchema = requiredSchema,
         filters = pushDownFilter,
         options = optParams,
         hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
       )
+
+      val hoodieTableState = HoodieMergeOnReadTableState(fileIndex, HoodieRecord.RECORD_KEY_METADATA_FIELD, preCombineFieldOpt)
 
       val rdd = new HoodieMergeOnReadRDD(
         sqlContext.sparkContext,
         jobConf,
         fullSchemaParquetReader,
         requiredSchemaParquetReader,
-        hoodieTableState
+        hoodieTableState,
+        tableSchema,
+        requiredSchema
       )
       rdd.asInstanceOf[RDD[Row]]
     }

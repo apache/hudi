@@ -115,11 +115,11 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       private val tableAvroSchema = new Schema.Parser().parse(tableSchema.avroSchemaStr)
       private val requiredAvroSchema = new Schema.Parser().parse(requiredSchema.avroSchemaStr)
       private val requiredFieldPosition =
-        requiredSchema.structType
+        requiredSchema.structTypeSchema
           .map(f => tableAvroSchema.getField(f.name).pos()).toList
       private val recordBuilder = new GenericRecordBuilder(requiredAvroSchema)
-      private val deserializer = HoodieAvroDeserializer(requiredAvroSchema, requiredSchema.structType)
-      private val unsafeProjection = UnsafeProjection.create(requiredSchema.structType)
+      private val deserializer = HoodieAvroDeserializer(requiredAvroSchema, requiredSchema.structTypeSchema)
+      private val unsafeProjection = UnsafeProjection.create(requiredSchema.structTypeSchema)
       private var logScanner = HoodieMergeOnReadRDD.scanLog(split, tableAvroSchema, config)
       private val logRecords = logScanner.getRecords
       private val logRecordsKeyIterator = logRecords.keySet().iterator().asScala
@@ -167,11 +167,11 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       private val tableAvroSchema = new Schema.Parser().parse(tableSchema.avroSchemaStr)
       private val requiredAvroSchema = new Schema.Parser().parse(requiredSchema.avroSchemaStr)
       private val requiredFieldPosition =
-        requiredSchema.structType
+        requiredSchema.structTypeSchema
           .map(f => tableAvroSchema.getField(f.name).pos()).toList
       private val recordBuilder = new GenericRecordBuilder(requiredAvroSchema)
-      private val deserializer = HoodieAvroDeserializer(requiredAvroSchema, requiredSchema.structType)
-      private val unsafeProjection = UnsafeProjection.create(requiredSchema.structType)
+      private val deserializer = HoodieAvroDeserializer(requiredAvroSchema, requiredSchema.structTypeSchema)
+      private val unsafeProjection = UnsafeProjection.create(requiredSchema.structTypeSchema)
       private var logScanner = HoodieMergeOnReadRDD.scanLog(split, tableAvroSchema, config)
       private val logRecords = logScanner.getRecords
       private val logRecordsKeyIterator = logRecords.keySet().iterator().asScala
@@ -226,17 +226,17 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       private val tableAvroSchema = new Schema.Parser().parse(tableSchema.avroSchemaStr)
       private val requiredAvroSchema = new Schema.Parser().parse(requiredSchema.avroSchemaStr)
       private val requiredFieldPosition =
-        requiredSchema.structType
+        requiredSchema.structTypeSchema
           .map(f => tableAvroSchema.getField(f.name).pos()).toList
-      private val requiredSerializer = HoodieAvroSerializer(requiredSchema.structType, requiredAvroSchema, nullable = false)
-      private val requiredDeserializer = HoodieAvroDeserializer(requiredAvroSchema, requiredSchema.structType)
+      private val requiredSerializer = HoodieAvroSerializer(requiredSchema.structTypeSchema, requiredAvroSchema, nullable = false)
+      private val requiredDeserializer = HoodieAvroDeserializer(requiredAvroSchema, requiredSchema.structTypeSchema)
       private val recordBuilder = new GenericRecordBuilder(requiredAvroSchema)
-      private val unsafeProjection = UnsafeProjection.create(requiredSchema.structType)
+      private val unsafeProjection = UnsafeProjection.create(requiredSchema.structTypeSchema)
       private var logScanner = HoodieMergeOnReadRDD.scanLog(split, tableAvroSchema, config)
       private val logRecords = logScanner.getRecords
       private val logRecordsKeyIterator = logRecords.keySet().iterator().asScala
       private val keyToSkip = mutable.Set.empty[String]
-      private val recordKeyPosition = tableSchema.structType.fieldIndex(recordKeyField)
+      private val recordKeyPosition = tableSchema.structTypeSchema.fieldIndex(recordKeyField)
 
       private var recordToLoad: InternalRow = _
 
@@ -262,7 +262,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
             }
           } else {
             // No merge needed, load current row with required schema
-            recordToLoad = unsafeProjection(createInternalRowWithSchema(curRow, requiredSchema.structType, requiredFieldPosition))
+            recordToLoad = unsafeProjection(createInternalRowWithSchema(curRow, requiredSchema.structTypeSchema, requiredFieldPosition))
             true
           }
         } else {

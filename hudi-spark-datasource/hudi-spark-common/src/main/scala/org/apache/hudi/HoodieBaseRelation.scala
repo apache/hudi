@@ -39,7 +39,7 @@ import org.apache.spark.sql.{SQLContext, SparkSession}
 import scala.collection.JavaConverters._
 import scala.util.Try
 
-case class HoodieTableSchema(structType: StructType, avroSchemaStr: String)
+case class HoodieTableSchema(structTypeSchema: StructType, avroSchemaStr: String)
 
 /**
  * Hoodie BaseRelation which extends [[PrunedFilteredScan]].
@@ -98,9 +98,9 @@ object HoodieBaseRelation {
     )
     val parquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
       sparkSession = spark,
-      dataSchema = tableSchema.structType,
+      dataSchema = tableSchema.structTypeSchema,
       partitionSchema = partitionSchema,
-      requiredSchema = requiredSchema.structType,
+      requiredSchema = requiredSchema.structTypeSchema,
       filters = filters,
       options = options,
       hadoopConf = hadoopConf
@@ -132,7 +132,7 @@ object HoodieBaseRelation {
       val reader = new HoodieHFileReader[GenericRecord](hadoopConf, new Path(partitionedFile.filePath),
         new CacheConfig(hadoopConf))
 
-      val requiredRowSchema = requiredSchema.structType
+      val requiredRowSchema = requiredSchema.structTypeSchema
       // NOTE: Schema has to be parsed at this point, since Avro's [[Schema]] aren't serializable
       //       to be passed from driver to executor
       val requiredAvroSchema = new Schema.Parser().parse(requiredSchema.avroSchemaStr)
