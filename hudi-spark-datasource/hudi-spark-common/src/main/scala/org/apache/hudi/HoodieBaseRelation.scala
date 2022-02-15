@@ -39,11 +39,7 @@ import org.apache.spark.sql.{SQLContext, SparkSession}
 import scala.collection.JavaConverters._
 import scala.util.Try
 
-case class HoodieTableSchemas(tableSchema: StructType,
-                              partitionSchema: StructType,
-                              requiredSchema: StructType,
-                              tableAvroSchema: String,
-                              requiredAvroSchema: String)
+case class HoodieTableSchema(structType: StructType, avroSchemaStr: String)
 
 /**
  * Hoodie BaseRelation which extends [[PrunedFilteredScan]].
@@ -86,22 +82,25 @@ object HoodieBaseRelation {
    * over [[InternalRow]]
    */
   def createBaseFileReader(spark: SparkSession,
-                           tableSchemas: HoodieTableSchemas,
+                           partitionSchema: StructType,
+                           tableSchema: HoodieTableSchema,
+                           requiredSchema: HoodieTableSchema,
                            filters: Array[Filter],
                            options: Map[String, String],
                            hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
     val hfileReader = createHFileReader(
       spark = spark,
-      tableSchemas = tableSchemas,
+      tableSchema = tableSchema,
+      requiredSchema = requiredSchema,
       filters = filters,
       options = options,
       hadoopConf = hadoopConf
     )
     val parquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
       sparkSession = spark,
-      dataSchema = tableSchemas.tableSchema,
-      partitionSchema = tableSchemas.partitionSchema,
-      requiredSchema = tableSchemas.requiredSchema,
+      dataSchema = tableSchema.structType,
+      partitionSchema = partitionSchema,
+      requiredSchema = requiredSchema.structType,
       filters = filters,
       options = options,
       hadoopConf = hadoopConf
@@ -120,7 +119,8 @@ object HoodieBaseRelation {
   }
 
   private def createHFileReader(spark: SparkSession,
-                                tableSchemas: HoodieTableSchemas,
+                                tableSchema: HoodieTableSchema,
+                                requiredSchema: HoodieTableSchema,
                                 filters: Array[Filter],
                                 options: Map[String, String],
                                 hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
@@ -132,11 +132,11 @@ object HoodieBaseRelation {
       val reader = new HoodieHFileReader[GenericRecord](hadoopConf, new Path(partitionedFile.filePath),
         new CacheConfig(hadoopConf))
 
-      val requiredSchema = tableSchemas.requiredSchema
+      val requiredRowSchema = requiredSchema.structType
       // NOTE: Schema has to be parsed at this point, since Avro's [[Schema]] aren't serializable
       //       to be passed from driver to executor
-      val requiredAvroSchema = new Schema.Parser().parse(tableSchemas.requiredAvroSchema)
-      val avroToRowConverter = AvroConversionUtils.createAvroToRowConverter(requiredAvroSchema, requiredSchema)
+      val requiredAvroSchema = new Schema.Parser().parse(requiredSchema.avroSchemaStr)
+      val avroToRowConverter = AvroConversionUtils.createAvroToRowConverter(requiredAvroSchema, requiredRowSchema)
 
       reader.getRecordIterator(requiredAvroSchema).asScala
         .map(record => {

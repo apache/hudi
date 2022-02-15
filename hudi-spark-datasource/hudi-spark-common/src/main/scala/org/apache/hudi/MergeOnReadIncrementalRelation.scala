@@ -118,7 +118,7 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
         tableSchema = tableStructSchema,
         partitionSchema = StructType(Nil),
         requiredSchema = requiredStructSchema,
-        tableAvroSchema = tableAvroSchema.toString,
+        tableAvroSchemaStr = tableAvroSchema.toString,
         requiredAvroSchema = requiredAvroSchema.toString
       )
       val hoodieTableState = HoodieMergeOnReadTableState(tableSchemas, fileIndex, HoodieRecord.RECORD_KEY_METADATA_FIELD, preCombineFieldOpt)

@@ -45,8 +45,7 @@ case class HoodieMergeOnReadFileSplit(dataFile: Option[PartitionedFile],
                                       maxCompactionMemoryInBytes: Long,
                                       mergeType: String)
 
-case class HoodieMergeOnReadTableState(schemas: HoodieTableSchemas,
-                                       hoodieRealtimeFileSplits: List[HoodieMergeOnReadFileSplit],
+case class HoodieMergeOnReadTableState(hoodieRealtimeFileSplits: List[HoodieMergeOnReadFileSplit],
                                        recordKeyField: String,
                                        preCombineFieldOpt: Option[String])
 
@@ -103,36 +102,35 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
     val (requiredAvroSchema, requiredStructSchema) =
       HoodieSparkUtils.getRequiredSchema(tableAvroSchema, fetchedColumns)
     val fileIndex = buildFileIndex(filters)
-    val tableSchemas = HoodieTableSchemas(
-      tableSchema = tableStructSchema,
-      partitionSchema = StructType(Nil),
-      requiredSchema = requiredStructSchema,
-      tableAvroSchema = tableAvroSchema.toString,
-      requiredAvroSchema = requiredAvroSchema.toString
-    )
-    val tableState = HoodieMergeOnReadTableState(tableSchemas, fileIndex, recordKeyField, preCombineFieldOpt)
+
+    val partitionSchema = StructType(Nil)
+    val tableSchema = HoodieTableSchema(tableStructSchema, tableAvroSchema.toString)
+    val requiredSchema = HoodieTableSchema(requiredStructSchema, requiredAvroSchema.toString)
+
     val fullSchemaParquetReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
-      tableSchemas = tableSchemas,
+      partitionSchema = partitionSchema,
+      tableSchema = tableSchema,
+      requiredSchema = tableSchema,
       filters = filters,
       options = optParams,
       hadoopConf = conf
     )
     val requiredSchemaParquetReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
-      tableSchemas = tableSchemas,
+      partitionSchema = partitionSchema,
+      tableSchema = tableSchema,
+      requiredSchema = requiredSchema,
       filters = filters,
       options = optParams,
       hadoopConf = conf
     )
 
-    val rdd = new HoodieMergeOnReadRDD(
-      sqlContext.sparkContext,
-      jobConf,
-      fullSchemaParquetReader,
-      requiredSchemaParquetReader,
-      tableState
-    )
+    val tableState = HoodieMergeOnReadTableState(fileIndex, recordKeyField, preCombineFieldOpt)
+
+    val rdd = new HoodieMergeOnReadRDD(sqlContext.sparkContext, jobConf, fullSchemaParquetReader,
+      requiredSchemaParquetReader, tableState, tableSchema, requiredSchema)
+
     rdd.asInstanceOf[RDD[Row]]
   }
 
