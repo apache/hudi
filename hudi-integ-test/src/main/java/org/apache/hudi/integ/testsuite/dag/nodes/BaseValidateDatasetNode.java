@@ -111,14 +111,17 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
       String database = context.getWriterContext().getProps().getString(DataSourceWriteOptions.HIVE_DATABASE().key());
       String tableName = context.getWriterContext().getProps().getString(DataSourceWriteOptions.HIVE_TABLE().key());
       log.warn("Validating hive table with db : " + database + " and table : " + tableName);
-      Dataset<Row> cowDf = session.sql("SELECT * FROM " + database + "." + tableName);
-      Dataset<Row> trimmedCowDf = cowDf.drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
-          .drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.FILENAME_METADATA_FIELD);
-      intersectionDf = inputSnapshotDf.intersect(trimmedCowDf);
+      session.sql("REFRESH TABLE " + database + "." + tableName);
+      Dataset<Row> cowDf = session.sql("SELECT _row_key, rider, driver, begin_lat, begin_lon, end_lat, end_lon, fare, _hoodie_is_deleted, " +
+          "test_suite_source_ordering_field FROM " + database + "." + tableName);
+      Dataset<Row> reorderedInputDf = inputSnapshotDf.select("_row_key","rider","driver","begin_lat","begin_lon","end_lat","end_lon","fare",
+          "_hoodie_is_deleted","test_suite_source_ordering_field");
+
+      Dataset<Row> intersectedHiveDf = reorderedInputDf.intersect(cowDf);
       outputCount = trimmedHudiDf.count();
       log.warn("Input count: " + inputCount + "; output count: " + outputCount);
       // the intersected df should be same as inputDf. if not, there is some mismatch.
-      if (outputCount == 0 || inputSnapshotDf.except(intersectionDf).count() != 0) {
+      if (outputCount == 0 || reorderedInputDf.except(intersectedHiveDf).count() != 0) {
         log.error("Data set validation failed for COW hive table. Total count in hudi " + outputCount + ", input df count " + inputCount);
         throw new AssertionError("Hudi hive table contents does not match contents input data. ");
       }
@@ -160,7 +163,6 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
         .map((MapFunction<Tuple2<String, Row>, Row>) value -> value._2, encoder)
         .filter("_hoodie_is_deleted != true");
   }
-
 
   private ExpressionEncoder getEncoder(StructType schema) {
     List<Attribute> attributes = JavaConversions.asJavaCollection(schema.toAttributes()).stream()

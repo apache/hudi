@@ -22,7 +22,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Extractor for Hive Style Partitioned tables, when the parition folders are key value pairs.
+ * Extractor for Hive Style Partitioned tables, when the partition folders are key value pairs.
  *
  * <p>This implementation extracts the partition value of yyyy-mm-dd from the path of type datestr=yyyy-mm-dd.
  */

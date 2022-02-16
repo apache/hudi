@@ -57,7 +57,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
   @Override
   public Map<ConfigProperty, String> upgrade(
       HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
-      BaseUpgradeDowngradeHelper upgradeDowngradeHelper) {
+      SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     // fetch pending commit info
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingCompaction();

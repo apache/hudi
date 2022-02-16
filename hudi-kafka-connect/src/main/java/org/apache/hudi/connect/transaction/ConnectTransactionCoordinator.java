@@ -294,7 +294,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
         long totalRecords = (long) allWriteStatuses.stream().mapToDouble(WriteStatus::getTotalRecords).sum();
         boolean hasErrors = totalErrorRecords > 0;
 
-        if ((!hasErrors || configs.allowCommitOnErrors()) && !allWriteStatuses.isEmpty()) {
+        if (!hasErrors || configs.allowCommitOnErrors()) {
           boolean success = transactionServices.endCommit(currentCommitTime,
               allWriteStatuses,
               transformKafkaOffsets(currentConsumedKafkaOffsets));
@@ -319,8 +319,6 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
               ws.getErrors().forEach((key, value) -> LOG.trace("Error for key:" + key + " is " + value));
             }
           });
-        } else {
-          LOG.warn("Empty write statuses were received from all Participants");
         }
 
         // Submit the next start commit, that will rollback the current commit.

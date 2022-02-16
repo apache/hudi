@@ -18,10 +18,16 @@
 
 package org.apache.hudi.hive;
 
+import com.beust.jcommander.JCommander;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
@@ -31,12 +37,6 @@ import org.apache.hudi.hive.util.Parquet2SparkSchemaUtils;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent.PartitionEventType;
 import org.apache.hudi.sync.common.AbstractSyncTool;
-
-import com.beust.jcommander.JCommander;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.GroupType;
@@ -168,25 +168,21 @@ public class HiveSyncTool extends AbstractSyncTool {
     // check if isDropPartition
     boolean isDropPartition = hoodieHiveClient.isDropPartition();
 
-    // check if schemaChanged
-    boolean schemaChanged = false;
+    // Get the parquet schema for this table looking at the latest commit
+    MessageType schema = hoodieHiveClient.getDataSchema();
 
-    if (!isDropPartition) {
-      // Get the parquet schema for this table looking at the latest commit
-      MessageType schema = hoodieHiveClient.getDataSchema();
-
-      // Currently HoodieBootstrapRelation does support reading bootstrap MOR rt table,
-      // so we disable the syncAsSparkDataSourceTable here to avoid read such kind table
-      // by the data source way (which will use the HoodieBootstrapRelation).
-      // TODO after we support bootstrap MOR rt table in HoodieBootstrapRelation[HUDI-2071], we can remove this logical.
-      if (hoodieHiveClient.isBootstrap()
-          && hoodieHiveClient.getTableType() == HoodieTableType.MERGE_ON_READ
-          && !readAsOptimized) {
-        cfg.syncAsSparkDataSourceTable = false;
-      }
-      // Sync schema if needed
-      schemaChanged = syncSchema(tableName, tableExists, useRealtimeInputFormat, readAsOptimized, schema);
+    // Currently HoodieBootstrapRelation does support reading bootstrap MOR rt table,
+    // so we disable the syncAsSparkDataSourceTable here to avoid read such kind table
+    // by the data source way (which will use the HoodieBootstrapRelation).
+    // TODO after we support bootstrap MOR rt table in HoodieBootstrapRelation[HUDI-2071], we can remove this logical.
+    if (hoodieHiveClient.isBootstrap()
+            && hoodieHiveClient.getTableType() == HoodieTableType.MERGE_ON_READ
+            && !readAsOptimized) {
+      cfg.syncAsSparkDataSourceTable = false;
     }
+
+    // Sync schema if needed
+    boolean schemaChanged = syncSchema(tableName, tableExists, useRealtimeInputFormat, readAsOptimized, schema);
 
     LOG.info("Schema sync complete. Syncing partitions for " + tableName);
     // Get the last time we successfully synced partitions
@@ -256,9 +252,9 @@ public class HiveSyncTool extends AbstractSyncTool {
         LOG.info("Schema difference found for " + tableName);
         hoodieHiveClient.updateTableDefinition(tableName, schema);
         // Sync the table properties if the schema has changed
-        if (cfg.tableProperties != null) {
+        if (cfg.tableProperties != null || cfg.syncAsSparkDataSourceTable) {
           hoodieHiveClient.updateTableProperties(tableName, tableProperties);
-          LOG.info("Sync table properties for " + tableName + ", table properties is: " + cfg.tableProperties);
+          LOG.info("Sync table properties for " + tableName + ", table properties is: " + tableProperties);
         }
         schemaChanged = true;
       } else {
@@ -307,6 +303,9 @@ public class HiveSyncTool extends AbstractSyncTool {
 
     Map<String, String> sparkProperties = new HashMap<>();
     sparkProperties.put("spark.sql.sources.provider", "hudi");
+    if (!StringUtils.isNullOrEmpty(cfg.sparkVersion)) {
+      sparkProperties.put("spark.sql.create.version", cfg.sparkVersion);
+    }
     // Split the schema string to multi-parts according the schemaLengthThreshold size.
     String schemaString = Parquet2SparkSchemaUtils.convertToSparkSchemaJson(reOrderedType);
     int numSchemaPart = (schemaString.length() + schemaLengthThreshold - 1) / schemaLengthThreshold;

@@ -34,9 +34,9 @@ import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetReader;
 
-public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileReader {
-  private Path path;
-  private Configuration conf;
+public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileReader<R> {
+  private final Path path;
+  private final Configuration conf;
   private final BaseFileUtils parquetUtils;
 
   public HoodieParquetReader(Configuration configuration, Path path) {
@@ -45,6 +45,7 @@ public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileR
     this.parquetUtils = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET);
   }
 
+  @Override
   public String[] readMinMaxRecordKeys() {
     return parquetUtils.readMinMaxRecordKeys(conf, path);
   }
@@ -55,15 +56,15 @@ public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileR
   }
 
   @Override
-  public Set<String> filterRowKeys(Set candidateRowKeys) {
+  public Set<String> filterRowKeys(Set<String> candidateRowKeys) {
     return parquetUtils.filterRowKeys(conf, path, candidateRowKeys);
   }
 
   @Override
   public Iterator<R> getRecordIterator(Schema schema) throws IOException {
     AvroReadSupport.setAvroReadSchema(conf, schema);
-    ParquetReader<IndexedRecord> reader = AvroParquetReader.<IndexedRecord>builder(path).withConf(conf).build();
-    return new ParquetReaderIterator(reader);
+    ParquetReader<R> reader = AvroParquetReader.<R>builder(path).withConf(conf).build();
+    return new ParquetReaderIterator<>(reader);
   }
 
   @Override

@@ -56,7 +56,7 @@ public class RealtimeFileStatus extends FileStatus {
   public Path getPath() {
     Path path = super.getPath();
     PathWithLogFilePath pathWithLogFilePath = new PathWithLogFilePath(path.getParent(), path.getName());
-    pathWithLogFilePath.setBelongToIncrementalPath(belongToIncrementalFileStatus);
+    pathWithLogFilePath.setBelongsToIncrementalPath(belongToIncrementalFileStatus);
     pathWithLogFilePath.setDeltaLogFiles(deltaLogFiles);
     pathWithLogFilePath.setMaxCommitTime(maxCommitTime);
     pathWithLogFilePath.setBasePath(basePath);

@@ -156,7 +156,9 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
 
   private AmazonDynamoDB getDynamoDBClient() {
     String region = this.lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_REGION.key());
-    String endpointURL = RegionUtils.getRegion(region).getServiceEndpoint(AmazonDynamoDB.ENDPOINT_PREFIX);
+    String endpointURL = this.lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_ENDPOINT_URL.key()) == null
+                          ? RegionUtils.getRegion(region).getServiceEndpoint(AmazonDynamoDB.ENDPOINT_PREFIX)
+                          : this.lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_ENDPOINT_URL.key());
     AwsClientBuilder.EndpointConfiguration dynamodbEndpoint =
             new AwsClientBuilder.EndpointConfiguration(endpointURL, region);
     return AmazonDynamoDBClientBuilder.standard()
@@ -199,7 +201,6 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
   }
 
   private void checkRequiredProps(final LockConfiguration config) {
-    ValidationUtils.checkArgument(config.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_BILLING_MODE.key()) != null);
     ValidationUtils.checkArgument(config.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME.key()) != null);
     ValidationUtils.checkArgument(config.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_REGION.key()) != null);
     ValidationUtils.checkArgument(config.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_PARTITION_KEY.key()) != null);

@@ -18,10 +18,6 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
-
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
@@ -29,6 +25,9 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -36,10 +35,12 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * All the metadata that gets stored along with a commit.
@@ -88,6 +89,10 @@ public class HoodieCommitMetadata implements Serializable {
 
   public Map<String, List<HoodieWriteStat>> getPartitionToWriteStats() {
     return partitionToWriteStats;
+  }
+
+  public List<HoodieWriteStat> getWriteStats() {
+    return partitionToWriteStats.values().stream().flatMap(Collection::stream).collect(Collectors.toList());
   }
 
   public String getMetadata(String metaKey) {

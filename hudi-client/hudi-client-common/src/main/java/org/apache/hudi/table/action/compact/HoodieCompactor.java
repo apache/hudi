@@ -111,13 +111,13 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
     table.getMetaClient().reloadActiveTimeline();
 
     HoodieTableMetaClient metaClient = table.getMetaClient();
-    TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
+    TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
 
     // Here we firstly use the table schema as the reader schema to read
     // log file.That is because in the case of MergeInto, the config.getSchema may not
     // the same with the table schema.
     try {
-      Schema readerSchema = schemaUtil.getTableAvroSchema(false);
+      Schema readerSchema = schemaResolver.getTableAvroSchema(false);
       config.setSchema(readerSchema.toString());
     } catch (Exception e) {
       // If there is no commit in the table, just ignore the exception.

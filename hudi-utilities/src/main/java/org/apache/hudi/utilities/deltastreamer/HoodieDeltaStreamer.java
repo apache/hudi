@@ -363,11 +363,30 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--run-bootstrap"}, description = "Run bootstrap if bootstrap index is not found")
     public Boolean runBootstrap = false;
 
+    @Parameter(names = {"--bootstrap-overwrite"}, description = "Overwrite existing target table, default false")
+    public Boolean bootstrapOverwrite = false;
+
     @Parameter(names = {"--bootstrap-index-class"}, description = "subclass of BootstrapIndex")
     public String bootstrapIndexClass = HFileBootstrapIndex.class.getName();
 
+    @Parameter(names = {"--retry-on-source-failures"}, description = "Retry on any source failures")
+    public Boolean retryOnSourceFailures = false;
+
+    @Parameter(names = {"--retry-interval-seconds"}, description = "the retry interval for source failures if --retry-on-source-failures is enabled")
+    public Integer retryIntervalSecs = 30;
+
+    @Parameter(names = {"--max-retry-count"}, description = "the max retry count if --retry-on-source-failures is enabled")
+    public Integer maxRetryCount = 3;
+
+    @Parameter(names = {"--allow-commit-on-no-checkpoint-change"}, description = "allow commits even if checkpoint has not changed before and after fetch data"
+        + "from souce. This might be useful in sources like SqlSource where there is not checkpoint. And is not recommended to enable in continuous mode.")
+    public Boolean allowCommitOnNoCheckpointChange = false;
+
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
+
+    @Parameter(names = {"--retry-last-pending-inline-clustering", "-rc"}, description = "Retry last pending inline clustering plan before writing to sink.")
+    public Boolean retryLastPendingInlineClusteringJob = false;
 
     public boolean isAsyncCompactionEnabled() {
       return continuousMode && !forceDisableCompaction

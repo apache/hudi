@@ -213,13 +213,23 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
         index.updateLocation(HoodieJavaRDD.of(writeStatus), context, table));
   }
 
-  protected Stream<HoodieBaseFile> insertRecords(HoodieTableMetaClient metaClient, List<HoodieRecord> records,
-                                                 SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {
+  protected Stream<HoodieBaseFile> insertRecordsToMORTable(HoodieTableMetaClient metaClient, List<HoodieRecord> records,
+                                                           SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {
+    return insertRecordsToMORTable(metaClient, records, client, cfg, commitTime, false);
+  }
+
+  protected Stream<HoodieBaseFile> insertRecordsToMORTable(HoodieTableMetaClient metaClient, List<HoodieRecord> records,
+                                                 SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime,
+                                                           boolean doExplicitCommit) throws IOException {
     HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
 
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
-    List<WriteStatus> statuses = client.insert(writeRecords, commitTime).collect();
+    JavaRDD<WriteStatus> statusesRdd = client.insert(writeRecords, commitTime);
+    List<WriteStatus> statuses = statusesRdd.collect();
     assertNoWriteErrors(statuses);
+    if (doExplicitCommit) {
+      client.commit(commitTime, statusesRdd);
+    }
     assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(reloadedMetaClient.getFs(), new Path(reloadedMetaClient.getBasePath(), status.getStat().getPath())));
 
     HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), reloadedMetaClient);
@@ -242,7 +252,12 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     return dataFilesToRead;
   }
 
-  protected void updateRecords(HoodieTableMetaClient metaClient, List<HoodieRecord> records, SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {
+  protected void updateRecordsInMORTable(HoodieTableMetaClient metaClient, List<HoodieRecord> records, SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {
+    updateRecordsInMORTable(metaClient, records, client, cfg, commitTime, true);
+  }
+
+  protected void updateRecordsInMORTable(HoodieTableMetaClient metaClient, List<HoodieRecord> records, SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime,
+                                         boolean doExplicitCommit) throws IOException {
     HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
 
     Map<HoodieKey, HoodieRecord> recordsMap = new HashMap<>();
@@ -252,9 +267,13 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
       }
     }
 
-    List<WriteStatus> statuses = client.upsert(jsc().parallelize(records, 1), commitTime).collect();
+    JavaRDD<WriteStatus> statusesRdd = client.upsert(jsc().parallelize(records, 1), commitTime);
+    List<WriteStatus> statuses = statusesRdd.collect();
     // Verify there are no errors
     assertNoWriteErrors(statuses);
+    if (doExplicitCommit) {
+      client.commit(commitTime, statusesRdd);
+    }
     assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(reloadedMetaClient.getFs(), new Path(reloadedMetaClient.getBasePath(), status.getStat().getPath())));
 
     Option<HoodieInstant> deltaCommit = reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
@@ -305,20 +324,20 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   }
 
   protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit, long compactionSmallFileSize, HoodieClusteringConfig clusteringConfig) {
-    return getConfigBuilder(autoCommit, false, HoodieIndex.IndexType.BLOOM, compactionSmallFileSize, clusteringConfig);
+    return getConfigBuilder(autoCommit, false, HoodieIndex.IndexType.BLOOM, compactionSmallFileSize, clusteringConfig, false);
   }
 
   protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit, Boolean rollbackUsingMarkers, HoodieIndex.IndexType indexType) {
-    return getConfigBuilder(autoCommit, rollbackUsingMarkers, indexType, 1024 * 1024 * 1024L, HoodieClusteringConfig.newBuilder().build());
+    return getConfigBuilder(autoCommit, rollbackUsingMarkers, indexType, 1024 * 1024 * 1024L, HoodieClusteringConfig.newBuilder().build(), false);
   }
 
   protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit, Boolean rollbackUsingMarkers, HoodieIndex.IndexType indexType,
-      long compactionSmallFileSize, HoodieClusteringConfig clusteringConfig) {
+      long compactionSmallFileSize, HoodieClusteringConfig clusteringConfig, boolean preserveCommitMetaForCompaction) {
     return HoodieWriteConfig.newBuilder().withPath(basePath()).withSchema(TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withDeleteParallelism(2)
         .withAutoCommit(autoCommit)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(compactionSmallFileSize)
-            .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
+            .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).withPreserveCommitMetadata(preserveCommitMetaForCompaction).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024 * 1024).parquetMaxFileSize(1024 * 1024 * 1024).build())
         .withEmbeddedTimelineServerEnabled(true).forTable("test-trip-table")
         .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()

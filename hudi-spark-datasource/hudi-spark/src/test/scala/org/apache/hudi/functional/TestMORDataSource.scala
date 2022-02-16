@@ -17,9 +17,8 @@
 
 package org.apache.hudi.functional
 
-import java.util.Properties
-
 import org.apache.hadoop.fs.Path
+
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieTableType}
@@ -29,12 +28,16 @@ import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestBase}
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+
 import org.apache.log4j.LogManager
+
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types.BooleanType
+
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -716,6 +719,28 @@ class TestMORDataSource extends HoodieClientTestBase {
   }
 
   @Test
+  def testClusteringOnNullableColumn(): Unit = {
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 1000)).toList
+    val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+      .withColumn("cluster_id", when(expr("end_lon < 0.2 "), lit(null).cast("string"))
+          .otherwise(col("_row_key")))
+      .withColumn("struct_cluster_col", when(expr("end_lon < 0.1"), lit(null))
+          .otherwise(struct(col("cluster_id"), col("_row_key"))))
+    inputDF1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key(), DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      // option for clustering
+      .option("hoodie.clustering.inline", "true")
+      .option("hoodie.clustering.inline.max.commits", "1")
+      .option("hoodie.clustering.plan.strategy.target.file.max.bytes", "1073741824")
+      .option("hoodie.clustering.plan.strategy.small.file.limit", "629145600")
+      .option("hoodie.clustering.plan.strategy.sort.columns", "struct_cluster_col")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+  }
+
+  @Test
   def testHoodieIsDeletedMOR(): Unit =  {
     val numRecords = 100
     val numRecordsToDelete = 2
@@ -749,5 +774,80 @@ class TestMORDataSource extends HoodieClientTestBase {
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .load(basePath + "/*/*/*/*")
     assertEquals(numRecords - numRecordsToDelete, snapshotDF2.count())
+  }
+
+  /**
+   * This tests the case that query by with a specified partition condition on hudi table which is
+   * different between the value of the partition field and the actual partition path,
+   * like hudi table written by TimestampBasedKeyGenerator.
+   *
+   * For MOR table, test all the three query modes.
+   */
+  @Test
+  def testPrunePartitionForTimestampBasedKeyGenerator(): Unit = {
+    val options = commonOpts ++ Map(
+      "hoodie.compact.inline" -> "false",
+      DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.TimestampBasedKeyGenerator",
+      Config.TIMESTAMP_TYPE_FIELD_PROP -> "DATE_STRING",
+      Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP -> "yyyy/MM/dd",
+      Config.TIMESTAMP_TIMEZONE_FORMAT_PROP -> "GMT+8:00",
+      Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP -> "yyyy-MM-dd"
+    )
+
+    val dataGen1 = new HoodieTestDataGenerator(Array("2022-01-01"))
+    val records1 = recordsToStrings(dataGen1.generateInserts("001", 50)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(options)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(spark.sessionState.newHadoopConf)
+      .build()
+    val commit1Time = metaClient.getActiveTimeline.lastInstant().get().getTimestamp
+
+    val dataGen2 = new HoodieTestDataGenerator(Array("2022-01-02"))
+    val records2 = recordsToStrings(dataGen2.generateInserts("002", 60)).toList
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+    inputDF2.write.format("org.apache.hudi")
+      .options(options)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val commit2Time = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+
+    val records3 = recordsToStrings(dataGen2.generateUniqueUpdates("003", 20)).toList
+    val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
+    inputDF3.write.format("org.apache.hudi")
+      .options(options)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val commit3Time = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+
+    // snapshot query
+    val snapshotQueryRes = spark.read.format("hudi").load(basePath)
+      assertEquals(snapshotQueryRes.where(s"_hoodie_commit_time = '$commit1Time'").count, 50)
+    assertEquals(snapshotQueryRes.where(s"_hoodie_commit_time = '$commit2Time'").count, 40)
+    assertEquals(snapshotQueryRes.where(s"_hoodie_commit_time = '$commit3Time'").count, 20)
+
+    assertEquals(snapshotQueryRes.where("partition = '2022-01-01'").count, 50)
+    assertEquals(snapshotQueryRes.where("partition = '2022-01-02'").count, 60)
+
+    // read_optimized query
+    val readOptimizedQueryRes = spark.read.format("hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
+      .load(basePath)
+    assertEquals(readOptimizedQueryRes.where("partition = '2022-01-01'").count, 50)
+    assertEquals(readOptimizedQueryRes.where("partition = '2022-01-02'").count, 60)
+
+    // incremental query
+    val incrementalQueryRes = spark.read.format("hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commit2Time)
+      .option(DataSourceReadOptions.END_INSTANTTIME.key, commit3Time)
+      .load(basePath)
+    assertEquals(incrementalQueryRes.where("partition = '2022-01-01'").count, 0)
+    assertEquals(incrementalQueryRes.where("partition = '2022-01-02'").count, 20)
   }
 }

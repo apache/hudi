@@ -136,6 +136,17 @@ public class FSUtils {
   }
 
   /**
+   * Makes path qualified w/ {@link FileSystem}'s URI
+   *
+   * @param fs instance of {@link FileSystem} path belongs to
+   * @param path path to be qualified
+   * @return qualified path, prefixed w/ the URI of the target FS object provided
+   */
+  public static Path makeQualified(FileSystem fs, Path path) {
+    return path.makeQualified(fs.getUri(), fs.getWorkingDirectory());
+  }
+
+  /**
    * A write token uniquely identifies an attempt at one of the IOHandle operations (Merge/Create/Append).
    */
   public static String makeWriteToken(int taskPartitionId, int stageId, long taskAttemptId) {
@@ -202,7 +213,13 @@ public class FSUtils {
   public static String getRelativePartitionPath(Path basePath, Path fullPartitionPath) {
     basePath = Path.getPathWithoutSchemeAndAuthority(basePath);
     fullPartitionPath = Path.getPathWithoutSchemeAndAuthority(fullPartitionPath);
+
     String fullPartitionPathStr = fullPartitionPath.toString();
+
+    if (!fullPartitionPathStr.startsWith(basePath.toString())) {
+      throw new IllegalArgumentException("Partition path does not belong to base-path");
+    }
+
     int partitionStartIndex = fullPartitionPathStr.indexOf(basePath.getName(),
         basePath.getParent() == null ? 0 : basePath.getParent().toString().length());
     // Partition-Path could be empty for non-partitioned tables
@@ -478,24 +495,25 @@ public class FSUtils {
   }
 
   /**
-   * Get the latest log file written from the list of log files passed in.
+   * Get the latest log file for the passed in file-id in the partition path
    */
-  public static Option<HoodieLogFile> getLatestLogFile(Stream<HoodieLogFile> logFiles) {
-    return Option.fromJavaOptional(logFiles.min(HoodieLogFile.getReverseLogFileComparator()));
+  public static Option<HoodieLogFile> getLatestLogFile(FileSystem fs, Path partitionPath, String fileId,
+                                                       String logFileExtension, String baseCommitTime) throws IOException {
+    return getLatestLogFile(getAllLogFiles(fs, partitionPath, fileId, logFileExtension, baseCommitTime));
   }
 
   /**
-   * Get all the log files for the passed in FileId in the partition path.
+   * Get all the log files for the passed in file-id in the partition path.
    */
   public static Stream<HoodieLogFile> getAllLogFiles(FileSystem fs, Path partitionPath, final String fileId,
       final String logFileExtension, final String baseCommitTime) throws IOException {
     try {
-      return Arrays
-          .stream(fs.listStatus(partitionPath,
-              path -> path.getName().startsWith("." + fileId) && path.getName().contains(logFileExtension)))
-          .map(HoodieLogFile::new).filter(s -> s.getBaseCommitTime().equals(baseCommitTime));
+      PathFilter pathFilter = path -> path.getName().startsWith("." + fileId) && path.getName().contains(logFileExtension);
+      return Arrays.stream(fs.listStatus(partitionPath, pathFilter))
+          .map(HoodieLogFile::new)
+          .filter(s -> s.getBaseCommitTime().equals(baseCommitTime));
     } catch (FileNotFoundException e) {
-      return Stream.<HoodieLogFile>builder().build();
+      return Stream.of();
     }
   }
 
@@ -721,6 +739,57 @@ public class FSUtils {
     }
   }
 
+  /**
+   * Lists file status at a certain level in the directory hierarchy.
+   * <p>
+   * E.g., given "/tmp/hoodie_table" as the rootPath, and 3 as the expected level,
+   * this method gives back the {@link FileStatus} of all files under
+   * "/tmp/hoodie_table/[*]/[*]/[*]/" folders.
+   *
+   * @param hoodieEngineContext {@link HoodieEngineContext} instance.
+   * @param fs                  {@link FileSystem} instance.
+   * @param rootPath            Root path for the file listing.
+   * @param expectLevel         Expected level of directory hierarchy for files to be added.
+   * @param parallelism         Parallelism for the file listing.
+   * @return A list of file status of files at the level.
+   */
+
+  public static List<FileStatus> getFileStatusAtLevel(
+      HoodieEngineContext hoodieEngineContext, FileSystem fs, Path rootPath,
+      int expectLevel, int parallelism) {
+    List<String> levelPaths = new ArrayList<>();
+    List<FileStatus> result = new ArrayList<>();
+    levelPaths.add(rootPath.toString());
+
+    for (int i = 0; i <= expectLevel; i++) {
+      result = FSUtils.parallelizeFilesProcess(hoodieEngineContext, fs, parallelism,
+          pairOfSubPathAndConf -> {
+            Path path = new Path(pairOfSubPathAndConf.getKey());
+            try {
+              FileSystem fileSystem = path.getFileSystem(pairOfSubPathAndConf.getValue().get());
+              return Arrays.stream(fileSystem.listStatus(path))
+                .collect(Collectors.toList());
+            } catch (IOException e) {
+              throw new HoodieIOException("Failed to list " + path, e);
+            }
+          },
+          levelPaths)
+          .values().stream()
+          .flatMap(list -> list.stream()).collect(Collectors.toList());
+      if (i < expectLevel) {
+        levelPaths = result.stream()
+            .filter(FileStatus::isDirectory)
+            .map(fileStatus -> fileStatus.getPath().toString())
+            .collect(Collectors.toList());
+      }
+    }
+    return result;
+  }
+
   public interface SerializableFunction<T, R> extends Function<T, R>, Serializable {
+  }
+
+  private static Option<HoodieLogFile> getLatestLogFile(Stream<HoodieLogFile> logFiles) {
+    return Option.fromJavaOptional(logFiles.min(HoodieLogFile.getReverseLogFileComparator()));
   }
 }

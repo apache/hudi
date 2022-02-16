@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.testutils;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -48,6 +49,8 @@ import com.fasterxml.jackson.dataformat.csv.CsvMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema.Builder;
 import org.apache.avro.Schema;
+import org.apache.avro.file.DataFileWriter;
+import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
@@ -78,6 +81,7 @@ import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -341,6 +345,20 @@ public class UtilitiesTestBase {
       }
     }
 
+    public static void saveAvroToDFS(List<GenericRecord> records, Path targetFile) throws IOException {
+      saveAvroToDFS(records,targetFile,HoodieTestDataGenerator.AVRO_SCHEMA);
+    }
+
+    public static void saveAvroToDFS(List<GenericRecord> records, Path targetFile, Schema schema) throws IOException {
+      FileSystem fs = targetFile.getFileSystem(HoodieTestUtils.getDefaultHadoopConf());
+      OutputStream output = fs.create(targetFile);
+      try (DataFileWriter<IndexedRecord> dataFileWriter = new DataFileWriter<>(new GenericDatumWriter(schema)).create(schema, output)) {
+        for (GenericRecord record : records) {
+          dataFileWriter.append(record);
+        }
+      }
+    }
+
     public static TypedProperties setupSchemaOnDFS() throws IOException {
       return setupSchemaOnDFS("delta-streamer-config", "source.avsc");
     }
@@ -361,7 +379,7 @@ public class UtilitiesTestBase {
 
     public static GenericRecord toGenericRecord(HoodieRecord hoodieRecord, Schema schema) {
       try {
-        Option<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(schema);
+        Option<IndexedRecord> recordOpt = ((HoodieAvroRecord) hoodieRecord).getData().getInsertValue(schema);
         return (GenericRecord) recordOpt.get();
       } catch (IOException e) {
         return null;

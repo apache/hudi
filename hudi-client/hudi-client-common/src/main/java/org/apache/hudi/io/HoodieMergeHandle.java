@@ -97,6 +97,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   protected Map<String, HoodieRecord<T>> keyToNewRecords;
   protected Set<String> writtenRecordKeys;
   protected HoodieFileWriter<IndexedRecord> fileWriter;
+  private boolean preserveMetadata = false;
 
   protected Path newFilePath;
   protected Path oldFilePath;
@@ -133,6 +134,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
     this.keyToNewRecords = keyToNewRecords;
     this.useWriterSchema = true;
+    this.preserveMetadata = config.isPreserveHoodieCommitMetadataForCompaction();
     init(fileId, this.partitionPath, dataFileToBeMerged);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
   }
@@ -291,7 +293,11 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       if (indexedRecord.isPresent() && !isDelete) {
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
         IndexedRecord recordWithMetadataInSchema = rewriteRecord((GenericRecord) indexedRecord.get());
-        fileWriter.writeAvroWithMetadata(recordWithMetadataInSchema, hoodieRecord);
+        if (preserveMetadata) {
+          fileWriter.writeAvro(hoodieRecord.getRecordKey(), recordWithMetadataInSchema);
+        } else {
+          fileWriter.writeAvroWithMetadata(recordWithMetadataInSchema, hoodieRecord);
+        }
         recordsWritten++;
       } else {
         recordsDeleted++;
@@ -318,7 +324,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     if (keyToNewRecords.containsKey(key)) {
       // If we have duplicate records that we are updating, then the hoodie record will be deflated after
       // writing the first record. So make a copy of the record to be merged
-      HoodieRecord<T> hoodieRecord = new HoodieRecord<>(keyToNewRecords.get(key));
+      HoodieRecord<T> hoodieRecord = keyToNewRecords.get(key).newInstance();
       try {
         Option<IndexedRecord> combinedAvroRecord =
             hoodieRecord.getData().combineAndGetUpdateValue(oldRecord,

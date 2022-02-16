@@ -57,6 +57,7 @@ public class InLineFileSystem extends FileSystem {
     return URI.create(getScheme());
   }
 
+  @Override
   public String getScheme() {
     return SCHEME;
   }
@@ -129,5 +130,4 @@ public class InLineFileSystem extends FileSystem {
   public boolean mkdirs(Path path, FsPermission fsPermission) throws IOException {
     throw new UnsupportedOperationException("Can't set working directory");
   }
-
 }

@@ -47,7 +47,7 @@ public class HoodieKeyLocationFetchHandle<T extends HoodieRecordPayload, I, K, O
 
   public HoodieKeyLocationFetchHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
                                       Pair<String, HoodieBaseFile> partitionPathBaseFilePair, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, null, hoodieTable, Pair.of(partitionPathBaseFilePair.getLeft(), partitionPathBaseFilePair.getRight().getFileId()));
+    super(config, hoodieTable, Pair.of(partitionPathBaseFilePair.getLeft(), partitionPathBaseFilePair.getRight().getFileId()));
     this.partitionPathBaseFilePair = partitionPathBaseFilePair;
     this.keyGeneratorOpt = keyGeneratorOpt;
   }

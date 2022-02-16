@@ -29,7 +29,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.parquet.io.api.Binary;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -62,6 +61,7 @@ import scala.collection.JavaConversions;
 import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -200,7 +200,7 @@ public class ColumnStatsIndexHelper {
 
                 indexRow.add(minMaxValue.getLeft());      // min
                 indexRow.add(minMaxValue.getRight());     // max
-                indexRow.add(colMetadata.getNumNulls());
+                indexRow.add(colMetadata.getNullCount());
               });
 
               return Row$.MODULE$.apply(JavaConversions.asScalaBuffer(indexRow));
@@ -262,10 +262,10 @@ public class ColumnStatsIndexHelper {
       // │   │   ├── <part-...>.parquet
       // │   │   └── ...
       //
-      // If index is currently empty (no persisted tables), we simply create one
-      // using clustering operation's commit instance as it's name
       Path newIndexTablePath = new Path(indexFolderPath, commitTime);
 
+      // If index is currently empty (no persisted tables), we simply create one
+      // using clustering operation's commit instance as it's name
       if (!fs.exists(new Path(indexFolderPath))) {
         newColStatsIndexDf.repartition(1)
             .write()
@@ -326,6 +326,9 @@ public class ColumnStatsIndexHelper {
           .repartition(1)
           .write()
           .format("parquet")
+          // NOTE: We intend to potentially overwrite index-table from the previous Clustering
+          //       operation that has failed to commit
+          .mode("overwrite")
           .save(newIndexTablePath.toString());
 
       // Clean up residual col-stats-index tables that have might have been dangling since
@@ -419,9 +422,8 @@ public class ColumnStatsIndexHelper {
       );
     } else if (colType instanceof StringType) {
       return Pair.of(
-          new String(((Binary) colMetadata.getMinValue()).getBytes()),
-          new String(((Binary) colMetadata.getMaxValue()).getBytes())
-      );
+          colMetadata.getMinValue().toString(),
+          colMetadata.getMaxValue().toString());
     } else if (colType instanceof DecimalType) {
       return Pair.of(
           new BigDecimal(colMetadata.getMinValue().toString()),
@@ -444,8 +446,8 @@ public class ColumnStatsIndexHelper {
           new Float(colMetadata.getMaxValue().toString()));
     } else if (colType instanceof BinaryType) {
       return Pair.of(
-          ((Binary) colMetadata.getMinValue()).getBytes(),
-          ((Binary) colMetadata.getMaxValue()).getBytes());
+          ((ByteBuffer) colMetadata.getMinValue()).array(),
+          ((ByteBuffer) colMetadata.getMaxValue()).array());
     } else if (colType instanceof BooleanType) {
       return Pair.of(
           Boolean.valueOf(colMetadata.getMinValue().toString()),

@@ -186,14 +186,14 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     }
 
     int metadataRecordKeyIndex = resultSchema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD);
-    int metadataParitionPathIndex = resultSchema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
+    int metadataPartitionPathIndex = resultSchema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
     int metadataCommitTimeIndex = resultSchema.fieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
     int metadataCommitSeqNoIndex = resultSchema.fieldIndex(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD);
     int metadataFilenameIndex = resultSchema.fieldIndex(HoodieRecord.FILENAME_METADATA_FIELD);
 
     result.toJavaRDD().foreach(entry -> {
       assertTrue(entry.get(metadataRecordKeyIndex).equals(entry.getAs("_row_key")));
-      assertTrue(entry.get(metadataParitionPathIndex).equals(entry.getAs("partition")));
+      assertTrue(entry.get(metadataPartitionPathIndex).equals(entry.getAs("partition")));
       assertTrue(entry.get(metadataCommitSeqNoIndex).equals(""));
       assertTrue(entry.get(metadataCommitTimeIndex).equals(""));
       assertTrue(entry.get(metadataFilenameIndex).equals(""));

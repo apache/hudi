@@ -24,7 +24,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
-import org.apache.hudi.index.bloom.HoodieBloomIndex;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
@@ -66,7 +66,7 @@ public class TestDeleteHelper {
   private static final int DELETE_PARALLELISM = 200;
 
   @Mock
-  private HoodieBloomIndex index;
+  private HoodieIndex index;
   @Mock
   private HoodieTable<EmptyHoodieRecordPayload, JavaRDD<HoodieRecord>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table;
   @Mock

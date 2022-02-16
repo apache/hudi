@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.bootstrap;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.HoodieBootstrapHandle;
@@ -39,7 +40,8 @@ public class BootstrapRecordConsumer extends BoundedInMemoryQueueConsumer<Hoodie
   @Override
   protected void consumeOneRecord(HoodieRecord record) {
     try {
-      bootstrapHandle.write(record, record.getData().getInsertValue(bootstrapHandle.getWriterSchemaWithMetaFields()));
+      bootstrapHandle.write(record, ((HoodieRecordPayload) record.getData())
+          .getInsertValue(bootstrapHandle.getWriterSchemaWithMetaFields()));
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);
     }

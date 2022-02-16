@@ -31,6 +31,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Properties;
 
 /**
  * Provides support for seamlessly applying changes captured via Debezium for PostgresDB.
@@ -69,6 +70,19 @@ public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
 
     // Pick the current value in storage only if its LSN is latest compared to the LSN of the insert value
     return insertSourceLSN < currentSourceLSN;
+  }
+
+  @Override
+  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Properties properties) throws IOException {
+    // Specific to Postgres: If the updated record has TOASTED columns,
+    // we will need to keep the previous value for those columns
+    // see https://debezium.io/documentation/reference/connectors/postgresql.html#postgresql-toasted-values
+    Option<IndexedRecord> insertOrDeleteRecord = super.combineAndGetUpdateValue(currentValue, schema, properties);
+
+    if (insertOrDeleteRecord.isPresent()) {
+      mergeToastedValuesIfPresent(insertOrDeleteRecord.get(), currentValue);
+    }
+    return insertOrDeleteRecord;
   }
 
   @Override

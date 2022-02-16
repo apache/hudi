@@ -31,10 +31,12 @@ import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.execution.JobClient;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.TableResult;
 import org.apache.flink.table.api.TableSchema;
+import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
 import org.apache.flink.table.catalog.ObjectPath;
@@ -86,8 +88,24 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     execConf.setString("restart-strategy", "fixed-delay");
     execConf.setString("restart-strategy.fixed-delay.attempts", "0");
 
+    Configuration conf = new Configuration();
+    // for batch upsert use cases: current suggestion is to disable these 2 options,
+    // from 1.14, flink runtime execution mode has switched from streaming
+    // to batch for batch execution mode(before that, both streaming and batch use streaming execution mode),
+    // current batch execution mode has these limitations:
+    //
+    // 1. the keyed stream default to always sort the inputs by key;
+    // 2. the batch state-backend requires the inputs sort by state key
+    //
+    // For our hudi batch pipeline upsert case, we rely on the consuming sequence for index records and data records,
+    // the index records must be loaded first before data records for BucketAssignFunction to keep upsert semantics correct,
+    // so we suggest disabling these 2 options to use streaming state-backend for batch execution mode
+    // to keep the strategy before 1.14.
+    conf.setBoolean("execution.sorted-inputs.enabled", false);
+    conf.setBoolean("execution.batch-state-backend.enabled", false);
+    StreamExecutionEnvironment execEnv = StreamExecutionEnvironment.getExecutionEnvironment(conf);
     settings = EnvironmentSettings.newInstance().inBatchMode().build();
-    batchTableEnv = TableEnvironmentImpl.create(settings);
+    batchTableEnv = StreamTableEnvironment.create(execEnv, settings);
     batchTableEnv.getConfig().getConfiguration()
         .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 1);
   }
@@ -547,6 +565,42 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
 
   @ParameterizedTest
   @EnumSource(value = ExecMode.class)
+  void testWriteAndReadWithTimestampMicros(ExecMode execMode) throws Exception {
+    boolean streaming = execMode == ExecMode.STREAM;
+    String hoodieTableDDL = sql("t1")
+        .field("id int")
+        .field("name varchar(10)")
+        .field("ts timestamp(6)")
+        .pkField("id")
+        .noPartition()
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.READ_AS_STREAMING, streaming)
+        .end();
+    streamTableEnv.executeSql(hoodieTableDDL);
+    String insertInto = "insert into t1 values\n"
+        + "(1,'Danny',TIMESTAMP '2021-12-01 01:02:01.100001'),\n"
+        + "(2,'Stephen',TIMESTAMP '2021-12-02 03:04:02.200002'),\n"
+        + "(3,'Julian',TIMESTAMP '2021-12-03 13:14:03.300003'),\n"
+        + "(4,'Fabian',TIMESTAMP '2021-12-04 15:16:04.400004')";
+    execInsertSql(streamTableEnv, insertInto);
+
+    final String expected = "["
+        + "+I[1, Danny, 2021-12-01T01:02:01.100001], "
+        + "+I[2, Stephen, 2021-12-02T03:04:02.200002], "
+        + "+I[3, Julian, 2021-12-03T13:14:03.300003], "
+        + "+I[4, Fabian, 2021-12-04T15:16:04.400004]]";
+
+    List<Row> result = execSelectSql(streamTableEnv, "select * from t1", execMode);
+    assertRowsEquals(result, expected);
+
+    // insert another batch of data
+    execInsertSql(streamTableEnv, insertInto);
+    List<Row> result2 = execSelectSql(streamTableEnv, "select * from t1", execMode);
+    assertRowsEquals(result2, expected);
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = ExecMode.class)
   void testInsertOverwrite(ExecMode execMode) {
     TableEnvironment tableEnv = execMode == ExecMode.BATCH ? batchTableEnv : streamTableEnv;
     String hoodieTableDDL = sql("t1")
@@ -825,7 +879,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
         .getContextClassLoader().getResource("debezium_json.data")).toString();
     String sourceDDL = ""
         + "CREATE TABLE debezium_source(\n"
-        + "  id INT NOT NULL,\n"
+        + "  id INT NOT NULL PRIMARY KEY NOT ENFORCED,\n"
         + "  ts BIGINT,\n"
         + "  name STRING,\n"
         + "  description STRING,\n"
@@ -1078,6 +1132,62 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
         + "+I[id6, Emma, 20, null, 1970-01-01T00:00:00.006, par3], "
         + "+I[id7, Bob, 44, null, 1970-01-01T00:00:00.007, par4], "
         + "+I[id8, Han, 56, null, 1970-01-01T00:00:00.008, par4]]";
+    assertRowsEquals(result, expected);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"insert", "upsert", "bulk_insert"})
+  void testParquetComplexTypes(String operation) {
+    TableEnvironment tableEnv = batchTableEnv;
+
+    String hoodieTableDDL = sql("t1")
+        .field("f_int int")
+        .field("f_array array<varchar(10)>")
+        .field("f_map map<varchar(20), int>")
+        .field("f_row row(f_row_f0 int, f_row_f1 varchar(10))")
+        .pkField("f_int")
+        .noPartition()
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.OPERATION, operation)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    execInsertSql(tableEnv, TestSQL.COMPLEX_TYPE_INSERT_T1);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    final String expected = "["
+        + "+I[1, [abc1, def1], {abc1=1, def1=3}, +I[1, abc1]], "
+        + "+I[2, [abc2, def2], {def2=3, abc2=1}, +I[2, abc2]], "
+        + "+I[3, [abc3, def3], {def3=3, abc3=1}, +I[3, abc3]]]";
+    assertRowsEquals(result, expected);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"insert", "upsert", "bulk_insert"})
+  void testParquetComplexNestedRowTypes(String operation) {
+    TableEnvironment tableEnv = batchTableEnv;
+
+    String hoodieTableDDL = sql("t1")
+        .field("f_int int")
+        .field("f_array array<varchar(10)>")
+        .field("f_map map<varchar(20), int>")
+        .field("f_row row(f_nested_array array<varchar(10)>, f_nested_row row(f_row_f0 int, f_row_f1 varchar(10)))")
+        .pkField("f_int")
+        .noPartition()
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.OPERATION, operation)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    execInsertSql(tableEnv, TestSQL.COMPLEX_NESTED_ROW_TYPE_INSERT_T1);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    final String expected = "["
+        + "+I[1, [abc1, def1], {abc1=1, def1=3}, +I[[abc1, def1], +I[1, abc1]]], "
+        + "+I[2, [abc2, def2], {def2=3, abc2=1}, +I[[abc2, def2], +I[2, abc2]]], "
+        + "+I[3, [abc3, def3], {def3=3, abc3=1}, +I[[abc3, def3], +I[3, abc3]]]]";
     assertRowsEquals(result, expected);
   }
 

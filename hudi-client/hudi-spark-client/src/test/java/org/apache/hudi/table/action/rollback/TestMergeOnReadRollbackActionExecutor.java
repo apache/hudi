@@ -20,7 +20,6 @@ package org.apache.hudi.table.action.rollback;
 
 import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
 import org.apache.hudi.client.SparkRDDWriteClient;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -112,7 +111,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
       assertTrue(meta.getSuccessDeleteFiles() == null || meta.getSuccessDeleteFiles().size() == 0);
     }
 
-    //4. assert filegroup after rollback, and compare to the rollbackstat
+    //4. assert file group after rollback, and compare to the rollbackstat
     // assert the first partition data and log file size
     List<HoodieFileGroup> firstPartitionRollBack1FileGroups = table.getFileSystemView().getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
     assertEquals(1, firstPartitionRollBack1FileGroups.size());
@@ -163,7 +162,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withRollbackUsingMarkers(false)
-        .withPath(basePath).withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build()).build();
+        .withPath(basePath).build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       client.startCommitWithTime("001");
       client.insert(jsc.emptyRDD(), "001");

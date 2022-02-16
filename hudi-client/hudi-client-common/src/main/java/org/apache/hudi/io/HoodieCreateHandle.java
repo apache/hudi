@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
@@ -37,6 +36,7 @@ import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
@@ -119,7 +119,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
 
   @Override
   public boolean canWrite(HoodieRecord record) {
-    return fileWriter.canWrite() && record.getPartitionPath().equals(writeStatus.getPartitionPath());
+    return (fileWriter.canWrite() && record.getPartitionPath().equals(writeStatus.getPartitionPath()))
+        || layoutControlsNumFiles();
   }
 
   /**
@@ -127,7 +128,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
    */
   @Override
   public void write(HoodieRecord record, Option<IndexedRecord> avroRecord) {
-    Option recordMetadata = record.getData().getMetadata();
+    Option recordMetadata = ((HoodieRecordPayload) record.getData()).getMetadata();
     if (HoodieOperation.isDelete(record.getOperation())) {
       avroRecord = Option.empty();
     }
@@ -139,6 +140,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
         IndexedRecord recordWithMetadataInSchema = rewriteRecord((GenericRecord) avroRecord.get());
         if (preserveHoodieMetadata) {
+          // do not preserve FILENAME_METADATA_FIELD
+          recordWithMetadataInSchema.put(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.FILENAME_METADATA_FIELD), path.getName());
           fileWriter.writeAvro(record.getRecordKey(), recordWithMetadataInSchema);
         } else {
           fileWriter.writeAvroWithMetadata(recordWithMetadataInSchema, record);

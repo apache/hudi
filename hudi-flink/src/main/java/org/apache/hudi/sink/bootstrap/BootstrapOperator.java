@@ -20,6 +20,7 @@ package org.apache.hudi.sink.bootstrap;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
@@ -179,9 +180,6 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
   protected void loadRecords(String partitionPath) throws Exception {
     long start = System.currentTimeMillis();
 
-    BaseFileUtils fileUtils = BaseFileUtils.getInstance(this.hoodieTable.getBaseFileFormat());
-    Schema schema = new TableSchemaResolver(this.hoodieTable.getMetaClient()).getTableAvroSchema();
-
     final int parallelism = getRuntimeContext().getNumberOfParallelSubtasks();
     final int maxParallelism = getRuntimeContext().getMaxNumberOfParallelSubtasks();
     final int taskID = getRuntimeContext().getIndexOfThisSubtask();
@@ -193,6 +191,9 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
     Option<HoodieInstant> latestCommitTime = commitsTimeline.filterCompletedInstants().lastInstant();
 
     if (latestCommitTime.isPresent()) {
+      BaseFileUtils fileUtils = BaseFileUtils.getInstance(this.hoodieTable.getBaseFileFormat());
+      Schema schema = new TableSchemaResolver(this.hoodieTable.getMetaClient()).getTableAvroSchema();
+
       List<FileSlice> fileSlices = this.hoodieTable.getSliceView()
           .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.get().getTimestamp(), true)
           .collect(toList());
@@ -251,7 +252,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
 
   @SuppressWarnings("unchecked")
   public static HoodieRecord generateHoodieRecord(HoodieKey hoodieKey, FileSlice fileSlice) {
-    HoodieRecord hoodieRecord = new HoodieRecord(hoodieKey, null);
+    HoodieRecord hoodieRecord = new HoodieAvroRecord(hoodieKey, null);
     hoodieRecord.setCurrentLocation(new HoodieRecordGlobalLocation(hoodieKey.getPartitionPath(), fileSlice.getBaseInstantTime(), fileSlice.getFileId()));
     hoodieRecord.seal();
 

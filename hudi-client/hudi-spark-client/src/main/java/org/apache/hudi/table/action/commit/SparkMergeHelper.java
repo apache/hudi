@@ -43,7 +43,7 @@ import org.apache.spark.api.java.JavaRDD;
 import java.io.IOException;
 import java.util.Iterator;
 
-public class SparkMergeHelper<T extends HoodieRecordPayload> extends AbstractMergeHelper<T, JavaRDD<HoodieRecord<T>>,
+public class SparkMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHelper<T, JavaRDD<HoodieRecord<T>>,
     JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   private SparkMergeHelper() {

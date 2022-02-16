@@ -73,9 +73,9 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
   }
 
   public static void createCommitFileWithMetadata(String basePath, String commitTime, Configuration configuration,
-      Option<Integer> writes, Option<Integer> updates, Map<String, String> extraMetdata) throws Exception {
+                                                  Option<Integer> writes, Option<Integer> updates, Map<String, String> extraMetadata) throws Exception {
     createCommitFileWithMetadata(basePath, commitTime, configuration, UUID.randomUUID().toString(),
-        UUID.randomUUID().toString(), writes, updates, extraMetdata);
+        UUID.randomUUID().toString(), writes, updates, extraMetadata);
   }
 
   public static void createCommitFileWithMetadata(String basePath, String commitTime, Configuration configuration,

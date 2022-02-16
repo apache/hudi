@@ -114,11 +114,22 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
 
   @Override
   protected void resetViewState() {
-    this.fgIdToPendingCompaction = null;
-    this.partitionToFileGroupsMap = null;
-    this.fgIdToBootstrapBaseFile = null;
-    this.fgIdToReplaceInstants = null;
-    this.fgIdToPendingClustering = null;
+    // do not nullify the members to avoid NPE.
+
+    // there are two cases that #resetViewState is called:
+    // 1. when #sync is invoked, the view clear the state through calling #resetViewState,
+    // then re-initialize the view;
+    // 2. when #close is invoked.
+    // (see AbstractTableFileSystemView for details.)
+
+    // for the 1st case, we better do not nullify the members when #resetViewState
+    // because there is possibility that this in-memory view is a backend view under TimelineServer,
+    // and many methods in the RequestHandler is not thread safe, when performRefreshCheck flag in ViewHandler
+    // is set as false, the view does not perform refresh check, if #sync is called just before and the members
+    // are nullified, the methods that use these members would throw NPE.
+
+    // actually there is no need to nullify the members here for 1st case, the members are assigned with new values
+    // when calling #init, for 2nd case, the #close method already nullify the members.
   }
 
   protected Map<String, List<HoodieFileGroup>> createPartitionToFileGroups() {
@@ -350,10 +361,11 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   @Override
   public void close() {
     super.close();
-    partitionToFileGroupsMap = null;
-    fgIdToPendingCompaction = null;
-    fgIdToBootstrapBaseFile = null;
-    fgIdToReplaceInstants = null;
+    this.fgIdToPendingCompaction = null;
+    this.partitionToFileGroupsMap = null;
+    this.fgIdToBootstrapBaseFile = null;
+    this.fgIdToReplaceInstants = null;
+    this.fgIdToPendingClustering = null;
     closed = true;
   }
 

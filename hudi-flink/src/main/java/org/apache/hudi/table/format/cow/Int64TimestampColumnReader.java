@@ -27,6 +27,8 @@ import org.apache.parquet.schema.PrimitiveType;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 /**
  * Timestamp {@link org.apache.flink.formats.parquet.vector.reader.ColumnReader} that supports INT64 8 bytes,
@@ -40,12 +42,25 @@ public class Int64TimestampColumnReader extends AbstractColumnReader<WritableTim
 
   private final boolean utcTimestamp;
 
+  private final ChronoUnit chronoUnit;
+
   public Int64TimestampColumnReader(
       boolean utcTimestamp,
       ColumnDescriptor descriptor,
-      PageReader pageReader) throws IOException {
+      PageReader pageReader,
+      int precision) throws IOException {
     super(descriptor, pageReader);
     this.utcTimestamp = utcTimestamp;
+    if (precision <= 3) {
+      this.chronoUnit = ChronoUnit.MILLIS;
+    } else if (precision <= 6) {
+      this.chronoUnit = ChronoUnit.MICROS;
+    } else {
+      throw new IllegalArgumentException(
+          "Avro does not support TIMESTAMP type with precision: "
+              + precision
+              + ", it only supports precision less than 6.");
+    }
     checkTypeName(PrimitiveType.PrimitiveTypeName.INT64);
   }
 
@@ -59,7 +74,7 @@ public class Int64TimestampColumnReader extends AbstractColumnReader<WritableTim
     for (int i = 0; i < num; i++) {
       if (runLenDecoder.readInteger() == maxDefLevel) {
         ByteBuffer buffer = readDataBuffer(8);
-        column.setTimestamp(rowId + i, int64ToTimestamp(utcTimestamp, buffer.getLong()));
+        column.setTimestamp(rowId + i, int64ToTimestamp(utcTimestamp, buffer.getLong(), chronoUnit));
       } else {
         column.setNullAt(rowId + i);
       }
@@ -75,7 +90,7 @@ public class Int64TimestampColumnReader extends AbstractColumnReader<WritableTim
     for (int i = rowId; i < rowId + num; ++i) {
       if (!column.isNullAt(i)) {
         column.setTimestamp(i, decodeInt64ToTimestamp(
-            utcTimestamp, dictionary, dictionaryIds.getInt(i)));
+            utcTimestamp, dictionary, dictionaryIds.getInt(i), chronoUnit));
       }
     }
   }
@@ -83,17 +98,22 @@ public class Int64TimestampColumnReader extends AbstractColumnReader<WritableTim
   public static TimestampData decodeInt64ToTimestamp(
       boolean utcTimestamp,
       org.apache.parquet.column.Dictionary dictionary,
-      int id) {
+      int id,
+      ChronoUnit unit) {
     long value = dictionary.decodeToLong(id);
-    return int64ToTimestamp(utcTimestamp, value);
+    return int64ToTimestamp(utcTimestamp, value, unit);
   }
 
-  private static TimestampData int64ToTimestamp(boolean utcTimestamp, long millionsOfDay) {
+  private static TimestampData int64ToTimestamp(
+      boolean utcTimestamp,
+      long interval,
+      ChronoUnit unit) {
+    final Instant instant = Instant.EPOCH.plus(interval, unit);
     if (utcTimestamp) {
-      return TimestampData.fromEpochMillis(millionsOfDay, 0);
+      return TimestampData.fromInstant(instant);
     } else {
-      Timestamp timestamp = new Timestamp(millionsOfDay);
-      return TimestampData.fromTimestamp(timestamp);
+      // this applies the local timezone
+      return TimestampData.fromTimestamp(Timestamp.from(instant));
     }
   }
 }

@@ -29,8 +29,8 @@ import org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelect
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.bootstrap.FileStatusUtils;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -171,7 +171,7 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
   }
 
   @Test
-  public void testMetadataBootstrapUnpartitionedCOW() throws Exception {
+  public void testMetadataBootstrapNonpartitionedCOW() throws Exception {
     testBootstrapCommon(false, false, EffectiveMode.METADATA_BOOTSTRAP_MODE);
   }
 
@@ -221,7 +221,7 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
         bootstrapInstants = Arrays.asList(bootstrapCommitInstantTs);
         break;
       default:
-        bootstrapModeSelectorClass = TestRandomBootstapModeSelector.class.getName();
+        bootstrapModeSelectorClass = TestRandomBootstrapModeSelector.class.getName();
         bootstrapCommitInstantTs = HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS;
         checkNumRawFiles = false;
         isBootstrapIndexCreated = true;
@@ -245,7 +245,6 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
             .withFullBootstrapInputProvider(TestFullBootstrapDataProvider.class.getName())
             .withBootstrapParallelism(3)
             .withBootstrapModeSelector(bootstrapModeSelectorClass).build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .build();
     SparkRDDWriteClient client = new SparkRDDWriteClient(context, config);
     client.bootstrap(Option.empty());
@@ -425,7 +424,7 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
           try {
             String key = gr.get("_row_key").toString();
             String pPath = p.getKey();
-            return new HoodieRecord<>(new HoodieKey(key, pPath), new RawTripTestPayload(gr.toString(), key, pPath,
+            return new HoodieAvroRecord<>(new HoodieKey(key, pPath), new RawTripTestPayload(gr.toString(), key, pPath,
                 HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA));
           } catch (IOException e) {
             throw new HoodieIOException(e.getMessage(), e);
@@ -437,10 +436,10 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
     }).collect(Collectors.toList()));
   }
 
-  public static class TestRandomBootstapModeSelector extends BootstrapModeSelector {
+  public static class TestRandomBootstrapModeSelector extends BootstrapModeSelector {
     private int currIdx = new Random().nextInt(2);
 
-    public TestRandomBootstapModeSelector(HoodieWriteConfig writeConfig) {
+    public TestRandomBootstrapModeSelector(HoodieWriteConfig writeConfig) {
       super(writeConfig);
     }
 
