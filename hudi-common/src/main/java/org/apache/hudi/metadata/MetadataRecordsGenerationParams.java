@@ -24,6 +24,9 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import java.io.Serializable;
 import java.util.List;
 
+/**
+ * Encapsulates all parameters required to generate metadata index for enabled index types.
+ */
 public class MetadataRecordsGenerationParams implements Serializable {
 
   private final HoodieTableMetaClient dataMetaClient;
@@ -31,15 +34,16 @@ public class MetadataRecordsGenerationParams implements Serializable {
   private final String bloomFilterType;
   private final int bloomIndexParallelism;
   private final boolean isAllColumnStatsIndexEnabled;
+  private final int columnStatsIndexParallelism;
 
-  MetadataRecordsGenerationParams(HoodieTableMetaClient dataMetaClient, List<MetadataPartitionType> enabledPartitionTypes,
-                                  String bloomFilterType, int bloomIndexParallelism, boolean isAllColumnStatsIndexEnabled) {
-
+  MetadataRecordsGenerationParams(HoodieTableMetaClient dataMetaClient, List<MetadataPartitionType> enabledPartitionTypes, String bloomFilterType, int bloomIndexParallelism,
+      boolean isAllColumnStatsIndexEnabled, int columnStatsIndexParallelism) {
     this.dataMetaClient = dataMetaClient;
     this.enabledPartitionTypes = enabledPartitionTypes;
     this.bloomFilterType = bloomFilterType;
     this.bloomIndexParallelism = Math.max(bloomIndexParallelism, 1);
     this.isAllColumnStatsIndexEnabled = isAllColumnStatsIndexEnabled;
+    this.columnStatsIndexParallelism = columnStatsIndexParallelism;
   }
 
   public HoodieTableMetaClient getDataMetaClient() {
@@ -60,5 +64,9 @@ public class MetadataRecordsGenerationParams implements Serializable {
 
   public int getBloomIndexParallelism() {
     return bloomIndexParallelism;
+  }
+
+  public int getColumnStatsIndexParallelism() {
+    return columnStatsIndexParallelism;
   }
 }

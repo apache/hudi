@@ -74,6 +74,8 @@ import java.util.Properties;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.COLUMN_RANGE_MERGE_FUNCTION;
+
 /**
  * IO Operation to append data onto an existing file.
  */
@@ -360,7 +362,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
               fieldSize,
               fieldSize
       );
-      columnRangeMap.merge(field.name(), fieldRange, HoodieColumnRangeMetadata.COLUMN_RANGE_MERGE_FUNCTION);
+      columnRangeMap.merge(field.name(), fieldRange, COLUMN_RANGE_MERGE_FUNCTION);
     });
   }
 
@@ -383,10 +385,12 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       updateWriteStatus(stat, result);
     }
 
-    Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap = stat.getRecordsStats().isPresent()
-        ? stat.getRecordsStats().get().getStats() : new HashMap<>();
-    getRecordsStats(stat.getPath(), recordList, columnRangeMap);
-    stat.setRecordsStats(new HoodieDeltaWriteStat.RecordsStats<>(columnRangeMap));
+    if (config.isMetadataIndexColumnStatsForAllColumnsEnabled()) {
+      Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap = stat.getRecordsStats().isPresent()
+              ? stat.getRecordsStats().get().getStats() : new HashMap<>();
+      getRecordsStats(stat.getPath(), recordList, columnRangeMap);
+      stat.setRecordsStats(new HoodieDeltaWriteStat.RecordsStats<>(columnRangeMap));
+    }
 
     resetWriteCounts();
     assert stat.getRuntimeStats() != null;

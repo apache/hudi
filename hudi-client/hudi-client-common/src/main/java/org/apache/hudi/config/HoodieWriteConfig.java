@@ -1453,6 +1453,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return isMetadataTableEnabled() && getMetadataConfig().isMetadataColumnStatsIndexForAllColumnsEnabled();
   }
 
+  public int getColumnStatsIndexParallelism() {
+    return metadataConfig.getColumnStatsIndexParallelism();
+  }
+
   public int getBloomIndexKeysPerBucket() {
     return getInt(HoodieIndexConfig.BLOOM_INDEX_KEYS_PER_BUCKET);
   }

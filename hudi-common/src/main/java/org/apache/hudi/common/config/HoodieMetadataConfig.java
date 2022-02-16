@@ -165,6 +165,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "used for pruning files during the index lookups. Only applies if "
           + ENABLE_METADATA_INDEX_COLUMN_STATS.key() + " is enabled.A");
 
+  public static final ConfigProperty<Integer> COLUMN_STATS_INDEX_PARALLELISM = ConfigProperty
+          .key(METADATA_PREFIX + ".index.column.stats.parallelism")
+          .defaultValue(1)
+          .sinceVersion("0.11.0")
+          .withDocumentation("Parallelism to use, when generating column stats index.");
+
   public static final ConfigProperty<Boolean> POPULATE_META_FIELDS = ConfigProperty
       .key(METADATA_PREFIX + ".populate.meta.fields")
       .defaultValue(false)
@@ -216,6 +222,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public int getColumnStatsIndexFileGroupCount() {
     return getIntOrDefault(METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT);
+  }
+
+  public int getColumnStatsIndexParallelism() {
+    return getIntOrDefault(COLUMN_STATS_INDEX_PARALLELISM);
   }
 
   public boolean enableMetrics() {
@@ -277,6 +287,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withMetadataIndexColumnStatsFileGroupCount(int fileGroupCount) {
       metadataConfig.setValue(METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT, String.valueOf(fileGroupCount));
+      return this;
+    }
+
+    public Builder withColumnStatsIndexParallelism(int parallelism) {
+      metadataConfig.setValue(COLUMN_STATS_INDEX_PARALLELISM, String.valueOf(parallelism));
       return this;
     }
 
