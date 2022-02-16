@@ -62,9 +62,9 @@ import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
+import org.apache.hudi.table.storage.HoodieStorageLayout;
 
 import org.apache.hadoop.hbase.io.compress.Compression;
-import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.orc.CompressionKind;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
@@ -440,6 +440,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(RandomFileIdPrefixProvider.class.getName())
       .sinceVersion("0.10.0")
       .withDocumentation("File Id Prefix provider class, that implements `org.apache.hudi.fileid.FileIdPrefixProvider`");
+
+  public static final ConfigProperty<Boolean> TABLE_SERVICES_ENABLED = ConfigProperty
+      .key("hoodie.table.services.enabled")
+      .defaultValue(true)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Master control to disable all table services including archive, clean, compact, cluster, etc.");
 
   private ConsistencyGuardConfig consistencyGuardConfig;
 
@@ -1137,6 +1143,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieCompactionConfig.AUTO_ARCHIVE);
   }
 
+  public boolean isAsyncArchive() {
+    return getBoolean(HoodieCompactionConfig.ASYNC_ARCHIVE);
+  }
+
   public boolean isAsyncClean() {
     return getBoolean(HoodieCompactionConfig.ASYNC_CLEAN);
   }
@@ -1147,6 +1157,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean inlineCompactionEnabled() {
     return getBoolean(HoodieCompactionConfig.INLINE_COMPACT);
+  }
+
+  public boolean scheduleInlineCompaction() {
+    return getBoolean(HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT);
   }
 
   public CompactionTriggerStrategy getInlineCompactTriggerStrategy() {
@@ -1187,6 +1201,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean inlineClusteringEnabled() {
     return getBoolean(HoodieClusteringConfig.INLINE_CLUSTERING);
+  }
+
+  public boolean scheduleInlineClustering() {
+    return getBoolean(HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING);
   }
 
   public boolean isAsyncClusteringEnabled() {
@@ -1868,12 +1886,12 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   /**
-   * Are any table services configured to run inline?
+   * Are any table services configured to run inline for both scheduling and execution?
    *
    * @return True if any table services are configured to run inline, false otherwise.
    */
-  public Boolean areAnyTableServicesInline() {
-    return inlineClusteringEnabled() || inlineCompactionEnabled() || isAutoClean();
+  public Boolean areAnyTableServicesExecutedInline() {
+    return inlineClusteringEnabled() || inlineCompactionEnabled() || isAutoClean() || isAutoArchive();
   }
 
   /**
@@ -1882,7 +1900,11 @@ public class HoodieWriteConfig extends HoodieConfig {
    * @return True if any table services are configured to run async, false otherwise.
    */
   public Boolean areAnyTableServicesAsync() {
-    return isAsyncClusteringEnabled() || !inlineCompactionEnabled() || isAsyncClean();
+    return isAsyncClusteringEnabled() || !inlineCompactionEnabled() || isAsyncClean() || isAsyncArchive();
+  }
+
+  public Boolean areAnyTableServicesScheduledInline() {
+    return scheduleInlineCompaction() || scheduleInlineClustering();
   }
 
   public String getPreCommitValidators() {
@@ -1911,6 +1933,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getFileIdPrefixProviderClassName() {
     return getString(FILEID_PREFIX_PROVIDER_CLASS);
+  }
+
+  public boolean areTableServicesEnabled() {
+    return getBooleanOrDefault(TABLE_SERVICES_ENABLED);
   }
 
   /**
@@ -2275,6 +2301,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withFileIdPrefixProviderClassName(String fileIdPrefixProviderClassName) {
       writeConfig.setValue(FILEID_PREFIX_PROVIDER_CLASS, fileIdPrefixProviderClassName);
+      return this;
+    }
+
+    public Builder withTableServicesEnabled(boolean enabled) {
+      writeConfig.setValue(TABLE_SERVICES_ENABLED, Boolean.toString(enabled));
       return this;
     }
 

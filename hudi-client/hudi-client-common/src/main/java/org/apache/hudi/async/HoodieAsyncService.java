@@ -36,7 +36,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
 /**
- * Base Class for running clean/delta-sync/compaction/clustering in separate thread and controlling their life-cycle.
+ * Base Class for running archive/clean/delta-sync/compaction/clustering in separate thread and controlling their life-cycles.
  */
 public abstract class HoodieAsyncService implements Serializable {
 
@@ -70,11 +70,15 @@ public abstract class HoodieAsyncService implements Serializable {
     this.runInDaemonMode = runInDaemonMode;
   }
 
-  protected boolean isShutdownRequested() {
+  public boolean isStarted() {
+    return started;
+  }
+
+  public boolean isShutdownRequested() {
     return shutdownRequested;
   }
 
-  protected boolean isShutdown() {
+  public boolean isShutdown() {
     return shutdown;
   }
 
@@ -85,6 +89,9 @@ public abstract class HoodieAsyncService implements Serializable {
    * @throws InterruptedException
    */
   public void waitForShutdown() throws ExecutionException, InterruptedException {
+    if (future == null) {
+      return;
+    }
     try {
       future.get();
     } catch (ExecutionException ex) {
@@ -125,6 +132,10 @@ public abstract class HoodieAsyncService implements Serializable {
    * @param onShutdownCallback
    */
   public void start(Function<Boolean, Boolean> onShutdownCallback) {
+    if (started) {
+      LOG.warn("The async service already started.");
+      return;
+    }
     Pair<CompletableFuture, ExecutorService> res = startService();
     future = res.getKey();
     executor = res.getValue();
@@ -134,8 +145,6 @@ public abstract class HoodieAsyncService implements Serializable {
 
   /**
    * Service implementation.
-   * 
-   * @return
    */
   protected abstract Pair<CompletableFuture, ExecutorService> startService();
 
@@ -146,6 +155,9 @@ public abstract class HoodieAsyncService implements Serializable {
    */
   @SuppressWarnings("unchecked")
   private void shutdownCallback(Function<Boolean, Boolean> callback) {
+    if (future == null) {
+      return;
+    }
     future.whenComplete((resp, error) -> {
       if (null != callback) {
         callback.apply(null != error);

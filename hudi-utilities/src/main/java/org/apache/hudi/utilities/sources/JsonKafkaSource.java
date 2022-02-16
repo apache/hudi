@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.exception.HoodieSourceTimeoutException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -35,8 +36,6 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.streaming.kafka010.KafkaUtils;
 import org.apache.spark.streaming.kafka010.LocationStrategies;
 import org.apache.spark.streaming.kafka010.OffsetRange;
-
-import java.util.Objects;
 
 /**
  * Read json kafka data.
@@ -79,7 +78,7 @@ public class JsonKafkaSource extends JsonSource {
             offsetGen.getKafkaParams(),
             offsetRanges,
             LocationStrategies.PreferConsistent())
-        .filter(x -> Objects.nonNull(x.value()))
+        .filter(x -> !StringUtils.isNullOrEmpty((String)x.value()))
         .map(x -> x.value().toString());
   }
 

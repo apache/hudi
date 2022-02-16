@@ -38,6 +38,7 @@ import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.LatencyMarker;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.flink.streaming.runtime.watermarkstatus.WatermarkStatus;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.OutputTag;
 
@@ -99,6 +100,11 @@ public class CompactFunctionWrapper {
     Output<StreamRecord<CompactionPlanEvent>> output = new Output<StreamRecord<CompactionPlanEvent>>() {
       @Override
       public void emitWatermark(Watermark watermark) {
+
+      }
+
+      @Override
+      public void emitWatermarkStatus(WatermarkStatus watermarkStatus) {
 
       }
 

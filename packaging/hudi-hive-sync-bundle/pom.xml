@@ -69,9 +69,6 @@
                   <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-hive-sync</include>
 
-                  <!-- TODO(HUDI-3239) remove this -->
-                  <include>org.scala-lang:scala-library</include>
-
                   <include>com.beust:jcommander</include>
                   <include>org.apache.avro:avro</include>
                   <include>org.apache.parquet:parquet-avro</include>
@@ -132,14 +129,6 @@
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-hive-sync</artifactId>
       <version>${project.version}</version>
-    </dependency>
-
-    <!-- Scala -->
-    <!-- TODO(HUDI-3239) remove this dep -->
-    <dependency>
-      <groupId>org.scala-lang</groupId>
-      <artifactId>scala-library</artifactId>
-      <version>${scala.version}</version>
     </dependency>
 
     <!-- Parquet -->

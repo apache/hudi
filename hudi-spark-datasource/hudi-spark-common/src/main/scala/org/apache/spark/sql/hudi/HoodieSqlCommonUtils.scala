@@ -32,11 +32,11 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{Resolver, UnresolvedRelation}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
-import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Expression}
+import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Cast, Expression, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
-import org.apache.spark.sql.internal.StaticSQLConf
-import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
+import org.apache.spark.sql.types.{DataType, NullType, StringType, StructField, StructType}
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 
 import java.net.URI
@@ -53,24 +53,6 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   ThreadLocal.withInitial(new java.util.function.Supplier[SimpleDateFormat] {
     override def get() = new SimpleDateFormat("yyyy-MM-dd")
   })
-
-  def isHoodieTable(table: CatalogTable): Boolean = {
-    table.provider.map(_.toLowerCase(Locale.ROOT)).orNull == "hudi"
-  }
-
-  def isHoodieTable(tableId: TableIdentifier, spark: SparkSession): Boolean = {
-    val table = spark.sessionState.catalog.getTableMetadata(tableId)
-    isHoodieTable(table)
-  }
-
-  def isHoodieTable(table: LogicalPlan, spark: SparkSession): Boolean = {
-    tripAlias(table) match {
-      case LogicalRelation(_, _, Some(tbl), _) => isHoodieTable(tbl)
-      case relation: UnresolvedRelation =>
-        isHoodieTable(sparkAdapter.toTableIdentifier(relation), spark)
-      case _=> false
-    }
-  }
 
   def getTableIdentifier(table: LogicalPlan): TableIdentifier = {
     table match {
@@ -200,14 +182,29 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     getTableLocation(table, spark)
   }
 
+  def getTableLocation(properties: Map[String, String], identifier: TableIdentifier, sparkSession: SparkSession): String = {
+    val location: Option[String] = Some(properties.getOrElse("location", ""))
+    val isManaged = location.isEmpty || location.get.isEmpty
+    val uri = if (isManaged) {
+      Some(sparkSession.sessionState.catalog.defaultTablePath(identifier))
+    } else {
+      Some(new Path(location.get).toUri)
+    }
+    getTableLocation(uri, identifier, sparkSession)
+  }
+
   def getTableLocation(table: CatalogTable, sparkSession: SparkSession): String = {
     val uri = table.storage.locationUri.orElse {
       Some(sparkSession.sessionState.catalog.defaultTablePath(table.identifier))
     }
+    getTableLocation(uri, table.identifier, sparkSession)
+  }
+
+  def getTableLocation(uri: Option[URI], identifier: TableIdentifier, sparkSession: SparkSession): String = {
     val conf = sparkSession.sessionState.newHadoopConf()
     uri.map(makePathQualified(_, conf))
       .map(removePlaceHolder)
-      .getOrElse(throw new IllegalArgumentException(s"Missing location for ${table.identifier}"))
+      .getOrElse(throw new IllegalArgumentException(s"Missing location for ${identifier}"))
   }
 
   private def removePlaceHolder(path: String): String = {
@@ -315,5 +312,13 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   // name(by resolver) and dataType.
   def columnEqual(field: StructField, other: StructField, resolver: Resolver): Boolean = {
     resolver(field.name, other.name) && field.dataType == other.dataType
+  }
+
+  def castIfNeeded(child: Expression, dataType: DataType, conf: SQLConf): Expression = {
+    child match {
+      case Literal(nul, NullType) => Literal(nul, dataType)
+      case _ => if (child.dataType != dataType)
+        Cast(child, dataType, Option(conf.sessionLocalTimeZone)) else child
+    }
   }
 }

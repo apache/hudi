@@ -38,6 +38,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.exception.HoodieException;
 
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -266,8 +267,8 @@ public class HoodieCompactor {
           throw new HoodieCompactionException("There is no scheduled compaction in the table.");
         }
       }
-      JavaRDD<WriteStatus> writeResponse = client.compact(cfg.compactionInstantTime);
-      return UtilHelpers.handleErrors(jsc, cfg.compactionInstantTime, writeResponse);
+      HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(cfg.compactionInstantTime);
+      return UtilHelpers.handleErrors(compactionMetadata.getCommitMetadata().get(), cfg.compactionInstantTime);
     }
   }
 

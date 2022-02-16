@@ -460,7 +460,7 @@ public class DeltaSync implements Serializable {
       schemaProvider = dataAndCheckpoint.getSchemaProvider();
     }
 
-    if (Objects.equals(checkpointStr, resumeCheckpointStr.orElse(null))) {
+    if (!cfg.allowCommitOnNoCheckpointChange && Objects.equals(checkpointStr, resumeCheckpointStr.orElse(null))) {
       LOG.info("No new data, source checkpoint has not changed. Nothing to commit. Old checkpoint=("
           + resumeCheckpointStr + "). New Checkpoint=(" + checkpointStr + ")");
       String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
@@ -596,7 +596,9 @@ public class DeltaSync implements Serializable {
     long metaSyncTimeMs = 0;
     if (!hasErrors || cfg.commitOnErrors) {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
-      checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);
+      if (checkpointStr != null) {
+        checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);
+      }
       if (cfg.checkpoint != null) {
         checkpointCommitMetadata.put(CHECKPOINT_RESET_KEY, cfg.checkpoint);
       }

@@ -35,9 +35,9 @@ import org.apache.spark.sql.SQLContext;
 import java.util.List;
 
 /**
- * Validator to run sql queries on new table state and expects a single result. If the result doesnt match expected result,
- * throw validation error. 
- * 
+ * Validator to run sql queries on new table state and expects a single result. If the result does not match expected result,
+ * throw validation error.
+ * <p>
  * Example configuration: "query1#expectedResult1;query2#expectedResult2;"
  */
 public class SqlQuerySingleResultPreCommitValidator<T extends HoodieRecordPayload, I, K, O extends JavaRDD<WriteStatus>> extends SqlQueryPreCommitValidator<T, I, K, O> {

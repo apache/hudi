@@ -87,7 +87,7 @@ public class SparkSizeBasedClusteringPlanStrategy<T extends HoodieRecordPayload<
 
       // Add to the current file-group
       currentGroup.add(currentSlice);
-      // assume each filegroup size is ~= parquet.max.file.size
+      // assume each file group size is ~= parquet.max.file.size
       totalSizeSoFar += currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
     }
 
@@ -118,7 +118,7 @@ public class SparkSizeBasedClusteringPlanStrategy<T extends HoodieRecordPayload<
   @Override
   protected Stream<FileSlice> getFileSlicesEligibleForClustering(final String partition) {
     return super.getFileSlicesEligibleForClustering(partition)
-        // Only files that have basefile size smaller than small file size are eligible.
+        // Only files that have base file size smaller than small file size are eligible.
         .filter(slice -> slice.getBaseFile().map(HoodieBaseFile::getFileSize).orElse(0L) < getWriteConfig().getClusteringSmallFileLimit());
   }
 

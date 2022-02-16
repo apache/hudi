@@ -7,13 +7,14 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package org.apache.hudi.common.table.log;
@@ -23,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 
@@ -53,10 +55,11 @@ public class HoodieFileSliceReader<T extends HoodieRecordPayload> implements Ite
       return new HoodieFileSliceReader(scanner.iterator());
     } else {
       Iterable<HoodieRecord<? extends HoodieRecordPayload>> iterable = () -> scanner.iterator();
+      HoodiePayloadConfig payloadConfig = HoodiePayloadConfig.newBuilder().withPayloadOrderingField(preCombineField).build();
       return new HoodieFileSliceReader(StreamSupport.stream(iterable.spliterator(), false)
           .map(e -> {
             try {
-              GenericRecord record = (GenericRecord) e.getData().getInsertValue(schema).get();
+              GenericRecord record = (GenericRecord) e.getData().getInsertValue(schema, payloadConfig.getProps()).get();
               return transform(record, scanner, payloadClass, preCombineField, simpleKeyGenFieldsOpt);
             } catch (IOException io) {
               throw new HoodieIOException("Error while creating reader for file slice with no base file.", io);

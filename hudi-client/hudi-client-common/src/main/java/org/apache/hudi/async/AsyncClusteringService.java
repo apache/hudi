@@ -38,7 +38,7 @@ import java.util.stream.IntStream;
  * Async clustering service that runs in a separate thread.
  * Currently, only one clustering thread is allowed to run at any time.
  */
-public abstract class AsyncClusteringService extends HoodieAsyncService {
+public abstract class AsyncClusteringService extends HoodieAsyncTableService {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(AsyncClusteringService.class);
@@ -51,7 +51,7 @@ public abstract class AsyncClusteringService extends HoodieAsyncService {
   }
 
   public AsyncClusteringService(BaseHoodieWriteClient writeClient, boolean runInDaemonMode) {
-    super(runInDaemonMode);
+    super(writeClient.getConfig(), runInDaemonMode);
     this.clusteringClient = createClusteringClient(writeClient);
     this.maxConcurrentClustering = 1;
   }

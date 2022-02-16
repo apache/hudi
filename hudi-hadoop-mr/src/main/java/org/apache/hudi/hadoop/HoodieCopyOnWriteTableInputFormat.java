@@ -27,7 +27,10 @@ import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.FileSplit;
+import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.RecordReader;
+import org.apache.hadoop.mapred.Reporter;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
@@ -43,13 +46,13 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
-import scala.collection.JavaConverters;
-import scala.collection.Seq;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -70,28 +73,10 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  *
  * NOTE: This class is invariant of the underlying file-format of the files being read
  */
-public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWritable, ArrayWritable>
+public class HoodieCopyOnWriteTableInputFormat extends FileInputFormat<NullWritable, ArrayWritable>
     implements Configurable {
 
   protected Configuration conf;
-
-  @Nonnull
-  private static RealtimeFileStatus createRealtimeFileStatusUnchecked(HoodieBaseFile baseFile, Stream<HoodieLogFile> logFiles) {
-    List<HoodieLogFile> sortedLogFiles = logFiles.sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
-    FileStatus baseFileStatus = getFileStatusUnchecked(baseFile);
-    try {
-      RealtimeFileStatus rtFileStatus = new RealtimeFileStatus(baseFileStatus);
-      rtFileStatus.setDeltaLogFiles(sortedLogFiles);
-      rtFileStatus.setBaseFilePath(baseFile.getPath());
-      if (baseFileStatus instanceof LocatedFileStatusWithBootstrapBaseFile || baseFileStatus instanceof FileStatusWithBootstrapBaseFile) {
-        rtFileStatus.setBootStrapFileStatus(baseFileStatus);
-      }
-
-      return rtFileStatus;
-    } catch (IOException e) {
-      throw new HoodieIOException(String.format("Failed to init %s", RealtimeFileStatus.class.getSimpleName()), e);
-    }
-  }
 
   @Override
   public final Configuration getConf() {
@@ -103,8 +88,6 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
     this.conf = conf;
   }
 
-  protected abstract boolean includeLogFilesForSnapshotView();
-
   @Override
   protected boolean isSplitable(FileSystem fs, Path filename) {
     return !(filename instanceof PathWithBootstrapFileStatus);
@@ -115,6 +98,16 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
                                 String[] hosts) {
     FileSplit split = new FileSplit(file, start, length, hosts);
 
+    if (file instanceof PathWithBootstrapFileStatus) {
+      return makeExternalFileSplit((PathWithBootstrapFileStatus)file, split);
+    }
+    return split;
+  }
+
+  @Override
+  protected FileSplit makeSplit(Path file, long start, long length,
+                                String[] hosts, String[] inMemoryHosts) {
+    FileSplit split = new FileSplit(file, start, length, hosts, inMemoryHosts);
     if (file instanceof PathWithBootstrapFileStatus) {
       return makeExternalFileSplit((PathWithBootstrapFileStatus)file, split);
     }
@@ -161,6 +154,15 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
     return returns.toArray(new FileStatus[0]);
   }
 
+  @Override
+  public RecordReader<NullWritable, ArrayWritable> getRecordReader(InputSplit split, JobConf job, Reporter reporter) throws IOException {
+    throw new UnsupportedEncodingException("not implemented");
+  }
+
+  protected boolean includeLogFilesForSnapshotView() {
+    return false;
+  }
+
   /**
    * Abstracts and exposes {@link FileInputFormat#listStatus(JobConf)} operation to subclasses that
    * lists files (returning an array of {@link FileStatus}) corresponding to the input paths specified
@@ -196,16 +198,6 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
     setInputPaths(job, incrementalInputPaths.get());
     FileStatus[] fileStatuses = doListStatus(job);
     return HoodieInputFormatUtils.filterIncrementalFileStatus(jobContext, tableMetaClient, timeline.get(), fileStatuses, commitsToCheck.get());
-  }
-
-  @Override
-  protected FileSplit makeSplit(Path file, long start, long length,
-                                String[] hosts, String[] inMemoryHosts) {
-    FileSplit split = new FileSplit(file, start, length, hosts, inMemoryHosts);
-    if (file instanceof PathWithBootstrapFileStatus) {
-      return makeExternalFileSplit((PathWithBootstrapFileStatus)file, split);
-    }
-    return split;
   }
 
   private BootstrapBaseFileSplit makeExternalFileSplit(PathWithBootstrapFileStatus file, FileSplit split) {
@@ -254,25 +246,23 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
               engineContext,
               tableMetaClient,
               props,
-              HoodieTableQueryType.QUERY_TYPE_SNAPSHOT,
+              HoodieTableQueryType.SNAPSHOT,
               partitionPaths,
               queryCommitInstant,
               shouldIncludePendingCommits);
 
-      Map<String, Seq<FileSlice>> partitionedFileSlices =
-          JavaConverters.mapAsJavaMapConverter(fileIndex.listFileSlices()).asJava();
+      Map<String, List<FileSlice>> partitionedFileSlices = fileIndex.listFileSlices();
 
       targetFiles.addAll(
           partitionedFileSlices.values()
               .stream()
-              .flatMap(seq -> JavaConverters.seqAsJavaListConverter(seq).asJava().stream())
+              .flatMap(Collection::stream)
               .map(fileSlice -> {
                 Option<HoodieBaseFile> baseFileOpt = fileSlice.getBaseFile();
                 Option<HoodieLogFile> latestLogFileOpt = fileSlice.getLatestLogFile();
                 Stream<HoodieLogFile> logFiles = fileSlice.getLogFiles();
 
-                Option<HoodieInstant> latestCompletedInstantOpt =
-                    fromScala(fileIndex.latestCompletedInstant());
+                Option<HoodieInstant> latestCompletedInstantOpt = fileIndex.getLatestCompletedInstant();
 
                 // Check if we're reading a MOR table
                 if (includeLogFilesForSnapshotView()) {
@@ -296,7 +286,7 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
       );
     }
 
-    // TODO cleanup
+    // TODO(HUDI-3280) cleanup
     validate(targetFiles, listStatusForSnapshotModeLegacy(job, tableMetaClientMap, snapshotPaths));
 
     return targetFiles;
@@ -368,13 +358,5 @@ public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWrit
     } catch (IOException e) {
       throw new HoodieIOException(String.format("Failed to init %s", RealtimeFileStatus.class.getSimpleName()), e);
     }
-  }
-
-  private static Option<HoodieInstant> fromScala(scala.Option<HoodieInstant> opt) {
-    if (opt.isDefined()) {
-      return Option.of(opt.get());
-    }
-
-    return Option.empty();
   }
 }

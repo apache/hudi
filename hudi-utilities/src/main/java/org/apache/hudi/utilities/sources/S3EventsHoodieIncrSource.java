@@ -22,6 +22,7 @@ import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -33,7 +34,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.sql.DataFrameReader;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
@@ -101,24 +101,33 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
             ? lastCkptStr.get().isEmpty() ? Option.empty() : lastCkptStr
             : Option.empty();
 
-    Pair<String, String> instantEndpts =
+    Pair<String, Pair<String, String>> queryTypeAndInstantEndpts =
         IncrSourceHelper.calculateBeginAndEndInstants(
             sparkContext, srcPath, numInstantsPerFetch, beginInstant, missingCheckpointStrategy);
 
-    if (instantEndpts.getKey().equals(instantEndpts.getValue())) {
-      LOG.warn("Already caught up. Begin Checkpoint was :" + instantEndpts.getKey());
-      return Pair.of(Option.empty(), instantEndpts.getKey());
+    if (queryTypeAndInstantEndpts.getValue().getKey().equals(queryTypeAndInstantEndpts.getValue().getValue())) {
+      LOG.warn("Already caught up. Begin Checkpoint was :" + queryTypeAndInstantEndpts.getKey());
+      return Pair.of(Option.empty(), queryTypeAndInstantEndpts.getKey());
     }
 
+    Dataset<Row> source = null;
     // Do incremental pull. Set end instant if available.
-    DataFrameReader metaReader = sparkSession.read().format("org.apache.hudi")
-        .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
-        .option(DataSourceReadOptions.BEGIN_INSTANTTIME().key(), instantEndpts.getLeft())
-        .option(DataSourceReadOptions.END_INSTANTTIME().key(), instantEndpts.getRight());
-    Dataset<Row> source = metaReader.load(srcPath);
+    if (queryTypeAndInstantEndpts.getKey().equals(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())) {
+      source = sparkSession.read().format("org.apache.hudi")
+          .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
+          .option(DataSourceReadOptions.BEGIN_INSTANTTIME().key(), queryTypeAndInstantEndpts.getRight().getLeft())
+          .option(DataSourceReadOptions.END_INSTANTTIME().key(), queryTypeAndInstantEndpts.getRight().getRight()).load(srcPath);
+    } else {
+      // if checkpoint is missing from source table, and if strategy is set to READ_UPTO_LATEST_COMMIT, we have to issue snapshot query
+      source = sparkSession.read().format("org.apache.hudi")
+          .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL()).load(srcPath)
+          // add filtering so that only interested records are returned.
+          .filter(String.format("%s > '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+              queryTypeAndInstantEndpts.getRight().getLeft()));
+    }
     
     if (source.isEmpty()) {
-      return Pair.of(Option.empty(), instantEndpts.getRight());
+      return Pair.of(Option.empty(), queryTypeAndInstantEndpts.getRight().getRight());
     }
 
     String filter = "s3.object.size > 0";
@@ -167,6 +176,6 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     if (!cloudFiles.isEmpty()) {
       dataset = Option.of(sparkSession.read().format(fileFormat).load(cloudFiles.toArray(new String[0])));
     }
-    return Pair.of(dataset, instantEndpts.getRight());
+    return Pair.of(dataset, queryTypeAndInstantEndpts.getRight().getRight());
   }
 }

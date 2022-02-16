@@ -18,8 +18,6 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hadoop.conf.Configurable;
-import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
 import org.apache.hadoop.hive.ql.io.sarg.ConvertAstToSearchArg;
 import org.apache.hadoop.hive.ql.plan.TableScanDesc;
 import org.apache.hadoop.io.ArrayWritable;
@@ -47,16 +45,16 @@ import java.util.stream.IntStream;
  */
 @UseRecordReaderFromInputFormat
 @UseFileSplitsFromInputFormat
-public class HoodieParquetInputFormat extends HoodieFileInputFormatBase implements Configurable {
+public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
 
   private static final Logger LOG = LogManager.getLogger(HoodieParquetInputFormat.class);
 
-  // NOTE: We're only using {@code MapredParquetInputFormat} to compose vectorized
-  //       {@code RecordReader}
-  private final MapredParquetInputFormat mapredParquetInputFormat = new MapredParquetInputFormat();
+  public HoodieParquetInputFormat() {
+    super(new HoodieCopyOnWriteTableInputFormat());
+  }
 
-  protected boolean includeLogFilesForSnapshotView() {
-    return false;
+  protected HoodieParquetInputFormat(HoodieCopyOnWriteTableInputFormat delegate) {
+    super(delegate);
   }
 
   @Override
@@ -88,7 +86,7 @@ public class HoodieParquetInputFormat extends HoodieFileInputFormatBase implemen
   private RecordReader<NullWritable, ArrayWritable> getRecordReaderInternal(InputSplit split,
                                                                             JobConf job,
                                                                             Reporter reporter) throws IOException {
-    return mapredParquetInputFormat.getRecordReader(split, job, reporter);
+    return super.getRecordReader(split, job, reporter);
   }
 
   private RecordReader<NullWritable, ArrayWritable> createBootstrappingRecordReader(InputSplit split,

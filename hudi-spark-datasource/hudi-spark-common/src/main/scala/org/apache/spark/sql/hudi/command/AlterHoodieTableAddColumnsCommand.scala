@@ -57,7 +57,8 @@ case class AlterHoodieTableAddColumnsCommand(
           s" table columns is: [${hoodieCatalogTable.tableSchemaWithoutMetaFields.fieldNames.mkString(",")}]")
       }
       // Get the new schema
-      val newSqlSchema = StructType(tableSchema.fields ++ colsToAdd)
+      val rearrangedSchema = hoodieCatalogTable.dataSchema ++ colsToAdd ++ hoodieCatalogTable.partitionSchema
+      val newSqlSchema = StructType(rearrangedSchema)
       val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableId.table)
       val newSchema = AvroConversionUtils.convertStructTypeToAvroSchema(newSqlSchema, structName, nameSpace)
 

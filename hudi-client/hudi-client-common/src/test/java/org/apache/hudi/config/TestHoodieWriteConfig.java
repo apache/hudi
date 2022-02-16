@@ -167,7 +167,7 @@ public class TestHoodieWriteConfig {
       }
     });
     assertFalse(writeConfig.areAnyTableServicesAsync());
-    assertTrue(writeConfig.areAnyTableServicesInline());
+    assertTrue(writeConfig.areAnyTableServicesExecutedInline());
     assertEquals(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue(), writeConfig.getLockProviderClass());
 
     // 5. User override for the lock provider should always take the precedence

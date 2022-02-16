@@ -28,6 +28,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -62,7 +63,7 @@ public class TestInlineCompaction extends CompactionTestBase {
       runNextDeltaCommits(writeClient, readClient, instants, records, cfg, true, new ArrayList<>());
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
 
-      // Then: ensure no compaction is executedm since there are only 2 delta commits
+      // Then: ensure no compaction is executed since there are only 2 delta commits
       assertEquals(2, metaClient.getActiveTimeline().getWriteTimeline().countInstants());
     }
   }
@@ -152,7 +153,7 @@ public class TestInlineCompaction extends CompactionTestBase {
       runNextDeltaCommits(writeClient, readClient, instants, records, cfg, true, new ArrayList<>());
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
 
-      // Then: ensure no compaction is executedm since there are only 3 delta commits
+      // Then: ensure no compaction is executed since there are only 3 delta commits
       assertEquals(3, metaClient.getActiveTimeline().getWriteTimeline().countInstants());
       // 4th commit, that will trigger compaction
       metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();

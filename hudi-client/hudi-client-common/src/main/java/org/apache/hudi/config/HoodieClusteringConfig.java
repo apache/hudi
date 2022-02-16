@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.util.TypeUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
@@ -176,6 +177,16 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Determines how to handle updates, deletes to file groups that are under clustering."
           + " Default strategy just rejects the update");
+
+  public static final ConfigProperty<String> SCHEDULE_INLINE_CLUSTERING = ConfigProperty
+      .key("hoodie.clustering.schedule.inline")
+      .defaultValue("false")
+      .withDocumentation("When set to true, clustering service will be attempted for inline scheduling after each write. Users have to ensure "
+          + "they have a separate job to run async clustering(execution) for the one scheduled by this writer. Users can choose to set both "
+          + "`hoodie.clustering.inline` and `hoodie.clustering.schedule.inline` to false and have both scheduling and execution triggered by any async process, on which "
+          + "case `hoodie.clustering.async.enabled` is expected to be set to true. But if `hoodie.clustering.inline` is set to false, and `hoodie.clustering.schedule.inline` "
+          + "is set to true, regular writers will schedule clustering inline, but users are expected to trigger async job for execution. If `hoodie.clustering.inline` is set "
+          + "to true, regular writers will do both scheduling and execution inline for clustering");
 
   public static final ConfigProperty<String> ASYNC_CLUSTERING_ENABLE = ConfigProperty
       .key("hoodie.clustering.async.enabled")
@@ -505,6 +516,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withScheduleInlineClustering(Boolean scheduleInlineClustering) {
+      clusteringConfig.setValue(SCHEDULE_INLINE_CLUSTERING, String.valueOf(scheduleInlineClustering));
+      return this;
+    }
+
     public Builder withInlineClusteringNumCommits(int numCommits) {
       clusteringConfig.setValue(INLINE_CLUSTERING_MAX_COMMITS, String.valueOf(numCommits));
       return this;
@@ -562,6 +578,12 @@ public class HoodieClusteringConfig extends HoodieConfig {
       clusteringConfig.setDefaultValue(
           EXECUTION_STRATEGY_CLASS_NAME, getDefaultExecutionStrategyClassName(engineType));
       clusteringConfig.setDefaults(HoodieClusteringConfig.class.getName());
+
+      boolean inlineCluster = clusteringConfig.getBoolean(HoodieClusteringConfig.INLINE_CLUSTERING);
+      boolean inlineClusterSchedule = clusteringConfig.getBoolean(HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING);
+      ValidationUtils.checkArgument(!(inlineCluster && inlineClusterSchedule), String.format("Either of inline clustering (%s) or "
+              + "schedule inline clustering (%s) can be enabled. Both can't be set to true at the same time. %s,%s", HoodieClusteringConfig.INLINE_CLUSTERING.key(),
+          HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING.key(), inlineCluster, inlineClusterSchedule));
       return clusteringConfig;
     }
 

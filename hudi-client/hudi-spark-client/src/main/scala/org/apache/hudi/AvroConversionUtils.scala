@@ -117,7 +117,7 @@ object AvroConversionUtils {
 
   def buildAvroRecordBySchema(record: IndexedRecord,
                               requiredSchema: Schema,
-                              requiredPos: List[Int],
+                              requiredPos: Seq[Int],
                               recordBuilder: GenericRecordBuilder): GenericRecord = {
     val requiredFields = requiredSchema.getFields.asScala
     assert(requiredFields.length == requiredPos.length)

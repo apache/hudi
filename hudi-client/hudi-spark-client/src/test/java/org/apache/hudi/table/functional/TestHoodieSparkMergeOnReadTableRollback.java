@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
@@ -50,6 +51,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
@@ -153,7 +155,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
                 HoodieMetadataConfig.newBuilder()
                     .enable(false)
                     .build());
-
+    
     addConfigsForPopulateMetaFields(cfgBuilder, true);
     HoodieWriteConfig cfg = cfgBuilder.build();
 
@@ -323,8 +325,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     boolean populateMetaFields = true;
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false)
         // Timeline-server-based markers are not used for multi-rollback tests
-        .withMarkersType(MarkerType.DIRECT.name())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build());
+        .withMarkersType(MarkerType.DIRECT.name());
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
 
@@ -385,8 +386,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       // WriteClient with custom config (disable small file handling)
       HoodieWriteConfig smallFileWriteConfig = getHoodieWriteConfigWithSmallFileHandlingOffBuilder(populateMetaFields)
           // Timeline-server-based markers are not used for multi-rollback tests
-          .withMarkersType(MarkerType.DIRECT.name())
-          .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build()).build();
+          .withMarkersType(MarkerType.DIRECT.name()).build();
       try (SparkRDDWriteClient nClient = getHoodieWriteClient(smallFileWriteConfig)) {
         nClient.startCommitWithTime(newCommitTime);
 
@@ -455,8 +455,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
       compactionInstantTime = "006";
       client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
-      JavaRDD<WriteStatus> ws = (JavaRDD<WriteStatus>) client.compact(compactionInstantTime);
-      client.commitCompaction(compactionInstantTime, ws, Option.empty());
+      HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(compactionInstantTime);
+      client.commitCompaction(compactionInstantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
 
       allFiles = listAllBaseFilesInPath(hoodieTable);
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -517,8 +517,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
   void testMORTableRestore(boolean restoreAfterCompaction) throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false)
         // Timeline-server-based markers are not used for multi-rollback tests
-        .withMarkersType(MarkerType.DIRECT.name())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build());
+        .withMarkersType(MarkerType.DIRECT.name());
     HoodieWriteConfig cfg = cfgBuilder.build();
 
     Properties properties = new Properties();
@@ -543,8 +542,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         metaClient = HoodieTableMetaClient.reload(metaClient);
         String compactionInstantTime = "005";
         client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
-        JavaRDD<WriteStatus> ws = (JavaRDD<WriteStatus>) client.compact(compactionInstantTime);
-        client.commitCompaction(compactionInstantTime, ws, Option.empty());
+        HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(compactionInstantTime);
+        client.commitCompaction(compactionInstantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
 
         validateRecords(cfg, metaClient, updates3);
         List<HoodieRecord> updates4 = updateAndGetRecords("006", client, dataGen, records);
@@ -755,11 +754,14 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       assertTrue(numLogFiles > 0);
       // Do a compaction
       newCommitTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
-      statuses = (JavaRDD<WriteStatus>) writeClient.compact(newCommitTime);
+      HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(newCommitTime);
+      statuses = compactionMetadata.getWriteStatuses();
       // Ensure all log files have been compacted into base files
       String extension = table.getBaseFileExtension();
-      assertEquals(numLogFiles, statuses.map(status -> status.getStat().getPath().contains(extension)).count());
-      assertEquals(numLogFiles, statuses.count());
+      Collection<List<HoodieWriteStat>> stats = compactionMetadata.getCommitMetadata().get().getPartitionToWriteStats().values();
+      assertEquals(numLogFiles, stats.stream().flatMap(Collection::stream).filter(state -> state.getPath().contains(extension)).count());
+      assertEquals(numLogFiles, stats.stream().mapToLong(Collection::size).sum());
+
       //writeClient.commitCompaction(newCommitTime, statuses, Option.empty());
       // Trigger a rollback of compaction
       table.getActiveTimeline().reload();
@@ -862,14 +864,15 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
   private long doCompaction(SparkRDDWriteClient client, HoodieTableMetaClient metaClient, HoodieWriteConfig cfg, long numLogFiles) throws IOException {
     // Do a compaction
     String instantTime = client.scheduleCompaction(Option.empty()).get().toString();
-    JavaRDD<WriteStatus> writeStatuses = (JavaRDD<WriteStatus>) client.compact(instantTime);
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(instantTime);
 
     metaClient.reloadActiveTimeline();
     HoodieTable table = HoodieSparkTable.create(cfg, context(), metaClient);
     String extension = table.getBaseFileExtension();
-    assertEquals(numLogFiles, writeStatuses.map(status -> status.getStat().getPath().contains(extension)).count());
-    assertEquals(numLogFiles, writeStatuses.count());
-    client.commitCompaction(instantTime, writeStatuses, Option.empty());
+    Collection<List<HoodieWriteStat>> stats = compactionMetadata.getCommitMetadata().get().getPartitionToWriteStats().values();
+    assertEquals(numLogFiles, stats.stream().flatMap(Collection::stream).filter(state -> state.getPath().contains(extension)).count());
+    assertEquals(numLogFiles, stats.stream().mapToLong(Collection::size).sum());
+    client.commitCompaction(instantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
     return numLogFiles;
   }
 

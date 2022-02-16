@@ -18,7 +18,6 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
@@ -43,12 +42,13 @@ import java.io.IOException;
  */
 @UseRecordReaderFromInputFormat
 @UseFileSplitsFromInputFormat
-public class HoodieParquetRealtimeInputFormat extends HoodieRealtimeFileInputFormatBase implements Configurable {
+public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat {
 
   private static final Logger LOG = LogManager.getLogger(HoodieParquetRealtimeInputFormat.class);
 
-  // NOTE: We're only using {@code HoodieParquetInputFormat} to compose {@code RecordReader}
-  private final HoodieParquetInputFormat parquetInputFormat = new HoodieParquetInputFormat();
+  public HoodieParquetRealtimeInputFormat() {
+    super(new HoodieMergeOnReadTableInputFormat());
+  }
 
   // To make Hive on Spark queries work with RT tables. Our theory is that due to
   // {@link org.apache.hadoop.hive.ql.io.parquet.ProjectionPusher}
@@ -71,7 +71,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieRealtimeFileInputFor
     }
 
     return new HoodieRealtimeRecordReader(realtimeSplit, jobConf,
-        parquetInputFormat.getRecordReader(split, jobConf, reporter));
+        super.getRecordReader(split, jobConf, reporter));
   }
 
   void addProjectionToJobConf(final RealtimeSplit realtimeSplit, final JobConf jobConf) {
@@ -96,8 +96,8 @@ public class HoodieParquetRealtimeInputFormat extends HoodieRealtimeFileInputFor
           if (!realtimeSplit.getDeltaLogPaths().isEmpty()) {
             HoodieRealtimeInputFormatUtils.addRequiredProjectionFields(jobConf, realtimeSplit.getHoodieVirtualKeyInfo());
           }
-          this.conf = jobConf;
-          this.conf.set(HoodieInputFormatUtils.HOODIE_READ_COLUMNS_PROP, "true");
+          jobConf.set(HoodieInputFormatUtils.HOODIE_READ_COLUMNS_PROP, "true");
+          setConf(jobConf);
         }
       }
     }

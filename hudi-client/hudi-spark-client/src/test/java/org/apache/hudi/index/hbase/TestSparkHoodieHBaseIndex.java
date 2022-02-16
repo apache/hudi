@@ -21,7 +21,6 @@ package org.apache.hudi.index.hbase;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -191,7 +190,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
     final String newCommitTime = "001";
     final int numRecords = 10;
     final String oldPartitionPath = "1970/01/01";
-    final String emptyHoodieRecordPayloadClasssName = EmptyHoodieRecordPayload.class.getName();
+    final String emptyHoodieRecordPayloadClassName = EmptyHoodieRecordPayload.class.getName();
 
     List<HoodieRecord> newRecords = dataGen.generateInserts(newCommitTime, numRecords);
     List<HoodieRecord> oldRecords = new LinkedList();
@@ -226,7 +225,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
       assertEquals(numRecords * 2L, taggedRecords.stream().count());
       // Verify the number of deleted records
       assertEquals(numRecords, taggedRecords.stream().filter(record -> record.getKey().getPartitionPath().equals(oldPartitionPath)
-          && record.getData().getClass().getName().equals(emptyHoodieRecordPayloadClasssName)).count());
+          && record.getData().getClass().getName().equals(emptyHoodieRecordPayloadClassName)).count());
       // Verify the number of inserted records
       assertEquals(numRecords, taggedRecords.stream().filter(record -> !record.getKey().getPartitionPath().equals(oldPartitionPath)).count());
 
@@ -342,8 +341,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
   public void testSimpleTagLocationAndUpdateWithRollback() throws Exception {
     // Load to memory
     HoodieWriteConfig config = getConfigBuilder(100, false, false)
-        .withRollbackUsingMarkers(false)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build()).build();
+        .withRollbackUsingMarkers(false).build();
     SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
     SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
 
@@ -431,8 +429,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
   public void testEnsureTagLocationUsesCommitTimeline() throws Exception {
     // Load to memory
     HoodieWriteConfig config = getConfigBuilder(100, false, false)
-        .withRollbackUsingMarkers(false)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build()).build();
+        .withRollbackUsingMarkers(false).build();
     SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
     SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
 

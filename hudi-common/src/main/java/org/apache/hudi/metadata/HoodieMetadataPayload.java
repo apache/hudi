@@ -52,6 +52,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -67,7 +68,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_L
  * <p>
  * METADATA_TYPE_PARTITION_LIST (1):
  * -- List of all partitions. There is a single such record
- * -- key = @{@link HoodieTableMetadata.RECORDKEY_PARTITION_LIST}
+ * -- key = @{@link HoodieTableMetadata#RECORDKEY_PARTITION_LIST}
  * <p>
  * METADATA_TYPE_FILE_LIST (2):
  * -- List of all files in a partition. There is one such record for each partition
@@ -274,7 +275,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         HoodieMetadataBloomFilter combineBloomFilterMetadata = combineBloomFilterMetadata(previousRecord);
         return new HoodieMetadataPayload(key, type, combineBloomFilterMetadata);
       case METADATA_TYPE_COLUMN_STATS:
-        return new HoodieMetadataPayload(key, type, combineColumnStatsMetadatat(previousRecord));
+        return new HoodieMetadataPayload(key, type, combineColumnStatsMetadata(previousRecord));
       default:
         throw new HoodieMetadataException("Unknown type of HoodieMetadataPayload: " + type);
     }
@@ -284,19 +285,24 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return this.bloomFilterMetadata;
   }
 
-  private HoodieMetadataColumnStats combineColumnStatsMetadatat(HoodieMetadataPayload previousRecord) {
+  private HoodieMetadataColumnStats combineColumnStatsMetadata(HoodieMetadataPayload previousRecord) {
     return this.columnStatMetadata;
   }
 
   @Override
-  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRecord, Schema schema) throws IOException {
+  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRecord, Schema schema, Properties properties) throws IOException {
     HoodieMetadataPayload anotherPayload = new HoodieMetadataPayload(Option.of((GenericRecord) oldRecord));
     HoodieRecordPayload combinedPayload = preCombine(anotherPayload);
-    return combinedPayload.getInsertValue(schema);
+    return combinedPayload.getInsertValue(schema, properties);
   }
 
   @Override
-  public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
+  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRecord, Schema schema) throws IOException {
+    return combineAndGetUpdateValue(oldRecord, schema, new Properties());
+  }
+
+  @Override
+  public Option<IndexedRecord> getInsertValue(Schema schema, Properties properties) throws IOException {
     if (key == null) {
       return Option.empty();
     }
@@ -304,6 +310,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
         columnStatMetadata);
     return Option.of(record);
+  }
+
+  @Override
+  public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
+    return getInsertValue(schema, new Properties());
   }
 
   /**

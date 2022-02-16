@@ -164,7 +164,7 @@ public class HoodieJavaStreamingApp {
     ExecutorService executor = Executors.newFixedThreadPool(2);
     int numInitialCommits = 0;
 
-    // thread for spark strucutured streaming
+    // thread for spark structured streaming
     try {
       Future<Void> streamFuture = executor.submit(() -> {
         LOG.info("===== Streaming Starting =====");
@@ -211,7 +211,7 @@ public class HoodieJavaStreamingApp {
     Dataset<Row> inputDF3 = newSpark.read().json(jssc.parallelize(deletes, 2));
     executor = Executors.newFixedThreadPool(2);
 
-    // thread for spark strucutured streaming
+    // thread for spark structured streaming
     try {
       Future<Void> streamFuture = executor.submit(() -> {
         LOG.info("===== Streaming Starting =====");

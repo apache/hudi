@@ -33,6 +33,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.Assertions;
 import org.apache.hudi.testutils.HoodieClientTestBase;
+
 import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
@@ -78,18 +79,18 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
     }
 
 
-    //2. assert filegroup and get the first partition fileslice
+    //2. assert file group and get the first partition file slice
     HoodieTable table = this.getHoodieTable(metaClient, cfg);
     SyncableFileSystemView fsView = getFileSystemViewWithUnCommittedSlices(table.getMetaClient());
     List<HoodieFileGroup> firstPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
     assertEquals(1, firstPartitionCommit2FileGroups.size());
     firstPartitionCommit2FileSlices.addAll(firstPartitionCommit2FileGroups.get(0).getAllFileSlices().collect(Collectors.toList()));
-    //3. assert filegroup and get the second partition fileslice
+    //3. assert file group and get the second partition file slice
     List<HoodieFileGroup> secondPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
     assertEquals(1, secondPartitionCommit2FileGroups.size());
     secondPartitionCommit2FileSlices.addAll(secondPartitionCommit2FileGroups.get(0).getAllFileSlices().collect(Collectors.toList()));
 
-    //4. assert fileslice
+    //4. assert file slice
     HoodieTableType tableType = this.getTableType();
     if (tableType.equals(HoodieTableType.COPY_ON_WRITE)) {
       assertEquals(2, firstPartitionCommit2FileSlices.size());

@@ -19,7 +19,6 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -38,6 +37,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieWriteConflictException;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.hadoop.fs.Path;
@@ -101,7 +101,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
     HoodieWriteConfig writeConfig = getConfigBuilder()
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(false).build())
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .withAutoArchive(false).withAutoClean(false).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         // Timeline-server-based markers are not used for multi-writer tests
         .withMarkersType(MarkerType.DIRECT.name())
@@ -364,8 +365,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       latchCountDownAndWait(runCountDownLatch, 30000);
       if (tableType == HoodieTableType.MERGE_ON_READ) {
         assertDoesNotThrow(() -> {
-          JavaRDD<WriteStatus> writeStatusJavaRDD = (JavaRDD<WriteStatus>) client2.compact("005");
-          client2.commitCompaction("005", writeStatusJavaRDD, Option.empty());
+          HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata =  client2.compact("005");
+          client2.commitCompaction("005", compactionMetadata.getCommitMetadata().get(), Option.empty());
           validInstants.add("005");
         });
       }
@@ -538,7 +539,6 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
             .withAutoClean(false).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         // Timeline-server-based markers are not used for multi-writer tests
         .withMarkersType(MarkerType.DIRECT.name())
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
@@ -584,7 +584,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   private void createCommitWithInserts(HoodieWriteConfig cfg, SparkRDDWriteClient client,
                                        String prevCommitTime, String newCommitTime, int numRecords,
                                        boolean doCommit) throws Exception {
-    // Finish first base commmit
+    // Finish first base commit
     JavaRDD<WriteStatus> result = insertFirstBatch(cfg, client, newCommitTime, prevCommitTime, numRecords, SparkRDDWriteClient::bulkInsert,
         false, false, numRecords);
     if (doCommit) {

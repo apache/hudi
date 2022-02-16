@@ -127,7 +127,7 @@ public class HoodieStorageConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PARQUET_OUTPUT_TIMESTAMP_TYPE = ConfigProperty
           .key("hoodie.parquet.outputtimestamptype")
-          .defaultValue("TIMESTAMP_MILLIS")
+          .defaultValue("TIMESTAMP_MICROS")
           .withDocumentation("Sets spark.sql.parquet.outputTimestampType. Parquet timestamp type to use when Spark writes data to Parquet files.");
 
   public static final ConfigProperty<String> HFILE_COMPRESSION_ALGORITHM_NAME = ConfigProperty

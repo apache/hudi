@@ -44,7 +44,7 @@ import java.io.IOException;
  */
 @UseRecordReaderFromInputFormat
 @UseFileSplitsFromInputFormat
-public class HoodieHFileRealtimeInputFormat extends HoodieRealtimeFileInputFormatBase {
+public class HoodieHFileRealtimeInputFormat extends HoodieMergeOnReadTableInputFormat {
 
   private static final Logger LOG = LogManager.getLogger(HoodieHFileRealtimeInputFormat.class);
 

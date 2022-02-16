@@ -26,12 +26,14 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.Config
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.keygen.{ComplexKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, lit}
+
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
@@ -99,9 +101,9 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     var updateDf: DataFrame = null
     if (classOf[TimestampBasedKeyGenerator].getName.equals(keyGenClass)) {
       // update current_ts to be same as original record so that partition path does not change with timestamp based key gen
-      val orignalRow = inputDF1.filter(col("_row_key") === verificationRowKey).collectAsList().get(0)
+      val originalRow = inputDF1.filter(col("_row_key") === verificationRowKey).collectAsList().get(0)
       updateDf = snapshotDF1.filter(col("_row_key") === verificationRowKey).withColumn(verificationCol, lit(updatedVerificationVal))
-        .withColumn("current_ts", lit(orignalRow.getAs("current_ts")))
+        .withColumn("current_ts", lit(originalRow.getAs("current_ts")))
     } else {
       updateDf = snapshotDF1.filter(col("_row_key") === verificationRowKey).withColumn(verificationCol, lit(updatedVerificationVal))
     }

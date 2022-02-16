@@ -367,22 +367,22 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
       return true;
     };
 
-    AtomicBoolean continousFailed = new AtomicBoolean(false);
+    AtomicBoolean continuousFailed = new AtomicBoolean(false);
     AtomicBoolean backfillFailed = new AtomicBoolean(false);
     try {
       Future regularIngestionJobFuture = service.submit(() -> {
         try {
           deltaStreamerTestRunner(ingestionJob, cfgIngestionJob, conditionForRegularIngestion, jobId);
         } catch (Throwable ex) {
-          continousFailed.set(true);
+          continuousFailed.set(true);
           LOG.error("Continuous job failed " + ex.getMessage());
           throw new RuntimeException(ex);
         }
       });
       Future backfillJobFuture = service.submit(() -> {
         try {
-          // trigger backfill atleast after 1 requested entry is added to timline from continuous job. If not, there is a chance that backfill will complete even before
-          // continous job starts.
+          // trigger backfill atleast after 1 requested entry is added to timeline from continuous job. If not, there is a chance that backfill will complete even before
+          // continuous job starts.
           awaitCondition(new GetCommitsAfterInstant(tableBasePath, lastSuccessfulCommit));
           backfillJob.sync();
         } catch (Throwable ex) {

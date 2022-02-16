@@ -18,11 +18,14 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.async.AsyncArchiveService;
+import org.apache.hudi.async.AsyncCleanerService;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.callback.HoodieWriteCommitCallback;
@@ -66,7 +69,6 @@ import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.HoodieTimelineArchiveLog;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.rollback.RollbackUtils;
 import org.apache.hudi.table.action.savepoint.SavepointHelpers;
@@ -98,7 +100,8 @@ import java.util.stream.Stream;
  * @param <K> Type of keys
  * @param <O> Type of outputs
  */
-public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K, O> extends BaseHoodieClient {
+public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K, O> extends BaseHoodieClient
+    implements RunsTableService {
 
   protected static final String LOOKUP_STR = "lookup";
   private static final long serialVersionUID = 1L;
@@ -114,6 +117,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   private transient WriteOperationType operationType;
   private transient HoodieWriteCommitCallback commitCallback;
   protected transient AsyncCleanerService asyncCleanerService;
+  protected transient AsyncArchiveService asyncArchiveService;
   protected final TransactionManager txnManager;
   protected Option<Pair<HoodieInstant, Map<String, String>>> lastCompletedTxnAndMetadata = Option.empty();
 
@@ -430,6 +434,11 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     } else {
       this.asyncCleanerService.start(null);
     }
+    if (null == this.asyncArchiveService) {
+      this.asyncArchiveService = AsyncArchiveService.startAsyncArchiveIfEnabled(this);
+    } else {
+      this.asyncArchiveService.start(null);
+    }
   }
 
   /**
@@ -455,16 +464,17 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
       autoCleanOnCommit();
-      if (config.isAutoArchive()) {
-        archive(table);
-      }
+      autoArchiveOnCommit(table);
     } finally {
       this.heartbeatClient.stop(instantTime);
     }
   }
 
   protected void runTableServicesInline(HoodieTable<T, I, K, O> table, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
-    if (config.areAnyTableServicesInline()) {
+    if (!tableServicesEnabled(config)) {
+      return;
+    }
+    if (config.areAnyTableServicesExecutedInline() || config.areAnyTableServicesScheduledInline()) {
       if (config.isMetadataTableEnabled()) {
         table.getHoodieView().sync();
       }
@@ -472,18 +482,34 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       if (config.inlineCompactionEnabled()) {
         runAnyPendingCompactions(table);
         metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
-        inlineCompact(extraMetadata);
+        inlineCompaction(extraMetadata);
       } else {
         metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT.key(), "false");
+      }
+
+      // if just inline schedule is enabled
+      if (!config.inlineCompactionEnabled() && config.scheduleInlineCompaction()
+          && !table.getActiveTimeline().getWriteTimeline().filterPendingCompactionTimeline().getInstants().findAny().isPresent()) {
+        // proceed only if there are no pending compactions
+        metadata.addMetadata(HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT.key(), "true");
+        inlineScheduleCompaction(extraMetadata);
       }
 
       // Do an inline clustering if enabled
       if (config.inlineClusteringEnabled()) {
         runAnyPendingClustering(table);
         metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true");
-        inlineCluster(extraMetadata);
+        inlineClustering(extraMetadata);
       } else {
         metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "false");
+      }
+
+      // if just inline schedule is enabled
+      if (!config.inlineClusteringEnabled() && config.scheduleInlineClustering()
+          && !table.getActiveTimeline().filterPendingReplaceTimeline().getInstants().findAny().isPresent()) {
+        // proceed only if there are no pending clustering
+        metadata.addMetadata(HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING.key(), "true");
+        inlineScheduleClustering(extraMetadata);
       }
     }
   }
@@ -506,22 +532,34 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     });
   }
 
-  /**
-   * Handle auto clean during commit.
-   *
-   */
   protected void autoCleanOnCommit() {
-    if (config.isAutoClean()) {
-      // Call clean to cleanup if there is anything to cleanup after the commit,
-      if (config.isAsyncClean()) {
-        LOG.info("Cleaner has been spawned already. Waiting for it to finish");
-        AsyncCleanerService.waitForCompletion(asyncCleanerService);
-        LOG.info("Cleaner has finished");
-      } else {
-        // Do not reuse instantTime for clean as metadata table requires all changes to have unique instant timestamps.
-        LOG.info("Auto cleaning is enabled. Running cleaner now");
-        clean(true);
-      }
+    if (!config.isAutoClean()) {
+      return;
+    }
+
+    if (config.isAsyncClean()) {
+      LOG.info("Async cleaner has been spawned. Waiting for it to finish");
+      AsyncCleanerService.waitForCompletion(asyncCleanerService);
+      LOG.info("Async cleaner has finished");
+    } else {
+      LOG.info("Start to clean synchronously.");
+      // Do not reuse instantTime for clean as metadata table requires all changes to have unique instant timestamps.
+      clean(true);
+    }
+  }
+
+  protected void autoArchiveOnCommit(HoodieTable<T, I, K, O> table) {
+    if (!config.isAutoArchive()) {
+      return;
+    }
+
+    if (config.isAsyncArchive()) {
+      LOG.info("Async archiver has been spawned. Waiting for it to finish");
+      AsyncArchiveService.waitForCompletion(asyncArchiveService);
+      LOG.info("Async archiver has finished");
+    } else {
+      LOG.info("Start to archive synchronously.");
+      archive(table);
     }
   }
 
@@ -674,16 +712,21 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     Timer.Context timerContext = metrics.getRollbackCtx();
     try {
       HoodieTable<T, I, K, O> table = createTable(config, hadoopConf, config.isMetadataTableEnabled());
-      HoodieRestoreMetadata restoreMetadata = table.restore(context, restoreInstantTime, instantTime);
-      if (timerContext != null) {
-        final long durationInMs = metrics.getDurationInMs(timerContext.stop());
-        final long totalFilesDeleted = restoreMetadata.getHoodieRestoreMetadata().values().stream()
-            .flatMap(Collection::stream)
-            .mapToLong(HoodieRollbackMetadata::getTotalFilesDeleted)
-            .sum();
-        metrics.updateRollbackMetrics(durationInMs, totalFilesDeleted);
+      Option<HoodieRestorePlan> restorePlanOption = table.scheduleRestore(context, restoreInstantTime, instantTime);
+      if (restorePlanOption.isPresent()) {
+        HoodieRestoreMetadata restoreMetadata = table.restore(context, restoreInstantTime, instantTime);
+        if (timerContext != null) {
+          final long durationInMs = metrics.getDurationInMs(timerContext.stop());
+          final long totalFilesDeleted = restoreMetadata.getHoodieRestoreMetadata().values().stream()
+              .flatMap(Collection::stream)
+              .mapToLong(HoodieRollbackMetadata::getTotalFilesDeleted)
+              .sum();
+          metrics.updateRollbackMetrics(durationInMs, totalFilesDeleted);
+        }
+        return restoreMetadata;
+      } else {
+        throw new HoodieRestoreException("Failed to restore " + config.getBasePath() + " to commit " + instantTime);
       }
-      return restoreMetadata;
     } catch (Exception e) {
       throw new HoodieRestoreException("Failed to restore to " + instantTime, e);
     }
@@ -721,6 +764,9 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * @param skipLocking if this is triggered by another parent transaction, locking can be skipped.
    */
   public HoodieCleanMetadata clean(String cleanInstantTime, boolean scheduleInline, boolean skipLocking) throws HoodieIOException {
+    if (!tableServicesEnabled(config)) {
+      return null;
+    }
     if (scheduleInline) {
       scheduleTableServiceInternal(cleanInstantTime, Option.empty(), TableServiceType.CLEAN);
     }
@@ -760,10 +806,13 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * @param table table to commit on.
    */
   protected void archive(HoodieTable<T, I, K, O> table) {
+    if (!tableServicesEnabled(config)) {
+      return;
+    }
     try {
       // We cannot have unbounded commit files. Archive commits if we have to archive
-      HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, table);
-      archiveLog.archiveIfRequired(context);
+      HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(config, table);
+      archiver.archiveIfRequired(context);
     } catch (IOException ioe) {
       throw new HoodieIOException("Failed to archive", ioe);
     }
@@ -861,7 +910,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * @param compactionInstantTime Compaction Instant Time
    * @return Collection of WriteStatus to inspect errors and counts
    */
-  public O compact(String compactionInstantTime) {
+  public HoodieWriteMetadata<O> compact(String compactionInstantTime) {
     return compact(compactionInstantTime, config.shouldAutoCommit());
   }
 
@@ -869,17 +918,16 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * Commit a compaction operation. Allow passing additional meta-data to be stored in commit instant file.
    *
    * @param compactionInstantTime Compaction Instant Time
-   * @param writeStatuses Collection of WriteStatus to inspect errors and counts
+   * @param metadata All the metadata that gets stored along with a commit
    * @param extraMetadata Extra Metadata to be stored
    */
-  public abstract void commitCompaction(String compactionInstantTime, O writeStatuses,
-                                        Option<Map<String, String>> extraMetadata) throws IOException;
+  public abstract void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata,
+                                        Option<Map<String, String>> extraMetadata);
 
   /**
    * Commit Compaction and track metrics.
    */
-  protected abstract void completeCompaction(HoodieCommitMetadata metadata, O writeStatuses,
-                                             HoodieTable<T, I, K, O> table, String compactionCommitTime);
+  protected abstract void completeCompaction(HoodieCommitMetadata metadata, HoodieTable<T, I, K, O> table, String compactionCommitTime);
 
   /**
    * Get inflight time line exclude compaction and clustering.
@@ -1001,18 +1049,28 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * @param compactionInstantTime Compaction Instant Time
    * @return Collection of Write Status
    */
-  protected abstract O compact(String compactionInstantTime, boolean shouldComplete);
+  protected abstract HoodieWriteMetadata<O> compact(String compactionInstantTime, boolean shouldComplete);
 
   /**
    * Performs a compaction operation on a table, serially before or after an insert/upsert action.
+   * Scheduling and execution is done inline.
    */
-  protected Option<String> inlineCompact(Option<Map<String, String>> extraMetadata) {
-    Option<String> compactionInstantTimeOpt = scheduleCompaction(extraMetadata);
+  protected Option<String> inlineCompaction(Option<Map<String, String>> extraMetadata) {
+    Option<String> compactionInstantTimeOpt = inlineScheduleCompaction(extraMetadata);
     compactionInstantTimeOpt.ifPresent(compactInstantTime -> {
       // inline compaction should auto commit as the user is never given control
       compact(compactInstantTime, true);
     });
     return compactionInstantTimeOpt;
+  }
+
+  /***
+   * Schedules compaction inline.
+   * @param extraMetadata extrametada to be used.
+   * @return compaction instant if scheduled.
+   */
+  protected Option<String> inlineScheduleCompaction(Option<Map<String, String>> extraMetadata) {
+    return scheduleCompaction(extraMetadata);
   }
 
   /**
@@ -1093,7 +1151,13 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
 
   private Option<String> scheduleTableServiceInternal(String instantTime, Option<Map<String, String>> extraMetadata,
                                                       TableServiceType tableServiceType) {
+    if (!tableServicesEnabled(config)) {
+      return Option.empty();
+    }
     switch (tableServiceType) {
+      case ARCHIVE:
+        LOG.info("Scheduling archiving is not supported. Skipping.");
+        return Option.empty();
       case CLUSTER:
         LOG.info("Scheduling clustering at instant time :" + instantTime);
         Option<HoodieClusteringPlan> clusteringPlan = createTable(config, hadoopConf, config.isMetadataTableEnabled())
@@ -1116,14 +1180,24 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
 
   /**
    * Executes a clustering plan on a table, serially before or after an insert/upsert action.
+   * Schedules and executes clustering inline.
    */
-  protected Option<String> inlineCluster(Option<Map<String, String>> extraMetadata) {
-    Option<String> clusteringInstantOpt = scheduleClustering(extraMetadata);
+  protected Option<String> inlineClustering(Option<Map<String, String>> extraMetadata) {
+    Option<String> clusteringInstantOpt = inlineScheduleClustering(extraMetadata);
     clusteringInstantOpt.ifPresent(clusteringInstant -> {
       // inline cluster should auto commit as the user is never given control
       cluster(clusteringInstant, true);
     });
     return clusteringInstantOpt;
+  }
+
+  /**
+   * Schedules clustering inline.
+   * @param extraMetadata extrametadata to use.
+   * @return clustering instant if scheduled.
+   */
+  protected Option<String> inlineScheduleClustering(Option<Map<String, String>> extraMetadata) {
+    return scheduleClustering(extraMetadata);
   }
 
   protected void rollbackInflightClustering(HoodieInstant inflightInstant, HoodieTable<T, I, K, O> table) {
@@ -1208,7 +1282,8 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
 
   @Override
   public void close() {
-    // release AsyncCleanerService
+    AsyncArchiveService.forceShutdown(asyncArchiveService);
+    asyncArchiveService = null;
     AsyncCleanerService.forceShutdown(asyncCleanerService);
     asyncCleanerService = null;
     // Stop timeline-server if running
