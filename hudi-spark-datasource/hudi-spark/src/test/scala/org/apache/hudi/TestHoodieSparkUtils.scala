@@ -20,22 +20,17 @@ package org.apache.hudi
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-
 import org.apache.hudi.testutils.DataSourceTestUtils
-
 import org.apache.spark.sql.types.{StructType, TimestampType}
 import org.apache.spark.sql.{Row, SparkSession}
-
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 
 import java.io.File
 import java.nio.file.Paths
-
 import scala.collection.JavaConverters
 
 class TestHoodieSparkUtils {
