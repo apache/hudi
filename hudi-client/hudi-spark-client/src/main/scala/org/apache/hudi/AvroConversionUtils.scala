@@ -67,8 +67,8 @@ object AvroConversionUtils {
         else {
           val schema = new Schema.Parser().parse(schemaStr)
           val dataType = convertAvroSchemaToStructType(schema)
-          val deserializer = HoodieAvroDeserializer(schema, dataType)
-          records.map { x => deserializer.deserializeData(x).get.asInstanceOf[Row] }
+          val converter = AvroConversionHelper.createConverterToRow(schema, dataType)
+          records.map { r => converter(r) }
         }
       }, convertAvroSchemaToStructType(new Schema.Parser().parse(schemaStr)))
     }
