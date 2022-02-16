@@ -257,6 +257,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             // we will trigger compaction manually, to control the instant times
             .withInlineCompaction(false)
             .withMaxNumDeltaCommitsBeforeCompaction(writeConfig.getMetadataCompactDeltaCommitMax())
+            .withPreserveCommitMetadata(false)
             // we will trigger archive manually, to ensure only regular writer invokes it
             .withAutoArchive(false).build())
         .withParallelism(parallelism, parallelism)
