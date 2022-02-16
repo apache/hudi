@@ -142,7 +142,7 @@ public class TestTimestampBasedKeyGenerator {
     assertEquals("2020-01-06 12", keyGen.getPartitionPath(internalRow, baseRow.schema()));
 
     // timezone is GMT+8:00, createTime is BigDecimal
-    BigDecimal decimal = new BigDecimal(1578283932000.00001);
+    BigDecimal decimal = new BigDecimal("1578283932000.0001");
     Conversions.DecimalConversion conversion = new Conversions.DecimalConversion();
     Tuple2<Object, Schema> resolvedNullableSchema = HoodieAvroSerializer.resolveAvroTypeNullability(schema.getField("createTimeDecimal").schema());
     GenericFixed avroDecimal = conversion.toFixed(decimal, resolvedNullableSchema._2, LogicalTypes.decimal(20, 4));
