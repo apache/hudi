@@ -133,10 +133,10 @@ object HoodieSparkUtils extends SparkAdapterSupport {
     createRdd(df, structName, recordNamespace, latestTableSchemaConverted)
   }
 
-  def createRdd(df: DataFrame, structName: String, recordNamespace: String, readerSchema: Option[Schema]): RDD[GenericRecord] = {
+  def createRdd(df: DataFrame, structName: String, recordNamespace: String, readerAvroSchemaOpt: Option[Schema]): RDD[GenericRecord] = {
     val writerSchema = df.schema
     val writerAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(writerSchema, structName, recordNamespace)
-    val readerAvroSchema = readerSchema.getOrElse(writerAvroSchema)
+    val readerAvroSchema = readerAvroSchemaOpt.getOrElse(writerAvroSchema)
     // We check whether passed in reader schema is identical to writer schema to avoid costly serde loop of
     // making Spark deserialize its internal representation [[InternalRow]] into [[Row]] for subsequent conversion
     // (and back)
