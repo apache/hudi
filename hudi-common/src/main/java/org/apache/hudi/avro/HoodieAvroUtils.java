@@ -63,7 +63,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -341,14 +340,24 @@ public class HoodieAvroUtils {
   /**
    * Given an Avro record with a given schema, rewrites it into the new schema while setting fields only from the new
    * schema.
+   *
+   * NOTE: This method is rewriting every record's field that is record itself recursively. It's
+   *       caller's responsibility to make sure that no unnecessary re-writing occurs (by preemptively
+   *       checking whether the record does require re-writing to adhere to the new schema)
+   *
    * NOTE: Here, the assumption is that you cannot go from an evolved schema (schema with (N) fields)
-   * to an older schema (schema with (N-1) fields). All fields present in the older record schema MUST be present in the
-   * new schema and the default/existing values are carried over.
-   * This particular method does the following things :
-   * a) Create a new empty GenericRecord with the new schema.
-   * b) For GenericRecord, copy over the data from the old schema to the new schema or set default values for all fields of this
-   * transformed schema
-   * c) For SpecificRecord, hoodie_metadata_fields have a special treatment. This is done because for code generated
+   *       to an older schema (schema with (N-1) fields). All fields present in the older record schema MUST be present in the
+   *       new schema and the default/existing values are carried over.
+   *
+   * This particular method does the following:
+   * <ol>
+   *   <li>Create a new empty GenericRecord with the new schema.</li>
+   *   <li>For GenericRecord, copy over the data from the old schema to the new schema or set default values for all
+   *   fields of this transformed schema</li>
+   *   <li>For SpecificRecord, hoodie_metadata_fields have a special treatment (see below)</li>
+   * </ol>
+   *
+   * For SpecificRecord we ignore Hudi Metadata fields, because for code generated
    * avro classes (HoodieMetadataRecord), the avro record is a SpecificBaseRecord type instead of a GenericRecord.
    * SpecificBaseRecord throws null pointer exception for record.get(name) if name is not present in the schema of the
    * record (which happens when converting a SpecificBaseRecord without hoodie_metadata_fields to a new record with it).
@@ -619,15 +628,17 @@ public class HoodieAvroUtils {
     }
 
     List<Schema> innerTypes = schema.getTypes();
-    Optional<Schema> nonNullType = innerTypes.stream()
-        .filter(it -> it.getType() != Schema.Type.NULL)
-        .findFirst();
+    Schema nonNullType =
+        innerTypes.stream()
+          .filter(it -> it.getType() != Schema.Type.NULL)
+          .findFirst()
+          .orElse(null);
 
-    if (innerTypes.size() != 2 || !nonNullType.isPresent()) {
+    if (innerTypes.size() != 2 || nonNullType == null) {
       throw new AvroRuntimeException(
           String.format("Unsupported Avro UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
     }
 
-    return nonNullType.get();
+    return nonNullType;
   }
 }
