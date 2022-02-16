@@ -24,17 +24,24 @@ import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.cluster.ClusteringTestBase;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.Assertions;
 
@@ -53,16 +60,21 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -217,7 +229,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
+  @ValueSource(booleans = {true})
   public void testCopyOnWriteRollbackActionExecutor(boolean isUsingMarkers) throws IOException {
     //1. prepare data and assert data result
     List<FileSlice> firstPartitionCommit2FileSlices = new ArrayList<>();
@@ -352,7 +364,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     // Create the rollback plan and perform the rollback
     BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, "003", needRollBackInstant, false,
-        table.getConfig().shouldRollbackUsingMarkers());
+            table.getConfig().shouldRollbackUsingMarkers());
     copyOnWriteRollbackPlanActionExecutor.execute();
 
     CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutor = new CopyOnWriteRollbackActionExecutor(context, table.getConfig(), table, "003",
@@ -363,5 +375,214 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     Path backupDir = new Path(metaClient.getMetaPath(), table.getConfig().getRollbackBackupDirectory());
     assertTrue(fs.exists(new Path(backupDir, testTable.getCommitFilePath("002").getName())));
     assertTrue(fs.exists(new Path(backupDir, testTable.getInflightCommitFilePath("002").getName())));
+  }
+
+  /**
+   * Throw an exception when rolling back inflight ingestion commit,
+   * when there is a completed commit with greater timestamp.
+   */
+  @Test
+  public void testRollbackForMultiwriter() throws Exception {
+    final String p1 = "2015/03/16";
+    final String p2 = "2015/03/17";
+    final String p3 = "2016/03/15";
+    // Let's create some commit files and parquet files
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient)
+        .withPartitionMetaFiles(p1, p2, p3)
+        .addCommit("001")
+        .withBaseFilesInPartition(p1, "id11")
+        .withBaseFilesInPartition(p2, "id12")
+        .withLogFile(p1, "id11", 3)
+        .addCommit("002")
+        .withBaseFilesInPartition(p1, "id21")
+        .withBaseFilesInPartition(p2, "id22")
+        .addInflightCommit("003")
+        .withBaseFilesInPartition(p1, "id31")
+        .addCommit("004");
+
+    HoodieTable table = this.getHoodieTable(metaClient, getConfigBuilder().build());
+    HoodieInstant needRollBackInstant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "003");
+
+    // execute CopyOnWriteRollbackActionExecutor with filelisting mode
+    CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutor =
+        new CopyOnWriteRollbackActionExecutor(context, table.getConfig(), table, "003", needRollBackInstant, true, true);
+    assertThrows(HoodieRollbackException.class, () -> copyOnWriteRollbackActionExecutor.execute());
+  }
+
+  /**
+   * This method tests rollback of completed ingestion commits and replacecommit inflight files
+   * when there is another replacecommit with greater timestamp already present in the timeline.
+   */
+  @Test
+  public void testRollbackWhenReplaceCommitIsPresent() throws Exception {
+
+    // insert data
+    HoodieWriteConfig writeConfig = getConfigBuilder().withAutoCommit(false).build();
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig);
+
+    // Create a base commit.
+    int numRecords = 200;
+    String firstCommit = HoodieActiveTimeline.createNewInstantTime();
+    String partitionStr = HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
+    dataGen = new HoodieTestDataGenerator(new String[]{partitionStr});
+    writeBatch(writeClient, firstCommit, "000", Option.of(Arrays.asList("000")), "000",
+        numRecords, dataGen::generateInserts, SparkRDDWriteClient::insert, true, numRecords, numRecords,
+        1, true);
+
+    // Create second commit.
+    String secondCommit = HoodieActiveTimeline.createNewInstantTime();
+    writeBatch(writeClient, secondCommit, firstCommit, Option.of(Arrays.asList(firstCommit)), "000", 100,
+        dataGen::generateInserts, SparkRDDWriteClient::insert, true, 100, 300,
+        2, true);
+
+    // Create completed clustering commit
+    SparkRDDWriteClient clusteringClient = getHoodieWriteClient(ClusteringTestBase.getClusteringConfig(basePath));
+
+    // Save an older instant for us to run clustering.
+    String clusteringInstant1 = HoodieActiveTimeline.createNewInstantTime();
+
+    // Create completed clustering commit
+    ClusteringTestBase.runClustering(clusteringClient, false, true);
+
+    // Now execute clustering on the saved instant and do not allow it to commit.
+    ClusteringTestBase.runClusteringOnInstant(clusteringClient, false, false, clusteringInstant1);
+
+    HoodieTable table = this.getHoodieTable(metaClient, getConfigBuilder().build());
+    HoodieInstant needRollBackInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, secondCommit);
+
+    // Schedule rollback
+    String rollbackInstant = HoodieActiveTimeline.createNewInstantTime();
+    BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
+        new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, rollbackInstant, needRollBackInstant, false,
+            !table.getConfig().shouldRollbackUsingMarkers());
+    copyOnWriteRollbackPlanActionExecutor.execute().get();
+
+    // execute CopyOnWriteRollbackActionExecutor with filelisting mode
+    final CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutor = new CopyOnWriteRollbackActionExecutor(
+        context, table.getConfig(), table, rollbackInstant, needRollBackInstant, true, false, true);
+    assertThrows(HoodieRollbackException.class, copyOnWriteRollbackActionExecutor::execute);
+
+    // Schedule rollback for incomplete clustering instant.
+    needRollBackInstant = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringInstant1);
+    rollbackInstant = HoodieActiveTimeline.createNewInstantTime();
+    copyOnWriteRollbackPlanActionExecutor =
+        new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, rollbackInstant, needRollBackInstant, false,
+            table.getConfig().shouldRollbackUsingMarkers());
+    HoodieRollbackPlan rollbackPlan = (HoodieRollbackPlan) copyOnWriteRollbackPlanActionExecutor.execute().get();
+
+    // execute CopyOnWriteRollbackActionExecutor with filelisting mode
+    CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutorForClustering = new CopyOnWriteRollbackActionExecutor(
+        context, table.getConfig(), table, rollbackInstant, needRollBackInstant, true, false, true);
+    copyOnWriteRollbackActionExecutorForClustering.execute();
+  }
+
+  @Test
+  public void testInflightCommitRollbackWhenReplaceCommitIsPresent() throws Exception {
+    final String p1 = "2015/03/16";
+    final String p2 = "2015/03/17";
+    final String p3 = "2016/03/15";
+    // Let's create some commit files and parquet files
+    String fileId11 = "id11";
+    String fileId12 = "id12";
+    String fileId21 = "id21";
+    String fileId22 = "id21";
+    String replaceFileID11 = "rid11";
+    String replaceFileID21 = "rid21";
+
+    Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> replaceCommitMetadataPair1
+        = generateReplaceCommitMetadata("004", p1, fileId11, replaceFileID11);
+    Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> replaceCommitMetadataPair2
+        = generateReplaceCommitMetadata("006", p2, fileId21, replaceFileID21);
+
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient)
+        .withPartitionMetaFiles(p1, p2, p3)
+        .addCommit("001")
+        .withBaseFilesInPartition(p1, fileId11)
+        .withBaseFilesInPartition(p2, fileId12)
+        .withLogFile(p1, fileId11, 3)
+        .addCommit("002")
+        .addInflightCommit("003")
+        .withBaseFilesInPartition(p1, fileId21)
+        .withBaseFilesInPartition(p2, fileId22)
+        .addReplaceCommit("004", Option.of(replaceCommitMetadataPair1.getKey()), Option.empty(), replaceCommitMetadataPair1.getValue())
+        .addRequestedAndInflightReplaceCommit("006", replaceCommitMetadataPair2.getKey(), replaceCommitMetadataPair2.getValue());
+    HoodieTimeline timeline = metaClient.reloadActiveTimeline();
+    HoodieTable table = this.getHoodieTable(metaClient, getConfigBuilder().build());
+    HoodieInstant needRollBackInstant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "003");
+
+    // Schedule rollback
+    BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
+        new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, "007", needRollBackInstant, false,
+            table.getConfig().shouldRollbackUsingMarkers());
+    HoodieRollbackPlan hoodieRollbackPlan = (HoodieRollbackPlan) copyOnWriteRollbackPlanActionExecutor.execute().get();
+
+    // execute CopyOnWriteRollbackActionExecutor with filelisting mode
+    CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutor = new CopyOnWriteRollbackActionExecutor(context, table.getConfig(), table, "007", needRollBackInstant, true, true);
+    copyOnWriteRollbackActionExecutor.execute();
+    timeline = metaClient.reloadActiveTimeline();
+    Stream<HoodieInstant> instantStream = timeline.getInstantsAsStream();
+    Set<String> validInstants = new HashSet<>(Arrays.asList("[001__commit__COMPLETED]", "[002__commit__COMPLETED]",
+        "[004__replacecommit__COMPLETED]","[==>006__replacecommit__INFLIGHT]","[007__rollback__COMPLETED]"));
+    instantStream.forEach(instant -> {
+      assertNotEquals(instant.getTimestamp(), "003");
+      assertTrue(validInstants.contains(instant.toString()));
+    });
+  }
+
+  @Test
+  public void testInflightCommitRollbackWhenInsertOverwriteIsPresent() throws Exception {
+    final String p1 = "2015/03/16";
+    final String p2 = "2015/03/17";
+    final String p3 = "2016/03/15";
+    // Let's create some commit files and parquet files
+    String fileId11 = "id11";
+    String fileId12 = "id12";
+    String fileId21 = "id21";
+    String fileId22 = "id21";
+    String replaceFileID11 = "rid11";
+    String replaceFileID21 = "rid21";
+
+    /**
+     Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> replaceCommitMetadataPair1
+     = TestCleaner.generateReplaceCommitMetadata(p1, fileId11, replaceFileID11);
+     Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> replaceCommitMetadataPair2
+     = TestCleaner.generateReplaceCommitMetadata(p2, fileId21, replaceFileID21);
+     */
+
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient)
+        .withPartitionMetaFiles(p1, p2, p3)
+        .addCommit("001")
+        .withBaseFilesInPartition(p1, fileId11)
+        .withBaseFilesInPartition(p2, fileId12)
+        .withLogFile(p1, fileId11, 3)
+        .addCommit("002")
+        .addInflightCommit("003")
+        .withBaseFilesInPartition(p1, fileId21)
+        .withBaseFilesInPartition(p2, fileId22);
+
+    HoodieTable table = this.getHoodieTable(metaClient, getConfigBuilder().build());
+    HoodieInstant needRollBackInstant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "003");
+
+    SparkRDDWriteClient client = getHoodieWriteClient(table.getConfig());
+    String testPartitionPath = "2017/03/15";
+    dataGen = new HoodieTestDataGenerator(new String[] {testPartitionPath});
+    String commitTime2 = "010";
+    client.startCommitWithTime(commitTime2, HoodieTimeline.REPLACE_COMMIT_ACTION);
+    List<HoodieRecord> inserts2 = dataGen.generateInserts(commitTime2, 100);
+    List<HoodieRecord> insertsAndUpdates2 = new ArrayList<>();
+    insertsAndUpdates2.addAll(inserts2);
+    JavaRDD<HoodieRecord> insertAndUpdatesRDD2 = jsc.parallelize(insertsAndUpdates2, 2);
+    client.insertOverwrite(insertAndUpdatesRDD2, commitTime2);
+    metaClient.reloadActiveTimeline();
+
+    // Schedule rollback
+    BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
+        new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, "007", needRollBackInstant, false,
+            table.getConfig().shouldRollbackUsingMarkers());
+    HoodieRollbackPlan hoodieRollbackPlan = (HoodieRollbackPlan) copyOnWriteRollbackPlanActionExecutor.execute().get();
+
+    // execute CopyOnWriteRollbackActionExecutor with filelisting mode
+    CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutor = new CopyOnWriteRollbackActionExecutor(context, table.getConfig(), table, "007", needRollBackInstant, true, true);
+    assertThrows(HoodieRollbackException.class, () -> copyOnWriteRollbackActionExecutor.execute());
   }
 }

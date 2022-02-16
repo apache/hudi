@@ -153,6 +153,9 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     });
   }
 
+  /**
+   * Validate commit sequence for rollback commits.
+   */
   private void validateRollbackCommitSequence() {
     // Continue to provide the same behavior if policy is EAGER (similar to pendingRollback logic). This is required
     // since with LAZY rollback we support parallel writing which can allow a new inflight while rollback is ongoing
@@ -162,9 +165,10 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
       final String instantTimeToRollback = instantToRollback.getTimestamp();
       HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
       HoodieTimeline inflightAndRequestedCommitTimeline = table.getPendingCommitTimeline();
+      // Check validity of completed commit timeline.
       // Make sure only the last n commits are being rolled back
       // If there is a commit in-between or after that is not rolled back, then abort
-      // this condition may not hold good for metadata table. since the order of commits applied to MDT is data table commits and the ordering could be different.
+      // this condition may not hold good for metadata table. since the order of commits applied to MDT in data table commits and the ordering could be different.
       if ((instantTimeToRollback != null) && !commitTimeline.empty()
           && !commitTimeline.findInstantsAfter(instantTimeToRollback, Integer.MAX_VALUE).empty()) {
         // check if remnants are from a previous LAZY rollback config, if yes, let out of order rollback continue
