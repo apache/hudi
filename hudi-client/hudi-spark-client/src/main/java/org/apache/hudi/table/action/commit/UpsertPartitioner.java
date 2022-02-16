@@ -165,7 +165,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
 
         List<SmallFile> smallFiles =
             filterSmallFilesInClustering(partitionPathToPendingClusteringFileGroupsId.getOrDefault(partitionPath, Collections.emptySet()),
-                partitionSmallFilesMap.get(partitionPath));
+                partitionSmallFilesMap.getOrDefault(partitionPath, new ArrayList<>()));
 
         this.smallFiles.addAll(smallFiles);
 
