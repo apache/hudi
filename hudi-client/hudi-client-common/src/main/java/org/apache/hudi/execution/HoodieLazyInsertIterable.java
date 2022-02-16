@@ -23,6 +23,7 @@ import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.CreateHandleFactory;
@@ -34,6 +35,7 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.Properties;
 import java.util.function.Function;
 
 /**
@@ -82,10 +84,10 @@ public abstract class HoodieLazyInsertIterable<T extends HoodieRecordPayload>
     // It caches the exception seen while fetching insert value.
     public Option<Exception> exception = Option.empty();
 
-    public HoodieInsertValueGenResult(T record, Schema schema) {
+    public HoodieInsertValueGenResult(T record, Schema schema, Properties properties) {
       this.record = record;
       try {
-        this.insertValue = record.getData().getInsertValue(schema);
+        this.insertValue = ((HoodieRecordPayload) record.getData()).getInsertValue(schema, properties);
       } catch (Exception e) {
         this.exception = Option.of(e);
       }
@@ -97,8 +99,13 @@ public abstract class HoodieLazyInsertIterable<T extends HoodieRecordPayload>
    * expensive operations of transformation to the reader thread.
    */
   static <T extends HoodieRecordPayload> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformFunction(
+      Schema schema, HoodieWriteConfig config) {
+    return hoodieRecord -> new HoodieInsertValueGenResult(hoodieRecord, schema, config.getProps());
+  }
+
+  static <T extends HoodieRecordPayload> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformFunction(
       Schema schema) {
-    return hoodieRecord -> new HoodieInsertValueGenResult(hoodieRecord, schema);
+    return hoodieRecord -> new HoodieInsertValueGenResult(hoodieRecord, schema, CollectionUtils.EMPTY_PROPERTIES);
   }
 
   @Override

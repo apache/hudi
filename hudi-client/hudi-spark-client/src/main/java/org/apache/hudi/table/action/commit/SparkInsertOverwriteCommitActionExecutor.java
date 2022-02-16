@@ -58,12 +58,14 @@ public class SparkInsertOverwriteCommitActionExecutor<T extends HoodieRecordPayl
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> execute() {
     return SparkWriteHelper.newInstance().write(instantTime, inputRecordsRDD, context, table,
-        config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, false);
+        config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, operationType);
   }
 
   @Override
   protected Partitioner getPartitioner(WorkloadProfile profile) {
-    return new SparkInsertOverwritePartitioner(profile, context, table, config);
+    return table.getStorageLayout().layoutPartitionerClass()
+        .map(c -> getLayoutPartitioner(profile, c))
+        .orElse(new SparkInsertOverwritePartitioner(profile, context, table, config));
   }
 
   @Override
@@ -72,8 +74,8 @@ public class SparkInsertOverwriteCommitActionExecutor<T extends HoodieRecordPayl
   }
 
   @Override
-  protected Map<String, List<String>> getPartitionToReplacedFileIds(JavaRDD<WriteStatus> writeStatuses) {
-    return writeStatuses.map(status -> status.getStat().getPartitionPath()).distinct().mapToPair(partitionPath ->
+  protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata) {
+    return writeMetadata.getWriteStatuses().map(status -> status.getStat().getPartitionPath()).distinct().mapToPair(partitionPath ->
         new Tuple2<>(partitionPath, getAllExistingFileIds(partitionPath))).collectAsMap();
   }
 

@@ -23,14 +23,26 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-public class CreateHandleFactory<T extends HoodieRecordPayload, I, K, O> extends WriteHandleFactory<T, I, K, O> {
+import java.io.Serializable;
+
+public class CreateHandleFactory<T extends HoodieRecordPayload, I, K, O> extends WriteHandleFactory<T, I, K, O> implements Serializable {
+
+  private boolean preserveMetadata = false;
+
+  public CreateHandleFactory() {
+    this(false);
+  }
+
+  public CreateHandleFactory(boolean preserveMetadata) {
+    this.preserveMetadata = preserveMetadata;
+  }
 
   @Override
   public HoodieWriteHandle<T, I, K, O> create(final HoodieWriteConfig hoodieConfig, final String commitTime,
-                                     final HoodieTable<T, I, K, O> hoodieTable, final String partitionPath,
-                                     final String fileIdPrefix, TaskContextSupplier taskContextSupplier) {
+                                              final HoodieTable<T, I, K, O> hoodieTable, final String partitionPath,
+                                              final String fileIdPrefix, TaskContextSupplier taskContextSupplier) {
 
     return new HoodieCreateHandle(hoodieConfig, commitTime, hoodieTable, partitionPath,
-        getNextFileId(fileIdPrefix), taskContextSupplier);
+        getNextFileId(fileIdPrefix), taskContextSupplier, preserveMetadata);
   }
 }

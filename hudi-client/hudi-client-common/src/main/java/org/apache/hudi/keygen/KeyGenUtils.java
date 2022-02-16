@@ -21,16 +21,17 @@ package org.apache.hudi.keygen;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.keygen.parser.AbstractHoodieDateTimeParser;
+import org.apache.hudi.keygen.parser.BaseHoodieDateTimeParser;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
@@ -39,12 +40,32 @@ public class KeyGenUtils {
   protected static final String NULL_RECORDKEY_PLACEHOLDER = "__null__";
   protected static final String EMPTY_RECORDKEY_PLACEHOLDER = "__empty__";
 
-  protected static final String DEFAULT_PARTITION_PATH = "default";
-  protected static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
+  protected static final String HUDI_DEFAULT_PARTITION_PATH = PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
+  public static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
+
+  /**
+   * Fetches record key from the GenericRecord.
+   * @param genericRecord generic record of interest.
+   * @param keyGeneratorOpt Optional BaseKeyGenerator. If not, meta field will be used.
+   * @return the record key for the passed in generic record.
+   */
+  public static String getRecordKeyFromGenericRecord(GenericRecord genericRecord, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    return keyGeneratorOpt.isPresent() ? keyGeneratorOpt.get().getRecordKey(genericRecord) : genericRecord.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+  }
+
+  /**
+   * Fetches partition path from the GenericRecord.
+   * @param genericRecord generic record of interest.
+   * @param keyGeneratorOpt Optional BaseKeyGenerator. If not, meta field will be used.
+   * @return the partition path for the passed in generic record.
+   */
+  public static String getPartitionPathFromGenericRecord(GenericRecord genericRecord, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    return keyGeneratorOpt.isPresent() ? keyGeneratorOpt.get().getPartitionPath(genericRecord) : genericRecord.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+  }
 
   /**
    * Extracts the record key fields in strings out of the given record key,
-   * this is the reverse operation of {@link #getRecordKey(GenericRecord, String)}.
+   * this is the reverse operation of {@link #getRecordKey(GenericRecord, String, boolean)}.
    *
    * @see SimpleAvroKeyGenerator
    * @see org.apache.hudi.keygen.ComplexAvroKeyGenerator
@@ -68,11 +89,11 @@ public class KeyGenUtils {
     }
   }
 
-  public static String getRecordKey(GenericRecord record, List<String> recordKeyFields) {
+  public static String getRecordKey(GenericRecord record, List<String> recordKeyFields, boolean consistentLogicalTimestampEnabled) {
     boolean keyIsNullEmpty = true;
     StringBuilder recordKey = new StringBuilder();
     for (String recordKeyField : recordKeyFields) {
-      String recordKeyValue = HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyField, true);
+      String recordKeyValue = HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyField, true, consistentLogicalTimestampEnabled);
       if (recordKeyValue == null) {
         recordKey.append(recordKeyField + ":" + NULL_RECORDKEY_PLACEHOLDER + ",");
       } else if (recordKeyValue.isEmpty()) {
@@ -91,24 +112,20 @@ public class KeyGenUtils {
   }
 
   public static String getRecordPartitionPath(GenericRecord record, List<String> partitionPathFields,
-      boolean hiveStylePartitioning, boolean encodePartitionPath) {
+      boolean hiveStylePartitioning, boolean encodePartitionPath, boolean consistentLogicalTimestampEnabled) {
     if (partitionPathFields.isEmpty()) {
       return "";
     }
 
     StringBuilder partitionPath = new StringBuilder();
     for (String partitionPathField : partitionPathFields) {
-      String fieldVal = HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathField, true);
+      String fieldVal = HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathField, true, consistentLogicalTimestampEnabled);
       if (fieldVal == null || fieldVal.isEmpty()) {
-        partitionPath.append(hiveStylePartitioning ? partitionPathField + "=" + DEFAULT_PARTITION_PATH
-            : DEFAULT_PARTITION_PATH);
+        partitionPath.append(hiveStylePartitioning ? partitionPathField + "=" + HUDI_DEFAULT_PARTITION_PATH
+            : HUDI_DEFAULT_PARTITION_PATH);
       } else {
         if (encodePartitionPath) {
-          try {
-            fieldVal = URLEncoder.encode(fieldVal, StandardCharsets.UTF_8.toString());
-          } catch (UnsupportedEncodingException uoe) {
-            throw new HoodieException(uoe.getMessage(), uoe);
-          }
+          fieldVal = PartitionPathEncodeUtils.escapePathName(fieldVal);
         }
         partitionPath.append(hiveStylePartitioning ? partitionPathField + "=" + fieldVal : fieldVal);
       }
@@ -118,8 +135,8 @@ public class KeyGenUtils {
     return partitionPath.toString();
   }
 
-  public static String getRecordKey(GenericRecord record, String recordKeyField) {
-    String recordKey = HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyField, true);
+  public static String getRecordKey(GenericRecord record, String recordKeyField, boolean consistentLogicalTimestampEnabled) {
+    String recordKey = HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyField, true, consistentLogicalTimestampEnabled);
     if (recordKey == null || recordKey.isEmpty()) {
       throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
     }
@@ -127,17 +144,13 @@ public class KeyGenUtils {
   }
 
   public static String getPartitionPath(GenericRecord record, String partitionPathField,
-      boolean hiveStylePartitioning, boolean encodePartitionPath) {
-    String partitionPath = HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathField, true);
+      boolean hiveStylePartitioning, boolean encodePartitionPath, boolean consistentLogicalTimestampEnabled) {
+    String partitionPath = HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathField, true, consistentLogicalTimestampEnabled);
     if (partitionPath == null || partitionPath.isEmpty()) {
-      partitionPath = DEFAULT_PARTITION_PATH;
+      partitionPath = HUDI_DEFAULT_PARTITION_PATH;
     }
     if (encodePartitionPath) {
-      try {
-        partitionPath = URLEncoder.encode(partitionPath, StandardCharsets.UTF_8.toString());
-      } catch (UnsupportedEncodingException uoe) {
-        throw new HoodieException(uoe.getMessage(), uoe);
-      }
+      partitionPath = PartitionPathEncodeUtils.escapePathName(partitionPath);
     }
     if (hiveStylePartitioning) {
       partitionPath = partitionPathField + "=" + partitionPath;
@@ -148,9 +161,9 @@ public class KeyGenUtils {
   /**
    * Create a date time parser class for TimestampBasedKeyGenerator, passing in any configs needed.
    */
-  public static AbstractHoodieDateTimeParser createDateTimeParser(TypedProperties props, String parserClass) throws IOException  {
+  public static BaseHoodieDateTimeParser createDateTimeParser(TypedProperties props, String parserClass) throws IOException  {
     try {
-      return (AbstractHoodieDateTimeParser) ReflectionUtils.loadClass(parserClass, props);
+      return (BaseHoodieDateTimeParser) ReflectionUtils.loadClass(parserClass, props);
     } catch (Throwable e) {
       throw new IOException("Could not load date time parser class " + parserClass, e);
     }
@@ -162,5 +175,25 @@ public class KeyGenUtils {
         throw new HoodieNotSupportedException("Required property " + prop + " is missing");
       }
     });
+  }
+
+  /**
+   * Create a key generator class via reflection, passing in any configs needed.
+   * <p>
+   * This method is for user-defined classes. To create hudi's built-in key generators, please set proper
+   * {@link org.apache.hudi.keygen.constant.KeyGeneratorType} conf, and use the relevant factory, see
+   * {@link org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory}.
+   */
+  public static KeyGenerator createKeyGeneratorByClassName(TypedProperties props) throws IOException {
+    KeyGenerator keyGenerator = null;
+    String keyGeneratorClass = props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), null);
+    if (!StringUtils.isNullOrEmpty(keyGeneratorClass)) {
+      try {
+        keyGenerator = (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, props);
+      } catch (Throwable e) {
+        throw new IOException("Could not load key generator class " + keyGeneratorClass, e);
+      }
+    }
+    return keyGenerator;
   }
 }

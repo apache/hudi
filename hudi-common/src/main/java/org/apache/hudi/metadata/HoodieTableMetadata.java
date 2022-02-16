@@ -18,18 +18,22 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieMetadataException;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Interface that supports querying various pieces of metadata about a hudi table.
@@ -43,11 +47,12 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * {@link org.apache.hudi.common.table.timeline.HoodieTimeline#INIT_INSTANT_TS}, such that the metadata table
    * can be prepped even before bootstrap is done.
    */
-  String SOLO_COMMIT_TIMESTAMP = "0000000000000";
+  String SOLO_COMMIT_TIMESTAMP = "00000000000000";
   // Key for the record which saves list of all partitions
   String RECORDKEY_PARTITION_LIST = "__all_partitions__";
   // The partition name used for non-partitioned tables
   String NON_PARTITIONED_NAME = ".";
+  String EMPTY_PARTITION_NAME = "";
 
   // Base path of the Metadata Table relative to the dataset (.hoodie/metadata)
   static final String METADATA_TABLE_REL_PATH = HoodieTableMetaClient.METAFOLDER_NAME + Path.SEPARATOR + "metadata";
@@ -67,6 +72,9 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * @param basePath The base path to check
    */
   static boolean isMetadataTable(String basePath) {
+    if (basePath.endsWith(Path.SEPARATOR)) {
+      basePath = basePath.substring(0, basePath.length() - 1);
+    }
     return basePath.endsWith(METADATA_TABLE_REL_PATH);
   }
 
@@ -77,7 +85,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
 
   static HoodieTableMetadata create(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String datasetBasePath,
                                     String spillableMapPath, boolean reuse) {
-    if (metadataConfig.useFileListingMetadata()) {
+    if (metadataConfig.enabled()) {
       return new HoodieBackedTableMetadata(engineContext, metadataConfig, datasetBasePath, spillableMapPath, reuse);
     } else {
       return new FileSystemBackedTableMetadata(engineContext, new SerializableConfiguration(engineContext.getHadoopConf()),
@@ -96,9 +104,54 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   List<String> getAllPartitionPaths() throws IOException;
 
   /**
+   * Fetch all files for given partition paths.
+   */
+  Map<String, FileStatus[]> getAllFilesInPartitions(List<String> partitionPaths) throws IOException;
+
+  /**
+   * Get the bloom filter for the FileID from the metadata table.
+   *
+   * @param partitionName - Partition name
+   * @param fileName      - File name for which bloom filter needs to be retrieved
+   * @return BloomFilter byte buffer if available, otherwise empty
+   * @throws HoodieMetadataException
+   */
+  Option<ByteBuffer> getBloomFilter(final String partitionName, final String fileName)
+      throws HoodieMetadataException;
+
+  /**
+   * Get bloom filters for files from the metadata table index.
+   *
+   * @param partitionNameFileNameList - List of partition and file name pair for which bloom filters need to be retrieved
+   * @return Map of partition file name pair to its bloom filter byte buffer
+   * @throws HoodieMetadataException
+   */
+  Map<Pair<String, String>, ByteBuffer> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList)
+      throws HoodieMetadataException;
+
+  /**
+   * Get column stats for files from the metadata table index.
+   *
+   * @param partitionNameFileNameList - List of partition and file name pair for which bloom filters need to be retrieved
+   * @param columnName                - Column name for which stats are needed
+   * @return Map of partition and file name pair to its column stats
+   * @throws HoodieMetadataException
+   */
+  Map<Pair<String, String>, HoodieMetadataColumnStats> getColumnStats(final List<Pair<String, String>> partitionNameFileNameList, final String columnName)
+      throws HoodieMetadataException;
+
+  /**
    * Get the instant time to which the metadata is synced w.r.t data timeline.
    */
   Option<String> getSyncedInstantTime();
 
-  boolean isInSync();
+  /**
+   * Returns the timestamp of the latest compaction.
+   */
+  Option<String> getLatestCompactionTime();
+
+  /**
+   * Clear the states of the table metadata.
+   */
+  void reset();
 }

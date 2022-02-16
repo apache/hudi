@@ -46,16 +46,14 @@ public class Metrics {
 
   private Metrics(HoodieWriteConfig metricConfig) {
     registry = new MetricRegistry();
-    commonMetricPrefix = metricConfig.getTableName();
+    commonMetricPrefix = metricConfig.getMetricReporterMetricsNamePrefix();
     reporter = MetricsReporterFactory.createReporter(metricConfig, registry);
     if (reporter == null) {
       throw new RuntimeException("Cannot initialize Reporter.");
     }
     reporter.start();
 
-    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-      reportAndCloseReporter();
-    }));
+    Runtime.getRuntime().addShutdownHook(new Thread(this::reportAndCloseReporter));
   }
 
   private void reportAndCloseReporter() {

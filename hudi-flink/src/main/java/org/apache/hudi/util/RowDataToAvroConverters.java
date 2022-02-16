@@ -31,15 +31,16 @@ import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.table.types.logical.TimestampType;
 
 import java.io.Serializable;
 import java.nio.ByteBuffer;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import static org.apache.flink.formats.avro.typeutils.AvroSchemaConverter.extractValueTypeToAvroMap;
 
 /**
  * Tool class used to convert from {@link RowData} to Avro {@link GenericRecord}.
@@ -70,7 +71,7 @@ public class RowDataToAvroConverters {
   // --------------------------------------------------------------------------------
 
   /**
-   * Creates a runtime converter accroding to the given logical type that converts objects of
+   * Creates a runtime converter according to the given logical type that converts objects of
    * Flink Table & SQL internal data structures to corresponding Avro data structures.
    */
   public static RowDataToAvroConverter createConverter(LogicalType type) {
@@ -153,15 +154,30 @@ public class RowDataToAvroConverters {
             };
         break;
       case TIMESTAMP_WITHOUT_TIME_ZONE:
-        converter =
-            new RowDataToAvroConverter() {
-              private static final long serialVersionUID = 1L;
+        final int precision = ((TimestampType) type).getPrecision();
+        if (precision <= 3) {
+          converter =
+              new RowDataToAvroConverter() {
+                private static final long serialVersionUID = 1L;
 
-              @Override
-              public Object convert(Schema schema, Object object) {
-                return ((TimestampData) object).toInstant().toEpochMilli();
-              }
-            };
+                @Override
+                public Object convert(Schema schema, Object object) {
+                  return ((TimestampData) object).toInstant().toEpochMilli();
+                }
+              };
+        } else if (precision <= 6) {
+          converter =
+              new RowDataToAvroConverter() {
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                public Object convert(Schema schema, Object object) {
+                  return ChronoUnit.MICROS.between(Instant.EPOCH, ((TimestampData) object).toInstant());
+                }
+              };
+        } else {
+          throw new UnsupportedOperationException("Unsupported timestamp precision: " + precision);
+        }
         break;
       case DECIMAL:
         converter =
@@ -279,7 +295,7 @@ public class RowDataToAvroConverters {
   }
 
   private static RowDataToAvroConverter createMapConverter(LogicalType type) {
-    LogicalType valueType = extractValueTypeToAvroMap(type);
+    LogicalType valueType = AvroSchemaConverter.extractValueTypeToAvroMap(type);
     final ArrayData.ElementGetter valueGetter = ArrayData.createElementGetter(valueType);
     final RowDataToAvroConverter valueConverter = createConverter(valueType);
 

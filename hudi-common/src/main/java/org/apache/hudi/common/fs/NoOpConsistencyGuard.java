@@ -23,7 +23,8 @@ import org.apache.hadoop.fs.Path;
 import java.util.List;
 
 /**
- * Default Consistency guard that does nothing. Used for HDFS deployments
+ * Default Consistency guard that does nothing. Used for lake storage which provided read-after-write
+ * guarantees.
  */
 public class NoOpConsistencyGuard implements ConsistencyGuard {
 

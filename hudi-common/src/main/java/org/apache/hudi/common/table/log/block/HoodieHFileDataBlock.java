@@ -18,22 +18,12 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.io.storage.HoodieHFileReader;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-
 import org.apache.avro.Schema;
-import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
@@ -41,9 +31,21 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.hbase.util.Pair;
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.fs.inline.InLineFSUtils;
+import org.apache.hudi.common.fs.inline.InLineFileSystem;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
+import org.apache.hudi.io.storage.HoodieHFileReader;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -51,7 +53,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-import javax.annotation.Nonnull;
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
  * HoodieHFileDataBlock contains a list of records stored inside an HFile format. It is used with the HFile
@@ -59,26 +61,28 @@ import javax.annotation.Nonnull;
  */
 public class HoodieHFileDataBlock extends HoodieDataBlock {
   private static final Logger LOG = LogManager.getLogger(HoodieHFileDataBlock.class);
-  private static Compression.Algorithm compressionAlgorithm = Compression.Algorithm.GZ;
-  private static int blockSize = 1 * 1024 * 1024;
 
-  public HoodieHFileDataBlock(@Nonnull Map<HeaderMetadataType, String> logBlockHeader,
-       @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
-       @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation, @Nonnull Option<byte[]> content,
-       FSDataInputStream inputStream, boolean readBlockLazily) {
-    super(logBlockHeader, logBlockFooter, blockContentLocation, content, inputStream, readBlockLazily);
+  private static final int DEFAULT_BLOCK_SIZE = 1024 * 1024;
+
+  private final Option<Compression.Algorithm> compressionAlgorithm;
+
+  public HoodieHFileDataBlock(FSDataInputStream inputStream,
+                              Option<byte[]> content,
+                              boolean readBlockLazily,
+                              HoodieLogBlockContentLocation logBlockContentLocation,
+                              Option<Schema> readerSchema,
+                              Map<HeaderMetadataType, String> header,
+                              Map<HeaderMetadataType, String> footer,
+                              boolean enablePointLookups) {
+    super(content, inputStream, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, HoodieHFileReader.KEY_FIELD_NAME, enablePointLookups);
+    this.compressionAlgorithm = Option.empty();
   }
 
-  public HoodieHFileDataBlock(HoodieLogFile logFile, FSDataInputStream inputStream, Option<byte[]> content,
-       boolean readBlockLazily, long position, long blockSize, long blockEndpos, Schema readerSchema,
-       Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer) {
-    super(content, inputStream, readBlockLazily,
-          Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndpos)), readerSchema, header,
-          footer);
-  }
-
-  public HoodieHFileDataBlock(@Nonnull List<IndexedRecord> records, @Nonnull Map<HeaderMetadataType, String> header) {
-    super(records, header, new HashMap<>());
+  public HoodieHFileDataBlock(List<IndexedRecord> records,
+                              Map<HeaderMetadataType, String> header,
+                              Compression.Algorithm compressionAlgorithm) {
+    super(records, header, new HashMap<>(), HoodieHFileReader.KEY_FIELD_NAME);
+    this.compressionAlgorithm = Option.of(compressionAlgorithm);
   }
 
   @Override
@@ -87,42 +91,44 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   }
 
   @Override
-  protected byte[] serializeRecords() throws IOException {
-    HFileContext context = new HFileContextBuilder().withBlockSize(blockSize).withCompression(compressionAlgorithm)
+  protected byte[] serializeRecords(List<IndexedRecord> records) throws IOException {
+    HFileContext context = new HFileContextBuilder()
+        .withBlockSize(DEFAULT_BLOCK_SIZE)
+        .withCompression(compressionAlgorithm.get())
         .build();
+
     Configuration conf = new Configuration();
     CacheConfig cacheConfig = new CacheConfig(conf);
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     FSDataOutputStream ostream = new FSDataOutputStream(baos, null);
 
-    HFile.Writer writer = HFile.getWriterFactory(conf, cacheConfig)
-        .withOutputStream(ostream).withFileContext(context).create();
+    // Use simple incrementing counter as a key
+    boolean useIntegerKey = !getRecordKey(records.get(0)).isPresent();
+    // This is set here to avoid re-computing this in the loop
+    int keyWidth = useIntegerKey ? (int) Math.ceil(Math.log(records.size())) + 1 : -1;
 
     // Serialize records into bytes
     Map<String, byte[]> sortedRecordsMap = new TreeMap<>();
     Iterator<IndexedRecord> itr = records.iterator();
-    boolean useIntegerKey = false;
-    int key = 0;
-    int keySize = 0;
-    Field keyField = records.get(0).getSchema().getField(HoodieRecord.RECORD_KEY_METADATA_FIELD);
-    if (keyField == null) {
-      // Missing key metadata field so we should use an integer sequence key
-      useIntegerKey = true;
-      keySize = (int) Math.ceil(Math.log(records.size())) + 1;
-    }
+
+    int id = 0;
     while (itr.hasNext()) {
       IndexedRecord record = itr.next();
       String recordKey;
       if (useIntegerKey) {
-        recordKey = String.format("%" + keySize + "s", key++);
+        recordKey = String.format("%" + keyWidth + "s", id++);
       } else {
-        recordKey = record.get(keyField.pos()).toString();
+        recordKey = getRecordKey(record).get();
       }
-      byte[] recordBytes = HoodieAvroUtils.indexedRecordToBytes(record);
+
+      final byte[] recordBytes = serializeRecord(record);
       ValidationUtils.checkState(!sortedRecordsMap.containsKey(recordKey),
           "Writing multiple records with same key not supported for " + this.getClass().getName());
       sortedRecordsMap.put(recordKey, recordBytes);
     }
+
+    HFile.Writer writer = HFile.getWriterFactory(conf, cacheConfig)
+        .withOutputStream(ostream).withFileContext(context).withComparator(new HoodieHBaseKVComparator()).create();
 
     // Write the records
     sortedRecordsMap.forEach((recordKey, recordBytes) -> {
@@ -142,21 +148,52 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   }
 
   @Override
-  protected void deserializeRecords() throws IOException {
+  protected List<IndexedRecord> deserializeRecords(byte[] content) throws IOException {
+    checkState(readerSchema != null, "Reader's schema has to be non-null");
+
     // Get schema from the header
     Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
-    // If readerSchema was not present, use writerSchema
-    if (schema == null) {
-      schema = writerSchema;
-    }
-
     // Read the content
-    HoodieHFileReader reader = new HoodieHFileReader<>(getContent().get());
-    List<Pair<String, IndexedRecord>> records = reader.readAllRecords(writerSchema, schema);
-    this.records = records.stream().map(t -> t.getSecond()).collect(Collectors.toList());
+    HoodieHFileReader<IndexedRecord> reader = new HoodieHFileReader<>(content);
+    List<Pair<String, IndexedRecord>> records = reader.readAllRecords(writerSchema, readerSchema);
 
-    // Free up content to be GC'd, deflate
-    deflate();
+    return records.stream().map(Pair::getSecond).collect(Collectors.toList());
+  }
+
+  // TODO abstract this w/in HoodieDataBlock
+  @Override
+  protected List<IndexedRecord> lookupRecords(List<String> keys) throws IOException {
+    HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
+
+    // NOTE: It's important to extend Hadoop configuration here to make sure configuration
+    //       is appropriately carried over
+    Configuration inlineConf = new Configuration(blockContentLoc.getHadoopConf());
+    inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
+
+    Path inlinePath = InLineFSUtils.getInlineFilePath(
+        blockContentLoc.getLogFile().getPath(),
+        blockContentLoc.getLogFile().getPath().getFileSystem(inlineConf).getScheme(),
+        blockContentLoc.getContentPositionInLogFile(),
+        blockContentLoc.getBlockSize());
+
+    // HFile read will be efficient if keys are sorted, since on storage, records are sorted by key. This will avoid unnecessary seeks.
+    Collections.sort(keys);
+
+    try (HoodieHFileReader<IndexedRecord> reader =
+             new HoodieHFileReader<>(inlineConf, inlinePath, new CacheConfig(inlineConf), inlinePath.getFileSystem(inlineConf))) {
+      // Get writer's schema from the header
+      List<Pair<String, IndexedRecord>> logRecords = reader.readRecords(keys, readerSchema);
+      return logRecords.stream().map(Pair::getSecond).collect(Collectors.toList());
+    }
+  }
+
+  private byte[] serializeRecord(IndexedRecord record) {
+    Option<Schema.Field> keyField = getKeyField(record.getSchema());
+    // Reset key value w/in the record to avoid duplicating the key w/in payload
+    if (keyField.isPresent()) {
+      record.put(keyField.get().pos(), StringUtils.EMPTY_STRING);
+    }
+    return HoodieAvroUtils.indexedRecordToBytes(record);
   }
 }

@@ -46,7 +46,7 @@ import java.util.List;
  * SQL API.
  *
  * <p>Note: Changes in this class need to be kept in sync with the corresponding runtime classes
- * {@link org.apache.flink.formats.avro.AvroRowDeserializationSchema} and {@link org.apache.flink.formats.avro.AvroRowSerializationSchema}.
+ * {@code org.apache.flink.formats.avro.AvroRowDeserializationSchema} and {@code org.apache.flink.formats.avro.AvroRowSerializationSchema}.
  *
  * <p>NOTE: reference from Flink release 1.12.0, should remove when Flink version upgrade to that.
  */
@@ -162,7 +162,7 @@ public class AvroSchemaConverter {
    * <p>Use "record" as the type name.
    *
    * @param schema the schema type, usually it should be the top level record type, e.g. not a
-   *     nested type
+   *               nested type
    * @return Avro's {@link Schema} matching this logical type.
    */
   public static Schema convertToSchema(LogicalType schema) {
@@ -176,7 +176,7 @@ public class AvroSchemaConverter {
    * schema. Nested record type that only differs with type name is still compatible.
    *
    * @param logicalType logical type
-   * @param rowName the record name
+   * @param rowName     the record name
    * @return Avro's {@link Schema} matching this logical type.
    */
   public static Schema convertToSchema(LogicalType logicalType, String rowName) {
@@ -217,12 +217,13 @@ public class AvroSchemaConverter {
         org.apache.avro.LogicalType avroLogicalType;
         if (precision <= 3) {
           avroLogicalType = LogicalTypes.timestampMillis();
+        } else if (precision <= 6) {
+          avroLogicalType = LogicalTypes.timestampMicros();
         } else {
           throw new IllegalArgumentException(
-              "Avro does not support TIMESTAMP type "
-                  + "with precision: "
+              "Avro does not support TIMESTAMP type with precision: "
                   + precision
-                  + ", it only supports precision less than 3.");
+                  + ", it only supports precision less than 6.");
         }
         Schema timestamp = avroLogicalType.addToSchema(SchemaBuilder.builder().longType());
         return nullable ? nullableSchema(timestamp) : timestamp;
@@ -294,7 +295,7 @@ public class AvroSchemaConverter {
     }
   }
 
-  private static LogicalType extractValueTypeToAvroMap(LogicalType type) {
+  public static LogicalType extractValueTypeToAvroMap(LogicalType type) {
     LogicalType keyType;
     LogicalType valueType;
     if (type instanceof MapType) {
@@ -315,7 +316,9 @@ public class AvroSchemaConverter {
     return valueType;
   }
 
-  /** Returns schema with nullable true. */
+  /**
+   * Returns schema with nullable true.
+   */
   private static Schema nullableSchema(Schema schema) {
     return schema.isNullable()
         ? schema

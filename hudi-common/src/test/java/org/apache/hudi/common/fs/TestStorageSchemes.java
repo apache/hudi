@@ -45,6 +45,10 @@ public class TestStorageSchemes {
     assertFalse(StorageSchemes.isAppendSupported("cosn"));
     assertFalse(StorageSchemes.isAppendSupported("dbfs"));
     assertFalse(StorageSchemes.isAppendSupported("cos"));
+    assertTrue(StorageSchemes.isAppendSupported("jfs"));
+    assertFalse(StorageSchemes.isAppendSupported("bos"));
+    assertFalse(StorageSchemes.isAppendSupported("ks3"));
+    assertTrue(StorageSchemes.isAppendSupported("ofs"));
     assertThrows(IllegalArgumentException.class, () -> {
       StorageSchemes.isAppendSupported("s2");
     }, "Should throw exception for unsupported schemes");

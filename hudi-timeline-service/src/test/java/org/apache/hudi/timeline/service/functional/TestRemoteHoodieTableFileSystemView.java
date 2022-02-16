@@ -18,6 +18,7 @@
 
 package org.apache.hudi.timeline.service.functional;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -29,6 +30,8 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TestHoodieTableFileSystemView;
 import org.apache.hudi.timeline.service.TimelineService;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -46,11 +49,13 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
     FileSystemViewStorageConfig sConf =
         FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.SPILLABLE_DISK).build();
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().build();
+    HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().build();
     HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
 
     try {
-      server = new TimelineService(0,
-          FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, sConf));
+      server = new TimelineService(localEngineContext, new Configuration(),
+          TimelineService.Config.builder().serverPort(0).build(), FileSystem.get(new Configuration()),
+          FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, sConf, commonConfig));
       server.startService();
     } catch (Exception ex) {
       throw new RuntimeException(ex);

@@ -119,11 +119,11 @@ cd hudi-${ARTIFACT_SUFFIX}
 
 ### BEGIN: Binary Files Check
 echo "Checking for binary files in source release"
-numBinaryFiles=`find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -va 'application/json' | grep -va 'text/' | grep -va 'application/xml' | grep -va 'application/json' | wc -l | sed -e s'/ //g'`
+numBinaryFiles=`find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -v "/src/test/" | grep -va 'application/json' | grep -va 'text/' | grep -va 'application/xml' | grep -va 'application/json' | wc -l | sed -e s'/ //g'`
 
 if [ "$numBinaryFiles" -gt "0" ]; then
   echo -e "There were non-text files in source release. Please check below\n"
-  find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -va 'application/json' | grep -va 'text/' |  grep -va 'application/xml'
+  find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -v "/src/test/" | grep -va 'application/json' | grep -va 'text/' |  grep -va 'application/xml'
   exit -1
 fi
 echo -e "\t\tNo Binary Files in Source Release? - [OK]\n"
@@ -156,10 +156,10 @@ echo -e "\t\tNotice file exists ? [OK]\n"
 
 ### Licensing Check
 echo "Performing custom Licensing Check "
-numfilesWithNoLicense=`find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.data'| grep -v '.commit' | grep -v DISCLAIMER | grep -v KEYS | grep -v '.mailmap' | grep -v '.sqltemplate' | grep -v 'ObjectSizeCalculator.java' | grep -v 'AvroConversionHelper.scala' | xargs grep -L "Licensed to the Apache Software Foundation (ASF)" | wc -l`
+numfilesWithNoLicense=`find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.data'| grep -v '.commit' | grep -v DISCLAIMER | grep -v KEYS | grep -v '.mailmap' | grep -v '.sqltemplate' | grep -v 'ObjectSizeCalculator.java' | grep -v 'AvroConversionHelper.scala' | grep -v "fixtures" | xargs grep -L "Licensed to the Apache Software Foundation (ASF)" | wc -l`
 if [ "$numfilesWithNoLicense" -gt  "0" ]; then
   echo "There were some source files that did not have Apache License"
-  find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.data' | grep -v '.commit' | grep -v DISCLAIMER | grep -v '.sqltemplate' | grep -v KEYS | grep -v '.mailmap' | grep -v 'ObjectSizeCalculator.java' | grep -v 'AvroConversionHelper.scala' | xargs grep -L "Licensed to the Apache Software Foundation (ASF)"
+  find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.data' | grep -v '.commit' | grep -v DISCLAIMER | grep -v '.sqltemplate' | grep -v KEYS | grep -v '.mailmap' | grep -v 'ObjectSizeCalculator.java' | grep -v 'AvroConversionHelper.scala' | grep -v "fixtures" | xargs grep -L "Licensed to the Apache Software Foundation (ASF)"
   exit -1
 fi
 echo -e "\t\tLicensing Check Passed [OK]\n"

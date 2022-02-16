@@ -90,7 +90,7 @@ public class BoundedInMemoryExecutor<I, O, E> {
         try {
           preExecute();
           producer.produce(queue);
-        } catch (Exception e) {
+        } catch (Throwable e) {
           LOG.error("error producing records", e);
           queue.markAsFailed(e);
           throw e;
@@ -139,6 +139,10 @@ public class BoundedInMemoryExecutor<I, O, E> {
       Future<E> future = startConsumer();
       // Wait for consumer to be done
       return future.get();
+    } catch (InterruptedException ie) {
+      shutdownNow();
+      Thread.currentThread().interrupt();
+      throw new HoodieException(ie);
     } catch (Exception e) {
       throw new HoodieException(e);
     }

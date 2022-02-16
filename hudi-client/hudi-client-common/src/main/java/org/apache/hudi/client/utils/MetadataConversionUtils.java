@@ -60,12 +60,18 @@ public class MetadataConversionUtils {
         archivedMetaWrapper.setActionType(ActionType.clean.name());
         break;
       }
-      case HoodieTimeline.COMMIT_ACTION:
-      case HoodieTimeline.DELTA_COMMIT_ACTION: {
+      case HoodieTimeline.COMMIT_ACTION: {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
                 .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
         archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(commitMetadata));
         archivedMetaWrapper.setActionType(ActionType.commit.name());
+        break;
+      }
+      case HoodieTimeline.DELTA_COMMIT_ACTION: {
+        HoodieCommitMetadata deltaCommitMetadata = HoodieCommitMetadata
+                .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
+        archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(deltaCommitMetadata));
+        archivedMetaWrapper.setActionType(ActionType.deltacommit.name());
         break;
       }
       case HoodieTimeline.REPLACE_COMMIT_ACTION: {
@@ -128,7 +134,7 @@ public class MetadataConversionUtils {
     return Option.of(HoodieCommitMetadata.fromBytes(inflightContent.get(), HoodieCommitMetadata.class));
   }
 
-  public static Option<HoodieRequestedReplaceMetadata> getRequestedReplaceMetadata(HoodieTableMetaClient metaClient, HoodieInstant instant) throws IOException {
+  private static Option<HoodieRequestedReplaceMetadata> getRequestedReplaceMetadata(HoodieTableMetaClient metaClient, HoodieInstant instant) throws IOException {
     Option<byte[]> requestedContent = metaClient.getActiveTimeline().getInstantDetails(instant);
     if (!requestedContent.isPresent() || requestedContent.get().length == 0) {
       // requested commit files can be empty in some certain cases, e.g. insert_overwrite or insert_overwrite_table.

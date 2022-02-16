@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.view;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 
@@ -29,6 +30,7 @@ public class TestSpillableMapBasedIncrementalFSViewSync extends TestIncrementalF
   @Override
   protected SyncableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline timeline) {
     return new SpillableMapBasedFileSystemView(metaClient, timeline,
-        FileSystemViewStorageConfig.newBuilder().withMaxMemoryForView(0L).withIncrementalTimelineSync(true).build());
+        FileSystemViewStorageConfig.newBuilder().withMaxMemoryForView(0L).withIncrementalTimelineSync(true).build(),
+        HoodieCommonConfig.newBuilder().build());
   }
 }

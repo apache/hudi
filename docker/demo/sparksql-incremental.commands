@@ -27,8 +27,8 @@ import org.apache.hadoop.fs.FileSystem;
 val fs = FileSystem.get(spark.sparkContext.hadoopConfiguration)
 val beginInstantTime = HoodieDataSourceHelpers.listCommitsSince(fs, "/user/hive/warehouse/stock_ticks_cow", "00000").get(0)
 val hoodieIncQueryDF =  spark.read.format("org.apache.hudi").
-                      option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL).
-                      option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, beginInstantTime).
+                      option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL).
+                      option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), beginInstantTime).
                       load("/user/hive/warehouse/stock_ticks_cow");
 hoodieIncQueryDF.registerTempTable("stock_ticks_cow_incr")
 spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close  from stock_ticks_cow_incr where  symbol = 'GOOG'").show(100, false);
@@ -37,21 +37,21 @@ spark.sql("select key, `_hoodie_partition_path` as datestr, symbol, ts, open, cl
     write.format("org.apache.hudi").
     option("hoodie.insert.shuffle.parallelism", "2").
     option("hoodie.upsert.shuffle.parallelism","2").
-    option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL).
-    option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL).
-    option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, "key").
-    option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "datestr").
-    option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY, "ts").
-    option(HoodieWriteConfig.TABLE_NAME, "stock_ticks_derived_mor").
-    option(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY, "stock_ticks_derived_mor").
-    option(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY, "default").
-    option(DataSourceWriteOptions.HIVE_URL_OPT_KEY, "jdbc:hive2://hiveserver:10000").
-    option(DataSourceWriteOptions.HIVE_USER_OPT_KEY, "hive").
-    option(DataSourceWriteOptions.HIVE_PASS_OPT_KEY, "hive").
-    option(DataSourceWriteOptions.HIVE_SYNC_ENABLED_OPT_KEY, "true").
-    option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY, "datestr").
-    option(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY, classOf[MultiPartKeysValueExtractor].getCanonicalName).
-    option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY, "true").
+    option(DataSourceWriteOptions.TABLE_TYPE.key(), DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL).
+    option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL).
+    option(DataSourceWriteOptions.RECORDKEY_FIELD.key(), "key").
+    option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "datestr").
+    option(DataSourceWriteOptions.PRECOMBINE_FIELD.key(), "ts").
+    option(HoodieWriteConfig.TBL_NAME.key(), "stock_ticks_derived_mor").
+    option(DataSourceWriteOptions.HIVE_TABLE.key(), "stock_ticks_derived_mor").
+    option(DataSourceWriteOptions.HIVE_DATABASE.key(), "default").
+    option(DataSourceWriteOptions.HIVE_URL.key(), "jdbc:hive2://hiveserver:10000").
+    option(DataSourceWriteOptions.HIVE_USER.key(), "hive").
+    option(DataSourceWriteOptions.HIVE_PASS.key(), "hive").
+    option(DataSourceWriteOptions.HIVE_SYNC_ENABLED.key(), "true").
+    option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS.key(), "datestr").
+    option(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS.key(), classOf[MultiPartKeysValueExtractor].getCanonicalName).
+    option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key(), "true").
     mode(SaveMode.Overwrite).
     save("/user/hive/warehouse/stock_ticks_derived_mor");
 
@@ -59,8 +59,8 @@ spark.sql("select count(*) from stock_ticks_derived_mor_ro").show(20, false)
 spark.sql("select count(*) from stock_ticks_derived_mor_rt").show(20, false)
 
 val hoodieIncQueryBsDF =  spark.read.format("org.apache.hudi").
-                      option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL).
-                      option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, "00000000000001").
+                      option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL).
+                      option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), "00000000000001").
                       load("/user/hive/warehouse/stock_ticks_cow_bs");
 hoodieIncQueryBsDF.registerTempTable("stock_ticks_cow_bs_incr")
 spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close  from stock_ticks_cow_bs_incr where  symbol = 'GOOG'").show(100, false);
@@ -69,21 +69,21 @@ spark.sql("select key, `_hoodie_partition_path` as datestr, symbol, ts, open, cl
     write.format("org.apache.hudi").
     option("hoodie.insert.shuffle.parallelism", "2").
     option("hoodie.upsert.shuffle.parallelism","2").
-    option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL).
-    option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL).
-    option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, "key").
-    option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "datestr").
-    option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY, "ts").
-    option(HoodieWriteConfig.TABLE_NAME, "stock_ticks_derived_mor_bs").
-    option(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY, "stock_ticks_derived_mor_bs").
-    option(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY, "default").
-    option(DataSourceWriteOptions.HIVE_URL_OPT_KEY, "jdbc:hive2://hiveserver:10000").
-    option(DataSourceWriteOptions.HIVE_USER_OPT_KEY, "hive").
-    option(DataSourceWriteOptions.HIVE_PASS_OPT_KEY, "hive").
-    option(DataSourceWriteOptions.HIVE_SYNC_ENABLED_OPT_KEY, "true").
-    option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY, "datestr").
-    option(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY, classOf[MultiPartKeysValueExtractor].getCanonicalName).
-    option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY, "true").
+    option(DataSourceWriteOptions.TABLE_TYPE.key(), DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL).
+    option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL).
+    option(DataSourceWriteOptions.RECORDKEY_FIELD.key(), "key").
+    option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "datestr").
+    option(DataSourceWriteOptions.PRECOMBINE_FIELD.key(), "ts").
+    option(HoodieWriteConfig.TBL_NAME.key(), "stock_ticks_derived_mor_bs").
+    option(DataSourceWriteOptions.HIVE_TABLE.key(), "stock_ticks_derived_mor_bs").
+    option(DataSourceWriteOptions.HIVE_DATABASE.key(), "default").
+    option(DataSourceWriteOptions.HIVE_URL.key(), "jdbc:hive2://hiveserver:10000").
+    option(DataSourceWriteOptions.HIVE_USER.key(), "hive").
+    option(DataSourceWriteOptions.HIVE_PASS.key(), "hive").
+    option(DataSourceWriteOptions.HIVE_SYNC_ENABLED.key(), "true").
+    option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS.key(), "datestr").
+    option(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS.key(), classOf[MultiPartKeysValueExtractor].getCanonicalName).
+    option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key(), "true").
     mode(SaveMode.Overwrite).
     save("/user/hive/warehouse/stock_ticks_derived_mor_bs");
 

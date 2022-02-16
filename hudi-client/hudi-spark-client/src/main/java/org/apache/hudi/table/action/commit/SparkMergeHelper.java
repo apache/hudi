@@ -43,7 +43,7 @@ import org.apache.spark.api.java.JavaRDD;
 import java.io.IOException;
 import java.util.Iterator;
 
-public class SparkMergeHelper<T extends HoodieRecordPayload> extends AbstractMergeHelper<T, JavaRDD<HoodieRecord<T>>,
+public class SparkMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHelper<T, JavaRDD<HoodieRecord<T>>,
     JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   private SparkMergeHelper() {
@@ -71,11 +71,11 @@ public class SparkMergeHelper<T extends HoodieRecordPayload> extends AbstractMer
     if (externalSchemaTransformation || baseFile.getBootstrapBaseFile().isPresent()) {
       readSchema = HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), mergeHandle.getOldFilePath()).getSchema();
       gWriter = new GenericDatumWriter<>(readSchema);
-      gReader = new GenericDatumReader<>(readSchema, mergeHandle.getWriterSchemaWithMetafields());
+      gReader = new GenericDatumReader<>(readSchema, mergeHandle.getWriterSchemaWithMetaFields());
     } else {
       gReader = null;
       gWriter = null;
-      readSchema = mergeHandle.getWriterSchemaWithMetafields();
+      readSchema = mergeHandle.getWriterSchemaWithMetaFields();
     }
 
     BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;

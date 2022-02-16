@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.configuration.Configuration;
@@ -55,29 +56,29 @@ public class PayloadCreation implements Serializable {
   }
 
   public static PayloadCreation instance(Configuration conf) throws Exception {
-    boolean shouldCombine = conf.getBoolean(FlinkOptions.INSERT_DROP_DUPS)
+    String preCombineField = OptionsResolver.getPreCombineField(conf);
+    boolean needCombine = conf.getBoolean(FlinkOptions.PRE_COMBINE)
         || WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)) == WriteOperationType.UPSERT;
-    String preCombineField = null;
+    boolean shouldCombine = needCombine && preCombineField != null;
+
     final Class<?>[] argTypes;
     final Constructor<?> constructor;
     if (shouldCombine) {
-      preCombineField = conf.getString(FlinkOptions.PRECOMBINE_FIELD);
       argTypes = new Class<?>[] {GenericRecord.class, Comparable.class};
     } else {
       argTypes = new Class<?>[] {Option.class};
     }
-    final String clazz = conf.getString(FlinkOptions.PAYLOAD_CLASS);
+    final String clazz = conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME);
     constructor = ReflectionUtils.getClass(clazz).getConstructor(argTypes);
     return new PayloadCreation(shouldCombine, constructor, preCombineField);
   }
 
-  public HoodieRecordPayload<?> createPayload(GenericRecord record, boolean isDelete) throws Exception {
+  public HoodieRecordPayload<?> createPayload(GenericRecord record) throws Exception {
     if (shouldCombine) {
       ValidationUtils.checkState(preCombineField != null);
       Comparable<?> orderingVal = (Comparable<?>) HoodieAvroUtils.getNestedFieldVal(record,
-          preCombineField, false);
-      return (HoodieRecordPayload<?>) constructor.newInstance(
-          isDelete ? null : record, orderingVal);
+          preCombineField, false, false);
+      return (HoodieRecordPayload<?>) constructor.newInstance(record, orderingVal);
     } else {
       return (HoodieRecordPayload<?>) this.constructor.newInstance(Option.of(record));
     }

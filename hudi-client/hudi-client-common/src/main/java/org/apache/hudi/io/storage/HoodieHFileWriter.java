@@ -25,6 +25,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -37,6 +38,8 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.io.Writable;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -61,6 +64,9 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   private final long maxFileSize;
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
+  private final boolean populateMetaFields;
+  private final Schema schema;
+  private final Option<Schema.Field> keyFieldSchema;
   private HFile.Writer writer;
   private String minRecordKey;
   private String maxRecordKey;
@@ -69,12 +75,14 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   private static String DROP_BEHIND_CACHE_COMPACTION_KEY = "hbase.hfile.drop.behind.compaction";
 
   public HoodieHFileWriter(String instantTime, Path file, HoodieHFileConfig hfileConfig, Schema schema,
-                           TaskContextSupplier taskContextSupplier) throws IOException {
+                           TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
 
     Configuration conf = FSUtils.registerFileSystem(file, hfileConfig.getHadoopConf());
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
     this.fs = (HoodieWrapperFileSystem) this.file.getFileSystem(conf);
     this.hfileConfig = hfileConfig;
+    this.schema = schema;
+    this.keyFieldSchema = Option.ofNullable(schema.getField(hfileConfig.getKeyFieldName()));
 
     // TODO - compute this compression ratio dynamically by looking at the bytes written to the
     // stream and the actual file size reported by HDFS
@@ -83,29 +91,34 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
     this.maxFileSize = hfileConfig.getMaxFileSize();
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;
+    this.populateMetaFields = populateMetaFields;
 
     HFileContext context = new HFileContextBuilder().withBlockSize(hfileConfig.getBlockSize())
-          .withCompression(hfileConfig.getCompressionAlgorithm())
-          .build();
+        .withCompression(hfileConfig.getCompressionAlgorithm())
+        .build();
 
     conf.set(CacheConfig.PREFETCH_BLOCKS_ON_OPEN_KEY, String.valueOf(hfileConfig.shouldPrefetchBlocksOnOpen()));
     conf.set(HColumnDescriptor.CACHE_DATA_IN_L1, String.valueOf(hfileConfig.shouldCacheDataInL1()));
     conf.set(DROP_BEHIND_CACHE_COMPACTION_KEY, String.valueOf(hfileConfig.shouldDropBehindCacheCompaction()));
     CacheConfig cacheConfig = new CacheConfig(conf);
-    this.writer = HFile.getWriterFactory(conf, cacheConfig).withPath(this.fs, this.file).withFileContext(context).create();
+    this.writer = HFile.getWriterFactory(conf, cacheConfig)
+        .withPath(this.fs, this.file)
+        .withFileContext(context)
+        .withComparator(hfileConfig.getHfileComparator())
+        .create();
 
     writer.appendFileInfo(HoodieHFileReader.KEY_SCHEMA.getBytes(), schema.toString().getBytes());
   }
 
   @Override
   public void writeAvroWithMetadata(R avroRecord, HoodieRecord record) throws IOException {
-    String seqId =
-        HoodieRecord.generateSequenceId(instantTime, taskContextSupplier.getPartitionIdSupplier().get(), recordIndex.getAndIncrement());
-    HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord, record.getRecordKey(), record.getPartitionPath(),
-        file.getName());
-    HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord, instantTime, seqId);
-
-    writeAvro(record.getRecordKey(), (IndexedRecord)avroRecord);
+    if (populateMetaFields) {
+      prepRecordWithMetadata(avroRecord, record, instantTime,
+          taskContextSupplier.getPartitionIdSupplier().get(), recordIndex, file.getName());
+      writeAvro(record.getRecordKey(), (IndexedRecord) avroRecord);
+    } else {
+      writeAvro(record.getRecordKey(), (IndexedRecord) avroRecord);
+    }
   }
 
   @Override
@@ -114,8 +127,25 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   }
 
   @Override
-  public void writeAvro(String recordKey, IndexedRecord object) throws IOException {
-    byte[] value = HoodieAvroUtils.avroToBytes((GenericRecord)object);
+  public void writeAvro(String recordKey, IndexedRecord record) throws IOException {
+    byte[] value = null;
+    boolean isRecordSerialized = false;
+    if (keyFieldSchema.isPresent()) {
+      GenericRecord keyExcludedRecord = (GenericRecord) record;
+      int keyFieldPos = this.keyFieldSchema.get().pos();
+      boolean isKeyAvailable = (record.get(keyFieldPos) != null && !(record.get(keyFieldPos).toString().isEmpty()));
+      if (isKeyAvailable) {
+        Object originalKey = keyExcludedRecord.get(keyFieldPos);
+        keyExcludedRecord.put(keyFieldPos, StringUtils.EMPTY_STRING);
+        value = HoodieAvroUtils.avroToBytes(keyExcludedRecord);
+        keyExcludedRecord.put(keyFieldPos, originalKey);
+        isRecordSerialized = true;
+      }
+    }
+    if (!isRecordSerialized) {
+      value = HoodieAvroUtils.avroToBytes((GenericRecord) record);
+    }
+
     KeyValue kv = new KeyValue(recordKey.getBytes(), null, null, value);
     writer.append(kv);
 
@@ -149,7 +179,8 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
         }
 
         @Override
-        public void readFields(DataInput in) throws IOException { }
+        public void readFields(DataInput in) throws IOException {
+        }
       });
     }
 

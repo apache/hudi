@@ -23,10 +23,13 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.marker.WriteMarkers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -64,7 +67,7 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
   public FlinkMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                           Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                           TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier);
+    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, Option.empty());
     if (rolloverPaths == null) {
       // #makeOldAndNewFilePaths may already initialize it already
       rolloverPaths = new ArrayList<>();
@@ -94,6 +97,14 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
     final String lastDataFileName = FSUtils.makeDataFileName(instantTime,
         lastWriteToken, this.fileId, hoodieTable.getBaseFileExtension());
     final Path path = makeNewFilePath(partitionPath, lastDataFileName);
+    if (path.equals(oldFilePath)) {
+      // In some rare cases, the old attempt file is used as the old base file to merge
+      // because the flink index eagerly records that.
+      //
+      // The merge handle has the 'UPSERT' semantics so there is no need to roll over
+      // and the file can still be used as the merge base file.
+      return;
+    }
     try {
       if (fs.exists(path)) {
         LOG.info("Deleting invalid MERGE base file due to task retry: " + lastDataFileName);
@@ -102,6 +113,12 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
     } catch (IOException e) {
       throw new HoodieException("Error while deleting the MERGE base file due to task retry: " + lastDataFileName, e);
     }
+  }
+
+  @Override
+  protected void createMarkerFile(String partitionPath, String dataFileName) {
+    WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
+    writeMarkers.createIfNotExists(partitionPath, dataFileName, getIOType());
   }
 
   @Override
@@ -119,6 +136,13 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
     try {
       int rollNumber = 0;
       while (fs.exists(newFilePath)) {
+        // in case there is empty file because of task failover attempt.
+        if (fs.getFileStatus(newFilePath).getLen() <= 0) {
+          fs.delete(newFilePath, false);
+          LOG.warn("Delete empty write file for MERGE bucket: " + newFilePath);
+          break;
+        }
+
         oldFilePath = newFilePath; // override the old file name
         rolloverPaths.add(oldFilePath);
         newFileName = newFileNameWithRollover(rollNumber++);

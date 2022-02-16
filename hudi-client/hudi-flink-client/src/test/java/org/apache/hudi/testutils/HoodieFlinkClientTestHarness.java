@@ -21,6 +21,7 @@ package org.apache.hudi.testutils;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -29,7 +30,9 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bloom.TestFlinkHoodieBloomIndex;
+import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
@@ -128,6 +131,10 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, tableType);
   }
 
+  protected List<HoodieRecord> tagLocation(
+      HoodieIndex index, List<HoodieRecord> records, HoodieTable table) {
+    return HoodieList.getList(index.tagLocation(HoodieList.of(records), context, table));
+  }
 
   /**
    * Cleanups file system.

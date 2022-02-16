@@ -78,10 +78,10 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   private final long memoryLimit;
 
   /**
-   * it holds the root cause of the exception in case either queueing records
+   * it holds the root cause of the Throwable in case either queueing records
    * (consuming from inputIterator) fails or thread reading records from queue fails.
    */
-  private final AtomicReference<Exception> hasFailed = new AtomicReference<>(null);
+  private final AtomicReference<Throwable> hasFailed = new AtomicReference<>(null);
 
   /** Used for indicating that all the records from queue are read successfully. **/
   private final AtomicBoolean isReadDone = new AtomicBoolean(false);
@@ -172,7 +172,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   /**
    * Inserts record into queue after applying transformation.
    *
-   * @param t Item to be queueed
+   * @param t Item to be queued
    */
   public void insertRecord(I t) throws Exception {
     // If already closed, throw exception
@@ -222,7 +222,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
         throw new HoodieException(e);
       }
     }
-    // Check one more time here as it is possible producer errored out and closed immediately
+    // Check one more time here as it is possible producer erred out and closed immediately
     throwExceptionIfFailed();
 
     if (newRecord != null && newRecord.isPresent()) {
@@ -244,6 +244,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
 
   private void throwExceptionIfFailed() {
     if (this.hasFailed.get() != null) {
+      close();
       throw new HoodieException("operation has failed", this.hasFailed.get());
     }
   }
@@ -251,7 +252,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   /**
    * API to allow producers and consumer to communicate termination due to failure.
    */
-  public void markAsFailed(Exception e) {
+  public void markAsFailed(Throwable e) {
     this.hasFailed.set(e);
     // release the permits so that if the queueing thread is waiting for permits then it will
     // get it.

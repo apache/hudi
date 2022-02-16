@@ -21,8 +21,8 @@ package org.apache.hudi.common.config;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Properties;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -35,21 +35,17 @@ public class TypedProperties extends Properties implements Serializable {
   }
 
   public TypedProperties(Properties defaults) {
-    super(defaults);
+    if (Objects.nonNull(defaults)) {
+      for (String key : defaults.stringPropertyNames()) {
+        put(key, defaults.getProperty(key));
+      }
+    }
   }
 
   private void checkKey(String property) {
-    if (!keyExists(property)) {
+    if (!containsKey(property)) {
       throw new IllegalArgumentException("Property " + property + " not found");
     }
-  }
-
-  private boolean keyExists(String property) {
-    Set<String> keys = super.stringPropertyNames();
-    if (keys.contains(property)) {
-      return true;
-    }
-    return false;
   }
 
   public String getString(String property) {
@@ -58,11 +54,11 @@ public class TypedProperties extends Properties implements Serializable {
   }
 
   public String getString(String property, String defaultValue) {
-    return keyExists(property) ? getProperty(property) : defaultValue;
+    return containsKey(property) ? getProperty(property) : defaultValue;
   }
 
   public List<String> getStringList(String property, String delimiter, List<String> defaultVal) {
-    if (!keyExists(property)) {
+    if (!containsKey(property)) {
       return defaultVal;
     }
     return Arrays.stream(getProperty(property).split(delimiter)).map(String::trim).collect(Collectors.toList());
@@ -74,7 +70,7 @@ public class TypedProperties extends Properties implements Serializable {
   }
 
   public int getInteger(String property, int defaultValue) {
-    return keyExists(property) ? Integer.parseInt(getProperty(property)) : defaultValue;
+    return containsKey(property) ? Integer.parseInt(getProperty(property)) : defaultValue;
   }
 
   public long getLong(String property) {
@@ -83,7 +79,7 @@ public class TypedProperties extends Properties implements Serializable {
   }
 
   public long getLong(String property, long defaultValue) {
-    return keyExists(property) ? Long.parseLong(getProperty(property)) : defaultValue;
+    return containsKey(property) ? Long.parseLong(getProperty(property)) : defaultValue;
   }
 
   public boolean getBoolean(String property) {
@@ -92,7 +88,7 @@ public class TypedProperties extends Properties implements Serializable {
   }
 
   public boolean getBoolean(String property, boolean defaultValue) {
-    return keyExists(property) ? Boolean.parseBoolean(getProperty(property)) : defaultValue;
+    return containsKey(property) ? Boolean.parseBoolean(getProperty(property)) : defaultValue;
   }
 
   public double getDouble(String property) {
@@ -101,6 +97,6 @@ public class TypedProperties extends Properties implements Serializable {
   }
 
   public double getDouble(String property, double defaultValue) {
-    return keyExists(property) ? Double.parseDouble(getProperty(property)) : defaultValue;
+    return containsKey(property) ? Double.parseDouble(getProperty(property)) : defaultValue;
   }
 }

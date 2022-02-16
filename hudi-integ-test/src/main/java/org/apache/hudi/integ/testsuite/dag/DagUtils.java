@@ -102,10 +102,11 @@ public class DagUtils {
         case DAG_CONTENT:
           JsonNode dagContent = dagNode.getValue();
           Iterator<Entry<String, JsonNode>> contentItr = dagContent.fields();
-          while(contentItr.hasNext()) {
+          while (contentItr.hasNext()) {
             Entry<String, JsonNode> dagContentNode = contentItr.next();
             allNodes.put(dagContentNode.getKey(), convertJsonToDagNode(allNodes, dagContentNode.getKey(), dagContentNode.getValue()));
           }
+          break;
         default:
           break;
       }

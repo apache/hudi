@@ -23,6 +23,7 @@ import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.utilities.HDFSParquetImporter.FormatValidator;
 import org.apache.hudi.utilities.UtilHelpers;
+import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
@@ -35,6 +36,9 @@ import scala.collection.JavaConverters;
 
 /**
  * CLI command for importing parquet table to hudi table.
+ *
+ * @deprecated This utility is deprecated in 0.10.0 and will be removed in 0.11.0. Use {@link HoodieDeltaStreamer.Config#runBootstrap} instead.
+ * @see HoodieDeltaStreamer
  */
 @Component
 public class HDFSParquetImportCommand implements CommandMarker {

@@ -115,7 +115,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public HoodieTimeline getCompletedReplaceTimeline() {
     return new HoodieDefaultTimeline(
-        instants.stream().filter(s -> s.getAction().equals(REPLACE_COMMIT_ACTION)).filter(s -> s.isCompleted()), details);
+        instants.stream().filter(s -> s.getAction().equals(REPLACE_COMMIT_ACTION)).filter(HoodieInstant::isCompleted), details);
   }
 
   @Override
@@ -125,9 +125,15 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public HoodieTimeline filterPendingRollbackTimeline() {
+    return new HoodieDefaultTimeline(instants.stream().filter(
+        s -> s.getAction().equals(HoodieTimeline.ROLLBACK_ACTION) && !s.isCompleted()), details);
+  }
+
+  @Override
   public HoodieTimeline filterPendingCompactionTimeline() {
     return new HoodieDefaultTimeline(
-        instants.stream().filter(s -> s.getAction().equals(HoodieTimeline.COMPACTION_ACTION)), details);
+        instants.stream().filter(s -> s.getAction().equals(HoodieTimeline.COMPACTION_ACTION) && !s.isCompleted()), details);
   }
 
   @Override
@@ -229,7 +235,14 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
    */
   public HoodieTimeline getRollbackTimeline() {
     return new HoodieDefaultTimeline(filterInstantsByAction(ROLLBACK_ACTION),
-            (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails);
+        (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails);
+  }
+
+  /**
+   * Get only the rollback and restore action (inflight and completed) in the active timeline.
+   */
+  public HoodieTimeline getRollbackAndRestoreTimeline() {
+    return  getTimelineOfActions(CollectionUtils.createSet(ROLLBACK_ACTION, RESTORE_ACTION));
   }
 
   /**
@@ -265,6 +278,12 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public Option<HoodieInstant> firstInstant() {
     return Option.fromJavaOptional(instants.stream().findFirst());
+  }
+
+  @Override
+  public Option<HoodieInstant> firstInstant(String action, State state) {
+    return Option.fromJavaOptional(instants.stream()
+        .filter(s -> action.equals(s.getAction()) && state.equals(s.getState())).findFirst());
   }
 
   @Override
@@ -330,6 +349,11 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     return details.apply(instant);
+  }
+
+  @Override
+  public boolean isEmpty(HoodieInstant instant) {
+    return getInstantDetails(instant).get().length == 0;
   }
 
   @Override

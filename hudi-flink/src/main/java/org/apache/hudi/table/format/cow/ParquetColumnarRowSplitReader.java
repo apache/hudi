@@ -18,10 +18,11 @@
 
 package org.apache.hudi.table.format.cow;
 
+import org.apache.hudi.table.format.cow.data.ColumnarRowData;
+import org.apache.hudi.table.format.cow.vector.VectorizedColumnBatch;
+
 import org.apache.flink.formats.parquet.vector.reader.ColumnReader;
-import org.apache.flink.table.data.ColumnarRowData;
 import org.apache.flink.table.data.vector.ColumnVector;
-import org.apache.flink.table.data.vector.VectorizedColumnBatch;
 import org.apache.flink.table.data.vector.writable.WritableColumnVector;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
@@ -46,6 +47,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.IntStream;
 
 import static org.apache.hudi.table.format.cow.ParquetSplitReaderUtil.createColumnReader;
 import static org.apache.hudi.table.format.cow.ParquetSplitReaderUtil.createWritableColumnVector;
@@ -67,6 +69,8 @@ public class ParquetColumnarRowSplitReader implements Closeable {
 
   private final MessageType fileSchema;
 
+  private final LogicalType[] requestedTypes;
+
   private final MessageType requestedSchema;
 
   /**
@@ -80,8 +84,6 @@ public class ParquetColumnarRowSplitReader implements Closeable {
   private final VectorizedColumnBatch columnarBatch;
 
   private final ColumnarRowData row;
-
-  private final LogicalType[] selectedTypes;
 
   private final int batchSize;
 
@@ -121,7 +123,6 @@ public class ParquetColumnarRowSplitReader implements Closeable {
       long splitStart,
       long splitLength) throws IOException {
     this.utcTimestamp = utcTimestamp;
-    this.selectedTypes = selectedTypes;
     this.batchSize = batchSize;
     // then we need to apply the predicate push down filter
     ParquetMetadata footer = readFooter(conf, path, range(splitStart, splitStart + splitLength));
@@ -130,7 +131,13 @@ public class ParquetColumnarRowSplitReader implements Closeable {
     List<BlockMetaData> blocks = filterRowGroups(filter, footer.getBlocks(), fileSchema);
 
     this.fileSchema = footer.getFileMetaData().getSchema();
-    this.requestedSchema = clipParquetSchema(fileSchema, selectedFieldNames, caseSensitive);
+
+    Type[] types = clipParquetSchema(fileSchema, selectedFieldNames, caseSensitive);
+    int[] requestedIndices = IntStream.range(0, types.length).filter(i -> types[i] != null).toArray();
+    Type[] readTypes = Arrays.stream(requestedIndices).mapToObj(i -> types[i]).toArray(Type[]::new);
+
+    this.requestedTypes = Arrays.stream(requestedIndices).mapToObj(i -> selectedTypes[i]).toArray(LogicalType[]::new);
+    this.requestedSchema = Types.buildMessage().addFields(readTypes).named("flink-parquet");
     this.reader = new ParquetFileReader(
         conf, footer.getFileMetaData(), path, blocks, requestedSchema.getColumns());
 
@@ -146,23 +153,37 @@ public class ParquetColumnarRowSplitReader implements Closeable {
     checkSchema();
 
     this.writableVectors = createWritableVectors();
-    this.columnarBatch = generator.generate(createReadableVectors());
+    ColumnVector[] columnVectors = patchedVector(selectedFieldNames.length, createReadableVectors(), requestedIndices);
+    this.columnarBatch = generator.generate(columnVectors);
     this.row = new ColumnarRowData(columnarBatch);
+  }
+
+  /**
+   * Patches the given vectors with nulls.
+   * The vector position that is not requested (or read from file) is patched as null.
+   *
+   * @param fields  The total selected fields number
+   * @param vectors The readable vectors
+   * @param indices The requested indices from the selected fields
+   */
+  private static ColumnVector[] patchedVector(int fields, ColumnVector[] vectors, int[] indices) {
+    ColumnVector[] patched = new ColumnVector[fields];
+    for (int i = 0; i < indices.length; i++) {
+      patched[indices[i]] = vectors[i];
+    }
+    return patched;
   }
 
   /**
    * Clips `parquetSchema` according to `fieldNames`.
    */
-  private static MessageType clipParquetSchema(
+  private static Type[] clipParquetSchema(
       GroupType parquetSchema, String[] fieldNames, boolean caseSensitive) {
     Type[] types = new Type[fieldNames.length];
     if (caseSensitive) {
       for (int i = 0; i < fieldNames.length; ++i) {
         String fieldName = fieldNames[i];
-        if (parquetSchema.getFieldIndex(fieldName) < 0) {
-          throw new IllegalArgumentException(fieldName + " does not exist");
-        }
-        types[i] = parquetSchema.getType(fieldName);
+        types[i] = parquetSchema.containsField(fieldName) ? parquetSchema.getType(fieldName) : null;
       }
     } else {
       Map<String, Type> caseInsensitiveFieldMap = new HashMap<>();
@@ -178,24 +199,24 @@ public class ParquetColumnarRowSplitReader implements Closeable {
       }
       for (int i = 0; i < fieldNames.length; ++i) {
         Type type = caseInsensitiveFieldMap.get(fieldNames[i].toLowerCase(Locale.ROOT));
-        if (type == null) {
-          throw new IllegalArgumentException(fieldNames[i] + " does not exist");
-        }
         // TODO clip for array,map,row types.
         types[i] = type;
       }
     }
 
-    return Types.buildMessage().addFields(types).named("flink-parquet");
+    return types;
   }
 
   private WritableColumnVector[] createWritableVectors() {
-    WritableColumnVector[] columns = new WritableColumnVector[selectedTypes.length];
-    for (int i = 0; i < selectedTypes.length; i++) {
+    WritableColumnVector[] columns = new WritableColumnVector[requestedTypes.length];
+    List<Type> types = requestedSchema.getFields();
+    List<ColumnDescriptor> descriptors = requestedSchema.getColumns();
+    for (int i = 0; i < requestedTypes.length; i++) {
       columns[i] = createWritableColumnVector(
           batchSize,
-          selectedTypes[i],
-          requestedSchema.getColumns().get(i).getPrimitiveType());
+          requestedTypes[i],
+          types.get(i),
+          descriptors);
     }
     return columns;
   }
@@ -207,7 +228,7 @@ public class ParquetColumnarRowSplitReader implements Closeable {
   private ColumnVector[] createReadableVectors() {
     ColumnVector[] vectors = new ColumnVector[writableVectors.length];
     for (int i = 0; i < writableVectors.length; i++) {
-      vectors[i] = selectedTypes[i].getTypeRoot() == LogicalTypeRoot.DECIMAL
+      vectors[i] = requestedTypes[i].getTypeRoot() == LogicalTypeRoot.DECIMAL
           ? new ParquetDecimalVector(writableVectors[i])
           : writableVectors[i];
     }
@@ -215,19 +236,10 @@ public class ParquetColumnarRowSplitReader implements Closeable {
   }
 
   private void checkSchema() throws IOException, UnsupportedOperationException {
-    if (selectedTypes.length != requestedSchema.getFieldCount()) {
-      throw new RuntimeException("The quality of field type is incompatible with the request schema!");
-    }
-
     /*
      * Check that the requested schema is supported.
      */
     for (int i = 0; i < requestedSchema.getFieldCount(); ++i) {
-      Type t = requestedSchema.getFields().get(i);
-      if (!t.isPrimitive() || t.isRepetition(Type.Repetition.REPEATED)) {
-        throw new UnsupportedOperationException("Complex types not supported.");
-      }
-
       String[] colPath = requestedSchema.getPaths().get(i);
       if (fileSchema.containsPath(colPath)) {
         ColumnDescriptor fd = fileSchema.getColumnDescription(colPath);
@@ -309,14 +321,16 @@ public class ParquetColumnarRowSplitReader implements Closeable {
       throw new IOException("expecting more rows but reached last block. Read "
           + rowsReturned + " out of " + totalRowCount);
     }
+    List<Type> types = requestedSchema.getFields();
     List<ColumnDescriptor> columns = requestedSchema.getColumns();
-    columnReaders = new ColumnReader[columns.size()];
-    for (int i = 0; i < columns.size(); ++i) {
+    columnReaders = new ColumnReader[types.size()];
+    for (int i = 0; i < types.size(); ++i) {
       columnReaders[i] = createColumnReader(
           utcTimestamp,
-          selectedTypes[i],
-          columns.get(i),
-          pages.getPageReader(columns.get(i)));
+          requestedTypes[i],
+          types.get(i),
+          columns,
+          pages);
     }
     totalCountLoadedSoFar += pages.getRowCount();
   }

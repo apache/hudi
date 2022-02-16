@@ -19,7 +19,7 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueue;
-import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieException;
 
 import org.apache.parquet.hadoop.ParquetReader;
 
@@ -49,8 +49,9 @@ public class ParquetReaderIterator<T> implements Iterator<T> {
         this.next = parquetReader.read();
       }
       return this.next != null;
-    } catch (IOException io) {
-      throw new HoodieIOException("unable to read next record from parquet file ", io);
+    } catch (Exception e) {
+      FileIOUtils.closeQuietly(parquetReader);
+      throw new HoodieException("unable to read next record from parquet file ", e);
     }
   }
 
@@ -60,14 +61,15 @@ public class ParquetReaderIterator<T> implements Iterator<T> {
       // To handle case when next() is called before hasNext()
       if (this.next == null) {
         if (!hasNext()) {
-          throw new HoodieIOException("No more records left to read from parquet file");
+          throw new HoodieException("No more records left to read from parquet file");
         }
       }
       T retVal = this.next;
       this.next = parquetReader.read();
       return retVal;
-    } catch (IOException io) {
-      throw new HoodieIOException("unable to read next record from parquet file ", io);
+    } catch (Exception e) {
+      FileIOUtils.closeQuietly(parquetReader);
+      throw new HoodieException("unable to read next record from parquet file ", e);
     }
   }
 

@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -41,8 +42,9 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
-import org.apache.hudi.index.SparkHoodieIndex;
+import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.table.HoodieSparkTable;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -146,11 +148,12 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withFailedWritesCleaningPolicy(cleaningPolicy)
             .compactionSmallFileSize(1024 * 1024).build())
-        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024).parquetMaxFileSize(1024 * 1024).build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024).parquetMaxFileSize(1024 * 1024).orcMaxFileSize(1024 * 1024).build())
         .forTable("test-trip-table")
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withEnableBackupForRemoteFileSystemView(false) // Fail test if problem connecting to timeline-server
+            .withRemoteServerPort(timelineServicePort)
             .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());
   }
 
@@ -234,11 +237,23 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
   private Function2<List<HoodieRecord>, String, Integer> wrapRecordsGenFunctionForPreppedCalls(
       final HoodieWriteConfig writeConfig, final Function2<List<HoodieRecord>, String, Integer> recordGenFunction) {
     return (commit, numRecords) -> {
-      final SparkHoodieIndex index = SparkHoodieIndex.createIndex(writeConfig);
+      final HoodieIndex index = SparkHoodieIndexFactory.createIndex(writeConfig);
       List<HoodieRecord> records = recordGenFunction.apply(commit, numRecords);
       final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
       HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
-      JavaRDD<HoodieRecord> taggedRecords = index.tagLocation(jsc.parallelize(records, 1), context, table);
+      JavaRDD<HoodieRecord> taggedRecords = tagLocation(index, jsc.parallelize(records, 1), table);
+      return taggedRecords.collect();
+    };
+  }
+
+  private Function3<List<HoodieRecord>, String, Integer, String> wrapRecordsGenFunctionForPreppedCalls(
+      final HoodieWriteConfig writeConfig, final Function3<List<HoodieRecord>, String, Integer, String> recordGenFunction) {
+    return (commit, numRecords, partition) -> {
+      final HoodieIndex index = SparkHoodieIndexFactory.createIndex(writeConfig);
+      List<HoodieRecord> records = recordGenFunction.apply(commit, numRecords, partition);
+      final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+      HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
+      JavaRDD<HoodieRecord> taggedRecords = tagLocation(index, jsc.parallelize(records, 1), table);
       return taggedRecords.collect();
     };
   }
@@ -255,13 +270,13 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
   private Function<Integer, List<HoodieKey>> wrapDeleteKeysGenFunctionForPreppedCalls(
       final HoodieWriteConfig writeConfig, final Function<Integer, List<HoodieKey>> keyGenFunction) {
     return (numRecords) -> {
-      final SparkHoodieIndex index = SparkHoodieIndex.createIndex(writeConfig);
+      final HoodieIndex index = SparkHoodieIndexFactory.createIndex(writeConfig);
       List<HoodieKey> records = keyGenFunction.apply(numRecords);
       final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
       HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
       JavaRDD<HoodieRecord> recordsToDelete = jsc.parallelize(records, 1)
-          .map(key -> new HoodieRecord(key, new EmptyHoodieRecordPayload()));
-      JavaRDD<HoodieRecord> taggedRecords = index.tagLocation(recordsToDelete, context, table);
+          .map(key -> new HoodieAvroRecord(key, new EmptyHoodieRecordPayload()));
+      JavaRDD<HoodieRecord> taggedRecords = tagLocation(index, recordsToDelete, table);
       return taggedRecords.map(record -> record.getKey()).collect();
     };
   }
@@ -277,6 +292,15 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
   public Function2<List<HoodieRecord>, String, Integer> generateWrapRecordsFn(boolean isPreppedAPI,
       HoodieWriteConfig writeConfig,
       Function2<List<HoodieRecord>, String, Integer> wrapped) {
+    if (isPreppedAPI) {
+      return wrapRecordsGenFunctionForPreppedCalls(writeConfig, wrapped);
+    } else {
+      return wrapped;
+    }
+  }
+
+  public Function3<List<HoodieRecord>, String, Integer, String> generateWrapRecordsForPartitionFn(boolean isPreppedAPI,
+      HoodieWriteConfig writeConfig, Function3<List<HoodieRecord>, String, Integer, String> wrapped) {
     if (isPreppedAPI) {
       return wrapRecordsGenFunctionForPreppedCalls(writeConfig, wrapped);
     } else {
@@ -301,6 +325,13 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
     }
   }
 
+  public JavaRDD<WriteStatus> insertFirstBatch(HoodieWriteConfig writeConfig, SparkRDDWriteClient client, String newCommitTime,
+                                               String initCommitTime, int numRecordsInThisCommit,
+                                               Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn, boolean isPreppedAPI,
+                                               boolean assertForCommit, int expRecordsInThisCommit) throws Exception {
+    return insertFirstBatch(writeConfig, client, newCommitTime, initCommitTime, numRecordsInThisCommit, writeFn, isPreppedAPI, assertForCommit, expRecordsInThisCommit, true);
+  }
+
   /**
    * Helper to insert first batch of records and do regular assertions on the state after successful completion.
    *
@@ -319,12 +350,12 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
   public JavaRDD<WriteStatus> insertFirstBatch(HoodieWriteConfig writeConfig, SparkRDDWriteClient client, String newCommitTime,
       String initCommitTime, int numRecordsInThisCommit,
       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn, boolean isPreppedAPI,
-      boolean assertForCommit, int expRecordsInThisCommit) throws Exception {
+      boolean assertForCommit, int expRecordsInThisCommit, boolean filterForCommitTimeWithAssert) throws Exception {
     final Function2<List<HoodieRecord>, String, Integer> recordGenFunction =
         generateWrapRecordsFn(isPreppedAPI, writeConfig, dataGen::generateInserts);
 
     return writeBatch(client, newCommitTime, initCommitTime, Option.empty(), initCommitTime, numRecordsInThisCommit,
-        recordGenFunction, writeFn, assertForCommit, expRecordsInThisCommit, expRecordsInThisCommit, 1, false);
+        recordGenFunction, writeFn, assertForCommit, expRecordsInThisCommit, expRecordsInThisCommit, 1, false, filterForCommitTimeWithAssert);
   }
 
   /**
@@ -347,12 +378,31 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
   public JavaRDD<WriteStatus> insertBatch(HoodieWriteConfig writeConfig, SparkRDDWriteClient client, String newCommitTime,
       String initCommitTime, int numRecordsInThisCommit,
       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn, boolean isPreppedAPI,
-      boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits) throws Exception {
-    final Function2<List<HoodieRecord>, String, Integer> recordGenFunction =
-        generateWrapRecordsFn(isPreppedAPI, writeConfig, dataGen::generateInserts);
+      boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits, Option<String> partition) throws Exception {
 
-    return writeBatch(client, newCommitTime, initCommitTime, Option.empty(), initCommitTime, numRecordsInThisCommit,
-        recordGenFunction, writeFn, assertForCommit, expRecordsInThisCommit, expTotalRecords, expTotalCommits, false);
+    if (partition.isPresent()) {
+      final Function3<List<HoodieRecord>, String, Integer, String> recordGenFunction =
+          generateWrapRecordsForPartitionFn(isPreppedAPI, writeConfig, dataGen::generateInsertsForPartition);
+
+      return writeBatch(client, newCommitTime, initCommitTime, Option.empty(), initCommitTime, numRecordsInThisCommit,
+          recordGenFunction, writeFn, assertForCommit, expRecordsInThisCommit, expTotalRecords, expTotalCommits, false,
+          partition.get());
+    } else {
+      final Function2<List<HoodieRecord>, String, Integer> recordGenFunction =
+          generateWrapRecordsFn(isPreppedAPI, writeConfig, dataGen::generateInserts);
+
+      return writeBatch(client, newCommitTime, initCommitTime, Option.empty(), initCommitTime, numRecordsInThisCommit,
+          recordGenFunction, writeFn, assertForCommit, expRecordsInThisCommit, expTotalRecords, expTotalCommits, false);
+    }
+  }
+
+  public JavaRDD<WriteStatus> updateBatch(HoodieWriteConfig writeConfig, SparkRDDWriteClient client, String newCommitTime,
+                                          String prevCommitTime, Option<List<String>> commitTimesBetweenPrevAndNew, String initCommitTime,
+                                          int numRecordsInThisCommit,
+                                          Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn, boolean isPreppedAPI,
+                                          boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits) throws Exception {
+    return updateBatch(writeConfig, client, newCommitTime, prevCommitTime, commitTimesBetweenPrevAndNew, initCommitTime, numRecordsInThisCommit, writeFn,
+        isPreppedAPI, assertForCommit, expRecordsInThisCommit, expTotalRecords, expTotalCommits, true);
   }
 
   /**
@@ -378,13 +428,23 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
                                           String prevCommitTime, Option<List<String>> commitTimesBetweenPrevAndNew, String initCommitTime,
                                           int numRecordsInThisCommit,
                                           Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn, boolean isPreppedAPI,
-                                          boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits) throws Exception {
+                                          boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits,
+                                          boolean filterForCommitTimeWithAssert) throws Exception {
     final Function2<List<HoodieRecord>, String, Integer> recordGenFunction =
         generateWrapRecordsFn(isPreppedAPI, writeConfig, dataGen::generateUniqueUpdates);
 
     return writeBatch(client, newCommitTime, prevCommitTime, commitTimesBetweenPrevAndNew, initCommitTime,
         numRecordsInThisCommit, recordGenFunction, writeFn, assertForCommit, expRecordsInThisCommit, expTotalRecords,
-        expTotalCommits, false);
+        expTotalCommits, false, filterForCommitTimeWithAssert);
+  }
+
+  public JavaRDD<WriteStatus> deleteBatch(HoodieWriteConfig writeConfig, SparkRDDWriteClient client, String newCommitTime,
+                                          String prevCommitTime, String initCommitTime,
+                                          int numRecordsInThisCommit,
+                                          Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieKey>, String> deleteFn, boolean isPreppedAPI,
+                                          boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords) throws Exception {
+    return deleteBatch(writeConfig, client, newCommitTime, prevCommitTime, initCommitTime, numRecordsInThisCommit, deleteFn, isPreppedAPI,
+        assertForCommit, expRecordsInThisCommit, expTotalRecords, true);
   }
 
   /**
@@ -408,13 +468,32 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
       String prevCommitTime, String initCommitTime,
       int numRecordsInThisCommit,
       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieKey>, String> deleteFn, boolean isPreppedAPI,
-      boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords) throws Exception {
+      boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, boolean filterForCommitTimeWithAssert) throws Exception {
     final Function<Integer, List<HoodieKey>> keyGenFunction =
         generateWrapDeleteKeysFn(isPreppedAPI, writeConfig, dataGen::generateUniqueDeletes);
 
     return deleteBatch(client, newCommitTime, prevCommitTime, initCommitTime, numRecordsInThisCommit,
         keyGenFunction,
-        deleteFn, assertForCommit, expRecordsInThisCommit, expTotalRecords);
+        deleteFn, assertForCommit, expRecordsInThisCommit, expTotalRecords, filterForCommitTimeWithAssert);
+  }
+
+  public JavaRDD<WriteStatus> writeBatch(SparkRDDWriteClient client, String newCommitTime, String prevCommitTime,
+                                         Option<List<String>> commitTimesBetweenPrevAndNew, String initCommitTime, int numRecordsInThisCommit,
+                                         Function2<List<HoodieRecord>, String, Integer> recordGenFunction,
+                                         Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
+                                         boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits, boolean doCommit) throws Exception {
+    return writeBatch(client, newCommitTime, prevCommitTime, commitTimesBetweenPrevAndNew, initCommitTime, numRecordsInThisCommit, recordGenFunction,
+        writeFn, assertForCommit, expRecordsInThisCommit, expTotalRecords, expTotalCommits, doCommit, true);
+  }
+
+  public JavaRDD<WriteStatus> writeBatch(SparkRDDWriteClient client, String newCommitTime, String prevCommitTime,
+                                         Option<List<String>> commitTimesBetweenPrevAndNew, String initCommitTime, int numRecordsInThisCommit,
+                                         Function3<List<HoodieRecord>, String, Integer, String> recordGenFunction,
+                                         Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
+                                         boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits,
+                                         boolean doCommit, String partition) throws Exception {
+    return writeBatch(client, newCommitTime, prevCommitTime, commitTimesBetweenPrevAndNew, initCommitTime, numRecordsInThisCommit, recordGenFunction,
+        writeFn, assertForCommit, expRecordsInThisCommit, expTotalRecords, expTotalCommits, doCommit, true, partition);
   }
 
   /**
@@ -439,12 +518,38 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
                                          Option<List<String>> commitTimesBetweenPrevAndNew, String initCommitTime, int numRecordsInThisCommit,
                                          Function2<List<HoodieRecord>, String, Integer> recordGenFunction,
                                          Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
-                                         boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits, boolean doCommit) throws Exception {
+                                         boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits, boolean doCommit,
+                                         boolean filterForCommitTimeWithAssert) throws Exception {
 
+    List<HoodieRecord> records = recordGenFunction.apply(newCommitTime, numRecordsInThisCommit);
+    return writeBatchHelper(client, newCommitTime, prevCommitTime, commitTimesBetweenPrevAndNew, initCommitTime,
+        numRecordsInThisCommit, records, writeFn, assertForCommit, expRecordsInThisCommit, expTotalRecords,
+        expTotalCommits, doCommit, filterForCommitTimeWithAssert);
+  }
+
+  public JavaRDD<WriteStatus> writeBatch(SparkRDDWriteClient client, String newCommitTime, String prevCommitTime,
+                                         Option<List<String>> commitTimesBetweenPrevAndNew, String initCommitTime, int numRecordsInThisCommit,
+                                         Function3<List<HoodieRecord>, String, Integer, String> recordGenFunction,
+                                         Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
+                                         boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits, boolean doCommit,
+                                         boolean filterForCommitTimeWithAssert,
+                                         String partition) throws Exception {
+
+    List<HoodieRecord> records = recordGenFunction.apply(newCommitTime, numRecordsInThisCommit, partition);
+    return writeBatchHelper(client, newCommitTime, prevCommitTime, commitTimesBetweenPrevAndNew, initCommitTime,
+        numRecordsInThisCommit, records, writeFn, assertForCommit, expRecordsInThisCommit, expTotalRecords,
+        expTotalCommits, doCommit, filterForCommitTimeWithAssert);
+  }
+
+  private JavaRDD<WriteStatus> writeBatchHelper(SparkRDDWriteClient client, String newCommitTime, String prevCommitTime,
+                                                Option<List<String>> commitTimesBetweenPrevAndNew, String initCommitTime,
+                                                int numRecordsInThisCommit, List<HoodieRecord> records,
+                                                Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
+                                                boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords,
+                                                int expTotalCommits, boolean doCommit, boolean filterForCommitTimeWithAssert) throws IOException {
     // Write 1 (only inserts)
     client.startCommitWithTime(newCommitTime);
 
-    List<HoodieRecord> records = recordGenFunction.apply(newCommitTime, numRecordsInThisCommit);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
     JavaRDD<WriteStatus> result = writeFn.apply(client, writeRecords, newCommitTime);
@@ -466,8 +571,10 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
           "Expecting " + expTotalCommits + " commits.");
       assertEquals(newCommitTime, timeline.lastInstant().get().getTimestamp(),
           "Latest commit should be " + newCommitTime);
-      assertEquals(expRecordsInThisCommit, HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
-          "Must contain " + expRecordsInThisCommit + " records");
+      if (filterForCommitTimeWithAssert) { // when meta cols are disabled, we can't really do per commit assertion.
+        assertEquals(expRecordsInThisCommit, HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
+            "Must contain " + expRecordsInThisCommit + " records");
+      }
 
       // Check the entire dataset has all records still
       String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
@@ -477,16 +584,18 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
       assertEquals(expTotalRecords, HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
           "Must contain " + expTotalRecords + " records");
 
-      // Check that the incremental consumption from prevCommitTime
-      assertEquals(HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
-          HoodieClientTestUtils.countRecordsSince(jsc, basePath, sqlContext, timeline, prevCommitTime),
-          "Incremental consumption from " + prevCommitTime + " should give all records in latest commit");
-      if (commitTimesBetweenPrevAndNew.isPresent()) {
-        commitTimesBetweenPrevAndNew.get().forEach(ct -> {
-          assertEquals(HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
-              HoodieClientTestUtils.countRecordsSince(jsc, basePath, sqlContext, timeline, ct),
-              "Incremental consumption from " + ct + " should give all records in latest commit");
-        });
+      if (filterForCommitTimeWithAssert) {
+        // Check that the incremental consumption from prevCommitTime
+        assertEquals(HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
+            HoodieClientTestUtils.countRecordsOptionallySince(jsc, basePath, sqlContext, timeline, Option.of(prevCommitTime)),
+            "Incremental consumption from " + prevCommitTime + " should give all records in latest commit");
+        if (commitTimesBetweenPrevAndNew.isPresent()) {
+          commitTimesBetweenPrevAndNew.get().forEach(ct -> {
+            assertEquals(HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
+                HoodieClientTestUtils.countRecordsOptionallySince(jsc, basePath, sqlContext, timeline, Option.of(ct)),
+                "Incremental consumption from " + ct + " should give all records in latest commit");
+          });
+        }
       }
     }
     return result;
@@ -510,7 +619,7 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
       String initCommitTime, int numRecordsInThisCommit,
       Function<Integer, List<HoodieKey>> keyGenFunction,
       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieKey>, String> deleteFn,
-      boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords) throws Exception {
+      boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, boolean filerForCommitTimeWithAssert) throws Exception {
 
     // Delete 1 (only deletes)
     client.startCommitWithTime(newCommitTime);
@@ -534,8 +643,10 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
           "Expecting 3 commits.");
       assertEquals(newCommitTime, timeline.lastInstant().get().getTimestamp(),
           "Latest commit should be " + newCommitTime);
-      assertEquals(expRecordsInThisCommit, HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
-          "Must contain " + expRecordsInThisCommit + " records");
+      if (filerForCommitTimeWithAssert) { // if meta cols are disabled, we can't do assertion based on assertion time
+        assertEquals(expRecordsInThisCommit, HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
+            "Must contain " + expRecordsInThisCommit + " records");
+      }
 
       // Check the entire dataset has all records still
       String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
@@ -545,11 +656,13 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
       assertEquals(expTotalRecords, HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
           "Must contain " + expTotalRecords + " records");
 
-      // Check that the incremental consumption from prevCommitTime
-      assertEquals(HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
-          HoodieClientTestUtils.countRecordsSince(jsc, basePath, sqlContext, timeline, prevCommitTime),
-          "Incremental consumption from " + prevCommitTime + " should give no records in latest commit,"
-              + " since it is a delete operation");
+      if (filerForCommitTimeWithAssert) {
+        // Check that the incremental consumption from prevCommitTime
+        assertEquals(HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
+            HoodieClientTestUtils.countRecordsOptionallySince(jsc, basePath, sqlContext, timeline, Option.of(prevCommitTime)),
+            "Incremental consumption from " + prevCommitTime + " should give no records in latest commit,"
+                + " since it is a delete operation");
+      }
     }
     return result;
   }

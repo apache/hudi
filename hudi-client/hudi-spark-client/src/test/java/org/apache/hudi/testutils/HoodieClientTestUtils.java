@@ -20,21 +20,29 @@ package org.apache.hudi.testutils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.Cell;
@@ -105,6 +113,11 @@ public class HoodieClientTestUtils {
 
   public static Dataset<Row> readCommit(String basePath, SQLContext sqlContext, HoodieTimeline commitTimeline,
                                         String instantTime) {
+    return readCommit(basePath, sqlContext, commitTimeline, instantTime, true);
+  }
+
+  public static Dataset<Row> readCommit(String basePath, SQLContext sqlContext, HoodieTimeline commitTimeline,
+                                        String instantTime, boolean filterByCommitTime) {
     HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, instantTime);
     if (!commitTimeline.containsInstant(commitInstant)) {
       throw new HoodieException("No commit exists at " + instantTime);
@@ -113,37 +126,67 @@ public class HoodieClientTestUtils {
       HashMap<String, String> paths =
           getLatestFileIDsToFullPath(basePath, commitTimeline, Arrays.asList(commitInstant));
       LOG.info("Path :" + paths.values());
-      return sqlContext.read().parquet(paths.values().toArray(new String[paths.size()]))
-          .filter(String.format("%s ='%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime));
+      Dataset<Row> unFilteredRows = null;
+      if (HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().equals(HoodieFileFormat.PARQUET)) {
+        unFilteredRows = sqlContext.read().parquet(paths.values().toArray(new String[paths.size()]));
+      } else if (HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().equals(HoodieFileFormat.ORC)) {
+        unFilteredRows = sqlContext.read().orc(paths.values().toArray(new String[paths.size()]));
+      }
+      if (unFilteredRows != null) {
+        if (filterByCommitTime) {
+          return unFilteredRows.filter(String.format("%s ='%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime));
+        } else {
+          return unFilteredRows;
+        }
+      } else {
+        return sqlContext.emptyDataFrame();
+      }
     } catch (Exception e) {
       throw new HoodieException("Error reading commit " + instantTime, e);
     }
   }
 
   /**
-   * Obtain all new data written into the Hoodie table since the given timestamp.
+   * Obtain all new data written into the Hoodie table with an optional from timestamp.
    */
-  public static long countRecordsSince(JavaSparkContext jsc, String basePath, SQLContext sqlContext,
-                                       HoodieTimeline commitTimeline, String lastCommitTime) {
+  public static long countRecordsOptionallySince(JavaSparkContext jsc, String basePath, SQLContext sqlContext,
+                                                 HoodieTimeline commitTimeline, Option<String> lastCommitTimeOpt) {
     List<HoodieInstant> commitsToReturn =
-        commitTimeline.findInstantsAfter(lastCommitTime, Integer.MAX_VALUE).getInstants().collect(Collectors.toList());
+        lastCommitTimeOpt.isPresent() ? commitTimeline.findInstantsAfter(lastCommitTimeOpt.get(), Integer.MAX_VALUE).getInstants().collect(Collectors.toList()) :
+            commitTimeline.getInstants().collect(Collectors.toList());
     try {
       // Go over the commit metadata, and obtain the new files that need to be read.
       HashMap<String, String> fileIdToFullPath = getLatestFileIDsToFullPath(basePath, commitTimeline, commitsToReturn);
       String[] paths = fileIdToFullPath.values().toArray(new String[fileIdToFullPath.size()]);
       if (paths[0].endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
-        return sqlContext.read().parquet(paths)
-            .filter(String.format("%s >'%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, lastCommitTime))
-            .count();
+        Dataset<Row> rows = sqlContext.read().parquet(paths);
+        if (lastCommitTimeOpt.isPresent()) {
+          return rows.filter(String.format("%s >'%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, lastCommitTimeOpt.get()))
+              .count();
+        } else {
+          return rows.count();
+        }
       } else if (paths[0].endsWith(HoodieFileFormat.HFILE.getFileExtension())) {
-        return readHFile(jsc, paths)
-            .filter(gr -> HoodieTimeline.compareTimestamps(lastCommitTime, HoodieActiveTimeline.LESSER_THAN,
-                gr.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString()))
-            .count();
+        Stream<GenericRecord> genericRecordStream = readHFile(jsc, paths);
+        if (lastCommitTimeOpt.isPresent()) {
+          return genericRecordStream.filter(gr -> HoodieTimeline.compareTimestamps(lastCommitTimeOpt.get(), HoodieActiveTimeline.LESSER_THAN,
+              gr.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString()))
+              .count();
+        } else {
+          return genericRecordStream.count();
+        }
+      } else if (paths[0].endsWith(HoodieFileFormat.ORC.getFileExtension())) {
+        Dataset<Row> rows = sqlContext.read().orc(paths);
+        if (lastCommitTimeOpt.isPresent()) {
+          return rows.filter(String.format("%s >'%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, lastCommitTimeOpt.get()))
+              .count();
+        } else {
+          return rows.count();
+        }
       }
       throw new HoodieException("Unsupported base file format for file :" + paths[0]);
     } catch (IOException e) {
-      throw new HoodieException("Error pulling data incrementally from commitTimestamp :" + lastCommitTime, e);
+      throw new HoodieException("Error pulling data incrementally from commitTimestamp :" + lastCommitTimeOpt.get(), e);
     }
   }
 
@@ -164,7 +207,7 @@ public class HoodieClientTestUtils {
   }
 
   /**
-   * Reads the paths under the a hoodie table out as a DataFrame.
+   * Reads the paths under the hoodie table out as a DataFrame.
    */
   public static Dataset<Row> read(JavaSparkContext jsc, String basePath, SQLContext sqlContext, FileSystem fs,
                                   String... paths) {
@@ -174,7 +217,16 @@ public class HoodieClientTestUtils {
       for (HoodieBaseFile file : latestFiles) {
         filteredPaths.add(file.getPath());
       }
-      return sqlContext.read().parquet(filteredPaths.toArray(new String[filteredPaths.size()]));
+      if (filteredPaths.isEmpty()) {
+        return sqlContext.emptyDataFrame();
+      }
+      String[] filteredPathsToRead = filteredPaths.toArray(new String[filteredPaths.size()]);
+      if (filteredPathsToRead[0].endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
+        return sqlContext.read().parquet(filteredPathsToRead);
+      } else if (filteredPathsToRead[0].endsWith(HoodieFileFormat.ORC.getFileExtension())) {
+        return sqlContext.read().orc(filteredPathsToRead);
+      }
+      return sqlContext.emptyDataFrame();
     } catch (Exception e) {
       throw new HoodieException("Error reading hoodie table as a dataframe", e);
     }
@@ -211,4 +263,52 @@ public class HoodieClientTestUtils {
     return valuesAsList.stream();
   }
 
+  /**
+   * Initializes timeline service based on the write config.
+   *
+   * @param context             {@link HoodieEngineContext} instance to use.
+   * @param basePath            Base path of the table.
+   * @param timelineServicePort Port number to use for timeline service.
+   * @return started {@link TimelineService} instance.
+   */
+  public static TimelineService initTimelineService(
+      HoodieEngineContext context, String basePath, int timelineServicePort) {
+    try {
+      HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+          .withPath(basePath)
+          .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+              .withRemoteServerPort(timelineServicePort).build())
+          .build();
+      TimelineService timelineService = new TimelineService(context, new Configuration(),
+          TimelineService.Config.builder().enableMarkerRequests(true)
+              .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
+          FileSystem.get(new Configuration()),
+          FileSystemViewManager.createViewManager(context, config.getMetadataConfig(),
+              config.getViewStorageConfig(), config.getCommonConfig()));
+      timelineService.startService();
+      LOG.info("Timeline service server port: " + timelineServicePort);
+      return timelineService;
+    } catch (Exception ex) {
+      throw new RuntimeException(ex);
+    }
+  }
+
+  public static Option<HoodieCommitMetadata> getCommitMetadataForLatestInstant(HoodieTableMetaClient metaClient) {
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    if (timeline.lastInstant().isPresent()) {
+      return getCommitMetadataForInstant(metaClient, timeline.lastInstant().get());
+    } else {
+      return Option.empty();
+    }
+  }
+
+  private static Option<HoodieCommitMetadata> getCommitMetadataForInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {
+    try {
+      HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+      byte[] data = timeline.getInstantDetails(instant).get();
+      return Option.of(HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class));
+    } catch (Exception e) {
+      throw new HoodieException("Failed to read schema from commit metadata", e);
+    }
+  }
 }

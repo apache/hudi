@@ -26,6 +26,9 @@
     "name" : "_row_key",
     "type" : "string"
   }, {
+     "name" : "partition_path",
+     "type" : "string"
+   }, {
     "name" : "rider",
     "type" : "string"
   }, {

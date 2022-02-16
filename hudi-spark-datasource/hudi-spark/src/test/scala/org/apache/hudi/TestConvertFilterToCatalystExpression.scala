@@ -19,6 +19,7 @@ package org.apache.hudi
 
 import org.apache.hudi.HoodieSparkUtils.convertToCatalystExpressions
 import org.apache.hudi.HoodieSparkUtils.convertToCatalystExpression
+
 import org.apache.spark.sql.sources.{And, EqualNullSafe, EqualTo, Filter, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Not, Or, StringContains, StringEndsWith, StringStartsWith}
 import org.apache.spark.sql.types.{DoubleType, IntegerType, LongType, StringType, StructField, StructType}
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -67,31 +68,37 @@ class TestConvertFilterToCatalystExpression {
       "((`ts` < 10) AND (`ts` > 1))")
   }
 
-  @Test
-  def testUnSupportConvert(): Unit = {
-    checkConvertFilters(Array(unsupport()), null)
-    checkConvertFilters(Array(and(unsupport(), eq("id", 1))), null)
-    checkConvertFilters(Array(or(unsupport(), eq("id", 1))), null)
-    checkConvertFilters(Array(and(eq("id", 1), not(unsupport()))), null)
-  }
-
   private def checkConvertFilter(filter: Filter, expectExpression: String): Unit = {
+    // [SPARK-25769][SPARK-34636][SPARK-34626][SQL] sql method in UnresolvedAttribute,
+    // AttributeReference and Alias don't quote qualified names properly
+    val removeQuotesIfNeed = if (expectExpression != null && HoodieSparkUtils.isSpark3_2) {
+      expectExpression.replace("`", "")
+    } else {
+      expectExpression
+    }
     val exp = convertToCatalystExpression(filter, tableSchema)
-    if (expectExpression == null) {
+    if (removeQuotesIfNeed == null) {
       assertEquals(exp.isEmpty, true)
     } else {
       assertEquals(exp.isDefined, true)
-      assertEquals(expectExpression, exp.get.sql)
+      assertEquals(removeQuotesIfNeed, exp.get.sql)
     }
   }
 
   private def checkConvertFilters(filters: Array[Filter], expectExpression: String): Unit = {
+    // [SPARK-25769][SPARK-34636][SPARK-34626][SQL] sql method in UnresolvedAttribute,
+    // AttributeReference and Alias don't quote qualified names properly
+    val removeQuotesIfNeed = if (expectExpression != null && HoodieSparkUtils.isSpark3_2) {
+      expectExpression.replace("`", "")
+    } else {
+      expectExpression
+    }
     val exp = convertToCatalystExpressions(filters, tableSchema)
-    if (expectExpression == null) {
+    if (removeQuotesIfNeed == null) {
       assertEquals(exp.isEmpty, true)
     } else {
       assertEquals(exp.isDefined, true)
-      assertEquals(expectExpression, exp.get.sql)
+      assertEquals(removeQuotesIfNeed, exp.get.sql)
     }
   }
 
@@ -153,13 +160,5 @@ class TestConvertFilterToCatalystExpression {
 
   private def contains(attribute: String, value: String): Filter = {
     StringContains(attribute, value)
-  }
-
-  private def unsupport(): Filter = {
-    UnSupportFilter("")
-  }
-
-  case class UnSupportFilter(value: Any) extends Filter {
-    override def references: Array[String] = Array.empty
   }
 }

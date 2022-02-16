@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
+import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.api.java.function.Function2;
@@ -42,21 +43,25 @@ public class BulkInsertMapFunction<T extends HoodieRecordPayload>
   private HoodieTable hoodieTable;
   private List<String> fileIDPrefixes;
   private boolean useWriterSchema;
+  private WriteHandleFactory writeHandleFactory;
 
   public BulkInsertMapFunction(String instantTime, boolean areRecordsSorted,
                                HoodieWriteConfig config, HoodieTable hoodieTable,
-                               List<String> fileIDPrefixes, boolean useWriterSchema) {
+                               List<String> fileIDPrefixes, boolean useWriterSchema,
+                               WriteHandleFactory writeHandleFactory) {
     this.instantTime = instantTime;
     this.areRecordsSorted = areRecordsSorted;
     this.config = config;
     this.hoodieTable = hoodieTable;
     this.fileIDPrefixes = fileIDPrefixes;
     this.useWriterSchema = useWriterSchema;
+    this.writeHandleFactory = writeHandleFactory;
   }
 
   @Override
   public Iterator<List<WriteStatus>> call(Integer partition, Iterator<HoodieRecord<T>> recordItr) {
     return new SparkLazyInsertIterable<>(recordItr, areRecordsSorted, config, instantTime, hoodieTable,
-        fileIDPrefixes.get(partition), hoodieTable.getTaskContextSupplier(), useWriterSchema);
+        fileIDPrefixes.get(partition), hoodieTable.getTaskContextSupplier(), useWriterSchema,
+        writeHandleFactory);
   }
 }

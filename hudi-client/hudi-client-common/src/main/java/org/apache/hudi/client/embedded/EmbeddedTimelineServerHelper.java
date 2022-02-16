@@ -49,6 +49,8 @@ public class EmbeddedTimelineServerHelper {
     if (config.isEmbeddedTimelineServerReuseEnabled()) {
       if (!TIMELINE_SERVER.isPresent() || !TIMELINE_SERVER.get().canReuseFor(config.getBasePath())) {
         TIMELINE_SERVER = Option.of(startTimelineService(context, config));
+      } else {
+        updateWriteConfigWithTimelineServer(TIMELINE_SERVER.get(), config);
       }
       return TIMELINE_SERVER;
     }
@@ -65,10 +67,7 @@ public class EmbeddedTimelineServerHelper {
     LOG.info("Starting Timeline service !!");
     Option<String> hostAddr = context.getProperty(EngineProperty.EMBEDDED_SERVER_HOST);
     EmbeddedTimelineService timelineService = new EmbeddedTimelineService(
-        context, hostAddr.orElse(null),config.getEmbeddedTimelineServerPort(),
-        config.getMetadataConfig(), config.getClientSpecifiedViewStorageConfig(), config.getBasePath(),
-        config.getEmbeddedTimelineServerThreads(), config.getEmbeddedTimelineServerCompressOutput(),
-        config.getEmbeddedTimelineServerUseAsync());
+        context, hostAddr.orElse(null), config);
     timelineService.startServer();
     updateWriteConfigWithTimelineServer(timelineService, config);
     return timelineService;

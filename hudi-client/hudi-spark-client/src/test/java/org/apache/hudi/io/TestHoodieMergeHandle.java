@@ -20,6 +20,7 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -27,6 +28,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
@@ -41,16 +43,21 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 @SuppressWarnings("unchecked")
 public class TestHoodieMergeHandle extends HoodieClientTestHarness {
@@ -69,14 +76,23 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
     cleanupResources();
   }
 
-  @Test
-  public void testUpsertsForMultipleRecordsInSameFile() throws Exception {
+  @ParameterizedTest
+  @MethodSource("testArguments")
+  public void testUpsertsForMultipleRecordsInSameFile(ExternalSpillableMap.DiskMapType diskMapType,
+                                                      boolean isCompressionEnabled) throws Exception {
     // Create records in a single partition
     String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
     dataGen = new HoodieTestDataGenerator(new String[] {partitionPath});
 
+    // Build a common config with diff configs
+    Properties properties = new Properties();
+    properties.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), diskMapType.name());
+    properties.setProperty(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), String.valueOf(isCompressionEnabled));
+
     // Build a write config with bulkinsertparallelism set
-    HoodieWriteConfig cfg = getConfigBuilder().build();
+    HoodieWriteConfig cfg = getConfigBuilder()
+        .withProperties(properties)
+        .build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
       FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
 
@@ -215,10 +231,19 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
     }
   }
 
-  @Test
-  public void testHoodieMergeHandleWriteStatMetrics() throws Exception {
+  @ParameterizedTest
+  @MethodSource("testArguments")
+  public void testHoodieMergeHandleWriteStatMetrics(ExternalSpillableMap.DiskMapType diskMapType,
+                                                    boolean isCompressionEnabled) throws Exception {
     // insert 100 records
-    HoodieWriteConfig config = getConfigBuilder().build();
+    // Build a common config with diff configs
+    Properties properties = new Properties();
+    properties.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), diskMapType.name());
+    properties.setProperty(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), String.valueOf(isCompressionEnabled));
+
+    HoodieWriteConfig config = getConfigBuilder()
+        .withProperties(properties)
+        .build();
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config);) {
       String newCommitTime = "100";
       writeClient.startCommitWithTime(newCommitTime);
@@ -315,6 +340,16 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
         .forTable("test-trip-table")
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
         .withBulkInsertParallelism(2).withWriteStatusClass(TestWriteStatus.class);
+  }
+
+  private static Stream<Arguments> testArguments() {
+    // Arg1: ExternalSpillableMap Type, Arg2: isDiskMapCompressionEnabled
+    return Stream.of(
+        arguments(ExternalSpillableMap.DiskMapType.BITCASK, false),
+        arguments(ExternalSpillableMap.DiskMapType.ROCKS_DB, false),
+        arguments(ExternalSpillableMap.DiskMapType.BITCASK, true),
+        arguments(ExternalSpillableMap.DiskMapType.ROCKS_DB, true)
+    );
   }
 
   /**

@@ -27,6 +27,7 @@ import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 
 import java.io.IOException;
 
+import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
 
@@ -40,6 +41,9 @@ public class HoodieFileReaderFactory {
     if (HFILE.getFileExtension().equals(extension)) {
       return newHFileFileReader(conf, path);
     }
+    if (ORC.getFileExtension().equals(extension)) {
+      return newOrcFileReader(conf, path);
+    }
 
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
@@ -51,5 +55,9 @@ public class HoodieFileReaderFactory {
   private static <R extends IndexedRecord> HoodieFileReader<R> newHFileFileReader(Configuration conf, Path path) throws IOException {
     CacheConfig cacheConfig = new CacheConfig(conf);
     return new HoodieHFileReader<>(conf, path, cacheConfig);
+  }
+
+  private static <R extends IndexedRecord> HoodieFileReader<R> newOrcFileReader(Configuration conf, Path path) {
+    return new HoodieOrcReader<>(conf, path);
   }
 }

@@ -27,12 +27,16 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilter;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.util.List;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -56,7 +60,9 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
    * Return list of partition paths to be considered for clustering.
    */
   protected List<String> filterPartitionPaths(List<String> partitionPaths) {
-    return partitionPaths;
+    List<String> filteredPartitions = ClusteringPlanPartitionFilter.filter(partitionPaths, getWriteConfig());
+    LOG.debug("Filtered to the following partitions: " + filteredPartitions);
+    return filteredPartitions;
   }
 
   @Override
@@ -66,6 +72,8 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
     HoodieWriteConfig config = getWriteConfig();
     List<String> partitionPaths = FSUtils.getAllPartitionPaths(getEngineContext(), config.getMetadataConfig(), metaClient.getBasePath());
 
+    // get regex matched partitions if set
+    partitionPaths = getRegexPatternMatchedPartitions(config, partitionPaths);
     // filter the partition paths if needed to reduce list status
     partitionPaths = filterPartitionPaths(partitionPaths);
 
@@ -74,13 +82,17 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
       return Option.empty();
     }
 
-    List<HoodieClusteringGroup> clusteringGroups = getEngineContext().flatMap(partitionPaths,
-        partitionPath -> {
-          List<FileSlice> fileSlicesEligible = getFileSlicesEligibleForClustering(partitionPath).collect(Collectors.toList());
-          return buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible).limit(getWriteConfig().getClusteringMaxNumGroups());
-        },
-        partitionPaths.size())
-        .stream().limit(getWriteConfig().getClusteringMaxNumGroups()).collect(Collectors.toList());
+    List<HoodieClusteringGroup> clusteringGroups = getEngineContext()
+        .flatMap(
+            partitionPaths,
+            partitionPath -> {
+              List<FileSlice> fileSlicesEligible = getFileSlicesEligibleForClustering(partitionPath).collect(Collectors.toList());
+              return buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible).limit(getWriteConfig().getClusteringMaxNumGroups());
+            },
+            partitionPaths.size())
+        .stream()
+        .limit(getWriteConfig().getClusteringMaxNumGroups())
+        .collect(Collectors.toList());
 
     if (clusteringGroups.isEmpty()) {
       LOG.info("No data available to cluster");
@@ -97,6 +109,17 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
         .setInputGroups(clusteringGroups)
         .setExtraMetadata(getExtraMetadata())
         .setVersion(getPlanVersion())
+        .setPreserveHoodieMetadata(getWriteConfig().isPreserveHoodieCommitMetadataForClustering())
         .build());
+  }
+
+  public List<String> getRegexPatternMatchedPartitions(HoodieWriteConfig config, List<String> partitionPaths) {
+    String pattern = config.getClusteringPartitionFilterRegexPattern();
+    if (!StringUtils.isNullOrEmpty(pattern)) {
+      partitionPaths = partitionPaths.stream()
+          .filter(partition -> Pattern.matches(pattern, partition))
+          .collect(Collectors.toList());
+    }
+    return partitionPaths;
   }
 }

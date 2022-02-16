@@ -18,32 +18,32 @@
 
 package org.apache.hudi.streamer;
 
+import org.apache.hudi.common.config.DFSPropertiesConfiguration;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.sink.CleanFunction;
-import org.apache.hudi.sink.StreamWriteOperatorFactory;
-import org.apache.hudi.sink.partitioner.BucketAssignFunction;
-import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
+import org.apache.hudi.sink.transform.Transformer;
+import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 
 import com.beust.jcommander.JCommander;
-import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.formats.common.TimestampFormat;
 import org.apache.flink.formats.json.JsonRowDataDeserializationSchema;
-import org.apache.flink.formats.json.TimestampFormat;
 import org.apache.flink.runtime.state.filesystem.FsStateBackend;
+import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 
-import java.util.Properties;
-
 /**
- * An Utility which can incrementally consume data from Kafka and apply it to the target table.
- * currently, it only support COW table and insert, upsert operation.
+ * A utility which can incrementally consume data from Kafka and apply it to the target table.
+ * It has the similar functionality with SQL data source except that the source is bind to Kafka
+ * and the format is bind to JSON.
  */
 public class HoodieFlinkStreamer {
   public static void main(String[] args) throws Exception {
@@ -65,18 +65,20 @@ public class HoodieFlinkStreamer {
       env.setStateBackend(new FsStateBackend(cfg.flinkCheckPointPath));
     }
 
-    Properties kafkaProps = StreamerUtil.appendKafkaProps(cfg);
+    TypedProperties kafkaProps = DFSPropertiesConfiguration.getGlobalProps();
+    kafkaProps.putAll(StreamerUtil.appendKafkaProps(cfg));
 
     // Read from kafka source
     RowType rowType =
         (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(cfg))
             .getLogicalType();
-    Configuration conf = FlinkOptions.fromStreamerConfig(cfg);
-    int numWriteTask = conf.getInteger(FlinkOptions.WRITE_TASKS);
-    StreamWriteOperatorFactory<HoodieRecord> operatorFactory =
-        new StreamWriteOperatorFactory<>(conf);
 
-    env.addSource(new FlinkKafkaConsumer<>(
+    Configuration conf = FlinkStreamerConfig.toFlinkConfig(cfg);
+    long ckpTimeout = env.getCheckpointConfig().getCheckpointTimeout();
+    int parallelism = env.getParallelism();
+    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
+
+    DataStream<RowData> dataStream = env.addSource(new FlinkKafkaConsumer<>(
         cfg.kafkaTopic,
         new JsonRowDataDeserializationSchema(
             rowType,
@@ -86,24 +88,22 @@ public class HoodieFlinkStreamer {
             TimestampFormat.ISO_8601
         ), kafkaProps))
         .name("kafka_source")
-        .uid("uid_kafka_source")
-        .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class))
-        // Key-by record key, to avoid multiple subtasks write to a partition at the same time
-        .keyBy(HoodieRecord::getRecordKey)
-        .transform(
-            "bucket_assigner",
-            TypeInformation.of(HoodieRecord.class),
-            new KeyedProcessOperator<>(new BucketAssignFunction<>(conf)))
-        .uid("uid_bucket_assigner")
-        // shuffle by fileId(bucket id)
-        .keyBy(record -> record.getCurrentLocation().getFileId())
-        .transform("hoodie_stream_write", null, operatorFactory)
-        .uid("uid_hoodie_stream_write")
-        .setParallelism(numWriteTask)
-        .addSink(new CleanFunction<>(conf))
-        .setParallelism(1)
-        .name("clean_commits")
-        .uid("uid_clean_commits");
+        .uid("uid_kafka_source");
+
+    if (cfg.transformerClassNames != null && !cfg.transformerClassNames.isEmpty()) {
+      Option<Transformer> transformer = StreamerUtil.createTransformer(cfg.transformerClassNames);
+      if (transformer.isPresent()) {
+        dataStream = transformer.get().apply(dataStream);
+      }
+    }
+
+    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, parallelism, dataStream);
+    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream);
+    if (StreamerUtil.needsAsyncCompaction(conf)) {
+      Pipelines.compact(conf, pipeline);
+    } else {
+      Pipelines.clean(conf, pipeline);
+    }
 
     env.execute(cfg.targetTableName);
   }

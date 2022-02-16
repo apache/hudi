@@ -22,7 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
@@ -38,8 +38,7 @@ public class HoodieBootstrapHandle<T extends HoodieRecordPayload, I, K, O> exten
   public HoodieBootstrapHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T, I, K, O> hoodieTable,
       String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
     super(config, commitTime, hoodieTable, partitionPath, fileId,
-        Pair.of(HoodieAvroUtils.RECORD_KEY_SCHEMA,
-            HoodieAvroUtils.addMetadataFields(HoodieAvroUtils.RECORD_KEY_SCHEMA)), taskContextSupplier);
+        Option.of(HoodieAvroUtils.RECORD_KEY_SCHEMA), taskContextSupplier);
   }
 
   @Override

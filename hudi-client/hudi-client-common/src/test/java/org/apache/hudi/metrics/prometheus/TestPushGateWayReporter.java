@@ -48,6 +48,7 @@ public class TestPushGateWayReporter {
   @Test
   public void testRegisterGauge() {
     when(config.isMetricsOn()).thenReturn(true);
+    when(config.getTableName()).thenReturn("foo");
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.PROMETHEUS_PUSHGATEWAY);
     when(config.getPushGatewayHost()).thenReturn("localhost");
     when(config.getPushGatewayPort()).thenReturn(9091);
@@ -57,7 +58,7 @@ public class TestPushGateWayReporter {
     when(config.getPushGatewayRandomJobNameSuffix()).thenReturn(false);
 
     assertDoesNotThrow(() -> {
-      new HoodieMetrics(config, "raw_table");
+      new HoodieMetrics(config);
     });
 
     registerGauge("pushGateWayReporter_metric", 123L);

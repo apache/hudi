@@ -32,7 +32,7 @@ import java.util.List;
 
 public class FlinkUpsertDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends BaseFlinkDeltaCommitActionExecutor<T> {
-  private List<HoodieRecord<T>> inputRecords;
+  private final List<HoodieRecord<T>> inputRecords;
 
   public FlinkUpsertDeltaCommitActionExecutor(HoodieEngineContext context,
                                               FlinkAppendHandle<?, ?, ?, ?> writeHandle,
@@ -47,6 +47,6 @@ public class FlinkUpsertDeltaCommitActionExecutor<T extends HoodieRecordPayload<
   @Override
   public HoodieWriteMetadata execute() {
     return FlinkWriteHelper.newInstance().write(instantTime, inputRecords, context, table,
-        config.shouldCombineBeforeUpsert(), config.getUpsertShuffleParallelism(), this, true);
+        config.shouldCombineBeforeUpsert(), config.getUpsertShuffleParallelism(), this, operationType);
   }
 }

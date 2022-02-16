@@ -18,8 +18,8 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hudi.cli.DeDupeType;
 import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.cli.DeDupeType;
 import org.apache.hudi.cli.DedupeSparkJob;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -31,13 +31,16 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
-import org.apache.hudi.table.upgrade.SparkUpgradeDowngrade;
+import org.apache.hudi.table.upgrade.SparkUpgradeDowngradeHelper;
+import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.utilities.HDFSParquetImporter;
 import org.apache.hudi.utilities.HDFSParquetImporter.Config;
 import org.apache.hudi.utilities.HoodieCleaner;
@@ -58,6 +61,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * This class deals with initializing spark context based on command entered to hudi-cli.
@@ -70,24 +74,26 @@ public class SparkMain {
    * Commands.
    */
   enum SparkCommand {
-    BOOTSTRAP, ROLLBACK, DEDUPLICATE, ROLLBACK_TO_SAVEPOINT, SAVEPOINT, IMPORT, UPSERT, COMPACT_SCHEDULE, COMPACT_RUN,
+    BOOTSTRAP, ROLLBACK, DEDUPLICATE, ROLLBACK_TO_SAVEPOINT, SAVEPOINT, IMPORT, UPSERT, COMPACT_SCHEDULE, COMPACT_RUN, COMPACT_SCHEDULE_AND_EXECUTE,
     COMPACT_UNSCHEDULE_PLAN, COMPACT_UNSCHEDULE_FILE, COMPACT_VALIDATE, COMPACT_REPAIR, CLUSTERING_SCHEDULE,
     CLUSTERING_RUN, CLEAN, DELETE_SAVEPOINT, UPGRADE, DOWNGRADE
   }
 
   public static void main(String[] args) throws Exception {
-    String command = args[0];
-    LOG.info("Invoking SparkMain:" + command);
+    ValidationUtils.checkArgument(args.length >= 4);
+    final String commandString = args[0];
+    LOG.info("Invoking SparkMain: " + commandString);
+    final SparkCommand cmd = SparkCommand.valueOf(commandString);
 
-    SparkCommand cmd = SparkCommand.valueOf(command);
+    JavaSparkContext jsc = SparkUtil.initJavaSparkConf("hoodie-cli-" + commandString,
+        Option.of(args[1]), Option.of(args[2]));
 
-    JavaSparkContext jsc = SparkUtil.initJavaSparkConf("hoodie-cli-" + command, Option.of(args[1]), Option.of(args[2]));
     int returnCode = 0;
     try {
       switch (cmd) {
         case ROLLBACK:
-          assert (args.length == 5);
-          returnCode = rollback(jsc, args[3], args[4]);
+          assert (args.length == 6);
+          returnCode = rollback(jsc, args[3], args[4], Boolean.parseBoolean(args[5]));
           break;
         case DEDUPLICATE:
           assert (args.length == 8);
@@ -108,8 +114,8 @@ public class SparkMain {
           if (args.length > 13) {
             configs.addAll(Arrays.asList(args).subList(13, args.length));
           }
-          returnCode = dataLoad(jsc, command, args[3], args[4], args[5], args[6], args[7], args[8],
-                  Integer.parseInt(args[9]), args[10], Integer.parseInt(args[11]), propsFilePath, configs);
+          returnCode = dataLoad(jsc, commandString, args[3], args[4], args[5], args[6], args[7], args[8],
+              Integer.parseInt(args[9]), args[10], Integer.parseInt(args[11]), propsFilePath, configs);
           break;
         case COMPACT_RUN:
           assert (args.length >= 10);
@@ -122,7 +128,21 @@ public class SparkMain {
             configs.addAll(Arrays.asList(args).subList(9, args.length));
           }
           returnCode = compact(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]), args[7],
-              Integer.parseInt(args[8]), false, propsFilePath, configs);
+              Integer.parseInt(args[8]), HoodieCompactor.EXECUTE, propsFilePath, configs);
+          break;
+        case COMPACT_SCHEDULE_AND_EXECUTE:
+          assert (args.length >= 9);
+          propsFilePath = null;
+          if (!StringUtils.isNullOrEmpty(args[8])) {
+            propsFilePath = args[8];
+          }
+          configs = new ArrayList<>();
+          if (args.length > 9) {
+            configs.addAll(Arrays.asList(args).subList(8, args.length));
+          }
+
+          returnCode = compact(jsc, args[3], args[4], null, Integer.parseInt(args[5]), args[6],
+              Integer.parseInt(args[7]), HoodieCompactor.SCHEDULE_AND_EXECUTE, propsFilePath, configs);
           break;
         case COMPACT_SCHEDULE:
           assert (args.length >= 7);
@@ -134,7 +154,7 @@ public class SparkMain {
           if (args.length > 7) {
             configs.addAll(Arrays.asList(args).subList(7, args.length));
           }
-          returnCode = compact(jsc, args[3], args[4], args[5], 1, "", 0, true, propsFilePath, configs);
+          returnCode = compact(jsc, args[3], args[4], args[5], 1, "", 0, HoodieCompactor.SCHEDULE, propsFilePath, configs);
           break;
         case COMPACT_VALIDATE:
           assert (args.length == 7);
@@ -156,33 +176,34 @@ public class SparkMain {
         case COMPACT_UNSCHEDULE_PLAN:
           assert (args.length == 9);
           doCompactUnschedule(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]),
-                  Boolean.parseBoolean(args[7]), Boolean.parseBoolean(args[8]));
+              Boolean.parseBoolean(args[7]), Boolean.parseBoolean(args[8]));
           returnCode = 0;
           break;
         case CLUSTERING_RUN:
-          assert (args.length >= 8);
+          assert (args.length >= 9);
           propsFilePath = null;
-          if (!StringUtils.isNullOrEmpty(args[7])) {
-            propsFilePath = args[7];
+          if (!StringUtils.isNullOrEmpty(args[8])) {
+            propsFilePath = args[8];
           }
           configs = new ArrayList<>();
-          if (args.length > 8) {
-            configs.addAll(Arrays.asList(args).subList(8, args.length));
+          if (args.length > 9) {
+            configs.addAll(Arrays.asList(args).subList(9, args.length));
           }
-          returnCode = cluster(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5],
-              Integer.parseInt(args[6]), false, propsFilePath, configs);
+          returnCode = cluster(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]), args[2],
+              Integer.parseInt(args[7]), false, propsFilePath, configs);
           break;
         case CLUSTERING_SCHEDULE:
-          assert (args.length >= 6);
+          assert (args.length >= 7);
           propsFilePath = null;
-          if (!StringUtils.isNullOrEmpty(args[5])) {
-            propsFilePath = args[5];
+          if (!StringUtils.isNullOrEmpty(args[6])) {
+            propsFilePath = args[6];
           }
           configs = new ArrayList<>();
-          if (args.length > 6) {
-            configs.addAll(Arrays.asList(args).subList(6, args.length));
+          if (args.length > 7) {
+            configs.addAll(Arrays.asList(args).subList(7, args.length));
           }
-          returnCode = cluster(jsc, args[1], args[2], args[3], 1, args[4], 0, true, propsFilePath, configs);
+          returnCode = cluster(jsc, args[3], args[4], args[5], 1, args[2],
+              0, true, propsFilePath, configs);
           break;
         case CLEAN:
           assert (args.length >= 5);
@@ -226,7 +247,7 @@ public class SparkMain {
           break;
       }
     } catch (Throwable throwable) {
-      LOG.error("Fail to execute command", throwable);
+      LOG.error("Fail to execute commandString", throwable);
       returnCode = -1;
     } finally {
       jsc.stop();
@@ -313,7 +334,7 @@ public class SparkMain {
   }
 
   private static int compact(JavaSparkContext jsc, String basePath, String tableName, String compactionInstant,
-      int parallelism, String schemaFile, int retry, boolean schedule, String propsFilePath,
+      int parallelism, String schemaFile, int retry, String mode, String propsFilePath,
       List<String> configs) {
     HoodieCompactor.Config cfg = new HoodieCompactor.Config();
     cfg.basePath = basePath;
@@ -323,7 +344,7 @@ public class SparkMain {
     cfg.strategyClassName = UnBoundedCompactionStrategy.class.getCanonicalName();
     cfg.parallelism = parallelism;
     cfg.schemaFile = schemaFile;
-    cfg.runSchedule = schedule;
+    cfg.runningMode = mode;
     cfg.propsFilePath = propsFilePath;
     cfg.configs = configs;
     return new HoodieCompactor(jsc, cfg).compact(retry);
@@ -353,19 +374,25 @@ public class SparkMain {
 
   private static int doBootstrap(JavaSparkContext jsc, String tableName, String tableType, String basePath,
       String sourcePath, String recordKeyCols, String partitionFields, String parallelism, String schemaProviderClass,
-      String bootstrapIndexClass, String selectorClass, String keyGeneratorClass, String fullBootstrapInputProvider,
+      String bootstrapIndexClass, String selectorClass, String keyGenerator, String fullBootstrapInputProvider,
       String payloadClassName, String enableHiveSync, String propsFilePath, List<String> configs) throws IOException {
 
     TypedProperties properties = propsFilePath == null ? UtilHelpers.buildProperties(configs)
-        : UtilHelpers.readConfig(FSUtils.getFs(propsFilePath, jsc.hadoopConfiguration()), new Path(propsFilePath), configs).getConfig();
+        : UtilHelpers.readConfig(jsc.hadoopConfiguration(), new Path(propsFilePath), configs).getProps(true);
 
-    properties.setProperty(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP, sourcePath);
-    properties.setProperty(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS, keyGeneratorClass);
-    properties.setProperty(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER, fullBootstrapInputProvider);
-    properties.setProperty(HoodieBootstrapConfig.BOOTSTRAP_PARALLELISM, parallelism);
-    properties.setProperty(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR, selectorClass);
-    properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), recordKeyCols);
-    properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), partitionFields);
+    properties.setProperty(HoodieBootstrapConfig.BASE_PATH.key(), sourcePath);
+
+    if (!StringUtils.isNullOrEmpty(keyGenerator) && KeyGeneratorType.getNames().contains(keyGenerator.toUpperCase(Locale.ROOT))) {
+      properties.setProperty(HoodieBootstrapConfig.KEYGEN_TYPE.key(), keyGenerator.toUpperCase(Locale.ROOT));
+    } else {
+      properties.setProperty(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key(), keyGenerator);
+    }
+
+    properties.setProperty(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME.key(), fullBootstrapInputProvider);
+    properties.setProperty(HoodieBootstrapConfig.PARALLELISM_VALUE.key(), parallelism);
+    properties.setProperty(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME.key(), selectorClass);
+    properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key(), recordKeyCols);
+    properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), partitionFields);
 
     HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
     cfg.targetTableName = tableName;
@@ -381,8 +408,8 @@ public class SparkMain {
     return 0;
   }
 
-  private static int rollback(JavaSparkContext jsc, String instantTime, String basePath) throws Exception {
-    SparkRDDWriteClient client = createHoodieClient(jsc, basePath);
+  private static int rollback(JavaSparkContext jsc, String instantTime, String basePath, Boolean rollbackUsingMarkers) throws Exception {
+    SparkRDDWriteClient client = createHoodieClient(jsc, basePath, rollbackUsingMarkers);
     if (client.rollback(instantTime)) {
       LOG.info(String.format("The commit \"%s\" rolled back.", instantTime));
       return 0;
@@ -412,7 +439,7 @@ public class SparkMain {
       LOG.info(String.format("The commit \"%s\" rolled back.", savepointTime));
       return 0;
     } catch (Exception e) {
-      LOG.warn(String.format("The commit \"%s\" failed to roll back.", savepointTime));
+      LOG.warn(String.format("The commit \"%s\" failed to roll back.", savepointTime), e);
       return -1;
     }
   }
@@ -424,7 +451,7 @@ public class SparkMain {
       LOG.info(String.format("Savepoint \"%s\" deleted.", savepointTime));
       return 0;
     } catch (Exception e) {
-      LOG.warn(String.format("Failed: Could not delete savepoint \"%s\".", savepointTime));
+      LOG.warn(String.format("Failed: Could not delete savepoint \"%s\".", savepointTime), e);
       return -1;
     }
   }
@@ -439,13 +466,14 @@ public class SparkMain {
    * @throws Exception
    */
   protected static int upgradeOrDowngradeTable(JavaSparkContext jsc, String basePath, String toVersion) {
-    HoodieWriteConfig config = getWriteConfig(basePath);
+    HoodieWriteConfig config = getWriteConfig(basePath, Boolean.parseBoolean(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE.defaultValue()));
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(false).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion()))).build();
     try {
-      new SparkUpgradeDowngrade(metaClient, config, new HoodieSparkEngineContext(jsc)).run(metaClient, HoodieTableVersion.valueOf(toVersion), config, new HoodieSparkEngineContext(jsc), null);
+      new UpgradeDowngrade(metaClient, config, new HoodieSparkEngineContext(jsc), SparkUpgradeDowngradeHelper.getInstance())
+          .run(HoodieTableVersion.valueOf(toVersion), null);
       LOG.info(String.format("Table at \"%s\" upgraded / downgraded to version \"%s\".", basePath, toVersion));
       return 0;
     } catch (Exception e) {
@@ -454,13 +482,18 @@ public class SparkMain {
     }
   }
 
-  private static SparkRDDWriteClient createHoodieClient(JavaSparkContext jsc, String basePath) throws Exception {
-    HoodieWriteConfig config = getWriteConfig(basePath);
+  private static SparkRDDWriteClient createHoodieClient(JavaSparkContext jsc, String basePath, Boolean rollbackUsingMarkers) throws Exception {
+    HoodieWriteConfig config = getWriteConfig(basePath, rollbackUsingMarkers);
     return new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), config);
   }
 
-  private static HoodieWriteConfig getWriteConfig(String basePath) {
+  private static SparkRDDWriteClient createHoodieClient(JavaSparkContext jsc, String basePath) throws Exception {
+    return createHoodieClient(jsc, basePath, Boolean.parseBoolean(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE.defaultValue()));
+  }
+
+  private static HoodieWriteConfig getWriteConfig(String basePath, Boolean rollbackUsingMarkers) {
     return HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withRollbackUsingMarkers(rollbackUsingMarkers)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
   }
 }

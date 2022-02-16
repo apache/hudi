@@ -39,7 +39,7 @@ public class HoodieCommitCallbackFactory {
       return (HoodieWriteCommitCallback) instance;
     } else {
       throw new HoodieCommitCallbackException(String.format("The value of the config option %s can not be null or "
-          + "empty", HoodieWriteCommitCallbackConfig.CALLBACK_CLASS_PROP));
+          + "empty", HoodieWriteCommitCallbackConfig.CALLBACK_CLASS_NAME.key()));
     }
   }
 

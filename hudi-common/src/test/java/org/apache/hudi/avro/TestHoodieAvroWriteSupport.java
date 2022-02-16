@@ -22,6 +22,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -52,7 +53,7 @@ public class TestHoodieAvroWriteSupport {
         1000, 0.0001, 10000,
         BloomFilterTypeCode.SIMPLE.name());
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
-        new AvroSchemaConverter().convert(schema), schema, filter);
+        new AvroSchemaConverter().convert(schema), schema, Option.of(filter));
     ParquetWriter writer = new ParquetWriter(new Path(filePath), writeSupport, CompressionCodecName.GZIP,
         120 * 1024 * 1024, ParquetWriter.DEFAULT_PAGE_SIZE);
     for (String rowKey : rowKeys) {

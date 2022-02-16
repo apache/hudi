@@ -81,6 +81,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -107,7 +108,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
   @BeforeEach
   public void setup() throws IOException {
-    metaClient = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType(), BOOTSTRAP_SOURCE_PATH);
+    metaClient = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType(), BOOTSTRAP_SOURCE_PATH, false);
     basePath = metaClient.getBasePath();
     refreshFsView();
   }
@@ -139,6 +140,46 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
   @Test
   public void testViewForFileSlicesWithNoBaseFileNonPartitioned() throws Exception {
     testViewForFileSlicesWithNoBaseFile(1, 0, "");
+  }
+
+  @Test
+  public void testCloseHoodieTableFileSystemView() throws Exception {
+    String instantTime1 = "1";
+    String instantTime2 = "2";
+    String clusteringInstantTime3 = "3";
+    String clusteringInstantTime4 = "4";
+
+    // prepare metadata
+    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+    Map<String, List<String>> partitionToReplaceFileIds = new HashMap<>();
+    List<String> replacedFileIds = new ArrayList<>();
+    replacedFileIds.add("fake_file_id");
+    partitionToReplaceFileIds.put("fake_partition_path", replacedFileIds);
+
+    // prepare Instants
+    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, instantTime1);
+    HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, instantTime2);
+    HoodieInstant clusteringInstant3 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringInstantTime3);
+    HoodieInstant clusteringInstant4 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringInstantTime4);
+    HoodieCommitMetadata commitMetadata =
+            CommitUtils.buildMetadata(Collections.emptyList(), partitionToReplaceFileIds, Option.empty(), WriteOperationType.CLUSTER, "", HoodieTimeline.REPLACE_COMMIT_ACTION);
+
+    saveAsComplete(commitTimeline, instant1, Option.empty());
+    saveAsComplete(commitTimeline, instant2, Option.empty());
+    saveAsComplete(commitTimeline, clusteringInstant3, Option.empty());
+    saveAsComplete(commitTimeline, clusteringInstant4, Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+
+    refreshFsView();
+
+    // Now create a scenario where archiving deleted replace commits (requested,inflight and replacecommit)
+    boolean deleteReplaceCommit = new File(this.basePath + "/.hoodie/" + clusteringInstantTime3 + ".replacecommit").delete();
+    boolean deleteReplaceCommitRequested = new File(this.basePath + "/.hoodie/" + clusteringInstantTime3 + ".replacecommit.requested").delete();
+    boolean deleteReplaceCommitInflight = new File(this.basePath + "/.hoodie/" + clusteringInstantTime3 + ".replacecommit.inflight").delete();
+
+    // confirm deleted
+    assertTrue(deleteReplaceCommit && deleteReplaceCommitInflight && deleteReplaceCommitRequested);
+    assertDoesNotThrow(() -> fsView.close());
+
   }
 
   protected void testViewForFileSlicesWithNoBaseFile(int expNumTotalFileSlices, int expNumTotalDataFiles,
@@ -303,6 +344,11 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
   protected void testViewForFileSlicesWithAsyncCompaction(boolean skipCreatingDataFile, boolean isCompactionInFlight,
       int expTotalFileSlices, int expTotalDataFiles, boolean includeInvalidAndInflight, boolean testBootstrap)
       throws Exception {
+
+    if (testBootstrap) {
+      metaClient = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType(), BOOTSTRAP_SOURCE_PATH, testBootstrap);
+    }
+
     String partitionPath = "2016/05/01";
     new File(basePath + "/" + partitionPath).mkdirs();
     String fileId = UUID.randomUUID().toString();

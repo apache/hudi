@@ -17,11 +17,17 @@
 
 package org.apache.hudi.callback.common;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.common.model.HoodieWriteStat;
+
 import java.io.Serializable;
+import java.util.List;
 
 /**
  * Base callback message, which contains commitTime and tableName only for now.
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public class HoodieWriteCommitCallbackMessage implements Serializable {
 
   private static final long serialVersionUID = -3033643980627719561L;
@@ -29,48 +35,43 @@ public class HoodieWriteCommitCallbackMessage implements Serializable {
   /**
    * CommitTime for one batch write, this is required.
    */
-  private String commitTime;
+  private final String commitTime;
 
   /**
    * Table name this batch commit to.
    */
-  private String tableName;
+  private final String tableName;
 
   /**
    * BathPath the table located.
    */
-  private String basePath;
+  private final String basePath;
 
-  public HoodieWriteCommitCallbackMessage() {
-  }
+  /**
+   * Statistics about Hoodie write operation.
+   */
+  private final List<HoodieWriteStat> hoodieWriteStat;
 
-  public HoodieWriteCommitCallbackMessage(String commitTime, String tableName, String basePath) {
+  public HoodieWriteCommitCallbackMessage(String commitTime, String tableName, String basePath, List<HoodieWriteStat> hoodieWriteStat) {
     this.commitTime = commitTime;
     this.tableName = tableName;
     this.basePath = basePath;
+    this.hoodieWriteStat = hoodieWriteStat;
   }
 
   public String getCommitTime() {
     return commitTime;
   }
 
-  public void setCommitTime(String commitTime) {
-    this.commitTime = commitTime;
-  }
-
   public String getTableName() {
     return tableName;
-  }
-
-  public void setTableName(String tableName) {
-    this.tableName = tableName;
   }
 
   public String getBasePath() {
     return basePath;
   }
 
-  public void setBasePath(String basePath) {
-    this.basePath = basePath;
+  public List<HoodieWriteStat> getHoodieWriteStat() {
+    return hoodieWriteStat;
   }
 }

@@ -62,6 +62,10 @@ public class HoodieInternalWriteStatus implements Serializable {
     totalRecords++;
   }
 
+  public void markSuccess() {
+    totalRecords++;
+  }
+
   public void markFailure(String recordKey, Throwable t) {
     if (failedRecordKeys.isEmpty() || (random.nextDouble() <= failureFraction)) {
       failedRecordKeys.add(Pair.of(recordKey, t));

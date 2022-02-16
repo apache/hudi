@@ -19,6 +19,8 @@
 package org.apache.hudi.common.table.view;
 
 import org.apache.hadoop.fs.FileStatus;
+
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.BootstrapBaseFileMapping;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieFileGroup;
@@ -53,9 +55,11 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
   private final long maxMemoryForReplaceFileGroups;
   private final long maxMemoryForClusteringFileGroups;
   private final String baseStoreDir;
+  private final ExternalSpillableMap.DiskMapType diskMapType;
+  private final boolean isBitCaskDiskMapCompressionEnabled;
 
   public SpillableMapBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
-      FileSystemViewStorageConfig config) {
+      FileSystemViewStorageConfig config, HoodieCommonConfig commonConfig) {
     super(config.isIncrementalTimelineSyncEnabled());
     this.maxMemoryForFileGroupMap = config.getMaxMemoryForFileGroupMap();
     this.maxMemoryForPendingCompaction = config.getMaxMemoryForPendingCompaction();
@@ -63,12 +67,14 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
     this.maxMemoryForReplaceFileGroups = config.getMaxMemoryForReplacedFileGroups();
     this.maxMemoryForClusteringFileGroups = config.getMaxMemoryForPendingClusteringFileGroups();
     this.baseStoreDir = config.getSpillableDir();
+    diskMapType = commonConfig.getSpillableDiskMapType();
+    isBitCaskDiskMapCompressionEnabled = commonConfig.isBitCaskDiskMapCompressionEnabled();
     init(metaClient, visibleActiveTimeline);
   }
 
   public SpillableMapBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
-      FileStatus[] fileStatuses, FileSystemViewStorageConfig config) {
-    this(metaClient, visibleActiveTimeline, config);
+      FileStatus[] fileStatuses, FileSystemViewStorageConfig config, HoodieCommonConfig commonConfig) {
+    this(metaClient, visibleActiveTimeline, config, commonConfig);
     addFilesToView(fileStatuses);
   }
 
@@ -79,7 +85,8 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
           + ", BaseDir=" + baseStoreDir);
       new File(baseStoreDir).mkdirs();
       return (Map<String, List<HoodieFileGroup>>) (new ExternalSpillableMap<>(maxMemoryForFileGroupMap, baseStoreDir,
-          new DefaultSizeEstimator(), new DefaultSizeEstimator<>()));
+          new DefaultSizeEstimator(), new DefaultSizeEstimator<>(),
+          diskMapType, isBitCaskDiskMapCompressionEnabled));
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
@@ -93,7 +100,8 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
           + ", BaseDir=" + baseStoreDir);
       new File(baseStoreDir).mkdirs();
       Map<HoodieFileGroupId, Pair<String, CompactionOperation>> pendingMap = new ExternalSpillableMap<>(
-          maxMemoryForPendingCompaction, baseStoreDir, new DefaultSizeEstimator(), new DefaultSizeEstimator<>());
+          maxMemoryForPendingCompaction, baseStoreDir, new DefaultSizeEstimator(), new DefaultSizeEstimator<>(),
+          diskMapType, isBitCaskDiskMapCompressionEnabled);
       pendingMap.putAll(fgIdToPendingCompaction);
       return pendingMap;
     } catch (IOException e) {
@@ -109,7 +117,8 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
           + ", BaseDir=" + baseStoreDir);
       new File(baseStoreDir).mkdirs();
       Map<HoodieFileGroupId, BootstrapBaseFileMapping> pendingMap = new ExternalSpillableMap<>(
-          maxMemoryForBootstrapBaseFile, baseStoreDir, new DefaultSizeEstimator(), new DefaultSizeEstimator<>());
+          maxMemoryForBootstrapBaseFile, baseStoreDir, new DefaultSizeEstimator(), new DefaultSizeEstimator<>(),
+          diskMapType, isBitCaskDiskMapCompressionEnabled);
       pendingMap.putAll(fileGroupIdBootstrapBaseFileMap);
       return pendingMap;
     } catch (IOException e) {
@@ -124,7 +133,8 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
           + ", BaseDir=" + baseStoreDir);
       new File(baseStoreDir).mkdirs();
       Map<HoodieFileGroupId, HoodieInstant> pendingMap = new ExternalSpillableMap<>(
-          maxMemoryForReplaceFileGroups, baseStoreDir, new DefaultSizeEstimator(), new DefaultSizeEstimator<>());
+          maxMemoryForReplaceFileGroups, baseStoreDir, new DefaultSizeEstimator(), new DefaultSizeEstimator<>(),
+          diskMapType, isBitCaskDiskMapCompressionEnabled);
       pendingMap.putAll(replacedFileGroups);
       return pendingMap;
     } catch (IOException e) {
@@ -139,7 +149,8 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
           + ", BaseDir=" + baseStoreDir);
       new File(baseStoreDir).mkdirs();
       Map<HoodieFileGroupId, HoodieInstant> pendingMap = new ExternalSpillableMap<>(
-          maxMemoryForClusteringFileGroups, baseStoreDir, new DefaultSizeEstimator(), new DefaultSizeEstimator<>());
+          maxMemoryForClusteringFileGroups, baseStoreDir, new DefaultSizeEstimator(), new DefaultSizeEstimator<>(),
+          diskMapType, isBitCaskDiskMapCompressionEnabled);
       pendingMap.putAll(fileGroupsInClustering);
       return pendingMap;
     } catch (IOException e) {

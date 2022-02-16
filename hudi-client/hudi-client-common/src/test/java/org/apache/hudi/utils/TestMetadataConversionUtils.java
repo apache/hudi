@@ -119,13 +119,23 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testCompletedCommitOrDeltaCommit() throws Exception {
+  public void testCompletedCommit() throws Exception {
     String newCommitTime = HoodieTestTable.makeNewCommitTime();
     createCommitMetadata(newCommitTime);
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
         new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, newCommitTime), metaClient);
     assertEquals(metaEntry.getActionState(), State.COMPLETED.toString());
     assertEquals(metaEntry.getHoodieCommitMetadata().getOperationType(), WriteOperationType.INSERT.toString());
+  }
+
+  @Test
+  public void testCompletedDeltaCommit() throws Exception {
+    String newCommitTime = HoodieTestTable.makeNewCommitTime();
+    createDeltaCommitMetadata(newCommitTime);
+    HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
+            new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), metaClient);
+    assertEquals(metaEntry.getActionState(), State.COMPLETED.toString());
+    assertEquals(metaEntry.getActionType(), HoodieTimeline.DELTA_COMMIT_ACTION);
   }
 
   @Test
@@ -166,7 +176,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     commitMetadata.setOperationType(WriteOperationType.COMPACT);
     commitMetadata.setCompacted(true);
     HoodieTestTable.of(metaClient)
-        .addCommit(instantTime, commitMetadata)
+        .addCommit(instantTime, Option.of(commitMetadata))
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
@@ -178,7 +188,6 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     rollbackPartitionMetadata.setPartitionPath("p1");
     rollbackPartitionMetadata.setSuccessDeleteFiles(Arrays.asList("f1"));
     rollbackPartitionMetadata.setFailedDeleteFiles(new ArrayList<>());
-    rollbackPartitionMetadata.setWrittenLogFiles(new HashMap<>());
     rollbackPartitionMetadata.setRollbackLogFiles(new HashMap<>());
     Map<String, HoodieRollbackPartitionMetadata> partitionMetadataMap = new HashMap<>();
     partitionMetadataMap.put("p1", rollbackPartitionMetadata);
@@ -196,8 +205,16 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     commitMetadata.addMetadata("test", "test");
     commitMetadata.setOperationType(WriteOperationType.INSERT);
     HoodieTestTable.of(metaClient)
-        .addCommit(instantTime, commitMetadata)
+        .addCommit(instantTime, Option.of(commitMetadata))
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
+  }
+
+  private void createDeltaCommitMetadata(String instantTime) throws Exception {
+    String fileId1 = "file-" + instantTime + "-1";
+    String fileId2 = "file-" + instantTime + "-2";
+    HoodieTestTable.of(metaClient)
+            .addDeltaCommit(instantTime)
+            .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
   private void createReplace(String instantTime, WriteOperationType writeOperationType, Boolean isClustering)

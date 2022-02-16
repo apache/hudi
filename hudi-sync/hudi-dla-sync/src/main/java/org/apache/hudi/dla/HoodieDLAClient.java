@@ -71,7 +71,7 @@ public class HoodieDLAClient extends AbstractSyncHoodieClient {
 
   public HoodieDLAClient(DLASyncConfig syncConfig, FileSystem fs) {
     super(syncConfig.basePath, syncConfig.assumeDatePartitioning, syncConfig.useFileListingFromMetadata,
-        syncConfig.verifyMetadataFileListing, fs);
+        false, fs);
     this.dlaConfig = syncConfig;
     try {
       this.partitionValueExtractor =
@@ -285,6 +285,11 @@ public class HoodieDLAClient extends AbstractSyncHoodieClient {
     for (String sql : sqls) {
       updateDLASQL(sql);
     }
+  }
+
+  @Override
+  public void dropPartitionsToTable(String tableName, List<String> partitionsToDrop) {
+    throw new UnsupportedOperationException("Not support dropPartitionsToTable yet.");
   }
 
   public Map<List<String>, String> scanTablePartitions(String tableName) {

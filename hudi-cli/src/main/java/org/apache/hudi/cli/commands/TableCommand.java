@@ -20,26 +20,47 @@ package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
+import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.exception.TableNotFoundException;
 
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 
 /**
  * CLI command to display hudi table options.
  */
 @Component
 public class TableCommand implements CommandMarker {
+
+  private static final Logger LOG = LogManager.getLogger(TableCommand.class);
 
   static {
     System.out.println("Table command getting loaded");
@@ -127,7 +148,7 @@ public class TableCommand implements CommandMarker {
     rows.add(new Comparable[] {"basePath", client.getBasePath()});
     rows.add(new Comparable[] {"metaPath", client.getMetaPath()});
     rows.add(new Comparable[] {"fileSystem", client.getFs().getScheme()});
-    client.getTableConfig().getProps().entrySet().forEach(e -> {
+    client.getTableConfig().propsMap().entrySet().forEach(e -> {
       rows.add(new Comparable[] {e.getKey(), e.getValue()});
     });
     return HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
@@ -141,5 +162,103 @@ public class TableCommand implements CommandMarker {
   public String refreshMetadata() {
     HoodieCLI.refreshTableMetadata();
     return "Metadata for table " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " refreshed.";
+  }
+
+  /**
+   * Fetches table schema in avro format.
+   */
+  @CliCommand(value = "fetch table schema", help = "Fetches latest table schema")
+  public String fetchTableSchema(
+      @CliOption(key = {"outputFilePath"}, mandatory = false, help = "File path to write schema") final String outputFilePath) throws Exception {
+    HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
+    TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(client);
+    Schema schema = tableSchemaResolver.getTableAvroSchema();
+    if (outputFilePath != null) {
+      LOG.info("Latest table schema : " + schema.toString(true));
+      writeToFile(outputFilePath, schema.toString(true));
+      return String.format("Latest table schema written to %s", outputFilePath);
+    } else {
+      return String.format("Latest table schema %s", schema.toString(true));
+    }
+  }
+
+  @CliCommand(value = "table recover-configs", help = "Recover table configs, from update/delete that failed midway.")
+  public String recoverTableConfig() throws IOException {
+    HoodieCLI.refreshTableMetadata();
+    HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
+    Path metaPathDir = new Path(client.getBasePath(), METAFOLDER_NAME);
+    HoodieTableConfig.recover(client.getFs(), metaPathDir);
+    return descTable();
+  }
+
+  @CliCommand(value = "table update-configs", help = "Update the table configs with configs with provided file.")
+  public String updateTableConfig(
+      @CliOption(key = {"props-file"}, mandatory = true, help = "Path to a properties file on local filesystem")
+      final String updatePropsFilePath) throws IOException {
+    HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
+    Map<String, String> oldProps = client.getTableConfig().propsMap();
+
+    Properties updatedProps = new Properties();
+    updatedProps.load(new FileInputStream(updatePropsFilePath));
+    Path metaPathDir = new Path(client.getBasePath(), METAFOLDER_NAME);
+    HoodieTableConfig.update(client.getFs(), metaPathDir, updatedProps);
+
+    HoodieCLI.refreshTableMetadata();
+    Map<String, String> newProps = HoodieCLI.getTableMetaClient().getTableConfig().propsMap();
+    return renderOldNewProps(newProps, oldProps);
+  }
+
+  @CliCommand(value = "table delete-configs", help = "Delete the supplied table configs from the table.")
+  public String deleteTableConfig(
+      @CliOption(key = {"comma-separated-configs"}, mandatory = true, help = "Comma separated list of configs to delete.")
+      final String csConfigs) {
+    HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
+    Map<String, String> oldProps = client.getTableConfig().propsMap();
+
+    Set<String> deleteConfigs = Arrays.stream(csConfigs.split(",")).collect(Collectors.toSet());
+    Path metaPathDir = new Path(client.getBasePath(), METAFOLDER_NAME);
+    HoodieTableConfig.delete(client.getFs(), metaPathDir, deleteConfigs);
+
+    HoodieCLI.refreshTableMetadata();
+    Map<String, String> newProps = HoodieCLI.getTableMetaClient().getTableConfig().propsMap();
+    return renderOldNewProps(newProps, oldProps);
+  }
+
+  private static String renderOldNewProps(Map<String, String> newProps, Map<String, String> oldProps) {
+    TreeSet<String> allPropKeys = new TreeSet<>();
+    allPropKeys.addAll(newProps.keySet().stream().map(Object::toString).collect(Collectors.toSet()));
+    allPropKeys.addAll(oldProps.keySet());
+
+    String[][] rows = new String[allPropKeys.size()][];
+    int ind = 0;
+    for (String propKey : allPropKeys) {
+      String[] row = new String[]{
+          propKey,
+          oldProps.getOrDefault(propKey, "null"),
+          newProps.getOrDefault(propKey, "null")
+      };
+      rows[ind++] = row;
+    }
+    return HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_HOODIE_PROPERTY,
+        HoodieTableHeaderFields.HEADER_OLD_VALUE, HoodieTableHeaderFields.HEADER_NEW_VALUE}, rows);
+  }
+
+  /**
+   * Use Streams when you are dealing with raw data.
+   * @param filePath output file path.
+   * @param data to be written to file.
+   */
+  private static void writeToFile(String filePath, String data) throws IOException {
+    File outFile = new File(filePath);
+    if (outFile.exists()) {
+      outFile.delete();
+    }
+    OutputStream os = null;
+    try {
+      os = new FileOutputStream(outFile);
+      os.write(data.getBytes(), 0, data.length());
+    } finally {
+      os.close();
+    }
   }
 }

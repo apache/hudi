@@ -18,10 +18,10 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
-
-import org.apache.avro.Schema;
+import org.apache.hudi.common.util.Option;
 import org.apache.parquet.avro.AvroWriteSupport;
 import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.parquet.schema.MessageType;
@@ -33,7 +33,7 @@ import java.util.HashMap;
  */
 public class HoodieAvroWriteSupport extends AvroWriteSupport {
 
-  private BloomFilter bloomFilter;
+  private Option<BloomFilter> bloomFilterOpt;
   private String minRecordKey;
   private String maxRecordKey;
 
@@ -43,39 +43,41 @@ public class HoodieAvroWriteSupport extends AvroWriteSupport {
   public static final String HOODIE_MAX_RECORD_KEY_FOOTER = "hoodie_max_record_key";
   public static final String HOODIE_BLOOM_FILTER_TYPE_CODE = "hoodie_bloom_filter_type_code";
 
-  public HoodieAvroWriteSupport(MessageType schema, Schema avroSchema, BloomFilter bloomFilter) {
+  public HoodieAvroWriteSupport(MessageType schema, Schema avroSchema, Option<BloomFilter> bloomFilterOpt) {
     super(schema, avroSchema);
-    this.bloomFilter = bloomFilter;
+    this.bloomFilterOpt = bloomFilterOpt;
   }
 
   @Override
   public WriteSupport.FinalizedWriteContext finalizeWrite() {
     HashMap<String, String> extraMetaData = new HashMap<>();
-    if (bloomFilter != null) {
-      extraMetaData.put(HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY, bloomFilter.serializeToString());
+    if (bloomFilterOpt.isPresent()) {
+      extraMetaData.put(HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY, bloomFilterOpt.get().serializeToString());
       if (minRecordKey != null && maxRecordKey != null) {
         extraMetaData.put(HOODIE_MIN_RECORD_KEY_FOOTER, minRecordKey);
         extraMetaData.put(HOODIE_MAX_RECORD_KEY_FOOTER, maxRecordKey);
       }
-      if (bloomFilter.getBloomFilterTypeCode().name().contains(HoodieDynamicBoundedBloomFilter.TYPE_CODE_PREFIX)) {
-        extraMetaData.put(HOODIE_BLOOM_FILTER_TYPE_CODE, bloomFilter.getBloomFilterTypeCode().name());
+      if (bloomFilterOpt.get().getBloomFilterTypeCode().name().contains(HoodieDynamicBoundedBloomFilter.TYPE_CODE_PREFIX)) {
+        extraMetaData.put(HOODIE_BLOOM_FILTER_TYPE_CODE, bloomFilterOpt.get().getBloomFilterTypeCode().name());
       }
     }
     return new WriteSupport.FinalizedWriteContext(extraMetaData);
   }
 
   public void add(String recordKey) {
-    this.bloomFilter.add(recordKey);
-    if (minRecordKey != null) {
-      minRecordKey = minRecordKey.compareTo(recordKey) <= 0 ? minRecordKey : recordKey;
-    } else {
-      minRecordKey = recordKey;
-    }
+    if (bloomFilterOpt.isPresent()) {
+      this.bloomFilterOpt.get().add(recordKey);
+      if (minRecordKey != null) {
+        minRecordKey = minRecordKey.compareTo(recordKey) <= 0 ? minRecordKey : recordKey;
+      } else {
+        minRecordKey = recordKey;
+      }
 
-    if (maxRecordKey != null) {
-      maxRecordKey = maxRecordKey.compareTo(recordKey) >= 0 ? maxRecordKey : recordKey;
-    } else {
-      maxRecordKey = recordKey;
+      if (maxRecordKey != null) {
+        maxRecordKey = maxRecordKey.compareTo(recordKey) >= 0 ? maxRecordKey : recordKey;
+      } else {
+        maxRecordKey = recordKey;
+      }
     }
   }
 }

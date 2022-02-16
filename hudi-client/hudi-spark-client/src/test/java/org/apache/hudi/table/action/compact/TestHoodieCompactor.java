@@ -40,11 +40,11 @@ import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.bloom.SparkHoodieBloomIndex;
+import org.apache.hudi.index.bloom.HoodieBloomIndex;
+import org.apache.hudi.index.bloom.SparkHoodieBloomIndexHelper;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
-import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
@@ -55,9 +55,6 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.testutils.FileCreateUtils.createDeltaCommit;
-import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightDeltaCommit;
-import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedDeltaCommit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -97,7 +94,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
         .withParallelism(2, 2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024)
             .withInlineCompaction(false).build())
-        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024).parquetMaxFileSize(1024 * 1024).build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024).parquetMaxFileSize(1024 * 1024).orcMaxFileSize(1024 * 1024).build())
         .withMemoryConfig(HoodieMemoryConfig.newBuilder().withMaxDFSStreamBufferSize(1 * 1024 * 1024).build())
         .forTable("test-trip-table")
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build());
@@ -133,9 +130,35 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
   }
 
   @Test
+  public void testScheduleCompactionWithInflightInstant() {
+    HoodieWriteConfig config = getConfig();
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
+      // insert 100 records.
+      String newCommitTime = "100";
+      writeClient.startCommitWithTime(newCommitTime);
+
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
+      JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+      writeClient.insert(recordsRDD, newCommitTime).collect();
+
+      // create one inflight instance.
+      newCommitTime = "102";
+      writeClient.startCommitWithTime(newCommitTime);
+      metaClient.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(State.REQUESTED,
+              HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
+
+      // create one compaction instance before exist inflight instance.
+      String compactionTime = "101";
+      writeClient.scheduleCompactionAtInstant(compactionTime, Option.empty());
+    }
+  }
+
+  @Test
   public void testWriteStatusContentsAfterCompaction() throws Exception {
     // insert 100 records
-    HoodieWriteConfig config = getConfig();
+    HoodieWriteConfig config = getConfigBuilder()
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .build();
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       String newCommitTime = "100";
       writeClient.startCommitWithTime(newCommitTime);
@@ -147,19 +170,14 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       // Update all the 100 records
       HoodieTable table = HoodieSparkTable.create(config, context);
       newCommitTime = "101";
-      writeClient.startCommitWithTime(newCommitTime);
 
       List<HoodieRecord> updatedRecords = dataGen.generateUpdates(newCommitTime, records);
       JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
-      HoodieIndex index = new SparkHoodieBloomIndex<>(config);
-      updatedRecords = ((JavaRDD<HoodieRecord>)index.tagLocation(updatedRecordsRDD, context, table)).collect();
+      HoodieIndex index = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
+      JavaRDD<HoodieRecord> updatedTaggedRecordsRDD = tagLocation(index, updatedRecordsRDD, table);
 
-      // Write them to corresponding avro logfiles. Also, set the state transition properly.
-      HoodieSparkWriteableTestTable.of(table, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS)
-          .withLogAppends(updatedRecords);
-      metaClient.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(State.REQUESTED,
-          HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
-      writeClient.commit(newCommitTime, jsc.emptyRDD(), Option.empty());
+      writeClient.startCommitWithTime(newCommitTime);
+      writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, newCommitTime).collect();
       metaClient.reloadActiveTimeline();
 
       // Verify that all data file has one log file
@@ -171,16 +189,14 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
           assertEquals(1, fileSlice.getLogFiles().count(), "There should be 1 log file written for every data file");
         }
       }
-      createDeltaCommit(basePath, newCommitTime);
-      createRequestedDeltaCommit(basePath, newCommitTime);
-      createInflightDeltaCommit(basePath, newCommitTime);
 
       // Do a compaction
       table = HoodieSparkTable.create(config, context);
       String compactionInstantTime = "102";
       table.scheduleCompaction(context, compactionInstantTime, Option.empty());
       table.getMetaClient().reloadActiveTimeline();
-      JavaRDD<WriteStatus> result = (JavaRDD<WriteStatus>) table.compact(context, compactionInstantTime).getWriteStatuses();
+      JavaRDD<WriteStatus> result = (JavaRDD<WriteStatus>) table.compact(
+          context, compactionInstantTime).getWriteStatuses();
 
       // Verify that all partition paths are present in the WriteStatus result
       for (String partitionPath : dataGen.getPartitionPaths()) {

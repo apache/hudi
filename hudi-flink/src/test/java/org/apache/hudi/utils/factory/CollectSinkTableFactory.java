@@ -18,10 +18,9 @@
 
 package org.apache.hudi.utils.factory;
 
-import org.apache.hudi.utils.TestConfigurations;
-
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
+import org.apache.flink.api.java.typeutils.RowTypeInfo;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
@@ -35,6 +34,8 @@ import org.apache.flink.table.connector.sink.SinkFunctionProvider;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.factories.DynamicTableSinkFactory;
 import org.apache.flink.table.factories.FactoryUtil;
+import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.utils.TypeConversions;
 import org.apache.flink.types.Row;
 import org.apache.flink.types.RowKind;
 
@@ -112,8 +113,10 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
 
     @Override
     public SinkRuntimeProvider getSinkRuntimeProvider(Context context) {
+      final DataType rowType = schema.toPhysicalRowDataType();
+      final RowTypeInfo rowTypeInfo = (RowTypeInfo) TypeConversions.fromDataTypeToLegacyInfo(rowType);
       DataStructureConverter converter = context.createDataStructureConverter(schema.toPhysicalRowDataType());
-      return SinkFunctionProvider.of(new CollectSinkFunction(converter));
+      return SinkFunctionProvider.of(new CollectSinkFunction(converter, rowTypeInfo));
     }
 
     @Override
@@ -131,27 +134,30 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
 
     private static final long serialVersionUID = 1L;
     private final DynamicTableSink.DataStructureConverter converter;
+    private final RowTypeInfo rowTypeInfo;
 
     protected transient ListState<Row> resultState;
     protected transient List<Row> localResult;
 
     private int taskID;
 
-    protected CollectSinkFunction(DynamicTableSink.DataStructureConverter converter) {
+    protected CollectSinkFunction(DynamicTableSink.DataStructureConverter converter, RowTypeInfo rowTypeInfo) {
       this.converter = converter;
+      this.rowTypeInfo = rowTypeInfo;
     }
 
     @Override
     public void invoke(RowData value, SinkFunction.Context context) {
       Row row = (Row) converter.toExternal(value);
       assert row != null;
+      row.setKind(value.getRowKind());
       RESULT.get(taskID).add(row);
     }
 
     @Override
     public void initializeState(FunctionInitializationContext context) throws Exception {
       this.resultState = context.getOperatorStateStore().getListState(
-          new ListStateDescriptor<>("sink-results", TestConfigurations.ROW_TYPE_INFO));
+          new ListStateDescriptor<>("sink-results", rowTypeInfo));
       this.localResult = new ArrayList<>();
       if (context.isRestored()) {
         for (Row value : resultState.get()) {

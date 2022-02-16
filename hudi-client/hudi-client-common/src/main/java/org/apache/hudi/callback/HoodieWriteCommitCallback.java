@@ -17,11 +17,15 @@
 
 package org.apache.hudi.callback;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 
 /**
  * A callback interface help to call back when a write commit completes successfully.
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
 public interface HoodieWriteCommitCallback {
 
   /**
@@ -30,6 +34,7 @@ public interface HoodieWriteCommitCallback {
    *
    * @param callbackMessage Callback msg, which will be sent to external system.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   void call(HoodieWriteCommitCallbackMessage callbackMessage);
 
 }

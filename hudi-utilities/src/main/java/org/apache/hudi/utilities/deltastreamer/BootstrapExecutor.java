@@ -49,17 +49,17 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER;
+import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 
 /**
  * Performs bootstrap from a non-hudi source.
  */
-public class BootstrapExecutor  implements Serializable {
+public class BootstrapExecutor implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(BootstrapExecutor.class);
 
   /**
-   *  Config.
+   * Config.
    */
   private final HoodieDeltaStreamer.Config cfg;
 
@@ -97,9 +97,10 @@ public class BootstrapExecutor  implements Serializable {
 
   /**
    * Bootstrap Executor.
-   * @param cfg DeltaStreamer Config
-   * @param jssc Java Spark Context
-   * @param fs File System
+   *
+   * @param cfg        DeltaStreamer Config
+   * @param jssc       Java Spark Context
+   * @param fs         File System
    * @param properties Bootstrap Writer Properties
    * @throws IOException
    */
@@ -111,13 +112,14 @@ public class BootstrapExecutor  implements Serializable {
     this.configuration = conf;
     this.props = properties;
 
-    ValidationUtils.checkArgument(properties.containsKey(HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH),
-        HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH + " must be specified.");
-    this.bootstrapBasePath = properties.getString(HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH);
+    ValidationUtils.checkArgument(properties.containsKey(HoodieTableConfig.BOOTSTRAP_BASE_PATH
+            .key()),
+        HoodieTableConfig.BOOTSTRAP_BASE_PATH.key() + " must be specified.");
+    this.bootstrapBasePath = properties.getString(HoodieTableConfig.BOOTSTRAP_BASE_PATH.key());
 
     // Add more defaults if full bootstrap requested
-    this.props.putIfAbsent(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY(),
-        DataSourceWriteOptions.DEFAULT_PAYLOAD_OPT_VAL());
+    this.props.putIfAbsent(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key(),
+        DataSourceWriteOptions.PAYLOAD_CLASS_NAME().defaultValue());
     this.schemaProvider = UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc);
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder().withPath(cfg.targetBasePath)
@@ -158,23 +160,31 @@ public class BootstrapExecutor  implements Serializable {
    * Sync to Hive.
    */
   private void syncHive() {
-    if (cfg.enableHiveSync) {
+    if (cfg.enableHiveSync || cfg.enableMetaSync) {
       HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, cfg.targetBasePath, cfg.baseFileFormat);
-      LOG.info("Syncing target hoodie table with hive table(" + hiveSyncConfig.tableName + "). Hive metastore URL :"
-          + hiveSyncConfig.jdbcUrl + ", basePath :" + cfg.targetBasePath);
+      HiveConf hiveConf = new HiveConf(fs.getConf(), HiveConf.class);
+      hiveConf.set(HiveConf.ConfVars.METASTOREURIS.varname,hiveSyncConfig.metastoreUris);
+      LOG.info("Hive Conf => " + hiveConf.getAllProperties().toString());
+      LOG.info("Hive Sync Conf => " + hiveSyncConfig);
       new HiveSyncTool(hiveSyncConfig, new HiveConf(configuration, HiveConf.class), fs).syncHoodieTable();
     }
   }
 
   private void initializeTable() throws IOException {
-    if (fs.exists(new Path(cfg.targetBasePath))) {
-      throw new HoodieException("target base path already exists at " + cfg.targetBasePath
-          + ". Cannot bootstrap data on top of an existing table");
+    Path basePath = new Path(cfg.targetBasePath);
+    if (fs.exists(basePath)) {
+      if (cfg.bootstrapOverwrite) {
+        LOG.warn("Target base path already exists, overwrite it");
+        fs.delete(basePath, true);
+      } else {
+        throw new HoodieException("target base path already exists at " + cfg.targetBasePath
+            + ". Cannot bootstrap data on top of an existing table");
+      }
     }
     HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
-        .setArchiveLogFolder(DEFAULT_ARCHIVELOG_FOLDER)
+        .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
         .setPayloadClassName(cfg.payloadClassName)
         .setBaseFileFormat(cfg.baseFileFormat)
         .setBootstrapIndexClass(cfg.bootstrapIndexClass)

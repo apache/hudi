@@ -54,9 +54,9 @@ public class HoodieMetrics {
   private Timer clusteringTimer = null;
   private Timer indexTimer = null;
 
-  public HoodieMetrics(HoodieWriteConfig config, String tableName) {
+  public HoodieMetrics(HoodieWriteConfig config) {
     this.config = config;
-    this.tableName = tableName;
+    this.tableName = config.getTableName();
     if (config.isMetricsOn()) {
       Metrics.init(config);
       this.rollbackTimerName = getMetricsName("timer", HoodieTimeline.ROLLBACK_ACTION);
@@ -128,6 +128,26 @@ public class HoodieMetrics {
       indexTimer = createTimer(indexTimerName);
     }
     return indexTimer == null ? null : indexTimer.time();
+  }
+
+  public void updateMetricsForEmptyData(String actionType) {
+    if (!config.isMetricsOn() || !config.getMetricsReporterType().equals(MetricsReporterType.PROMETHEUS_PUSHGATEWAY)) {
+      // No-op if metrics are not of type PROMETHEUS_PUSHGATEWAY.
+      return;
+    }
+    Metrics.registerGauge(getMetricsName(actionType, "totalPartitionsWritten"), 0);
+    Metrics.registerGauge(getMetricsName(actionType, "totalFilesInsert"), 0);
+    Metrics.registerGauge(getMetricsName(actionType, "totalFilesUpdate"), 0);
+    Metrics.registerGauge(getMetricsName(actionType, "totalRecordsWritten"), 0);
+    Metrics.registerGauge(getMetricsName(actionType, "totalUpdateRecordsWritten"), 0);
+    Metrics.registerGauge(getMetricsName(actionType, "totalInsertRecordsWritten"), 0);
+    Metrics.registerGauge(getMetricsName(actionType, "totalBytesWritten"), 0);
+    Metrics.registerGauge(getMetricsName(actionType, "totalScanTime"), 0);
+    Metrics.registerGauge(getMetricsName(actionType, "totalCreateTime"), 0);
+    Metrics.registerGauge(getMetricsName(actionType, "totalUpsertTime"), 0);
+    Metrics.registerGauge(getMetricsName(actionType, "totalCompactedRecordsUpdated"), 0);
+    Metrics.registerGauge(getMetricsName(actionType, "totalLogFilesCompacted"), 0);
+    Metrics.registerGauge(getMetricsName(actionType, "totalLogFilesSize"), 0);
   }
 
   public void updateCommitMetrics(long commitEpochTimeInMs, long durationInMs, HoodieCommitMetadata metadata,
@@ -215,7 +235,7 @@ public class HoodieMetrics {
   }
 
   String getMetricsName(String action, String metric) {
-    return config == null ? null : String.format("%s.%s.%s", tableName, action, metric);
+    return config == null ? null : String.format("%s.%s.%s", config.getMetricReporterMetricsNamePrefix(), action, metric);
   }
 
   /**

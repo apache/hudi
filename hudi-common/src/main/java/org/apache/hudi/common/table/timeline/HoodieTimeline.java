@@ -73,10 +73,12 @@ public interface HoodieTimeline extends Serializable {
   String INFLIGHT_CLEAN_EXTENSION = "." + CLEAN_ACTION + INFLIGHT_EXTENSION;
   String REQUESTED_CLEAN_EXTENSION = "." + CLEAN_ACTION + REQUESTED_EXTENSION;
   String INFLIGHT_ROLLBACK_EXTENSION = "." + ROLLBACK_ACTION + INFLIGHT_EXTENSION;
+  String REQUESTED_ROLLBACK_EXTENSION = "." + ROLLBACK_ACTION + REQUESTED_EXTENSION;
   String INFLIGHT_SAVEPOINT_EXTENSION = "." + SAVEPOINT_ACTION + INFLIGHT_EXTENSION;
   String REQUESTED_COMPACTION_SUFFIX = StringUtils.join(COMPACTION_ACTION, REQUESTED_EXTENSION);
   String REQUESTED_COMPACTION_EXTENSION = StringUtils.join(".", REQUESTED_COMPACTION_SUFFIX);
   String INFLIGHT_COMPACTION_EXTENSION = StringUtils.join(".", COMPACTION_ACTION, INFLIGHT_EXTENSION);
+  String REQUESTED_RESTORE_EXTENSION = "." + RESTORE_ACTION + REQUESTED_EXTENSION;
   String INFLIGHT_RESTORE_EXTENSION = "." + RESTORE_ACTION + INFLIGHT_EXTENSION;
   String RESTORE_EXTENSION = "." + RESTORE_ACTION;
   String INFLIGHT_REPLACE_COMMIT_EXTENSION = "." + REPLACE_COMMIT_ACTION + INFLIGHT_EXTENSION;
@@ -157,6 +159,11 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterPendingReplaceTimeline();
 
   /**
+   * Filter this timeline to include pending rollbacks.
+   */
+  HoodieTimeline filterPendingRollbackTimeline();
+
+  /**
    * Create a new Timeline with all the instants after startTs.
    */
   HoodieTimeline findInstantsAfterOrEquals(String commitTime, int numCommits);
@@ -207,6 +214,13 @@ public interface HoodieTimeline extends Serializable {
    * @return first completed instant if available
    */
   Option<HoodieInstant> firstInstant();
+
+  /**
+   * @param action Instant action String.
+   * @param state  Instant State.
+   * @return first instant of a specific action and state if available
+   */
+  Option<HoodieInstant> firstInstant(String action, State state);
 
   /**
    * @return nth completed instant from the first completed instant
@@ -268,6 +282,8 @@ public interface HoodieTimeline extends Serializable {
    */
   Option<byte[]> getInstantDetails(HoodieInstant instant);
 
+  boolean isEmpty(HoodieInstant instant);
+
   /**
    * Helper methods to compare instants.
    **/
@@ -321,6 +337,10 @@ public interface HoodieTimeline extends Serializable {
     return new HoodieInstant(State.INFLIGHT, REPLACE_COMMIT_ACTION, timestamp);
   }
 
+  static HoodieInstant getRollbackRequestedInstant(HoodieInstant instant) {
+    return instant.isRequested() ? instant : HoodieTimeline.getRequestedInstant(instant);
+  }
+
   /**
    * Returns the inflight instant corresponding to the instant being passed. Takes care of changes in action names
    * between inflight and completed instants (compaction <=> commit).
@@ -361,6 +381,14 @@ public interface HoodieTimeline extends Serializable {
 
   static String makeRollbackFileName(String instant) {
     return StringUtils.join(instant, HoodieTimeline.ROLLBACK_EXTENSION);
+  }
+
+  static String makeRequestedRollbackFileName(String instant) {
+    return StringUtils.join(instant, HoodieTimeline.REQUESTED_ROLLBACK_EXTENSION);
+  }
+
+  static String makeRequestedRestoreFileName(String instant) {
+    return StringUtils.join(instant, HoodieTimeline.REQUESTED_RESTORE_EXTENSION);
   }
 
   static String makeInflightRollbackFileName(String instant) {

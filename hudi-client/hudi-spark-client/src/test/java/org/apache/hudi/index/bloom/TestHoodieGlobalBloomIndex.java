@@ -19,11 +19,15 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaPairRDD;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
@@ -74,7 +78,8 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
   @Test
   public void testLoadInvolvedFiles() throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
-    SparkHoodieGlobalBloomIndex index = new SparkHoodieGlobalBloomIndex(config);
+    HoodieGlobalBloomIndex index =
+        new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(hoodieTable, SCHEMA);
 
@@ -87,24 +92,24 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     RawTripTestPayload rowChange1 =
         new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record1 =
-        new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
+        new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
     RawTripTestPayload rowChange2 =
         new RawTripTestPayload("{\"_row_key\":\"001\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record2 =
-        new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
+        new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
     RawTripTestPayload rowChange3 =
         new RawTripTestPayload("{\"_row_key\":\"002\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record3 =
-        new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
+        new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
     RawTripTestPayload rowChange4 =
         new RawTripTestPayload("{\"_row_key\":\"003\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record4 =
-        new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
+        new HoodieAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
     // intentionally missed the partition "2015/03/12" to see if the GlobalBloomIndex can pick it up
     List<String> partitions = Arrays.asList("2016/01/21", "2016/04/01");
     // partitions will NOT be respected by this loadInvolvedFiles(...) call
-    List<Tuple2<String, BloomIndexFileInfo>> filesList = index.loadInvolvedFiles(partitions, context, hoodieTable);
+    List<Pair<String, BloomIndexFileInfo>> filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
     // Still 0, as no valid commit
     assertEquals(0, filesList.size());
 
@@ -113,7 +118,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
         .withInserts("2015/03/12", "3", record1)
         .withInserts("2015/03/12", "4", record2, record3, record4);
 
-    filesList = index.loadInvolvedFiles(partitions, context, hoodieTable);
+    filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
     assertEquals(4, filesList.size());
 
     Map<String, BloomIndexFileInfo> filesMap = toFileMap(filesList);
@@ -138,7 +143,8 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
   public void testExplodeRecordRDDWithFileComparisons() {
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
-    SparkHoodieGlobalBloomIndex index = new SparkHoodieGlobalBloomIndex(config);
+    HoodieGlobalBloomIndex index =
+        new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
 
     final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo = new HashMap<>();
     partitionToFileIndexInfo.put("2017/10/22", Arrays.asList(new BloomIndexFileInfo("f1"),
@@ -152,8 +158,9 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
         jsc.parallelize(Arrays.asList(new Tuple2<>("2017/10/21", "003"), new Tuple2<>("2017/10/22", "002"),
             new Tuple2<>("2017/10/22", "005"), new Tuple2<>("2017/10/23", "004"))).mapToPair(t -> t);
 
-    List<Tuple2<String, HoodieKey>> comparisonKeyList =
-        index.explodeRecordRDDWithFileComparisons(partitionToFileIndexInfo, partitionRecordKeyPairRDD).collect();
+    List<Pair<String, HoodieKey>> comparisonKeyList = HoodieJavaRDD.getJavaRDD(
+        index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo,
+            HoodieJavaPairRDD.of(partitionRecordKeyPairRDD))).collect();
 
     /*
      * expecting: f4, HoodieKey { recordKey=003 partitionPath=2017/10/23} f1, HoodieKey { recordKey=003
@@ -166,7 +173,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     assertEquals(10, comparisonKeyList.size());
 
     Map<String, List<String>> recordKeyToFileComps = comparisonKeyList.stream()
-        .collect(Collectors.groupingBy(t -> t._2.getRecordKey(), Collectors.mapping(Tuple2::_1, Collectors.toList())));
+        .collect(Collectors.groupingBy(t -> t.getRight().getRecordKey(), Collectors.mapping(Pair::getKey, Collectors.toList())));
 
     assertEquals(4, recordKeyToFileComps.size());
     assertEquals(new HashSet<>(Arrays.asList("f4", "f1", "f3")), new HashSet<>(recordKeyToFileComps.get("002")));
@@ -177,8 +184,10 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
 
   @Test
   public void testTagLocation() throws Exception {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
-    SparkHoodieGlobalBloomIndex index = new SparkHoodieGlobalBloomIndex(config);
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withBloomIndexUpdatePartitionPath(false).build()).build();
+    HoodieGlobalBloomIndex index =
+        new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(hoodieTable, SCHEMA);
 
@@ -191,28 +200,28 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     RawTripTestPayload rowChange1 =
         new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record1 =
-        new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
+        new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
     RawTripTestPayload rowChange2 =
         new RawTripTestPayload("{\"_row_key\":\"001\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record2 =
-        new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
+        new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
     RawTripTestPayload rowChange3 =
         new RawTripTestPayload("{\"_row_key\":\"002\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record3 =
-        new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
+        new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
 
     // this record will be saved in table and will be tagged to the incoming record5
     RawTripTestPayload rowChange4 =
         new RawTripTestPayload("{\"_row_key\":\"003\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record4 =
-        new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
+        new HoodieAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
     // this has the same record key as record4 but different time so different partition, but globalbloomIndex should
     // tag the original partition of the saved record4
     RawTripTestPayload rowChange5 =
         new RawTripTestPayload("{\"_row_key\":\"003\",\"time\":\"2016-02-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record5 =
-        new HoodieRecord(new HoodieKey(rowChange5.getRowKey(), rowChange5.getPartitionPath()), rowChange5);
+        new HoodieAvroRecord(new HoodieKey(rowChange5.getRowKey(), rowChange5.getPartitionPath()), rowChange5);
 
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record5));
 
@@ -223,7 +232,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     String fileId4 = testTable.addCommit("4000").getFileIdWithInserts("2015/03/12", record4);
 
     // partitions will NOT be respected by this loadInvolvedFiles(...) call
-    JavaRDD<HoodieRecord> taggedRecordRDD = index.tagLocation(recordRDD, context, hoodieTable);
+    JavaRDD<HoodieRecord> taggedRecordRDD = tagLocation(index, recordRDD, hoodieTable);
 
     for (HoodieRecord record : taggedRecordRDD.collect()) {
       switch (record.getRecordKey()) {
@@ -259,7 +268,8 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
         .withPath(basePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withBloomIndexUpdatePartitionPath(true).build())
         .build();
-    SparkHoodieGlobalBloomIndex index = new SparkHoodieGlobalBloomIndex(config);
+    HoodieGlobalBloomIndex index =
+        new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(hoodieTable, SCHEMA);
     final String p1 = "2016/01/31";
@@ -271,7 +281,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     RawTripTestPayload originalPayload =
         new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord originalRecord =
-        new HoodieRecord(new HoodieKey(originalPayload.getRowKey(), originalPayload.getPartitionPath()),
+        new HoodieAvroRecord(new HoodieKey(originalPayload.getRowKey(), originalPayload.getPartitionPath()),
             originalPayload);
 
     /*
@@ -284,7 +294,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     RawTripTestPayload incomingPayload =
         new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-02-28T03:16:41.415Z\",\"number\":12}");
     HoodieRecord incomingRecord =
-        new HoodieRecord(new HoodieKey(incomingPayload.getRowKey(), incomingPayload.getPartitionPath()),
+        new HoodieAvroRecord(new HoodieKey(incomingPayload.getRowKey(), incomingPayload.getPartitionPath()),
             incomingPayload);
 
     /*
@@ -295,7 +305,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     RawTripTestPayload incomingPayloadSamePartition =
         new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T04:16:41.415Z\",\"number\":15}");
     HoodieRecord incomingRecordSamePartition =
-        new HoodieRecord(
+        new HoodieAvroRecord(
             new HoodieKey(incomingPayloadSamePartition.getRowKey(), incomingPayloadSamePartition.getPartitionPath()),
             incomingPayloadSamePartition);
 
@@ -303,7 +313,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
 
     // test against incoming record with a different partition
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Collections.singletonList(incomingRecord));
-    JavaRDD<HoodieRecord> taggedRecordRDD = index.tagLocation(recordRDD, context, hoodieTable);
+    JavaRDD<HoodieRecord> taggedRecordRDD = tagLocation(index, recordRDD, hoodieTable);
 
     assertEquals(2, taggedRecordRDD.count());
     for (HoodieRecord record : taggedRecordRDD.collect()) {
@@ -324,7 +334,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     // test against incoming record with the same partition
     JavaRDD<HoodieRecord> recordRDDSamePartition = jsc
         .parallelize(Collections.singletonList(incomingRecordSamePartition));
-    JavaRDD<HoodieRecord> taggedRecordRDDSamePartition = index.tagLocation(recordRDDSamePartition, context, hoodieTable);
+    JavaRDD<HoodieRecord> taggedRecordRDDSamePartition = tagLocation(index, recordRDDSamePartition, hoodieTable);
 
     assertEquals(1, taggedRecordRDDSamePartition.count());
     HoodieRecord record = taggedRecordRDDSamePartition.first();
@@ -334,10 +344,10 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
   }
 
   // convert list to map to avoid sorting order dependencies
-  private static Map<String, BloomIndexFileInfo> toFileMap(List<Tuple2<String, BloomIndexFileInfo>> filesList) {
+  private static Map<String, BloomIndexFileInfo> toFileMap(List<Pair<String, BloomIndexFileInfo>> filesList) {
     Map<String, BloomIndexFileInfo> filesMap = new HashMap<>();
-    for (Tuple2<String, BloomIndexFileInfo> t : filesList) {
-      filesMap.put(t._1() + "/" + t._2().getFileId(), t._2());
+    for (Pair<String, BloomIndexFileInfo> t : filesList) {
+      filesMap.put(t.getKey() + "/" + t.getValue().getFileId(), t.getValue());
     }
     return filesMap;
   }

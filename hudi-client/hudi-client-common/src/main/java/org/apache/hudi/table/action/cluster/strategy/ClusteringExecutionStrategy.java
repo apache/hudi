@@ -18,25 +18,27 @@
 
 package org.apache.hudi.table.action.cluster.strategy;
 
-import org.apache.avro.Schema;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
+
+import org.apache.avro.Schema;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.Serializable;
-import java.util.Map;
 
 /**
  * Pluggable implementation for writing data into new file groups based on ClusteringPlan.
  */
-public abstract class ClusteringExecutionStrategy<T extends HoodieRecordPayload,I,K,O> implements Serializable {
+public abstract class ClusteringExecutionStrategy<T extends HoodieRecordPayload, I, K, O> implements Serializable {
   private static final Logger LOG = LogManager.getLogger(ClusteringExecutionStrategy.class);
 
-  private final HoodieTable<T,I,K,O> hoodieTable;
-  private final HoodieEngineContext engineContext;
+  private final HoodieTable<T, I, K, O> hoodieTable;
+  private final transient HoodieEngineContext engineContext;
   private final HoodieWriteConfig writeConfig;
 
   public ClusteringExecutionStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
@@ -50,10 +52,9 @@ public abstract class ClusteringExecutionStrategy<T extends HoodieRecordPayload,
    * file groups created is bounded by numOutputGroups.
    * Note that commit is not done as part of strategy. commit is callers responsibility.
    */
-  public abstract O performClustering(final I inputRecords, final int numOutputGroups, final String instantTime,
-                                      final Map<String, String> strategyParams, final Schema schema);
+  public abstract HoodieWriteMetadata<O> performClustering(final HoodieClusteringPlan clusteringPlan, final Schema schema, final String instantTime);
 
-  protected HoodieTable<T,I,K, O> getHoodieTable() {
+  protected HoodieTable<T, I, K, O> getHoodieTable() {
     return this.hoodieTable;
   }
 

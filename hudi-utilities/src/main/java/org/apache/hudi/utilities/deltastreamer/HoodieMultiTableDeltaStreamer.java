@@ -77,7 +77,7 @@ public class HoodieMultiTableDeltaStreamer {
     FileSystem fs = FSUtils.getFs(commonPropsFile, jssc.hadoopConfiguration());
     configFolder = configFolder.charAt(configFolder.length() - 1) == '/' ? configFolder.substring(0, configFolder.length() - 1) : configFolder;
     checkIfPropsFileAndConfigFolderExist(commonPropsFile, configFolder, fs);
-    TypedProperties commonProperties = UtilHelpers.readConfig(fs, new Path(commonPropsFile), new ArrayList<>()).getConfig();
+    TypedProperties commonProperties = UtilHelpers.readConfig(fs.getConf(), new Path(commonPropsFile), new ArrayList<String>()).getProps();
     //get the tables to be ingested and their corresponding config files from this properties instance
     populateTableExecutionContextList(commonProperties, configFolder, fs, config);
   }
@@ -116,7 +116,7 @@ public class HoodieMultiTableDeltaStreamer {
       String configProp = Constants.INGESTION_PREFIX + database + Constants.DELIMITER + currentTable + Constants.INGESTION_CONFIG_SUFFIX;
       String configFilePath = properties.getString(configProp, Helpers.getDefaultConfigFilePath(configFolder, database, currentTable));
       checkIfTableConfigFileExists(configFolder, fs, configFilePath);
-      TypedProperties tableProperties = UtilHelpers.readConfig(fs, new Path(configFilePath), new ArrayList<>()).getConfig();
+      TypedProperties tableProperties = UtilHelpers.readConfig(fs.getConf(), new Path(configFilePath), new ArrayList<String>()).getProps();
       properties.forEach((k, v) -> {
         if (tableProperties.get(k) == null) {
           tableProperties.setProperty(k.toString(), v.toString());
@@ -128,8 +128,8 @@ public class HoodieMultiTableDeltaStreamer {
       Helpers.deepCopyConfigs(config, cfg);
       String overriddenTargetBasePath = tableProperties.getString(Constants.TARGET_BASE_PATH_PROP, "");
       cfg.targetBasePath = StringUtils.isNullOrEmpty(overriddenTargetBasePath) ? targetBasePath : overriddenTargetBasePath;
-      if (cfg.enableHiveSync && StringUtils.isNullOrEmpty(tableProperties.getString(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY(), ""))) {
-        throw new HoodieException("Hive sync table field not provided!");
+      if (cfg.enableMetaSync && StringUtils.isNullOrEmpty(tableProperties.getString(DataSourceWriteOptions.HIVE_TABLE().key(), ""))) {
+        throw new HoodieException("Meta sync table field not provided!");
       }
       populateSchemaProviderProps(cfg, tableProperties);
       executionContext = new TableExecutionContext();
@@ -180,6 +180,7 @@ public class HoodieMultiTableDeltaStreamer {
 
     static void deepCopyConfigs(Config globalConfig, HoodieDeltaStreamer.Config tableConfig) {
       tableConfig.enableHiveSync = globalConfig.enableHiveSync;
+      tableConfig.enableMetaSync = globalConfig.enableMetaSync;
       tableConfig.schemaProviderClassName = globalConfig.schemaProviderClassName;
       tableConfig.sourceOrderingField = globalConfig.sourceOrderingField;
       tableConfig.sourceClassName = globalConfig.sourceClassName;
@@ -193,6 +194,7 @@ public class HoodieMultiTableDeltaStreamer {
       tableConfig.payloadClassName = globalConfig.payloadClassName;
       tableConfig.forceDisableCompaction = globalConfig.forceDisableCompaction;
       tableConfig.maxPendingCompactions = globalConfig.maxPendingCompactions;
+      tableConfig.maxPendingClustering = globalConfig.maxPendingClustering;
       tableConfig.minSyncIntervalSeconds = globalConfig.minSyncIntervalSeconds;
       tableConfig.transformerClassNames = globalConfig.transformerClassNames;
       tableConfig.commitOnErrors = globalConfig.commitOnErrors;
@@ -206,6 +208,11 @@ public class HoodieMultiTableDeltaStreamer {
 
   public static void main(String[] args) throws IOException {
     final Config config = new Config();
+
+    if (config.enableHiveSync) {
+      logger.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");
+    }
+
     JCommander cmd = new JCommander(config, null, args);
     if (config.help || args.length == 0) {
       cmd.usage();
@@ -291,10 +298,18 @@ public class HoodieMultiTableDeltaStreamer {
     @Parameter(names = {"--enable-hive-sync"}, description = "Enable syncing to hive")
     public Boolean enableHiveSync = false;
 
+    @Parameter(names = {"--enable-sync"}, description = "Enable syncing meta")
+    public Boolean enableMetaSync = false;
+
     @Parameter(names = {"--max-pending-compactions"},
         description = "Maximum number of outstanding inflight/requested compactions. Delta Sync will not happen unless"
         + "outstanding compactions is less than this number")
     public Integer maxPendingCompactions = 5;
+
+    @Parameter(names = {"--max-pending-clustering"},
+        description = "Maximum number of outstanding inflight/requested clustering. Delta Sync will not happen unless"
+            + "outstanding clustering is less than this number")
+    public Integer maxPendingClustering = 5;
 
     @Parameter(names = {"--continuous"}, description = "Delta Streamer runs in continuous mode running"
         + " source-fetch -> Transform -> Hudi Write in loop")

@@ -38,6 +38,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -57,6 +58,7 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Disabled("Disable due to flakiness and feature deprecation.")
 @Tag("functional")
 public class TestHDFSParquetImporter extends FunctionalTestHarness implements Serializable {
 
@@ -228,10 +230,10 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
 
   public List<GenericRecord> createInsertRecords(Path srcFolder) throws ParseException, IOException {
     Path srcFile = new Path(srcFolder.toString(), "file1.parquet");
-    long startTime = HoodieActiveTimeline.COMMIT_FORMATTER.parse("20170203000000").getTime() / 1000;
+    long startTime = HoodieActiveTimeline.parseDateFromInstantTime("20170203000000").getTime() / 1000;
     List<GenericRecord> records = new ArrayList<GenericRecord>();
     for (long recordNum = 0; recordNum < 96; recordNum++) {
-      records.add(HoodieTestDataGenerator.generateGenericRecord(Long.toString(recordNum), "rider-" + recordNum,
+      records.add(HoodieTestDataGenerator.generateGenericRecord(Long.toString(recordNum), "0", "rider-" + recordNum,
           "driver-" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)));
     }
     try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(srcFile)
@@ -245,16 +247,16 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
 
   public List<GenericRecord> createUpsertRecords(Path srcFolder) throws ParseException, IOException {
     Path srcFile = new Path(srcFolder.toString(), "file1.parquet");
-    long startTime = HoodieActiveTimeline.COMMIT_FORMATTER.parse("20170203000000").getTime() / 1000;
+    long startTime = HoodieActiveTimeline.parseDateFromInstantTime("20170203000000").getTime() / 1000;
     List<GenericRecord> records = new ArrayList<GenericRecord>();
     // 10 for update
     for (long recordNum = 0; recordNum < 11; recordNum++) {
-      records.add(HoodieTestDataGenerator.generateGenericRecord(Long.toString(recordNum), "rider-upsert-" + recordNum,
+      records.add(HoodieTestDataGenerator.generateGenericRecord(Long.toString(recordNum), "0", "rider-upsert-" + recordNum,
           "driver-upsert" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)));
     }
     // 4 for insert
     for (long recordNum = 96; recordNum < 100; recordNum++) {
-      records.add(HoodieTestDataGenerator.generateGenericRecord(Long.toString(recordNum), "rider-upsert-" + recordNum,
+      records.add(HoodieTestDataGenerator.generateGenericRecord(Long.toString(recordNum), "0", "rider-upsert-" + recordNum,
           "driver-upsert" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)));
     }
     try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(srcFile)

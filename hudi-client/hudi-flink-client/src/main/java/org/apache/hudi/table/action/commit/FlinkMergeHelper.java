@@ -45,7 +45,7 @@ import java.util.Iterator;
 
 import scala.collection.immutable.List;
 
-public class FlinkMergeHelper<T extends HoodieRecordPayload> extends AbstractMergeHelper<T, List<HoodieRecord<T>>,
+public class FlinkMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHelper<T, List<HoodieRecord<T>>,
     List<HoodieKey>, List<WriteStatus>> {
 
   private FlinkMergeHelper() {
@@ -71,11 +71,11 @@ public class FlinkMergeHelper<T extends HoodieRecordPayload> extends AbstractMer
     if (externalSchemaTransformation || baseFile.getBootstrapBaseFile().isPresent()) {
       readSchema = HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), mergeHandle.getOldFilePath()).getSchema();
       gWriter = new GenericDatumWriter<>(readSchema);
-      gReader = new GenericDatumReader<>(readSchema, mergeHandle.getWriterSchemaWithMetafields());
+      gReader = new GenericDatumReader<>(readSchema, mergeHandle.getWriterSchemaWithMetaFields());
     } else {
       gReader = null;
       gWriter = null;
-      readSchema = mergeHandle.getWriterSchemaWithMetafields();
+      readSchema = mergeHandle.getWriterSchemaWithMetaFields();
     }
 
     BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;

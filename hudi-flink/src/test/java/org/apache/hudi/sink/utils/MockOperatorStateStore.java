@@ -49,6 +49,7 @@ public class MockOperatorStateStore implements KeyedStateStore, OperatorStateSto
   private Map<String, TestUtils.MockListState> lastSuccessStateMap;
 
   private MapState mapState;
+  private Map<String, ValueState> valueStateMap;
 
   public MockOperatorStateStore() {
     this.historyStateMap = new HashMap<>();
@@ -57,6 +58,7 @@ public class MockOperatorStateStore implements KeyedStateStore, OperatorStateSto
     this.lastSuccessStateMap = new HashMap<>();
 
     this.mapState = new MockMapState<>();
+    this.valueStateMap = new HashMap<>();
   }
 
   @Override
@@ -66,7 +68,9 @@ public class MockOperatorStateStore implements KeyedStateStore, OperatorStateSto
 
   @Override
   public <T> ValueState<T> getState(ValueStateDescriptor<T> valueStateDescriptor) {
-    return null;
+    String name = valueStateDescriptor.getName();
+    valueStateMap.putIfAbsent(name, new MockValueState());
+    return valueStateMap.get(name);
   }
 
   @Override

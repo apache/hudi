@@ -29,4 +29,7 @@ public class HoodieRemoteException extends RuntimeException {
     super(t.getMessage(), t);
   }
 
+  public HoodieRemoteException(String message, IOException t) {
+    super(message + "\n" + t.getMessage(), t);
+  }
 }
