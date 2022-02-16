@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -271,6 +272,8 @@ public abstract class BaseHoodieTableFileIndex {
     Option<String> queryInstant =
         specifiedQueryInstant.or(() -> latestInstant.map(HoodieInstant::getTimestamp));
 
+    validate(activeTimeline, queryInstant);
+
     if (tableType.equals(HoodieTableType.MERGE_ON_READ) && queryType.equals(HoodieTableQueryType.SNAPSHOT)) {
       cachedAllInputFileSlices = partitionFiles.keySet().stream()
           .collect(Collectors.toMap(
@@ -316,6 +319,12 @@ public abstract class BaseHoodieTableFileIndex {
         .reduce(0L, Long::sum);
 
     return fileSlice.getBaseFile().map(BaseFile::getFileLen).orElse(0L) + logFileSize;
+  }
+
+  private static void validate(HoodieTimeline activeTimeline, Option<String> queryInstant) {
+    if (queryInstant.isPresent() && !activeTimeline.containsInstant(queryInstant.get())) {
+      throw new HoodieIOException(String.format("Query instant (%s) not found in the timeline", queryInstant.get()));
+    }
   }
 
   protected static final class PartitionPath {
