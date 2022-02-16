@@ -21,6 +21,7 @@ package org.apache.hudi
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hudi.avro.HoodieAvroUtils.rewriteRecord
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.HoodieRecord
@@ -31,9 +32,8 @@ import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomK
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.HoodieAvroSerializer.resolveAvroTypeNullability
-import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Literal, UnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Literal}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, InMemoryFileIndex}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
@@ -124,35 +124,47 @@ object HoodieSparkUtils extends SparkAdapterSupport {
     new InMemoryFileIndex(sparkSession, globbedPaths, Map(), Option.empty, fileStatusCache)
   }
 
+  /**
+   * @deprecated please use other overload [[createRdd]]
+   */
   def createRdd(df: DataFrame, structName: String, recordNamespace: String, reconcileToLatestSchema: Boolean,
                 latestTableSchema: org.apache.hudi.common.util.Option[Schema] = org.apache.hudi.common.util.Option.empty()): RDD[GenericRecord] = {
-    val latestTableSchemaConverted = if (latestTableSchema.isPresent) Some(latestTableSchema.get()) else None
+    val latestTableSchemaConverted = if (latestTableSchema.isPresent && reconcileToLatestSchema) Some(latestTableSchema.get()) else None
     createRdd(df, structName, recordNamespace, latestTableSchemaConverted)
   }
 
-  def createRdd(df: DataFrame, structName: String, recordNamespace: String, latestTableSchema: Option[Schema]): RDD[GenericRecord] = {
-    val writerAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, recordNamespace)
-    val (readerAvroSchema, sameSchema) = latestTableSchema.map((_, false)).getOrElse((writerAvroSchema, true))
-    val (nullable, _) = resolveAvroTypeNullability(readerAvroSchema)
+  def createRdd(df: DataFrame, structName: String, recordNamespace: String, readerSchema: Option[Schema]): RDD[GenericRecord] = {
+    val writerSchema = df.schema
+    val writerAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(writerSchema, structName, recordNamespace)
+    val readerAvroSchema = readerSchema.getOrElse(writerAvroSchema)
+    // We check whether passed in reader schema is identical to writer schema to avoid costly serde loop of
+    // making Spark deserialize its internal representation [[InternalRow]] into [[Row]] for subsequent conversion
+    // (and back)
+    val sameSchema = writerAvroSchema.equals(readerAvroSchema)
+    val (nullable, _) = resolveAvroTypeNullability(writerAvroSchema)
 
-    val readerStructType = AvroConversionUtils.convertAvroSchemaToStructType(readerAvroSchema)
     // NOTE: We have to serialize Avro schema, and then subsequently parse it on the executor node, since Spark
     //       serializer is not able to digest it
     val readerAvroSchemaStr = readerAvroSchema.toString
-
+    // NOTE: We're accessing toRdd here directly to avoid [[InternalRow]] to [[Row]] conversion
     df.queryExecution.toRdd.mapPartitions { rows =>
       if (rows.isEmpty) {
         Iterator.empty
       } else {
-        val readerAvroSchema = new Schema.Parser().parse(readerAvroSchemaStr)
-        val convert = AvroConversionUtils.createRowToAvroConverter(readerStructType, readerAvroSchema, nullable = nullable)
+        val transform: GenericRecord => GenericRecord =
+          if (sameSchema) identity
+          else {
+            val readerAvroSchema = new Schema.Parser().parse(readerAvroSchemaStr)
+            rewriteRecord(_, readerAvroSchema)
+          }
 
-        // Since caller might request to get records in a different projected schema, we might need to
-        // project the row first, before converting it into Avro
-        val project: InternalRow => InternalRow =
-          if (sameSchema) identity else UnsafeProjection.create(readerStructType)
+        // Since caller might request to get records in a different ("evolved") schema, we will be converting from
+        // existing Writer's (catalyst) schema directly into Reader's (avro) schema
+        //
+        // NOTE: Very limited set of deviations from writer's schema are permitted
+        val convert = AvroConversionUtils.createRowToAvroConverter(writerSchema, writerAvroSchema, nullable = nullable)
 
-        rows.map { r => convert(project(r)) }
+        rows.map { ir => transform(convert(ir)) }
       }
     }
   }
