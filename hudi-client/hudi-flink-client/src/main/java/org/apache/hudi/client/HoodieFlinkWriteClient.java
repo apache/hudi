@@ -396,8 +396,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> doInitTable(WriteOperationType operationType,
-                                                                                                  String instantTime,
+  protected HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> doInitTable(String instantTime,
                                                                                                   HoodieTableMetaClient metaClient) {
     new UpgradeDowngrade(metaClient, config, context, FlinkUpgradeDowngradeHelper.getInstance())
         .run(HoodieTableVersion.current(), instantTime);

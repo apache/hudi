@@ -1256,18 +1256,31 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   }
 
   /**
-   * Instantiates instance of {@link HoodieTable}
+   * Instantiates engine-specific instance of {@link HoodieTable} as well as performs necessary
+   * bootstrapping operations (for ex, validating whether Metadata Table has to be bootstrapped)
    *
    * NOTE: THIS OPERATION IS EXECUTED UNDER LOCK, THEREFORE SHOULD AVOID ANY OPERATIONS
    *       NOT REQUIRING EXTERNAL SYNCHRONIZATION
    *
-   * @param operationType write operation type
    * @param instantTime current inflight instant time
    * @param metaClient instance of {@link HoodieTableMetaClient}
    * @return instantiated {@link HoodieTable}
    */
-  protected abstract HoodieTable<T, I, K, O> doInitTable(WriteOperationType operationType, String instantTime, HoodieTableMetaClient metaClient);
+  protected abstract HoodieTable<T, I, K, O> doInitTable(String instantTime, HoodieTableMetaClient metaClient);
 
+  /**
+   * Instantiates and initializes instance of {@link HoodieTable}, performing crucial bootstrapping
+   * operations such as:
+   *
+   * NOTE: This method is engine-agnostic and SHOULD NOT be overloaded, please check on
+   * {@link #doInitTable(String, HoodieTableMetaClient)} instead
+   *
+   * <ul>
+   *   <li>Checking whether upgrade/downgrade is required</li>
+   *   <li>Bootstrapping Metadata Table (if required)</li>
+   *   <li>Initializing metrics contexts</li>
+   * </ul>
+   */
   protected final HoodieTable<T, I, K, O> initTable(WriteOperationType operationType, String instantTime) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
     // Setup write schemas for deletes
@@ -1276,10 +1289,11 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     }
 
     HoodieTable<T, I, K, O> table;
+
     this.txnManager.beginTransaction();
     try {
       tryUpgrade(instantTime, metaClient);
-      table = doInitTable(operationType, instantTime, metaClient);
+      table = doInitTable(instantTime, metaClient);
     } finally {
       this.txnManager.endTransaction();
     }
@@ -1288,11 +1302,25 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     metaClient.validateTableProperties(config.getProps(), operationType);
     // Make sure that FS View is in sync
     table.getHoodieView().sync();
-    // Setup write timer
-    if (table.getMetaClient().getCommitActionType().equals(HoodieTimeline.COMMIT_ACTION)) {
-      writeTimer = metrics.getCommitCtx();
-    } else {
-      writeTimer = metrics.getDeltaCommitCtx();
+
+    switch (operationType) {
+      case INSERT:
+      case INSERT_PREPPED:
+      case UPSERT:
+      case UPSERT_PREPPED:
+      case BULK_INSERT:
+      case BULK_INSERT_PREPPED:
+      case INSERT_OVERWRITE:
+      case INSERT_OVERWRITE_TABLE:
+        setWriteTimer(table);
+        break;
+      case CLUSTER:
+        clusteringTimer = metrics.getClusteringCtx();
+        break;
+      case COMPACT:
+        compactionTimer = metrics.getCompactionCtx();
+        break;
+      default:
     }
 
     return table;
@@ -1344,6 +1372,15 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     this.index.close();
     this.heartbeatClient.stop();
     this.txnManager.close();
+  }
+
+  private void setWriteTimer(HoodieTable<T, I, K, O> table) {
+    String commitType = table.getMetaClient().getCommitActionType();
+    if (commitType.equals(HoodieTimeline.COMMIT_ACTION)) {
+      writeTimer = metrics.getCommitCtx();
+    } else if (commitType.equals(HoodieTimeline.DELTA_COMMIT_ACTION)) {
+      writeTimer = metrics.getDeltaCommitCtx();
+    }
   }
 
   private void tryUpgrade(String instantTime, HoodieTableMetaClient metaClient) {
