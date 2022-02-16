@@ -29,7 +29,6 @@ import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder;
 import org.apache.spark.sql.catalyst.encoders.RowEncoder;
 import org.apache.spark.sql.catalyst.expressions.Attribute;
 import org.apache.spark.sql.types.StructType;
-import scala.Function1;
 import scala.Tuple2;
 import scala.collection.JavaConversions;
 import scala.collection.JavaConverters;
@@ -60,7 +59,7 @@ public class SparkRowWriteHelper {
                 : (value.getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD) + "+" + value.getAs(HoodieRecord.RECORD_KEY_METADATA_FIELD)), Encoders.STRING())
         .reduceGroups((ReduceFunction<Row>) (v1, v2) ->
             ((Comparable) v1.getAs(preCombineField)).compareTo(v2.getAs(preCombineField)) >= 0 ? v1 : v2)
-        .map((Function1<Tuple2<String, Row>, Row>) tuple -> tuple._2, getEncoder(inputDf.schema()));
+        .map((MapFunction<Tuple2<String, Row>, Row>) value -> value._2, getEncoder(inputDf.schema()));
   }
 
   private ExpressionEncoder getEncoder(StructType schema) {
