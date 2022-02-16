@@ -40,7 +40,6 @@ import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.specific.SpecificRecordBase;
-
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -360,16 +359,16 @@ public class HoodieAvroUtils {
     GenericRecord newRecord = new GenericData.Record(newSchema);
     boolean isSpecificRecord = oldRecord instanceof SpecificRecordBase;
     for (Schema.Field f : newSchema.getFields()) {
-      if (!isSpecificRecord) {
-        copyOldValueOrSetDefault(oldRecord, newRecord, f);
-      } else if (!isMetadataField(f.name())) {
+      if (!(isSpecificRecord && isMetadataField(f.name()))) {
         copyOldValueOrSetDefault(oldRecord, newRecord, f);
       }
     }
+
     if (!GenericData.get().validate(newSchema, newRecord)) {
       throw new SchemaCompatibilityException(
           "Unable to validate the rewritten record " + oldRecord + " against schema " + newSchema);
     }
+
     return newRecord;
   }
 
@@ -383,18 +382,20 @@ public class HoodieAvroUtils {
     return records.stream().map(r -> rewriteRecord(r, newSchema)).collect(Collectors.toList());
   }
 
-  private static void copyOldValueOrSetDefault(GenericRecord oldRecord, GenericRecord newRecord, Schema.Field f) {
-    // cache the result of oldRecord.get() to save CPU expensive hash lookup
+  private static void copyOldValueOrSetDefault(GenericRecord oldRecord, GenericRecord newRecord, Schema.Field field) {
     Schema oldSchema = oldRecord.getSchema();
-    Object fieldValue = oldSchema.getField(f.name()) == null ? null : oldRecord.get(f.name());
-    if (fieldValue == null) {
-      if (f.defaultVal() instanceof JsonProperties.Null) {
-        newRecord.put(f.name(), null);
-      } else {
-        newRecord.put(f.name(), f.defaultVal());
-      }
+    Object fieldValue = oldSchema.getField(field.name()) == null ? null : oldRecord.get(field.name());
+
+    if (fieldValue != null) {
+      // In case field's value is a nested record, we have to rewrite it as well
+      Object newFieldValue = fieldValue instanceof GenericRecord
+          ? rewriteRecord((GenericRecord) fieldValue, field.schema())
+          : fieldValue;
+      newRecord.put(field.name(), newFieldValue);
+    } else if (field.defaultVal() instanceof JsonProperties.Null) {
+      newRecord.put(field.name(), null);
     } else {
-      newRecord.put(f.name(), fieldValue);
+      newRecord.put(field.name(), field.defaultVal());
     }
   }
 
