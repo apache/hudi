@@ -41,6 +41,7 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.upgrade.JavaUpgradeDowngradeHelper;
 
 import java.util.List;
 import java.util.Map;
@@ -50,14 +51,14 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
     BaseHoodieWriteClient<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
 
   public HoodieJavaWriteClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
-    super(context, clientConfig);
+    super(context, clientConfig, JavaUpgradeDowngradeHelper.getInstance());
   }
 
   public HoodieJavaWriteClient(HoodieEngineContext context,
                                HoodieWriteConfig writeConfig,
                                boolean rollbackPending,
                                Option<EmbeddedTimelineService> timelineService) {
-    super(context, writeConfig, timelineService);
+    super(context, writeConfig, timelineService, JavaUpgradeDowngradeHelper.getInstance());
   }
 
   @Override
