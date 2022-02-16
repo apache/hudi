@@ -89,6 +89,9 @@ public abstract class HoodieAsyncService implements Serializable {
    * @throws InterruptedException
    */
   public void waitForShutdown() throws ExecutionException, InterruptedException {
+    if (future == null) {
+      return;
+    }
     try {
       future.get();
     } catch (ExecutionException ex) {
@@ -152,6 +155,9 @@ public abstract class HoodieAsyncService implements Serializable {
    */
   @SuppressWarnings("unchecked")
   private void shutdownCallback(Function<Boolean, Boolean> callback) {
+    if (future == null) {
+      return;
+    }
     future.whenComplete((resp, error) -> {
       if (null != callback) {
         callback.apply(null != error);

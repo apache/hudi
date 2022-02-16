@@ -34,7 +34,7 @@ import java.util.concurrent.Executors;
 /**
  * Async archive service to run concurrently with write operation.
  */
-public class AsyncArchiveService extends HoodieAsyncService {
+public class AsyncArchiveService extends HoodieAsyncTableService {
 
   private static final Logger LOG = LogManager.getLogger(AsyncArchiveService.class);
 
@@ -42,6 +42,7 @@ public class AsyncArchiveService extends HoodieAsyncService {
   private final transient ExecutorService executor = Executors.newSingleThreadExecutor();
 
   protected AsyncArchiveService(BaseHoodieWriteClient writeClient) {
+    super(writeClient.getConfig());
     this.writeClient = writeClient;
   }
 

@@ -84,8 +84,8 @@ public class LockManager implements Serializable, AutoCloseable {
   }
 
   /**
-   * We need to take care of the scenarios that current thread may not the holder of this lock
-   * and trying to call unlock()
+   * We need to take care of the scenarios that current thread may not be the holder of this lock
+   * and tries to call unlock()
    */
   public void unlock() {
     if (writeConfig.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
