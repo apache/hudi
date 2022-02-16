@@ -120,6 +120,8 @@
     <flink.version>1.14.3</flink.version>
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.2.0</spark3.version>
+    <spark3.1.x.version>3.1.2</spark3.1.x.version>
+    <spark3-common.version>${spark3.version}</spark3-common.version>
     <hudi.spark.module>hudi-spark2</hudi.spark.module>
     <hudi.spark.common.module>hudi-spark2-common</hudi.spark.common.module>
     <avro.version>1.8.2</avro.version>
@@ -1605,9 +1607,9 @@
     <profile>
       <id>spark3.1.x</id>
       <properties>
-        <spark3.version>3.1.2</spark3.version>
-        <spark.version>${spark3.version}</spark.version>
-        <sparkbundle.version>${spark3.version}</sparkbundle.version>
+        <spark.version>${spark3.1.x.version}</spark.version>
+        <sparkbundle.version>${spark3.1.x.version}</sparkbundle.version>
+        <spark3-common.version>${spark3.1.x.version}</spark3-common.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
         <hudi.spark.module>hudi-spark3.1.x</hudi.spark.module>
