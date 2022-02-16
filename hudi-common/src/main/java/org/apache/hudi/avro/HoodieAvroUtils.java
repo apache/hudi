@@ -63,6 +63,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -389,7 +390,7 @@ public class HoodieAvroUtils {
     if (fieldValue != null) {
       // In case field's value is a nested record, we have to rewrite it as well
       Object newFieldValue = fieldValue instanceof GenericRecord
-          ? rewriteRecord((GenericRecord) fieldValue, field.schema())
+          ? rewriteRecord((GenericRecord) fieldValue, resolveNullableSchema(field.schema()))
           : fieldValue;
       newRecord.put(field.name(), newFieldValue);
     } else if (field.defaultVal() instanceof JsonProperties.Null) {
@@ -610,5 +611,23 @@ public class HoodieAvroUtils {
                                              String[] columns,
                                              SerializableSchema schema, boolean consistentLogicalTimestampEnabled) {
     return getRecordColumnValues(record, columns, schema.get(), consistentLogicalTimestampEnabled);
+  }
+
+  private static Schema resolveNullableSchema(Schema schema) {
+    if (schema.getType() != Schema.Type.UNION) {
+      return schema;
+    }
+
+    List<Schema> innerTypes = schema.getTypes();
+    Optional<Schema> nonNullType = innerTypes.stream()
+        .filter(it -> it.getType() != Schema.Type.NULL)
+        .findFirst();
+
+    if (innerTypes.size() != 2 || !nonNullType.isPresent()) {
+      throw new AvroRuntimeException(
+          String.format("Unsupported Avro UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
+    }
+
+    return nonNullType.get();
   }
 }
