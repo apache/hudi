@@ -98,7 +98,7 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
   public List<WriteStatus> upsert(List<HoodieRecord<T>> records,
                                   String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
-        initTable(WriteOperationType.UPSERT, instantTime);
+        initTable(WriteOperationType.UPSERT, Option.ofNullable(instantTime));
     table.validateUpsertSchema();
     preWrite(instantTime, WriteOperationType.UPSERT, table.getMetaClient());
     HoodieWriteMetadata<List<WriteStatus>> result = table.upsert(context, instantTime, records);
@@ -112,7 +112,7 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
   public List<WriteStatus> upsertPreppedRecords(List<HoodieRecord<T>> preppedRecords,
                                                 String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
-        initTable(WriteOperationType.UPSERT_PREPPED, instantTime);
+        initTable(WriteOperationType.UPSERT_PREPPED, Option.ofNullable(instantTime));
     table.validateUpsertSchema();
     preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
     HoodieWriteMetadata<List<WriteStatus>> result = table.upsertPrepped(context,instantTime, preppedRecords);
@@ -122,7 +122,7 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
   @Override
   public List<WriteStatus> insert(List<HoodieRecord<T>> records, String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
-        initTable(WriteOperationType.INSERT, instantTime);
+        initTable(WriteOperationType.INSERT, Option.ofNullable(instantTime));
     table.validateUpsertSchema();
     preWrite(instantTime, WriteOperationType.INSERT, table.getMetaClient());
     HoodieWriteMetadata<List<WriteStatus>> result = table.insert(context, instantTime, records);
@@ -136,7 +136,7 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
   public List<WriteStatus> insertPreppedRecords(List<HoodieRecord<T>> preppedRecords,
                                                 String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
-        initTable(WriteOperationType.INSERT_PREPPED, instantTime);
+        initTable(WriteOperationType.INSERT_PREPPED, Option.ofNullable(instantTime));
     table.validateInsertSchema();
     preWrite(instantTime, WriteOperationType.INSERT_PREPPED, table.getMetaClient());
     HoodieWriteMetadata<List<WriteStatus>> result = table.insertPrepped(context,instantTime, preppedRecords);
@@ -168,7 +168,7 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
                                                     String instantTime,
                                                     Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> bulkInsertPartitioner) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
-        initTable(WriteOperationType.BULK_INSERT_PREPPED, instantTime);
+        initTable(WriteOperationType.BULK_INSERT_PREPPED, Option.ofNullable(instantTime));
     table.validateInsertSchema();
     preWrite(instantTime, WriteOperationType.BULK_INSERT_PREPPED, table.getMetaClient());
     HoodieWriteMetadata<List<WriteStatus>> result = table.bulkInsertPrepped(context, instantTime, preppedRecords, bulkInsertPartitioner);
@@ -179,7 +179,7 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
   public List<WriteStatus> delete(List<HoodieKey> keys,
                                   String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
-        initTable(WriteOperationType.DELETE, instantTime);
+        initTable(WriteOperationType.DELETE, Option.ofNullable(instantTime));
     preWrite(instantTime, WriteOperationType.DELETE, table.getMetaClient());
     HoodieWriteMetadata<List<WriteStatus>> result = table.delete(context,instantTime, keys);
     return postWrite(result, instantTime, table);
@@ -232,8 +232,7 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> doInitTable(String instantTime,
-                                                                                                  HoodieTableMetaClient metaClient) {
+  protected HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> doInitTable(HoodieTableMetaClient metaClient, Option<String> instantTime) {
     // new JavaUpgradeDowngrade(metaClient, config, context).run(metaClient, HoodieTableVersion.current(), config, context, instantTime);
 
     // Create a Hoodie table which encapsulated the commits and files visible
