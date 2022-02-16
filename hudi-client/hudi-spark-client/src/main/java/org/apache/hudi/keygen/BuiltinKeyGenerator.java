@@ -20,7 +20,7 @@ package org.apache.hudi.keygen;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.ApiMaturityLevel;
-import org.apache.hudi.AvroConversionHelper;
+import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.client.utils.SparkRowSerDe;
@@ -67,7 +67,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public String getRecordKey(Row row) {
     if (null == converterFn) {
-      converterFn = AvroConversionHelper.createConverterToAvro(row.schema(), STRUCT_NAME, NAMESPACE);
+      converterFn = AvroConversionUtils.createConverterToAvro(row.schema(), STRUCT_NAME, NAMESPACE);
     }
     GenericRecord genericRecord = (GenericRecord) converterFn.apply(row);
     return getKey(genericRecord).getRecordKey();
@@ -82,7 +82,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public String getPartitionPath(Row row) {
     if (null == converterFn) {
-      converterFn = AvroConversionHelper.createConverterToAvro(row.schema(), STRUCT_NAME, NAMESPACE);
+      converterFn = AvroConversionUtils.createConverterToAvro(row.schema(), STRUCT_NAME, NAMESPACE);
     }
     GenericRecord genericRecord = (GenericRecord) converterFn.apply(row);
     return getKey(genericRecord).getPartitionPath();

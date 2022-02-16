@@ -20,10 +20,13 @@ package org.apache.hudi
 
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedRecord}
 import org.apache.avro.{JsonProperties, Schema}
+import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.avro.HoodieAvroSerializer.resolveAvroTypeNullability
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer, SchemaConverters}
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.sql.{Dataset, Row, SparkSession}
 
@@ -39,7 +42,7 @@ object AvroConversionUtils {
    * @param rootCatalystType Catalyst [[StructType]] to be transformed into
    * @return converter accepting Avro payload and transforming it into a Catalyst one (in the form of [[InternalRow]])
    */
-  def createAvroToRowConverter(rootAvroType: Schema, rootCatalystType: StructType): GenericRecord => Option[InternalRow] =
+  def createAvroToInternalRowConverter(rootAvroType: Schema, rootCatalystType: StructType): GenericRecord => Option[InternalRow] =
     record => HoodieAvroDeserializer(rootAvroType, rootCatalystType)
       .deserializeData(record)
       .map(_.asInstanceOf[InternalRow])
@@ -52,12 +55,49 @@ object AvroConversionUtils {
    * @param nullable whether Avro record is nullable
    * @return converter accepting Catalyst payload (in the form of [[InternalRow]]) and transforming it into an Avro one
    */
-  def createRowToAvroConverter(rootCatalystType: StructType, rootAvroType: Schema, nullable: Boolean): InternalRow => GenericRecord = {
+  def createInternalRowToAvroConverter(rootCatalystType: StructType, rootAvroType: Schema, nullable: Boolean): InternalRow => GenericRecord = {
     row => HoodieAvroSerializer(rootCatalystType, rootAvroType, nullable)
       .serialize(row)
       .asInstanceOf[GenericRecord]
   }
 
+  /**
+   * @deprecated please use [[AvroConversionUtils.createInternalRowToAvroConverter]]
+   */
+  @Deprecated
+  def createConverterToRow(sourceAvroSchema: Schema,
+                           targetSqlType: StructType): GenericRecord => Row = {
+    val encoder = RowEncoder.apply(targetSqlType).resolveAndBind()
+    val serde = sparkAdapter.createSparkRowSerDe(encoder)
+    val converter = AvroConversionUtils.createAvroToInternalRowConverter(sourceAvroSchema, targetSqlType)
+
+    avro => converter.apply(avro).map(serde.deserializeRow).get
+  }
+
+  /**
+   * @deprecated please use [[AvroConversionUtils.createInternalRowToAvroConverter]]
+   */
+  @Deprecated
+  def createConverterToAvro(sourceSqlType: StructType,
+                            structName: String,
+                            recordNamespace: String): Row => GenericRecord = {
+    val encoder = RowEncoder.apply(sourceSqlType).resolveAndBind()
+    val serde = sparkAdapter.createSparkRowSerDe(encoder)
+    val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(sourceSqlType, structName, recordNamespace)
+    val (nullable, _) = resolveAvroTypeNullability(avroSchema)
+
+    val converter = AvroConversionUtils.createInternalRowToAvroConverter(sourceSqlType, avroSchema, nullable)
+
+    row => converter.apply(serde.serializeRow(row))
+  }
+
+
+
+  /**
+   * Creates [[org.apache.spark.sql.DataFrame]] from the provided [[RDD]] of [[GenericRecord]]s
+   *
+   * TODO convert directly from GenericRecord into InternalRow instead
+   */
   def createDataFrame(rdd: RDD[GenericRecord], schemaStr: String, ss: SparkSession): Dataset[Row] = {
     if (rdd.isEmpty()) {
       ss.emptyDataFrame
@@ -67,7 +107,7 @@ object AvroConversionUtils {
         else {
           val schema = new Schema.Parser().parse(schemaStr)
           val dataType = convertAvroSchemaToStructType(schema)
-          val converter = AvroConversionHelper.createConverterToRow(schema, dataType)
+          val converter = createConverterToRow(schema, dataType)
           records.map { r => converter(r) }
         }
       }, convertAvroSchemaToStructType(new Schema.Parser().parse(schemaStr)))

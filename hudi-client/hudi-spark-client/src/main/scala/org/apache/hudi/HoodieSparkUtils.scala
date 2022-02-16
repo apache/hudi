@@ -162,7 +162,7 @@ object HoodieSparkUtils extends SparkAdapterSupport {
         // existing Writer's (catalyst) schema directly into Reader's (avro) schema
         //
         // NOTE: Very limited set of deviations from writer's schema are permitted
-        val convert = AvroConversionUtils.createRowToAvroConverter(writerSchema, writerAvroSchema, nullable = nullable)
+        val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerAvroSchema, nullable = nullable)
 
         rows.map { ir => transform(convert(ir)) }
       }

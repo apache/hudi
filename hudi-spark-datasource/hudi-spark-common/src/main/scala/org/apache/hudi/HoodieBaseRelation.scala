@@ -136,7 +136,7 @@ object HoodieBaseRelation {
       // NOTE: Schema has to be parsed at this point, since Avro's [[Schema]] aren't serializable
       //       to be passed from driver to executor
       val requiredAvroSchema = new Schema.Parser().parse(requiredSchema.avroSchemaStr)
-      val avroToRowConverter = AvroConversionUtils.createAvroToRowConverter(requiredAvroSchema, requiredRowSchema)
+      val avroToRowConverter = AvroConversionUtils.createAvroToInternalRowConverter(requiredAvroSchema, requiredRowSchema)
 
       reader.getRecordIterator(requiredAvroSchema).asScala
         .map(record => {

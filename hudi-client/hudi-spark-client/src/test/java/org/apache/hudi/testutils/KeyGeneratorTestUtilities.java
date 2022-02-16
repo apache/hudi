@@ -21,7 +21,6 @@ package org.apache.hudi.testutils;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.AvroConversionHelper;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.spark.package$;
 import org.apache.spark.sql.Row;
@@ -84,7 +83,7 @@ public class KeyGeneratorTestUtilities {
   }
 
   public static Row getRow(GenericRecord record, Schema schema, StructType structType) {
-    Function1<GenericRecord, Row> converterFn = AvroConversionHelper.createConverterToRow(schema, structType);
+    Function1<GenericRecord, Row> converterFn = AvroConversionUtils.createConverterToRow(schema, structType);
     Row row = converterFn.apply(record);
     int fieldCount = structType.fieldNames().length;
     Object[] values = new Object[fieldCount];

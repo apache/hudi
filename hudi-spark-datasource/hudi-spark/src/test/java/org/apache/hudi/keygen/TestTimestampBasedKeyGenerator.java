@@ -23,7 +23,6 @@ import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.AvroConversionHelper;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
@@ -72,7 +71,7 @@ public class TestTimestampBasedKeyGenerator {
   }
 
   private Row genericRecordToRow(GenericRecord baseRecord) {
-    Function1<GenericRecord, Row> convertor = AvroConversionHelper.createConverterToRow(baseRecord.getSchema(), structType);
+    Function1<GenericRecord, Row> convertor = AvroConversionUtils.createConverterToRow(baseRecord.getSchema(), structType);
     Row row = convertor.apply(baseRecord);
     int fieldCount = structType.fieldNames().length;
     Object[] values = new Object[fieldCount];
