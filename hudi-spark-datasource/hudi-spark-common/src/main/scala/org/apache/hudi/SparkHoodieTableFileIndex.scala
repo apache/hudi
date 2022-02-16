@@ -65,6 +65,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     queryPaths.asJava,
     toJavaOption(specifiedQueryInstant),
     false,
+    false,
     SparkHoodieTableFileIndex.adapt(fileStatusCache)
   )
     with SparkAdapterSupport

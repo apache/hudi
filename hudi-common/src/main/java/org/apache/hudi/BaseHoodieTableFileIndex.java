@@ -75,6 +75,7 @@ public abstract class BaseHoodieTableFileIndex {
   protected final List<Path> queryPaths;
 
   private final boolean shouldIncludePendingCommits;
+  private final boolean shouldValidateInstant;
 
   private final HoodieTableType tableType;
   protected final String basePath;
@@ -99,6 +100,7 @@ public abstract class BaseHoodieTableFileIndex {
    * @param queryPaths target DFS paths being queried
    * @param specifiedQueryInstant instant as of which table is being queried
    * @param shouldIncludePendingCommits flags whether file-index should exclude any pending operations
+   * @param shouldValidateInstant flags to validate whether query instant is present in the timeline
    * @param fileStatusCache transient cache of fetched [[FileStatus]]es
    */
   public BaseHoodieTableFileIndex(HoodieEngineContext engineContext,
@@ -108,6 +110,7 @@ public abstract class BaseHoodieTableFileIndex {
                                   List<Path> queryPaths,
                                   Option<String> specifiedQueryInstant,
                                   boolean shouldIncludePendingCommits,
+                                  boolean shouldValidateInstant,
                                   FileStatusCache fileStatusCache) {
     this.partitionColumns = metaClient.getTableConfig().getPartitionFields()
         .orElse(new String[0]);
@@ -123,6 +126,7 @@ public abstract class BaseHoodieTableFileIndex {
     this.queryPaths = queryPaths;
     this.specifiedQueryInstant = specifiedQueryInstant;
     this.shouldIncludePendingCommits = shouldIncludePendingCommits;
+    this.shouldValidateInstant = shouldValidateInstant;
 
     this.tableType = metaClient.getTableType();
     this.basePath = metaClient.getBasePath();
@@ -287,15 +291,15 @@ public abstract class BaseHoodieTableFileIndex {
               )
           );
     } else {
-      // TODO re-align with the branch (MOR, snapshot) branch
       cachedAllInputFileSlices = partitionFiles.keySet().stream()
          .collect(Collectors.toMap(
              Function.identity(),
              partitionPath ->
-                 specifiedQueryInstant.map(instant ->
-                     fileSystemView.getLatestFileSlicesBeforeOrOn(partitionPath.path, instant, true))
-                 .orElse(fileSystemView.getLatestFileSlices(partitionPath.path))
-                 .collect(Collectors.toList())
+                 queryInstant.map(instant ->
+                     fileSystemView.getLatestFileSlicesBeforeOrOn(partitionPath.path, instant, true)
+                 )
+                   .orElse(fileSystemView.getLatestFileSlices(partitionPath.path))
+                   .collect(Collectors.toList())
              )
          );
     }
@@ -313,18 +317,20 @@ public abstract class BaseHoodieTableFileIndex {
     LOG.info(String.format("Refresh table %s, spent: %d ms", metaClient.getTableConfig().getTableName(), duration));
   }
 
+  private void validate(HoodieTimeline activeTimeline, Option<String> queryInstant) {
+    if (shouldValidateInstant) {
+      if (queryInstant.isPresent() && !activeTimeline.containsInstant(queryInstant.get())) {
+        throw new HoodieIOException(String.format("Query instant (%s) not found in the timeline", queryInstant.get()));
+      }
+    }
+  }
+
   private static long fileSliceSize(FileSlice fileSlice) {
     long logFileSize = fileSlice.getLogFiles().map(HoodieLogFile::getFileSize)
         .filter(s -> s > 0)
         .reduce(0L, Long::sum);
 
     return fileSlice.getBaseFile().map(BaseFile::getFileLen).orElse(0L) + logFileSize;
-  }
-
-  private static void validate(HoodieTimeline activeTimeline, Option<String> queryInstant) {
-    if (queryInstant.isPresent() && !activeTimeline.containsInstant(queryInstant.get())) {
-      throw new HoodieIOException(String.format("Query instant (%s) not found in the timeline", queryInstant.get()));
-    }
   }
 
   protected static final class PartitionPath {
