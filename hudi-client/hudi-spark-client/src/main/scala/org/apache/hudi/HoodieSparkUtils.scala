@@ -146,6 +146,7 @@ object HoodieSparkUtils extends SparkAdapterSupport {
     // NOTE: We have to serialize Avro schema, and then subsequently parse it on the executor node, since Spark
     //       serializer is not able to digest it
     val readerAvroSchemaStr = readerAvroSchema.toString
+    val writerAvroSchemaStr = writerAvroSchema.toString
     // NOTE: We're accessing toRdd here directly to avoid [[InternalRow]] to [[Row]] conversion
     df.queryExecution.toRdd.mapPartitions { rows =>
       if (rows.isEmpty) {
@@ -158,10 +159,9 @@ object HoodieSparkUtils extends SparkAdapterSupport {
             rewriteRecord(_, readerAvroSchema)
           }
 
-        // Since caller might request to get records in a different ("evolved") schema, we will be converting from
-        // existing Writer's (catalyst) schema directly into Reader's (avro) schema
-        //
-        // NOTE: Very limited set of deviations from writer's schema are permitted
+        // Since caller might request to get records in a different ("evolved") schema, we will be rewriting from
+        // existing Writer's schema into Reader's (avro) schema
+        val writerAvroSchema = new Schema.Parser().parse(writerAvroSchemaStr)
         val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerAvroSchema, nullable = nullable)
 
         rows.map { ir => transform(convert(ir)) }
