@@ -1357,7 +1357,7 @@ public class TestCleaner extends HoodieClientTestBase {
     String firstCommitTs = HoodieActiveTimeline.formatDate(Date.from(commitDateTime.minusMinutes(minutesForFirstCommit).toInstant()));
     testTable.addInflightCommit(firstCommitTs).withBaseFilesInPartition(p0, file1P0C0).withBaseFilesInPartition(p1, file1P1C0);
 
-    HoodieCommitMetadata commitMetadata = generateCommitMetadata(
+    HoodieCommitMetadata commitMetadata = generateCommitMetadata(firstCommitTs,
             Collections.unmodifiableMap(new HashMap<String, List<String>>() {
               {
                 put(p0, CollectionUtils.createImmutableList(file1P0C0));
@@ -1383,7 +1383,7 @@ public class TestCleaner extends HoodieClientTestBase {
     String file2P0C1 = partitionAndFileId002.get(p0);
     String file2P1C1 = partitionAndFileId002.get(p1);
     testTable.forCommit(secondCommitTs).withBaseFilesInPartition(p0, file1P0C0).withBaseFilesInPartition(p1, file1P1C0);
-    commitMetadata = generateCommitMetadata(new HashMap<String, List<String>>() {
+    commitMetadata = generateCommitMetadata(secondCommitTs, new HashMap<String, List<String>>() {
       {
         put(p0, CollectionUtils.createImmutableList(file1P0C0, file2P0C1));
         put(p1, CollectionUtils.createImmutableList(file1P1C0, file2P1C1));

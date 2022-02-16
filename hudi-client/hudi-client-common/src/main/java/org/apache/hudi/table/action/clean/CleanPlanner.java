@@ -363,8 +363,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
    * @return list of files to clean
    */
   private List<CleanFileInfo> getFilesToCleanKeepingLatestHours(String partitionPath) {
-    int commitsToRetain = 0;
-    return getFilesToCleanKeepingLatestCommits(partitionPath, commitsToRetain, HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS);
+    return getFilesToCleanKeepingLatestCommits(partitionPath, 0, HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS);
   }
   
   private List<CleanFileInfo> getReplacedFilesEligibleToClean(List<String> savepointedFiles, String partitionPath, Option<HoodieInstant> earliestCommitToRetain) {

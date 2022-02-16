@@ -86,8 +86,8 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<String> CLEANER_HOURS_RETAINED = ConfigProperty.key("hoodie.cleaner.hours.retained")
           .defaultValue("24")
           .withDocumentation("Number of hours for which commits need to be retained. This config provides a more flexible option as"
-          + "compared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group," +
-                  " corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.");
+          + "compared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group,"
+                  + " corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.");
 
   public static final ConfigProperty<String> CLEANER_POLICY = ConfigProperty
       .key("hoodie.cleaner.policy")
