@@ -18,8 +18,7 @@
 
 package org.apache.hudi.table.format.cow.vector;
 
-import org.apache.hudi.table.format.cow.data.ColumnarMapData;
-
+import org.apache.flink.table.data.ColumnarMapData;
 import org.apache.flink.table.data.MapData;
 import org.apache.flink.table.data.vector.ColumnVector;
 import org.apache.flink.table.data.vector.heap.AbstractHeapVector;

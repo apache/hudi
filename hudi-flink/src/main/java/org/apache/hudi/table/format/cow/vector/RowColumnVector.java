@@ -18,8 +18,7 @@
 
 package org.apache.hudi.table.format.cow.vector;
 
-import org.apache.hudi.table.format.cow.data.ColumnarRowData;
-
+import org.apache.flink.table.data.ColumnarRowData;
 import org.apache.flink.table.data.vector.ColumnVector;
 
 /**
