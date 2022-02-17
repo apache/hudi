@@ -124,8 +124,8 @@ object HoodieSparkSqlWriter {
 
     val jsc = new JavaSparkContext(sparkContext)
     if (asyncCompactionTriggerFn.isDefined) {
-      if (jsc.getConf.getOption(DataSourceWriteOptions.SPARK_SCHEDULER_ALLOCATION_FILE_KEY).isDefined) {
-        jsc.setLocalProperty("spark.scheduler.pool", DataSourceWriteOptions.SPARK_DATASOURCE_WRITER_POOL_NAME)
+      if (jsc.getConf.getOption(SparkConfigs.SPARK_SCHEDULER_ALLOCATION_FILE_KEY).isDefined) {
+        jsc.setLocalProperty("spark.scheduler.pool", SparkConfigs.SPARK_DATASOURCE_WRITER_POOL_NAME)
       }
     }
     val instantTime = HoodieActiveTimeline.createNewInstantTime()
