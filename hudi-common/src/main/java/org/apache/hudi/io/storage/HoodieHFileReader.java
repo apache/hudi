@@ -18,16 +18,16 @@
 
 package org.apache.hudi.io.storage;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.stream.Collectors;
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.bloom.BloomFilterFactory;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -48,20 +48,20 @@ import org.apache.hadoop.hbase.io.hfile.ReaderContext;
 import org.apache.hadoop.hbase.io.hfile.ReaderContextBuilder;
 import org.apache.hadoop.hbase.nio.ByteBuff;
 import org.apache.hadoop.hbase.util.Pair;
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.bloom.BloomFilterFactory;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.util.ClosableIterator;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import static org.apache.hudi.common.fs.FSUtils.getFs;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileReader<R> {
   private static final Logger LOG = LogManager.getLogger(HoodieHFileReader.class);
@@ -84,14 +84,14 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   public HoodieHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig) throws IOException {
     this.conf = configuration;
     this.path = path;
-    this.reader = HFile.createReader(getFs(path.toString(), configuration), path, cacheConfig, true, conf);
+    this.reader = HFile.createReader(FSUtils.getFs(path.toString(), configuration), path, cacheConfig, true, conf);
   }
 
   public HoodieHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig, FileSystem fs) throws IOException {
     this.conf = configuration;
     this.path = path;
     this.fsDataInputStream = fs.open(path);
-    this.reader = HFile.createReader(fs, path, cacheConfig, true configuration);
+    this.reader = HFile.createReader(fs, path, cacheConfig, true, configuration);
   }
 
   public HoodieHFileReader(byte[] content) throws IOException {
@@ -101,13 +101,13 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     FSDataInputStream fsdis = new FSDataInputStream(bis);
     FSDataInputStreamWrapper stream = new FSDataInputStreamWrapper(fsdis);
     ReaderContext context = new ReaderContextBuilder()
-            .withFilePath(path)
-            .withInputStreamWrapper(stream)
-            .withFileSize(getFs("hoodie", conf).getFileStatus(path).getLen())
-            .withFileSystem(stream.getHfs())
-            .withPrimaryReplicaReader(true)
-            .withReaderType(ReaderContext.ReaderType.STREAM)
-            .build();
+        .withFilePath(path)
+        .withInputStreamWrapper(stream)
+        .withFileSize(FSUtils.getFs("hoodie", conf).getFileStatus(path).getLen())
+        .withFileSystem(stream.getHfs())
+        .withPrimaryReplicaReader(true)
+        .withReaderType(ReaderContext.ReaderType.STREAM)
+        .build();
     HFileInfo fileInfo = new HFileInfo(context, conf);
     this.reader = HFile.createReader(context, fileInfo, new CacheConfig(conf), conf);
     fileInfo.initMetaAndIndex(reader);
@@ -269,7 +269,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
 
   public ClosableIterator<R> getRecordIterator(List<String> keys, Schema schema) throws IOException {
     this.schema = schema;
-    reader.loadFileInfo();
+    reader.getHFileInfo();
     Iterator<String> iterator = keys.iterator();
     return new ClosableIterator<R>() {
       private R next;
