@@ -22,7 +22,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.{createBaseFileReader, isMetadataTable}
-import org.apache.hudi.common.model.HoodieLogFile
+import org.apache.hudi.common.model.{HoodieLogFile, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils
@@ -66,7 +66,13 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
 
   private val maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(jobConf)
 
-  private val recordKeyField = metaClient.getTableConfig.getRecordKeyFieldProp
+  // If meta fields are enabled, always prefer key from the meta field as opposed to user-specified one
+  // NOTE: This is historical behavior which is preserved as is
+  private val recordKeyField = {
+    if (metaClient.getTableConfig.populateMetaFields()) HoodieRecord.RECORD_KEY_METADATA_FIELD
+    else metaClient.getTableConfig.getRecordKeyFieldProp
+  }
+
   private val preCombineFieldOpt =
     Option(metaClient.getTableConfig.getPreCombineField)
       // get preCombineFiled from the options if this is a old table which have not store
