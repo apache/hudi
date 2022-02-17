@@ -32,13 +32,13 @@ import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.hive.HiveSyncConfig
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.DataSourceTestUtils
-import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
+import org.apache.spark.{SparkConf, SparkContext}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -827,33 +827,32 @@ class TestHoodieSparkSqlWriter {
   /**
    * Test case for non partition table with metatable support.
    */
-  @Test
-  def testNonPartitionTableWithMetatableSupport(): Unit = {
-    List(DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL).foreach { tableType =>
-      val options = Map(DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
-        DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "col3",
-        DataSourceWriteOptions.RECORDKEY_FIELD.key -> "keyid",
-        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
-        DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
-        HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
-        "hoodie.insert.shuffle.parallelism" -> "1",
-        "hoodie.metadata.enable" -> "true")
-      val df = spark.range(0, 10).toDF("keyid")
-        .withColumn("col3", expr("keyid"))
-        .withColumn("age", expr("keyid + 1000"))
-      df.write.format("hudi")
-        .options(options.updated(DataSourceWriteOptions.OPERATION.key, "insert"))
-        .mode(SaveMode.Overwrite).save(tempBasePath)
-      // upsert same record again
-      val df_update = spark.range(0, 10).toDF("keyid")
-        .withColumn("col3", expr("keyid"))
-        .withColumn("age", expr("keyid + 2000"))
-      df_update.write.format("hudi")
-        .options(options.updated(DataSourceWriteOptions.OPERATION.key, "upsert"))
-        .mode(SaveMode.Append).save(tempBasePath)
-      assert(spark.read.format("hudi").load(tempBasePath).count() == 10)
-      assert(spark.read.format("hudi").load(tempBasePath).where("age >= 2000").count() == 10)
-    }
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testNonPartitionTableWithMetatableSupport(tableType: HoodieTableType): Unit = {
+    val options = Map(DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name,
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "col3",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "keyid",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.metadata.enable" -> "true")
+    val df = spark.range(0, 10).toDF("keyid")
+      .withColumn("col3", expr("keyid"))
+      .withColumn("age", expr("keyid + 1000"))
+    df.write.format("hudi")
+      .options(options.updated(DataSourceWriteOptions.OPERATION.key, "insert"))
+      .mode(SaveMode.Overwrite).save(tempBasePath)
+    // upsert same record again
+    val df_update = spark.range(0, 10).toDF("keyid")
+      .withColumn("col3", expr("keyid"))
+      .withColumn("age", expr("keyid + 2000"))
+    df_update.write.format("hudi")
+      .options(options.updated(DataSourceWriteOptions.OPERATION.key, "upsert"))
+      .mode(SaveMode.Append).save(tempBasePath)
+    assert(spark.read.format("hudi").load(tempBasePath).count() == 10)
+    assert(spark.read.format("hudi").load(tempBasePath).where("age >= 2000").count() == 10)
   }
 
   /**
