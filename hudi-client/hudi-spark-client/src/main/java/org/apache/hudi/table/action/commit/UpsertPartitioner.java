@@ -70,10 +70,6 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
    */
   private int totalBuckets = 0;
   /**
-   * Stat for the input and output workload. Describe the workload before and after being assigned buckets.
-   */
-  private WorkloadProfile workloadProfile;
-  /**
    * Helps decide which bucket an incoming update should go to.
    */
   private HashMap<String, Integer> updateLocationToBucket;
@@ -88,25 +84,15 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
 
   protected final HoodieWriteConfig config;
 
-//<<<<<<< HEAD
   public UpsertPartitioner(WorkloadProfile profile, HoodieEngineContext context, HoodieTable table,
       HoodieWriteConfig config) {
     super(profile, table);
     updateLocationToBucket = new HashMap<>();
     partitionPathToInsertBucketInfos = new HashMap<>();
     bucketInfoMap = new HashMap<>();
-/*=======
-  public UpsertPartitioner(WorkloadProfile workloadProfile, HoodieEngineContext context, HoodieTable table,
-                           HoodieWriteConfig config) {
-    updateLocationToBucket = new HashMap<>();
-    partitionPathToInsertBucketInfos = new HashMap<>();
-    bucketInfoMap = new HashMap<>();
-    this.workloadProfile = workloadProfile;
-    this.table = table;
->>>>>>> 5357800bb ([HUDI-2917] rollback insert data appended to log file in Hbase Index)*/
     this.config = config;
-    assignUpdates(workloadProfile);
-    assignInserts(workloadProfile, context);
+    assignUpdates(profile);
+    assignInserts(profile, context);
 
     LOG.info("Total Buckets :" + totalBuckets + ", buckets info => " + bucketInfoMap + ", \n"
         + "Partition to insert buckets => " + partitionPathToInsertBucketInfos + ", \n"
@@ -341,7 +327,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
       String partitionPath = keyLocation._1().getPartitionPath();
       List<InsertBucketCumulativeWeightPair> targetBuckets = partitionPathToInsertBucketInfos.get(partitionPath);
       // pick the target bucket to use based on the weights.
-      final long totalInserts = Math.max(1, workloadProfile.getWorkloadStat(partitionPath).getNumInserts());
+      final long totalInserts = Math.max(1, profile.getWorkloadStat(partitionPath).getNumInserts());
       final long hashOfKey = NumericUtils.getMessageDigestHash("MD5", keyLocation._1().getRecordKey());
       final double r = 1.0 * Math.floorMod(hashOfKey, totalInserts) / totalInserts;
 
