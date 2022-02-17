@@ -48,8 +48,7 @@ public class KeyGeneratorTestUtilities {
       + "{\"name\": \"timestamp\",\"type\": \"long\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
       + "{\"name\": \"ts_ms\", \"type\": \"string\"},"
       + "{\"name\": \"pii_col\", \"type\": \"string\"},"
-      + "{\"name\": \"nested_col\",\"type\": "
-      + NESTED_COL_SCHEMA + "}"
+      + "{\"name\": \"nested_col\",\"type\": [\"null\", " + NESTED_COL_SCHEMA + "]}"
       + "]}";
 
   public static final String TEST_STRUCTNAME = "test_struct_name";
