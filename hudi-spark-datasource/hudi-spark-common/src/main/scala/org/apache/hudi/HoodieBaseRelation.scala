@@ -85,7 +85,7 @@ object HoodieBaseRelation {
                            partitionSchema: StructType,
                            tableSchema: HoodieTableSchema,
                            requiredSchema: HoodieTableSchema,
-                           filters: Array[Filter],
+                           filters: Seq[Filter],
                            options: Map[String, String],
                            hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
     val hfileReader = createHFileReader(
@@ -121,7 +121,7 @@ object HoodieBaseRelation {
   private def createHFileReader(spark: SparkSession,
                                 tableSchema: HoodieTableSchema,
                                 requiredSchema: HoodieTableSchema,
-                                filters: Array[Filter],
+                                filters: Seq[Filter],
                                 options: Map[String, String],
                                 hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
     val hadoopConfBroadcast =

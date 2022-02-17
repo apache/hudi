@@ -119,7 +119,11 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       partitionSchema = partitionSchema,
       tableSchema = tableSchema,
       requiredSchema = tableSchema,
-      filters = filters,
+      // This file-reader is used to read base file records, subsequently merging them with the records
+      // stored in delta-log files. As such, we have to read _all_ records from the base file, while avoiding
+      // applying any filtering _before_ we complete combining them w/ delta-log records (to make sure that
+      // we combine them correctly)
+      filters = Seq.empty,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
