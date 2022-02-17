@@ -131,6 +131,13 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(".*")
       .withDescription("Whether to load partitions in state if partition path matching， default *");
 
+  public static final ConfigOption<Integer> READ_RECORD_BATCH_SIZE = ConfigOptions
+      .key("read.record.batch.size")
+      .intType()
+      .defaultValue(-1)
+      .withDescription("The Batch Size of Read Record, if the Config is less than or equal to 0, Batch Read is disabled,\n"
+              + "default -1");
+
   // ------------------------------------------------------------------------
   //  Read Options
   // ------------------------------------------------------------------------

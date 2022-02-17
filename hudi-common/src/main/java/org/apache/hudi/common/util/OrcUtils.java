@@ -54,6 +54,22 @@ import org.apache.orc.TypeDescription;
  */
 public class OrcUtils extends BaseFileUtils {
 
+  @Override
+  public BaseFileReader getReader(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    try {
+      Configuration conf = new Configuration(configuration);
+      conf.addResource(FSUtils.getFs(filePath.toString(), conf).getConf());
+      Reader reader = OrcFile.createReader(filePath, OrcFile.readerOptions(conf));
+
+      Schema readSchema = HoodieAvroUtils.getRecordKeyPartitionPathSchema();
+      TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(readSchema);
+      RecordReader recordReader = reader.rows(new Options(conf).schema(orcSchema));
+      return new OrcFileInnerReader(reader, readSchema, orcSchema, recordReader);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to open reader from ORC file:" + filePath, e);
+    }
+  }
+
   /**
    * Fetch {@link HoodieKey}s from the given ORC file.
    *
@@ -63,21 +79,31 @@ public class OrcUtils extends BaseFileUtils {
    */
   @Override
   public List<HoodieKey> fetchRecordKeyPartitionPath(Configuration configuration, Path filePath) {
-    List<HoodieKey> hoodieKeys = new ArrayList<>();
     try {
       if (!filePath.getFileSystem(configuration).exists(filePath)) {
         return new ArrayList<>();
       }
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to read from ORC file:" + filePath, e);
+    }
+    try (BaseFileReader reader = getReader(configuration, filePath)) {
+      return fetchRecordKeyPartitionPathInternal(reader, filePath, -1);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to read from ORC file:" + filePath, e);
+    }
+  }
 
-      Configuration conf = new Configuration(configuration);
-      conf.addResource(FSUtils.getFs(filePath.toString(), conf).getConf());
-      Reader reader = OrcFile.createReader(filePath, OrcFile.readerOptions(conf));
+  @Override
+  public List<HoodieKey> fetchRecordKeyPartitionPath(BaseFileReader reader, Path filePath, int batchSize) {
+    return fetchRecordKeyPartitionPathInternal(reader, filePath, batchSize);
+  }
 
-      Schema readSchema = HoodieAvroUtils.getRecordKeyPartitionPathSchema();
-      TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(readSchema);
-      List<String> fieldNames = orcSchema.getFieldNames();
-      VectorizedRowBatch batch = orcSchema.createRowBatch();
-      RecordReader recordReader = reader.rows(new Options(conf).schema(orcSchema));
+  public List<HoodieKey> fetchRecordKeyPartitionPathInternal(BaseFileReader reader, Path filePath, int batchSize) {
+    List<HoodieKey> hoodieKeys = new ArrayList<>();
+    try {
+      List<String> fieldNames = (((OrcFileInnerReader)reader).orcSchema).getFieldNames();
+      VectorizedRowBatch batch = (((OrcFileInnerReader)reader).orcSchema).createRowBatch();
+      RecordReader recordReader = ((OrcFileInnerReader)reader).recordReader;
 
       // column indices for the RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD fields
       int keyCol = -1;
@@ -100,6 +126,9 @@ public class OrcUtils extends BaseFileUtils {
           String rowKey = rowKeys.toString(i);
           String partitionPath = partitionPaths.toString(i);
           hoodieKeys.add(new HoodieKey(rowKey, partitionPath));
+          if (batchSize > 0 && hoodieKeys.size() >= batchSize) {
+            break;
+          }
         }
       }
     } catch (IOException e) {
@@ -119,8 +148,7 @@ public class OrcUtils extends BaseFileUtils {
   @Override
   public List<GenericRecord> readAvroRecords(Configuration configuration, Path filePath) {
     Schema avroSchema;
-    try {
-      Reader reader = OrcFile.createReader(filePath, OrcFile.readerOptions(configuration));
+    try (Reader reader = OrcFile.createReader(filePath, OrcFile.readerOptions(configuration))) {
       avroSchema = AvroOrcUtils.createAvroSchema(reader.getSchema());
     } catch (IOException io) {
       throw new HoodieIOException("Unable to read Avro records from an ORC file:" + filePath, io);
@@ -134,10 +162,12 @@ public class OrcUtils extends BaseFileUtils {
   @Override
   public List<GenericRecord> readAvroRecords(Configuration configuration, Path filePath, Schema avroSchema) {
     List<GenericRecord> records = new ArrayList<>();
+    Reader reader = null;
+    RecordReader recordReader = null;
     try {
-      Reader reader = OrcFile.createReader(filePath, OrcFile.readerOptions(configuration));
+      reader = OrcFile.createReader(filePath, OrcFile.readerOptions(configuration));
       TypeDescription orcSchema = reader.getSchema();
-      RecordReader recordReader = reader.rows(new Options(configuration).schema(orcSchema));
+      recordReader = reader.rows(new Options(configuration).schema(orcSchema));
       OrcReaderIterator<GenericRecord> iterator = new OrcReaderIterator<>(recordReader, avroSchema, orcSchema);
       while (iterator.hasNext()) {
         GenericRecord record = iterator.next();
@@ -145,6 +175,17 @@ public class OrcUtils extends BaseFileUtils {
       }
     } catch (IOException io) {
       throw new HoodieIOException("Unable to create an ORC reader for ORC file:" + filePath, io);
+    } finally {
+      try {
+        if (reader != null) {
+          reader.close();
+        }
+        if (recordReader != null) {
+          recordReader.close();
+        }
+      } catch (IOException e) {
+        // ignore
+      }
     }
     return records;
   }
@@ -161,13 +202,15 @@ public class OrcUtils extends BaseFileUtils {
   @Override
   public Set<String> filterRowKeys(Configuration conf, Path filePath, Set<String> filter)
       throws HoodieIOException {
+    Reader reader = null;
+    RecordReader recordReader = null;
     try {
-      Reader reader = OrcFile.createReader(filePath, OrcFile.readerOptions(conf));
+      reader = OrcFile.createReader(filePath, OrcFile.readerOptions(conf));
       Set<String> filteredRowKeys = new HashSet<>();
       TypeDescription schema = reader.getSchema();
       List<String> fieldNames = schema.getFieldNames();
       VectorizedRowBatch batch = schema.createRowBatch();
-      RecordReader recordReader = reader.rows(new Options(conf).schema(schema));
+      recordReader = reader.rows(new Options(conf).schema(schema));
 
       // column index for the RECORD_KEY_METADATA_FIELD field
       int colIndex = -1;
@@ -192,14 +235,24 @@ public class OrcUtils extends BaseFileUtils {
       return filteredRowKeys;
     } catch (IOException io) {
       throw new HoodieIOException("Unable to read row keys for ORC file:" + filePath, io);
+    } finally {
+      try {
+        if (reader != null) {
+          reader.close();
+        }
+        if (recordReader != null) {
+          recordReader.close();
+        }
+      } catch (IOException e) {
+        //ignore
+      }
     }
   }
 
   @Override
   public Map<String, String> readFooter(Configuration conf, boolean required,
                                         Path orcFilePath, String... footerNames) {
-    try {
-      Reader reader = OrcFile.createReader(orcFilePath, OrcFile.readerOptions(conf));
+    try (Reader reader = OrcFile.createReader(orcFilePath, OrcFile.readerOptions(conf))) {
       Map<String, String> footerVals = new HashMap<>();
       List<UserMetadataItem> metadataItemList = reader.getFileTail().getFooter().getMetadataList();
       Map<String, String> metadata = metadataItemList.stream().collect(Collectors.toMap(
@@ -221,8 +274,7 @@ public class OrcUtils extends BaseFileUtils {
 
   @Override
   public Schema readAvroSchema(Configuration conf, Path orcFilePath) {
-    try {
-      Reader reader = OrcFile.createReader(orcFilePath, OrcFile.readerOptions(conf));
+    try (Reader reader = OrcFile.createReader(orcFilePath, OrcFile.readerOptions(conf))) {
       if (reader.hasMetadataValue("orc.avro.schema")) {
         ByteBuffer metadataValue = reader.getMetadataValue("orc.avro.schema");
         byte[] bytes = new byte[metadataValue.remaining()];
@@ -239,11 +291,30 @@ public class OrcUtils extends BaseFileUtils {
 
   @Override
   public long getRowCount(Configuration conf, Path orcFilePath) {
-    try {
-      Reader reader = OrcFile.createReader(orcFilePath, OrcFile.readerOptions(conf));
+    try (Reader reader = OrcFile.createReader(orcFilePath, OrcFile.readerOptions(conf))) {
       return reader.getNumberOfRows();
     } catch (IOException io) {
       throw new HoodieIOException("Unable to get row count for ORC file:" + orcFilePath, io);
+    }
+  }
+
+  private class OrcFileInnerReader extends BaseFileReader {
+    Reader reader;
+    Schema readSchema;
+    TypeDescription orcSchema;
+    RecordReader recordReader;
+
+    public OrcFileInnerReader(Reader reader, Schema readSchema, TypeDescription orcSchema, RecordReader recordReader) {
+      this.reader = reader;
+      this.readSchema = readSchema;
+      this.orcSchema = orcSchema;
+      this.recordReader = recordReader;
+    }
+
+    @Override
+    public void close() throws IOException {
+      this.recordReader.close();
+      this.reader.close();
     }
   }
 }

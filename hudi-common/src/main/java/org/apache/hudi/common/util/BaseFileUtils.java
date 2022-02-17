@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util;
 
+import java.io.Closeable;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -173,6 +174,33 @@ public abstract class BaseFileUtils {
 
   /**
    * Fetch {@link HoodieKey}s from the given data file.
+   * @param reader        The file reader
+   * @param filePath      The data file path
+   * @return {@link List} of {@link HoodieKey}s fetched from the parquet file
+   */
+  public abstract List<HoodieKey> fetchRecordKeyPartitionPath(BaseFileReader reader, Path filePath, int batchSize);
+
+  /**
+   * Open File Reader.
+   * @param configuration        configuration to build file reader
+   * @param filePath      The data file path
+   * @param keyGeneratorOpt instance of KeyGenerator
+   * @return file reader
+   */
+  public abstract BaseFileReader getReader(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt);
+
+  /**
+   * Open File Reader.
+   * @param configuration        configuration to build file reader
+   * @param filePath      The data file path
+   * @return file reader
+   */
+  public BaseFileReader getReader(Configuration configuration, Path filePath) {
+    return getReader(configuration, filePath, Option.empty());
+  }
+
+  /**
+   * Fetch {@link HoodieKey}s from the given data file.
    * @param configuration configuration to build fs object
    * @param filePath      The data file path
    * @param keyGeneratorOpt instance of KeyGenerator.
@@ -187,4 +215,8 @@ public abstract class BaseFileUtils {
    * @return The Avro schema of the data file
    */
   public abstract Schema readAvroSchema(Configuration configuration, Path filePath);
+
+  public abstract class BaseFileReader implements Closeable {
+
+  }
 }

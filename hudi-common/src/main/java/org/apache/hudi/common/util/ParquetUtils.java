@@ -129,11 +129,16 @@ public class ParquetUtils extends BaseFileUtils {
    */
   @Override
   public List<HoodieKey> fetchRecordKeyPartitionPath(Configuration configuration, Path filePath) {
-    return fetchRecordKeyPartitionPathInternal(configuration, filePath, Option.empty());
+    return fetchRecordKeyPartitionPath(configuration, filePath, Option.empty());
   }
 
-  private List<HoodieKey> fetchRecordKeyPartitionPathInternal(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    List<HoodieKey> hoodieKeys = new ArrayList<>();
+  @Override
+  public List<HoodieKey> fetchRecordKeyPartitionPath(BaseFileReader reader, Path filePath, int batchSize) {
+    return fetchRecordKeyPartitionPathInternal(reader, filePath, Option.empty(), batchSize);
+  }
+
+  @Override
+  public BaseFileReader getReader(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     try {
       Configuration conf = new Configuration(configuration);
       conf.addResource(FSUtils.getFs(filePath.toString(), conf).getConf());
@@ -143,11 +148,20 @@ public class ParquetUtils extends BaseFileUtils {
         fields.addAll(keyGenerator.getPartitionPathFields());
         return HoodieAvroUtils.getSchemaForFields(readAvroSchema(conf, filePath), fields);
       })
-          .orElse(HoodieAvroUtils.getRecordKeyPartitionPathSchema());
+              .orElse(HoodieAvroUtils.getRecordKeyPartitionPathSchema());
       AvroReadSupport.setAvroReadSchema(conf, readSchema);
       AvroReadSupport.setRequestedProjection(conf, readSchema);
       ParquetReader reader = AvroParquetReader.builder(filePath).withConf(conf).build();
-      Object obj = reader.read();
+      return new ParquetFileInnerReader(reader);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to open reader from Parquet file " + filePath, e);
+    }
+  }
+
+  private List<HoodieKey> fetchRecordKeyPartitionPathInternal(BaseFileReader reader, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt, int batchSize) {
+    List<HoodieKey> hoodieKeys = new ArrayList<>();
+    try {
+      Object obj = (((ParquetFileInnerReader)reader).reader).read();
       while (obj != null) {
         if (obj instanceof GenericRecord) {
           String recordKey = null;
@@ -160,7 +174,10 @@ public class ParquetUtils extends BaseFileUtils {
             partitionPath = ((GenericRecord) obj).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
           }
           hoodieKeys.add(new HoodieKey(recordKey, partitionPath));
-          obj = reader.read();
+          if (batchSize > 0 && hoodieKeys.size() >= batchSize) {
+            break;
+          }
+          obj = (((ParquetFileInnerReader)reader).reader).read();
         }
       }
     } catch (IOException e) {
@@ -179,7 +196,11 @@ public class ParquetUtils extends BaseFileUtils {
    */
   @Override
   public List<HoodieKey> fetchRecordKeyPartitionPath(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    return fetchRecordKeyPartitionPathInternal(configuration, filePath, keyGeneratorOpt);
+    try (BaseFileReader reader = getReader(configuration, filePath, keyGeneratorOpt)) {
+      return fetchRecordKeyPartitionPathInternal(reader, filePath, keyGeneratorOpt, -1);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to read from Parquet file " + filePath, e);
+    }
   }
 
   public ParquetMetadata readMetadata(Configuration conf, Path parquetFilePath) {
@@ -228,10 +249,8 @@ public class ParquetUtils extends BaseFileUtils {
    */
   @Override
   public List<GenericRecord> readAvroRecords(Configuration configuration, Path filePath) {
-    ParquetReader reader = null;
     List<GenericRecord> records = new ArrayList<>();
-    try {
-      reader = AvroParquetReader.builder(filePath).withConf(configuration).build();
+    try (ParquetReader reader = AvroParquetReader.builder(filePath).withConf(configuration).build()) {
       Object obj = reader.read();
       while (obj != null) {
         if (obj instanceof GenericRecord) {
@@ -242,14 +261,6 @@ public class ParquetUtils extends BaseFileUtils {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read avro records from Parquet " + filePath, e);
 
-    } finally {
-      if (reader != null) {
-        try {
-          reader.close();
-        } catch (IOException e) {
-          // ignore
-        }
-      }
     }
     return records;
   }
@@ -422,6 +433,19 @@ public class ParquetUtils extends BaseFileUtils {
       return new BigDecimal(new BigInteger(((Binary) val).getBytesUnsafe()), scale);
     } else {
       throw new UnsupportedOperationException(String.format("Unsupported value type (%s)", val.getClass().getName()));
+    }
+  }
+
+  private class ParquetFileInnerReader extends BaseFileReader {
+    ParquetReader reader;
+
+    private ParquetFileInnerReader(ParquetReader reader) {
+      this.reader = reader;
+    }
+
+    @Override
+    public void close() throws IOException {
+      this.reader.close();
     }
   }
 }

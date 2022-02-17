@@ -92,6 +92,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
   private transient ListState<String> instantState;
   private final Pattern pattern;
   private String lastInstantTime;
+  private int batchSize = -1;
 
   public BootstrapOperator(Configuration conf) {
     this.conf = conf;
@@ -124,6 +125,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
     this.writeConfig = StreamerUtil.getHoodieClientConfig(this.conf, true);
     this.hoodieTable = FlinkTables.createTable(writeConfig, hadoopConf, getRuntimeContext());
     this.aggregateManager = getRuntimeContext().getGlobalAggregateManager();
+    this.batchSize = conf.getInteger(FlinkOptions.READ_RECORD_BATCH_SIZE);
 
     preLoadIndexRecords();
   }
@@ -211,16 +213,29 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
             return;
           }
 
-          final List<HoodieKey> hoodieKeys;
-          try {
-            hoodieKeys =
-                fileUtils.fetchRecordKeyPartitionPath(this.hadoopConf, new Path(baseFile.getPath()));
-          } catch (Exception e) {
-            throw new HoodieException(String.format("Error when loading record keys from file: %s", baseFile), e);
-          }
+          if (this.batchSize > 0) {
+            List<HoodieKey> hoodieKeys;
+            Path filePath = new Path(baseFile.getPath());
+            try (BaseFileUtils.BaseFileReader reader = fileUtils.getReader(this.hadoopConf, filePath)) {
+              do {
+                hoodieKeys = fileUtils.fetchRecordKeyPartitionPath(reader, filePath, batchSize);
+                hoodieKeys.forEach(hoodieKey ->
+                        output.collect(new StreamRecord(new IndexRecord(generateHoodieRecord(hoodieKey, fileSlice)))));
+              } while (hoodieKeys.size() >= this.batchSize);
+            } catch (Exception e) {
+              throw new HoodieException(String.format("Error when loading record keys from file: %s", baseFile), e);
+            }
+          } else {
+            final List<HoodieKey> hoodieKeys;
+            try {
+              hoodieKeys =
+                      fileUtils.fetchRecordKeyPartitionPath(this.hadoopConf, new Path(baseFile.getPath()));
+            } catch (Exception e) {
+              throw new HoodieException(String.format("Error when loading record keys from file: %s", baseFile), e);
+            }
 
-          for (HoodieKey hoodieKey : hoodieKeys) {
-            output.collect(new StreamRecord(new IndexRecord(generateHoodieRecord(hoodieKey, fileSlice))));
+            hoodieKeys.forEach(hoodieKey ->
+                    output.collect(new StreamRecord(new IndexRecord(generateHoodieRecord(hoodieKey, fileSlice)))));
           }
         });
 
