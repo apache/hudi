@@ -85,12 +85,12 @@ public class HoodieFileWriterFactory {
       TaskContextSupplier taskContextSupplier) throws IOException {
 
     BloomFilter filter = createBloomFilter(config);
-    HoodieHFileConfig hFileConfig = new HoodieHFileConfig(hoodieTable.getHadoopConf(),
+    HoodieHFileConfig hfileConfig = new HoodieHFileConfig(hoodieTable.getHadoopConf(),
         config.getHFileCompressionAlgorithm(), config.getHFileBlockSize(), config.getHFileMaxFileSize(),
         HoodieHFileReader.KEY_FIELD_NAME, PREFETCH_ON_OPEN, CACHE_DATA_IN_L1, DROP_BEHIND_CACHE_COMPACTION,
         filter, HFILE_COMPARATOR);
 
-    return new HoodieHFileWriter<>(instantTime, path, hFileConfig, schema, taskContextSupplier, config.populateMetaFields());
+    return new HoodieHFileWriter<>(instantTime, path, hfileConfig, schema, taskContextSupplier, config.populateMetaFields());
   }
 
   private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieFileWriter<R> newOrcFileWriter(
