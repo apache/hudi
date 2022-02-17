@@ -349,6 +349,7 @@
           <configuration>
             <rerunFailingTestsCount>3</rerunFailingTestsCount>
             <argLine>@{argLine}</argLine>
+            <trimStackTrace>false</trimStackTrace>
             <systemPropertyVariables>
               <log4j.configuration>
                 ${surefire-log4j.file}
