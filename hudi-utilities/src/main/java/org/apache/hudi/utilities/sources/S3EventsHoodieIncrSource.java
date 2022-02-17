@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 
+import com.esotericsoftware.minlog.Log;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -37,6 +38,9 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.ArrayType;
+import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -106,8 +110,8 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
             sparkContext, srcPath, numInstantsPerFetch, beginInstant, missingCheckpointStrategy);
 
     if (queryTypeAndInstantEndpts.getValue().getKey().equals(queryTypeAndInstantEndpts.getValue().getValue())) {
-      LOG.warn("Already caught up. Begin Checkpoint was :" + queryTypeAndInstantEndpts.getKey());
-      return Pair.of(Option.empty(), queryTypeAndInstantEndpts.getKey());
+      LOG.warn("Already caught up. Begin Checkpoint was :" + queryTypeAndInstantEndpts.getValue().getKey());
+      return Pair.of(Option.empty(), queryTypeAndInstantEndpts.getValue().getKey());
     }
 
     Dataset<Row> source = null;
@@ -125,7 +129,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
           .filter(String.format("%s > '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
               queryTypeAndInstantEndpts.getRight().getLeft()));
     }
-    
+
     if (source.isEmpty()) {
       return Pair.of(Option.empty(), queryTypeAndInstantEndpts.getRight().getRight());
     }
@@ -174,7 +178,27 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     }
     Option<Dataset<Row>> dataset = Option.empty();
     if (!cloudFiles.isEmpty()) {
+      Log.info("Number of files to be processed=" + cloudFiles.size());
       dataset = Option.of(sparkSession.read().format(fileFormat).load(cloudFiles.toArray(new String[0])));
+      if (props.containsKey(HoodieIncrSource.Config.DROP_COLUMNS)) {
+        String dropColumns = props.getString(HoodieIncrSource.Config.DROP_COLUMNS);
+        dataset = dataset.map(ds -> ds.drop(dropColumns.split(",")));
+      }
+      if (props.containsKey(HoodieIncrSource.Config.CAST_TO_STRING)) {
+        Boolean castToString = props.getBoolean(HoodieIncrSource.Config.CAST_TO_STRING);
+        if (castToString) {
+          dataset = dataset.map(ds -> {
+            Dataset<Row> transformedDs = ds;
+            for (StructField field : ds.schema().fields()) {
+              if (field.dataType() instanceof ArrayType || field.dataType() instanceof StructType) {
+                transformedDs = transformedDs.withColumn(field.name(), org.apache.spark.sql.functions.col(field.name()).cast("string"));
+                LOG.info(String.format("Column=%s having dataType=%s is being cast str ", field.name(), field.dataType()));
+              }
+            }
+            return transformedDs;
+          });
+        }
+      }
     }
     return Pair.of(dataset, queryTypeAndInstantEndpts.getRight().getRight());
   }
