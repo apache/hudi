@@ -35,7 +35,6 @@ import org.apache.hudi.common.testutils.CompactionTestUtils;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieHBaseIndexConfig;
@@ -46,7 +45,6 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.WorkloadProfile;
-import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.deltacommit.SparkUpsertDeltaCommitPartitioner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
@@ -199,12 +197,6 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     UpsertPartitioner partitioner = getUpsertPartitioner(0, 200, 100, 1024, testPartitionPath, false);
     List<InsertBucketCumulativeWeightPair> insertBuckets = partitioner.getInsertBuckets(testPartitionPath);
     assertEquals(2, insertBuckets.size(), "Total of 2 insert buckets");
-
-    // validate executionWorkloadProfile
-    WorkloadProfile executionWorkloadProfile = partitioner.getExecutionWorkloadProfile();
-    assertTrue(executionWorkloadProfile.getPartitionPaths().size() > 0);
-    WorkloadStat executionWorkStat = executionWorkloadProfile.getWorkloadStat(testPartitionPath);
-    assertTrue(executionWorkStat.getUpdateLocationToCount().size() > 0);
   }
 
   @Test
@@ -440,15 +432,6 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
             "Bucket 0 should be UPDATE");
     assertEquals("fg1", partitioner.getBucketInfo(0).fileIdPrefix,
             "Insert should be assigned to fg1");
-
-    // validate executionWorkloadProfile
-    WorkloadProfile executionWorkloadProfile = partitioner.getExecutionWorkloadProfile();
-    assertEquals(1, executionWorkloadProfile.getPartitionPaths().size());
-    WorkloadStat executionWorkStat = executionWorkloadProfile.getWorkloadStat(testPartitionPath);
-    assertEquals(1, executionWorkStat.getInsertLocationToCount().size());
-    Map.Entry<String, Pair<String, Long>> insertCount = executionWorkStat.getInsertLocationToCount().entrySet().iterator().next();
-    assertEquals("fg1", insertCount.getKey());
-    assertEquals(1, insertCount.getValue().getValue());
   }
 
   @Test

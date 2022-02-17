@@ -18,14 +18,10 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.table.WorkloadProfile;
-
 import java.io.Serializable;
 
 public interface Partitioner extends Serializable {
   int getNumPartitions();
 
   int getPartition(Object key);
-
-  WorkloadProfile getExecutionWorkloadProfile();
 }

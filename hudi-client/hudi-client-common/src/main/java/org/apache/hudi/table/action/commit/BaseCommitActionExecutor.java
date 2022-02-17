@@ -91,8 +91,8 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
       throws HoodieCommitException {
     try {
       HoodieCommitMetadata metadata = new HoodieCommitMetadata();
-      profile.getPartitionPaths().forEach(path -> {
-        WorkloadStat partitionStat = profile.getWorkloadStat(path);
+      profile.getOutputPartitionPaths().forEach(path -> {
+        WorkloadStat partitionStat = profile.getOutputWorkloadStat(path);
         HoodieWriteStat insertStat = new HoodieWriteStat();
         insertStat.setNumInserts(partitionStat.getNumInserts());
         insertStat.setFileId("");

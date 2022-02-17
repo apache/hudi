@@ -90,17 +90,15 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
   public HoodieWriteMetadata<List<WriteStatus>> execute(List<HoodieRecord<T>> inputRecords) {
     HoodieWriteMetadata<List<WriteStatus>> result = new HoodieWriteMetadata<>();
 
-    WorkloadProfile inputProfile = null;
+    WorkloadProfile workloadProfile = null;
     if (isWorkloadProfileNeeded()) {
-      inputProfile = new WorkloadProfile(buildProfile(inputRecords));
-      LOG.info("Input workload profile :" + inputProfile);
+      workloadProfile = new WorkloadProfile(buildProfile(inputRecords));
+      LOG.info("Input workload profile :" + workloadProfile);
     }
 
-    final Partitioner partitioner = getPartitioner(inputProfile);
+    final Partitioner partitioner = getPartitioner(workloadProfile);
     try {
-      WorkloadProfile executionProfile = partitioner.getExecutionWorkloadProfile();
-      LOG.info("Execution workload profile :" + inputProfile);
-      saveWorkloadProfileMetadataToInflight(executionProfile, instantTime);
+      saveWorkloadProfileMetadataToInflight(workloadProfile, instantTime);
     } catch (Exception e) {
       HoodieTableMetaClient metaClient = table.getMetaClient();
       HoodieInstant inflightInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, metaClient.getCommitActionType(), instantTime);

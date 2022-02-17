@@ -194,13 +194,15 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         return new ArrayList<>();
       } else {
         // TODO: we may directly rename original parquet file if there is not evolution/devolution of schema
-        //TaskContextSupplier taskContextSupplier = hoodieCopyOnWriteTable.getTaskContextSupplier();
-        //String newFileName = FSUtils.makeDataFileName(instantTime,
-        //    FSUtils.makeWriteToken(taskContextSupplier.getPartitionIdSupplier().get(), taskContextSupplier.getStageIdSupplier().get(), taskContextSupplier.getAttemptIdSupplier().get()),
-        //    operation.getFileId(), hoodieCopyOnWriteTable.getBaseFileExtension());
-        //Path oldFilePath = new Path(oldDataFileOpt.get().getPath());
-        //Path newFilePath = new Path(oldFilePath.getParent(), newFileName);
-        //FileUtil.copy(fs,oldFilePath, fs, newFilePath, false, fs.getConf());
+        /*
+        TaskContextSupplier taskContextSupplier = hoodieCopyOnWriteTable.getTaskContextSupplier();
+        String newFileName = FSUtils.makeDataFileName(instantTime,
+            FSUtils.makeWriteToken(taskContextSupplier.getPartitionIdSupplier().get(), taskContextSupplier.getStageIdSupplier().get(), taskContextSupplier.getAttemptIdSupplier().get()),
+            operation.getFileId(), hoodieCopyOnWriteTable.getBaseFileExtension());
+        Path oldFilePath = new Path(oldDataFileOpt.get().getPath());
+        Path newFilePath = new Path(oldFilePath.getParent(), newFileName);
+        FileUtil.copy(fs,oldFilePath, fs, newFilePath, false, fs.getConf());
+        */
       }
     }
 
