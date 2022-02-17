@@ -23,6 +23,8 @@ import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieDataSourceHelper._
+import org.apache.hudi.HoodieMergeOnReadRDD.resolveAvroSchemaNullability
+import org.apache.hudi.MergeOnReadSnapshotRelation.getFilePath
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.fs.FSUtils
@@ -33,6 +35,7 @@ import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.avro.HoodieAvroSerializer.resolveAvroTypeNullability
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection
@@ -228,7 +231,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       private val requiredFieldPosition =
         requiredSchema.structTypeSchema
           .map(f => tableAvroSchema.getField(f.name).pos()).toList
-      private val requiredSerializer = HoodieAvroSerializer(requiredSchema.structTypeSchema, requiredAvroSchema, nullable = false)
+      private val serializer = HoodieAvroSerializer(tableSchema.structTypeSchema, tableAvroSchema, resolveAvroSchemaNullability(tableAvroSchema))
       private val requiredDeserializer = HoodieAvroDeserializer(requiredAvroSchema, requiredSchema.structTypeSchema)
       private val recordBuilder = new GenericRecordBuilder(requiredAvroSchema)
       private val unsafeProjection = UnsafeProjection.create(requiredSchema.structTypeSchema)
@@ -307,9 +310,9 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       }
 
       private def mergeRowWithLog(curRow: InternalRow, curKey: String) = {
-        val historyAvroRecord = requiredSerializer.serialize(curRow).asInstanceOf[GenericRecord]
+        val historyAvroRecord = serializer.serialize(curRow).asInstanceOf[GenericRecord]
         logRecords.get(curKey).getData
-          .combineAndGetUpdateValue(historyAvroRecord, requiredAvroSchema, payloadProps)
+          .combineAndGetUpdateValue(historyAvroRecord, tableAvroSchema, payloadProps)
       }
     }
 }
@@ -370,5 +373,11 @@ private object HoodieMergeOnReadRDD {
     split.dataFile.map(baseFile => new Path(baseFile.filePath))
       .getOrElse(split.logFiles.get.head.getPath)
       .getParent
+  }
+
+  private def resolveAvroSchemaNullability(schema: Schema) = {
+    resolveAvroTypeNullability(schema) match {
+      case (nullable, _) => nullable
+    }
   }
 }

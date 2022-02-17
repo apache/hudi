@@ -17,6 +17,7 @@
 
 package org.apache.hudi
 
+import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{GlobPattern, Path}
 import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.createBaseFileReader
@@ -46,7 +47,7 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
                                      val metaClient: HoodieTableMetaClient)
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) {
 
-  private val conf = sqlContext.sparkContext.hadoopConfiguration
+  private val conf = new Configuration(sqlContext.sparkContext.hadoopConfiguration)
   private val jobConf = new JobConf(conf)
 
   private val commitTimeline = metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants()
@@ -125,7 +126,9 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
         requiredSchema = tableSchema,
         filters = pushDownFilter,
         options = optParams,
-        hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
+        // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
+        //       to configure Parquet reader appropriately
+        hadoopConf = new Configuration(conf)
       )
       val requiredSchemaParquetReader = createBaseFileReader(
         spark = sqlContext.sparkSession,
@@ -134,7 +137,9 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
         requiredSchema = requiredSchema,
         filters = pushDownFilter,
         options = optParams,
-        hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
+        // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
+        //       to configure Parquet reader appropriately
+        hadoopConf = new Configuration(conf)
       )
 
       val hoodieTableState = HoodieMergeOnReadTableState(fileIndex, HoodieRecord.RECORD_KEY_METADATA_FIELD, preCombineFieldOpt)
