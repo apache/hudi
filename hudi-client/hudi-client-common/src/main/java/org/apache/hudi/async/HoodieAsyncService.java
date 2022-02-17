@@ -210,7 +210,7 @@ public abstract class HoodieAsyncService implements Serializable {
    * @throws InterruptedException
    */
   HoodieInstant fetchNextAsyncServiceInstant() throws InterruptedException {
-    LOG.info("Waiting for next instant upto 10 seconds");
+    LOG.info(String.format("Waiting for next instant up to %d seconds", POLLING_SECONDS));
     HoodieInstant instant = pendingInstants.poll(POLLING_SECONDS, TimeUnit.SECONDS);
     if (instant != null) {
       try {
