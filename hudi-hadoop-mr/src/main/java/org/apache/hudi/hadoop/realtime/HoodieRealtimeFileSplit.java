@@ -18,84 +18,125 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
-
-import org.apache.hadoop.mapred.FileSplit;
 
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
- * Filesplit that wraps the base split and a list of log files to merge deltas from.
+ * {@link FileSplit} implementation that holds
+ * <ol>
+ *   <li>Split corresponding to the base file</li>
+ *   <li>List of {@link HoodieLogFile} that holds the delta to be merged (upon reading)</li>
+ * </ol>
+ *
+ * This split is correspondent to a single file-slice in the Hudi terminology.
  *
  * NOTE: If you're adding fields here you need to make sure that you appropriately de-/serialize them
  *       in {@link #readFromInput(DataInput)} and {@link #writeToOutput(DataOutput)}
  */
 public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit {
-
-  private List<String> deltaLogPaths;
+  /**
+   * List of delta log-files holding updated records for this base-file
+   */
   private List<HoodieLogFile> deltaLogFiles = new ArrayList<>();
-
-  private String maxCommitTime;
-
+  /**
+   * Base path of the table this path belongs to
+   */
   private String basePath;
-
-  private Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo = Option.empty();
+  /**
+   * Latest commit instant available at the time of the query in which all of the files
+   * pertaining to this split are represented
+   */
+  private String maxCommitTime;
+  /**
+   * Marks whether this path produced as part of Incremental Query
+   */
+  private boolean belongsToIncrementalQuery = false;
+  /**
+   * Virtual key configuration of the table this split belongs to
+   */
+  private Option<HoodieVirtualKeyInfo> virtualKeyInfo = Option.empty();
 
   public HoodieRealtimeFileSplit() {}
 
-  public HoodieRealtimeFileSplit(FileSplit baseSplit, String basePath, List<HoodieLogFile> deltaLogFiles, String maxCommitTime,
-                                 Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo)
+  public HoodieRealtimeFileSplit(FileSplit baseSplit,
+                                 HoodieRealtimePath path)
+      throws IOException {
+    this(baseSplit,
+        path.getBasePath(),
+        path.getDeltaLogFiles(),
+        path.getMaxCommitTime(),
+        path.getBelongsToIncrementalQuery(),
+        path.getVirtualKeyInfo());
+  }
+
+  /**
+   * @VisibleInTesting
+   */
+  public HoodieRealtimeFileSplit(FileSplit baseSplit,
+                                 String basePath,
+                                 List<HoodieLogFile> deltaLogFiles,
+                                 String maxCommitTime,
+                                 boolean belongsToIncrementalQuery,
+                                 Option<HoodieVirtualKeyInfo> virtualKeyInfo)
       throws IOException {
     super(baseSplit.getPath(), baseSplit.getStart(), baseSplit.getLength(), baseSplit.getLocations());
     this.deltaLogFiles = deltaLogFiles;
-    this.deltaLogPaths = deltaLogFiles.stream().map(entry -> entry.getPath().toString()).collect(Collectors.toList());
-    this.maxCommitTime = maxCommitTime;
     this.basePath = basePath;
-    this.hoodieVirtualKeyInfo = hoodieVirtualKeyInfo;
-  }
-
-  public List<String> getDeltaLogPaths() {
-    return deltaLogPaths;
+    this.maxCommitTime = maxCommitTime;
+    this.belongsToIncrementalQuery = belongsToIncrementalQuery;
+    this.virtualKeyInfo = virtualKeyInfo;
   }
 
   public List<HoodieLogFile> getDeltaLogFiles() {
     return deltaLogFiles;
   }
 
+  @Override
+  public void setDeltaLogFiles(List<HoodieLogFile> deltaLogFiles) {
+    this.deltaLogFiles = deltaLogFiles;
+  }
+
   public String getMaxCommitTime() {
     return maxCommitTime;
-  }
-
-  public String getBasePath() {
-    return basePath;
-  }
-
-  @Override
-  public void setHoodieVirtualKeyInfo(Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo) {
-    this.hoodieVirtualKeyInfo = hoodieVirtualKeyInfo;
-  }
-
-  @Override
-  public Option<HoodieVirtualKeyInfo> getHoodieVirtualKeyInfo() {
-    return hoodieVirtualKeyInfo;
-  }
-
-  public void setDeltaLogPaths(List<String> deltaLogPaths) {
-    this.deltaLogPaths = deltaLogPaths;
   }
 
   public void setMaxCommitTime(String maxCommitTime) {
     this.maxCommitTime = maxCommitTime;
   }
 
+  public String getBasePath() {
+    return basePath;
+  }
+
   public void setBasePath(String basePath) {
     this.basePath = basePath;
+  }
+
+  @Override
+  public void setVirtualKeyInfo(Option<HoodieVirtualKeyInfo> virtualKeyInfo) {
+    this.virtualKeyInfo = virtualKeyInfo;
+  }
+
+  @Override
+  public Option<HoodieVirtualKeyInfo> getVirtualKeyInfo() {
+    return virtualKeyInfo;
+  }
+
+  @Override
+  public boolean getBelongsToIncrementalQuery() {
+    return belongsToIncrementalQuery;
+  }
+
+  @Override
+  public void setBelongsToIncrementalQuery(boolean belongsToIncrementalPath) {
+    this.belongsToIncrementalQuery = belongsToIncrementalPath;
   }
 
   @Override
@@ -112,7 +153,7 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
 
   @Override
   public String toString() {
-    return "HoodieRealtimeFileSplit{DataPath=" + getPath() + ", deltaLogPaths=" + deltaLogPaths
+    return "HoodieRealtimeFileSplit{DataPath=" + getPath() + ", deltaLogPaths=" + getDeltaLogPaths()
         + ", maxCommitTime='" + maxCommitTime + '\'' + ", basePath='" + basePath + '\'' + '}';
   }
 }

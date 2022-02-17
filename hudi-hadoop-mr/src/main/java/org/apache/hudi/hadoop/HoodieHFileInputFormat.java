@@ -42,11 +42,6 @@ public class HoodieHFileInputFormat extends HoodieCopyOnWriteTableInputFormat {
   }
 
   @Override
-  protected boolean includeLogFilesForSnapshotView() {
-    return false;
-  }
-
-  @Override
   public RecordReader<NullWritable, ArrayWritable> getRecordReader(final InputSplit split, final JobConf job,
       final Reporter reporter) throws IOException {
     return new HoodieHFileRecordReader(conf, split, job);

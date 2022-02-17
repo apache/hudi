@@ -53,6 +53,7 @@ public class HiveHoodieTableFileIndex extends BaseHoodieTableFileIndex {
         queryPaths,
         specifiedQueryInstant,
         shouldIncludePendingCommits,
+        true,
         new NoopCache());
   }
 
