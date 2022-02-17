@@ -17,44 +17,54 @@
 
  grammar HoodieSqlCommon;
 
- @members {
-    /**
-     * When false, INTERSECT is given the greater precedence over the other set
-     * operations (UNION, EXCEPT and MINUS) as per the SQL standard.
-     */
-    public boolean legacy_setops_precedence_enbled = false;
-
-    /**
-     * Verify whether current token is a valid decimal token (which contains dot).
-     * Returns true if the character that follows the token is not a digit or letter or underscore.
-     *
-     * For example:
-     * For char stream "2.3", "2." is not a valid decimal token, because it is followed by digit '3'.
-     * For char stream "2.3_", "2.3" is not a valid decimal token, because it is followed by '_'.
-     * For char stream "2.3W", "2.3" is not a valid decimal token, because it is followed by 'W'.
-     * For char stream "12.0D 34.E2+0.12 "  12.0D is a valid decimal token because it is followed
-     * by a space. 34.E2 is a valid decimal token because it is followed by symbol '+'
-     * which is not a digit or letter or underscore.
-     */
-    public boolean isValidDecimal() {
-      int nextChar = _input.LA(1);
-      if (nextChar >= 'A' && nextChar <= 'Z' || nextChar >= '0' && nextChar <= '9' ||
-        nextChar == '_') {
-        return false;
-      } else {
-        return true;
-      }
+ @lexer::members {
+  /**
+   * Verify whether current token is a valid decimal token (which contains dot).
+   * Returns true if the character that follows the token is not a digit or letter or underscore.
+   *
+   * For example:
+   * For char stream "2.3", "2." is not a valid decimal token, because it is followed by digit '3'.
+   * For char stream "2.3_", "2.3" is not a valid decimal token, because it is followed by '_'.
+   * For char stream "2.3W", "2.3" is not a valid decimal token, because it is followed by 'W'.
+   * For char stream "12.0D 34.E2+0.12 "  12.0D is a valid decimal token because it is followed
+   * by a space. 34.E2 is a valid decimal token because it is followed by symbol '+'
+   * which is not a digit or letter or underscore.
+   */
+  public boolean isValidDecimal() {
+    int nextChar = _input.LA(1);
+    if (nextChar >= 'A' && nextChar <= 'Z' || nextChar >= '0' && nextChar <= '9' ||
+      nextChar == '_') {
+      return false;
+    } else {
+      return true;
     }
   }
+
+  /**
+   * This method will be called when we see '/*' and try to match it as a bracketed comment.
+   * If the next character is '+', it should be parsed as hint later, and we cannot match
+   * it as a bracketed comment.
+   *
+   * Returns true if the next character is '+'.
+   */
+  public boolean isHint() {
+    int nextChar = _input.LA(1);
+    if (nextChar == '+') {
+      return true;
+    } else {
+      return false;
+    }
+  }
+}
 
  singleStatement
     : statement EOF
     ;
 
  statement
-    : compactionStatement                                              #compactionCommand
-    | callStatement                                                    #callProcedure
-    | .*?                                                              #passThrough
+    : compactionStatement                                                       #compactionCommand
+    | CALL multipartIdentifier '(' (callArgument (',' callArgument)*)? ')'      #call
+    | .*?                                                                       #passThrough
     ;
 
  compactionStatement
@@ -68,77 +78,56 @@
     : (db=IDENTIFIER '.')? table=IDENTIFIER
     ;
 
- callStatement
-   : CALL multipartIdentifier '(' (callArgument (',' callArgument)*)? ')'  #call
-   ;
-
- multipartIdentifier
-     : parts+=identifier ('.' parts+=identifier)*
-     ;
-
- callExpression
-     : constant
-     | stringMap
-     ;
-
  callArgument
-     : callExpression                        #positionalArgument
-     | identifier '=>' callExpression        #namedArgument
-     ;
+    : expression                    #positionalArgument
+    | identifier '=>' expression    #namedArgument
+    ;
 
- stringMap
-     : MAP '(' constant (',' constant)* ')'
-     ;
-
- identifier
-     : strictIdentifier
-     ;
-
- strictIdentifier
-     : IDENTIFIER             #unquotedIdentifier
-     | quotedIdentifier       #quotedIdentifierAlternative
-     | nonReserved            #unquotedIdentifier
-     ;
-
- quotedIdentifier
-     : BACKQUOTED_IDENTIFIER
-     ;
+ expression
+    : constant
+    | stringMap
+    ;
 
  constant
-     : NULL                                                                                     #nullLiteral
-     | interval                                                                                 #intervalLiteral
-     | identifier STRING                                                                        #typeConstructor
-     | number                                                                                   #numericLiteral
-     | booleanValue                                                                             #booleanLiteral
-     | STRING+                                                                                  #stringLiteral
-     ;
+    : number                          #numericLiteral
+    | booleanValue                    #booleanLiteral
+    | STRING+                         #stringLiteral
+    | identifier STRING               #typeConstructor
+    ;
+
+ stringMap
+    : MAP '(' constant (',' constant)* ')'
+    ;
 
  booleanValue
-      : TRUE | FALSE
-      ;
-
- interval
-     : INTERVAL intervalField*
-     ;
-
- intervalField
-     : value=intervalValue unit=identifier (TO to=identifier)?
-     ;
-
- intervalValue
-     : (PLUS | MINUS)? (INTEGER_VALUE | DECIMAL_VALUE)
-     | STRING
-     ;
+    : TRUE | FALSE
+    ;
 
  number
-     : MINUS? INTEGER_VALUE            #integerLiteral
-     | MINUS? DECIMAL_VALUE            #decimalLiteral
-     | MINUS? BIGINT_LITERAL           #bigIntLiteral
-     | MINUS? SMALLINT_LITERAL         #smallIntLiteral
-     | MINUS? TINYINT_LITERAL          #tinyIntLiteral
-     | MINUS? DOUBLE_LITERAL           #doubleLiteral
-     | MINUS? BIGDECIMAL_LITERAL       #bigDecimalLiteral
-     ;
+    : MINUS? EXPONENT_VALUE           #exponentLiteral
+    | MINUS? DECIMAL_VALUE            #decimalLiteral
+    | MINUS? INTEGER_VALUE            #integerLiteral
+    | MINUS? BIGINT_LITERAL           #bigIntLiteral
+    | MINUS? SMALLINT_LITERAL         #smallIntLiteral
+    | MINUS? TINYINT_LITERAL          #tinyIntLiteral
+    | MINUS? DOUBLE_LITERAL           #doubleLiteral
+    | MINUS? FLOAT_LITERAL            #floatLiteral
+    | MINUS? BIGDECIMAL_LITERAL       #bigDecimalLiteral
+    ;
+
+ multipartIdentifier
+    : parts+=identifier ('.' parts+=identifier)*
+    ;
+
+ identifier
+    : IDENTIFIER              #unquotedIdentifier
+    | quotedIdentifier        #quotedIdentifierAlternative
+    | nonReserved             #unquotedIdentifier
+    ;
+
+ quotedIdentifier
+    : BACKQUOTED_IDENTIFIER
+    ;
 
  nonReserved
      : CALL | COMPACTION | RUN | SCHEDULE | ON | SHOW | LIMIT
@@ -163,81 +152,91 @@
  PLUS: '+';
  MINUS: '-';
 
- IDENTIFIER
-    : (LETTER | DIGIT | '_')+
-    ;
-
  STRING
     : '\'' ( ~('\''|'\\') | ('\\' .) )* '\''
     | '"' ( ~('"'|'\\') | ('\\' .) )* '"'
     ;
 
- BACKQUOTED_IDENTIFIER
-     : '`' ( ~'`' | '``' )* '`'
-     ;
-
  BIGINT_LITERAL
-     : DIGIT+ 'L'
-     ;
+    : DIGIT+ 'L'
+    ;
 
  SMALLINT_LITERAL
-     : DIGIT+ 'S'
-     ;
+    : DIGIT+ 'S'
+    ;
 
  TINYINT_LITERAL
-     : DIGIT+ 'Y'
-     ;
+    : DIGIT+ 'Y'
+    ;
 
  INTEGER_VALUE
-     : DIGIT+
-     ;
+    : DIGIT+
+    ;
+
+ EXPONENT_VALUE
+    : DIGIT+ EXPONENT
+    | DECIMAL_DIGITS EXPONENT {isValidDecimal()}?
+    ;
 
  DECIMAL_VALUE
-     : DIGIT+ EXPONENT
-     | DECIMAL_DIGITS EXPONENT? {isValidDecimal()}?
-     ;
+    : DECIMAL_DIGITS {isValidDecimal()}?
+    ;
+
+ FLOAT_LITERAL
+    : DIGIT+ EXPONENT? 'F'
+    | DECIMAL_DIGITS EXPONENT? 'F' {isValidDecimal()}?
+    ;
 
  DOUBLE_LITERAL
-     : DIGIT+ EXPONENT? 'D'
-     | DECIMAL_DIGITS EXPONENT? 'D' {isValidDecimal()}?
-     ;
+    : DIGIT+ EXPONENT? 'D'
+    | DECIMAL_DIGITS EXPONENT? 'D' {isValidDecimal()}?
+    ;
 
  BIGDECIMAL_LITERAL
-     : DIGIT+ EXPONENT? 'BD'
-     | DECIMAL_DIGITS EXPONENT? 'BD' {isValidDecimal()}?
-     ;
+    : DIGIT+ EXPONENT? 'BD'
+    | DECIMAL_DIGITS EXPONENT? 'BD' {isValidDecimal()}?
+    ;
+
+ IDENTIFIER
+    : (LETTER | DIGIT | '_')+
+    ;
+
+ BACKQUOTED_IDENTIFIER
+    : '`' ( ~'`' | '``' )* '`'
+    ;
 
  fragment DECIMAL_DIGITS
-     : DIGIT+ '.' DIGIT*
-     | '.' DIGIT+
-     ;
+    : DIGIT+ '.' DIGIT*
+    | '.' DIGIT+
+    ;
 
  fragment EXPONENT
-     : 'E' [+-]? DIGIT+
-     ;
+    : 'E' [+-]? DIGIT+
+    ;
 
  fragment DIGIT
-     : [0-9]
-     ;
+    : [0-9]
+    ;
 
  fragment LETTER
-     : [A-Z]
-     ;
+    : [A-Z]
+    ;
 
  SIMPLE_COMMENT
-     : '--' ~[\r\n]* '\r'? '\n'? -> channel(HIDDEN)
-     ;
+    : '--' ('\\\n' | ~[\r\n])* '\r'? '\n'? -> channel(HIDDEN)
+    ;
 
  BRACKETED_COMMENT
-     : '/*' .*? '*/' -> channel(HIDDEN)
-     ;
+    : '/*' {!isHint()}? (BRACKETED_COMMENT|.)*? '*/' -> channel(HIDDEN)
+    ;
 
- WS  : [ \r\n\t]+ -> channel(HIDDEN)
-     ;
+ WS
+    : [ \r\n\t]+ -> channel(HIDDEN)
+    ;
 
  // Catch-all for anything we can't recognize.
  // We use this to be able to ignore and recover all the text
  // when splitting statements with DelimiterLexer
  UNRECOGNIZED
-     : .
-     ;
+    : .
+    ;

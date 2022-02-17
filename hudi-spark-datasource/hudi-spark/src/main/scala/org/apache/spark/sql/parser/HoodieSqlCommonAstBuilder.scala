@@ -26,7 +26,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
-import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
 import org.apache.spark.sql.catalyst.parser.{ParseException, ParserInterface, ParserUtils}
 import org.apache.spark.sql.catalyst.plans.logical._
 
@@ -90,32 +90,6 @@ class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface
     UnresolvedRelation(TableIdentifier(ctx.table.getText, Option(ctx.db).map(_.getText)))
   }
 
-  /**
-   * Create a positional argument in a stored procedure call.
-   */
-  override def visitPositionalArgument(ctx: PositionalArgumentContext): CallArgument = withOrigin(ctx) {
-    val expr = typedVisit[Expression](ctx.callExpression)
-    PositionalArgument(expr)
-  }
-
-  /**
-   * Create a named argument in a stored procedure call.
-   */
-  override def visitNamedArgument(ctx: NamedArgumentContext): CallArgument = withOrigin(ctx) {
-    val name = ctx.identifier.getText
-    val expr = typedVisit[Expression](ctx.callExpression)
-    NamedArgument(name, expr)
-  }
-
-  override def visitCallExpression(ctx: CallExpressionContext): Expression = {
-    // reconstruct the SQL string and parse it using the main Spark parser
-    // while we can avoid the logic to build Spark expressions, we still have to parse them
-    // we cannot call ctx.getText directly since it will not render spaces correctly
-    // that's why we need to recurse down the tree in reconstructSqlString
-    val sqlString = reconstructSqlString(ctx)
-    delegate.parseExpression(sqlString)
-  }
-
   override def visitCall(ctx: CallContext): LogicalPlan = withOrigin(ctx) {
     if (ctx.callArgument().isEmpty) {
       throw new ParseException(s"Procedures arguments is empty", ctx)
@@ -126,10 +100,42 @@ class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface
     CallCommand(name, args)
   }
 
-  override def visitMultipartIdentifier(ctx: MultipartIdentifierContext): Seq[String] =
-    withOrigin(ctx) {
-      ctx.parts.asScala.map(_.getText).toSeq
-    }
+  /**
+   * Return a multi-part identifier as Seq[String].
+   */
+  override def visitMultipartIdentifier(ctx: MultipartIdentifierContext): Seq[String] = withOrigin(ctx) {
+    ctx.parts.asScala.map(_.getText)
+  }
+
+  /**
+   * Create a positional argument in a stored procedure call.
+   */
+  override def visitPositionalArgument(ctx: PositionalArgumentContext): CallArgument = withOrigin(ctx) {
+    val expr = typedVisit[Expression](ctx.expression)
+    PositionalArgument(expr)
+  }
+
+  /**
+   * Create a named argument in a stored procedure call.
+   */
+  override def visitNamedArgument(ctx: NamedArgumentContext): CallArgument = withOrigin(ctx) {
+    val name = ctx.identifier.getText
+    val expr = typedVisit[Expression](ctx.expression)
+    NamedArgument(name, expr)
+  }
+
+  def visitConstant(ctx: ConstantContext): Literal = {
+    delegate.parseExpression(ctx.getText).asInstanceOf[Literal]
+  }
+
+  override def visitExpression(ctx: ExpressionContext): Expression = {
+    // reconstruct the SQL string and parse it using the main Spark parser
+    // while we can avoid the logic to build Spark expressions, we still have to parse them
+    // we cannot call ctx.getText directly since it will not render spaces correctly
+    // that's why we need to recurse down the tree in reconstructSqlString
+    val sqlString = reconstructSqlString(ctx)
+    delegate.parseExpression(sqlString)
+  }
 
   private def reconstructSqlString(ctx: ParserRuleContext): String = {
     ctx.children.asScala.map {

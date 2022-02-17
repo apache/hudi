@@ -29,8 +29,6 @@ class TestCallCommandParser extends TestHoodieSqlBase {
   private val parser = spark.sessionState.sqlParser
 
   test("Test Call Produce with Positional Arguments") {
-    val call2 = parser.parsePlan("schedule compaction on h0")
-
     val call = parser.parsePlan("CALL c.n.func(1, '2', 3L, true, 1.0D, 9.0e1, 900e-1BD)").asInstanceOf[CallCommand]
     assertResult(ImmutableList.of("c", "n", "func"))(JavaConverters.seqAsJavaListConverter(call.name).asJava)
 

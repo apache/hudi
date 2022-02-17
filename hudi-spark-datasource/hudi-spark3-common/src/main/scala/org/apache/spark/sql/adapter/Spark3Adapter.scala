@@ -114,10 +114,4 @@ class Spark3Adapter extends SparkAdapter {
       case _ => false
     }
   }
-
-  override def createExtendedSparkParser: Option[(SparkSession, ParserInterface) => ParserInterface] = {
-    Some(
-      (spark: SparkSession, delegate: ParserInterface) => new HoodieSpark3ExtendedSqlParser(spark, delegate)
-    )
-  }
 }
