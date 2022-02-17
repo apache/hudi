@@ -18,7 +18,6 @@
 package org.apache.hudi.functional
 
 import org.apache.hadoop.fs.Path
-
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieTableType}
@@ -32,11 +31,9 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestBase}
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkUtils}
 import org.apache.log4j.LogManager
-
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types.BooleanType
-
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -431,6 +428,9 @@ class TestMORDataSource extends HoodieClientTestBase {
     val hudiSnapshotDF3 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .load(basePath + "/*/*/*/*")
+
+    verifyShow(hudiSnapshotDF3);
+
     assertEquals(100, hudiSnapshotDF3.count())
     assertEquals(0, hudiSnapshotDF3.filter("rider = 'rider-003'").count())
   }
@@ -560,7 +560,7 @@ class TestMORDataSource extends HoodieClientTestBase {
       // Since Spark3.2, the `nation` column is parsed as String, not Struct.
       assertEquals(sampleRow.getString(4), sampleRow.get(4))
     } else {
-      assertEquals(sampleRow.getStruct(4), sampleRow.get(4))
+      assertEquals(sampleRow.getString(4), sampleRow.get(4))
     }
   }
 
