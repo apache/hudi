@@ -25,6 +25,8 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -38,8 +40,6 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.io.Writable;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -59,7 +59,7 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   private static AtomicLong recordIndex = new AtomicLong(1);
 
   private final Path file;
-  private HoodieHFileConfig hFileConfig;
+  private HoodieHFileConfig hfileConfig;
   private final HoodieWrapperFileSystem fs;
   private final long maxFileSize;
   private final String instantTime;
@@ -74,13 +74,14 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   // This is private in CacheConfig so have been copied here.
   private static String DROP_BEHIND_CACHE_COMPACTION_KEY = "hbase.hfile.drop.behind.compaction";
 
-  public HoodieHFileWriter(String instantTime, Path file, HoodieHFileConfig hFileConfig, Schema schema,
+  public HoodieHFileWriter(String instantTime, Path file, HoodieHFileConfig hfileConfig, Schema schema,
                            TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
 
-    Configuration conf = FSUtils.registerFileSystem(file, hFileConfig.getHadoopConf());
+    Configuration conf = FSUtils.registerFileSystem(file, hfileConfig.getHadoopConf());
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
     this.fs = (HoodieWrapperFileSystem) this.file.getFileSystem(conf);
-    this.hFileConfig = hFileConfig;
+    
+    this.hfileConfig = hfileConfig;
     this.schema = schema;
     this.keyFieldSchema = Option.ofNullable(schema.getField(hfileConfig.getKeyFieldName()));
 
@@ -88,19 +89,19 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
     // stream and the actual file size reported by HDFS
     // this.maxFileSize = hfileConfig.getMaxFileSize()
     //    + Math.round(hfileConfig.getMaxFileSize() * hfileConfig.getCompressionRatio());
-    this.maxFileSize = hFileConfig.getMaxFileSize();
+    this.maxFileSize = hfileConfig.getMaxFileSize();
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;
     this.populateMetaFields = populateMetaFields;
 
-    HFileContext context = new HFileContextBuilder().withBlockSize(hFileConfig.getBlockSize())
-        .withCompression(hFileConfig.getCompressionAlgorithm())
-        .withCellComparator(hFileConfig.getHFileComparator())
+    HFileContext context = new HFileContextBuilder().withBlockSize(hfileConfig.getBlockSize())
+        .withCompression(hfileConfig.getCompressionAlgorithm())
+        .withCellComparator(hfileConfig.getHFileComparator())
         .build();
 
-    conf.set(CacheConfig.PREFETCH_BLOCKS_ON_OPEN_KEY, String.valueOf(hFileConfig.shouldPrefetchBlocksOnOpen()));
-    conf.set(HColumnDescriptor.CACHE_DATA_IN_L1, String.valueOf(hFileConfig.shouldCacheDataInL1()));
-    conf.set(DROP_BEHIND_CACHE_COMPACTION_KEY, String.valueOf(hFileConfig.shouldDropBehindCacheCompaction()));
+    conf.set(CacheConfig.PREFETCH_BLOCKS_ON_OPEN_KEY, String.valueOf(hfileConfig.shouldPrefetchBlocksOnOpen()));
+    conf.set(HColumnDescriptor.CACHE_DATA_IN_L1, String.valueOf(hfileConfig.shouldCacheDataInL1()));
+    conf.set(DROP_BEHIND_CACHE_COMPACTION_KEY, String.valueOf(hfileConfig.shouldDropBehindCacheCompaction()));
     CacheConfig cacheConfig = new CacheConfig(conf);
     this.writer = HFile.getWriterFactory(conf, cacheConfig)
         .withPath(this.fs, this.file)
@@ -149,8 +150,8 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
     KeyValue kv = new KeyValue(recordKey.getBytes(), null, null, value);
     writer.append(kv);
 
-    if (hFileConfig.useBloomFilter()) {
-      hFileConfig.getBloomFilter().add(recordKey);
+    if (hfileConfig.useBloomFilter()) {
+      hfileConfig.getBloomFilter().add(recordKey);
       if (minRecordKey == null) {
         minRecordKey = recordKey;
       }
@@ -160,8 +161,8 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
 
   @Override
   public void close() throws IOException {
-    if (hFileConfig.useBloomFilter()) {
-      final BloomFilter bloomFilter = hFileConfig.getBloomFilter();
+    if (hfileConfig.useBloomFilter()) {
+      final BloomFilter bloomFilter = hfileConfig.getBloomFilter();
       if (minRecordKey == null) {
         minRecordKey = "";
       }
