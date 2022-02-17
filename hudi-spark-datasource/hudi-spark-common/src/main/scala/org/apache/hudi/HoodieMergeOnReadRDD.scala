@@ -185,7 +185,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       override def hasNext: Boolean = {
         if (baseFileIterator.hasNext) {
           val curRow = baseFileIterator.next()
-          recordToLoad = curRow
+          recordToLoad = unsafeProjection(curRow)
           true
         } else {
           if (logRecordsKeyIterator.hasNext) {
