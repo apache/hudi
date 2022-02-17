@@ -95,11 +95,10 @@ object HoodieDataSourceHelper extends PredicateHelper {
 
     file: PartitionedFile => {
       val iter = readParquetFile(file)
-      val rows = iter.flatMap(_ match {
+      iter.flatMap {
         case r: InternalRow => Seq(r)
         case b: ColumnarBatch => b.rowIterator().asScala
-      })
-      rows
+      }
     }
   }
 

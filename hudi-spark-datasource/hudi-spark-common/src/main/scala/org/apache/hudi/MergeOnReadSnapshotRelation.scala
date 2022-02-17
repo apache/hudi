@@ -18,6 +18,7 @@
 
 package org.apache.hudi
 
+import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.{createBaseFileReader, isMetadataTable}
@@ -56,7 +57,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
                                   val metaClient: HoodieTableMetaClient)
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) {
 
-  private val conf = sqlContext.sparkContext.hadoopConfiguration
+  private val conf = new Configuration(sqlContext.sparkContext.hadoopConfiguration)
   private val jobConf = new JobConf(conf)
 
   private val mergeType = optParams.getOrElse(
@@ -114,7 +115,9 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       requiredSchema = tableSchema,
       filters = filters,
       options = optParams,
-      hadoopConf = conf
+      // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
+      //       to configure Parquet reader appropriately
+      hadoopConf = new Configuration(conf)
     )
     val requiredSchemaParquetReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
@@ -123,7 +126,9 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       requiredSchema = requiredSchema,
       filters = filters,
       options = optParams,
-      hadoopConf = conf
+      // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
+      //       to configure Parquet reader appropriately
+      hadoopConf = new Configuration(conf)
     )
 
     val tableState = HoodieMergeOnReadTableState(fileIndex, recordKeyField, preCombineFieldOpt)
