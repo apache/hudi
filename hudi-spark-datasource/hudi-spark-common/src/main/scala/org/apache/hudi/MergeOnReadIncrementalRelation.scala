@@ -73,8 +73,6 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
 
   private val fileIndex = if (commitsToReturn.isEmpty) List() else buildFileIndex()
 
-  private val preCombineFieldOpt = getPrecombineFieldProperty
-
   // Record filters making sure that only records w/in the requested bounds are being fetched as part of the
   // scan collected by this relation
   private lazy val incrementalSpanRecordsFilters: Seq[Filter] = {

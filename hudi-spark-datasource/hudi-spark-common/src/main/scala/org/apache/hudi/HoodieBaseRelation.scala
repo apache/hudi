@@ -69,11 +69,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     if (metaClient.getTableConfig.populateMetaFields()) HoodieRecord.RECORD_KEY_METADATA_FIELD
     else metaClient.getTableConfig.getRecordKeyFieldProp
 
-  protected lazy val preCombineFieldOpt: Option[String] =
-    Option(metaClient.getTableConfig.getPreCombineField)
-      // get preCombineFiled from the options if this is a old table which have not store
-      // the field to hoodie.properties
-      .orElse(optParams.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key))
+  protected lazy val preCombineFieldOpt: Option[String] = getPrecombineFieldProperty
 
   protected lazy val mandatoryColumns: Seq[String] = {
     if (isMetadataTable(metaClient)) {
