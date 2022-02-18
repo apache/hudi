@@ -83,18 +83,23 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
       // the field to hoodie.properties
       .orElse(optParams.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key))
 
-  override def needConversion: Boolean = false
-
-  override def unhandledFilters(filters: Array[Filter]): Array[Filter] = {
-    if (fileIndex.isEmpty) {
-      filters
-    } else {
-      val isNotNullFilter = IsNotNull(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
-      val largerThanFilter = GreaterThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.head.getTimestamp)
-      val lessThanFilter = LessThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.last.getTimestamp)
-      filters :+ isNotNullFilter :+ largerThanFilter :+ lessThanFilter
-    }
+  // Record filters making sure that only records w/in the requested bounds are being fetched as part of the
+  // scan collected by this relation
+  private lazy val incrementalSpanRecordsFilters: Seq[Filter] = {
+    val isNotNullFilter = IsNotNull(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
+    val largerThanFilter = GreaterThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.head.getTimestamp)
+    val lessThanFilter = LessThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.last.getTimestamp)
+    Seq(isNotNullFilter, largerThanFilter, lessThanFilter)
   }
+
+  private lazy val mandatoryColumns = {
+    // NOTE: This columns are required for Incremental flow to be able to handle the rows properly, even in
+    //       cases when no columns are requested to be fetched (for ex, when using {@code count()} API)
+    Seq(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD) ++
+      preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
+  }
+
+  override def needConversion: Boolean = false
 
   override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
     if (fileIndex.isEmpty) {
@@ -102,18 +107,16 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
     } else {
       logDebug(s"buildScan requiredColumns = ${requiredColumns.mkString(",")}")
       logDebug(s"buildScan filters = ${filters.mkString(",")}")
+
       // config to ensure the push down filter for parquet will be applied.
       sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.filterPushdown", "true")
       sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.recordLevelFilter.enabled", "true")
       sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "false")
-      val pushDownFilter = {
-        val isNotNullFilter = IsNotNull(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
-        val largerThanFilter = GreaterThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.head.getTimestamp)
-        val lessThanFilter = LessThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.last.getTimestamp)
-        filters :+ isNotNullFilter :+ largerThanFilter :+ lessThanFilter
-      }
+
+      val fetchedColumns: Array[String] = appendMandatoryColumns(requiredColumns)
+
       val (requiredAvroSchema, requiredStructSchema) =
-        HoodieSparkUtils.getRequiredSchema(tableAvroSchema, requiredColumns)
+        HoodieSparkUtils.getRequiredSchema(tableAvroSchema, fetchedColumns)
 
       val partitionSchema = StructType(Nil)
       val tableSchema = HoodieTableSchema(tableStructSchema, tableAvroSchema.toString)
@@ -126,9 +129,12 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
         requiredSchema = tableSchema,
         // This file-reader is used to read base file records, subsequently merging them with the records
         // stored in delta-log files. As such, we have to read _all_ records from the base file, while avoiding
-        // applying any filtering _before_ we complete combining them w/ delta-log records (to make sure that
+        // applying any user-defined filtering _before_ we complete combining them w/ delta-log records (to make sure that
         // we combine them correctly)
-        filters = Seq.empty,
+        //
+        // The only filtering applicable here is the filtering to make sure we're only fetching records that
+        // fall into incremental span of the timeline being queried
+        filters = incrementalSpanRecordsFilters,
         options = optParams,
         // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
         //       to configure Parquet reader appropriately
@@ -139,7 +145,7 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
         partitionSchema = partitionSchema,
         tableSchema = tableSchema,
         requiredSchema = requiredSchema,
-        filters = pushDownFilter,
+        filters = filters ++ incrementalSpanRecordsFilters,
         options = optParams,
         // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
         //       to configure Parquet reader appropriately
@@ -148,6 +154,8 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
 
       val hoodieTableState = HoodieMergeOnReadTableState(fileIndex, HoodieRecord.RECORD_KEY_METADATA_FIELD, preCombineFieldOpt)
 
+      // TODO implement incremental span record filtering w/in RDD to make sure returned iterator is appropriately
+      //      filtered, since file-reader might not be capable to perform filtering
       val rdd = new HoodieMergeOnReadRDD(
         sqlContext.sparkContext,
         jobConf,
@@ -220,5 +228,10 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
       HoodieMergeOnReadFileSplit(partitionedFile, logPath,
         latestCommit, metaClient.getBasePath, maxCompactionMemoryInBytes, mergeType)
     })
+  }
+
+  private def appendMandatoryColumns(requestedColumns: Array[String]): Array[String] = {
+    val missing = mandatoryColumns.filter(col => !requestedColumns.contains(col))
+    requestedColumns ++ missing
   }
 }
