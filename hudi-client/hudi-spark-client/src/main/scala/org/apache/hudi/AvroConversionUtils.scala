@@ -112,8 +112,6 @@ object AvroConversionUtils {
     row => converter.apply(serde.serializeRow(row))
   }
 
-
-
   /**
    * Creates [[org.apache.spark.sql.DataFrame]] from the provided [[RDD]] of [[GenericRecord]]s
    *
