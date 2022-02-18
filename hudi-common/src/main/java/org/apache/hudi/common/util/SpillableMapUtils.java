@@ -33,9 +33,9 @@ import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
-import java.util.zip.CRC32;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.getNullableValAsString;
+import static org.apache.hudi.common.util.BinaryUtil.generateChecksum;
 
 /**
  * A utility class supports spillable map.
@@ -93,15 +93,6 @@ public class SpillableMapUtils {
     outputStream.write(fileEntry.getKey());
     outputStream.write(fileEntry.getValue());
     return outputStream.getSize();
-  }
-
-  /**
-   * Generate a checksum for a given set of bytes.
-   */
-  public static long generateChecksum(byte[] data) {
-    CRC32 crc = new CRC32();
-    crc.update(data);
-    return crc.getValue();
   }
 
   /**
