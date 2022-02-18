@@ -19,19 +19,20 @@ package org.apache.spark.sql.avro
 
 import org.apache.avro.Schema.Type
 import org.apache.avro.{AvroRuntimeException, Schema}
-import org.apache.spark.sql.types.DataType
 
 import scala.collection.JavaConverters._
 
 /**
- * As AvroSerializer cannot be access out of the spark.sql.avro package since spark 3.1, we define
- * this class to be accessed by other class.
+ * Serializes Catalyst payload into Avro object
+ *
+ * NOTE: This is low-level component operating on Spark internal data-types (comprising [[InternalRow]]).
+ *       If you're looking to convert "deserialized" [[Row]] into Avro, please check [[AvroConversionUtils]]
  */
-case class HoodieAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean)
-  extends AvroSerializer(rootCatalystType, rootAvroType, nullable)
+trait HoodieAvroSerializerTrait {
+  def serialize(catalystData: Any): Any
+}
 
-object HoodieAvroSerializer {
-
+object HoodieAvroSerializerTrait {
   /**
    * Check the nullability of the input Avro type and resolve it when it is nullable. The first
    * return value is a [[Boolean]] indicating if the input Avro type is nullable. The second
@@ -52,5 +53,4 @@ object HoodieAvroSerializer {
       (false, avroType)
     }
   }
-
 }

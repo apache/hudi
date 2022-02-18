@@ -21,17 +21,12 @@ import org.apache.avro.Schema
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.spark.sql.types.DataType
 
-/**
- * This is to be compatible with the type returned by Spark 3.1
- * and other spark versions for AvroDeserializer
- *
- * TODO move to SparkAdapter
- */
-case class HoodieAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType) {
+class Spark3HoodieAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType)
+  extends HoodieAvroDeserializerTrait {
 
+  // SPARK-34404: As of Spark3.2, there is no AvroDeserializer's constructor with Schema and DataType arguments.
+  // So use the reflection to get AvroDeserializer instance.
   private val avroDeserializer = if (HoodieSparkUtils.isSpark3_2) {
-    // SPARK-34404: As of Spark3.2, there is no AvroDeserializer's constructor with Schema and DataType arguments.
-    // So use the reflection to get AvroDeserializer instance.
     val constructor = classOf[AvroDeserializer].getConstructor(classOf[Schema], classOf[DataType], classOf[String])
     constructor.newInstance(rootAvroType, rootCatalystType, "EXCEPTION")
   } else {
@@ -39,10 +34,5 @@ case class HoodieAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataTy
     constructor.newInstance(rootAvroType, rootCatalystType)
   }
 
-  def deserializeData(data: Any): Option[Any] = {
-    avroDeserializer.deserialize(data) match {
-      case opt: Option[_] => opt    // As of Spark 3.1, this will return data wrapped with Option, so we fetch the data
-      case row => Some(row)         // For other Spark versions, return the data as is
-    }
-  }
+  def doDeserialize(data: Any): Any = avroDeserializer.deserialize(data)
 }
