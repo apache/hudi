@@ -480,6 +480,17 @@ With this understanding, if you want your DAG stage to run faster, *bring T as c
 
 https://hudi.apache.org/docs/configurations#hoodiedatasourcehive_syncsupport_timestamp
 
+### How to convert an existing COW table to MOR?
+
+All you need to do is to edit the table type property in hoodie.properties (located at hudi_table_path/.hoodie/hoodie.properties).
+But manually changing it will result in checksum errors. So, we have to go via hudi-cli.
+
+1. Copy existing hoodie.properties to a new location.
+2. Edit table type to MERGE_ON_READ
+3. launch hudi-cli
+    1. connect --path hudi_table_path
+    2. repair overwrite-hoodie-props --new-props-file new_hoodie.properties
+
 ## Contributing to FAQ
 
 A good and usable FAQ should be community-driven and crowd source questions/thoughts across everyone.
