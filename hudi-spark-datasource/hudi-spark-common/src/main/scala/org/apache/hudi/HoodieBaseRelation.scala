@@ -134,7 +134,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected def doBuildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[InternalRow]
 
-  protected def appendMandatoryColumns(requestedColumns: Array[String]): Array[String] = {
+  protected final def appendMandatoryColumns(requestedColumns: Array[String]): Array[String] = {
     val missing = mandatoryColumns.filter(col => !requestedColumns.contains(col))
     requestedColumns ++ missing
   }

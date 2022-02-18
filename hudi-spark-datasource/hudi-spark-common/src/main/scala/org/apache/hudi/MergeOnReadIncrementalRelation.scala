@@ -217,9 +217,4 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
         latestCommit, metaClient.getBasePath, maxCompactionMemoryInBytes, mergeType)
     })
   }
-
-  private def appendMandatoryColumns(requestedColumns: Array[String]): Array[String] = {
-    val missing = mandatoryColumns.filter(col => !requestedColumns.contains(col))
-    requestedColumns ++ missing
-  }
 }
