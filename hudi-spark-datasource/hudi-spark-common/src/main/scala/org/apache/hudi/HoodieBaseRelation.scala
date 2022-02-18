@@ -76,9 +76,8 @@ abstract class HoodieBaseRelation(
       // NOTE: This is required to compensate for cases when empty string is used to stub
       //       property value to avoid it being set with the default value
       // TODO(HUDI-3456) cleanup
-      case Some(f) =>
-        if (StringUtils.isNullOrEmpty(f)) None
-        else Some(f)
+      case Some(f) if !StringUtils.isNullOrEmpty(f) => Some(f)
+      case _ => None
     }
 
   override def schema: StructType = tableStructSchema
