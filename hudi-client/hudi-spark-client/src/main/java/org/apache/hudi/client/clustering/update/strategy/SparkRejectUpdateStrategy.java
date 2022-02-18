@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieClusteringUpdateException;
-import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -39,18 +38,12 @@ import java.util.Set;
  * Update strategy based on following.
  * if some file groups have update record, throw exception
  */
-public class SparkRejectUpdateStrategy<T extends HoodieRecordPayload<T>> extends UpdateStrategy<T, JavaRDD<HoodieRecord<T>>> {
+public class SparkRejectUpdateStrategy<T extends HoodieRecordPayload<T>> extends BaseSparkUpdateStrategy<T> {
   private static final Logger LOG = LogManager.getLogger(SparkRejectUpdateStrategy.class);
 
-  public SparkRejectUpdateStrategy(HoodieSparkEngineContext engineContext, HashSet<HoodieFileGroupId> fileGroupsInPendingClustering) {
+  public SparkRejectUpdateStrategy(HoodieSparkEngineContext engineContext,
+                                   HashSet<HoodieFileGroupId> fileGroupsInPendingClustering) {
     super(engineContext, fileGroupsInPendingClustering);
-  }
-
-  private List<HoodieFileGroupId> getGroupIdsWithUpdate(JavaRDD<HoodieRecord<T>> inputRecords) {
-    List<HoodieFileGroupId> fileGroupIdsWithUpdates = inputRecords
-        .filter(record -> record.getCurrentLocation() != null)
-        .map(record -> new HoodieFileGroupId(record.getPartitionPath(), record.getCurrentLocation().getFileId())).distinct().collect();
-    return fileGroupIdsWithUpdates;
   }
 
   @Override
