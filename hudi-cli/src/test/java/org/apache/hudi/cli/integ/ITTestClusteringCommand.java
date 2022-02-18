@@ -37,6 +37,7 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.testutils.HoodieClientTestBase;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.BeforeEach;
@@ -85,9 +86,7 @@ public class ITTestClusteringCommand extends AbstractShellIntegrationTest {
     // generate commits
     generateCommits();
 
-    CommandResult cr = getShell().executeCommand(
-        String.format("clustering schedule --hoodieConfigs hoodie.clustering.inline.max.commits=1 --sparkMaster %s",
-            "local"));
+    CommandResult cr = scheduleClustering();
     assertAll("Command run failed",
         () -> assertTrue(cr.isSuccess()),
         () -> assertTrue(
@@ -106,7 +105,14 @@ public class ITTestClusteringCommand extends AbstractShellIntegrationTest {
     // generate commits
     generateCommits();
 
-    String instance = prepareScheduleClustering();
+    CommandResult cr1 = scheduleClustering();
+    assertTrue(cr1.isSuccess());
+
+    // get clustering instance
+    HoodieActiveTimeline timeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
+    Option<String> instance =
+        timeline.filterPendingReplaceTimeline().firstInstant().map(HoodieInstant::getTimestamp);
+    assertTrue(instance.isPresent(), "Must have pending clustering.");
 
     CommandResult cr2 = getShell().executeCommand(
         String.format("clustering run --parallelism %s --clusteringInstant %s --sparkMaster %s",
@@ -152,19 +158,10 @@ public class ITTestClusteringCommand extends AbstractShellIntegrationTest {
         "Completed clustering couldn't be 0");
   }
 
-  private String prepareScheduleClustering() {
+  private CommandResult scheduleClustering() {
     // generate requested clustering
-    CommandResult cr = getShell().executeCommand(
-        String.format("clustering schedule --hoodieConfigs hoodie.clustering.inline.max.commits=1 --sparkMaster %s",
-            "local"));
-    assertTrue(cr.isSuccess());
-
-    // get clustering instance
-    HoodieActiveTimeline timeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
-    Option<String> instance =
-        timeline.filterPendingReplaceTimeline().firstInstant().map(HoodieInstant::getTimestamp);
-    assertTrue(instance.isPresent(), "Must have pending clustering.");
-    return instance.get();
+    return getShell().executeCommand(
+        String.format("clustering schedule --hoodieConfigs hoodie.clustering.inline.max.commits=1 --sparkMaster %s", "local"));
   }
 
   private void generateCommits() throws IOException {
