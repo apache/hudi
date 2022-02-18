@@ -31,7 +31,7 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenerator}
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.avro.HoodieAvroSerializer.resolveAvroTypeNullability
+import org.apache.spark.sql.avro.HoodieAvroSerializerTrait.resolveAvroTypeNullability
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Literal}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, InMemoryFileIndex}

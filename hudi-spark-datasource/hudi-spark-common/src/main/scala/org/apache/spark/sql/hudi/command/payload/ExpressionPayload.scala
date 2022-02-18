@@ -29,7 +29,7 @@ import org.apache.hudi.common.util.{ValidationUtils, Option => HOption}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.io.HoodieWriteHandle
 import org.apache.hudi.sql.IExpressionEvaluator
-import org.apache.spark.sql.avro.{AvroSerializer, HoodieAvroSerializer, SchemaConverters}
+import org.apache.spark.sql.avro.{AvroSerializer, SchemaConverters}
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.hudi.SerDeUtils
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload.getEvaluator
@@ -311,7 +311,7 @@ object ExpressionPayload {
               val conditionEvaluator = ExpressionCodeGen.doCodeGen(Seq(condition), conditionSerializer)
 
               val assignSqlType = AvroConversionUtils.convertAvroSchemaToStructType(writeSchema)
-              val assignSerializer = HoodieAvroSerializer(assignSqlType, writeSchema, false)
+              val assignSerializer = new AvroSerializer(assignSqlType, writeSchema, false)
               val assignmentEvaluator = ExpressionCodeGen.doCodeGen(assignments, assignSerializer)
               conditionEvaluator -> assignmentEvaluator
           }

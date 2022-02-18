@@ -23,8 +23,8 @@ import org.apache.avro.{JsonProperties, Schema}
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.avro.HoodieAvroSerializer.resolveAvroTypeNullability
-import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer, SchemaConverters}
+import org.apache.spark.sql.avro.HoodieAvroSerializerTrait.resolveAvroTypeNullability
+import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.types.{DataType, StructType}
@@ -43,8 +43,8 @@ object AvroConversionUtils {
    * @return converter accepting Avro payload and transforming it into a Catalyst one (in the form of [[InternalRow]])
    */
   def createAvroToInternalRowConverter(rootAvroType: Schema, rootCatalystType: StructType): GenericRecord => Option[InternalRow] =
-    record => HoodieAvroDeserializer(rootAvroType, rootCatalystType)
-      .deserializeData(record)
+    record => sparkAdapter.createAvroDeserializer(rootAvroType, rootCatalystType)
+      .deserialize(record)
       .map(_.asInstanceOf[InternalRow])
 
   /**
@@ -56,7 +56,7 @@ object AvroConversionUtils {
    * @return converter accepting Catalyst payload (in the form of [[InternalRow]]) and transforming it into an Avro one
    */
   def createInternalRowToAvroConverter(rootCatalystType: StructType, rootAvroType: Schema, nullable: Boolean): InternalRow => GenericRecord = {
-    row => HoodieAvroSerializer(rootCatalystType, rootAvroType, nullable)
+    row => sparkAdapter.createAvroSerializer(rootCatalystType, rootAvroType, nullable)
       .serialize(row)
       .asInstanceOf[GenericRecord]
   }
