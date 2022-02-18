@@ -42,7 +42,11 @@ trait ProvidesHoodieConfig extends Logging {
     val tableConfig = hoodieCatalogTable.tableConfig
     val tableId = hoodieCatalogTable.table.identifier
 
-    val preCombineFieldOpt = Option(tableConfig.getPreCombineField)
+    // NOTE: Here we fallback to "" to make sure that null value is not overridden with
+    // default value ("ts")
+    // TODO(HUDI-3456) clean up
+    val preCombineField = Option(tableConfig.getPreCombineField).getOrElse("")
+
     require(hoodieCatalogTable.primaryKeys.nonEmpty,
       s"There are no primary key in table ${hoodieCatalogTable.table.identifier}, cannot execute update operator")
     val enableHive = isEnableHive(sparkSession)
@@ -52,7 +56,7 @@ trait ProvidesHoodieConfig extends Logging {
         "path" -> hoodieCatalogTable.tableLocation,
         RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
         TBL_NAME.key -> hoodieCatalogTable.tableName,
-        PRECOMBINE_FIELD.key -> preCombineFieldOpt.orNull,
+        PRECOMBINE_FIELD.key -> preCombineField,
         HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
         URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
         KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
@@ -98,6 +102,11 @@ trait ProvidesHoodieConfig extends Logging {
 
     val options = hoodieCatalogTable.catalogProperties ++ tableConfig.getProps.asScala.toMap ++ extraOptions
     val parameters = withSparkConf(sparkSession, options)()
+
+    // NOTE: Here we fallback to "" to make sure that null value is not overridden with
+    // default value ("ts")
+    // TODO(HUDI-3456) clean up
+    val preCombineField = hoodieCatalogTable.preCombineKey.getOrElse("")
 
     val hiveStylePartitioningEnable = Option(tableConfig.getHiveStylePartitioningEnable).getOrElse("true")
     val urlEncodePartitioning = Option(tableConfig.getUrlEncodePartitioning).getOrElse("false")
@@ -161,7 +170,7 @@ trait ProvidesHoodieConfig extends Logging {
         KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
         SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME -> keyGeneratorClassName,
         RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
-        PRECOMBINE_FIELD.key -> hoodieCatalogTable.preCombineKey.orNull,
+        PRECOMBINE_FIELD.key -> preCombineField,
         PARTITIONPATH_FIELD.key -> getPartitionFieldsConfValue(hoodieCatalogTable.partitionFields).orNull,
         PAYLOAD_CLASS_NAME.key -> payloadClassName,
         ENABLE_ROW_WRITER.key -> enableBulkInsert.toString,
