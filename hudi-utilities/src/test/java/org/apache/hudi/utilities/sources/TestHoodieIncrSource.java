@@ -49,7 +49,6 @@ import java.util.Properties;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieIncrSource extends HoodieClientTestHarness {
 
