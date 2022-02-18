@@ -17,11 +17,6 @@
 
 package org.apache.spark.sql.avro
 
-import org.apache.avro.Schema.Type
-import org.apache.avro.{AvroRuntimeException, Schema}
-
-import scala.collection.JavaConverters._
-
 /**
  * Serializes Catalyst payload into Avro object
  *
@@ -30,27 +25,4 @@ import scala.collection.JavaConverters._
  */
 trait HoodieAvroSerializerTrait {
   def serialize(catalystData: Any): Any
-}
-
-object HoodieAvroSerializerTrait {
-  /**
-   * Check the nullability of the input Avro type and resolve it when it is nullable. The first
-   * return value is a [[Boolean]] indicating if the input Avro type is nullable. The second
-   * return value is either provided Avro type if it's not nullable, or its resolved non-nullable part
-   * in case it is
-   */
-  def resolveAvroTypeNullability(avroType: Schema): (Boolean, Schema) = {
-    if (avroType.getType == Type.UNION) {
-      val fields = avroType.getTypes.asScala
-      val actualType = fields.filter(_.getType != Type.NULL)
-      if (fields.length != 2 || actualType.length != 1) {
-        throw new AvroRuntimeException(
-          s"Unsupported Avro UNION type $avroType: Only UNION of a null type and a non-null " +
-            "type is supported")
-      }
-      (true, actualType.head)
-    } else {
-      (false, avroType)
-    }
-  }
 }

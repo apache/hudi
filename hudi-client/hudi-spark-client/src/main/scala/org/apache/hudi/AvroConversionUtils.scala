@@ -18,12 +18,12 @@
 
 package org.apache.hudi
 
+import org.apache.avro.Schema.Type
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedRecord}
-import org.apache.avro.{JsonProperties, Schema}
+import org.apache.avro.{AvroRuntimeException, JsonProperties, Schema}
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.avro.HoodieAvroSerializerTrait.resolveAvroTypeNullability
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
@@ -34,6 +34,27 @@ import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
 object AvroConversionUtils {
+
+  /**
+   * Check the nullability of the input Avro type and resolve it when it is nullable. The first
+   * return value is a [[Boolean]] indicating if the input Avro type is nullable. The second
+   * return value is either provided Avro type if it's not nullable, or its resolved non-nullable part
+   * in case it is
+   */
+  def resolveAvroTypeNullability(avroType: Schema): (Boolean, Schema) = {
+    if (avroType.getType == Type.UNION) {
+      val fields = avroType.getTypes.asScala
+      val actualType = fields.filter(_.getType != Type.NULL)
+      if (fields.length != 2 || actualType.length != 1) {
+        throw new AvroRuntimeException(
+          s"Unsupported Avro UNION type $avroType: Only UNION of a null type and a non-null " +
+            "type is supported")
+      }
+      (true, actualType.head)
+    } else {
+      (false, avroType)
+    }
+  }
 
   /**
    * Creates converter to transform Avro payload into Spark's Catalyst one

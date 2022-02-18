@@ -35,7 +35,6 @@ import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.avro.HoodieAvroSerializerTrait.resolveAvroTypeNullability
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection
 import org.apache.spark.sql.execution.datasources.PartitionedFile
@@ -376,7 +375,7 @@ private object HoodieMergeOnReadRDD {
   }
 
   private def resolveAvroSchemaNullability(schema: Schema) = {
-    resolveAvroTypeNullability(schema) match {
+    AvroConversionUtils.resolveAvroTypeNullability(schema) match {
       case (nullable, _) => nullable
     }
   }
