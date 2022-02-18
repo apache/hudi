@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.SerializableConfiguration
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.io.storage.HoodieHFileReader
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.spark.internal.Logging
@@ -68,6 +69,17 @@ abstract class HoodieBaseRelation(
   protected val tableStructSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
 
   protected val partitionColumns: Array[String] = metaClient.getTableConfig.getPartitionFields.orElse(Array.empty)
+
+  protected def getPrecombineFieldProperty: Option[String] =
+    Option(metaClient.getTableConfig.getPreCombineField)
+      .orElse(optParams.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key)) match {
+      // NOTE: This is required to compensate for cases when empty string is used to stub
+      //       property value to avoid it being set with the default value
+      // TODO(HUDI-3456) cleanup
+      case Some(f) =>
+        if (StringUtils.isNullOrEmpty(f)) None
+        else Some(f)
+    }
 
   override def schema: StructType = tableStructSchema
 }

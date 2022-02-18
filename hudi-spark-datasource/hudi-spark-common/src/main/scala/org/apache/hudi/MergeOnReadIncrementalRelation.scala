@@ -77,11 +77,7 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
 
   private val fileIndex = if (commitsToReturn.isEmpty) List() else buildFileIndex()
 
-  private val preCombineFieldOpt =
-    Option(metaClient.getTableConfig.getPreCombineField)
-      // get preCombineFiled from the options if this is a old table which have not store
-      // the field to hoodie.properties
-      .orElse(optParams.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key))
+  private val preCombineFieldOpt = getPrecombineFieldProperty
 
   // Record filters making sure that only records w/in the requested bounds are being fetched as part of the
   // scan collected by this relation

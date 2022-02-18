@@ -73,11 +73,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
     else metaClient.getTableConfig.getRecordKeyFieldProp
   }
 
-  private val preCombineFieldOpt =
-    Option(metaClient.getTableConfig.getPreCombineField)
-      // get preCombineFiled from the options if this is a old table which have not store
-      // the field to hoodie.properties
-      .orElse(optParams.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key))
+  private val preCombineFieldOpt = getPrecombineFieldProperty
 
   private lazy val mandatoryColumns = {
     if (isMetadataTable(metaClient)) {
