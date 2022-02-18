@@ -39,6 +39,7 @@ import org.apache.hadoop.fs.PositionedReadable;
 import org.apache.hadoop.fs.Seekable;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.KeyValue;
+import org.apache.hadoop.hbase.fs.HFileSystem;
 import org.apache.hadoop.hbase.io.FSDataInputStreamWrapper;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
@@ -100,11 +101,13 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     SeekableByteArrayInputStream bis = new SeekableByteArrayInputStream(content);
     FSDataInputStream fsdis = new FSDataInputStream(bis);
     FSDataInputStreamWrapper stream = new FSDataInputStreamWrapper(fsdis);
+    FileSystem fs = FSUtils.getFs("hoodie", conf);
+    HFileSystem hfs = (fs instanceof HFileSystem) ? (HFileSystem) fs : new HFileSystem(fs);
     ReaderContext context = new ReaderContextBuilder()
         .withFilePath(path)
         .withInputStreamWrapper(stream)
-        .withFileSize(FSUtils.getFs("hoodie", conf).getFileStatus(path).getLen())
-        .withFileSystem(stream.getHfs())
+        .withFileSize(content.length)
+        .withFileSystem(hfs)
         .withPrimaryReplicaReader(true)
         .withReaderType(ReaderContext.ReaderType.STREAM)
         .build();
