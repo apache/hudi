@@ -165,7 +165,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
 
         List<SmallFile> smallFiles =
             filterSmallFilesInClustering(partitionPathToPendingClusteringFileGroupsId.getOrDefault(partitionPath, Collections.emptySet()),
-                partitionSmallFilesMap.get(partitionPath));
+                partitionSmallFilesMap.getOrDefault(partitionPath, new ArrayList<>()));
 
         this.smallFiles.addAll(smallFiles);
 
@@ -241,6 +241,11 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
   private Map<String, List<SmallFile>> getSmallFilesForPartitions(List<String> partitionPaths, HoodieEngineContext context) {
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
     Map<String, List<SmallFile>> partitionSmallFilesMap = new HashMap<>();
+
+    if (config.getParquetSmallFileLimit() <= 0) {
+      return partitionSmallFilesMap;
+    }
+
     if (partitionPaths != null && partitionPaths.size() > 0) {
       context.setJobStatus(this.getClass().getSimpleName(), "Getting small files from partitions");
       JavaRDD<String> partitionPathRdds = jsc.parallelize(partitionPaths, partitionPaths.size());
