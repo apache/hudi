@@ -31,7 +31,6 @@ import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.avro.HoodieAvroSerializer;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema;
 import org.apache.spark.sql.types.StructType;
@@ -144,7 +143,7 @@ public class TestTimestampBasedKeyGenerator {
     // timezone is GMT+8:00, createTime is BigDecimal
     BigDecimal decimal = new BigDecimal("1578283932000.0001");
     Conversions.DecimalConversion conversion = new Conversions.DecimalConversion();
-    Tuple2<Object, Schema> resolvedNullableSchema = HoodieAvroSerializer.resolveAvroTypeNullability(schema.getField("createTimeDecimal").schema());
+    Tuple2<Object, Schema> resolvedNullableSchema = AvroConversionUtils.resolveAvroTypeNullability(schema.getField("createTimeDecimal").schema());
     GenericFixed avroDecimal = conversion.toFixed(decimal, resolvedNullableSchema._2, LogicalTypes.decimal(20, 4));
     baseRecord.put("createTimeDecimal", avroDecimal);
     properties = getBaseKeyConfig("createTimeDecimal", "EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT+8:00", null);
