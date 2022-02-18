@@ -18,6 +18,7 @@
 
 package org.apache.hudi
 
+import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieBaseRelation.createBaseFileReader
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -26,10 +27,6 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
-import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile}
-import org.apache.spark.sql.{Row, SQLContext}
-import org.apache.spark.sql.sources.{BaseRelation, Filter}
-import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
@@ -77,20 +74,20 @@ class BaseFileOnlyViewRelation(sqlContext: SQLContext,
 
     val filePartitions = getPartitions(partitionFilters, dataFilters)
 
-    val tableSchemas = HoodieTableSchemas(
-      tableSchema = tableStructSchema,
-      partitionSchema = StructType(Nil),
-      requiredSchema = requiredStructSchema,
-      tableAvroSchema = tableAvroSchema.toString,
-      requiredAvroSchema = requiredAvroSchema.toString
-    )
+    val partitionSchema = StructType(Nil)
+    val tableSchema = HoodieTableSchema(tableStructSchema, tableAvroSchema.toString)
+    val requiredSchema = HoodieTableSchema(requiredStructSchema, requiredAvroSchema.toString)
 
     val baseFileReader = createBaseFileReader(
       spark = sparkSession,
-      tableSchemas = tableSchemas,
+      partitionSchema = partitionSchema,
+      tableSchema = tableSchema,
+      requiredSchema = requiredSchema,
       filters = filters,
       options = optParams,
-      hadoopConf = sparkSession.sessionState.newHadoopConf()
+      // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
+      //       to configure Parquet reader appropriately
+      hadoopConf = new Configuration(conf)
     )
 
     new HoodieFileScanRDD(sparkSession, baseFileReader, filePartitions)
