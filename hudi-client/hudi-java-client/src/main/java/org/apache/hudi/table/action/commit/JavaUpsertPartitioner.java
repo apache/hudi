@@ -206,7 +206,7 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
   private Map<String, List<SmallFile>> getSmallFilesForPartitions(List<String> partitionPaths, HoodieEngineContext context) {
     Map<String, List<SmallFile>> partitionSmallFilesMap = new HashMap<>();
 
-    if (config.getParquetSmallFileLimit() == 0) {
+    if (config.getParquetSmallFileLimit() <= 0) {
       return partitionSmallFilesMap;
     }
 

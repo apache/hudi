@@ -242,7 +242,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
     Map<String, List<SmallFile>> partitionSmallFilesMap = new HashMap<>();
 
-    if (config.getParquetSmallFileLimit() == 0) {
+    if (config.getParquetSmallFileLimit() <= 0) {
       return partitionSmallFilesMap;
     }
 

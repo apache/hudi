@@ -97,7 +97,7 @@ public class SparkUpsertDeltaCommitPartitioner<T extends HoodieRecordPayload<T>>
               .collect(Collectors.toList());
     }
 
-    if (config.getParquetSmallFileLimit() == 0) {
+    if (config.getParquetSmallFileLimit() <= 0) {
       return Collections.emptyList();
     }
 

@@ -173,7 +173,8 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .defaultValue(String.valueOf(104857600))
       .withDocumentation("During upsert operation, we opportunistically expand existing small files on storage, instead of writing"
           + " new files, to keep number of files to an optimum. This config sets the file size limit below which a file on storage "
-          + " becomes a candidate to be selected as such a `small file`. By default, treat any file <= 100MB as a small file.");
+          + " becomes a candidate to be selected as such a `small file`. By default, treat any file <= 100MB as a small file."
+          + " Also note that if this set <= 0, will not try to get small files and directly write new files");
 
   public static final ConfigProperty<String> RECORD_SIZE_ESTIMATION_THRESHOLD = ConfigProperty
       .key("hoodie.record.size.estimation.threshold")

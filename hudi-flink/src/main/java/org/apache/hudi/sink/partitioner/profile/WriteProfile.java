@@ -182,7 +182,7 @@ public class WriteProfile {
     }
 
     List<SmallFile> smallFiles = new ArrayList<>();
-    if (config.getParquetSmallFileLimit() == 0) {
+    if (config.getParquetSmallFileLimit() <= 0) {
       this.smallFilesMap.put(partitionPath, smallFiles);
       return smallFiles;
     }
