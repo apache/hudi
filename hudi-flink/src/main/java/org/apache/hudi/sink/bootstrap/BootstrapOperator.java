@@ -216,7 +216,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
           if (this.batchSize > 0) {
             List<HoodieKey> hoodieKeys;
             Path filePath = new Path(baseFile.getPath());
-            try (BaseFileUtils.BaseFileReader reader = fileUtils.getReader(this.hadoopConf, filePath)) {
+            try (BaseFileUtils.ReaderWrapper reader = fileUtils.getRecordKeyPartitionPathReader(this.hadoopConf, filePath)) {
               do {
                 hoodieKeys = fileUtils.fetchRecordKeyPartitionPath(reader, filePath, batchSize);
                 hoodieKeys.forEach(hoodieKey ->

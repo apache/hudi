@@ -133,12 +133,12 @@ public class ParquetUtils extends BaseFileUtils {
   }
 
   @Override
-  public List<HoodieKey> fetchRecordKeyPartitionPath(BaseFileReader reader, Path filePath, int batchSize) {
+  public List<HoodieKey> fetchRecordKeyPartitionPath(ReaderWrapper reader, Path filePath, int batchSize) {
     return fetchRecordKeyPartitionPathInternal(reader, filePath, Option.empty(), batchSize);
   }
 
   @Override
-  public BaseFileReader getReader(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public ReaderWrapper getRecordKeyPartitionPathReader(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     try {
       Configuration conf = new Configuration(configuration);
       conf.addResource(FSUtils.getFs(filePath.toString(), conf).getConf());
@@ -148,20 +148,20 @@ public class ParquetUtils extends BaseFileUtils {
         fields.addAll(keyGenerator.getPartitionPathFields());
         return HoodieAvroUtils.getSchemaForFields(readAvroSchema(conf, filePath), fields);
       })
-              .orElse(HoodieAvroUtils.getRecordKeyPartitionPathSchema());
+          .orElse(HoodieAvroUtils.getRecordKeyPartitionPathSchema());
       AvroReadSupport.setAvroReadSchema(conf, readSchema);
       AvroReadSupport.setRequestedProjection(conf, readSchema);
       ParquetReader reader = AvroParquetReader.builder(filePath).withConf(conf).build();
-      return new ParquetFileInnerReader(reader);
+      return new ParquetReaderWrapper(reader);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to open reader from Parquet file " + filePath, e);
     }
   }
 
-  private List<HoodieKey> fetchRecordKeyPartitionPathInternal(BaseFileReader reader, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt, int batchSize) {
+  private List<HoodieKey> fetchRecordKeyPartitionPathInternal(ReaderWrapper reader, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt, int batchSize) {
     List<HoodieKey> hoodieKeys = new ArrayList<>();
     try {
-      Object obj = (((ParquetFileInnerReader)reader).reader).read();
+      Object obj = (((ParquetReaderWrapper)reader).reader).read();
       while (obj != null) {
         if (obj instanceof GenericRecord) {
           String recordKey = null;
@@ -177,7 +177,7 @@ public class ParquetUtils extends BaseFileUtils {
           if (batchSize > 0 && hoodieKeys.size() >= batchSize) {
             break;
           }
-          obj = (((ParquetFileInnerReader)reader).reader).read();
+          obj = (((ParquetReaderWrapper)reader).reader).read();
         }
       }
     } catch (IOException e) {
@@ -196,7 +196,7 @@ public class ParquetUtils extends BaseFileUtils {
    */
   @Override
   public List<HoodieKey> fetchRecordKeyPartitionPath(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    try (BaseFileReader reader = getReader(configuration, filePath, keyGeneratorOpt)) {
+    try (ReaderWrapper reader = getRecordKeyPartitionPathReader(configuration, filePath, keyGeneratorOpt)) {
       return fetchRecordKeyPartitionPathInternal(reader, filePath, keyGeneratorOpt, -1);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read from Parquet file " + filePath, e);
@@ -436,10 +436,10 @@ public class ParquetUtils extends BaseFileUtils {
     }
   }
 
-  private class ParquetFileInnerReader extends BaseFileReader {
+  private class ParquetReaderWrapper extends ReaderWrapper {
     ParquetReader reader;
 
-    private ParquetFileInnerReader(ParquetReader reader) {
+    private ParquetReaderWrapper(ParquetReader reader) {
       this.reader = reader;
     }
 

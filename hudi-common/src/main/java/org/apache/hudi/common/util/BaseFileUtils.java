@@ -178,25 +178,25 @@ public abstract class BaseFileUtils {
    * @param filePath      The data file path
    * @return {@link List} of {@link HoodieKey}s fetched from the parquet file
    */
-  public abstract List<HoodieKey> fetchRecordKeyPartitionPath(BaseFileReader reader, Path filePath, int batchSize);
+  public abstract List<HoodieKey> fetchRecordKeyPartitionPath(ReaderWrapper reader, Path filePath, int batchSize);
 
   /**
    * Open File Reader.
-   * @param configuration        configuration to build file reader
-   * @param filePath      The data file path
+   * @param configuration     configuration to build file reader
+   * @param filePath          The data file path
    * @param keyGeneratorOpt instance of KeyGenerator
    * @return file reader
    */
-  public abstract BaseFileReader getReader(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt);
+  public abstract ReaderWrapper getRecordKeyPartitionPathReader(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt);
 
   /**
    * Open File Reader.
-   * @param configuration        configuration to build file reader
-   * @param filePath      The data file path
+   * @param configuration    configuration to build file reader
+   * @param filePath         The data file path
    * @return file reader
    */
-  public BaseFileReader getReader(Configuration configuration, Path filePath) {
-    return getReader(configuration, filePath, Option.empty());
+  public ReaderWrapper getRecordKeyPartitionPathReader(Configuration configuration, Path filePath) {
+    return getRecordKeyPartitionPathReader(configuration, filePath, Option.empty());
   }
 
   /**
@@ -216,7 +216,7 @@ public abstract class BaseFileUtils {
    */
   public abstract Schema readAvroSchema(Configuration configuration, Path filePath);
 
-  public abstract class BaseFileReader implements Closeable {
+  public abstract class ReaderWrapper implements Closeable {
 
   }
 }

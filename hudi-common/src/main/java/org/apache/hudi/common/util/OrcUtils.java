@@ -55,7 +55,7 @@ import org.apache.orc.TypeDescription;
 public class OrcUtils extends BaseFileUtils {
 
   @Override
-  public BaseFileReader getReader(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public ReaderWrapper getRecordKeyPartitionPathReader(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     try {
       Configuration conf = new Configuration(configuration);
       conf.addResource(FSUtils.getFs(filePath.toString(), conf).getConf());
@@ -64,7 +64,7 @@ public class OrcUtils extends BaseFileUtils {
       Schema readSchema = HoodieAvroUtils.getRecordKeyPartitionPathSchema();
       TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(readSchema);
       RecordReader recordReader = reader.rows(new Options(conf).schema(orcSchema));
-      return new OrcFileInnerReader(reader, readSchema, orcSchema, recordReader);
+      return new OrcReaderWrapper(reader, readSchema, orcSchema, recordReader);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to open reader from ORC file:" + filePath, e);
     }
@@ -86,7 +86,7 @@ public class OrcUtils extends BaseFileUtils {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read from ORC file:" + filePath, e);
     }
-    try (BaseFileReader reader = getReader(configuration, filePath)) {
+    try (ReaderWrapper reader = getRecordKeyPartitionPathReader(configuration, filePath)) {
       return fetchRecordKeyPartitionPathInternal(reader, filePath, -1);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read from ORC file:" + filePath, e);
@@ -94,16 +94,16 @@ public class OrcUtils extends BaseFileUtils {
   }
 
   @Override
-  public List<HoodieKey> fetchRecordKeyPartitionPath(BaseFileReader reader, Path filePath, int batchSize) {
+  public List<HoodieKey> fetchRecordKeyPartitionPath(ReaderWrapper reader, Path filePath, int batchSize) {
     return fetchRecordKeyPartitionPathInternal(reader, filePath, batchSize);
   }
 
-  public List<HoodieKey> fetchRecordKeyPartitionPathInternal(BaseFileReader reader, Path filePath, int batchSize) {
+  public List<HoodieKey> fetchRecordKeyPartitionPathInternal(ReaderWrapper reader, Path filePath, int batchSize) {
     List<HoodieKey> hoodieKeys = new ArrayList<>();
     try {
-      List<String> fieldNames = (((OrcFileInnerReader)reader).orcSchema).getFieldNames();
-      VectorizedRowBatch batch = (((OrcFileInnerReader)reader).orcSchema).createRowBatch();
-      RecordReader recordReader = ((OrcFileInnerReader)reader).recordReader;
+      List<String> fieldNames = (((OrcReaderWrapper)reader).orcSchema).getFieldNames();
+      VectorizedRowBatch batch = (((OrcReaderWrapper)reader).orcSchema).createRowBatch();
+      RecordReader recordReader = ((OrcReaderWrapper)reader).recordReader;
 
       // column indices for the RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD fields
       int keyCol = -1;
@@ -126,9 +126,9 @@ public class OrcUtils extends BaseFileUtils {
           String rowKey = rowKeys.toString(i);
           String partitionPath = partitionPaths.toString(i);
           hoodieKeys.add(new HoodieKey(rowKey, partitionPath));
-          if (batchSize > 0 && hoodieKeys.size() >= batchSize) {
-            break;
-          }
+        }
+        if (batchSize > 0 && hoodieKeys.size() >= batchSize) {
+          break;
         }
       }
     } catch (IOException e) {
@@ -298,13 +298,13 @@ public class OrcUtils extends BaseFileUtils {
     }
   }
 
-  private class OrcFileInnerReader extends BaseFileReader {
+  private class OrcReaderWrapper extends ReaderWrapper {
     Reader reader;
     Schema readSchema;
     TypeDescription orcSchema;
     RecordReader recordReader;
 
-    public OrcFileInnerReader(Reader reader, Schema readSchema, TypeDescription orcSchema, RecordReader recordReader) {
+    public OrcReaderWrapper(Reader reader, Schema readSchema, TypeDescription orcSchema, RecordReader recordReader) {
       this.reader = reader;
       this.readSchema = readSchema;
       this.orcSchema = orcSchema;
