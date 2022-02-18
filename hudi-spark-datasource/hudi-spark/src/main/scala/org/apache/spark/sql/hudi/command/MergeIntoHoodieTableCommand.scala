@@ -449,7 +449,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       Map(
         "path" -> path,
         RECORDKEY_FIELD.key -> tableConfig.getRecordKeyFieldProp,
-        PRECOMBINE_FIELD.key -> hoodieCatalogTable.preCombineKey.getOrElse(""),
+        PRECOMBINE_FIELD.key -> hoodieCatalogTable.preCombineKey.orNull,
         TBL_NAME.key -> hoodieCatalogTable.tableName,
         PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp,
         PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
@@ -470,6 +470,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> "200",
         SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL
       )
+        .filter { case (_, v) => v != null }
     }
   }
 }
