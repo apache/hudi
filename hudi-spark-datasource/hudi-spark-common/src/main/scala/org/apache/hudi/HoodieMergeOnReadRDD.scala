@@ -20,9 +20,8 @@ package org.apache.hudi
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder}
-
 import org.apache.hadoop.conf.Configuration
-
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieDataSourceHelper._
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
@@ -30,7 +29,6 @@ import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS
-
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -40,7 +38,6 @@ import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskCont
 
 import java.io.Closeable
 import java.util.Properties
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.util.Try
@@ -325,6 +322,7 @@ private object HoodieMergeOnReadRDD {
 
   def scanLog(split: HoodieMergeOnReadFileSplit, logSchema: Schema, config: Configuration): HoodieMergedLogRecordScanner = {
     val fs = FSUtils.getFs(split.tablePath, config)
+    val partitionPath = new Path(split.logPaths.get.asJava.get(0)).getParent.getName
     HoodieMergedLogRecordScanner.newBuilder()
       .withFileSystem(fs)
       .withBasePath(split.tablePath)
@@ -343,6 +341,7 @@ private object HoodieMergeOnReadRDD {
       .withSpillableMapBasePath(
         config.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP,
           HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
+      .withPartition(partitionPath)
       .build()
   }
 }

@@ -577,6 +577,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         TimelineLayoutVersion.CURR_VERSION).build();
     client = getHoodieWriteClient(newConfig);
 
+    client.savepoint("004", "user1","comment1");
+
     client.restoreToInstant("004");
 
     assertFalse(metaClient.reloadActiveTimeline().getRollbackTimeline().lastInstant().isPresent());
