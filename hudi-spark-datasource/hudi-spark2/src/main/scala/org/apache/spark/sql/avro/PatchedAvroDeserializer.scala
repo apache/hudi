@@ -167,19 +167,21 @@ class PatchedAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType) 
 
       case (ARRAY, ArrayType(elementType, containsNull)) =>
         val elementWriter = newWriter(avroType.getElementType, elementType, path)
+        val elementPath = path :+ "element"
         (updater, ordinal, value) =>
-          val array = value.asInstanceOf[GenericData.Array[Any]]
-          val len = array.size()
+          val collection = value.asInstanceOf[java.util.Collection[Any]]
+          val len = collection.size()
           val result = createArrayData(elementType, len)
           val elementUpdater = new ArrayDataUpdater(result)
 
           var i = 0
-          while (i < len) {
-            val element = array.get(i)
+          val iter = collection.iterator()
+          while (iter.hasNext) {
+            val element = iter.next()
             if (element == null) {
               if (!containsNull) {
-                throw new RuntimeException(s"Array value at path ${path.mkString(".")} is not " +
-                  "allowed to be null")
+                throw new RuntimeException(
+                  s"Array value at path '${elementPath.mkString(".")}' is not allowed to be null")
               } else {
                 elementUpdater.setNullAt(i)
               }
