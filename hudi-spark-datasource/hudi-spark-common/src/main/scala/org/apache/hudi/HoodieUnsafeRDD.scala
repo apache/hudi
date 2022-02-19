@@ -56,9 +56,13 @@ import org.apache.spark.{Partition, SparkContext, TaskContext}
  * NOTE: It enforces, for ex, that all of the RDDs implement [[compute]] method returning
  *       [[InternalRow]] to avoid superfluous ser/de
  */
-abstract class HoodieBaseUnsafeRDD(@transient sc: SparkContext)
+abstract class HoodieUnsafeRDD(@transient sc: SparkContext)
   extends RDD[InternalRow](sc, Nil) {
 
   def compute(split: Partition, context: TaskContext): Iterator[InternalRow]
 
+  override final def collect(): Array[InternalRow] =
+    throw new UnsupportedOperationException(
+      "This method will not function correctly, please refer to scala-doc for HoodieUnsafeRDD"
+    )
 }
