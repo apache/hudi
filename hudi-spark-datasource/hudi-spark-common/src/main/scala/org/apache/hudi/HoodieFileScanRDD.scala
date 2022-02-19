@@ -30,7 +30,7 @@ import org.apache.spark.{Partition, TaskContext}
 class HoodieFileScanRDD(@transient private val sparkSession: SparkSession,
                         readFunction: PartitionedFile => Iterator[InternalRow],
                         @transient fileSplits: Seq[FilePartition])
-  extends HoodieBaseRDD(sparkSession.sparkContext) {
+  extends HoodieBaseUnsafeRDD(sparkSession.sparkContext) {
 
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
     val iterator = new Iterator[InternalRow] with AutoCloseable {
