@@ -103,6 +103,8 @@ trait ProvidesHoodieConfig extends Logging {
     val options = hoodieCatalogTable.catalogProperties ++ tableConfig.getProps.asScala.toMap ++ extraOptions
     val parameters = withSparkConf(sparkSession, options)()
 
+    val partitionFieldsStr = hoodieCatalogTable.partitionFields.mkString(",")
+
     // NOTE: Here we fallback to "" to make sure that null value is not overridden with
     // default value ("ts")
     // TODO(HUDI-3456) clean up
@@ -171,11 +173,11 @@ trait ProvidesHoodieConfig extends Logging {
         SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME -> keyGeneratorClassName,
         RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
         PRECOMBINE_FIELD.key -> preCombineField,
-        PARTITIONPATH_FIELD.key -> getPartitionFieldsConfValue(hoodieCatalogTable.partitionFields).orNull,
+        PARTITIONPATH_FIELD.key -> partitionFieldsStr,
         PAYLOAD_CLASS_NAME.key -> payloadClassName,
         ENABLE_ROW_WRITER.key -> enableBulkInsert.toString,
         HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(hasPrecombineColumn),
-        HIVE_PARTITION_FIELDS.key -> getPartitionFieldsConfValue(hoodieCatalogTable.partitionFields).orNull,
+        HIVE_PARTITION_FIELDS.key -> partitionFieldsStr,
         META_SYNC_ENABLED.key -> enableHive.toString,
         HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
         HIVE_USE_JDBC.key -> "false",
@@ -191,7 +193,4 @@ trait ProvidesHoodieConfig extends Logging {
     }
   }
 
-  private def getPartitionFieldsConfValue(partitionFields: Array[String]): Option[String] =
-    if (partitionFields.nonEmpty) Some(partitionFields.mkString(","))
-    else None
 }
