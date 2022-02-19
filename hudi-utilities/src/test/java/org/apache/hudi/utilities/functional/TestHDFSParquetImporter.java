@@ -250,13 +250,11 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
     List<GenericRecord> records = new ArrayList<GenericRecord>();
     // 10 for update
     for (long recordNum = 0; recordNum < 11; recordNum++) {
-      records.add(new HoodieTestDataGenerator().generateGenericRecord(Long.toString(recordNum), "0", "rider-upsert-" + recordNum,
-          "driver-upsert" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)));
+      records.add(new HoodieTestDataGenerator().generateGenericRecord(Long.toString(recordNum), "0", "rider-upsert-" + recordNum, "driver-upsert" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)));
     }
     // 4 for insert
     for (long recordNum = 96; recordNum < 100; recordNum++) {
-      records.add(new HoodieTestDataGenerator().generateGenericRecord(Long.toString(recordNum), "0", "rider-upsert-" + recordNum,
-          "driver-upsert" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)));
+      records.add(new HoodieTestDataGenerator().generateGenericRecord(Long.toString(recordNum), "0", "rider-upsert-" + recordNum, "driver-upsert" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)));
     }
     try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(srcFile)
         .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA).withConf(HoodieTestUtils.getDefaultHadoopConf()).build()) {
