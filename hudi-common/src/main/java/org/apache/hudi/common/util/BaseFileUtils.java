@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import java.io.Closeable;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -168,43 +167,33 @@ public abstract class BaseFileUtils {
    * Fetch {@link HoodieKey}s from the given data file.
    * @param configuration configuration to build fs object
    * @param filePath      The data file path
-   * @return {@link List} of {@link HoodieKey}s fetched from the parquet file
+   * @return {@link List} of {@link HoodieKey}s fetched from the data file
    */
   public abstract List<HoodieKey> fetchRecordKeyPartitionPath(Configuration configuration, Path filePath);
 
   /**
-   * Fetch {@link HoodieKey}s from the given data file.
-   * @param reader        The file reader
+   * Provides a closable iterator for reading the given data file.
+   * @param configuration configuration to build fs object
    * @param filePath      The data file path
-   * @return {@link List} of {@link HoodieKey}s fetched from the parquet file
+   * @param keyGeneratorOpt instance of KeyGenerator.
+   * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the file
    */
-  public abstract List<HoodieKey> fetchRecordKeyPartitionPath(ReaderWrapper reader, Path filePath, int batchSize);
+  public abstract ClosableIterator<HoodieKey> fetchRecordKeyPartitionPathIterator(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt);
 
   /**
-   * Open File Reader.
-   * @param configuration     configuration to build file reader
-   * @param filePath          The data file path
-   * @param keyGeneratorOpt instance of KeyGenerator
-   * @return file reader
+   * Provides a closable iterator for reading the given data file.
+   * @param configuration configuration to build fs object
+   * @param filePath      The data file path
+   * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the file
    */
-  public abstract ReaderWrapper getRecordKeyPartitionPathReader(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt);
-
-  /**
-   * Open File Reader.
-   * @param configuration    configuration to build file reader
-   * @param filePath         The data file path
-   * @return file reader
-   */
-  public ReaderWrapper getRecordKeyPartitionPathReader(Configuration configuration, Path filePath) {
-    return getRecordKeyPartitionPathReader(configuration, filePath, Option.empty());
-  }
+  public abstract ClosableIterator<HoodieKey> fetchRecordKeyPartitionPathIterator(Configuration configuration, Path filePath);
 
   /**
    * Fetch {@link HoodieKey}s from the given data file.
    * @param configuration configuration to build fs object
    * @param filePath      The data file path
    * @param keyGeneratorOpt instance of KeyGenerator.
-   * @return {@link List} of {@link HoodieKey}s fetched from the parquet file
+   * @return {@link List} of {@link HoodieKey}s fetched from the data file
    */
   public abstract List<HoodieKey> fetchRecordKeyPartitionPath(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt);
 
@@ -215,8 +204,4 @@ public abstract class BaseFileUtils {
    * @return The Avro schema of the data file
    */
   public abstract Schema readAvroSchema(Configuration configuration, Path filePath);
-
-  public abstract class ReaderWrapper implements Closeable {
-
-  }
 }

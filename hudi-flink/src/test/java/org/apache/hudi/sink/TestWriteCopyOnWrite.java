@@ -33,15 +33,12 @@ import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.hudi.configuration.FlinkOptions.READ_RECORD_BATCH_SIZE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
@@ -341,10 +338,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     return EXPECTED2;
   }
 
-  @ParameterizedTest(name = "read.record.batch.size={0}")
-  @ValueSource(ints = {-1, 1, 2, 10})
-  public void testIndexStateBootstrap(int argument) throws Exception {
-    conf.setInteger(READ_RECORD_BATCH_SIZE, argument);
+  @Test
+  public void testIndexStateBootstrap() throws Exception {
     // open the function and ingest data
     preparePipeline()
         .consume(TestData.DATA_SET_INSERT)

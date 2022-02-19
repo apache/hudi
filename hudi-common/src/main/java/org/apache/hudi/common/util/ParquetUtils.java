@@ -133,12 +133,20 @@ public class ParquetUtils extends BaseFileUtils {
   }
 
   @Override
-  public List<HoodieKey> fetchRecordKeyPartitionPath(ReaderWrapper reader, Path filePath, int batchSize) {
-    return fetchRecordKeyPartitionPathInternal(reader, filePath, Option.empty(), batchSize);
+  public ClosableIterator<HoodieKey> fetchRecordKeyPartitionPathIterator(Configuration configuration, Path filePath) {
+    return fetchRecordKeyPartitionPathIterator(configuration, filePath, Option.empty());
   }
 
+  /**
+   * Provides a closable iterator for reading the given parquet file.
+   *
+   * @param configuration configuration to build fs object
+   * @param filePath      The parquet file path
+   * @param keyGeneratorOpt instance of KeyGenerator
+   * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the parquet file
+   */
   @Override
-  public ReaderWrapper getRecordKeyPartitionPathReader(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public ClosableIterator<HoodieKey> fetchRecordKeyPartitionPathIterator(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     try {
       Configuration conf = new Configuration(configuration);
       conf.addResource(FSUtils.getFs(filePath.toString(), conf).getConf());
@@ -152,38 +160,24 @@ public class ParquetUtils extends BaseFileUtils {
       AvroReadSupport.setAvroReadSchema(conf, readSchema);
       AvroReadSupport.setRequestedProjection(conf, readSchema);
       ParquetReader reader = AvroParquetReader.builder(filePath).withConf(conf).build();
-      return new ParquetReaderWrapper(reader);
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to open reader from Parquet file " + filePath, e);
-    }
-  }
-
-  private List<HoodieKey> fetchRecordKeyPartitionPathInternal(ReaderWrapper reader, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt, int batchSize) {
-    List<HoodieKey> hoodieKeys = new ArrayList<>();
-    try {
-      Object obj = (((ParquetReaderWrapper)reader).reader).read();
-      while (obj != null) {
-        if (obj instanceof GenericRecord) {
-          String recordKey = null;
-          String partitionPath = null;
-          if (keyGeneratorOpt.isPresent()) {
-            recordKey = keyGeneratorOpt.get().getRecordKey((GenericRecord) obj);
-            partitionPath = keyGeneratorOpt.get().getPartitionPath((GenericRecord) obj);
-          } else {
-            recordKey = ((GenericRecord) obj).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-            partitionPath = ((GenericRecord) obj).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
-          }
-          hoodieKeys.add(new HoodieKey(recordKey, partitionPath));
-          if (batchSize > 0 && hoodieKeys.size() >= batchSize) {
-            break;
-          }
-          obj = (((ParquetReaderWrapper)reader).reader).read();
+      return new ParquetReaderIterator(reader) {
+        @Override
+        protected Object map(Object retVal) {
+            String recordKey = null;
+            String partitionPath = null;
+            if (keyGeneratorOpt.isPresent()) {
+              recordKey = keyGeneratorOpt.get().getRecordKey((GenericRecord) retVal);
+              partitionPath = keyGeneratorOpt.get().getPartitionPath((GenericRecord) retVal);
+            } else {
+              recordKey = ((GenericRecord) retVal).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+              partitionPath = ((GenericRecord) retVal).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+            }
+            return new HoodieKey(recordKey, partitionPath);
         }
-      }
+      };
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read from Parquet file " + filePath, e);
     }
-    return hoodieKeys;
   }
 
   /**
@@ -191,15 +185,15 @@ public class ParquetUtils extends BaseFileUtils {
    *
    * @param configuration   configuration to build fs object
    * @param filePath        The parquet file path.
-   * @param keyGeneratorOpt
+   * @param keyGeneratorOpt instance of KeyGenerator.
    * @return {@link List} of {@link HoodieKey}s fetched from the parquet file
    */
   @Override
   public List<HoodieKey> fetchRecordKeyPartitionPath(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    try (ReaderWrapper reader = getRecordKeyPartitionPathReader(configuration, filePath, keyGeneratorOpt)) {
-      return fetchRecordKeyPartitionPathInternal(reader, filePath, keyGeneratorOpt, -1);
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to read from Parquet file " + filePath, e);
+    List<HoodieKey> hoodieKeys = new ArrayList<>();
+    try (ClosableIterator<HoodieKey> iterator = fetchRecordKeyPartitionPathIterator(configuration, filePath, keyGeneratorOpt)) {
+      iterator.forEachRemaining(hoodieKeys::add);
+      return hoodieKeys;
     }
   }
 
@@ -433,19 +427,6 @@ public class ParquetUtils extends BaseFileUtils {
       return new BigDecimal(new BigInteger(((Binary) val).getBytesUnsafe()), scale);
     } else {
       throw new UnsupportedOperationException(String.format("Unsupported value type (%s)", val.getClass().getName()));
-    }
-  }
-
-  private class ParquetReaderWrapper extends ReaderWrapper {
-    ParquetReader reader;
-
-    private ParquetReaderWrapper(ParquetReader reader) {
-      this.reader = reader;
-    }
-
-    @Override
-    public void close() throws IOException {
-      this.reader.close();
     }
   }
 }

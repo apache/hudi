@@ -54,8 +54,15 @@ import org.apache.orc.TypeDescription;
  */
 public class OrcUtils extends BaseFileUtils {
 
+  /**
+   * Provides a closable iterator for reading the given ORC file.
+   *
+   * @param configuration configuration to build fs object
+   * @param filePath      The ORC file path
+   * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the ORC file
+   */
   @Override
-  public ReaderWrapper getRecordKeyPartitionPathReader(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public ClosableIterator<HoodieKey> fetchRecordKeyPartitionPathIterator(Configuration configuration, Path filePath) {
     try {
       Configuration conf = new Configuration(configuration);
       conf.addResource(FSUtils.getFs(filePath.toString(), conf).getConf());
@@ -64,7 +71,41 @@ public class OrcUtils extends BaseFileUtils {
       Schema readSchema = HoodieAvroUtils.getRecordKeyPartitionPathSchema();
       TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(readSchema);
       RecordReader recordReader = reader.rows(new Options(conf).schema(orcSchema));
-      return new OrcReaderWrapper(reader, readSchema, orcSchema, recordReader);
+      List<String> fieldNames = orcSchema.getFieldNames();
+      VectorizedRowBatch batch = orcSchema.createRowBatch();
+
+      // column indices for the RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD fields
+      int keyCol = -1;
+      int partitionCol = -1;
+      for (int i = 0; i < fieldNames.size(); i++) {
+        if (fieldNames.get(i).equals(HoodieRecord.RECORD_KEY_METADATA_FIELD)) {
+          keyCol = i;
+        }
+        if (fieldNames.get(i).equals(HoodieRecord.PARTITION_PATH_METADATA_FIELD)) {
+          partitionCol = i;
+        }
+      }
+      if (keyCol == -1 || partitionCol == -1) {
+        throw new HoodieException(String.format("Couldn't find row keys or partition path in %s.", filePath));
+      }
+      final int finalKeyCol = keyCol;
+      final int finalPartitionCol = partitionCol;
+      OrcReaderIterator iterator = new OrcReaderIterator(recordReader, readSchema, orcSchema) {
+        @Override
+        protected Object readRecordFromBatch() throws IOException {
+          // No more records left to read from ORC file
+          if (!ensureBatch()) {
+            return null;
+          }
+          String rowKey = (String) AvroOrcUtils.readFromVector((TypeDescription) orcFieldTypes.get(finalKeyCol),
+                  batch.cols[finalKeyCol], avroFieldSchemas[finalKeyCol], rowInBatch);
+          String partitionPath = (String) AvroOrcUtils.readFromVector((TypeDescription) orcFieldTypes.get(finalPartitionCol),
+                  batch.cols[finalPartitionCol], avroFieldSchemas[finalPartitionCol], rowInBatch);
+          rowInBatch++;
+          return new HoodieKey(rowKey, partitionPath);
+        }
+      };
+      return iterator;
     } catch (IOException e) {
       throw new HoodieIOException("Failed to open reader from ORC file:" + filePath, e);
     }
@@ -86,59 +127,20 @@ public class OrcUtils extends BaseFileUtils {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read from ORC file:" + filePath, e);
     }
-    try (ReaderWrapper reader = getRecordKeyPartitionPathReader(configuration, filePath)) {
-      return fetchRecordKeyPartitionPathInternal(reader, filePath, -1);
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to read from ORC file:" + filePath, e);
-    }
-  }
-
-  @Override
-  public List<HoodieKey> fetchRecordKeyPartitionPath(ReaderWrapper reader, Path filePath, int batchSize) {
-    return fetchRecordKeyPartitionPathInternal(reader, filePath, batchSize);
-  }
-
-  public List<HoodieKey> fetchRecordKeyPartitionPathInternal(ReaderWrapper reader, Path filePath, int batchSize) {
     List<HoodieKey> hoodieKeys = new ArrayList<>();
-    try {
-      List<String> fieldNames = (((OrcReaderWrapper)reader).orcSchema).getFieldNames();
-      VectorizedRowBatch batch = (((OrcReaderWrapper)reader).orcSchema).createRowBatch();
-      RecordReader recordReader = ((OrcReaderWrapper)reader).recordReader;
-
-      // column indices for the RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD fields
-      int keyCol = -1;
-      int partitionCol = -1;
-      for (int i = 0; i < fieldNames.size(); i++) {
-        if (fieldNames.get(i).equals(HoodieRecord.RECORD_KEY_METADATA_FIELD)) {
-          keyCol = i;
-        }
-        if (fieldNames.get(i).equals(HoodieRecord.PARTITION_PATH_METADATA_FIELD)) {
-          partitionCol = i;
-        }
-      }
-      if (keyCol == -1 || partitionCol == -1) {
-        throw new HoodieException(String.format("Couldn't find row keys or partition path in %s.", filePath));
-      }
-      while (recordReader.nextBatch(batch)) {
-        BytesColumnVector rowKeys = (BytesColumnVector) batch.cols[keyCol];
-        BytesColumnVector partitionPaths = (BytesColumnVector) batch.cols[partitionCol];
-        for (int i = 0; i < batch.size; i++) {
-          String rowKey = rowKeys.toString(i);
-          String partitionPath = partitionPaths.toString(i);
-          hoodieKeys.add(new HoodieKey(rowKey, partitionPath));
-        }
-        if (batchSize > 0 && hoodieKeys.size() >= batchSize) {
-          break;
-        }
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to read from ORC file:" + filePath, e);
+    try (ClosableIterator<HoodieKey> iterator = fetchRecordKeyPartitionPathIterator(configuration, filePath, Option.empty()))  {
+      iterator.forEachRemaining(hoodieKeys::add);
     }
     return hoodieKeys;
   }
 
   @Override
   public List<HoodieKey> fetchRecordKeyPartitionPath(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    throw new HoodieIOException("UnsupportedOperation : Disabling meta fields not yet supported for Orc");
+  }
+
+  @Override
+  public ClosableIterator<HoodieKey> fetchRecordKeyPartitionPathIterator(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     throw new HoodieIOException("UnsupportedOperation : Disabling meta fields not yet supported for Orc");
   }
 
@@ -244,7 +246,7 @@ public class OrcUtils extends BaseFileUtils {
           recordReader.close();
         }
       } catch (IOException e) {
-        //ignore
+        // ignore
       }
     }
   }
@@ -295,26 +297,6 @@ public class OrcUtils extends BaseFileUtils {
       return reader.getNumberOfRows();
     } catch (IOException io) {
       throw new HoodieIOException("Unable to get row count for ORC file:" + orcFilePath, io);
-    }
-  }
-
-  private class OrcReaderWrapper extends ReaderWrapper {
-    Reader reader;
-    Schema readSchema;
-    TypeDescription orcSchema;
-    RecordReader recordReader;
-
-    public OrcReaderWrapper(Reader reader, Schema readSchema, TypeDescription orcSchema, RecordReader recordReader) {
-      this.reader = reader;
-      this.readSchema = readSchema;
-      this.orcSchema = orcSchema;
-      this.recordReader = recordReader;
-    }
-
-    @Override
-    public void close() throws IOException {
-      this.recordReader.close();
-      this.reader.close();
     }
   }
 }
