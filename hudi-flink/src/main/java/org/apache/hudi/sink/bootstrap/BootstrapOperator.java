@@ -211,9 +211,9 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
           if (!isValidFile(baseFile.getFileStatus())) {
             return;
           }
-          try (ClosableIterator<HoodieKey> iterator = fileUtils.fetchRecordKeyPartitionPathIterator(this.hadoopConf, new Path(baseFile.getPath()))) {
+          try (ClosableIterator<HoodieKey> iterator = fileUtils.getHoodieKeyIterator(this.hadoopConf, new Path(baseFile.getPath()))) {
             iterator.forEachRemaining(hoodieKey -> {
-              output.collect(new StreamRecord(new IndexRecord(generateHoodieRecord(iterator.next(), fileSlice))));
+              output.collect(new StreamRecord(new IndexRecord(generateHoodieRecord(hoodieKey, fileSlice))));
             });
           }
         });

@@ -20,6 +20,7 @@ package org.apache.hudi.common.util;
 
 import java.util.List;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericData.Record;
 import org.apache.orc.storage.ql.exec.vector.VectorizedRowBatch;
 import org.apache.hudi.exception.HoodieIOException;
@@ -36,11 +37,11 @@ public class OrcReaderIterator<T> implements ClosableIterator<T> {
 
   private final RecordReader recordReader;
   private final Schema avroSchema;
-  private List<String> fieldNames;
-  protected List<TypeDescription> orcFieldTypes;
-  protected Schema[] avroFieldSchemas;
-  private VectorizedRowBatch batch;
-  protected int rowInBatch;
+  private final List<String> fieldNames;
+  private final List<TypeDescription> orcFieldTypes;
+  private final Schema[] avroFieldSchemas;
+  private final VectorizedRowBatch batch;
+  private int rowInBatch;
   private T next;
 
   public OrcReaderIterator(RecordReader recordReader, Schema schema, TypeDescription orcSchema) {
@@ -50,7 +51,7 @@ public class OrcReaderIterator<T> implements ClosableIterator<T> {
     this.orcFieldTypes = orcSchema.getChildren();
     this.avroFieldSchemas = fieldNames.stream()
         .map(fieldName -> avroSchema.getField(fieldName).schema())
-        .toArray(size -> new Schema[size]);
+        .toArray(Schema[]::new);
     this.batch = orcSchema.createRowBatch();
     this.rowInBatch = 0;
   }
@@ -60,7 +61,7 @@ public class OrcReaderIterator<T> implements ClosableIterator<T> {
    * @return true if we have rows available.
    * @throws IOException
    */
-  protected boolean ensureBatch() throws IOException {
+  private boolean ensureBatch() throws IOException {
     if (rowInBatch >= batch.size) {
       rowInBatch = 0;
       return recordReader.nextBatch(batch);
@@ -91,27 +92,27 @@ public class OrcReaderIterator<T> implements ClosableIterator<T> {
         }
       }
       T retVal = this.next;
-      this.next = readRecordFromBatch();
+      this.next = (T) readRecordFromBatch();
       return retVal;
     } catch (IOException io) {
       throw new HoodieIOException("unable to read next record from ORC file ", io);
     }
   }
 
-  protected T readRecordFromBatch() throws IOException {
+  private GenericData.Record readRecordFromBatch() throws IOException {
     // No more records left to read from ORC file
     if (!ensureBatch()) {
       return null;
     }
 
-    Record record = new Record(avroSchema);
+    GenericData.Record record = new Record(avroSchema);
     int numFields = orcFieldTypes.size();
     for (int i = 0; i < numFields; i++) {
       Object data = AvroOrcUtils.readFromVector(orcFieldTypes.get(i), batch.cols[i], avroFieldSchemas[i], rowInBatch);
       record.put(fieldNames.get(i), data);
     }
     rowInBatch++;
-    return (T) record;
+    return record;
   }
 
   @Override

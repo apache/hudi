@@ -169,7 +169,7 @@ public abstract class BaseFileUtils {
    * @param filePath      The data file path
    * @return {@link List} of {@link HoodieKey}s fetched from the data file
    */
-  public abstract List<HoodieKey> fetchRecordKeyPartitionPath(Configuration configuration, Path filePath);
+  public abstract List<HoodieKey> fetchHoodieKeys(Configuration configuration, Path filePath);
 
   /**
    * Provides a closable iterator for reading the given data file.
@@ -178,7 +178,7 @@ public abstract class BaseFileUtils {
    * @param keyGeneratorOpt instance of KeyGenerator.
    * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the file
    */
-  public abstract ClosableIterator<HoodieKey> fetchRecordKeyPartitionPathIterator(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt);
+  public abstract ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt);
 
   /**
    * Provides a closable iterator for reading the given data file.
@@ -186,7 +186,7 @@ public abstract class BaseFileUtils {
    * @param filePath      The data file path
    * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the file
    */
-  public abstract ClosableIterator<HoodieKey> fetchRecordKeyPartitionPathIterator(Configuration configuration, Path filePath);
+  public abstract ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath);
 
   /**
    * Fetch {@link HoodieKey}s from the given data file.
@@ -195,7 +195,7 @@ public abstract class BaseFileUtils {
    * @param keyGeneratorOpt instance of KeyGenerator.
    * @return {@link List} of {@link HoodieKey}s fetched from the data file
    */
-  public abstract List<HoodieKey> fetchRecordKeyPartitionPath(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt);
+  public abstract List<HoodieKey> fetchHoodieKeys(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt);
 
   /**
    * Read the Avro schema of the data file.
