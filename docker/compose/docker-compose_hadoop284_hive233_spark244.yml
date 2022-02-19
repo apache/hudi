@@ -86,7 +86,7 @@ services:
     container_name: hive-metastore-postgresql
 
   hivemetastore:
-    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3:latest
+    image: yihua/hudi-hadoop_2.8.4-hive_2.3.3:latest
     hostname: hivemetastore
     container_name: hivemetastore
     links:
@@ -109,7 +109,7 @@ services:
       - "namenode"
 
   hiveserver:
-    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3:latest
+    image: yihua/hudi-hadoop_2.8.4-hive_2.3.3:latest
     hostname: hiveserver
     container_name: hiveserver
     env_file:
