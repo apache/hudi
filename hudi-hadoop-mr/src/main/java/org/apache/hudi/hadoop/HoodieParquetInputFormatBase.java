@@ -47,7 +47,7 @@ import java.io.IOException;
  */
 public abstract class HoodieParquetInputFormatBase extends MapredParquetInputFormat implements Configurable {
 
-  private final HoodieCopyOnWriteTableInputFormat inputFormatDelegate;
+  private final HoodieTableInputFormat inputFormatDelegate;
 
   protected HoodieParquetInputFormatBase(HoodieCopyOnWriteTableInputFormat inputFormatDelegate) {
     this.inputFormatDelegate = inputFormatDelegate;

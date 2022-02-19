@@ -18,11 +18,10 @@
 
 package org.apache.hudi.table.format.cow;
 
-import org.apache.hudi.table.format.cow.data.ColumnarRowData;
-import org.apache.hudi.table.format.cow.vector.VectorizedColumnBatch;
-
 import org.apache.flink.formats.parquet.vector.reader.ColumnReader;
+import org.apache.flink.table.data.ColumnarRowData;
 import org.apache.flink.table.data.vector.ColumnVector;
+import org.apache.flink.table.data.vector.VectorizedColumnBatch;
 import org.apache.flink.table.data.vector.writable.WritableColumnVector;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;

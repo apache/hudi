@@ -97,6 +97,10 @@ public class SparkUpsertDeltaCommitPartitioner<T extends HoodieRecordPayload<T>>
               .collect(Collectors.toList());
     }
 
+    if (config.getParquetSmallFileLimit() <= 0) {
+      return Collections.emptyList();
+    }
+
     // If we cannot index log files, then we choose the smallest parquet file in the partition and add inserts to
     // it. Doing this overtime for a partition, we ensure that we handle small file issues
     return table.getSliceView()

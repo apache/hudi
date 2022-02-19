@@ -135,7 +135,7 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
       WorkloadStat pStat = profile.getWorkloadStat(partitionPath);
       if (pStat.getNumInserts() > 0) {
 
-        List<SmallFile> smallFiles = partitionSmallFilesMap.get(partitionPath);
+        List<SmallFile> smallFiles = partitionSmallFilesMap.getOrDefault(partitionPath, new ArrayList<>());
         this.smallFiles.addAll(smallFiles);
 
         LOG.info("For partitionPath : " + partitionPath + " Small Files => " + smallFiles);
@@ -205,6 +205,11 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
 
   private Map<String, List<SmallFile>> getSmallFilesForPartitions(List<String> partitionPaths, HoodieEngineContext context) {
     Map<String, List<SmallFile>> partitionSmallFilesMap = new HashMap<>();
+
+    if (config.getParquetSmallFileLimit() <= 0) {
+      return partitionSmallFilesMap;
+    }
+
     if (partitionPaths != null && partitionPaths.size() > 0) {
       context.setJobStatus(this.getClass().getSimpleName(), "Getting small files from partitions");
       partitionSmallFilesMap = context.mapToPair(partitionPaths,

@@ -18,6 +18,10 @@
 
 package org.apache.hudi.sink.partitioner.profile;
 
+import org.apache.flink.core.fs.Path;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -29,11 +33,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.util.StreamerUtil;
-
-import org.apache.flink.core.fs.Path;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -117,7 +116,7 @@ public class WriteProfiles {
       HoodieCommitMetadata metadata,
       FileSystem fs,
       HoodieTableType tableType) {
-    return getFilesToRead(metadata, basePath.toString(), tableType).entrySet().stream()
+    return getFilesToRead(fs.getConf(), metadata, basePath.toString(), tableType).entrySet().stream()
         // filter out the file paths that does not exist, some files may be cleaned by
         // the cleaner.
         .filter(entry -> {
@@ -133,14 +132,16 @@ public class WriteProfiles {
   }
 
   private static Map<String, FileStatus> getFilesToRead(
+      Configuration hadoopConf,
       HoodieCommitMetadata metadata,
       String basePath,
-      HoodieTableType tableType) {
+      HoodieTableType tableType
+  ) {
     switch (tableType) {
       case COPY_ON_WRITE:
-        return metadata.getFileIdToFileStatus(basePath);
+        return metadata.getFileIdToFileStatus(hadoopConf, basePath);
       case MERGE_ON_READ:
-        return metadata.getFullPathToFileStatus(basePath);
+        return metadata.getFullPathToFileStatus(hadoopConf, basePath);
       default:
         throw new AssertionError();
     }

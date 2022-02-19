@@ -18,12 +18,11 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.util.Option;
-
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.FileSplit;
+import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.util.Option;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -72,7 +71,7 @@ public class TestHoodieRealtimeFileSplit {
     baseFileSplit = new FileSplit(new Path(fileSplitName), 0, 100, new String[] {});
     maxCommitTime = "10001";
 
-    split = new HoodieRealtimeFileSplit(baseFileSplit, basePath, deltaLogFiles, maxCommitTime, Option.empty());
+    split = new HoodieRealtimeFileSplit(baseFileSplit, basePath, deltaLogFiles, maxCommitTime, false, Option.empty());
   }
 
   @Test

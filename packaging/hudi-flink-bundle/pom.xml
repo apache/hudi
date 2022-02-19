@@ -174,46 +174,6 @@
                   <shadedPattern>${flink.bundle.shade.prefix}com.beust.jcommander.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.apache.hive.jdbc.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hive.jdbc.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.hive.metastore.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hadoop.hive.metastore.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hive.common.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hive.common.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.hive.common.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hadoop.hive.common.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.hive.conf.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hadoop.hive.conf.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hive.service.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hive.service.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.hive.service.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hadoop.hive.service.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.hive.ql.metadata.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hadoop.hive.ql.metadata.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.hive.ql.optimizer.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hadoop.hive.ql.optimizer.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.hive.ql.lockmgr.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hadoop.hive.ql.lockmgr.</shadedPattern>
-                </relocation>
-                <relocation>
                   <pattern>com.codahale.metrics.</pattern>
                   <shadedPattern>${flink.bundle.shade.prefix}com.codahale.metrics.</shadedPattern>
                 </relocation>

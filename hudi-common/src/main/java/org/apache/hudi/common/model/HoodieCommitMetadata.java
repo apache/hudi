@@ -23,6 +23,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.fs.FSUtils;
@@ -153,10 +154,12 @@ public class HoodieCommitMetadata implements Serializable {
    * been touched multiple times in the given commits, the return value will keep the one
    * from the latest commit.
    *
+   *
+   * @param hadoopConf
    * @param basePath The base path
    * @return the file full path to file status mapping
    */
-  public Map<String, FileStatus> getFullPathToFileStatus(String basePath) {
+  public Map<String, FileStatus> getFullPathToFileStatus(Configuration hadoopConf, String basePath) {
     Map<String, FileStatus> fullPathToFileStatus = new HashMap<>();
     for (List<HoodieWriteStat> stats : getPartitionToWriteStats().values()) {
       // Iterate through all the written files.
@@ -164,7 +167,8 @@ public class HoodieCommitMetadata implements Serializable {
         String relativeFilePath = stat.getPath();
         Path fullPath = relativeFilePath != null ? FSUtils.getPartitionPath(basePath, relativeFilePath) : null;
         if (fullPath != null) {
-          FileStatus fileStatus = new FileStatus(stat.getFileSizeInBytes(), false, 0, 0,
+          long blockSize = FSUtils.getFs(fullPath.toString(), hadoopConf).getDefaultBlockSize(fullPath);
+          FileStatus fileStatus = new FileStatus(stat.getFileSizeInBytes(), false, 0, blockSize,
               0, fullPath);
           fullPathToFileStatus.put(fullPath.getName(), fileStatus);
         }
@@ -178,14 +182,16 @@ public class HoodieCommitMetadata implements Serializable {
    * been touched multiple times in the given commits, the return value will keep the one
    * from the latest commit by file group ID.
    *
-   * <p>Note: different with {@link #getFullPathToFileStatus(String)},
+   * <p>Note: different with {@link #getFullPathToFileStatus(Configuration, String)},
    * only the latest commit file for a file group is returned,
    * this is an optimization for COPY_ON_WRITE table to eliminate legacy files for filesystem view.
    *
+   *
+   * @param hadoopConf
    * @param basePath The base path
    * @return the file ID to file status mapping
    */
-  public Map<String, FileStatus> getFileIdToFileStatus(String basePath) {
+  public Map<String, FileStatus> getFileIdToFileStatus(Configuration hadoopConf, String basePath) {
     Map<String, FileStatus> fileIdToFileStatus = new HashMap<>();
     for (List<HoodieWriteStat> stats : getPartitionToWriteStats().values()) {
       // Iterate through all the written files.
