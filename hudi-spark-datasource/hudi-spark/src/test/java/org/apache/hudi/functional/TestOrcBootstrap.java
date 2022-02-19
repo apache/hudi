@@ -98,7 +98,6 @@ import java.util.stream.StreamSupport;
 
 import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toList;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.generateGenericRecord;
 import static org.apache.spark.sql.functions.callUDF;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -476,8 +475,7 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
     final List<String> records = new ArrayList<>();
     IntStream.range(from, to).forEach(i -> {
       String id = "" + i;
-      records.add(generateGenericRecord("trip_" + id, Long.toString(timestamp), "rider_" + id, "driver_" + id,
-          timestamp, false, false).toString());
+      records.add(new HoodieTestDataGenerator().generateGenericRecord("trip_" + id, Long.toString(timestamp), "rider_" + id, "driver_" + id, timestamp, false, false).toString());
     });
     if (isPartitioned) {
       sqlContext.udf().register("partgen",
