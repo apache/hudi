@@ -65,7 +65,7 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Base
                                                            final HoodieWriteConfig config,
                                                            final BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, R> executor,
                                                            final boolean performDedupe,
-                                                           final Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner) {
+                                                           final Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> userDefinedBulkInsertPartitioner) {
     HoodieWriteMetadata result = new HoodieWriteMetadata();
 
     // It's possible the transition to inflight could have already happened.
@@ -89,7 +89,7 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Base
                                       HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
                                       HoodieWriteConfig config,
                                       boolean performDedupe,
-                                      Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner,
+                                      Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> userDefinedBulkInsertPartitioner,
                                       boolean useWriterSchema,
                                       int parallelism,
                                       WriteHandleFactory writeHandleFactory) {
