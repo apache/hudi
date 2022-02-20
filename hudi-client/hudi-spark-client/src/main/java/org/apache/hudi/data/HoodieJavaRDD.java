@@ -131,6 +131,18 @@ public class HoodieJavaRDD<T> extends HoodieData<T> {
   }
 
   @Override
+  public <O> HoodieData<T> distinctWithKey(SerializableFunction<T, O> keyGetter, int parallelism) {
+    return HoodieJavaRDD.of(rddData.keyBy(keyGetter::apply)
+        .reduceByKey((key1, key2) -> key1, parallelism)
+        .values());
+  }
+
+  @Override
+  public HoodieData<T> filter(SerializableFunction<T, Boolean> filterFunc) {
+    return HoodieJavaRDD.of(rddData.filter(filterFunc::apply));
+  }
+
+  @Override
   public HoodieData<T> union(HoodieData<T> other) {
     return HoodieJavaRDD.of(rddData.union((JavaRDD<T>) other.get()));
   }

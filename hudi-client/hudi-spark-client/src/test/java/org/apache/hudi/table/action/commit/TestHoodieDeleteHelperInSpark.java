@@ -19,6 +19,7 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -54,7 +55,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-public class TestDeleteHelper {
+public class TestHoodieDeleteHelperInSpark {
 
   private enum CombineTestMode {
     None, GlobalIndex, NoneGlobalIndex;
@@ -68,9 +69,9 @@ public class TestDeleteHelper {
   @Mock
   private HoodieIndex index;
   @Mock
-  private HoodieTable<EmptyHoodieRecordPayload, JavaRDD<HoodieRecord>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table;
+  private HoodieTable<EmptyHoodieRecordPayload, HoodieData<HoodieRecord>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table;
   @Mock
-  private BaseSparkCommitActionExecutor<EmptyHoodieRecordPayload> executor;
+  private BaseCommitActionExecutor<EmptyHoodieRecordPayload, HoodieData<HoodieRecord>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, HoodieWriteMetadata> executor;
   @Mock
   private HoodieWriteMetadata metadata;
   @Mock
@@ -80,7 +81,7 @@ public class TestDeleteHelper {
   @Mock
   private HoodieSparkEngineContext context;
 
-  private JavaRDD<HoodieKey> rddToDelete;
+  private HoodieData<HoodieKey> rddToDelete;
   private HoodieWriteConfig config;
 
   @BeforeEach
@@ -94,9 +95,9 @@ public class TestDeleteHelper {
     rddToDelete = mockEmptyHoodieKeyRdd();
     config = newWriteConfig(WITHOUT_COMBINE);
 
-    SparkDeleteHelper.newInstance().execute("test-time", rddToDelete, context, config, table, executor);
+    HoodieDeleteHelper.newInstance().execute("test-time", rddToDelete, context, config, table, executor);
 
-    verify(rddToDelete, never()).repartition(DELETE_PARALLELISM);
+    verify(HoodieJavaRDD.getJavaRDD(rddToDelete), never()).repartition(DELETE_PARALLELISM);
     verifyNoDeleteExecution();
   }
 
@@ -105,9 +106,9 @@ public class TestDeleteHelper {
     rddToDelete = newHoodieKeysRddMock(2, CombineTestMode.None);
     config = newWriteConfig(WITHOUT_COMBINE);
 
-    SparkDeleteHelper.newInstance().execute("test-time", rddToDelete, context, config, table, executor);
+    HoodieDeleteHelper.newInstance().execute("test-time", rddToDelete, context, config, table, executor);
 
-    verify(rddToDelete, times(1)).repartition(DELETE_PARALLELISM);
+    verify(HoodieJavaRDD.getJavaRDD(rddToDelete), times(1)).repartition(DELETE_PARALLELISM);
     verifyDeleteExecution();
   }
 
@@ -116,9 +117,9 @@ public class TestDeleteHelper {
     rddToDelete = newHoodieKeysRddMock(2, CombineTestMode.NoneGlobalIndex);
     config = newWriteConfig(WITH_COMBINE);
 
-    SparkDeleteHelper.newInstance().execute("test-time", rddToDelete, context, config, table, executor);
+    HoodieDeleteHelper.newInstance().execute("test-time", rddToDelete, context, config, table, executor);
 
-    verify(rddToDelete, times(1)).distinct(DELETE_PARALLELISM);
+    verify(HoodieJavaRDD.getJavaRDD(rddToDelete), times(1)).distinct(DELETE_PARALLELISM);
     verifyDeleteExecution();
   }
 
@@ -128,7 +129,7 @@ public class TestDeleteHelper {
     config = newWriteConfig(WITH_COMBINE);
     when(index.isGlobal()).thenReturn(true);
 
-    SparkDeleteHelper.newInstance().execute("test-time", rddToDelete, context, config, table, executor);
+    HoodieDeleteHelper.newInstance().execute("test-time", rddToDelete, context, config, table, executor);
 
     verify(keyPairs, times(1)).reduceByKey(any(), eq(DELETE_PARALLELISM));
     verifyDeleteExecution();
@@ -151,7 +152,7 @@ public class TestDeleteHelper {
             .build();
   }
 
-  private JavaRDD<HoodieKey> newHoodieKeysRddMock(int howMany, CombineTestMode combineMode) {
+  private HoodieData<HoodieKey> newHoodieKeysRddMock(int howMany, CombineTestMode combineMode) {
     JavaRDD<HoodieKey> keysToDelete = mock(JavaRDD.class);
 
     JavaRDD recordsRdd = mock(JavaRDD.class);
@@ -174,10 +175,10 @@ public class TestDeleteHelper {
 
     when(keysToDelete.map(any())).thenReturn(recordsRdd);
     when(executor.execute(any())).thenReturn(metadata);
-    return keysToDelete;
+    return HoodieJavaRDD.of(keysToDelete);
   }
 
-  private JavaRDD<HoodieKey> mockEmptyHoodieKeyRdd() {
+  private HoodieData<HoodieKey> mockEmptyHoodieKeyRdd() {
     JavaRDD<HoodieKey> emptyRdd = mock(JavaRDD.class);
     doReturn(true).when(emptyRdd).isEmpty();
     doReturn(Collections.emptyList()).when(emptyRdd).partitions();
@@ -188,7 +189,7 @@ public class TestDeleteHelper {
 
     doNothing().when(executor).saveWorkloadProfileMetadataToInflight(any(), anyString());
     doReturn(emptyRdd).when(jsc).emptyRDD();
-    return emptyRdd;
+    return HoodieJavaRDD.of(emptyRdd);
   }
 
 }

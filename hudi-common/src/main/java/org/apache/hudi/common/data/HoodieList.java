@@ -27,8 +27,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -130,6 +132,26 @@ public class HoodieList<T> extends HoodieData<T> {
   @Override
   public HoodieData<T> distinct() {
     return HoodieList.of(new ArrayList<>(new HashSet<>(listData)));
+  }
+
+  @Override
+  public <O> HoodieData<T> distinctWithKey(SerializableFunction<T, O> keyGetter, int parallelism) {
+    Set<O> set = listData.stream().map(i -> throwingMapWrapper(keyGetter).apply(i)).collect(Collectors.toSet());
+    List<T> distinctList = new LinkedList<>();
+    listData.forEach(x -> {
+      if (set.contains(throwingMapWrapper(keyGetter).apply(x))) {
+        distinctList.add(x);
+      }
+    });
+    return HoodieList.of(distinctList);
+  }
+
+  @Override
+  public HoodieData<T> filter(SerializableFunction<T, Boolean> filterFunc) {
+    return HoodieList.of(listData
+        .stream()
+        .filter(i -> throwingMapWrapper(filterFunc).apply(i))
+        .collect(Collectors.toList()));
   }
 
   @Override

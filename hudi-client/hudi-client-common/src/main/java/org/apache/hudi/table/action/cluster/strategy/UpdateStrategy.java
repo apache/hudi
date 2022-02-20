@@ -28,7 +28,7 @@ import java.util.Set;
 /**
  * When file groups in clustering, write records to these file group need to check.
  */
-public abstract class UpdateStrategy<T extends HoodieRecordPayload<T>, I> {
+public abstract class UpdateStrategy<T extends HoodieRecordPayload, I> {
 
   protected final HoodieEngineContext engineContext;
   protected Set<HoodieFileGroupId> fileGroupsInPendingClustering;

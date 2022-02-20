@@ -97,6 +97,10 @@ public abstract class HoodieData<T> implements Serializable {
    */
   public abstract HoodieData<T> distinct();
 
+  public abstract <O> HoodieData<T> distinctWithKey(SerializableFunction<T, O> keyGetter, int parallelism);
+
+  public abstract HoodieData<T> filter(SerializableFunction<T, Boolean> filterFunc);
+
   /**
    * Unions this {@link HoodieData} with other {@link HoodieData}.
    * @param other {@link HoodieData} of interest.
