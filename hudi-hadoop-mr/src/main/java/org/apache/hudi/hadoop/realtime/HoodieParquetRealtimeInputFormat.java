@@ -94,7 +94,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat {
           // TO fix this, hoodie columns are appended late at the time record-reader gets built instead of construction
           // time.
           if (!realtimeSplit.getDeltaLogPaths().isEmpty()) {
-            HoodieRealtimeInputFormatUtils.addRequiredProjectionFields(jobConf, realtimeSplit.getHoodieVirtualKeyInfo());
+            HoodieRealtimeInputFormatUtils.addRequiredProjectionFields(jobConf, realtimeSplit.getVirtualKeyInfo());
           }
           jobConf.set(HoodieInputFormatUtils.HOODIE_READ_COLUMNS_PROP, "true");
           setConf(jobConf);

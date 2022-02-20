@@ -45,7 +45,6 @@ import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 import scala.collection.JavaConverters;
 
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.List;
@@ -153,10 +152,12 @@ public class RepairsCommand implements CommandMarker {
 
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     Properties newProps = new Properties();
-    newProps.load(new FileInputStream(new File(overwriteFilePath)));
+    newProps.load(new FileInputStream(overwriteFilePath));
     Map<String, String> oldProps = client.getTableConfig().propsMap();
     Path metaPathDir = new Path(client.getBasePath(), METAFOLDER_NAME);
     HoodieTableConfig.create(client.getFs(), metaPathDir, newProps);
+    // reload new props as checksum would have been added
+    newProps = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient()).getTableConfig().getProps();
 
     TreeSet<String> allPropKeys = new TreeSet<>();
     allPropKeys.addAll(newProps.keySet().stream().map(Object::toString).collect(Collectors.toSet()));

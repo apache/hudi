@@ -36,9 +36,7 @@ public class BootstrapBaseFileSplit extends FileSplit {
    * NOTE: This ctor is necessary for Hive to be able to serialize and
    *       then instantiate it when deserializing back
    */
-  public BootstrapBaseFileSplit() {
-    super();
-  }
+  public BootstrapBaseFileSplit() {}
 
   public BootstrapBaseFileSplit(FileSplit baseSplit, FileSplit bootstrapFileSplit)
       throws IOException {

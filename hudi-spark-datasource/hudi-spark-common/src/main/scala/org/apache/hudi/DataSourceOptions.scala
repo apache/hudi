@@ -23,7 +23,7 @@ import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.Option
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.util.ConfigUtils
 import org.apache.hudi.hive.{HiveStylePartitionValueExtractor, HiveSyncTool, MultiPartKeysValueExtractor, NonPartitionedExtractor, SlashEncodedDayPartitionValueExtractor}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
@@ -587,17 +587,9 @@ object DataSourceWriteOptions {
     .defaultValue("true")
     .withDocumentation("Controls whether async compaction should be turned on for MOR table writing.")
 
-  val INLINE_CLUSTERING_ENABLE: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.clustering.inline.enable")
-    .defaultValue("false")
-    .sinceVersion("0.9.0")
-    .withDocumentation("Enable inline clustering. Disabled by default.")
+  val INLINE_CLUSTERING_ENABLE = HoodieClusteringConfig.INLINE_CLUSTERING
 
-  val ASYNC_CLUSTERING_ENABLE: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.clustering.async.enable")
-    .defaultValue("false")
-    .sinceVersion("0.9.0")
-    .withDocumentation("Enable asynchronous clustering. Disabled by default.")
+  val ASYNC_CLUSTERING_ENABLE = HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE
 
   val KAFKA_AVRO_VALUE_DESERIALIZER_CLASS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.deltastreamer.source.kafka.value.deserializer.class")
@@ -669,10 +661,10 @@ object DataSourceWriteOptions {
   @Deprecated
   val HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY = HIVE_PARTITION_EXTRACTOR_CLASS.key()
 
-  /** @deprecated Use {@link KEYGENERATOR_CLASS} and its methods instead */
+  /** @deprecated Use {@link KEYGENERATOR_CLASS_NAME} and its methods instead */
   @Deprecated
   val DEFAULT_KEYGENERATOR_CLASS_OPT_VAL = KEYGENERATOR_CLASS_NAME.defaultValue()
-  /** @deprecated Use {@link KEYGENERATOR_CLASS} and its methods instead */
+  /** @deprecated Use {@link KEYGENERATOR_CLASS_NAME} and its methods instead */
   @Deprecated
   val KEYGENERATOR_CLASS_OPT_KEY = HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key()
   /** @deprecated Use {@link ENABLE_ROW_WRITER} and its methods instead */

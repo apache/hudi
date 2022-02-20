@@ -26,8 +26,10 @@ import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.SplitLocationInfo;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -37,11 +39,12 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
 import org.apache.hudi.hadoop.FileStatusWithBootstrapBaseFile;
+import org.apache.hudi.hadoop.HiveHoodieTableFileIndex;
 import org.apache.hudi.hadoop.HoodieCopyOnWriteTableInputFormat;
 import org.apache.hudi.hadoop.LocatedFileStatusWithBootstrapBaseFile;
-import org.apache.hudi.hadoop.PathWithLogFilePath;
 import org.apache.hudi.hadoop.RealtimeFileStatus;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
@@ -53,6 +56,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
  * Base implementation of the Hive's {@link FileInputFormat} allowing for reading of Hudi's
@@ -63,18 +69,38 @@ import java.util.stream.Collectors;
  *   <li>Incremental mode: reading table's state as of particular timestamp (or instant, in Hudi's terms)</li>
  *   <li>External mode: reading non-Hudi partitions</li>
  * </ul>
- *
+ * <p>
  * NOTE: This class is invariant of the underlying file-format of the files being read
  */
 public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInputFormat implements Configurable {
 
   @Override
   public InputSplit[] getSplits(JobConf job, int numSplits) throws IOException {
-    List<FileSplit> fileSplits = Arrays.stream(super.getSplits(job, numSplits)).map(is -> (FileSplit) is).collect(Collectors.toList());
+    List<FileSplit> fileSplits = Arrays.stream(super.getSplits(job, numSplits))
+        .map(is -> (FileSplit) is)
+        .collect(Collectors.toList());
 
-    return HoodieRealtimeInputFormatUtils.isIncrementalQuerySplits(fileSplits)
-        ? HoodieRealtimeInputFormatUtils.getIncrementalRealtimeSplits(job, fileSplits)
-        : HoodieRealtimeInputFormatUtils.getRealtimeSplits(job, fileSplits);
+    return (containsIncrementalQuerySplits(fileSplits) ? filterIncrementalQueryFileSplits(fileSplits) : fileSplits)
+        .toArray(new FileSplit[0]);
+  }
+
+  @Override
+  protected FileStatus createFileStatusUnchecked(FileSlice fileSlice, HiveHoodieTableFileIndex fileIndex, Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt) {
+    Option<HoodieBaseFile> baseFileOpt = fileSlice.getBaseFile();
+    Option<HoodieLogFile> latestLogFileOpt = fileSlice.getLatestLogFile();
+    Stream<HoodieLogFile> logFiles = fileSlice.getLogFiles();
+
+    Option<HoodieInstant> latestCompletedInstantOpt = fileIndex.getLatestCompletedInstant();
+    String tableBasePath = fileIndex.getBasePath();
+
+    // Check if we're reading a MOR table
+    if (baseFileOpt.isPresent()) {
+      return createRealtimeFileStatusUnchecked(baseFileOpt.get(), logFiles, tableBasePath, latestCompletedInstantOpt, virtualKeyInfoOpt);
+    } else if (latestLogFileOpt.isPresent()) {
+      return createRealtimeFileStatusUnchecked(latestLogFileOpt.get(), logFiles, tableBasePath, latestCompletedInstantOpt, virtualKeyInfoOpt);
+    } else {
+      throw new IllegalStateException("Invalid state: either base-file or log-file has to be present");
+    }
   }
 
   /**
@@ -126,7 +152,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
 
     // build fileGroup from fsView
     List<FileStatus> affectedFileStatus = Arrays.asList(HoodieInputFormatUtils
-        .listAffectedFilesForCommits(new Path(tableMetaClient.getBasePath()), metadataList));
+        .listAffectedFilesForCommits(job, new Path(tableMetaClient.getBasePath()), metadataList));
     // step3
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(tableMetaClient, commitsTimelineToReturn, affectedFileStatus.toArray(new FileStatus[0]));
     // build fileGroup from fsView
@@ -152,21 +178,17 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
       candidateFileStatus.put(key, fileStatuses[i]);
     }
 
+    Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt = getHoodieVirtualKeyInfo(tableMetaClient);
     String maxCommitTime = fsView.getLastInstant().get().getTimestamp();
     // step6
-    result.addAll(collectAllIncrementalFiles(fileGroups, maxCommitTime, basePath.toString(), candidateFileStatus));
+    result.addAll(collectAllIncrementalFiles(fileGroups, maxCommitTime, basePath.toString(), candidateFileStatus, virtualKeyInfoOpt));
     return result;
   }
 
   @Override
-  protected boolean includeLogFilesForSnapshotView() {
-    return true;
-  }
-
-  @Override
   protected boolean isSplitable(FileSystem fs, Path filename) {
-    if (filename instanceof PathWithLogFilePath) {
-      return ((PathWithLogFilePath)filename).splitable();
+    if (filename instanceof HoodieRealtimePath) {
+      return ((HoodieRealtimePath) filename).isSplitable();
     }
 
     return super.isSplitable(fs, filename);
@@ -177,21 +199,26 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
   // PathWithLogFilePath, so those bootstrap files should be processed int this function.
   @Override
   protected FileSplit makeSplit(Path file, long start, long length, String[] hosts) {
-    if (file instanceof PathWithLogFilePath) {
-      return doMakeSplitForPathWithLogFilePath((PathWithLogFilePath) file, start, length, hosts, null);
+    if (file instanceof HoodieRealtimePath) {
+      return doMakeSplitForRealtimePath((HoodieRealtimePath) file, start, length, hosts, null);
     }
     return super.makeSplit(file, start, length, hosts);
   }
 
   @Override
   protected FileSplit makeSplit(Path file, long start, long length, String[] hosts, String[] inMemoryHosts) {
-    if (file instanceof PathWithLogFilePath) {
-      return doMakeSplitForPathWithLogFilePath((PathWithLogFilePath) file, start, length, hosts, inMemoryHosts);
+    if (file instanceof HoodieRealtimePath) {
+      return doMakeSplitForRealtimePath((HoodieRealtimePath) file, start, length, hosts, inMemoryHosts);
     }
     return super.makeSplit(file, start, length, hosts, inMemoryHosts);
   }
 
-  private List<FileStatus> collectAllIncrementalFiles(List<HoodieFileGroup> fileGroups, String maxCommitTime, String basePath, Map<String, FileStatus> candidateFileStatus) {
+  private static List<FileStatus> collectAllIncrementalFiles(List<HoodieFileGroup> fileGroups,
+                                                             String maxCommitTime,
+                                                             String basePath,
+                                                             Map<String, FileStatus> candidateFileStatus,
+                                                             Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt) {
+
     List<FileStatus> result = new ArrayList<>();
     fileGroups.stream().forEach(f -> {
       try {
@@ -202,15 +229,12 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
           if (!candidateFileStatus.containsKey(baseFilePath)) {
             throw new HoodieException("Error obtaining fileStatus for file: " + baseFilePath);
           }
+          List<HoodieLogFile> deltaLogFiles = f.getLatestFileSlice().get().getLogFiles().collect(Collectors.toList());
           // We cannot use baseFileStatus.getPath() here, since baseFileStatus.getPath() missing file size information.
           // So we use candidateFileStatus.get(baseFileStatus.getPath()) to get a correct path.
-          RealtimeFileStatus fileStatus = new RealtimeFileStatus(candidateFileStatus.get(baseFilePath));
+          RealtimeFileStatus fileStatus = new RealtimeFileStatus(candidateFileStatus.get(baseFilePath),
+              basePath, deltaLogFiles, true, virtualKeyInfoOpt);
           fileStatus.setMaxCommitTime(maxCommitTime);
-          fileStatus.setBelongToIncrementalFileStatus(true);
-          fileStatus.setBasePath(basePath);
-          fileStatus.setBaseFilePath(baseFilePath);
-          fileStatus.setDeltaLogFiles(f.getLatestFileSlice().get().getLogFiles().collect(Collectors.toList()));
-          // try to set bootstrapfileStatus
           if (baseFileStatus instanceof LocatedFileStatusWithBootstrapBaseFile || baseFileStatus instanceof FileStatusWithBootstrapBaseFile) {
             fileStatus.setBootStrapFileStatus(baseFileStatus);
           }
@@ -220,11 +244,10 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
         if (f.getLatestFileSlice().isPresent() && baseFiles.isEmpty()) {
           List<FileStatus> logFileStatus = f.getLatestFileSlice().get().getLogFiles().map(logFile -> logFile.getFileStatus()).collect(Collectors.toList());
           if (logFileStatus.size() > 0) {
-            RealtimeFileStatus fileStatus = new RealtimeFileStatus(logFileStatus.get(0));
-            fileStatus.setBelongToIncrementalFileStatus(true);
-            fileStatus.setDeltaLogFiles(logFileStatus.stream().map(l -> new HoodieLogFile(l.getPath(), l.getLen())).collect(Collectors.toList()));
+            List<HoodieLogFile> deltaLogFiles = logFileStatus.stream().map(l -> new HoodieLogFile(l.getPath(), l.getLen())).collect(Collectors.toList());
+            RealtimeFileStatus fileStatus = new RealtimeFileStatus(logFileStatus.get(0), basePath,
+                deltaLogFiles, true, virtualKeyInfoOpt);
             fileStatus.setMaxCommitTime(maxCommitTime);
-            fileStatus.setBasePath(basePath);
             result.add(fileStatus);
           }
         }
@@ -235,20 +258,117 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
     return result;
   }
 
-  private FileSplit doMakeSplitForPathWithLogFilePath(PathWithLogFilePath path, long start, long length, String[] hosts, String[] inMemoryHosts) {
-    if (!path.includeBootstrapFilePath()) {
-      return path.buildSplit(path, start, length, hosts);
-    } else {
+  private FileSplit doMakeSplitForRealtimePath(HoodieRealtimePath path, long start, long length, String[] hosts, String[] inMemoryHosts) {
+    if (path.includeBootstrapFilePath()) {
       FileSplit bf =
           inMemoryHosts == null
               ? super.makeSplit(path.getPathWithBootstrapFileStatus(), start, length, hosts)
               : super.makeSplit(path.getPathWithBootstrapFileStatus(), start, length, hosts, inMemoryHosts);
-      return HoodieRealtimeInputFormatUtils.createRealtimeBoostrapBaseFileSplit(
+      return createRealtimeBoostrapBaseFileSplit(
           (BootstrapBaseFileSplit) bf,
           path.getBasePath(),
           path.getDeltaLogFiles(),
           path.getMaxCommitTime(),
-          path.getBelongsToIncrementalQuery());
+          path.getBelongsToIncrementalQuery(),
+          path.getVirtualKeyInfo()
+      );
+    }
+
+    return createRealtimeFileSplit(path, start, length, hosts);
+  }
+
+  private static boolean containsIncrementalQuerySplits(List<FileSplit> fileSplits) {
+    return fileSplits.stream().anyMatch(HoodieRealtimeInputFormatUtils::doesBelongToIncrementalQuery);
+  }
+
+  private static List<FileSplit> filterIncrementalQueryFileSplits(List<FileSplit> fileSplits) {
+    return fileSplits.stream().filter(HoodieRealtimeInputFormatUtils::doesBelongToIncrementalQuery)
+        .collect(Collectors.toList());
+  }
+
+  private static HoodieRealtimeFileSplit createRealtimeFileSplit(HoodieRealtimePath path, long start, long length, String[] hosts) {
+    try {
+      return new HoodieRealtimeFileSplit(new FileSplit(path, start, length, hosts), path);
+    } catch (IOException e) {
+      throw new HoodieIOException(String.format("Failed to create instance of %s", HoodieRealtimeFileSplit.class.getName()), e);
+    }
+  }
+
+  private static HoodieRealtimeBootstrapBaseFileSplit createRealtimeBoostrapBaseFileSplit(BootstrapBaseFileSplit split,
+                                                                                          String basePath,
+                                                                                          List<HoodieLogFile> logFiles,
+                                                                                          String maxInstantTime,
+                                                                                          boolean belongsToIncrementalQuery,
+                                                                                          Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt) {
+    try {
+      String[] hosts = split.getLocationInfo() != null ? Arrays.stream(split.getLocationInfo())
+          .filter(x -> !x.isInMemory()).toArray(String[]::new) : new String[0];
+      String[] inMemoryHosts = split.getLocationInfo() != null ? Arrays.stream(split.getLocationInfo())
+          .filter(SplitLocationInfo::isInMemory).toArray(String[]::new) : new String[0];
+      FileSplit baseSplit = new FileSplit(split.getPath(), split.getStart(), split.getLength(),
+          hosts, inMemoryHosts);
+      return new HoodieRealtimeBootstrapBaseFileSplit(baseSplit, basePath, logFiles, maxInstantTime, split.getBootstrapFileSplit(),
+          belongsToIncrementalQuery, virtualKeyInfoOpt);
+    } catch (IOException e) {
+      throw new HoodieIOException("Error creating hoodie real time split ", e);
+    }
+  }
+
+  /**
+   * Creates {@link RealtimeFileStatus} for the file-slice where base file is present
+   */
+  private static RealtimeFileStatus createRealtimeFileStatusUnchecked(HoodieBaseFile baseFile,
+                                                                      Stream<HoodieLogFile> logFiles,
+                                                                      String basePath,
+                                                                      Option<HoodieInstant> latestCompletedInstantOpt,
+                                                                      Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt) {
+    FileStatus baseFileStatus = getFileStatusUnchecked(baseFile);
+    List<HoodieLogFile> sortedLogFiles = logFiles.sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
+
+    try {
+      RealtimeFileStatus rtFileStatus = new RealtimeFileStatus(baseFileStatus, basePath, sortedLogFiles,
+          false, virtualKeyInfoOpt);
+
+      if (latestCompletedInstantOpt.isPresent()) {
+        HoodieInstant latestCompletedInstant = latestCompletedInstantOpt.get();
+        checkState(latestCompletedInstant.isCompleted());
+
+        rtFileStatus.setMaxCommitTime(latestCompletedInstant.getTimestamp());
+      }
+
+      if (baseFileStatus instanceof LocatedFileStatusWithBootstrapBaseFile || baseFileStatus instanceof FileStatusWithBootstrapBaseFile) {
+        rtFileStatus.setBootStrapFileStatus(baseFileStatus);
+      }
+
+      return rtFileStatus;
+    } catch (IOException e) {
+      throw new HoodieIOException(String.format("Failed to init %s", RealtimeFileStatus.class.getSimpleName()), e);
+    }
+  }
+
+  /**
+   * Creates {@link RealtimeFileStatus} for the file-slice where base file is NOT present
+   */
+  private static RealtimeFileStatus createRealtimeFileStatusUnchecked(HoodieLogFile latestLogFile,
+                                                                      Stream<HoodieLogFile> logFiles,
+                                                                      String basePath,
+                                                                      Option<HoodieInstant> latestCompletedInstantOpt,
+                                                                      Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt) {
+    List<HoodieLogFile> sortedLogFiles = logFiles.sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
+    try {
+      RealtimeFileStatus rtFileStatus = new RealtimeFileStatus(latestLogFile.getFileStatus(), basePath,
+          sortedLogFiles, false, virtualKeyInfoOpt);
+
+      if (latestCompletedInstantOpt.isPresent()) {
+        HoodieInstant latestCompletedInstant = latestCompletedInstantOpt.get();
+        checkState(latestCompletedInstant.isCompleted());
+
+        rtFileStatus.setMaxCommitTime(latestCompletedInstant.getTimestamp());
+      }
+
+      return rtFileStatus;
+    } catch (IOException e) {
+      throw new HoodieIOException(String.format("Failed to init %s", RealtimeFileStatus.class.getSimpleName()), e);
     }
   }
 }

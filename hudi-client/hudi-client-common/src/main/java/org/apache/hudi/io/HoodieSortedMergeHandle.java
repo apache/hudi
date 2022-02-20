@@ -108,8 +108,9 @@ public class HoodieSortedMergeHandle<T extends HoodieRecordPayload, I, K, O> ext
   @Override
   public List<WriteStatus> close() {
     // write out any pending records (this can happen when inserts are turned into updates)
-    newRecordKeysSorted.stream().forEach(key -> {
+    while (!newRecordKeysSorted.isEmpty()) {
       try {
+        String key = newRecordKeysSorted.poll();
         HoodieRecord<T> hoodieRecord = keyToNewRecords.get(key);
         if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
           if (useWriterSchema) {
@@ -122,7 +123,7 @@ public class HoodieSortedMergeHandle<T extends HoodieRecordPayload, I, K, O> ext
       } catch (IOException e) {
         throw new HoodieUpsertException("Failed to close UpdateHandle", e);
       }
-    });
+    }
     newRecordKeysSorted.clear();
     keyToNewRecords.clear();
 

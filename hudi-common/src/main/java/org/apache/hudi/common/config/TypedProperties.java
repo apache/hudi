@@ -20,15 +20,22 @@ package org.apache.hudi.common.config;
 
 import java.io.Serializable;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
  * Type-aware extension of {@link java.util.Properties}.
  */
 public class TypedProperties extends Properties implements Serializable {
+
+  private final HashSet<Object> keys = new LinkedHashSet<>();
 
   public TypedProperties() {
     super(null);
@@ -40,6 +47,45 @@ public class TypedProperties extends Properties implements Serializable {
         put(key, defaults.getProperty(key));
       }
     }
+  }
+
+  @Override
+  public Enumeration propertyNames() {
+    return Collections.enumeration(keys);
+  }
+
+  @Override
+  public synchronized Enumeration<Object> keys() {
+    return Collections.enumeration(keys);
+  }
+
+  @Override
+  public Set<String> stringPropertyNames() {
+    Set<String> set = new LinkedHashSet<>();
+    for (Object key : this.keys) {
+      set.add((String) key);
+    }
+    return set;
+  }
+
+  @Override
+  public synchronized Object put(Object key, Object value) {
+    keys.remove(key);
+    keys.add(key);
+    return super.put(key, value);
+  }
+
+  public synchronized Object putIfAbsent(Object key, Object value) {
+    if (!containsKey(String.valueOf(key))) {
+      keys.add(key);
+    }
+    return super.putIfAbsent(key, value);
+  }
+
+  @Override
+  public Object remove(Object key) {
+    keys.remove(key);
+    return super.remove(key);
   }
 
   private void checkKey(String property) {

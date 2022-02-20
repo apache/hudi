@@ -114,7 +114,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .key("hoodie.clustering.inline")
       .defaultValue("false")
       .sinceVersion("0.7.0")
-      .withDocumentation("Turn on inline clustering - clustering will be run after each write operation is complete");
+      .withDocumentation("Turn on inline clustering - clustering will be run after each write operation is complete")
+      .withAlternatives("hoodie.datasource.clustering.inline.enable");
 
   public static final ConfigProperty<String> INLINE_CLUSTERING_MAX_COMMITS = ConfigProperty
       .key("hoodie.clustering.inline.max.commits")
@@ -192,7 +193,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .key("hoodie.clustering.async.enabled")
       .defaultValue("false")
       .sinceVersion("0.7.0")
-      .withDocumentation("Enable running of clustering service, asynchronously as inserts happen on the table.");
+      .withDocumentation("Enable running of clustering service, asynchronously as inserts happen on the table.")
+      .withAlternatives("hoodie.datasource.clustering.async.enable");
 
   public static final ConfigProperty<Boolean> PRESERVE_COMMIT_METADATA = ConfigProperty
       .key("hoodie.clustering.preserve.commit.metadata")

@@ -232,6 +232,43 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     assertTableProps(cfg);
   }
 
+  @Test
+  public void testUpgradeDowngradeBetweenThreeAndCurrentVersion() throws IOException {
+    // init config, table and client.
+    Map<String, String> params = new HashMap<>();
+    addNewTableParamsToProps(params);
+    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).withRollbackUsingMarkers(false).withProps(params).build();
+
+    // write inserts
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
+    doInsert(client);
+
+    // current version should have TABLE_CHECKSUM key
+    assertEquals(HoodieTableVersion.current(), metaClient.getTableConfig().getTableVersion());
+    assertTableVersionFromPropertyFile(HoodieTableVersion.current());
+    assertTrue(metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.TABLE_CHECKSUM.key()));
+    String checksum = metaClient.getTableConfig().getProps().getString(HoodieTableConfig.TABLE_CHECKSUM.key());
+
+    // downgrade to version 3 and check TABLE_CHECKSUM is still present
+    new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.THREE, null);
+    assertEquals(HoodieTableVersion.THREE.versionCode(), metaClient.getTableConfig().getTableVersion().versionCode());
+    assertTableVersionFromPropertyFile(HoodieTableVersion.THREE);
+    assertTrue(metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.TABLE_CHECKSUM.key()));
+    assertEquals(checksum, metaClient.getTableConfig().getProps().getString(HoodieTableConfig.TABLE_CHECKSUM.key()));
+
+    // remove TABLE_CHECKSUM and upgrade to current version
+    metaClient.getTableConfig().getProps().remove(HoodieTableConfig.TABLE_CHECKSUM.key());
+    new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.current(), null);
+
+    // verify upgrade and TABLE_CHECKSUM
+    metaClient = HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(cfg.getBasePath())
+        .setLayoutVersion(Option.of(new TimelineLayoutVersion(cfg.getTimelineLayoutVersion()))).build();
+    assertEquals(HoodieTableVersion.current().versionCode(), metaClient.getTableConfig().getTableVersion().versionCode());
+    assertTableVersionFromPropertyFile(HoodieTableVersion.current());
+    assertTrue(metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.TABLE_CHECKSUM.key()));
+    assertEquals(checksum, metaClient.getTableConfig().getProps().getString(HoodieTableConfig.TABLE_CHECKSUM.key()));
+  }
+
   private void addNewTableParamsToProps(Map<String, String> params) {
     params.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
     params.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
