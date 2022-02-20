@@ -32,7 +32,6 @@ import java.util.Set;
 /**
  * Spark base update strategy, write records to the file groups which are in clustering
  * need to check. Spark relate implementations should extend this base class.
- * @param <T>
  */
 public abstract class BaseSparkUpdateStrategy<T extends HoodieRecordPayload<T>> extends UpdateStrategy<T, JavaRDD<HoodieRecord<T>>> {
 
