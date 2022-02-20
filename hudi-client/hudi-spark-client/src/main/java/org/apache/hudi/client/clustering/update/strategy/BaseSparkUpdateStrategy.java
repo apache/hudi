@@ -29,6 +29,11 @@ import org.apache.spark.api.java.JavaRDD;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * Spark base update strategy, write records to the file groups which are in clustering
+ * need to check. Spark relate implementations should extend this base class.
+ * @param <T>
+ */
 public abstract class BaseSparkUpdateStrategy<T extends HoodieRecordPayload<T>> extends UpdateStrategy<T, JavaRDD<HoodieRecord<T>>> {
 
   public BaseSparkUpdateStrategy(HoodieSparkEngineContext engineContext,
@@ -38,6 +43,8 @@ public abstract class BaseSparkUpdateStrategy<T extends HoodieRecordPayload<T>> 
 
   /**
    * Get records matched file group ids.
+   * @param inputRecords the records to write, tagged with target file id
+   * @return the records matched file group ids
    */
   protected List<HoodieFileGroupId> getGroupIdsWithUpdate(JavaRDD<HoodieRecord<T>> inputRecords) {
     return inputRecords
