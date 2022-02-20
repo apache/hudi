@@ -132,6 +132,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       private val logRecordsKeyIterator = logRecords.keySet().iterator().asScala
 
       private var recordToLoad: InternalRow = _
+
       override def hasNext: Boolean = {
         if (logRecordsKeyIterator.hasNext) {
           val curAvrokey = logRecordsKeyIterator.next()
@@ -189,7 +190,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
         } else {
           if (logRecordsKeyIterator.hasNext) {
             val curAvrokey = logRecordsKeyIterator.next()
-            val curAvroRecord =logRecords.get(curAvrokey).getData.getInsertValue(tableAvroSchema, payloadProps)
+            val curAvroRecord = logRecords.get(curAvrokey).getData.getInsertValue(tableAvroSchema, payloadProps)
             if (!curAvroRecord.isPresent) {
               // delete record found, skipping
               this.hasNext
@@ -315,15 +316,19 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
           historyAvroRecord, tableAvroSchema, payloadProps)
       }
     }
-  }
+}
 
 private object HoodieMergeOnReadRDD {
   val CONFIG_INSTANTIATION_LOCK = new Object()
 
   def scanLog(split: HoodieMergeOnReadFileSplit, logSchema: Schema, config: Configuration): HoodieMergedLogRecordScanner = {
     val fs = FSUtils.getFs(split.tablePath, config)
-    val partitionPath = new Path(split.logPaths.get.asJava.get(0)).getParent.getName
-    HoodieMergedLogRecordScanner.newBuilder()
+    val partitionPath: String = if (split.logPaths.isEmpty || split.logPaths.get.asJava.isEmpty) {
+      null
+    } else {
+      new Path(split.logPaths.get.asJava.get(0)).getParent.getName
+    }
+    val logRecordScannerBuilder = HoodieMergedLogRecordScanner.newBuilder()
       .withFileSystem(fs)
       .withBasePath(split.tablePath)
       .withLogFilePaths(split.logPaths.get.asJava)
@@ -341,7 +346,9 @@ private object HoodieMergeOnReadRDD {
       .withSpillableMapBasePath(
         config.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP,
           HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
-      .withPartition(partitionPath)
-      .build()
+    if (partitionPath != null) {
+      logRecordScannerBuilder.withPartition(partitionPath)
+    }
+    logRecordScannerBuilder.build()
   }
 }
