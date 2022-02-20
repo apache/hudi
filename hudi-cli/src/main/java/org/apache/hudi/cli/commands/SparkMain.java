@@ -470,7 +470,8 @@ public class SparkMain {
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(false).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
-            .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion()))).build();
+            .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
+            .setFileSystemRetryConfig(config.getFileSystemRetryConfig()).build();
     try {
       new UpgradeDowngrade(metaClient, config, new HoodieSparkEngineContext(jsc), SparkUpgradeDowngradeHelper.getInstance())
           .run(HoodieTableVersion.valueOf(toVersion), null);
