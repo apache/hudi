@@ -61,7 +61,7 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
 
   private int getCommitsSinceLastCleaning() {
     Option<HoodieInstant> lastCleanInstant = table.getActiveTimeline().getCleanerTimeline().filterCompletedInstants().lastInstant();
-    HoodieTimeline commitTimeline = table.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+    HoodieTimeline commitTimeline = table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
 
     String latestCleanTs;
     int numCommits = 0;
@@ -75,7 +75,7 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
     return numCommits;
   }
 
-  private boolean needCleaning(CleaningTriggerStrategy strategy) {
+  private boolean needsCleaning(CleaningTriggerStrategy strategy) {
     if (strategy == CleaningTriggerStrategy.NUM_COMMITS) {
       int numberOfCommits = getCommitsSinceLastCleaning();
       int maxInlineCommitsForNextClean = config.getInlineCleaningMaxCommits();
@@ -151,7 +151,7 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
 
   @Override
   public Option<HoodieCleanerPlan> execute() {
-    if (!needCleaning(config.getCleaningTriggerStrategy())) {
+    if (!needsCleaning(config.getCleaningTriggerStrategy())) {
       return Option.empty();
     }
     // Plan a new clean action
