@@ -3,26 +3,25 @@ title: Disaster and Recovery with Apache Hudi
 toc: true
 ---
 
-Disaster and Recovery is very much mission critical for any software. Especially when it comes to data systems, the impact could be very serious
-leading to delay in business decisions or even wrong business decisions at times. So, Apache Hudi has built in features to assist 
-you in such situations. Apache Hudi supports two write operation, namely "savepoint" and "restore" to assist you in this.
+Disaster Recovery is very much mission critical for any software. Especially when it comes to data systems, the impact could be very serious
+leading to delay in business decisions or even wrong business decisions at times. Apache Hudi has two operations to assist you in recovering
+data from a previous state: "savepoint" and "restore".
 
 ## Savepoint
 
 As the name suggest, "savepoint" saves the table as of the commit time, so that it lets you restore the table to this 
-savepoint at a later point in time if need be. Users can run some validations on few candidate commits and trigger a savepoint 
-as applicable. Care is taken to ensure cleaner will not clean up any files that are savepointed. On similar lines, 
-savepoint cannot be triggered on a commit that is already cleaned up. In simpler terms, this is synonymous to taking a backup, 
-just that we don't make a new copy of the table, but just save the state of the table elegantly so that we can restore later 
-when in need. 
+savepoint at a later point in time if need be. Care is taken to ensure cleaner will not clean up any files that are savepointed. 
+On similar lines, savepoint cannot be triggered on a commit that is already cleaned up. In simpler terms, this is synonymous 
+to taking a backup, just that we don't make a new copy of the table, but just save the state of the table elegantly so that 
+we can restore it later when in need. 
 
 ## Restore
 
-This operation lets you restore your table to one of the savepointed commit. This is a destructive operation and so care 
+This operation lets you restore your table to one of the savepoint commit. This operation cannot be undone (or reversed) and so care 
 should be taken before doing a restore. Hudi will delete all data files and commit files (timeline files) greater than the
-savepointed commit to which the table is being restored. Also, users should bring down all writer processes while triggering 
-a restore for a given hudi table. And please note that queries might likely fail during the time of restore since queries are likely
-hitting latest files which might be deleted during retore operation. 
+savepoint commit to which the table is being restored. You should pause all writes to the table when performing
+a restore since they are likely to fail while the restore is in progress. Also, reads could also fail since snapshot queries 
+will be hitting latest files which has high possibility of getting deleted with restore. 
 
 ## Runbook
 
@@ -283,12 +282,6 @@ at regular cadence and keep deleting older savepoints when new ones are created.
 to assist in deleting a savepoint. Please do remember that cleaner may not clean the files that are savepointed. And so users 
 should ensure they delete the savepoints from time to time. If not, the storage reclamation may not happen. 
 
-## Conclusion
-Apache Hudi's savepoint and restore functionality might be very handy to handle disaster and recovery situations. If not, 
-think about taking a backup of your entire table in cloud stores at regular cadence and then using them to restore it back. 
-Also, care should be taken to ensure table does not have any operation in flight when such backup is happening. If not, 
-the backup copy will have some intermittant state which is not a deirable one. Hope users find this very useful when
-they operate with Hudi tables. 
 
 
 
