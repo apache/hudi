@@ -569,7 +569,7 @@ public class TestCleaner extends HoodieClientTestBase {
     return runCleaner(config, false, firstCommitSequence);
   }
 
-  private List<HoodieCleanStat> runCleaner(HoodieWriteConfig config, boolean simulateRetryFailure) throws IOException {
+  protected List<HoodieCleanStat> runCleaner(HoodieWriteConfig config, boolean simulateRetryFailure) throws IOException {
     return runCleaner(config, simulateRetryFailure, 1);
   }
 
@@ -1182,7 +1182,7 @@ public class TestCleaner extends HoodieClientTestBase {
     }
   }
 
-  private static Stream<Arguments> argumentsForTestKeepLatestCommits() {
+  protected static Stream<Arguments> argumentsForTestKeepLatestCommits() {
     return Stream.of(
         Arguments.of(false, false, false),
         Arguments.of(true, false, false),
@@ -1328,7 +1328,7 @@ public class TestCleaner extends HoodieClientTestBase {
    * @return Partition to BootstrapFileMapping Map
    * @throws IOException
    */
-  private Map<String, List<BootstrapFileMapping>> generateBootstrapIndexAndSourceData(String... partitions) throws IOException {
+  protected Map<String, List<BootstrapFileMapping>> generateBootstrapIndexAndSourceData(String... partitions) throws IOException {
     // create bootstrap source data path
     java.nio.file.Path sourcePath = tempDir.resolve("data");
     java.nio.file.Files.createDirectories(sourcePath);
@@ -1680,7 +1680,7 @@ public class TestCleaner extends HoodieClientTestBase {
     return Stream.concat(stream1, stream2);
   }
 
-  private static HoodieCommitMetadata generateCommitMetadata(
+  protected static HoodieCommitMetadata generateCommitMetadata(
       String instantTime, Map<String, List<String>> partitionToFilePaths) {
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
     partitionToFilePaths.forEach((partitionPath, fileList) -> fileList.forEach(f -> {

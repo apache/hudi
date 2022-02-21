@@ -1085,6 +1085,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED);
   }
 
+  public int getCleanerHoursRetained() {
+    return getInt(HoodieCompactionConfig.CLEANER_HOURS_RETAINED);
+  }
+
   public int getMaxCommitsToKeep() {
     return getInt(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP);
   }

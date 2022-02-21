@@ -83,6 +83,12 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("Number of commits to retain, without cleaning. This will be retained for num_of_commits * time_between_commits "
           + "(scheduled). This also directly translates into how much data retention the table supports for incremental queries.");
 
+  public static final ConfigProperty<String> CLEANER_HOURS_RETAINED = ConfigProperty.key("hoodie.cleaner.hours.retained")
+          .defaultValue("24")
+          .withDocumentation("Number of hours for which commits need to be retained. This config provides a more flexible option as"
+          + "compared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group,"
+                  + " corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.");
+
   public static final ConfigProperty<String> CLEANER_POLICY = ConfigProperty
       .key("hoodie.cleaner.policy")
       .defaultValue(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
@@ -582,6 +588,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder retainCommits(int commitsRetained) {
       compactionConfig.setValue(CLEANER_COMMITS_RETAINED, String.valueOf(commitsRetained));
+      return this;
+    }
+
+    public Builder cleanerNumHoursRetained(int cleanerHoursRetained) {
+      compactionConfig.setValue(CLEANER_HOURS_RETAINED, String.valueOf(cleanerHoursRetained));
       return this;
     }
 
