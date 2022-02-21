@@ -22,6 +22,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -44,7 +45,7 @@ public class SparkInsertOverwritePartitioner extends UpsertPartitioner {
    * Returns a list of small files in the given partition path.
    */
   protected List<SmallFile> getSmallFiles(String partitionPath) {
-    // for overwrite, we ignore all existing files. So dont consider any file to be smallFiles
+    // for overwrite, we ignore all existing files. So do not consider any file to be smallFiles
     return Collections.emptyList();
   }
 }

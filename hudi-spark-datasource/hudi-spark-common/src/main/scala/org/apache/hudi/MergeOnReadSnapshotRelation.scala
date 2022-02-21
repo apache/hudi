@@ -18,14 +18,15 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
 import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
+
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.SchemaConverters
@@ -55,32 +56,22 @@ case class HoodieMergeOnReadTableState(tableStructSchema: StructType,
                                        preCombineField: Option[String],
                                        recordKeyFieldOpt: Option[String])
 
-class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
-                                  val optParams: Map[String, String],
-                                  val userSchema: StructType,
-                                  val globPaths: Option[Seq[Path]],
+class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
+                                  optParams: Map[String, String],
+                                  val userSchema: Option[StructType],
+                                  val globPaths: Seq[Path],
                                   val metaClient: HoodieTableMetaClient)
-  extends BaseRelation with PrunedFilteredScan with Logging {
+  extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) {
 
   private val conf = sqlContext.sparkContext.hadoopConfiguration
   private val jobConf = new JobConf(conf)
-  // use schema from latest metadata, if not present, read schema from the data file
-  private val schemaUtil = new TableSchemaResolver(metaClient)
-  private lazy val tableAvroSchema = {
-    try {
-      schemaUtil.getTableAvroSchema
-    } catch {
-      case _: Throwable => // If there is no commit in the table, we cann't get the schema
-        // with schemaUtil, use the userSchema instead.
-        SchemaConverters.toAvroType(userSchema)
-    }
-  }
 
-  private lazy val tableStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
   private val mergeType = optParams.getOrElse(
     DataSourceReadOptions.REALTIME_MERGE.key,
     DataSourceReadOptions.REALTIME_MERGE.defaultValue)
+
   private val maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(jobConf)
+
   private val preCombineField = {
     val preCombineFieldFromTableConfig = metaClient.getTableConfig.getPreCombineField
     if (preCombineFieldFromTableConfig != null) {
@@ -95,7 +86,6 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
   if (!metaClient.getTableConfig.populateMetaFields()) {
     recordKeyFieldOpt = Option(metaClient.getTableConfig.getRecordKeyFieldProp)
   }
-  override def schema: StructType = tableStructSchema
 
   override def needConversion: Boolean = false
 
@@ -107,7 +97,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
     log.debug(s" buildScan filters = ${filters.mkString(",")}")
 
     val (requiredAvroSchema, requiredStructSchema) =
-      MergeOnReadSnapshotRelation.getRequiredSchema(tableAvroSchema, requiredColumns)
+      HoodieSparkUtils.getRequiredSchema(tableAvroSchema, requiredColumns)
     val fileIndex = buildFileIndex(filters)
     val hoodieTableState = HoodieMergeOnReadTableState(
       tableStructSchema,
@@ -118,7 +108,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
       preCombineField,
       recordKeyFieldOpt
     )
-    val fullSchemaParquetReader = new ParquetFileFormat().buildReaderWithPartitionValues(
+    val fullSchemaParquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
       sparkSession = sqlContext.sparkSession,
       dataSchema = tableStructSchema,
       partitionSchema = StructType(Nil),
@@ -127,7 +117,8 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
       options = optParams,
       hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
     )
-    val requiredSchemaParquetReader = new ParquetFileFormat().buildReaderWithPartitionValues(
+
+    val requiredSchemaParquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
       sparkSession = sqlContext.sparkSession,
       dataSchema = tableStructSchema,
       partitionSchema = StructType(Nil),
@@ -148,9 +139,9 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
   }
 
   def buildFileIndex(filters: Array[Filter]): List[HoodieMergeOnReadFileSplit] = {
-    if (globPaths.isDefined) {
+    if (globPaths.nonEmpty) {
       // Load files from the global paths if it has defined to be compatible with the original mode
-      val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(sqlContext.sparkSession, globPaths.get)
+      val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(sqlContext.sparkSession, globPaths)
       val fsView = new HoodieTableFileSystemView(metaClient,
         // file-slice after pending compaction-requested instant-time is also considered valid
         metaClient.getCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants,
@@ -196,10 +187,12 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
       val partitionFilters = filters.filter(f => f.references.forall(p => partitionColumns.contains(p)))
       val partitionFilterExpression =
         HoodieSparkUtils.convertToCatalystExpressions(partitionFilters, tableStructSchema)
+      val convertedPartitionFilterExpression =
+        HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilterExpression.toSeq)
 
       // If convert success to catalyst expression, use the partition prune
-      val fileSlices = if (partitionFilterExpression.isDefined) {
-        hoodieFileIndex.listFileSlices(Seq(partitionFilterExpression.get))
+      val fileSlices = if (convertedPartitionFilterExpression.nonEmpty) {
+        hoodieFileIndex.listFileSlices(convertedPartitionFilterExpression)
       } else {
         hoodieFileIndex.listFileSlices(Seq.empty[Expression])
       }
@@ -252,14 +245,4 @@ object MergeOnReadSnapshotRelation {
     path.toUri.toString
   }
 
-  def getRequiredSchema(tableAvroSchema: Schema, requiredColumns: Array[String]): (Schema, StructType) = {
-    // First get the required avro-schema, then convert the avro-schema to spark schema.
-    val name2Fields = tableAvroSchema.getFields.asScala.map(f => f.name() -> f).toMap
-    val requiredFields = requiredColumns.map(c => name2Fields(c))
-      .map(f => new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal(), f.order())).toList
-    val requiredAvroSchema = Schema.createRecord(tableAvroSchema.getName, tableAvroSchema.getDoc,
-      tableAvroSchema.getNamespace, tableAvroSchema.isError, requiredFields.asJava)
-    val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
-    (requiredAvroSchema, requiredStructSchema)
-  }
 }

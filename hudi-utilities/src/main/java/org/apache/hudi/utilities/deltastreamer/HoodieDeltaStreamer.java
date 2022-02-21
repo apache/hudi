@@ -369,6 +369,19 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--bootstrap-index-class"}, description = "subclass of BootstrapIndex")
     public String bootstrapIndexClass = HFileBootstrapIndex.class.getName();
 
+    @Parameter(names = {"--retry-on-source-failures"}, description = "Retry on any source failures")
+    public Boolean retryOnSourceFailures = false;
+
+    @Parameter(names = {"--retry-interval-seconds"}, description = "the retry interval for source failures if --retry-on-source-failures is enabled")
+    public Integer retryIntervalSecs = 30;
+
+    @Parameter(names = {"--max-retry-count"}, description = "the max retry count if --retry-on-source-failures is enabled")
+    public Integer maxRetryCount = 3;
+
+    @Parameter(names = {"--allow-commit-on-no-checkpoint-change"}, description = "allow commits even if checkpoint has not changed before and after fetch data"
+        + "from souce. This might be useful in sources like SqlSource where there is not checkpoint. And is not recommended to enable in continuous mode.")
+    public Boolean allowCommitOnNoCheckpointChange = false;
+
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
 
@@ -646,6 +659,10 @@ public class HoodieDeltaStreamer implements Serializable {
                 asyncCompactService.get().enqueuePendingAsyncServiceInstant(new HoodieInstant(State.REQUESTED,
                     HoodieTimeline.COMPACTION_ACTION, scheduledCompactionInstantAndRDD.get().getLeft().get()));
                 asyncCompactService.get().waitTillPendingAsyncServiceInstantsReducesTo(cfg.maxPendingCompactions);
+                if (asyncCompactService.get().hasError()) {
+                  error = true;
+                  throw new HoodieException("Async compaction failed.  Shutting down Delta Sync...");
+                }
               }
               if (clusteringConfig.isAsyncClusteringEnabled()) {
                 Option<String> clusteringInstant = deltaSync.getClusteringInstantOpt();
@@ -653,6 +670,10 @@ public class HoodieDeltaStreamer implements Serializable {
                   LOG.info("Scheduled async clustering for instant: " + clusteringInstant.get());
                   asyncClusteringService.get().enqueuePendingAsyncServiceInstant(new HoodieInstant(State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringInstant.get()));
                   asyncClusteringService.get().waitTillPendingAsyncServiceInstantsReducesTo(cfg.maxPendingClustering);
+                  if (asyncClusteringService.get().hasError()) {
+                    error = true;
+                    throw new HoodieException("Async clustering failed.  Shutting down Delta Sync...");
+                  }
                 }
               }
               long toSleepMs = cfg.minSyncIntervalSeconds * 1000 - (System.currentTimeMillis() - start);
@@ -671,6 +692,7 @@ public class HoodieDeltaStreamer implements Serializable {
           }
         } finally {
           shutdownAsyncServices(error);
+          executor.shutdownNow();
         }
         return true;
       }, executor), executor);
@@ -724,13 +746,12 @@ public class HoodieDeltaStreamer implements Serializable {
               HoodieTableMetaClient.builder().setConf(new Configuration(jssc.hadoopConfiguration())).setBasePath(cfg.targetBasePath).setLoadActiveTimelineOnLoad(true).build();
           List<HoodieInstant> pending = CompactionUtils.getPendingCompactionInstantTimes(meta);
           pending.forEach(hoodieInstant -> asyncCompactService.get().enqueuePendingAsyncServiceInstant(hoodieInstant));
-          asyncCompactService.get().start((error) -> {
-            // Shutdown DeltaSync
-            shutdown(false);
-            return true;
-          });
+          asyncCompactService.get().start(error -> true);
           try {
             asyncCompactService.get().waitTillPendingAsyncServiceInstantsReducesTo(cfg.maxPendingCompactions);
+            if (asyncCompactService.get().hasError()) {
+              throw new HoodieException("Async compaction failed during write client initialization.");
+            }
           } catch (InterruptedException ie) {
             throw new HoodieException(ie);
           }
@@ -749,12 +770,12 @@ public class HoodieDeltaStreamer implements Serializable {
           List<HoodieInstant> pending = ClusteringUtils.getPendingClusteringInstantTimes(meta);
           LOG.info(String.format("Found %d pending clustering instants ", pending.size()));
           pending.forEach(hoodieInstant -> asyncClusteringService.get().enqueuePendingAsyncServiceInstant(hoodieInstant));
-          asyncClusteringService.get().start((error) -> {
-            shutdown(false);
-            return true;
-          });
+          asyncClusteringService.get().start(error -> true);
           try {
             asyncClusteringService.get().waitTillPendingAsyncServiceInstantsReducesTo(cfg.maxPendingClustering);
+            if (asyncClusteringService.get().hasError()) {
+              throw new HoodieException("Async clustering failed during write client initialization.");
+            }
           } catch (InterruptedException e) {
             throw new HoodieException(e);
           }

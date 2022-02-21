@@ -38,6 +38,8 @@ import org.apache.hudi.index.HoodieIndex;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
@@ -140,8 +142,8 @@ public class HoodieWriteClientExample {
       // compaction
       if (HoodieTableType.valueOf(tableType) == HoodieTableType.MERGE_ON_READ) {
         Option<String> instant = client.scheduleCompaction(Option.empty());
-        JavaRDD<WriteStatus> writeStatues = client.compact(instant.get());
-        client.commitCompaction(instant.get(), writeStatues, Option.empty());
+        HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(instant.get());
+        client.commitCompaction(instant.get(), compactionMetadata.getCommitMetadata().get(), Option.empty());
       }
 
     }

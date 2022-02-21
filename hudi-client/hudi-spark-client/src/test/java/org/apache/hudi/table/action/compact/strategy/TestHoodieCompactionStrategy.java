@@ -143,10 +143,10 @@ public class TestHoodieCompactionStrategy {
         "DayBasedCompactionStrategy should have resulted in fewer compactions");
     assertEquals(2, returned.size(), "DayBasedCompactionStrategy should have resulted in fewer compactions");
 
-    int comparision = strategy.getComparator().compare(returned.get(returned.size() - 1).getPartitionPath(),
+    int comparison = strategy.getComparator().compare(returned.get(returned.size() - 1).getPartitionPath(),
         returned.get(0).getPartitionPath());
     // Either the partition paths are sorted in descending order or they are equal
-    assertTrue(comparision >= 0, "DayBasedCompactionStrategy should sort partitions in descending order");
+    assertTrue(comparison >= 0, "DayBasedCompactionStrategy should sort partitions in descending order");
   }
 
   @Test
@@ -192,10 +192,10 @@ public class TestHoodieCompactionStrategy {
     assertEquals(5, returned.size(),
         "BoundedPartitionAwareCompactionStrategy should have resulted in fewer compactions");
 
-    int comparision = strategy.getComparator().compare(returned.get(returned.size() - 1).getPartitionPath(),
+    int comparison = strategy.getComparator().compare(returned.get(returned.size() - 1).getPartitionPath(),
         returned.get(0).getPartitionPath());
     // Either the partition paths are sorted in descending order or they are equal
-    assertTrue(comparision >= 0, "BoundedPartitionAwareCompactionStrategy should sort partitions in descending order");
+    assertTrue(comparison >= 0, "BoundedPartitionAwareCompactionStrategy should sort partitions in descending order");
   }
 
   @Test

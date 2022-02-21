@@ -18,7 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -35,6 +34,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metrics.DistributedRegistry;
 
+import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -51,8 +51,8 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   /**
    * Return a Spark based implementation of {@code HoodieTableMetadataWriter} which can be used to
    * write to the metadata table.
-   *
-   * If the metadata table does not exist, an attempt is made to bootstrap it but there is no guarantted that
+   * <p>
+   * If the metadata table does not exist, an attempt is made to bootstrap it but there is no guaranteed that
    * table will end up bootstrapping at this time.
    *
    * @param conf

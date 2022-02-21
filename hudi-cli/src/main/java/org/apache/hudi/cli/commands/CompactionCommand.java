@@ -264,6 +264,41 @@ public class CompactionCommand implements CommandMarker {
     return "Compaction successfully completed for " + compactionInstantTime;
   }
 
+  @CliCommand(value = "compaction scheduleAndExecute", help = "Schedule compaction plan and execute this plan")
+  public String compact(
+      @CliOption(key = {"parallelism"}, mandatory = true,
+          help = "Parallelism for hoodie compaction") final String parallelism,
+      @CliOption(key = "schemaFilePath", mandatory = true,
+          help = "Path for Avro schema file") final String schemaFilePath,
+      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "local",
+          help = "Spark Master") String master,
+      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
+          help = "Spark executor memory") final String sparkMemory,
+      @CliOption(key = "retry", unspecifiedDefaultValue = "1", help = "Number of retries") final String retry,
+      @CliOption(key = "propsFilePath", help = "path to properties file on localfs or dfs with configurations for hoodie client for compacting",
+          unspecifiedDefaultValue = "") final String propsFilePath,
+      @CliOption(key = "hoodieConfigs", help = "Any configuration that can be set in the properties file can be passed here in the form of an array",
+          unspecifiedDefaultValue = "") final String[] configs)
+      throws Exception {
+    HoodieTableMetaClient client = checkAndGetMetaClient();
+    boolean initialized = HoodieCLI.initConf();
+    HoodieCLI.initFS(initialized);
+    String sparkPropertiesPath =
+        Utils.getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
+    SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
+    sparkLauncher.addAppArgs(SparkCommand.COMPACT_SCHEDULE_AND_EXECUTE.toString(), master, sparkMemory, client.getBasePath(),
+        client.getTableConfig().getTableName(), parallelism, schemaFilePath,
+        retry, propsFilePath);
+    UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
+    Process process = sparkLauncher.launch();
+    InputStreamConsumer.captureOutput(process);
+    int exitCode = process.waitFor();
+    if (exitCode != 0) {
+      return "Failed to schedule and execute compaction ";
+    }
+    return "Schedule and execute compaction successfully completed";
+  }
+
   /**
    * Prints all compaction details.
    */

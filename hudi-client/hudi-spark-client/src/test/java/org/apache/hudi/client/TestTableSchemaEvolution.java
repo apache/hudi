@@ -147,7 +147,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
         + TIP_NESTED_SCHEMA + EXTRA_FIELD_SCHEMA + EXTRA_FIELD_SCHEMA.replace("new_field", "new_new_field")
         + TRIP_SCHEMA_SUFFIX;
     assertTrue(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, multipleAddedFieldSchema),
-        "Multiple added fields with defauls are compatible");
+        "Multiple added fields with defaults are compatible");
 
     assertFalse(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA,
         TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
@@ -205,7 +205,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     final List<HoodieRecord> failedRecords = generateInsertsWithSchema("004", numRecords, TRIP_EXAMPLE_SCHEMA_DEVOLVED);
     try {
       // We cannot use insertBatch directly here because we want to insert records
-      // with a devolved schema and insertBatch inserts records using the TRIP_EXMPLE_SCHEMA.
+      // with a devolved schema and insertBatch inserts records using the TRIP_EXAMPLE_SCHEMA.
       writeBatch(client, "005", "004", Option.empty(), "003", numRecords,
           (String s, Integer a) -> failedRecords, SparkRDDWriteClient::insert, false, 0, 0, 0, false);
       fail("Insert with devolved scheme should fail");
@@ -233,7 +233,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     client = getHoodieWriteClient(hoodieEvolvedWriteConfig);
 
     // We cannot use insertBatch directly here because we want to insert records
-    // with a evolved schemaand insertBatch inserts records using the TRIP_EXMPLE_SCHEMA.
+    // with an evolved schema and insertBatch inserts records using the TRIP_EXAMPLE_SCHEMA.
     final List<HoodieRecord> evolvedRecords = generateInsertsWithSchema("005", numRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED);
     writeBatch(client, "005", "004", Option.empty(), initCommitTime, numRecords,
         (String s, Integer a) -> evolvedRecords, SparkRDDWriteClient::insert, false, 0, 0, 0, false);

@@ -37,7 +37,7 @@ import java.util.Set;
 
 /**
  * Update strategy based on following.
- * if some file group have update record, throw exception
+ * if some file groups have update record, throw exception
  */
 public class SparkRejectUpdateStrategy<T extends HoodieRecordPayload<T>> extends UpdateStrategy<T, JavaRDD<HoodieRecord<T>>> {
   private static final Logger LOG = LogManager.getLogger(SparkRejectUpdateStrategy.class);

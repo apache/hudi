@@ -32,7 +32,6 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
-import org.apache.spark.sql.hudi.HoodieSqlUtils.castIfNeeded
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.{Dataset, Row, SaveMode, SparkSession}
 

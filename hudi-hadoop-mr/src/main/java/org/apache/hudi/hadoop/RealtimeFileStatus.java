@@ -18,13 +18,14 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.common.model.HoodieLogFile;
-
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.realtime.HoodieRealtimePath;
+import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -34,49 +35,60 @@ import java.util.List;
  * in Path.
  */
 public class RealtimeFileStatus extends FileStatus {
-  // a flag to mark this split is produced by incremental query or not.
-  private boolean belongToIncrementalFileStatus = false;
-  // the log files belong this fileStatus.
-  private List<HoodieLogFile> deltaLogFiles = new ArrayList<>();
-  // max commit time of current fileStatus.
+  /**
+   * Base path of the table this path belongs to
+   */
+  private final String basePath;
+  /**
+   * List of delta log-files holding updated records for this base-file
+   */
+  private final List<HoodieLogFile> deltaLogFiles;
+  /**
+   * Marks whether this path produced as part of Incremental Query
+   */
+  private final boolean belongsToIncrementalQuery;
+  /**
+   * Latest commit instant available at the time of the query in which all of the files
+   * pertaining to this split are represented
+   */
   private String maxCommitTime = "";
-  // the basePath of current hoodie table.
-  private String basePath = "";
-  // the base file belong to this status;
-  private String baseFilePath = "";
-  // the bootstrap file belong to this status.
-  // only if current query table is bootstrap table, this field is used.
+  /**
+   * File status for the Bootstrap file (only relevant if this table is a bootstrapped table
+   */
   private FileStatus bootStrapFileStatus;
+  /**
+   * Virtual key configuration of the table this split belongs to
+   */
+  private final Option<HoodieVirtualKeyInfo> virtualKeyInfo;
 
-  public RealtimeFileStatus(FileStatus fileStatus) throws IOException {
+  public RealtimeFileStatus(FileStatus fileStatus,
+                            String basePath,
+                            List<HoodieLogFile> deltaLogFiles,
+                            boolean belongsToIncrementalQuery,
+                            Option<HoodieVirtualKeyInfo> virtualKeyInfo) throws IOException {
     super(fileStatus);
+    this.basePath = basePath;
+    this.deltaLogFiles = deltaLogFiles;
+    this.belongsToIncrementalQuery = belongsToIncrementalQuery;
+    this.virtualKeyInfo = virtualKeyInfo;
   }
 
   @Override
   public Path getPath() {
     Path path = super.getPath();
-    PathWithLogFilePath pathWithLogFilePath = new PathWithLogFilePath(path.getParent(), path.getName());
-    pathWithLogFilePath.setBelongsToIncrementalPath(belongToIncrementalFileStatus);
-    pathWithLogFilePath.setDeltaLogFiles(deltaLogFiles);
-    pathWithLogFilePath.setMaxCommitTime(maxCommitTime);
-    pathWithLogFilePath.setBasePath(basePath);
-    pathWithLogFilePath.setBaseFilePath(baseFilePath);
-    if (bootStrapFileStatus != null) {
-      pathWithLogFilePath.setPathWithBootstrapFileStatus((PathWithBootstrapFileStatus)bootStrapFileStatus.getPath());
-    }
-    return pathWithLogFilePath;
-  }
 
-  public void setBelongToIncrementalFileStatus(boolean belongToIncrementalFileStatus) {
-    this.belongToIncrementalFileStatus = belongToIncrementalFileStatus;
+    HoodieRealtimePath realtimePath = new HoodieRealtimePath(path.getParent(), path.getName(), basePath,
+        deltaLogFiles, maxCommitTime, belongsToIncrementalQuery, virtualKeyInfo);
+
+    if (bootStrapFileStatus != null) {
+      realtimePath.setPathWithBootstrapFileStatus((PathWithBootstrapFileStatus)bootStrapFileStatus.getPath());
+    }
+
+    return realtimePath;
   }
 
   public List<HoodieLogFile> getDeltaLogFiles() {
     return deltaLogFiles;
-  }
-
-  public void setDeltaLogFiles(List<HoodieLogFile> deltaLogFiles) {
-    this.deltaLogFiles = deltaLogFiles;
   }
 
   public String getMaxCommitTime() {
@@ -85,18 +97,6 @@ public class RealtimeFileStatus extends FileStatus {
 
   public void setMaxCommitTime(String maxCommitTime) {
     this.maxCommitTime = maxCommitTime;
-  }
-
-  public String getBasePath() {
-    return basePath;
-  }
-
-  public void setBasePath(String basePath) {
-    this.basePath = basePath;
-  }
-
-  public void setBaseFilePath(String baseFilePath) {
-    this.baseFilePath = baseFilePath;
   }
 
   public void setBootStrapFileStatus(FileStatus bootStrapFileStatus) {

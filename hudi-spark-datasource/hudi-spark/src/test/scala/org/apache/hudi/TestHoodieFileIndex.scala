@@ -18,6 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
+
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.HoodieJavaWriteClient
 import org.apache.hudi.client.common.HoodieJavaEngineContext
@@ -26,27 +27,32 @@ import org.apache.hudi.common.engine.EngineType
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
-import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.ComplexKeyGenerator
-import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.{Config, TimestampType}
+import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.TimestampType
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.testutils.HoodieClientTestBase
+
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, GreaterThanOrEqual, LessThan, Literal}
 import org.apache.spark.sql.execution.datasources.PartitionDirectory
 import org.apache.spark.sql.functions.{lit, struct}
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{DataFrameWriter, Row, SaveMode, SparkSession}
+
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource, ValueSource}
 
 import java.util.Properties
+
+
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
@@ -213,8 +219,11 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       GreaterThanOrEqual(attribute("partition"), literal("2021/03/08")),
       LessThan(attribute("partition"), literal("2021/03/10"))
     )
-    val prunedPartitions = fileIndex.listFiles(Seq(partitionFilter2),
-      Seq.empty).map(_.values.toSeq(Seq(StringType)).mkString(",")).toList
+    val prunedPartitions = fileIndex.listFiles(Seq(partitionFilter2), Seq.empty)
+      .map(_.values.toSeq(Seq(StringType))
+      .mkString(","))
+      .toList
+      .sorted
 
     assertEquals(List("2021/03/08", "2021/03/09"), prunedPartitions)
   }

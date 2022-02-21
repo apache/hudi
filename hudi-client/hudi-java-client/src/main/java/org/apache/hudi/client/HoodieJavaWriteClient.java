@@ -44,7 +44,6 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import com.codahale.metrics.Timer;
 import org.apache.hadoop.conf.Configuration;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -210,21 +209,20 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   public void commitCompaction(String compactionInstantTime,
-                               List<WriteStatus> writeStatuses,
-                               Option<Map<String, String>> extraMetadata) throws IOException {
+                               HoodieCommitMetadata metadata,
+                               Option<Map<String, String>> extraMetadata) {
     throw new HoodieNotSupportedException("CommitCompaction is not supported in HoodieJavaClient");
   }
 
   @Override
   protected void completeCompaction(HoodieCommitMetadata metadata,
-                                    List<WriteStatus> writeStatuses,
                                     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
                                     String compactionCommitTime) {
     throw new HoodieNotSupportedException("CompleteCompaction is not supported in HoodieJavaClient");
   }
 
   @Override
-  protected List<WriteStatus> compact(String compactionInstantTime,
+  protected HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime,
                                       boolean shouldComplete) {
     throw new HoodieNotSupportedException("Compact is not supported in HoodieJavaClient");
   }

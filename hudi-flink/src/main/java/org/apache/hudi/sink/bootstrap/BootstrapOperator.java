@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.BaseFileUtils;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -219,6 +220,12 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
           if (!isValidFile(baseFile.getFileStatus())) {
             return;
           }
+
+          /*try (ClosableIterator<HoodieKey> iterator = fileUtils.getHoodieKeyIterator(this.hadoopConf, new Path(baseFile.getPath()))) {
+            iterator.forEachRemaining(hoodieKey -> {
+              output.collect(new StreamRecord(new IndexRecord(generateHoodieRecord(hoodieKey, fileSlice))));
+            });
+          }*/
 
           try {
             final List<GenericRecord> hoodieRecords = fileUtils.readAvroRecords(this.hadoopConf, new Path(baseFile.getPath()));

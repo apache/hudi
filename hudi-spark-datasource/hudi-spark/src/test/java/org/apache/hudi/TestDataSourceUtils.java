@@ -191,7 +191,7 @@ public class TestDataSourceUtils {
 
   @Test
   public void testCreateUserDefinedBulkInsertPartitionerRowsWithInValidPartitioner() throws HoodieException {
-    config = HoodieWriteConfig.newBuilder().withPath("/").withUserDefinedBulkInsertPartitionerClass("NonExistantUserDefinedClass").build();
+    config = HoodieWriteConfig.newBuilder().withPath("/").withUserDefinedBulkInsertPartitionerClass("NonExistentUserDefinedClass").build();
 
     Exception exception = assertThrows(HoodieException.class, () -> {
       DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(config);

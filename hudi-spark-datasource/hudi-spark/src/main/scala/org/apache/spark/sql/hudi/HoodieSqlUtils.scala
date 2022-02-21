@@ -19,10 +19,8 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.expressions.{And, Cast, Expression, Literal}
+import org.apache.spark.sql.catalyst.expressions.{And, Expression}
 import org.apache.spark.sql.catalyst.plans.logical.{MergeIntoTable, SubqueryAlias}
-import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{DataType, NullType}
 
 object HoodieSqlUtils extends SparkAdapterSupport {
 
@@ -48,14 +46,6 @@ object HoodieSqlUtils extends SparkAdapterSupport {
       case And(left, right) =>
         splitByAnd(left) ++ splitByAnd(right)
       case exp => Seq(exp)
-    }
-  }
-
-  def castIfNeeded(child: Expression, dataType: DataType, conf: SQLConf): Expression = {
-    child match {
-      case Literal(nul, NullType) => Literal(nul, dataType)
-      case _ => if (child.dataType != dataType)
-        Cast(child, dataType, Option(conf.sessionLocalTimeZone)) else child
     }
   }
 }

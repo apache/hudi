@@ -54,6 +54,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
@@ -643,6 +644,12 @@ public class HoodieTableMetaClient implements Serializable {
     private Boolean urlEncodePartitioning;
     private HoodieTimelineTimeZone commitTimeZone;
 
+    /**
+     * Persist the configs that is written at the first time, and should not be changed.
+     * Like KeyGenerator's configs.
+     */
+    private Properties others = new Properties();
+
     private PropertyBuilder() {
 
     }
@@ -750,6 +757,23 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public PropertyBuilder set(String key, Object value) {
+      if (HoodieTableConfig.PERSISTED_CONFIG_LIST.contains(key)) {
+        this.others.put(key, value);
+      }
+      return this;
+    }
+
+    public PropertyBuilder set(Map<String, Object> props) {
+      for (String key: HoodieTableConfig.PERSISTED_CONFIG_LIST) {
+        Object value = props.get(key);
+        if (value != null) {
+          set(key, value);
+        }
+      }
+      return this;
+    }
+
     public PropertyBuilder fromMetaClient(HoodieTableMetaClient metaClient) {
       return setTableType(metaClient.getTableType())
         .setTableName(metaClient.getTableConfig().getTableName())
@@ -759,6 +783,14 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder fromProperties(Properties properties) {
       HoodieConfig hoodieConfig = new HoodieConfig(properties);
+
+      for (String key: HoodieTableConfig.PERSISTED_CONFIG_LIST) {
+        Object value = hoodieConfig.getString(key);
+        if (value != null) {
+          set(key, value);
+        }
+      }
+
       if (hoodieConfig.contains(HoodieTableConfig.DATABASE_NAME)) {
         setDatabaseName(hoodieConfig.getString(HoodieTableConfig.DATABASE_NAME));
       }
@@ -828,6 +860,9 @@ public class HoodieTableMetaClient implements Serializable {
       ValidationUtils.checkArgument(tableName != null, "tableName is null");
 
       HoodieTableConfig tableConfig = new HoodieTableConfig();
+
+      tableConfig.setAll(others);
+
       if (databaseName != null) {
         tableConfig.setValue(HoodieTableConfig.DATABASE_NAME, databaseName);
       }

@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
@@ -74,6 +75,7 @@ import org.apache.hudi.table.action.commit.SparkUpsertPreppedCommitActionExecuto
 import org.apache.hudi.table.action.restore.CopyOnWriteRestoreActionExecutor;
 import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
+import org.apache.hudi.table.action.rollback.RestorePlanActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
 
 import org.apache.avro.Schema;
@@ -258,6 +260,7 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
 
   @Override
   public void rollbackBootstrap(HoodieEngineContext context, String instantTime) {
+    new RestorePlanActionExecutor<>(context, config, this, instantTime, HoodieTimeline.INIT_INSTANT_TS).execute();
     new CopyOnWriteRestoreActionExecutor(context, config, this, instantTime, HoodieTimeline.INIT_INSTANT_TS).execute();
   }
 
@@ -353,4 +356,8 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
     return new CopyOnWriteRestoreActionExecutor(context, config, this, restoreInstantTime, instantToRestore).execute();
   }
 
+  @Override
+  public Option<HoodieRestorePlan> scheduleRestore(HoodieEngineContext context, String restoreInstantTime, String instantToRestore) {
+    return new RestorePlanActionExecutor(context, config, this, restoreInstantTime, instantToRestore).execute();
+  }
 }

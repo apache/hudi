@@ -128,12 +128,26 @@ public class ParquetUtils extends BaseFileUtils {
    * @return {@link List} of {@link HoodieKey}s fetched from the parquet file
    */
   @Override
-  public List<HoodieKey> fetchRecordKeyPartitionPath(Configuration configuration, Path filePath) {
-    return fetchRecordKeyPartitionPathInternal(configuration, filePath, Option.empty());
+  public List<HoodieKey> fetchHoodieKeys(Configuration configuration, Path filePath) {
+    return fetchHoodieKeys(configuration, filePath, Option.empty());
   }
 
-  private List<HoodieKey> fetchRecordKeyPartitionPathInternal(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    List<HoodieKey> hoodieKeys = new ArrayList<>();
+  @Override
+  public ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath) {
+    return getHoodieKeyIterator(configuration, filePath, Option.empty());
+  }
+
+  /**
+   * Returns a closable iterator for reading the given parquet file.
+   *
+   * @param configuration configuration to build fs object
+   * @param filePath      The parquet file path
+   * @param keyGeneratorOpt instance of KeyGenerator
+   *
+   * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the parquet file
+   */
+  @Override
+  public ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     try {
       Configuration conf = new Configuration(configuration);
       conf.addResource(FSUtils.getFs(filePath.toString(), conf).getConf());
@@ -146,27 +160,11 @@ public class ParquetUtils extends BaseFileUtils {
           .orElse(HoodieAvroUtils.getRecordKeyPartitionPathSchema());
       AvroReadSupport.setAvroReadSchema(conf, readSchema);
       AvroReadSupport.setRequestedProjection(conf, readSchema);
-      ParquetReader reader = AvroParquetReader.builder(filePath).withConf(conf).build();
-      Object obj = reader.read();
-      while (obj != null) {
-        if (obj instanceof GenericRecord) {
-          String recordKey = null;
-          String partitionPath = null;
-          if (keyGeneratorOpt.isPresent()) {
-            recordKey = keyGeneratorOpt.get().getRecordKey((GenericRecord) obj);
-            partitionPath = keyGeneratorOpt.get().getPartitionPath((GenericRecord) obj);
-          } else {
-            recordKey = ((GenericRecord) obj).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-            partitionPath = ((GenericRecord) obj).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
-          }
-          hoodieKeys.add(new HoodieKey(recordKey, partitionPath));
-          obj = reader.read();
-        }
-      }
+      ParquetReader<GenericRecord> reader = AvroParquetReader.<GenericRecord>builder(filePath).withConf(conf).build();
+      return HoodieKeyIterator.getInstance(new ParquetReaderIterator<>(reader), keyGeneratorOpt);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read from Parquet file " + filePath, e);
     }
-    return hoodieKeys;
   }
 
   /**
@@ -174,12 +172,16 @@ public class ParquetUtils extends BaseFileUtils {
    *
    * @param configuration   configuration to build fs object
    * @param filePath        The parquet file path.
-   * @param keyGeneratorOpt
+   * @param keyGeneratorOpt instance of KeyGenerator.
    * @return {@link List} of {@link HoodieKey}s fetched from the parquet file
    */
   @Override
-  public List<HoodieKey> fetchRecordKeyPartitionPath(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    return fetchRecordKeyPartitionPathInternal(configuration, filePath, keyGeneratorOpt);
+  public List<HoodieKey> fetchHoodieKeys(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    List<HoodieKey> hoodieKeys = new ArrayList<>();
+    try (ClosableIterator<HoodieKey> iterator = getHoodieKeyIterator(configuration, filePath, keyGeneratorOpt)) {
+      iterator.forEachRemaining(hoodieKeys::add);
+      return hoodieKeys;
+    }
   }
 
   public ParquetMetadata readMetadata(Configuration conf, Path parquetFilePath) {
@@ -228,10 +230,8 @@ public class ParquetUtils extends BaseFileUtils {
    */
   @Override
   public List<GenericRecord> readAvroRecords(Configuration configuration, Path filePath) {
-    ParquetReader reader = null;
     List<GenericRecord> records = new ArrayList<>();
-    try {
-      reader = AvroParquetReader.builder(filePath).withConf(configuration).build();
+    try (ParquetReader reader = AvroParquetReader.builder(filePath).withConf(configuration).build()) {
       Object obj = reader.read();
       while (obj != null) {
         if (obj instanceof GenericRecord) {
@@ -242,14 +242,6 @@ public class ParquetUtils extends BaseFileUtils {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read avro records from Parquet " + filePath, e);
 
-    } finally {
-      if (reader != null) {
-        try {
-          reader.close();
-        } catch (IOException e) {
-          // ignore
-        }
-      }
     }
     return records;
   }
@@ -422,6 +414,57 @@ public class ParquetUtils extends BaseFileUtils {
       return new BigDecimal(new BigInteger(((Binary) val).getBytesUnsafe()), scale);
     } else {
       throw new UnsupportedOperationException(String.format("Unsupported value type (%s)", val.getClass().getName()));
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  //  Inner Class
+  // -------------------------------------------------------------------------
+
+  /**
+   * An iterator that can apply the given function {@code func} to transform records
+   * from the underneath record iterator to hoodie keys.
+   */
+  private static class HoodieKeyIterator implements ClosableIterator<HoodieKey> {
+    private final ClosableIterator<GenericRecord> nestedItr;
+    private final Function<GenericRecord, HoodieKey> func;
+
+    public static HoodieKeyIterator getInstance(ClosableIterator<GenericRecord> nestedItr, Option<BaseKeyGenerator> keyGenerator) {
+      return new HoodieKeyIterator(nestedItr, keyGenerator);
+    }
+
+    private HoodieKeyIterator(ClosableIterator<GenericRecord> nestedItr, Option<BaseKeyGenerator> keyGenerator) {
+      this.nestedItr = nestedItr;
+      if (keyGenerator.isPresent()) {
+        this.func = retVal -> {
+          String recordKey = keyGenerator.get().getRecordKey(retVal);
+          String partitionPath = keyGenerator.get().getPartitionPath(retVal);
+          return new HoodieKey(recordKey, partitionPath);
+        };
+      } else {
+        this.func = retVal -> {
+          String recordKey = retVal.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+          String partitionPath = retVal.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+          return new HoodieKey(recordKey, partitionPath);
+        };
+      }
+    }
+
+    @Override
+    public void close() {
+      if (this.nestedItr != null) {
+        this.nestedItr.close();
+      }
+    }
+
+    @Override
+    public boolean hasNext() {
+      return this.nestedItr.hasNext();
+    }
+
+    @Override
+    public HoodieKey next() {
+      return this.func.apply(this.nestedItr.next());
     }
   }
 }

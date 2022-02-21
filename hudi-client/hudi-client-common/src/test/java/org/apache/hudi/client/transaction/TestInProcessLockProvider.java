@@ -238,7 +238,7 @@ public class TestInProcessLockProvider {
     assertDoesNotThrow(() -> {
       inProcessLockProvider.unlock();
     });
-    assertThrows(HoodieLockException.class, () -> {
+    assertDoesNotThrow(() -> {
       inProcessLockProvider.unlock();
     });
   }
@@ -246,7 +246,7 @@ public class TestInProcessLockProvider {
   @Test
   public void testUnlockWithoutLock() {
     InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration, hadoopConfiguration);
-    assertThrows(HoodieLockException.class, () -> {
+    assertDoesNotThrow(() -> {
       inProcessLockProvider.unlock();
     });
   }

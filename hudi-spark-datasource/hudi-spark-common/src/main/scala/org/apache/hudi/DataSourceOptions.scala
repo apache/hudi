@@ -23,7 +23,7 @@ import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.Option
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.util.ConfigUtils
 import org.apache.hudi.hive.{HiveStylePartitionValueExtractor, HiveSyncTool, MultiPartKeysValueExtractor, NonPartitionedExtractor, SlashEncodedDayPartitionValueExtractor}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
@@ -75,6 +75,7 @@ object DataSourceReadOptions {
   val ENABLE_HOODIE_FILE_INDEX: ConfigProperty[Boolean] = ConfigProperty
     .key("hoodie.file.index.enable")
     .defaultValue(true)
+    .deprecatedAfter("0.11.0")
     .withDocumentation("Enables use of the spark file index implementation for Hudi, "
       + "that speeds up listing of large tables.")
 
@@ -427,6 +428,11 @@ object DataSourceWriteOptions {
   val HIVE_URL: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.jdbcurl")
     .defaultValue("jdbc:hive2://localhost:10000")
+    .withDocumentation("Hive jdbc url")
+
+  val METASTORE_URIS: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.hive_sync.metastore.uris")
+    .defaultValue("thrift://localhost:9083")
     .withDocumentation("Hive metastore url")
 
   val hivePartitionFieldsInferFunc = DataSourceOptionsHelper.scalaFunctionToJavaFunction((p: HoodieConfig) => {
@@ -472,6 +478,32 @@ object DataSourceWriteOptions {
     .withDocumentation("Flag to choose InputFormat under com.uber.hoodie package instead of org.apache.hudi package. "
       + "Use this when you are in the process of migrating from "
       + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to org.apache.hudi input format")
+
+  // spark data source write pool name. Incase of streaming sink, users might be interested to set custom scheduling configs
+  // for regular writes and async compaction. In such cases, this pool name will be used for spark datasource writes.
+  val SPARK_DATASOURCE_WRITER_POOL_NAME = "sparkdatasourcewrite"
+
+  /*
+  When async compaction is enabled (deltastreamer or streaming sink), users might be interested to set custom
+  scheduling configs for regular writes and async compaction. This is the property used to set custom scheduler config
+  file with spark. In Deltastreamer, the file is generated within hudi and set if necessary. Where as in case of streaming
+  sink, users have to set this property when they invoke spark shell.
+  Sample format of the file contents.
+  <?xml version="1.0"?>
+  <allocations>
+    <pool name="sparkdatasourcewrite">
+      <schedulingMode>FAIR</schedulingMode>
+      <weight>4</weight>
+      <minShare>2</minShare>
+    </pool>
+    <pool name="hoodiecompact">
+      <schedulingMode>FAIR</schedulingMode>
+      <weight>3</weight>
+      <minShare>1</minShare>
+    </pool>
+  </allocations>
+   */
+  val SPARK_SCHEDULER_ALLOCATION_FILE_KEY = "spark.scheduler.allocation.file"
 
   /** @deprecated Use {@link HIVE_SYNC_MODE} instead of this config from 0.9.0 */
   @Deprecated
@@ -555,17 +587,9 @@ object DataSourceWriteOptions {
     .defaultValue("true")
     .withDocumentation("Controls whether async compaction should be turned on for MOR table writing.")
 
-  val INLINE_CLUSTERING_ENABLE: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.clustering.inline.enable")
-    .defaultValue("false")
-    .sinceVersion("0.9.0")
-    .withDocumentation("Enable inline clustering. Disabled by default.")
+  val INLINE_CLUSTERING_ENABLE = HoodieClusteringConfig.INLINE_CLUSTERING
 
-  val ASYNC_CLUSTERING_ENABLE: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.clustering.async.enable")
-    .defaultValue("false")
-    .sinceVersion("0.9.0")
-    .withDocumentation("Enable asynchronous clustering. Disabled by default.")
+  val ASYNC_CLUSTERING_ENABLE = HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE
 
   val KAFKA_AVRO_VALUE_DESERIALIZER_CLASS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.deltastreamer.source.kafka.value.deserializer.class")
@@ -637,10 +661,10 @@ object DataSourceWriteOptions {
   @Deprecated
   val HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY = HIVE_PARTITION_EXTRACTOR_CLASS.key()
 
-  /** @deprecated Use {@link KEYGENERATOR_CLASS} and its methods instead */
+  /** @deprecated Use {@link KEYGENERATOR_CLASS_NAME} and its methods instead */
   @Deprecated
   val DEFAULT_KEYGENERATOR_CLASS_OPT_VAL = KEYGENERATOR_CLASS_NAME.defaultValue()
-  /** @deprecated Use {@link KEYGENERATOR_CLASS} and its methods instead */
+  /** @deprecated Use {@link KEYGENERATOR_CLASS_NAME} and its methods instead */
   @Deprecated
   val KEYGENERATOR_CLASS_OPT_KEY = HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key()
   /** @deprecated Use {@link ENABLE_ROW_WRITER} and its methods instead */

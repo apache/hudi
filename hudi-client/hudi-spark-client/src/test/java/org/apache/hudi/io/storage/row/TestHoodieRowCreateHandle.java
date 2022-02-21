@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
+import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
@@ -36,8 +37,9 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -170,19 +172,29 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
     assertRows(inputRows, result, instantTime, fileNames);
   }
 
-  @Test
-  public void testInstantiationFailure() throws IOException {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testInstantiationFailure(boolean enableMetadataTable) {
     // init config and table
     HoodieWriteConfig cfg = SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
-        .withPath("/dummypath/abc/").build();
-    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+        .withPath("/dummypath/abc/")
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
+        .build();
 
     try {
+      HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
       new HoodieRowCreateHandle(table, cfg, " def", UUID.randomUUID().toString(), "001", RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
       fail("Should have thrown exception");
     } catch (HoodieInsertException ioe) {
-      // expected
+      // expected without metadata table
+      if (enableMetadataTable) {
+        fail("Should have thrown TableNotFoundException");
+      }
+    } catch (TableNotFoundException e) {
+      // expected with metadata table
+      if (!enableMetadataTable) {
+        fail("Should have thrown HoodieInsertException");
+      }
     }
   }
 

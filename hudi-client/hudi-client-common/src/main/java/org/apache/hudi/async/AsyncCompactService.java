@@ -37,7 +37,7 @@ import java.util.stream.IntStream;
 /**
  * Async Compactor Service that runs in separate thread. Currently, only one compactor is allowed to run at any time.
  */
-public abstract class AsyncCompactService extends HoodieAsyncService {
+public abstract class AsyncCompactService extends HoodieAsyncTableService {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(AsyncCompactService.class);
@@ -56,7 +56,7 @@ public abstract class AsyncCompactService extends HoodieAsyncService {
   }
 
   public AsyncCompactService(HoodieEngineContext context, BaseHoodieWriteClient client, boolean runInDaemonMode) {
-    super(runInDaemonMode);
+    super(client.getConfig(), runInDaemonMode);
     this.context = context;
     this.compactor = createCompactor(client);
     this.maxConcurrentCompaction = 1;
@@ -92,10 +92,16 @@ public abstract class AsyncCompactService extends HoodieAsyncService {
         }
         LOG.info("Compactor shutting down properly!!");
       } catch (InterruptedException ie) {
+        hasError = true;
         LOG.warn("Compactor executor thread got interrupted exception. Stopping", ie);
       } catch (IOException e) {
-        LOG.error("Compactor executor failed", e);
+        hasError = true;
+        LOG.error("Compactor executor failed due to IOException", e);
         throw new HoodieIOException(e.getMessage(), e);
+      } catch (Exception e) {
+        hasError = true;
+        LOG.error("Compactor executor failed", e);
+        throw e;
       }
       return true;
     }, executor)).toArray(CompletableFuture[]::new)), executor);

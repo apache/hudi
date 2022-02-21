@@ -20,23 +20,20 @@ package org.apache.hudi.functional
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, LocatedFileStatus, Path}
-import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata
 import org.apache.hudi.common.util.ParquetUtils
 import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper
 import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.spark.sql._
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.functions.typedLit
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{Column, DataFrame, Dataset, Row, RowFactory, SaveMode, SparkSession, functions}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import java.math.BigInteger
-import java.nio.charset.StandardCharsets
 import java.sql.{Date, Timestamp}
 import scala.collection.JavaConverters._
-import scala.util.{Random, Success}
+import scala.util.Random
 
 class TestColumnStatsIndex extends HoodieClientTestBase {
   var spark: SparkSession = _
@@ -354,11 +351,10 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
         .distinct()
         .collect()
         .map(_.getString(0))
-        .sorted
 
     val uuidToIdx: UserDefinedFunction = functions.udf((fileName: String) => {
-      val (uuid, idx) = uuids.zipWithIndex.find { case (uuid, _) => fileName.contains(uuid) }.get
-      fileName.replace(uuid, idx.toString)
+      val uuid = uuids.find(uuid => fileName.contains(uuid)).get
+      fileName.replace(uuid, "xxx")
     })
 
     ds.withColumn("file", uuidToIdx(ds("file")))
@@ -409,12 +405,11 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       .mkString("\n")
 
   private def sort(df: DataFrame): DataFrame = {
-    // Since upon parsing JSON, Spark re-order columns in lexicographical order
-    // of their names, we have to shuffle new Z-index table columns order to match
-    // Rows are sorted by filename as well to avoid
     val sortedCols = df.columns.sorted
+    // Sort dataset by the first 2 columns (to minimize non-determinism in case multiple files have the same
+    // value of the first column)
     df.select(sortedCols.head, sortedCols.tail: _*)
-      .sort("file")
+      .sort("c1_maxValue", "c1_minValue")
   }
 
 }

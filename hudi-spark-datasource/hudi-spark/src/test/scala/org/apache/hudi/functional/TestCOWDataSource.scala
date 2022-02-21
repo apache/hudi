@@ -18,6 +18,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hadoop.fs.FileSystem
+
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
@@ -25,13 +26,15 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieUpsertException
-import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.Config
 import org.apache.hudi.keygen._
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, concat, lit, udf}
 import org.apache.spark.sql.types._
+
 import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue, fail}
@@ -41,6 +44,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 import java.sql.{Date, Timestamp}
+
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
@@ -58,7 +62,8 @@ class TestCOWDataSource extends HoodieClientTestBase {
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
+    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+    HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "1"
   )
 
   val verificationCol: String = "driver"
@@ -91,6 +96,62 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .save(basePath)
 
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+  }
+
+  /**
+   * This tests the case that query by with a specified partition condition on hudi table which is
+   * different between the value of the partition field and the actual partition path,
+   * like hudi table written by TimestampBasedKeyGenerator.
+   *
+   * For COW table, test the snapshot query mode and incremental query mode.
+   */
+  @Test
+  def testPrunePartitionForTimestampBasedKeyGenerator(): Unit = {
+    val options = commonOpts ++ Map(
+      "hoodie.compact.inline" -> "false",
+      DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.TimestampBasedKeyGenerator",
+      Config.TIMESTAMP_TYPE_FIELD_PROP -> "DATE_STRING",
+      Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP -> "yyyy/MM/dd",
+      Config.TIMESTAMP_TIMEZONE_FORMAT_PROP -> "GMT+8:00",
+      Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP -> "yyyy-MM-dd"
+    )
+
+    val dataGen1 = new HoodieTestDataGenerator(Array("2022-01-01"))
+    val records1 = recordsToStrings(dataGen1.generateInserts("001", 20)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(options)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(spark.sessionState.newHadoopConf)
+      .build()
+    val commit1Time = metaClient.getActiveTimeline.lastInstant().get().getTimestamp
+
+    val dataGen2 = new HoodieTestDataGenerator(Array("2022-01-02"))
+    val records2 = recordsToStrings(dataGen2.generateInserts("002", 30)).toList
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+    inputDF2.write.format("org.apache.hudi")
+      .options(options)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val commit2Time = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+
+    // snapshot query
+    val snapshotQueryRes = spark.read.format("hudi").load(basePath)
+    assertEquals(snapshotQueryRes.where("partition = '2022-01-01'").count, 20)
+    assertEquals(snapshotQueryRes.where("partition = '2022-01-02'").count, 30)
+
+    // incremental query
+    val incrementalQueryRes = spark.read.format("hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commit1Time)
+      .option(DataSourceReadOptions.END_INSTANTTIME.key, commit2Time)
+      .load(basePath)
+    assertEquals(incrementalQueryRes.where("partition = '2022-01-01'").count, 0)
+    assertEquals(incrementalQueryRes.where("partition = '2022-01-02'").count, 30)
   }
 
   /**
@@ -157,7 +218,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     val snapshotDF2 = spark.read.format("org.apache.hudi")
       .load(basePath + "/*/*/*/*")
-    assertEquals(snapshotDF1.count() - inputDF2.count(), snapshotDF2.count())
+    assertEquals(snapshotDF2.count(), 80)
   }
 
   @Test def testOverWriteModeUseReplaceAction(): Unit = {
@@ -405,15 +466,10 @@ class TestCOWDataSource extends HoodieClientTestBase {
   }
 
   private def getDataFrameWriter(keyGenerator: String): DataFrameWriter[Row] = {
-    getDataFrameWriter(keyGenerator, true)
-  }
-
-  private def getDataFrameWriter(keyGenerator: String, enableMetadata: Boolean): DataFrameWriter[Row] = {
     val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
-    val opts = commonOpts ++ Map(HoodieMetadataConfig.ENABLE.key() -> String.valueOf(enableMetadata))
     inputDF.write.format("hudi")
-      .options(opts)
+      .options(commonOpts)
       .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, keyGenerator)
       .mode(SaveMode.Overwrite)
   }
@@ -441,7 +497,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= udf_date_format(col("current_ts"))).count() == 0)
 
     // Mixed fieldType
-    writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName, false)
+    writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName)
     writer.partitionBy("driver", "rider:SIMPLE", "current_ts:TIMESTAMP")
       .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
       .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyyMMdd")
@@ -453,7 +509,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
       concat(col("driver"), lit("/"), col("rider"), lit("/"), udf_date_format(col("current_ts")))).count() == 0)
 
     // Test invalid partitionKeyType
-    writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName, false)
+    writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName)
     writer = writer.partitionBy("current_ts:DUMMY")
       .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
       .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyyMMdd")
@@ -720,7 +776,6 @@ class TestCOWDataSource extends HoodieClientTestBase {
         .option("hoodie.keep.min.commits", "4")
         .option("hoodie.keep.max.commits", "5")
         .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-        .option(HoodieMetadataConfig.ENABLE.key(), value = false)
         .mode(SaveMode.Append)
         .save(basePath)
     }
@@ -832,5 +887,49 @@ class TestCOWDataSource extends HoodieClientTestBase {
     // compare the test result
     assertEquals(inputDF2.sort("_row_key").select("shortDecimal").collect().map(_.getDecimal(0).toPlainString).mkString(","),
       readResult.sort("_row_key").select("shortDecimal").collect().map(_.getDecimal(0).toPlainString).mkString(","))
+  }
+
+  @Test
+  def testHoodieBaseFileOnlyViewRelation(): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+
+    val df = Seq((1, "z3", 30, "v1", "2018-09-23"), (2, "z3", 35, "v1", "2018-09-24"))
+      .toDF("id", "name", "age", "ts", "data_date")
+
+    df.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
+      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
+      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
+      .option("hoodie.insert.shuffle.parallelism", "4")
+      .option("hoodie.upsert.shuffle.parallelism", "4")
+      .option("hoodie.bulkinsert.shuffle.parallelism", "2")
+      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
+      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "data_date")
+      .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, "org.apache.hudi.keygen.TimestampBasedKeyGenerator")
+      .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "DATE_STRING")
+      .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyy/MM/dd")
+      .option(Config.TIMESTAMP_TIMEZONE_FORMAT_PROP, "GMT+8:00")
+      .option(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, "yyyy-MM-dd")
+      .mode(org.apache.spark.sql.SaveMode.Append)
+      .save(basePath)
+
+    val res = spark.read.format("hudi").load(basePath)
+
+    assert(res.count() == 2)
+
+    // data_date is the partition field. Persist to the parquet file using the origin values, and read it.
+    assertTrue(
+      res.select("data_date").map(_.get(0).toString).collect().sorted.sameElements(
+        Array("2018-09-23", "2018-09-24")
+      )
+    )
+    assertTrue(
+      res.select("_hoodie_partition_path").map(_.get(0).toString).collect().sorted.sameElements(
+        Array("2018/09/23", "2018/09/24")
+      )
+    )
   }
 }
