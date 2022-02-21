@@ -20,6 +20,7 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.PartialOverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.util.StreamerUtil;
@@ -1170,25 +1171,30 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
 
     String hoodieTableDDL = sql("t1")
         .field("f_int int")
+        .field("version int")
         .field("f1 varchar(10)")
         .field("f2 varchar(10)")
         .field("f3 varchar(10)")
+        .field("f4 array<int>")
+        .field("f5 varchar(10)")
+        .field("f6_row row(f_row_f0 int, f_row_f1 varchar(10))")
         .pkField("f_int")
         .noPartition()
-        .option(FlinkOptions.PAYLOAD_CLASS_NAME, "org.apache.hudi.common.model.PartialOverwriteWithLatestAvroPayload")
+        .option(FlinkOptions.PAYLOAD_CLASS_NAME, PartialOverwriteWithLatestAvroPayload.class.getCanonicalName())
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.OPERATION, operation)
+        .option(FlinkOptions.PRE_COMBINE, true)
+        .option(FlinkOptions.PRECOMBINE_FIELD, "version")
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
-    execInsertSql(tableEnv, "insert into t1(f_int, f1) values (1, 'a')");
-    execInsertSql(tableEnv, "insert into t1(f_int, f2) values (1, 'b')");
-    execInsertSql(tableEnv, "insert into t1(f_int, f1, f3) values (1, 'c', 'c')");
+    execInsertSql(tableEnv, "insert into t1(f_int, version, f1, f5, f6_row) values (1, 1, 'a', 'a1', row(1, 'row1-a')), (1, 2, 'a', 'a2', row(1, 'row1-b'))");
+    execInsertSql(tableEnv, "insert into t1(f_int, version,  f2, f4, f6_row) values (1, 3, 'b', array[1, 1], row(2, 'row2'))");
+    execInsertSql(tableEnv, "insert into t1(f_int, version,  f1, f3) values (1, 4, 'c', 'c')");
 
     List<Row> result = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
-    final String expected = "["
-        + "+I[1, c, b, c]]";
+    final String expected = "[+I[1, 4, c, b, c, [1, 1], a2, +I[2, row2]]]";
     assertRowsEquals(result, expected);
   }
 
