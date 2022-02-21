@@ -95,7 +95,7 @@ class TestHoodieSparkSqlWriter {
    */
   def initSparkContext(): Unit = {
     val sparkConf = new SparkConf()
-    if (!HoodieSparkUtils.beforeSpark3_2()) {
+    if (HoodieSparkUtils.gteqSpark3_2) {
       sparkConf.set("spark.sql.catalog.spark_catalog",
         "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
     }
