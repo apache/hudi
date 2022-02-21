@@ -88,7 +88,8 @@
                         }
                     ]
                 }
-            ]
+            ],
+            "default" : null
         },
         {
             "doc": "Metadata Index of column statistics for all data files in the user table",
@@ -163,7 +164,8 @@
                         }
                     ]
                 }
-            ]
+            ],
+            "default" : null
         }
     ]
 }
