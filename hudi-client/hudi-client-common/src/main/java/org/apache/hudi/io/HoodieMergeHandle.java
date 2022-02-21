@@ -61,6 +61,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.hudi.common.model.HoodieRecord.FILENAME_METADATA_FIELD_POS;
+
 @SuppressWarnings("Duplicates")
 /**
  * Handle to merge incoming records to those in storage.
@@ -293,9 +295,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       if (indexedRecord.isPresent() && !isDelete) {
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
         IndexedRecord recordWithMetadataInSchema = rewriteRecord((GenericRecord) indexedRecord.get());
-        if (preserveMetadata) {
+        if (preserveMetadata && !config.populateMetaFields()) {
           // do not preserve FILENAME_METADATA_FIELD
-          recordWithMetadataInSchema.put(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.FILENAME_METADATA_FIELD), newFilePath.getName());
+          recordWithMetadataInSchema.put(FILENAME_METADATA_FIELD_POS, newFilePath.getName());
           fileWriter.writeAvro(hoodieRecord.getRecordKey(), recordWithMetadataInSchema);
         } else {
           fileWriter.writeAvroWithMetadata(recordWithMetadataInSchema, hoodieRecord);
