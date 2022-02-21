@@ -25,6 +25,11 @@ import java.io.Serializable;
  */
 public interface Functions {
 
+  static Runnable noop() {
+    return () -> {
+    };
+  }
+
   /**
    * A function which has not any parameter.
    */
