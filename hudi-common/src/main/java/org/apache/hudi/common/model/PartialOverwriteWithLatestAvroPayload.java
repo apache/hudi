@@ -27,6 +27,7 @@ import org.apache.avro.generic.IndexedRecord;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
+import java.util.Properties;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro;
 
@@ -57,11 +58,7 @@ import static org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro;
 public class PartialOverwriteWithLatestAvroPayload extends OverwriteWithLatestAvroPayload {
 
   public PartialOverwriteWithLatestAvroPayload(GenericRecord record, Comparable orderingVal) {
-    this(record, orderingVal, null);
-  }
-
-  public PartialOverwriteWithLatestAvroPayload(GenericRecord record, Comparable orderingVal, String schema) {
-    super(record, orderingVal, schema);
+    super(record, orderingVal);
   }
 
   public PartialOverwriteWithLatestAvroPayload(Option<GenericRecord> record) {
@@ -97,33 +94,32 @@ public class PartialOverwriteWithLatestAvroPayload extends OverwriteWithLatestAv
   }
 
   @Override
-  public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue) {
-    if (null == this.schema || null == oldValue.schema) {
+  public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue, Properties properties, Schema schema) {
+    if (null == schema) {
       return super.preCombine(oldValue);
     }
 
     try {
-      Schema schema = new Schema.Parser().parse(this.schema);
-      Option<IndexedRecord> incomingOption = getInsertValue(new Schema.Parser().parse(this.schema));
-      Option<IndexedRecord> insertRecordOption = oldValue.getInsertValue(new Schema.Parser().parse(oldValue.schema));
+      Option<IndexedRecord> incomingOption = getInsertValue(schema);
+      Option<IndexedRecord> oldRecordOption = oldValue.getInsertValue(schema);
 
-      if (incomingOption.isPresent() && insertRecordOption.isPresent()) {
-        GenericRecord currentRecord = (GenericRecord) incomingOption.get();
-        GenericRecord insertRecord = (GenericRecord) insertRecordOption.get();
-        boolean chooseCurrent = this.orderingVal.compareTo(oldValue.orderingVal) > 0;
+      if (incomingOption.isPresent() && oldRecordOption.isPresent()) {
+        GenericRecord incomingRecord = (GenericRecord) incomingOption.get();
+        GenericRecord oldRecord = (GenericRecord) oldRecordOption.get();
+        boolean chooseIncomingRecord = this.orderingVal.compareTo(oldValue.orderingVal) > 0;
 
-        if (!isDeleteRecord(insertRecord) && !isDeleteRecord(currentRecord)) {
+        if (!isDeleteRecord(oldRecord) && !isDeleteRecord(incomingRecord)) {
           schema.getFields().forEach(field -> {
-            Object insertValue = insertRecord.get(field.name());
-            Object currentValue = currentRecord.get(field.name());
-            currentRecord.put(field.name(), mergeValue(currentValue, insertValue, chooseCurrent));
+            Object insertValue = oldRecord.get(field.name());
+            Object incomingValue = incomingRecord.get(field.name());
+            incomingRecord.put(field.name(), mergeValue(incomingValue, insertValue, chooseIncomingRecord));
           });
-          return new PartialOverwriteWithLatestAvroPayload(currentRecord, chooseCurrent ? this.orderingVal : oldValue.orderingVal, this.schema);
+          return new PartialOverwriteWithLatestAvroPayload(incomingRecord, chooseIncomingRecord ? this.orderingVal : oldValue.orderingVal);
         } else {
-          return isDeleteRecord(insertRecord) ? this : oldValue;
+          return isDeleteRecord(oldRecord) ? this : oldValue;
         }
       } else {
-        return insertRecordOption.isPresent() ? oldValue : this;
+        return oldRecordOption.isPresent() ? oldValue : this;
       }
     } catch (IOException e) {
       return super.preCombine(oldValue);

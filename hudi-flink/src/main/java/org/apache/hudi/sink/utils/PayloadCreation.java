@@ -43,19 +43,16 @@ public class PayloadCreation implements Serializable {
   private static final long serialVersionUID = 1L;
 
   private final boolean shouldCombine;
-  private final boolean partialOverwriteEnabled;
   private final Constructor<?> constructor;
   private final String preCombineField;
 
   private PayloadCreation(
       boolean shouldCombine,
       Constructor<?> constructor,
-      @Nullable String preCombineField,
-      boolean partialOverwriteEnabled) {
+      @Nullable String preCombineField) {
     this.shouldCombine = shouldCombine;
     this.constructor = constructor;
     this.preCombineField = preCombineField;
-    this.partialOverwriteEnabled = partialOverwriteEnabled;
   }
 
   public static PayloadCreation instance(Configuration conf) throws Exception {
@@ -63,47 +60,35 @@ public class PayloadCreation implements Serializable {
     boolean needCombine = conf.getBoolean(FlinkOptions.PRE_COMBINE)
         || WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)) == WriteOperationType.UPSERT;
     boolean shouldCombine = needCombine && preCombineField != null;
-    boolean partialOverwriteEnabled = conf.getBoolean(FlinkOptions.PARTIAL_OVERWRITE_ENABLED);
 
+    final Class<?>[] argTypes;
+    final Constructor<?> constructor;
+    if (shouldCombine) {
+      argTypes = new Class<?>[] {GenericRecord.class, Comparable.class};
+    } else {
+      argTypes = new Class<?>[] {Option.class};
+    }
     final String clazz = conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME);
-    final Class<?>[] argTypes = generateArgTypes(shouldCombine, partialOverwriteEnabled);
-    final Constructor<?> constructor = ReflectionUtils.getClass(clazz).getConstructor(argTypes);
-    return new PayloadCreation(shouldCombine, constructor, preCombineField, partialOverwriteEnabled);
+    constructor = ReflectionUtils.getClass(clazz).getConstructor(argTypes);
+    return new PayloadCreation(shouldCombine, constructor, preCombineField);
   }
 
-  public HoodieRecordPayload<?> generatePayload(GenericRecord record, String schema) throws Exception {
+  public HoodieRecordPayload<?> createPayload(GenericRecord record) throws Exception {
     if (shouldCombine) {
       ValidationUtils.checkState(preCombineField != null);
       Comparable<?> orderingVal = (Comparable<?>) HoodieAvroUtils.getNestedFieldVal(record,
           preCombineField, false, false);
-      return generatePayload(record, orderingVal, schema);
+      return (HoodieRecordPayload<?>) constructor.newInstance(record, orderingVal);
     } else {
       return (HoodieRecordPayload<?>) this.constructor.newInstance(Option.of(record));
     }
   }
 
   public HoodieRecordPayload<?> createDeletePayload(BaseAvroPayload payload) throws Exception {
-    return generatePayload(null, payload.orderingVal, null);
-  }
-
-  private HoodieRecordPayload<?> generatePayload(GenericRecord record, Comparable orderingVal, String schema) throws Exception {
     if (shouldCombine) {
-      if (partialOverwriteEnabled) {
-        return (HoodieRecordPayload<?>) constructor.newInstance(record, orderingVal, schema);
-      }
-      return (HoodieRecordPayload<?>) constructor.newInstance(record, orderingVal);
+      return (HoodieRecordPayload<?>) constructor.newInstance(null, payload.orderingVal);
     } else {
       return (HoodieRecordPayload<?>) this.constructor.newInstance(Option.empty());
     }
-  }
-
-  private static Class<?>[] generateArgTypes(boolean shouldCombine, boolean partialOverwriteEnabled) {
-    if (shouldCombine) {
-      if (partialOverwriteEnabled) {
-        return new Class<?>[] {GenericRecord.class, Comparable.class, String.class};
-      }
-      return new Class<?>[] {GenericRecord.class, Comparable.class};
-    }
-    return new Class<?>[] {Option.class};
   }
 }

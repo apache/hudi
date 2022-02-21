@@ -1164,6 +1164,35 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
   }
 
   @ParameterizedTest
+  @ValueSource(strings = {"upsert"})
+  void testPartialUpdateFiles(String operation) {
+    TableEnvironment tableEnv = streamTableEnv;
+
+    String hoodieTableDDL = sql("t1")
+        .field("f_int int")
+        .field("f1 varchar(10)")
+        .field("f2 varchar(10)")
+        .field("f3 varchar(10)")
+        .pkField("f_int")
+        .noPartition()
+        .option(FlinkOptions.PAYLOAD_CLASS_NAME, "org.apache.hudi.common.model.PartialOverwriteWithLatestAvroPayload")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.OPERATION, operation)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    execInsertSql(tableEnv, "insert into t1(f_int, f1) values (1, 'a')");
+    execInsertSql(tableEnv, "insert into t1(f_int, f2) values (1, 'b')");
+    execInsertSql(tableEnv, "insert into t1(f_int, f1, f3) values (1, 'c', 'c')");
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    final String expected = "["
+        + "+I[1, c, b, c]]";
+    assertRowsEquals(result, expected);
+  }
+
+  @ParameterizedTest
   @ValueSource(strings = {"insert", "upsert", "bulk_insert"})
   void testParquetComplexNestedRowTypes(String operation) {
     TableEnvironment tableEnv = batchTableEnv;

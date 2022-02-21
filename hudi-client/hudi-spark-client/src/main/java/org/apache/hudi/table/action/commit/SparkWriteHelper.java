@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.data.HoodieJavaRDD;
-import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -37,7 +36,7 @@ import scala.Tuple2;
  *
  * @param <T>
  */
-public class SparkWriteHelper<T extends HoodieRecordPayload,R> extends BaseWriteHelper<T, JavaRDD<HoodieRecord<T>>,
+public class SparkWriteHelper<T extends HoodieRecordPayload, R> extends BaseWriteHelper<T, JavaRDD<HoodieRecord<T>>,
     JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, R> {
   private SparkWriteHelper() {
   }
@@ -59,8 +58,8 @@ public class SparkWriteHelper<T extends HoodieRecordPayload,R> extends BaseWrite
 
   @Override
   public JavaRDD<HoodieRecord<T>> deduplicateRecords(
-      JavaRDD<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism) {
-    boolean isIndexingGlobal = index.isGlobal();
+      JavaRDD<HoodieRecord<T>> records, HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table, int parallelism) {
+    boolean isIndexingGlobal = table.getIndex().isGlobal();
     return records.mapToPair(record -> {
       HoodieKey hoodieKey = record.getKey();
       // If index used is global, then records are expected to differ in their partitionPath

@@ -61,7 +61,7 @@ class PartialOverwriteWithLatestAvroPayloadTest {
     record2.put("partition", "");
     record2.put("ts", 1L);
     record2.put("_hoodie_is_deleted", false);
-    record2.put("city", "NY");
+    record2.put("city", null);
     record2.put("child", Collections.emptyList());
 
     GenericRecord record3 = new GenericData.Record(schema);
@@ -69,8 +69,8 @@ class PartialOverwriteWithLatestAvroPayloadTest {
     record3.put("partition", "");
     record3.put("ts", 1L);
     record3.put("_hoodie_is_deleted", false);
-    record3.put("city", "NY");
-    record3.put("child", Arrays.asList("A"));
+    record3.put("city", "NY0");
+    record3.put("child", Collections.emptyList());
 
 
     PartialOverwriteWithLatestAvroPayload payload1 = new PartialOverwriteWithLatestAvroPayload(record1, 1);
@@ -129,14 +129,13 @@ class PartialOverwriteWithLatestAvroPayloadTest {
     expectedRecord.put("city", "NY");
     expectedRecord.put("child", Collections.emptyList());
 
-
-    PartialOverwriteWithLatestAvroPayload payload1 = new PartialOverwriteWithLatestAvroPayload(record1, 1, schema.toString());
-    PartialOverwriteWithLatestAvroPayload payload2 = new PartialOverwriteWithLatestAvroPayload(record2, 2, schema.toString());
-    PartialOverwriteWithLatestAvroPayload expectedPayload = new PartialOverwriteWithLatestAvroPayload(expectedRecord, 2, schema.toString());
-    assertArrayEquals(payload1.preCombine(payload2).recordBytes, expectedPayload.recordBytes);
-    assertArrayEquals(payload2.preCombine(payload1).recordBytes, expectedPayload.recordBytes);
-    assertEquals(payload1.preCombine(payload2).orderingVal, expectedPayload.orderingVal);
-    assertEquals(payload2.preCombine(payload1).orderingVal, expectedPayload.orderingVal);
+    PartialOverwriteWithLatestAvroPayload payload1 = new PartialOverwriteWithLatestAvroPayload(record1, 1);
+    PartialOverwriteWithLatestAvroPayload payload2 = new PartialOverwriteWithLatestAvroPayload(record2, 2);
+    PartialOverwriteWithLatestAvroPayload expectedPayload = new PartialOverwriteWithLatestAvroPayload(expectedRecord, 2);
+    assertArrayEquals(payload1.preCombine(payload2, null, schema).recordBytes, expectedPayload.recordBytes);
+    assertArrayEquals(payload2.preCombine(payload1, null, schema).recordBytes, expectedPayload.recordBytes);
+    assertEquals(payload1.preCombine(payload2, null, schema).orderingVal, expectedPayload.orderingVal);
+    assertEquals(payload2.preCombine(payload1, null, schema).orderingVal, expectedPayload.orderingVal);
   }
 
   @Test
@@ -165,11 +164,11 @@ class PartialOverwriteWithLatestAvroPayloadTest {
     record2.put("city", "NY0");
     record2.put("child", Collections.emptyList());
 
-    PartialOverwriteWithLatestAvroPayload payload1 = new PartialOverwriteWithLatestAvroPayload(record1, 1, schema.toString());
-    PartialOverwriteWithLatestAvroPayload payload2 = new PartialOverwriteWithLatestAvroPayload(delRecord1, 2, schema.toString());
+    PartialOverwriteWithLatestAvroPayload payload1 = new PartialOverwriteWithLatestAvroPayload(record1, 1);
+    PartialOverwriteWithLatestAvroPayload payload2 = new PartialOverwriteWithLatestAvroPayload(delRecord1, 2);
 
-    assertEquals(payload1.preCombine(payload2), payload1);
-    assertEquals(payload2.preCombine(payload1), payload1);
+    assertEquals(payload1.preCombine(payload2, null, schema), payload1);
+    assertEquals(payload2.preCombine(payload1, null, schema), payload1);
   }
 
 }

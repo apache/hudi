@@ -22,7 +22,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -80,11 +79,5 @@ public abstract class BaseWriteHelper<T extends HoodieRecordPayload, I, K, O, R>
    * @param parallelism parallelism or partitions to be used while reducing/deduplicating
    * @return Collection of HoodieRecord already be deduplicated
    */
-  public I deduplicateRecords(
-      I records, HoodieTable<T, I, K, O> table, int parallelism) {
-    return deduplicateRecords(records, table.getIndex(), parallelism);
-  }
-
-  public abstract I deduplicateRecords(
-      I records, HoodieIndex<?, ?> index, int parallelism);
+  public abstract I deduplicateRecords(I records, HoodieTable<T, I, K, O> table, int parallelism);
 }

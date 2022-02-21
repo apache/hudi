@@ -59,6 +59,19 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   }
 
   /**
+   *When more than one HoodieRecord have the same HoodieKey in the incoming batch, this function combines them before attempting to insert/upsert by taking in a property map.
+   *
+   * @param oldValue instance of the old {@link HoodieRecordPayload} to be combined with.
+   * @param properties Payload related properties. For example pass the ordering field(s) name to extract from value in storage.
+   * @param schema Schema used for record
+   * @return the combined value
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
+  default T preCombine(T oldValue, Properties properties, Schema schema) {
+    return preCombine(oldValue, properties);
+  }
+
+  /**
    * When more than one HoodieRecord have the same HoodieKey in the incoming batch, and get the merged result after calling preCombine method instead of choose one of two records,
    * can call this method to get the order among combined record with previous records
    * @param oldValue instance of the old {@link HoodieRecordPayload} to be compare.
