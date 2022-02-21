@@ -112,7 +112,7 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
         HoodieRecordLocation hoodieRecordLocation = new HoodieRecordLocation(updateLocEntry.getValue().getKey(), updateLocEntry.getKey());
         outputWorkloadStats.addUpdates(hoodieRecordLocation, updateLocEntry.getValue().getValue());
       }
-      profile.getOutputPartitionPathStatMap().putIfAbsent(partitionStat.getKey(), outputWorkloadStats);
+      profile.getOutputPartitionPathStatMap().put(partitionStat.getKey(), outputWorkloadStats);
     }
   }
 
@@ -208,7 +208,7 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
         LOG.info("Total insert buckets for partition path " + partitionPath + " => " + insertBuckets);
         partitionPathToInsertBucketInfos.put(partitionPath, insertBuckets);
       }
-      profile.getOutputPartitionPathStatMap().putIfAbsent(partitionPath, outputWorkloadStats);
+      profile.getOutputPartitionPathStatMap().put(partitionPath, outputWorkloadStats);
     }
   }
 

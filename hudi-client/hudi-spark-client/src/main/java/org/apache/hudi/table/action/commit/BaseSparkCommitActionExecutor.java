@@ -163,14 +163,15 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
       LOG.info("Input workload profile :" + workloadProfile);
     }
 
-    // handle records update with clustering
-    JavaRDD<HoodieRecord<T>> inputRecordsRDDWithClusteringUpdate = clusteringHandleUpdate(inputRecordsRDD);
-
     // partition using the insert partitioner
     final Partitioner partitioner = getPartitioner(workloadProfile);
     if (isWorkloadProfileNeeded()) {
       saveWorkloadProfileMetadataToInflight(workloadProfile, instantTime);
     }
+
+    // handle records update with clustering
+    JavaRDD<HoodieRecord<T>> inputRecordsRDDWithClusteringUpdate = clusteringHandleUpdate(inputRecordsRDD);
+
     context.setJobStatus(this.getClass().getSimpleName(), "Doing partition and writing data");
     JavaRDD<HoodieRecord<T>> partitionedRecords = partition(inputRecordsRDDWithClusteringUpdate, partitioner);
     JavaRDD<WriteStatus> writeStatusRDD = partitionedRecords.mapPartitionsWithIndex((partition, recordItr) -> {

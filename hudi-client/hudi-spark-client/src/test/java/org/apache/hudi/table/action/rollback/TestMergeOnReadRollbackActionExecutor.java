@@ -180,9 +180,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     //1. prepare data
     HoodieTestDataGenerator.writePartitionMetadata(fs, new String[]{DEFAULT_FIRST_PARTITION_PATH}, basePath);
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
-    /**
-     * Write 1 (only inserts)
-     */
+    // Write 1 (only inserts)
     String newCommitTime = "001";
     client.startCommitWithTime(newCommitTime);
     List<HoodieRecord> records = dataGen.generateInsertsForPartition(newCommitTime, 2, DEFAULT_FIRST_PARTITION_PATH);
@@ -217,9 +215,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
       assert wStat.getNumInserts() > 0;
     });
 
-    /**
-     * Write 2 (inserts)
-     */
+    // Write 2 (inserts)
     newCommitTime = "002";
     client.startCommitWithTime(newCommitTime);
     List<HoodieRecord> updateRecords = Collections.singletonList(dataGen.generateUpdateRecord(records.get(0).getKey(), newCommitTime));
@@ -252,9 +248,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     String fileIdInPartitionTwo = secondHoodieWriteStatOptionList.get(0).getFileId();
     assertEquals(2, hoodieWriteStatOptionList.get(0).getNumInserts());
 
-    /**
-     * Rollback
-     */
+    // Rollback
     HoodieInstant rollBackInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "002");
     BaseRollbackPlanActionExecutor mergeOnReadRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, cfg, table, "003", rollBackInstant, false,
@@ -322,7 +316,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
   private void setUpDFS() throws IOException {
     initDFS();
     initSparkContexts();
-    //just generate tow partitions
+    //just generate two partitions
     dataGen = new HoodieTestDataGenerator(new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH});
     initFileSystem();
     initDFSMetaClient();
