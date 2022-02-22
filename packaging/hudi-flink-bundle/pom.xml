@@ -162,10 +162,6 @@
                   <shadedPattern>${flink.bundle.shade.prefix}org.apache.avro.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.apache.parquet.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.parquet.</shadedPattern>
-                </relocation>
-                <relocation>
                   <pattern>com.yammer.metrics.</pattern>
                   <shadedPattern>${flink.bundle.shade.prefix}com.yammer.metrics.</shadedPattern>
                 </relocation>
