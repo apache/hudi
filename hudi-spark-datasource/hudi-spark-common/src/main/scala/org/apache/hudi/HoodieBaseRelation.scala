@@ -71,7 +71,10 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected lazy val preCombineFieldOpt: Option[String] = getPrecombineFieldProperty
 
-  protected lazy val mandatoryColumns: Seq[String] = {
+  /**
+   * @VisibleInTests
+   */
+  lazy val mandatoryColumns: Seq[String] = {
     if (isMetadataTable(metaClient)) {
       Seq(HoodieMetadataPayload.KEY_FIELD_NAME, HoodieMetadataPayload.SCHEMA_FIELD_NAME_TYPE)
     } else {
