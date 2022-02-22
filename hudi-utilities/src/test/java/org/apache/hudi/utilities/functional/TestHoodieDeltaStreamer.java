@@ -260,7 +260,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     static Map<String, Long> getPartitionRecordCount(String basePath, SQLContext sqlContext) {
       sqlContext.clearCache();
-      //List<Row> rows0 = sqlContext.read().format("org.apache.hudi").load(basePath).collectAsList();
       List<Row> rows = sqlContext.read().format("org.apache.hudi").load(basePath).groupBy(HoodieRecord.PARTITION_PATH_METADATA_FIELD).count().collectAsList();
       Map<String, Long> partitionRecordCount = new HashMap<>();
       rows.stream().forEach(row -> partitionRecordCount.put(row.getString(0), row.getLong(1)));
@@ -1995,9 +1994,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     @Override
     public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
                               TypedProperties properties) {
-      //List<Row> row0 = rowDataset.collectAsList();
       Dataset<Row> toReturn = rowDataset.filter("partition_path == '" + HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH + "'");
-      //List<Row> rows = toReturn.collectAsList();
       return toReturn;
     }
   }
