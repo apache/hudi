@@ -18,10 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
@@ -30,6 +26,11 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroParquetReader;
@@ -46,6 +47,7 @@ import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
 
 import javax.annotation.Nonnull;
+
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -78,6 +80,17 @@ public class ParquetUtils extends BaseFileUtils {
   @Override
   public Set<String> filterRowKeys(Configuration configuration, Path filePath, Set<String> filter) {
     return filterParquetRowKeys(configuration, filePath, filter, HoodieAvroUtils.getRecordKeySchema());
+  }
+
+  public static ParquetMetadata readMetadata(Configuration conf, Path parquetFilePath) {
+    ParquetMetadata footer;
+    try {
+      // TODO(vc): Should we use the parallel reading version here?
+      footer = ParquetFileReader.readFooter(FSUtils.getFs(parquetFilePath.toString(), conf).getConf(), parquetFilePath);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to read footer for parquet " + parquetFilePath, e);
+    }
+    return footer;
   }
 
   /**
@@ -182,17 +195,6 @@ public class ParquetUtils extends BaseFileUtils {
       iterator.forEachRemaining(hoodieKeys::add);
       return hoodieKeys;
     }
-  }
-
-  public ParquetMetadata readMetadata(Configuration conf, Path parquetFilePath) {
-    ParquetMetadata footer;
-    try {
-      // TODO(vc): Should we use the parallel reading version here?
-      footer = ParquetFileReader.readFooter(FSUtils.getFs(parquetFilePath.toString(), conf).getConf(), parquetFilePath);
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to read footer for parquet " + parquetFilePath, e);
-    }
-    return footer;
   }
 
   /**
