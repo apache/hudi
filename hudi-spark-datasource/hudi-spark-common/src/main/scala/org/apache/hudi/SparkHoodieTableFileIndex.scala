@@ -20,6 +20,8 @@ package org.apache.hudi
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_INCREMENTAL_OPT_VAL, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
+import org.apache.hudi.HoodieCommonUtils.toJavaOption
+import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, generateFieldMap}
 import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, generateFieldMap, toJavaOption}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.TypedProperties
@@ -38,7 +40,6 @@ import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.JavaConverters._
-import scala.language.implicitConversions
 
 /**
  * Implementation of the [[BaseHoodieTableFileIndex]] for Spark
@@ -140,7 +141,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    */
   def listFileSlices(partitionFilters: Seq[Expression]): Map[String, Seq[FileSlice]] = {
     // Prune the partition path by the partition filters
-    val prunedPartitions = prunePartition(cachedAllInputFileSlices.asScala.keys.toSeq, partitionFilters)
+    val prunedPartitions = prunePartition(cachedAllInputFileSlices.keySet().asScala.toSeq, partitionFilters)
     prunedPartitions.map(partition => {
       (partition.path, cachedAllInputFileSlices.get(partition).asScala)
     }).toMap
