@@ -156,7 +156,7 @@ public class HoodieTableMetaClient implements Serializable {
    */
   private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
     in.defaultReadObject();
-    fs = null; // will be lazily inited
+    fs = null; // will be lazily initialized
   }
 
   private void writeObject(java.io.ObjectOutputStream out) throws IOException {
@@ -330,13 +330,27 @@ public class HoodieTableMetaClient implements Serializable {
    * Get the archived commits as a timeline. This is costly operation, as all data from the archived files are read.
    * This should not be used, unless for historical debugging purposes.
    *
-   * @return Active commit timeline
+   * @return Archived commit timeline
    */
   public synchronized HoodieArchivedTimeline getArchivedTimeline() {
     if (archivedTimeline == null) {
       archivedTimeline = new HoodieArchivedTimeline(this);
     }
     return archivedTimeline;
+  }
+
+  /**
+   * Returns fresh new archived commits as a timeline from startTs (inclusive).
+   *
+   * <p>This is costly operation if really early endTs is specified.
+   * Be caution to use this only when the time range is short.
+   *
+   * <p>This method is not thread safe.
+   *
+   * @return Archived commit timeline
+   */
+  public HoodieArchivedTimeline getArchivedTimeline(String startTs) {
+    return new HoodieArchivedTimeline(this, startTs);
   }
 
   /**

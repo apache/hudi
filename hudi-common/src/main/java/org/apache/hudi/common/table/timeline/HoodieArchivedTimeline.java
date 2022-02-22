@@ -79,18 +79,31 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   private static final String ACTION_TYPE_KEY = "actionType";
   private static final String ACTION_STATE = "actionState";
   private HoodieTableMetaClient metaClient;
-  private Map<String, byte[]> readCommits = new HashMap<>();
+  private final Map<String, byte[]> readCommits = new HashMap<>();
 
   private static final Logger LOG = LogManager.getLogger(HoodieArchivedTimeline.class);
 
   /**
-   * Loads instants between (startTs, endTs].
-   * Note that there is no lazy loading, so this may not work if really long time range (endTs-startTs) is specified.
+   * Loads all the archived instants.
+   * Note that there is no lazy loading, so this may not work if the archived timeline range is really long.
    * TBD: Should we enforce maximum time range?
    */
   public HoodieArchivedTimeline(HoodieTableMetaClient metaClient) {
     this.metaClient = metaClient;
     setInstants(this.loadInstants(false));
+    // multiple casts will make this lambda serializable -
+    // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
+    this.details = (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
+  }
+
+  /**
+   * Loads completed instants from startTs(inclusive).
+   * Note that there is no lazy loading, so this may not work if really early startTs is specified.
+   */
+  public HoodieArchivedTimeline(HoodieTableMetaClient metaClient, String startTs) {
+    this.metaClient = metaClient;
+    setInstants(loadInstants(new StartTsFilter(startTs), true,
+        record -> HoodieInstant.State.COMPLETED.toString().equals(record.get(ACTION_STATE).toString())));
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
     this.details = (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
@@ -300,6 +313,19 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
     }
   }
 
+  private static class StartTsFilter extends TimeRangeFilter {
+    private final String startTs;
+
+    public StartTsFilter(String startTs) {
+      super(startTs, null); // endTs is never used
+      this.startTs = startTs;
+    }
+
+    public boolean isInRange(HoodieInstant instant) {
+      return HoodieTimeline.compareTimestamps(instant.getTimestamp(), GREATER_THAN_OR_EQUALS, startTs);
+    }
+  }
+
   /**
    * Sort files by reverse order of version suffix in file name.
    */
@@ -330,7 +356,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
     // filter in-memory instants
     Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
     return new HoodieDefaultTimeline(getInstants().filter(i ->
-        readCommits.keySet().contains(i.getTimestamp()))
+        readCommits.containsKey(i.getTimestamp()))
         .filter(s -> validActions.contains(s.getAction())), details);
   }
 }
