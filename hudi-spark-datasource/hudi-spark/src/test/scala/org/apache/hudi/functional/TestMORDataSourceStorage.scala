@@ -191,6 +191,9 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
   def testProperProjection(): Unit = {
     val defaultOpts: Map[String, String] = commonOpts ++ Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
+      // NOTE: It's critical that we use non-partitioned table, since the way we track amount of bytes read
+      //       is not robust, and works most reliably only when we read just a single file. As such, making table
+      //       non-partitioned makes it much more likely just a single file will be written
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getName
     )
 
