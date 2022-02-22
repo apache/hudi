@@ -106,8 +106,8 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
             sparkContext, srcPath, numInstantsPerFetch, beginInstant, missingCheckpointStrategy);
 
     if (queryTypeAndInstantEndpts.getValue().getKey().equals(queryTypeAndInstantEndpts.getValue().getValue())) {
-      LOG.warn("Already caught up. Begin Checkpoint was :" + queryTypeAndInstantEndpts.getKey());
-      return Pair.of(Option.empty(), queryTypeAndInstantEndpts.getKey());
+      LOG.warn("Already caught up. Begin Checkpoint was :" + queryTypeAndInstantEndpts.getValue().getKey());
+      return Pair.of(Option.empty(), queryTypeAndInstantEndpts.getValue().getKey());
     }
 
     Dataset<Row> source = null;
