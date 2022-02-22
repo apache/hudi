@@ -41,7 +41,7 @@ case class HoodieMergeOnReadFileSplit(dataFile: Option[PartitionedFile],
                                       latestCommit: String,
                                       tablePath: String,
                                       maxCompactionMemoryInBytes: Long,
-                                      mergeType: String)
+                                      mergeType: String) extends HoodieFileSplit
 
 class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
                                   optParams: Map[String, String],
@@ -50,34 +50,19 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
                                   val metaClient: HoodieTableMetaClient)
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) {
 
+  override type FileSplit = HoodieMergeOnReadFileSplit
+
   private val mergeType = optParams.getOrElse(
     DataSourceReadOptions.REALTIME_MERGE.key,
     DataSourceReadOptions.REALTIME_MERGE.defaultValue)
 
   private val maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(jobConf)
 
-  override def doBuildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[InternalRow] = {
-    log.debug(s" buildScan requiredColumns = ${requiredColumns.mkString(",")}")
-    log.debug(s" buildScan filters = ${filters.mkString(",")}")
-
-    // NOTE: In case list of requested columns doesn't contain the Primary Key one, we
-    //       have to add it explicitly so that
-    //          - Merging could be performed correctly
-    //          - In case 0 columns are to be fetched (for ex, when doing {@code count()} on Spark's [[Dataset]],
-    //          Spark still fetches all the rows to execute the query correctly
-    //
-    //       It's okay to return columns that have not been requested by the caller, as those nevertheless will be
-    //       filtered out upstream
-    val fetchedColumns: Array[String] = appendMandatoryColumns(requiredColumns)
-
-    val (requiredAvroSchema, requiredStructSchema) =
-      HoodieSparkUtils.getRequiredSchema(tableAvroSchema, fetchedColumns)
-    val fileIndex = buildFileIndex(filters)
-
-    val partitionSchema = StructType(Nil)
-    val tableSchema = HoodieTableSchema(tableStructSchema, tableAvroSchema.toString)
-    val requiredSchema = HoodieTableSchema(requiredStructSchema, requiredAvroSchema.toString)
-
+  protected override def composeRDD(fileIndex: Seq[HoodieMergeOnReadFileSplit],
+                                    partitionSchema: StructType,
+                                    tableSchema: HoodieTableSchema,
+                                    requiredSchema: HoodieTableSchema,
+                                    filters: Array[Filter]): HoodieUnsafeRDD = {
     val fullSchemaParquetReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
       partitionSchema = partitionSchema,
@@ -93,6 +78,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       //       to configure Parquet reader appropriately
       hadoopConf = new Configuration(conf)
     )
+
     val requiredSchemaParquetReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
       partitionSchema = partitionSchema,
@@ -111,7 +97,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       requiredSchemaParquetReader, tableState, tableSchema, requiredSchema, fileIndex)
   }
 
-  def buildFileIndex(filters: Array[Filter]): List[HoodieMergeOnReadFileSplit] = {
+  protected override def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
     if (globPaths.nonEmpty) {
       // Load files from the global paths if it has defined to be compatible with the original mode
       val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(sqlContext.sparkSession, globPaths)
@@ -157,11 +143,8 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
 
       // Get partition filter and convert to catalyst expression
       val partitionColumns = hoodieFileIndex.partitionSchema.fieldNames.toSet
-      val partitionFilters = filters.filter(f => f.references.forall(p => partitionColumns.contains(p)))
-      val partitionFilterExpression =
-        HoodieSparkUtils.convertToCatalystExpression(partitionFilters, tableStructSchema)
       val convertedPartitionFilterExpression =
-        HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilterExpression.toSeq)
+        HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters.toSeq)
 
       // If convert success to catalyst expression, use the partition prune
       val fileSlices = if (convertedPartitionFilterExpression.nonEmpty) {

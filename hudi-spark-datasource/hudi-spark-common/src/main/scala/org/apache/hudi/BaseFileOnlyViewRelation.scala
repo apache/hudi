@@ -52,33 +52,13 @@ class BaseFileOnlyViewRelation(sqlContext: SQLContext,
                                globPaths: Seq[Path])
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) with SparkAdapterSupport {
 
-  private val fileIndex = HoodieFileIndex(sparkSession, metaClient, userSchema, optParams,
-    FileStatusCache.getOrCreate(sqlContext.sparkSession))
+  override type FileSplit = HoodieBaseFileSplit
 
-  override def doBuildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[InternalRow] = {
-    // NOTE: In case list of requested columns doesn't contain the Primary Key one, we
-    //       have to add it explicitly so that
-    //          - Merging could be performed correctly
-    //          - In case 0 columns are to be fetched (for ex, when doing {@code count()} on Spark's [[Dataset]],
-    //          Spark still fetches all the rows to execute the query correctly
-    //
-    //       It's okay to return columns that have not been requested by the caller, as those nevertheless will be
-    //       filtered out upstream
-    val fetchedColumns: Array[String] = appendMandatoryColumns(requiredColumns)
-
-    val (requiredAvroSchema, requiredStructSchema) =
-      HoodieSparkUtils.getRequiredSchema(tableAvroSchema, fetchedColumns)
-
-    val filterExpressions = convertToExpressions(filters)
-    val (partitionFilters, dataFilters) = HoodieCatalystExpressionUtils.splitPartitionAndDataPredicates(
-      sparkSession, filterExpressions, partitionColumns)
-
-    val filePartitions = getPartitions(partitionFilters, dataFilters)
-
-    val partitionSchema = StructType(Nil)
-    val tableSchema = HoodieTableSchema(tableStructSchema, tableAvroSchema.toString)
-    val requiredSchema = HoodieTableSchema(requiredStructSchema, requiredAvroSchema.toString)
-
+  protected override def composeRDD(fileSplits: Seq[HoodieBaseFileSplit],
+                                    partitionSchema: StructType,
+                                    tableSchema: HoodieTableSchema,
+                                    requiredSchema: HoodieTableSchema,
+                                    filters: Array[Filter]): HoodieUnsafeRDD = {
     val baseFileReader = createBaseFileReader(
       spark = sparkSession,
       partitionSchema = partitionSchema,
@@ -91,10 +71,10 @@ class BaseFileOnlyViewRelation(sqlContext: SQLContext,
       hadoopConf = new Configuration(conf)
     )
 
-    new HoodieFileScanRDD(sparkSession, baseFileReader, filePartitions)
+    new HoodieFileScanRDD(sparkSession, baseFileReader, fileSplits)
   }
 
-  private def getPartitions(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FilePartition] = {
+  protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[HoodieBaseFileSplit] = {
     val partitionDirectories = if (globPaths.isEmpty) {
       val hoodieFileIndex = HoodieFileIndex(sparkSession, metaClient, userSchema, optParams,
         FileStatusCache.getOrCreate(sqlContext.sparkSession))
@@ -125,17 +105,5 @@ class BaseFileOnlyViewRelation(sqlContext: SQLContext,
     val maxSplitBytes = sparkSession.sessionState.conf.filesMaxPartitionBytes
 
     sparkAdapter.getFilePartitions(sparkSession, partitions, maxSplitBytes)
-  }
-
-  private def convertToExpressions(filters: Array[Filter]): Array[Expression] = {
-    val catalystExpressions = HoodieSparkUtils.convertToCatalystExpressions(filters, tableStructSchema)
-
-    val failedExprs = catalystExpressions.zipWithIndex.filter { case (opt, _) => opt.isEmpty }
-    if (failedExprs.nonEmpty) {
-      val failedFilters = failedExprs.map(p => filters(p._2))
-      logWarning(s"Failed to convert Filters into Catalyst expressions (${failedFilters.map(_.toString)})")
-    }
-
-    catalystExpressions.filter(_.isDefined).map(_.get).toArray
   }
 }
