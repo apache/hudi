@@ -72,9 +72,8 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
     runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, "", projectedColumnsReadStats)
   }
 
-
   @Test
-  def testMORSnapshotRelationWithDeltaLogs(): Unit = {
+  def testMergeOnReadSnapshotRelationWithDeltaLogs(): Unit = {
     val tablePath = s"$basePath/mor-with-logs"
     val targetRecordsCount = 100
     val targetUpdatedRecordsRatio = 0.5
@@ -109,7 +108,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
   }
 
   @Test
-  def testMORSnapshotRelationWithNoDeltaLogs(): Unit = {
+  def testMergeOnReadSnapshotRelationWithNoDeltaLogs(): Unit = {
     val tablePath = s"$basePath/mor-no-logs"
     val targetRecordsCount = 100
     val targetUpdatedRecordsRatio = 0.0
@@ -139,14 +138,57 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
     runTest(tableState, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, "null", projectedColumnsReadStats)
   }
 
+  @Test
+  def testMergeOnReadIncrementalRelationWithDeltaLogs(): Unit = {
+    val tablePath = s"$basePath/mor-with-logs"
+    val targetRecordsCount = 100
+    val targetUpdatedRecordsRatio = 0.5
+
+    val (_, schema) = bootstrapMORTable(tablePath, targetRecordsCount, targetUpdatedRecordsRatio, defaultWriteOpts, populateMetaFields = true)
+    val tableState = TableState(tablePath, schema, targetRecordsCount, targetUpdatedRecordsRatio)
+
+    // Stats for the reads fetching only _projected_ columns (note how amount of bytes read
+    // increases along w/ the # of columns)
+    val projectedColumnsReadStats: Array[(String, Long)] = Array(
+      ("rider", 2560),
+      ("rider,driver", 2660),
+      ("rider,driver,tip_history", 3625)
+    )
+
+    // Stats for the reads fetching _all_ columns (note, how amount of bytes read
+    // is invariant of the # of columns)
+    val fullColumnsReadStats: Array[(String, Long)] = Array(
+      ("rider", 14667),
+      ("rider,driver", 14667),
+      ("rider,driver,tip_history", 14667)
+    )
+
+    val incrementalOpts: Map[String, String] = Map(
+      DataSourceReadOptions.BEGIN_INSTANTTIME.key -> "001"
+    )
+
+    // Test MOR / Incremental / Skip-merge
+    runTest(tableState, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL,
+      projectedColumnsReadStats, incrementalOpts)
+
+    // Test MOR / Incremental / Payload-combine
+    runTest(tableState, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL, DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL,
+      fullColumnsReadStats, incrementalOpts)
+  }
+
+
   // Test routine
-  private def runTest(tableState: TableState, queryType: String, mergeType: String, expectedStats: Array[(String, Long)]): Unit = {
+  private def runTest(tableState: TableState,
+                      queryType: String,
+                      mergeType: String,
+                      expectedStats: Array[(String, Long)],
+                      additionalOpts: Map[String, String] = Map.empty): Unit = {
     val tablePath = tableState.path
     val readOpts = defaultWriteOpts ++ Map(
       "path" -> tablePath,
       DataSourceReadOptions.QUERY_TYPE.key -> queryType,
       DataSourceReadOptions.REALTIME_MERGE.key -> mergeType
-    )
+    ) ++ additionalOpts
 
     val ds = new DefaultSource()
     val relation: HoodieBaseRelation = ds.createRelation(spark.sqlContext, readOpts).asInstanceOf[HoodieBaseRelation]
