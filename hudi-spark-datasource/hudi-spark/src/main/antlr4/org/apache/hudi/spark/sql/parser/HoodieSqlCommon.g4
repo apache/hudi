@@ -39,22 +39,6 @@
       return true;
     }
   }
-
-  /**
-   * This method will be called when we see '/*' and try to match it as a bracketed comment.
-   * If the next character is '+', it should be parsed as hint later, and we cannot match
-   * it as a bracketed comment.
-   *
-   * Returns true if the next character is '+'.
-   */
-  public boolean isHint() {
-    int nextChar = _input.LA(1);
-    if (nextChar == '+') {
-      return true;
-    } else {
-      return false;
-    }
-  }
 }
 
  singleStatement
@@ -223,20 +207,19 @@
     ;
 
  SIMPLE_COMMENT
-    : '--' ('\\\n' | ~[\r\n])* '\r'? '\n'? -> channel(HIDDEN)
-    ;
+     : '--' ~[\r\n]* '\r'? '\n'? -> channel(HIDDEN)
+     ;
 
  BRACKETED_COMMENT
-    : '/*' {!isHint()}? (BRACKETED_COMMENT|.)*? '*/' -> channel(HIDDEN)
-    ;
+     : '/*' .*? '*/' -> channel(HIDDEN)
+     ;
 
- WS
-    : [ \r\n\t]+ -> channel(HIDDEN)
-    ;
+ WS  : [ \r\n\t]+ -> channel(HIDDEN)
+     ;
 
  // Catch-all for anything we can't recognize.
  // We use this to be able to ignore and recover all the text
  // when splitting statements with DelimiterLexer
  UNRECOGNIZED
-    : .
-    ;
+     : .
+     ;

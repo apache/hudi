@@ -92,21 +92,16 @@ class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure 
 
   override def build: Procedure = new ShowCommitsProcedure(includeExtraMetadata)
 
-  def getCommitsWithMetadata(timeline: HoodieDefaultTimeline,
-                             limit: Int): Seq[Row] = {
-    val rows = new util.ArrayList[Row]
-    // timeline can be read from multiple files. So sort is needed instead of reversing the collection
-    val commits: util.List[HoodieInstant] = timeline.getCommitsTimeline.filterCompletedInstants
-      .getInstants.toArray().map(instant => instant.asInstanceOf[HoodieInstant]).toList.asJava
-    val newCommits = new util.ArrayList[HoodieInstant](commits)
-    Collections.sort(newCommits, HoodieInstant.COMPARATOR.reversed)
+  private def getCommitsWithMetadata(timeline: HoodieDefaultTimeline,
+                                     limit: Int): Seq[Row] = {
+    import scala.collection.JavaConversions._
+
+    val (rows: util.ArrayList[Row], newCommits: util.ArrayList[HoodieInstant]) = getSortCommits(timeline)
 
     for (i <- 0 until newCommits.size) {
       val commit = newCommits.get(i)
       val commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(commit).get, classOf[HoodieCommitMetadata])
-      import scala.collection.JavaConversions._
       for (partitionWriteStat <- commitMetadata.getPartitionToWriteStats.entrySet) {
-        import scala.collection.JavaConversions._
         for (hoodieWriteStat <- partitionWriteStat.getValue) {
           rows.add(Row(
             commit.getTimestamp, commit.getAction, hoodieWriteStat.getPartitionPath,
@@ -122,14 +117,19 @@ class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure 
     rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
   }
 
-  def getCommits(timeline: HoodieDefaultTimeline,
-                 limit: Int): Seq[Row] = {
+  private def getSortCommits(timeline: HoodieDefaultTimeline): (util.ArrayList[Row], util.ArrayList[HoodieInstant]) = {
     val rows = new util.ArrayList[Row]
     // timeline can be read from multiple files. So sort is needed instead of reversing the collection
     val commits: util.List[HoodieInstant] = timeline.getCommitsTimeline.filterCompletedInstants
       .getInstants.toArray().map(instant => instant.asInstanceOf[HoodieInstant]).toList.asJava
     val newCommits = new util.ArrayList[HoodieInstant](commits)
     Collections.sort(newCommits, HoodieInstant.COMPARATOR.reversed)
+    (rows, newCommits)
+  }
+
+  def getCommits(timeline: HoodieDefaultTimeline,
+                 limit: Int): Seq[Row] = {
+    val (rows: util.ArrayList[Row], newCommits: util.ArrayList[HoodieInstant]) = getSortCommits(timeline)
 
     for (i <- 0 until newCommits.size) {
       val commit = newCommits.get(i)

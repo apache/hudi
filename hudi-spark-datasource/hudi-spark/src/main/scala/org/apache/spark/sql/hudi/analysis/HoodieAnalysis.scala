@@ -137,10 +137,14 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
       case CompactionShowOnPath(path, limit) =>
         CompactionShowHoodiePathCommand(path, limit)
       // Convert to HoodieCallProcedureCommand
-      case CallCommand(name, args) =>
-        val procedure: Option[Procedure] = loadProcedure(name)
-        val input = buildProcedureArgs(args)
-        CallProcedureHoodieCommand(procedure.get, input)
+      case c@CallCommand(_, _) =>
+        val procedure: Option[Procedure] = loadProcedure(c.name)
+        val input = buildProcedureArgs(c.args)
+        if (procedure.nonEmpty) {
+          CallProcedureHoodieCommand(procedure.get, input)
+        } else {
+          c
+        }
       case _ => plan
     }
   }
@@ -149,12 +153,12 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
     val procedure: Option[Procedure] = if (name.nonEmpty) {
       val builder = HoodieProcedures.newBuilder(name.last)
       if (builder != null) {
-        Option.apply(builder.build)
+        Option(builder.build)
       } else {
         throw new AnalysisException(s"procedure: ${name.last} is not exists")
       }
     } else {
-      Option.empty
+      None
     }
     procedure
   }
