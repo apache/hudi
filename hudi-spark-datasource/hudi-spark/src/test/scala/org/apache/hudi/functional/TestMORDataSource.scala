@@ -30,8 +30,7 @@ import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestBase}
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
-
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkUtils}
 import org.apache.log4j.LogManager
 
 import org.apache.spark.sql._
@@ -557,7 +556,12 @@ class TestMORDataSource extends HoodieClientTestBase {
     assertEquals(sampleRow.getLong(1), sampleRow.get(1))
     assertEquals(sampleRow.getString(2), sampleRow.get(2))
     assertEquals(sampleRow.getSeq(3), sampleRow.get(3))
-    assertEquals(sampleRow.getStruct(4), sampleRow.get(4))
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      // Since Spark3.2, the `nation` column is parsed as String, not Struct.
+      assertEquals(sampleRow.getString(4), sampleRow.get(4))
+    } else {
+      assertEquals(sampleRow.getStruct(4), sampleRow.get(4))
+    }
   }
 
   def verifyShow(df: DataFrame): Unit = {

@@ -119,7 +119,7 @@
     <sparkbundle.version></sparkbundle.version>
     <flink.version>1.14.3</flink.version>
     <spark2.version>2.4.4</spark2.version>
-    <spark3.version>3.2.0</spark3.version>
+    <spark3.version>3.2.1</spark3.version>
     <hudi.spark.module>hudi-spark2</hudi.spark.module>
     <hudi.spark.common.module>hudi-spark2-common</hudi.spark.common.module>
     <avro.version>1.8.2</avro.version>
@@ -1592,8 +1592,9 @@
         <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
         <scalatest.version>3.1.0</scalatest.version>
         <kafka.version>2.4.1</kafka.version>
-        <parquet.version>1.12.1</parquet.version>
+        <parquet.version>1.12.2</parquet.version>
         <avro.version>1.10.2</avro.version>
+        <orc.version>1.6.12</orc.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
