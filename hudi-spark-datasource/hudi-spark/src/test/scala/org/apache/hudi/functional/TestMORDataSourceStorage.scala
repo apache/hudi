@@ -240,46 +240,93 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       }
     }
 
-    //
-    // Setup MOR table w/ Delta Logs
-    //
-
     case class TableState(path: String, schema: Schema, targetRecordCount: Long, targetUpdatedRecordsRatio: Double)
 
-    val tablePath = s"$basePath/mor-with-logs"
-    val targetRecordsCount = 100
-    val targetUpdatedRecordsRatio = 0.5
-
-    val (_, schema) = bootstrapMORTable(tablePath, targetRecordsCount, targetUpdatedRecordsRatio, defaultOpts, populateMetaFields = true)
-    val tableState = TableState(tablePath, schema, targetRecordsCount, targetUpdatedRecordsRatio)
 
     //
     // Test #1: MOR table w/ Delta Logs
     //
+    {
+      val tablePath = s"$basePath/mor-with-logs"
+      val targetRecordsCount = 100
+      val targetUpdatedRecordsRatio = 0.5
 
-    // NOTE: Values for the amount of bytes read should be stable, and not change a lot
-    //       since file format layout on disk is very stable
-    val noLogsInputs: Array[(String, Long)] = Array(
-      ("rider", 2452),
-      ("rider,driver", 2552),
-      ("rider,driver,tip_history", 3517)
-    )
+      val (_, schema) = bootstrapMORTable(tablePath, targetRecordsCount, targetUpdatedRecordsRatio, defaultOpts, populateMetaFields = true)
+      val tableState = TableState(tablePath, schema, targetRecordsCount, targetUpdatedRecordsRatio)
 
-    // Test MOR / Snapshot / Skip-merge
-    runTest(
-      queryType = DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL,
-      mergeType = DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL,
-      inputs = noLogsInputs,
-      tableState = tableState
-    )
 
-    // Test MOR / Read Optimized
-    runTest(
-      queryType = DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL,
-      mergeType = "null",
-      inputs = noLogsInputs,
-      tableState = tableState
-    )
+      // NOTE: Values for the amount of bytes read should be stable, and not change a lot
+      //       since file format layout on disk is very stable
+      val inputs: Array[(String, Long)] = Array(
+        ("rider", 2452),
+        ("rider,driver", 2552),
+        ("rider,driver,tip_history", 3517)
+      )
+
+      // Test MOR / Snapshot / Skip-merge
+      runTest(
+        queryType = DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL,
+        mergeType = DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL,
+        inputs = inputs,
+        tableState = tableState
+      )
+
+      // Test MOR / Read Optimized
+      runTest(
+        queryType = DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL,
+        mergeType = "null",
+        inputs = inputs,
+        tableState = tableState
+      )
+    }
+
+    //
+    // Test #2: MOR table w/ NO Delta Logs
+    //
+    {
+      val tablePath = s"$basePath/mor-no-logs"
+      val targetRecordsCount = 100
+      val targetUpdatedRecordsRatio = 0.0
+
+      val (_, schema) = bootstrapMORTable(tablePath, targetRecordsCount, targetUpdatedRecordsRatio, defaultOpts, populateMetaFields = true)
+      val tableState = TableState(tablePath, schema, targetRecordsCount, targetUpdatedRecordsRatio)
+
+      //
+      // Test #1: MOR table w/ Delta Logs
+      //
+
+      // NOTE: Values for the amount of bytes read should be stable, and not change a lot
+      //       since file format layout on disk is very stable
+      val inputs: Array[(String, Long)] = Array(
+        ("rider", 2452),
+        ("rider,driver", 2552),
+        ("rider,driver,tip_history", 3517)
+      )
+
+      // Test MOR / Snapshot / Skip-merge
+      runTest(
+        queryType = DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL,
+        mergeType = DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL,
+        inputs = inputs,
+        tableState = tableState
+      )
+
+      // Test MOR / Snapshot / Payload-combine
+      runTest(
+        queryType = DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL,
+        mergeType = DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL,
+        inputs = inputs,
+        tableState = tableState
+      )
+
+      // Test MOR / Read Optimized
+      runTest(
+        queryType = DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL,
+        mergeType = "null",
+        inputs = inputs,
+        tableState = tableState
+      )
+    }
   }
 
   def measureBytesRead[T](f: () => T): (T, Int) = {
