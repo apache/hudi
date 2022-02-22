@@ -264,7 +264,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
         isDelete = HoodieOperation.isDelete(hoodieRecord.getOperation());
       }
     }
-    return writeRecord(hoodieRecord, indexedRecord, isDelete);
+    return writeRecord(hoodieRecord, indexedRecord, isDelete, oldRecord);
   }
 
   protected void writeInsertRecord(HoodieRecord<T> hoodieRecord) throws IOException {
@@ -274,16 +274,16 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     if (insertRecord.isPresent() && insertRecord.get().equals(IGNORE_RECORD)) {
       return;
     }
-    if (writeRecord(hoodieRecord, insertRecord, HoodieOperation.isDelete(hoodieRecord.getOperation()))) {
+    if (writeRecord(hoodieRecord, insertRecord, HoodieOperation.isDelete(hoodieRecord.getOperation()), null)) {
       insertRecordsWritten++;
     }
   }
 
   protected boolean writeRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> indexedRecord) {
-    return writeRecord(hoodieRecord, indexedRecord, false);
+    return writeRecord(hoodieRecord, indexedRecord, false, null);
   }
 
-  protected boolean writeRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> indexedRecord, boolean isDelete) {
+  protected boolean writeRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> indexedRecord, boolean isDelete, GenericRecord oldRecord) {
     Option recordMetadata = hoodieRecord.getData().getMetadata();
     if (!partitionPath.equals(hoodieRecord.getPartitionPath())) {
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
@@ -294,8 +294,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     try {
       if (indexedRecord.isPresent() && !isDelete) {
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
-        IndexedRecord recordWithMetadataInSchema = rewriteRecord((GenericRecord) indexedRecord.get());
-        if (preserveMetadata && !config.populateMetaFields()) {
+        IndexedRecord recordWithMetadataInSchema = rewriteRecord((GenericRecord) indexedRecord.get(), preserveMetadata, oldRecord);
+        if (preserveMetadata && useWriterSchema) {
           // do not preserve FILENAME_METADATA_FIELD
           recordWithMetadataInSchema.put(FILENAME_METADATA_FIELD_POS, newFilePath.getName());
           fileWriter.writeAvro(hoodieRecord.getRecordKey(), recordWithMetadataInSchema);

@@ -172,9 +172,9 @@ public class HoodieTableConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("Base path of the dataset that needs to be bootstrapped as a Hudi table");
 
-  public static final ConfigProperty<String> POPULATE_META_FIELDS = ConfigProperty
+  public static final ConfigProperty<Boolean> POPULATE_META_FIELDS = ConfigProperty
       .key("hoodie.populate.meta.fields")
-      .defaultValue("true")
+      .defaultValue(true)
       .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated "
           + "and incremental queries will not be functional. This is only meant to be used for append only/immutable data for batch processing");
 
