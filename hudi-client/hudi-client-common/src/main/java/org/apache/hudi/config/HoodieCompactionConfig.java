@@ -278,6 +278,13 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("The average record size. If not explicitly specified, hudi will compute the "
           + "record size estimate compute dynamically based on commit metadata. "
           + " This is critical in computing the insert parallelism and bin-packing inserts into small files.");
+  
+  public static final ConfigProperty<Boolean> ALLOW_MULTIPLE_CLEANS = ConfigProperty
+      .key("hoodie.clean.allow.multiple")
+      .defaultValue(true)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Allows scheduling/executing multiple cleans by enabling this config. If users prefer to strictly ensure clean requests should be mutually exclusive, "
+          + ".i.e. a 2nd clean will not be scheduled if another clean is not yet completed to avoid repeat cleaning of same files, they might want to disable this config.");
 
   public static final ConfigProperty<Integer> ARCHIVE_MERGE_FILES_BATCH_SIZE = ConfigProperty
       .key("hoodie.archive.merge.files.batch.size")
@@ -639,6 +646,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder approxRecordSize(int recordSizeEstimate) {
       compactionConfig.setValue(COPY_ON_WRITE_RECORD_SIZE_ESTIMATE, String.valueOf(recordSizeEstimate));
+      return this;
+    }
+
+    public Builder allowMultipleCleans(boolean allowMultipleCleanSchedules) {
+      compactionConfig.setValue(ALLOW_MULTIPLE_CLEANS, String.valueOf(allowMultipleCleanSchedules));
       return this;
     }
 
