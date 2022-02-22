@@ -104,6 +104,6 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
 
     val maxSplitBytes = sparkSession.sessionState.conf.filesMaxPartitionBytes
 
-    sparkAdapter.getFilePartitions(sparkSession, partitions, maxSplitBytes)
+    sparkAdapter.getFilePartitions(sparkSession, partitions, maxSplitBytes).map(HoodieBaseFileSplit.apply)
   }
 }

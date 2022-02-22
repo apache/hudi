@@ -47,7 +47,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
                                   optParams: Map[String, String],
                                   val userSchema: Option[StructType],
                                   val globPaths: Seq[Path],
-                                  val metaClient: HoodieTableMetaClient)
+                                  metaClient: HoodieTableMetaClient)
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) {
 
   override type FileSplit = HoodieMergeOnReadFileSplit
@@ -111,11 +111,9 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       if (partitionPaths.isEmpty) { // If this an empty table, return an empty split list.
         List.empty[HoodieMergeOnReadFileSplit]
       } else {
-        val lastInstant = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants.lastInstant()
-        if (!lastInstant.isPresent) { // Return empty list if the table has no commit
+        if (latestInstant.isEmpty) { // Return empty list if the table has no commit
           List.empty
         } else {
-          val queryInstant = specifiedQueryInstant.getOrElse(lastInstant.get().getTimestamp)
           val baseAndLogsList = HoodieRealtimeInputFormatUtils.groupLogsByBaseFile(conf, partitionPaths.asJava).asScala
           val fileSplits = baseAndLogsList.map(kv => {
             val baseFile = kv.getLeft
@@ -130,7 +128,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
             } else {
               None
             }
-            HoodieMergeOnReadFileSplit(baseDataPath, logPaths, queryInstant,
+            HoodieMergeOnReadFileSplit(baseDataPath, logPaths, queryTimestamp.get,
               metaClient.getBasePath, maxCompactionMemoryInBytes, mergeType)
           }).toList
           fileSplits
@@ -142,7 +140,6 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
         Some(tableStructSchema), optParams, FileStatusCache.getOrCreate(sqlContext.sparkSession))
 
       // Get partition filter and convert to catalyst expression
-      val partitionColumns = hoodieFileIndex.partitionSchema.fieldNames.toSet
       val convertedPartitionFilterExpression =
         HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters.toSeq)
 
@@ -158,10 +155,6 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
         List.empty[HoodieMergeOnReadFileSplit]
       } else {
         val fileSplits = fileSlices.values.flatten.map(fileSlice => {
-          val latestInstant = metaClient.getActiveTimeline.getCommitsTimeline
-            .filterCompletedInstants.lastInstant().get().getTimestamp
-          val queryInstant = specifiedQueryInstant.getOrElse(latestInstant)
-
           val partitionedFile = if (fileSlice.getBaseFile.isPresent) {
             val baseFile = fileSlice.getBaseFile.get()
             val baseFilePath = MergeOnReadSnapshotRelation.getFilePath(baseFile.getFileStatus.getPath)
@@ -173,7 +166,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
           val logPaths = fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList
           val logPathsOptional = if (logPaths.isEmpty) Option.empty else Option(logPaths)
 
-          HoodieMergeOnReadFileSplit(partitionedFile, logPathsOptional, queryInstant, metaClient.getBasePath,
+          HoodieMergeOnReadFileSplit(partitionedFile, logPathsOptional, queryTimestamp.get, metaClient.getBasePath,
             maxCompactionMemoryInBytes, mergeType)
         }).toList
         fileSplits

@@ -24,10 +24,12 @@ import org.apache.hadoop.fs.Path
 import org.apache.hadoop.hbase.io.hfile.CacheConfig
 import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.isMetadataTable
+import org.apache.hudi.HoodieCommonUtils.toScalaOption
 import org.apache.hudi.common.config.SerializableConfiguration
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.io.storage.HoodieHFileReader
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
@@ -68,27 +70,17 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected lazy val conf: Configuration = new Configuration(sqlContext.sparkContext.hadoopConfiguration)
   protected lazy val jobConf = new JobConf(conf)
 
+  protected lazy val tableConfig: HoodieTableConfig = metaClient.getTableConfig
+
   // If meta fields are enabled, always prefer key from the meta field as opposed to user-specified one
   // NOTE: This is historical behavior which is preserved as is
   protected lazy val recordKeyField: String =
-    if (metaClient.getTableConfig.populateMetaFields()) HoodieRecord.RECORD_KEY_METADATA_FIELD
-    else metaClient.getTableConfig.getRecordKeyFieldProp
+    if (tableConfig.populateMetaFields()) HoodieRecord.RECORD_KEY_METADATA_FIELD
+    else tableConfig.getRecordKeyFieldProp
 
   protected lazy val preCombineFieldOpt: Option[String] = getPrecombineFieldProperty
 
-  /**
-   * @VisibleInTests
-   */
-  lazy val mandatoryColumns: Seq[String] = {
-    if (isMetadataTable(metaClient)) {
-      Seq(HoodieMetadataPayload.KEY_FIELD_NAME, HoodieMetadataPayload.SCHEMA_FIELD_NAME_TYPE)
-    } else {
-      // TODO this is MOR table requirement, not necessary for COW
-      Seq(recordKeyField) ++ preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
-    }
-  }
-
-  protected lazy val specifiedQueryInstant: Option[String] =
+  protected lazy val specifiedQueryTimestamp: Option[String] =
     optParams.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key)
       .map(HoodieSqlCommonUtils.formatQueryInstant)
 
@@ -106,17 +98,30 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected val tableStructSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
 
-  protected val partitionColumns: Array[String] = metaClient.getTableConfig.getPartitionFields.orElse(Array.empty)
+  protected val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
-  // TODO scala-doc
-  protected def composeRDD(fileSplits: Seq[FileSplit],
-                           partitionSchema: StructType,
-                           tableSchema: HoodieTableSchema,
-                           requiredSchema: HoodieTableSchema,
-                           filters: Array[Filter]): HoodieUnsafeRDD
+  /**
+   * @VisibleInTests
+   */
+  lazy val mandatoryColumns: Seq[String] = {
+    if (isMetadataTable(metaClient)) {
+      Seq(HoodieMetadataPayload.KEY_FIELD_NAME, HoodieMetadataPayload.SCHEMA_FIELD_NAME_TYPE)
+    } else {
+      // TODO this is MOR table requirement, not necessary for COW
+      Seq(recordKeyField) ++ preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
+    }
+  }
 
-  // TODO scala-doc
-  protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSplit]
+  protected def timeline: HoodieTimeline =
+    // NOTE: We're including compaction here since it's not considering a "commit" operation
+    metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants
+
+  protected def latestInstant: Option[HoodieInstant] =
+    toScalaOption(timeline.lastInstant())
+
+  protected def queryTimestamp: Option[String] = {
+    specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant().map(i => i.getTimestamp)))
+  }
 
   override def schema: StructType = tableStructSchema
 
@@ -163,6 +168,16 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     composeRDD(fileSplits, partitionSchema, tableSchema, requiredSchema, filters).asInstanceOf[RDD[Row]]
   }
 
+  // TODO scala-doc
+  protected def composeRDD(fileSplits: Seq[FileSplit],
+                           partitionSchema: StructType,
+                           tableSchema: HoodieTableSchema,
+                           requiredSchema: HoodieTableSchema,
+                           filters: Array[Filter]): HoodieUnsafeRDD
+
+  // TODO scala-doc
+  protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSplit]
+
   protected def convertToExpressions(filters: Array[Filter]): Array[Expression] = {
     val catalystExpressions = HoodieSparkUtils.convertToCatalystExpressions(filters, tableStructSchema)
 
@@ -193,7 +208,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   }
 
   protected def getPrecombineFieldProperty: Option[String] =
-    Option(metaClient.getTableConfig.getPreCombineField)
+    Option(tableConfig.getPreCombineField)
       .orElse(optParams.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key)) match {
       // NOTE: This is required to compensate for cases when empty string is used to stub
       //       property value to avoid it being set with the default value
