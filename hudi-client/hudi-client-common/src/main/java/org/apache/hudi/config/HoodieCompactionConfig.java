@@ -273,7 +273,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + " This is critical in computing the insert parallelism and bin-packing inserts into small files.");
   
   public static final ConfigProperty<Boolean> ALLOW_MULTIPLE_CLEANS = ConfigProperty
-      .key("hoodie.allow.multiple.cleans")
+      .key("hoodie.clean.allow.multiple")
       .defaultValue(true)
       .sinceVersion("0.11.0")
       .withDocumentation("Allows scheduling/executing multiple cleans by enabling this config. If users prefer to strictly ensure clean requests should be mutually exclusive, "
