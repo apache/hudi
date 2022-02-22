@@ -107,7 +107,7 @@ public abstract class AbstractStreamWriteFunction<I>
   /**
    * List state of the write metadata events.
    */
-  private transient ListState<WriteMetadataEvent> writeMetadataState;
+  protected transient ListState<WriteMetadataEvent> writeMetadataState;
 
   /**
    * Write status list for the current checkpoint.

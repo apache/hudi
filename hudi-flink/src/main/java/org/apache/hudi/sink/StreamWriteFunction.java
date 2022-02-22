@@ -371,7 +371,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
    *
    * @param value HoodieRecord
    */
-  private void bufferRecord(HoodieRecord<?> value) {
+  protected void bufferRecord(HoodieRecord<?> value) {
     final String bucketID = getBucketID(value);
 
     DataBucket bucket = this.buckets.computeIfAbsent(bucketID,
