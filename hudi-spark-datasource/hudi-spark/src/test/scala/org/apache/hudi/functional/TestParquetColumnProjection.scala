@@ -66,13 +66,13 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
         DataSourceReadOptions.REALTIME_MERGE.key -> mergeType
       )
 
-      println(s"Running test for $tablePath / $queryType / $mergeType")
-
       val ds = new DefaultSource()
       val relation: HoodieBaseRelation = ds.createRelation(spark.sqlContext, readOpts).asInstanceOf[HoodieBaseRelation]
 
       for ((columnListStr, expectedBytesRead) <- expectedStats) {
         val targetColumns = columnListStr.split(",")
+
+        println(s"Running test for $tablePath / $queryType / $mergeType / $columnListStr")
 
         val (rows, bytesRead) = measureBytesRead { () =>
           val rdd = relation.buildScan(targetColumns, Array.empty).asInstanceOf[HoodieUnsafeRDD]
@@ -125,8 +125,8 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
       // Stats for the reads fetching _all_ columns (note, how amount of bytes read
       // is invariant of the # of columns)
       val fullColumnsReadStats: Array[(String, Long)] = Array(
-        ("rider", 14666),
-        ("rider,driver", 14666),
+        ("rider", 14665),
+        ("rider,driver", 14665),
         ("rider,driver,tip_history", 14665)
       )
 
