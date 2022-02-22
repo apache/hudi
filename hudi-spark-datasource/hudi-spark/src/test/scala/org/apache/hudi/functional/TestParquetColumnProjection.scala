@@ -37,7 +37,7 @@ import scala.collection.JavaConverters._
 @Tag("functional")
 class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
 
-  val commonOpts = Map(
+  val defaultWriteOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",
     "hoodie.bulkinsert.shuffle.parallelism" -> "2",
@@ -47,160 +47,120 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
 
+  val defaultReadOpts: Map[String, String] = defaultWriteOpts ++ Map(
+    HoodieMetadataConfig.ENABLE.key -> "true",
+    // NOTE: It's critical that we use non-partitioned table, since the way we track amount of bytes read
+    //       is not robust, and works most reliably only when we read just a single file. As such, making table
+    //       non-partitioned makes it much more likely just a single file will be written
+    DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getName
+  )
+
   @Test
-  def testMORSnapshotRelation(): Unit = {
-    val defaultOpts: Map[String, String] = commonOpts ++ Map(
-      HoodieMetadataConfig.ENABLE.key -> "true",
-      // NOTE: It's critical that we use non-partitioned table, since the way we track amount of bytes read
-      //       is not robust, and works most reliably only when we read just a single file. As such, making table
-      //       non-partitioned makes it much more likely just a single file will be written
-      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getName
+  def testMORSnapshotRelationWithDeltaLogs(): Unit = {
+    val tablePath = s"$basePath/mor-with-logs"
+    val targetRecordsCount = 100
+    val targetUpdatedRecordsRatio = 0.5
+
+    val (_, schema) = bootstrapMORTable(tablePath, targetRecordsCount, targetUpdatedRecordsRatio, defaultReadOpts, populateMetaFields = true)
+    val tableState(tablePath, schema, targetRecordsCount, targetUpdatedRecordsRatio)
+
+    // Stats for the reads fetching only _projected_ columns (note how amount of bytes read
+    // increases along w/ the # of columns)
+    val projectedColumnsReadStats: Array[(String, Long)] = Array(
+      ("rider", 2452),
+      ("rider,driver", 2552),
+      ("rider,driver,tip_history", 3517)
     )
 
-    // Test routine
-    def runTest(queryType: String, mergeType: String, expectedStats: Array[(String, Long)], tableState: TableState): Unit = {
-      val tablePath = tableState.path
-      val readOpts = defaultOpts ++ Map(
-        "path" -> tablePath,
-        DataSourceReadOptions.QUERY_TYPE.key -> queryType,
-        DataSourceReadOptions.REALTIME_MERGE.key -> mergeType
-      )
+    // Stats for the reads fetching _all_ columns (note, how amount of bytes read
+    // is invariant of the # of columns)
+    val fullColumnsReadStats: Array[(String, Long)] = Array(
+      ("rider", 14665),
+      ("rider,driver", 14665),
+      ("rider,driver,tip_history", 14665)
+    )
 
-      val ds = new DefaultSource()
-      val relation: HoodieBaseRelation = ds.createRelation(spark.sqlContext, readOpts).asInstanceOf[HoodieBaseRelation]
+    // Test MOR / Snapshot / Skip-merge
+    runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL, projectedColumnsReadStats)
 
-      for ((columnListStr, expectedBytesRead) <- expectedStats) {
-        val targetColumns = columnListStr.split(",")
+    // Test MOR / Snapshot / Payload-combine
+    runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL, fullColumnsReadStats)
 
-        println(s"Running test for $tablePath / $queryType / $mergeType / $columnListStr")
+    // Test MOR / Read Optimized
+    runTest(tableState, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, "null", projectedColumnsReadStats)
+  }
 
-        val (rows, bytesRead) = measureBytesRead { () =>
-          val rdd = relation.buildScan(targetColumns, Array.empty).asInstanceOf[HoodieUnsafeRDD]
-          HoodieUnsafeRDDUtils.collect(rdd)
-        }
+  @Test
+  def testMORSnapshotRelationWithNoDeltaLogs(): Unit = {
+    val tablePath = s"$basePath/mor-no-logs"
+    val targetRecordsCount = 100
+    val targetUpdatedRecordsRatio = 0.0
 
-        val targetRecordCount = tableState.targetRecordCount;
-        val targetUpdatedRecordsRatio = tableState.targetUpdatedRecordsRatio
-
-        val expectedRecordCount =
-          if (DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL.equals(mergeType)) targetRecordCount * (1 + targetUpdatedRecordsRatio)
-          else targetRecordCount
-
-        assertEquals(expectedRecordCount, rows.length)
-        assertEquals(expectedBytesRead, bytesRead)
-
-        val readColumns = targetColumns ++ relation.mandatoryColumns
-        val (_, projectedStructType) = HoodieSparkUtils.getRequiredSchema(tableState.schema, readColumns)
-
-        val row: InternalRow = rows.take(1).head
-
-        // This check is mostly about making sure InternalRow deserializes properly into projected schema
-        val deserializedColumns = row.toSeq(projectedStructType)
-        assertEquals(readColumns.length, deserializedColumns.size)
-      }
-    }
-
-    case class TableState(path: String, schema: Schema, targetRecordCount: Long, targetUpdatedRecordsRatio: Double)
-
+    val (_, schema) = bootstrapMORTable(tablePath, targetRecordsCount, targetUpdatedRecordsRatio, defaultReadOpts, populateMetaFields = true)
+    val tableState(tablePath, schema, targetRecordsCount, targetUpdatedRecordsRatio)
 
     //
     // Test #1: MOR table w/ Delta Logs
     //
-    {
-      val tablePath = s"$basePath/mor-with-logs"
-      val targetRecordsCount = 100
-      val targetUpdatedRecordsRatio = 0.5
 
-      val (_, schema) = bootstrapMORTable(tablePath, targetRecordsCount, targetUpdatedRecordsRatio, defaultOpts, populateMetaFields = true)
-      val tableState = TableState(tablePath, schema, targetRecordsCount, targetUpdatedRecordsRatio)
+    // Stats for the reads fetching only _projected_ columns (note how amount of bytes read
+    // increases along w/ the # of columns)
+    val projectedColumnsReadStats: Array[(String, Long)] = Array(
+      ("rider", 2452),
+      ("rider,driver", 2552),
+      ("rider,driver,tip_history", 3517)
+    )
 
-      // Stats for the reads fetching only _projected_ columns (note how amount of bytes read
-      // increases along w/ the # of columns)
-      val projectedColumnsReadStats: Array[(String, Long)] = Array(
-        ("rider", 2452),
-        ("rider,driver", 2552),
-        ("rider,driver,tip_history", 3517)
-      )
+    // Test MOR / Snapshot / Skip-merge
+    runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL, projectedColumnsReadStats)
 
-      // Stats for the reads fetching _all_ columns (note, how amount of bytes read
-      // is invariant of the # of columns)
-      val fullColumnsReadStats: Array[(String, Long)] = Array(
-        ("rider", 14665),
-        ("rider,driver", 14665),
-        ("rider,driver,tip_history", 14665)
-      )
+    // Test MOR / Snapshot / Payload-combine
+    runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL, projectedColumnsReadStats)
 
-      // Test MOR / Snapshot / Skip-merge
-      runTest(
-        queryType = DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL,
-        mergeType = DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL,
-        expectedStats = projectedColumnsReadStats,
-        tableState = tableState
-      )
+    // Test MOR / Read Optimized
+    runTest(tableState, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, "null", projectedColumnsReadStats)
+  }
 
-      // Test MOR / Snapshot / Payload-combine
-      runTest(
-        queryType = DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL,
-        mergeType = DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL,
-        expectedStats = fullColumnsReadStats,
-        tableState = tableState
-      )
+  // Test routine
+  private def runTest(tableState: TableState, queryType: String, mergeType: String, expectedStats: Array[(String, Long)]): Unit = {
+    val tablePath = tableState.path
+    val readOpts = defaultReadOpts ++ Map(
+      "path" -> tablePath,
+      DataSourceReadOptions.QUERY_TYPE.key -> queryType,
+      DataSourceReadOptions.REALTIME_MERGE.key -> mergeType
+    )
 
-      // Test MOR / Read Optimized
-      runTest(
-        queryType = DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL,
-        mergeType = "null",
-        expectedStats = projectedColumnsReadStats,
-        tableState = tableState
-      )
-    }
+    val ds = new DefaultSource()
+    val relation: HoodieBaseRelation = ds.createRelation(spark.sqlContext, readOpts).asInstanceOf[HoodieBaseRelation]
 
-    //
-    // Test #2: MOR table w/ NO Delta Logs
-    //
-    {
-      val tablePath = s"$basePath/mor-no-logs"
-      val targetRecordsCount = 100
-      val targetUpdatedRecordsRatio = 0.0
+    for ((columnListStr, expectedBytesRead) <- expectedStats) {
+      val targetColumns = columnListStr.split(",")
 
-      val (_, schema) = bootstrapMORTable(tablePath, targetRecordsCount, targetUpdatedRecordsRatio, defaultOpts, populateMetaFields = true)
-      val tableState = TableState(tablePath, schema, targetRecordsCount, targetUpdatedRecordsRatio)
+      println(s"Running test for $tablePath / $queryType / $mergeType / $columnListStr")
 
-      //
-      // Test #1: MOR table w/ Delta Logs
-      //
+      val (rows, bytesRead) = measureBytesRead { () =>
+        val rdd = relation.buildScan(targetColumns, Array.empty).asInstanceOf[HoodieUnsafeRDD]
+        HoodieUnsafeRDDUtils.collect(rdd)
+      }
 
-      // Stats for the reads fetching only _projected_ columns (note how amount of bytes read
-      // increases along w/ the # of columns)
-      val projectedColumnsReadStats: Array[(String, Long)] = Array(
-        ("rider", 2452),
-        ("rider,driver", 2552),
-        ("rider,driver,tip_history", 3517)
-      )
+      val targetRecordCount = tableState.targetRecordCount;
+      val targetUpdatedRecordsRatio = tableState.targetUpdatedRecordsRatio
 
-      // Test MOR / Snapshot / Skip-merge
-      runTest(
-        queryType = DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL,
-        mergeType = DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL,
-        expectedStats = projectedColumnsReadStats,
-        tableState = tableState
-      )
+      val expectedRecordCount =
+        if (DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL.equals(mergeType)) targetRecordCount * (1 + targetUpdatedRecordsRatio)
+        else targetRecordCount
 
-      // Test MOR / Snapshot / Payload-combine
-      runTest(
-        queryType = DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL,
-        mergeType = DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL,
-        expectedStats = projectedColumnsReadStats,
-        tableState = tableState
-      )
+      assertEquals(expectedRecordCount, rows.length)
+      assertEquals(expectedBytesRead, bytesRead)
 
-      // Test MOR / Read Optimized
-      runTest(
-        queryType = DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL,
-        mergeType = "null",
-        expectedStats = projectedColumnsReadStats,
-        tableState = tableState
-      )
+      val readColumns = targetColumns ++ relation.mandatoryColumns
+      val (_, projectedStructType) = HoodieSparkUtils.getRequiredSchema(tableState.schema, readColumns)
+
+      val row: InternalRow = rows.take(1).head
+
+      // This check is mostly about making sure InternalRow deserializes properly into projected schema
+      val deserializedColumns = row.toSeq(projectedStructType)
+      assertEquals(readColumns.length, deserializedColumns.size)
     }
   }
 
@@ -268,4 +228,6 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
     val bytesRead = BenchmarkCounter.getBytesRead.toInt
     (r, bytesRead)
   }
+
+  case class TableState(path: String, schema: Schema, targetRecordCount: Long, targetUpdatedRecordsRatio: Double)
 }
