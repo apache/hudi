@@ -58,7 +58,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
     )
 
     // Test routine
-    def runTest(queryType: String, mergeType: String, inputs: Array[(String, Long)], tableState: TableState): Unit = {
+    def runTest(queryType: String, mergeType: String, expectedStats: Array[(String, Long)], tableState: TableState): Unit = {
       val tablePath = tableState.path
       val readOpts = defaultOpts ++ Map(
         "path" -> tablePath,
@@ -71,7 +71,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
       val ds = new DefaultSource()
       val relation: HoodieBaseRelation = ds.createRelation(spark.sqlContext, readOpts).asInstanceOf[HoodieBaseRelation]
 
-      for ((columnListStr, expectedBytesRead) <- inputs) {
+      for ((columnListStr, expectedBytesRead) <- expectedStats) {
         val targetColumns = columnListStr.split(",")
 
         val (rows, bytesRead) = measureBytesRead { () =>
@@ -114,20 +114,35 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
       val (_, schema) = bootstrapMORTable(tablePath, targetRecordsCount, targetUpdatedRecordsRatio, defaultOpts, populateMetaFields = true)
       val tableState = TableState(tablePath, schema, targetRecordsCount, targetUpdatedRecordsRatio)
 
-
-      // NOTE: Values for the amount of bytes read should be stable, and not change a lot
-      //       since file format layout on disk is very stable
-      val inputs: Array[(String, Long)] = Array(
+      // Stats for the reads fetching only _projected_ columns (note how amount of bytes read
+      // increases along w/ the # of columns)
+      val projectedColumnsReadStats: Array[(String, Long)] = Array(
         ("rider", 2452),
         ("rider,driver", 2552),
         ("rider,driver,tip_history", 3517)
+      )
+
+      // Stats for the reads fetching _all_ columns (note, how amount of bytes read
+      // is invariant of the # of columns)
+      val fullColumnsReadStats: Array[(String, Long)] = Array(
+        ("rider", 14666),
+        ("rider,driver", 14666),
+        ("rider,driver,tip_history", 14665)
       )
 
       // Test MOR / Snapshot / Skip-merge
       runTest(
         queryType = DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL,
         mergeType = DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL,
-        inputs = inputs,
+        expectedStats = projectedColumnsReadStats,
+        tableState = tableState
+      )
+
+      // Test MOR / Snapshot / Payload-combine
+      runTest(
+        queryType = DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL,
+        mergeType = DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL,
+        expectedStats = fullColumnsReadStats,
         tableState = tableState
       )
 
@@ -135,7 +150,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
       runTest(
         queryType = DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL,
         mergeType = "null",
-        inputs = inputs,
+        expectedStats = projectedColumnsReadStats,
         tableState = tableState
       )
     }
@@ -155,9 +170,9 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
       // Test #1: MOR table w/ Delta Logs
       //
 
-      // NOTE: Values for the amount of bytes read should be stable, and not change a lot
-      //       since file format layout on disk is very stable
-      val inputs: Array[(String, Long)] = Array(
+      // Stats for the reads fetching only _projected_ columns (note how amount of bytes read
+      // increases along w/ the # of columns)
+      val projectedColumnsReadStats: Array[(String, Long)] = Array(
         ("rider", 2452),
         ("rider,driver", 2552),
         ("rider,driver,tip_history", 3517)
@@ -167,7 +182,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
       runTest(
         queryType = DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL,
         mergeType = DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL,
-        inputs = inputs,
+        expectedStats = projectedColumnsReadStats,
         tableState = tableState
       )
 
@@ -175,7 +190,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
       runTest(
         queryType = DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL,
         mergeType = DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL,
-        inputs = inputs,
+        expectedStats = projectedColumnsReadStats,
         tableState = tableState
       )
 
@@ -183,7 +198,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
       runTest(
         queryType = DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL,
         mergeType = "null",
-        inputs = inputs,
+        expectedStats = projectedColumnsReadStats,
         tableState = tableState
       )
     }
