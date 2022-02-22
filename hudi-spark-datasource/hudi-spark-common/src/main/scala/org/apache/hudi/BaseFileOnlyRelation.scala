@@ -45,11 +45,11 @@ import org.apache.spark.sql.types.StructType
  * verbatim value of the partition path field (when custom [[KeyGenerator]] is used) therefore leading to incorrect
  * partition field values being written
  */
-class BaseFileOnlyViewRelation(sqlContext: SQLContext,
-                               metaClient: HoodieTableMetaClient,
-                               optParams: Map[String, String],
-                               userSchema: Option[StructType],
-                               globPaths: Seq[Path])
+class BaseFileOnlyRelation(sqlContext: SQLContext,
+                           metaClient: HoodieTableMetaClient,
+                           optParams: Map[String, String],
+                           userSchema: Option[StructType],
+                           globPaths: Seq[Path])
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) with SparkAdapterSupport {
 
   override type FileSplit = HoodieBaseFileSplit
