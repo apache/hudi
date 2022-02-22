@@ -27,6 +27,7 @@ import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.testutils.{HadoopMapRedUtils, HoodieTestDataGenerator}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.functional.TestMORDataSourceStorage.testParams
+import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSource, HoodieBaseRelation, HoodieDataSourceHelpers, HoodieSparkUtils, HoodieUnsafeRDD}
 import org.apache.log4j.LogManager
@@ -156,11 +157,11 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
   }
 
   private def bootstrapMORTable(path: String,
-                                        recordCount: Int,
-                                        updatedRecordsRatio: Double,
-                                        opts: Map[String, String],
-                                        populateMetaFields: Boolean,
-                                        dataGenOpt: Option[HoodieTestDataGenerator] = None): (List[HoodieRecord[_]], Schema) = {
+                                recordCount: Int,
+                                updatedRecordsRatio: Double,
+                                opts: Map[String, String],
+                                populateMetaFields: Boolean,
+                                dataGenOpt: Option[HoodieTestDataGenerator] = None): (List[HoodieRecord[_]], Schema) = {
     val dataGen = dataGenOpt.getOrElse(new HoodieTestDataGenerator(0x12345))
 
     // Step 1: Bootstrap table w/ N records (t/h bulk-insert)
@@ -190,7 +191,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
   def testProperProjection(): Unit = {
     val defaultOpts: Map[String, String] = commonOpts ++ Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
-      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_path"
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getName
     )
 
     // Test routine
@@ -231,18 +232,23 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
         val row: InternalRow = rows.take(1).head
 
         // This check is mostly about making sure InternalRow deserializes properly into projected schema
-        assertEquals(readColumns.length, row.toSeq(projectedStructType).size)
+        val deserializedColumns = row.toSeq(projectedStructType)
+        assertEquals(readColumns.length, deserializedColumns.size)
       }
     }
 
     //
-    // Setup table
+    // Setup MOR table w/ Delta Logs
     //
 
-    val tablePath = s"$basePath/mor"
-    val (_, schema) = bootstrapMORTable(tablePath, 100, 0.5, defaultOpts, populateMetaFields = true)
+    case class TableState(path: String, schema: Schema, targetRecordCount: Long, targetUpdatedRecordsRatio: Double)
 
-    case class TableState(path: String, targetRecordCount: Long, targetUpdatedRecordsRatio: Double, schema: Schema)
+    val tablePath = s"$basePath/mor-with-logs"
+    val targetRecordsCount = 100
+    val targetUpdatedRecordsRatio = 0.5
+
+    val (_, schema) = bootstrapMORTable(tablePath, targetRecordsCount, targetUpdatedRecordsRatio, defaultOpts, populateMetaFields = true)
+    val tableState = TableState(tablePath, schema, targetRecordsCount, targetUpdatedRecordsRatio)
 
     //
     // Test #1: MOR table w/ Delta Logs
@@ -250,17 +256,26 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
 
     // NOTE: Values for the amount of bytes read should be stable, and not change a lot
     //       since file format layout on disk is very stable
-    val noLogFilesParams: Array[(String, Long)] = Array(
-      ("rider", 2894),
-      ("rider,driver", 3188),
-      ("rider,driver,tip_history", 4468)
+    val noLogsInputs: Array[(String, Long)] = Array(
+      ("rider", 2452),
+      ("rider,driver", 2552),
+      ("rider,driver,tip_history", 3517)
     )
 
+    // Test MOR / Snapshot / Skip-merge
     runTest(
       queryType = DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL,
       mergeType = DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL,
-      inputs = noLogFilesParams,
-      tableState = TableState(tablePath, 100, 0.5, schema)
+      inputs = noLogsInputs,
+      tableState = tableState
+    )
+
+    // Test MOR / Read Optimized
+    runTest(
+      queryType = DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL,
+      mergeType = "null",
+      inputs = noLogsInputs,
+      tableState = tableState
     )
   }
 
