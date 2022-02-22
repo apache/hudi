@@ -44,10 +44,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
     "hoodie.delete.shuffle.parallelism" -> "1",
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
-  )
-
-  val defaultReadOpts: Map[String, String] = defaultWriteOpts ++ Map(
+    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
     HoodieMetadataConfig.ENABLE.key -> "true",
     // NOTE: It's critical that we use non-partitioned table, since the way we track amount of bytes read
     //       is not robust, and works most reliably only when we read just a single file. As such, making table
@@ -56,13 +53,34 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
   )
 
   @Test
+  def testBaseFileOnlyViewRelation(): Unit = {
+    val tablePath = s"$basePath/cow"
+    val targetRecordsCount = 100
+    val (_, schema) = bootstrapTable(tablePath, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL, targetRecordsCount,
+      defaultWriteOpts, populateMetaFields = true)
+    val tableState = TableState(tablePath, schema, targetRecordsCount, 0.0)
+
+    // Stats for the reads fetching only _projected_ columns (note how amount of bytes read
+    // increases along w/ the # of columns)
+    val projectedColumnsReadStats: Array[(String, Long)] = Array(
+      ("rider", 2452),
+      ("rider,driver", 2552),
+      ("rider,driver,tip_history", 3517)
+    )
+
+    // Test COW / Snapshot
+    runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, "", projectedColumnsReadStats)
+  }
+
+
+  @Test
   def testMORSnapshotRelationWithDeltaLogs(): Unit = {
     val tablePath = s"$basePath/mor-with-logs"
     val targetRecordsCount = 100
     val targetUpdatedRecordsRatio = 0.5
 
-    val (_, schema) = bootstrapMORTable(tablePath, targetRecordsCount, targetUpdatedRecordsRatio, defaultReadOpts, populateMetaFields = true)
-    val tableState(tablePath, schema, targetRecordsCount, targetUpdatedRecordsRatio)
+    val (_, schema) = bootstrapMORTable(tablePath, targetRecordsCount, targetUpdatedRecordsRatio, defaultWriteOpts, populateMetaFields = true)
+    val tableState = TableState(tablePath, schema, targetRecordsCount, targetUpdatedRecordsRatio)
 
     // Stats for the reads fetching only _projected_ columns (note how amount of bytes read
     // increases along w/ the # of columns)
@@ -96,8 +114,8 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
     val targetRecordsCount = 100
     val targetUpdatedRecordsRatio = 0.0
 
-    val (_, schema) = bootstrapMORTable(tablePath, targetRecordsCount, targetUpdatedRecordsRatio, defaultReadOpts, populateMetaFields = true)
-    val tableState(tablePath, schema, targetRecordsCount, targetUpdatedRecordsRatio)
+    val (_, schema) = bootstrapMORTable(tablePath, targetRecordsCount, targetUpdatedRecordsRatio, defaultWriteOpts, populateMetaFields = true)
+    val tableState = TableState(tablePath, schema, targetRecordsCount, targetUpdatedRecordsRatio)
 
     //
     // Test #1: MOR table w/ Delta Logs
@@ -124,7 +142,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
   // Test routine
   private def runTest(tableState: TableState, queryType: String, mergeType: String, expectedStats: Array[(String, Long)]): Unit = {
     val tablePath = tableState.path
-    val readOpts = defaultReadOpts ++ Map(
+    val readOpts = defaultWriteOpts ++ Map(
       "path" -> tablePath,
       DataSourceReadOptions.QUERY_TYPE.key -> queryType,
       DataSourceReadOptions.REALTIME_MERGE.key -> mergeType
