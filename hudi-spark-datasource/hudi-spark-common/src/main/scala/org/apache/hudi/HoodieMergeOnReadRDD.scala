@@ -120,6 +120,10 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     }
   }
 
+  /**
+   * Provided w/ instance of [[HoodieMergeOnReadFileSplit]], iterates over all of the records stored in
+   * Delta Log files (represented as [[InternalRow]]s)
+   */
   private class LogFileIterator(split: HoodieMergeOnReadFileSplit, config: Configuration)
     extends Iterator[InternalRow] with Closeable with SparkAdapterSupport {
 
@@ -174,9 +178,14 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     }
   }
 
+  /**
+   * Provided w/ instance of [[HoodieMergeOnReadFileSplit]], provides an iterator over all of the records stored in
+   * a) Base file and all of the b) Delta Log files simply returning concatenation of these streams, while not
+   * performing any combination/merging of the records w/ the same primary keys (ie producing duplicates potentially)
+   */
   private class SkipMergeIterator(split: HoodieMergeOnReadFileSplit,
-                          baseFileIterator: Iterator[InternalRow],
-                          config: Configuration)
+                                  baseFileIterator: Iterator[InternalRow],
+                                  config: Configuration)
     extends LogFileIterator(split, config) {
 
     override def hasNext: Boolean = {
@@ -190,6 +199,11 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     }
   }
 
+  /**
+   * Provided w/ instance of [[HoodieMergeOnReadFileSplit]], provides an iterator over all of the records stored in
+   * a) Base file and all of the b) Delta Log files combining records with the same primary key from both of these
+   * streams
+   */
   private class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
                                           baseFileIterator: Iterator[InternalRow],
                                           config: Configuration)
@@ -290,8 +304,8 @@ private object HoodieMergeOnReadRDD {
    * the schema of the original row is strictly a superset of the given one
    */
   private def projectRow(row: InternalRow,
-              schema: StructType,
-              positions: Seq[Int]): InternalRow = {
+                         schema: StructType,
+                         positions: Seq[Int]): InternalRow = {
     val projectedRow = new SpecificInternalRow(schema)
     var curIndex = 0
     schema.zip(positions).foreach { case (field, pos) =>
