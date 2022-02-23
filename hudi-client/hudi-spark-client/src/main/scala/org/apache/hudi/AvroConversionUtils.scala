@@ -83,7 +83,7 @@ object AvroConversionUtils {
   }
 
   /**
-   * @deprecated please use [[AvroConversionUtils.createInternalRowToAvroConverter]]
+   * @deprecated please use [[AvroConversionUtils.createAvroToInternalRowConverter]]
    */
   @Deprecated
   def createConverterToRow(sourceAvroSchema: Schema,

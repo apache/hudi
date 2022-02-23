@@ -58,7 +58,7 @@ abstract class HoodieBaseRelation(
     val schemaUtil = new TableSchemaResolver(metaClient)
     Try(schemaUtil.getTableAvroSchema).getOrElse(
       // If there is no commit in the table, we can't get the schema
-      // t/h [[TableSchemaResolver]], fallback to provided the [[userSchema]] instead.
+      // t/h [[TableSchemaResolver]], fallback to the provided [[userSchema]] instead.
       userSchema match {
         case Some(s) => SchemaConverters.toAvroType(s)
         case _ => throw new IllegalArgumentException("User-provided schema is required in case the table is empty")

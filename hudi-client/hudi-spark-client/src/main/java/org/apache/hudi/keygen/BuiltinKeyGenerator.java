@@ -69,8 +69,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     if (null == converterFn) {
       converterFn = AvroConversionUtils.createConverterToAvro(row.schema(), STRUCT_NAME, NAMESPACE);
     }
-    GenericRecord genericRecord = (GenericRecord) converterFn.apply(row);
-    return getKey(genericRecord).getRecordKey();
+    return getKey(converterFn.apply(row)).getRecordKey();
   }
 
   /**
@@ -84,8 +83,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     if (null == converterFn) {
       converterFn = AvroConversionUtils.createConverterToAvro(row.schema(), STRUCT_NAME, NAMESPACE);
     }
-    GenericRecord genericRecord = (GenericRecord) converterFn.apply(row);
-    return getKey(genericRecord).getPartitionPath();
+    return getKey(converterFn.apply(row)).getPartitionPath();
   }
 
   /**
