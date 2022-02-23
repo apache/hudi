@@ -53,7 +53,9 @@ trait HoodieFileSplit {}
 
 case class HoodieTableSchema(structTypeSchema: StructType, avroSchemaStr: String)
 
-case class HoodieTableState(recordKeyField: String,
+case class HoodieTableState(tablePath: String,
+                            latestCommit: String,
+                            recordKeyField: String,
                             preCombineFieldOpt: Option[String])
 
 /**
@@ -84,7 +86,15 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     if (tableConfig.populateMetaFields()) HoodieRecord.RECORD_KEY_METADATA_FIELD
     else tableConfig.getRecordKeyFieldProp
 
-  protected lazy val preCombineFieldOpt: Option[String] = getPrecombineFieldProperty
+  protected lazy val preCombineFieldOpt: Option[String] =
+    Option(tableConfig.getPreCombineField)
+      .orElse(optParams.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key)) match {
+        // NOTE: This is required to compensate for cases when empty string is used to stub
+        //       property value to avoid it being set with the default value
+        // TODO(HUDI-3456) cleanup
+        case Some(f) if !StringUtils.isNullOrEmpty(f) => Some(f)
+        case _ => None
+      }
 
   protected lazy val specifiedQueryTimestamp: Option[String] =
     optParams.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key)
@@ -136,9 +146,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected def latestInstant: Option[HoodieInstant] =
     toScalaOption(timeline.lastInstant())
 
-  protected def queryTimestamp: Option[String] = {
-    specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(i => i.getTimestamp))
-  }
+  protected def queryTimestamp: Option[String] =
+    specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.getTimestamp))
 
   override def schema: StructType = tableStructSchema
 
@@ -257,15 +266,10 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     requestedColumns ++ missing
   }
 
-  private def getPrecombineFieldProperty: Option[String] =
-    Option(tableConfig.getPreCombineField)
-      .orElse(optParams.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key)) match {
-      // NOTE: This is required to compensate for cases when empty string is used to stub
-      //       property value to avoid it being set with the default value
-      // TODO(HUDI-3456) cleanup
-      case Some(f) if !StringUtils.isNullOrEmpty(f) => Some(f)
-      case _ => None
-    }
+  protected def getTableState: HoodieTableState = {
+    // Subset of the state of table's configuration as of at the time of the query
+    HoodieTableState(basePath, queryTimestamp.get, recordKeyField, preCombineFieldOpt)
+  }
 
   private def imbueConfigs(sqlContext: SQLContext): Unit = {
     sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.filterPushdown", "true")

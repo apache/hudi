@@ -57,6 +57,8 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            tableState: HoodieTableState,
                            tableSchema: HoodieTableSchema,
                            requiredSchema: HoodieTableSchema,
+                           maxCompactionMemoryInBytes: Long,
+                           mergeType: String,
                            @transient fileSplits: Seq[HoodieMergeOnReadFileSplit])
   extends RDD[InternalRow](sc, Nil) with HoodieUnsafeRDD {
 
@@ -80,21 +82,21 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       case logFileOnlySplit if logFileOnlySplit.dataFile.isEmpty =>
         logFileIterator(logFileOnlySplit, getConfig)
 
-      case skipMergeSplit if skipMergeSplit.mergeType.equals(DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL) =>
+      case skipMergeSplit if mergeType.equals(DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL) =>
         val baseFileIterator = requiredSchemaFileReader(skipMergeSplit.dataFile.get)
         skipMergingFileIterator(skipMergeSplit, baseFileIterator, getConfig)
 
       case payloadCombineSplit
-        if payloadCombineSplit.mergeType.equals(DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL) =>
+        if mergeType.equals(DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL) =>
         val baseFileIterator = fullSchemaFileReader(payloadCombineSplit.dataFile.get)
         recordMergingFileIterator(payloadCombineSplit, baseFileIterator, getConfig)
 
       case _ => throw new HoodieException(s"Unable to select an Iterator to read the Hoodie MOR File Split for " +
         s"file path: ${mergeOnReadPartition.split.dataFile.get.filePath}" +
         s"log paths: ${mergeOnReadPartition.split.logFiles.toString}" +
-        s"hoodie table path: ${mergeOnReadPartition.split.tablePath}" +
+        s"hoodie table path: ${tableState.tablePath}" +
         s"spark partition Index: ${mergeOnReadPartition.index}" +
-        s"merge type: ${mergeOnReadPartition.split.mergeType}")
+        s"merge type: ${mergeType}")
     }
 
     if (iter.isInstanceOf[Closeable]) {
@@ -203,7 +205,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     //       going to be used, since we modify `logRecords` before that and can do it any earlier
     protected lazy val logRecordsIterator: Iterator[(String, HoodieRecord[_ <: HoodieRecordPayload[_]])] = logRecords.iterator
 
-    private var logScanner = HoodieMergeOnReadRDD.scanLog(split, tableAvroSchema, config)
+    private var logScanner = HoodieMergeOnReadRDD.scanLog(split, tableAvroSchema, tableState, maxCompactionMemoryInBytes, config)
 
     protected val logRecords = logScanner.getRecords.asScala
 
@@ -262,40 +264,45 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
 private object HoodieMergeOnReadRDD {
   val CONFIG_INSTANTIATION_LOCK = new Object()
 
-  def scanLog(split: HoodieMergeOnReadFileSplit, logSchema: Schema, config: Configuration): HoodieMergedLogRecordScanner = {
-    val fs = FSUtils.getFs(split.tablePath, config)
+  def scanLog(split: HoodieMergeOnReadFileSplit,
+              logSchema: Schema,
+              tableState: HoodieTableState,
+              maxCompactionMemoryInBytes: Long,
+              hadoopConf: Configuration): HoodieMergedLogRecordScanner = {
+    val tablePath = tableState.tablePath
+    val fs = FSUtils.getFs(tablePath, hadoopConf)
     val logFiles = split.logFiles.get
 
-    if (HoodieTableMetadata.isMetadataTable(split.tablePath)) {
+    if (HoodieTableMetadata.isMetadataTable(tablePath)) {
       val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build()
-      val dataTableBasePath = getDataTableBasePathFromMetadataTable(split.tablePath)
+      val dataTableBasePath = getDataTableBasePathFromMetadataTable(tablePath)
       val metadataTable = new HoodieBackedTableMetadata(
-        new HoodieLocalEngineContext(config), metadataConfig,
+        new HoodieLocalEngineContext(hadoopConf), metadataConfig,
         dataTableBasePath,
-        config.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP, HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
+        hadoopConf.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP, HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
 
       // NOTE: In case of Metadata Table partition path equates to partition name (since there's just one level
       //       of indirection among MT partitions)
-      val relativePartitionPath = getRelativePartitionPath(new Path(split.tablePath), getPartitionPath(split))
+      val relativePartitionPath = getRelativePartitionPath(new Path(tablePath), getPartitionPath(split))
       metadataTable.getLogRecordScanner(logFiles.asJava, relativePartitionPath).getLeft
     } else {
       val logRecordScannerBuilder = HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
-        .withBasePath(split.tablePath)
+        .withBasePath(tablePath)
         .withLogFilePaths(split.logFiles.get.map(logFile => getFilePath(logFile.getPath)).asJava)
         .withReaderSchema(logSchema)
-        .withLatestInstantTime(split.latestCommit)
+        .withLatestInstantTime(tableState.latestCommit)
         .withReadBlocksLazily(
-          Try(config.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP,
+          Try(hadoopConf.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP,
             HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED).toBoolean)
             .getOrElse(false))
         .withReverseReader(false)
         .withBufferSize(
-          config.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP,
+          hadoopConf.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP,
             HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE))
-        .withMaxMemorySizeInBytes(split.maxCompactionMemoryInBytes)
+        .withMaxMemorySizeInBytes(maxCompactionMemoryInBytes)
         .withSpillableMapBasePath(
-          config.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP,
+          hadoopConf.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP,
             HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
 
       if (logFiles.nonEmpty) {
