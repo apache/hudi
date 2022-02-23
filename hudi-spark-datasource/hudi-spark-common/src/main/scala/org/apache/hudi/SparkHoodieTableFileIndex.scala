@@ -136,6 +136,8 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    * Fetch list of latest base files w/ corresponding log files, after performing
    * partition pruning
    *
+   * TODO unify w/ HoodieFileIndex#listFiles
+   *
    * @param partitionFilters partition column filters
    * @return mapping from string partition paths to its base/log files
    */
