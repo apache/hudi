@@ -101,25 +101,20 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
   protected override def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
     val convertedPartitionFilters =
       HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters)
-    val partitions = listLatestBaseFiles(globPaths, convertedPartitionFilters, dataFilters)
 
-    if (globPaths.nonEmpty) {
-      val partitionPaths = partitions.keys.toSeq
-      // If this an empty table, return
-      if (partitionPaths.isEmpty) {
-        List.empty[HoodieMergeOnReadFileSplit]
-      } else {
-        // If the table has no completed commits yet, return
-        if (latestInstant.isEmpty) {
-          List.empty
-        } else {
-          val fileSlices = listFileSlices(partitionPaths)
-          buildSplits(fileSlices).toList
-        }
-      }
-    } else {
+    if (globPaths.isEmpty) {
       val fileSlices = fileIndex.listFileSlices(convertedPartitionFilters)
       buildSplits(fileSlices.values.flatten.toSeq).toList
+    } else {
+      val partitions = listLatestBaseFiles(globPaths, convertedPartitionFilters, dataFilters)
+      val partitionPaths = partitions.keys.toSeq
+      if (partitionPaths.isEmpty || latestInstant.isEmpty) {
+        // If this an empty table OR it has no completed commits yet, return
+        List.empty[HoodieMergeOnReadFileSplit]
+      } else {
+        val fileSlices = listFileSlices(partitionPaths)
+        buildSplits(fileSlices).toList
+      }
     }
   }
 
