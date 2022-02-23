@@ -24,7 +24,7 @@ import org.apache.hudi.HoodieCommonUtils.toScalaOption
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
@@ -35,26 +35,7 @@ import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.StructType
 
 import scala.collection.JavaConverters._
-
-trait HoodieIncrementalRelationTrait {
-  this: HoodieBaseRelation =>
-
-  def validate() {
-    if (timeline.empty()) {
-      throw new HoodieException("No instants to incrementally pull")
-    }
-
-    if (!this.optParams.contains(DataSourceReadOptions.BEGIN_INSTANTTIME.key)) {
-      throw new HoodieException(s"Specify the begin instant time to pull from using " +
-        s"option ${DataSourceReadOptions.BEGIN_INSTANTTIME.key}")
-    }
-
-    if (!this.tableConfig.populateMetaFields()) {
-      throw new HoodieException("Incremental queries are not supported when meta fields are disabled")
-    }
-  }
-
-}
+import scala.collection.immutable
 
 /**
  * @Experimental
@@ -66,27 +47,6 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
   extends MergeOnReadSnapshotRelation(sqlContext, optParams, userSchema, Seq(), metaClient) with HoodieIncrementalRelationTrait {
 
   override type FileSplit = HoodieMergeOnReadFileSplit
-
-  validate()
-
-  private lazy val includedCommits = timeline.getInstants.iterator().asScala.toList
-
-  // Record filters making sure that only records w/in the requested bounds are being fetched as part of the
-  // scan collected by this relation
-  private lazy val incrementalSpanRecordFilters: Seq[Filter] = {
-    val isNotNullFilter = IsNotNull(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
-    val largerThanFilter = GreaterThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, includedCommits.head.getTimestamp)
-    val lessThanFilter = LessThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, includedCommits.last.getTimestamp)
-
-    Seq(isNotNullFilter, largerThanFilter, lessThanFilter)
-  }
-
-  override lazy val mandatoryColumns: Seq[String] = {
-    // NOTE: This columns are required for Incremental flow to be able to handle the rows properly, even in
-    //       cases when no columns are requested to be fetched (for ex, when using {@code count()} API)
-    Seq(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD) ++
-      preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
-  }
 
   override protected def timeline: HoodieTimeline = {
     val startTimestamp = optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)
@@ -169,7 +129,50 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
     }
     filteredFileSlices
   }
-
-  private def globPattern =
-    optParams.getOrElse(DataSourceReadOptions.INCR_PATH_GLOB.key, DataSourceReadOptions.INCR_PATH_GLOB.defaultValue)
 }
+
+trait HoodieIncrementalRelationTrait {
+  this: HoodieBaseRelation =>
+
+  // Validate this Incremental implementation is properly configured
+  validate()
+
+  protected lazy val includedCommits: immutable.Seq[HoodieInstant] = timeline.getInstants.iterator().asScala.toList
+
+  // Record filters making sure that only records w/in the requested bounds are being fetched as part of the
+  // scan collected by this relation
+  protected lazy val incrementalSpanRecordFilters: Seq[Filter] = {
+    val isNotNullFilter = IsNotNull(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
+    val largerThanFilter = GreaterThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, includedCommits.head.getTimestamp)
+    val lessThanFilter = LessThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, includedCommits.last.getTimestamp)
+
+    Seq(isNotNullFilter, largerThanFilter, lessThanFilter)
+  }
+
+  override lazy val mandatoryColumns: Seq[String] = {
+    // NOTE: This columns are required for Incremental flow to be able to handle the rows properly, even in
+    //       cases when no columns are requested to be fetched (for ex, when using {@code count()} API)
+    Seq(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD) ++
+      preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
+  }
+
+  protected def validate(): Unit = {
+    if (timeline.empty()) {
+      throw new HoodieException("No instants to incrementally pull")
+    }
+
+    if (!this.optParams.contains(DataSourceReadOptions.BEGIN_INSTANTTIME.key)) {
+      throw new HoodieException(s"Specify the begin instant time to pull from using " +
+        s"option ${DataSourceReadOptions.BEGIN_INSTANTTIME.key}")
+    }
+
+    if (!this.tableConfig.populateMetaFields()) {
+      throw new HoodieException("Incremental queries are not supported when meta fields are disabled")
+    }
+  }
+
+  protected def globPattern: String =
+    optParams.getOrElse(DataSourceReadOptions.INCR_PATH_GLOB.key, DataSourceReadOptions.INCR_PATH_GLOB.defaultValue)
+
+}
+
