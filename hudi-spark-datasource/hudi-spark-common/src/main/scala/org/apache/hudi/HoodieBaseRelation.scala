@@ -20,17 +20,19 @@ package org.apache.hudi
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
+import org.apache.hadoop.fs.{FileStatus, Path, PathFilter}
 import org.apache.hadoop.hbase.io.hfile.CacheConfig
 import org.apache.hadoop.mapred.JobConf
-import org.apache.hudi.HoodieBaseRelation.isMetadataTable
+import org.apache.hudi.HoodieBaseRelation.{getPartitionPath, isMetadataTable}
 import org.apache.hudi.HoodieCommonUtils.toScalaOption
 import org.apache.hudi.common.config.SerializableConfiguration
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.hudi.io.storage.HoodieHFileReader
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
 import org.apache.spark.internal.Logging
@@ -38,7 +40,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
-import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionDirectory, PartitionedFile}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.StructType
@@ -72,6 +74,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected lazy val tableConfig: HoodieTableConfig = metaClient.getTableConfig
 
+  protected lazy val basePath: String = metaClient.getBasePath
+
   // If meta fields are enabled, always prefer key from the meta field as opposed to user-specified one
   // NOTE: This is historical behavior which is preserved as is
   protected lazy val recordKeyField: String =
@@ -99,6 +103,17 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected val tableStructSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
 
   protected val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
+
+  /**
+   * NOTE: PLEASE READ THIS CAREFULLY
+   *
+   * Even though [[HoodieFileIndex]] initializes eagerly listing all of the files w/in the given Hudi table,
+   * this variable itself is _lazy_ (and have to stay that way) which guarantees that it's not initialized, until
+   * it's actually accessed
+   */
+  protected lazy val fileIndex: HoodieFileIndex =
+    HoodieFileIndex(sparkSession, metaClient, Some(tableStructSchema), optParams,
+      FileStatusCache.getOrCreate(sparkSession))
 
   /**
    * @VisibleInTests
@@ -178,6 +193,26 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   // TODO scala-doc
   protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSplit]
 
+  protected def listLatestBaseFiles(globPaths: Seq[Path], partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Map[Path, Seq[FileStatus]] = {
+    if (globPaths.isEmpty) {
+      val partitionDirs = fileIndex.listFiles(partitionFilters, dataFilters)
+      partitionDirs.map(pd => (getPartitionPath(pd.files.head), pd.files)).toMap
+    } else {
+      sqlContext.sparkContext.hadoopConfiguration.setClass(
+        "mapreduce.input.pathFilter.class",
+        classOf[HoodieROTablePathFilter],
+        classOf[PathFilter])
+
+      val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(sparkSession, globPaths)
+      val partitionDirs = inMemoryFileIndex.listFiles(partitionFilters, dataFilters)
+
+      val fsView = new HoodieTableFileSystemView(metaClient, timeline, partitionDirs.flatMap(_.files).toArray)
+      val latestBaseFiles = fsView.getLatestBaseFiles.iterator().asScala.toList.map(_.getFileStatus)
+
+      latestBaseFiles.groupBy(getPartitionPath)
+    }
+  }
+
   protected def convertToExpressions(filters: Array[Filter]): Array[Expression] = {
     val catalystExpressions = HoodieSparkUtils.convertToCatalystExpressions(filters, tableStructSchema)
 
@@ -191,7 +226,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   }
 
   /**
-   * Checks whether given expression only references only references partition columns
+   * Checks whether given expression only references partition columns
    * (and involves no sub-query)
    */
   protected def isPartitionPredicate(condition: Expression): Boolean = {
@@ -207,7 +242,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     requestedColumns ++ missing
   }
 
-  protected def getPrecombineFieldProperty: Option[String] =
+  private def getPrecombineFieldProperty: Option[String] =
     Option(tableConfig.getPreCombineField)
       .orElse(optParams.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key)) match {
       // NOTE: This is required to compensate for cases when empty string is used to stub
@@ -220,7 +255,10 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
 object HoodieBaseRelation {
 
-  def isMetadataTable(metaClient: HoodieTableMetaClient) =
+  def getPartitionPath(fileStatus: FileStatus): Path =
+    fileStatus.getPath.getParent
+
+  def isMetadataTable(metaClient: HoodieTableMetaClient): Boolean =
     HoodieTableMetadata.isMetadataTable(metaClient.getBasePath)
 
   /**

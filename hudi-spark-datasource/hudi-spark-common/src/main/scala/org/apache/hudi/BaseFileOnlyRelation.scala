@@ -22,8 +22,6 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieBaseRelation.createBaseFileReader
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.hadoop.HoodieROTablePathFilter
-import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{HoodieCatalystExpressionUtils, SQLContext}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -75,22 +73,9 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
   }
 
   protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[HoodieBaseFileSplit] = {
-    val partitionDirectories = if (globPaths.isEmpty) {
-      val hoodieFileIndex = HoodieFileIndex(sparkSession, metaClient, userSchema, optParams,
-        FileStatusCache.getOrCreate(sqlContext.sparkSession))
-      hoodieFileIndex.listFiles(partitionFilters, dataFilters)
-    } else {
-      sqlContext.sparkContext.hadoopConfiguration.setClass(
-        "mapreduce.input.pathFilter.class",
-        classOf[HoodieROTablePathFilter],
-        classOf[org.apache.hadoop.fs.PathFilter])
-
-      val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(sparkSession, globPaths)
-      inMemoryFileIndex.listFiles(partitionFilters, dataFilters)
-    }
-
-    val partitions = partitionDirectories.flatMap { partition =>
-      partition.files.flatMap { file =>
+    val partitions = listLatestBaseFiles(globPaths, partitionFilters, dataFilters)
+    val fileSplits = partitions.values.toSeq.flatMap { files =>
+      files.flatMap { file =>
         // TODO move to adapter
         // TODO fix, currently assuming parquet as underlying format
         HoodieDataSourceHelper.splitFiles(
@@ -104,6 +89,6 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
 
     val maxSplitBytes = sparkSession.sessionState.conf.filesMaxPartitionBytes
 
-    sparkAdapter.getFilePartitions(sparkSession, partitions, maxSplitBytes).map(HoodieBaseFileSplit.apply)
+    sparkAdapter.getFilePartitions(sparkSession, fileSplits, maxSplitBytes).map(HoodieBaseFileSplit.apply)
   }
 }
