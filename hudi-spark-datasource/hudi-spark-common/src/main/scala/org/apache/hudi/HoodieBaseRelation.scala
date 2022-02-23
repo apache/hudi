@@ -137,7 +137,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     toScalaOption(timeline.lastInstant())
 
   protected def queryTimestamp: Option[String] = {
-    specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant().map(i => i.getTimestamp)))
+    specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(i => i.getTimestamp))
   }
 
   override def schema: StructType = tableStructSchema

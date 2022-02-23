@@ -79,5 +79,5 @@ class HoodieFileScanRDD(@transient private val sparkSession: SparkSession,
     iterator.asInstanceOf[Iterator[InternalRow]]
   }
 
-  override protected def getPartitions: Array[Partition] = fileSplits.toArray
+  override protected def getPartitions: Array[Partition] = fileSplits.map(_.filePartition).toArray
 }
