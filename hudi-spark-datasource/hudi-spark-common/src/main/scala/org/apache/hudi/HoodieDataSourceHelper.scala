@@ -65,28 +65,6 @@ object HoodieDataSourceHelper extends PredicateHelper {
     }
   }
 
-  /**
-   * Convert [[InternalRow]] to [[SpecificInternalRow]].
-   */
-  def createInternalRowWithSchema(
-      row: InternalRow,
-      schema: StructType,
-      positions: Seq[Int]): InternalRow = {
-    val rowToReturn = new SpecificInternalRow(schema)
-    var curIndex = 0
-    schema.zip(positions).foreach { case (field, pos) =>
-      val curField = if (row.isNullAt(pos)) {
-        null
-      } else {
-        row.get(pos, field.dataType)
-      }
-      rowToReturn.update(curIndex, curField)
-      curIndex += 1
-    }
-    rowToReturn
-  }
-
-
   def splitFiles(
       sparkSession: SparkSession,
       file: FileStatus,
