@@ -39,7 +39,7 @@ import org.apache.spark.sql.types.StructType
 import scala.collection.JavaConverters._
 
 case class HoodieMergeOnReadFileSplit(dataFile: Option[PartitionedFile],
-                                      logFiles: Option[List[HoodieLogFile]]) extends HoodieFileSplit
+                                      logFiles: List[HoodieLogFile]) extends HoodieFileSplit
 
 class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
                                   optParams: Map[String, String],
@@ -117,7 +117,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
   protected def buildSplits(fileSlices: Seq[FileSlice]): List[HoodieMergeOnReadFileSplit] = {
     fileSlices.map { fileSlice =>
       val baseFile = toScalaOption(fileSlice.getBaseFile)
-      val logFiles = Option(fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList)
+      val logFiles = fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList
 
       val partitionedBaseFile = baseFile.map { file =>
         val filePath = getFilePath(file.getFileStatus.getPath)

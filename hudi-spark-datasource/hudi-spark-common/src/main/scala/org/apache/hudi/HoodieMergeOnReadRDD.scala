@@ -136,7 +136,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     //       which always reads records in full schema (never projected, due to the fact that DL file might
     //       be stored in non-columnar formats like Avro, HFile, etc)
     private val requiredFieldOrdinals: List[Int] =
-      requiredAvroSchema.getFields.asScala.map(f => logFileReaderAvroSchema.getField(f.name()).pos()).toList
+    requiredAvroSchema.getFields.asScala.map(f => logFileReaderAvroSchema.getField(f.name()).pos()).toList
     private val deserializer: HoodieAvroDeserializer =
       sparkAdapter.createAvroDeserializer(requiredAvroSchema, requiredSchema.structTypeSchema)
 
@@ -144,7 +144,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     protected val unsafeProjection: UnsafeProjection = UnsafeProjection.create(requiredSchema.structTypeSchema)
 
     private var logScanner =
-      HoodieMergeOnReadRDD.scanLog(split.logFiles.get, getPartitionPath(split), logFileReaderAvroSchema, tableState,
+      HoodieMergeOnReadRDD.scanLog(split.logFiles, getPartitionPath(split), logFileReaderAvroSchema, tableState,
         maxCompactionMemoryInBytes, config)
 
     protected val logRecords = logScanner.getRecords.asScala
@@ -363,7 +363,7 @@ private object HoodieMergeOnReadRDD {
     //    - The base file
     //    - Some log file
     split.dataFile.map(baseFile => new Path(baseFile.filePath))
-      .getOrElse(split.logFiles.get.head.getPath)
+      .getOrElse(split.logFiles.head.getPath)
       .getParent
   }
 
