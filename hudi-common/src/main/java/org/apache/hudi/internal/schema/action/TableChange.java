@@ -212,6 +212,10 @@ public interface TableChange {
       return new ColumnPositionChange(srcId, dsrId, ColumnPositionType.AFTER);
     }
 
+    static ColumnPositionChange get(int srcId, int dsrId, String type) {
+      return get(srcId, dsrId, fromTypeValue(type));
+    }
+
     static ColumnPositionChange get(int srcId, int dsrId, ColumnPositionType type) {
       switch (type) {
         case FIRST:

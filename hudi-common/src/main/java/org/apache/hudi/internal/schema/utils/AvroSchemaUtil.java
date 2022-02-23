@@ -136,8 +136,12 @@ public class AvroSchemaUtil {
   }
 
   private static Object rewritePrimaryType(Object oldValue, Schema oldSchema, Schema newSchema) {
-    if (oldSchema.getType() == newSchema.getType()) {
-      switch (oldSchema.getType()) {
+    Schema realOldSchema = oldSchema;
+    if (realOldSchema.getType() == UNION) {
+      realOldSchema = getActualSchemaFromUnion(oldSchema, oldValue);
+    }
+    if (realOldSchema.getType() == newSchema.getType()) {
+      switch (realOldSchema.getType()) {
         case NULL:
         case BOOLEAN:
         case INT:
@@ -149,12 +153,12 @@ public class AvroSchemaUtil {
           return oldValue;
         case FIXED:
           // fixed size and name must match:
-          if (!SchemaCompatibility.schemaNameEquals(oldSchema, newSchema) || oldSchema.getFixedSize() != newSchema.getFixedSize()) {
+          if (!SchemaCompatibility.schemaNameEquals(realOldSchema, newSchema) || realOldSchema.getFixedSize() != newSchema.getFixedSize()) {
             // deal with the precision change for decimalType
-            if (oldSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
+            if (realOldSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
               final byte[] bytes;
               bytes = ((GenericFixed) oldValue).bytes();
-              LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) oldSchema.getLogicalType();
+              LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) realOldSchema.getLogicalType();
               BigDecimal bd = new BigDecimal(new BigInteger(bytes), decimal.getScale()).setScale(((LogicalTypes.Decimal) newSchema.getLogicalType()).getScale());
               return DECIMAL_CONVERSION.toFixed(bd, newSchema, newSchema.getLogicalType());
             }
@@ -166,7 +170,7 @@ public class AvroSchemaUtil {
           throw new AvroRuntimeException("Unknown schema type: " + newSchema.getType());
       }
     } else {
-      return rewritePrimaryTypeWithDiffSchemaType(oldValue, oldSchema, newSchema);
+      return rewritePrimaryTypeWithDiffSchemaType(oldValue, realOldSchema, newSchema);
     }
   }
 
@@ -177,7 +181,7 @@ public class AvroSchemaUtil {
         break;
       case INT:
         if (newSchema.getLogicalType() == LogicalTypes.date() && oldSchema.getType() == Schema.Type.STRING) {
-          return fromJavaDate(Date.valueOf((String) oldValue));
+          return fromJavaDate(Date.valueOf(oldValue.toString()));
         }
         break;
       case LONG:
@@ -231,13 +235,17 @@ public class AvroSchemaUtil {
         // deal with decimal Type
         if (newSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
           // TODO: support more types
-          if (oldSchema.getType() == Schema.Type.STRING || oldSchema.getType() == Schema.Type.DOUBLE) {
+          if (oldSchema.getType() == Schema.Type.STRING
+              || oldSchema.getType() == Schema.Type.DOUBLE
+              || oldSchema.getType() == Schema.Type.INT
+              || oldSchema.getType() == Schema.Type.LONG
+              || oldSchema.getType() == Schema.Type.FLOAT) {
             LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) newSchema.getLogicalType();
             BigDecimal bigDecimal = null;
             if (oldSchema.getType() == Schema.Type.STRING) {
               bigDecimal = new java.math.BigDecimal((String) oldValue)
                   .setScale(decimal.getScale());
-            } else if (oldSchema.getType() == Schema.Type.DOUBLE) {
+            } else {
               // Due to Java, there will be precision problems in direct conversion, we should use string instead of use double
               bigDecimal = new java.math.BigDecimal(oldValue.toString())
                   .setScale(decimal.getScale());
@@ -248,7 +256,7 @@ public class AvroSchemaUtil {
         break;
       default:
     }
-    throw new AvroRuntimeException("cannot support rewrite value for schema type: " + newSchema.getType());
+    throw new AvroRuntimeException(String.format("cannot support rewrite value for schema type: %s since the old schema type is: %s", newSchema, oldSchema));
   }
 
   // convert days to Date

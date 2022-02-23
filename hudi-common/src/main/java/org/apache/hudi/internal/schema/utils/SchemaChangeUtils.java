@@ -60,11 +60,12 @@ public class SchemaChangeUtils {
     }
     switch (src.typeId()) {
       case INT:
-        return dsr == Types.LongType.get() || dsr == Types.FloatType.get() || dsr == Types.DoubleType.get() || dsr == Types.StringType.get();
+        return dsr == Types.LongType.get() || dsr == Types.FloatType.get()
+            || dsr == Types.DoubleType.get() || dsr == Types.StringType.get() || dsr.typeId() == Type.TypeID.DECIMAL;
       case LONG:
-        return dsr == Types.FloatType.get() || dsr == Types.DoubleType.get() || dsr == Types.StringType.get();
+        return dsr == Types.FloatType.get() || dsr == Types.DoubleType.get() || dsr == Types.StringType.get() || dsr.typeId() == Type.TypeID.DECIMAL;
       case FLOAT:
-        return dsr == Types.DoubleType.get() || dsr == Types.StringType.get();
+        return dsr == Types.DoubleType.get() || dsr == Types.StringType.get() || dsr.typeId() == Type.TypeID.DECIMAL;
       case DOUBLE:
         return dsr == Types.StringType.get() || dsr.typeId() == Type.TypeID.DECIMAL;
       case DATE:
@@ -200,7 +201,7 @@ public class SchemaChangeUtils {
         if (fields.isEmpty()) {
           throw new UnsupportedOperationException("cannot support delete all columns from Struct");
         }
-        return fields.size() == record.fields().size() ? record : Types.RecordType.get(fields);
+        return Types.RecordType.get(fields);
       case ARRAY:
         Types.ArrayType array = (Types.ArrayType) type;
         Type newElementType = applyTableChange2Type(array.elementType(), deletes);
@@ -286,7 +287,7 @@ public class SchemaChangeUtils {
         return Types.ArrayType.get(array.elementId(), optional, newElementType);
       case MAP:
         Types.MapType map = (Types.MapType) type;
-        Types.Field valueFiled = map.fields().get(0);
+        Types.Field valueFiled = map.fields().get(1);
         Type newValueType;
         newValueType = applyTableChange2Type(map.valueType(), updates);
         newValueType = updates.applyUpdates(valueFiled, newValueType);

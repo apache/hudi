@@ -30,21 +30,21 @@ import java.util.List;
  * auxiliary class.
  * help to merge file schema and query schema to produce final read schema for avro/parquet file
  */
-public class SchemaMerger {
+public class InternalSchemaMerger {
   private final InternalSchema fileSchema;
   private final InternalSchema querySchema;
   // now there exist some bugs when we use spark update/merge api,
   // those operation will change col nullability from optional to required which is wrong.
   // Before that bug is fixed, we need to do adapt.
   // if mergeRequiredFiledForce is true, we will ignore the col's required attribute.
-  private final boolean mergeRequiredFiledForce;
+  private final boolean ignoreRequiredAttribute;
   // Whether to use column Type from file schema to read files when we find some column type has changed.
   private boolean useColumnTypeFromFileSchema = true;
 
-  public SchemaMerger(InternalSchema fileSchema, InternalSchema querySchema, boolean mergeRequiredFiledForce, boolean useColumnTypeFromFileSchema) {
+  public InternalSchemaMerger(InternalSchema fileSchema, InternalSchema querySchema, boolean ignoreRequiredAttribute, boolean useColumnTypeFromFileSchema) {
     this.fileSchema = fileSchema;
     this.querySchema = querySchema;
-    this.mergeRequiredFiledForce = mergeRequiredFiledForce;
+    this.ignoreRequiredAttribute = ignoreRequiredAttribute;
     this.useColumnTypeFromFileSchema = useColumnTypeFromFileSchema;
   }
 
@@ -58,7 +58,7 @@ public class SchemaMerger {
       if (fileSchema.findField(fieldId) != null) {
         if (fileSchema.findfullName(fieldId).equals(fullName)) {
           // maybe col type changed, deal with it.
-          newFields.add(dealWithColTypeChanged(fieldId, newType, oldField));
+          newFields.add(Types.Field.get(oldField.fieldId(), oldField.isOptional(), oldField.name(), newType, oldField.doc()));
         } else {
           // find rename, deal with it.
           newFields.add(dealWithRename(fieldId, newType, oldField));
@@ -71,7 +71,7 @@ public class SchemaMerger {
         } else {
           // find add column
           // now there exist some bugs when we use spark update/merge api, those operation will change col optional to required.
-          if (mergeRequiredFiledForce) {
+          if (ignoreRequiredAttribute) {
             newFields.add(Types.Field.get(oldField.fieldId(), true, oldField.name(), newType, oldField.doc()));
           } else {
             newFields.add(Types.Field.get(oldField.fieldId(), oldField.isOptional(), oldField.name(), newType, oldField.doc()));
@@ -80,16 +80,6 @@ public class SchemaMerger {
       }
     }
     return newFields;
-  }
-
-  private Types.Field dealWithColTypeChanged(int fieldId, Type newType, Types.Field oldField) {
-    Type typeFromFileSchema = fileSchema.findField(fieldId).type();
-    // Current design mechanism guarantees nestedType change is not allowed, so no need to consider.
-    if (newType.isNestedType()) {
-      return Types.Field.get(oldField.fieldId(), oldField.isOptional(), oldField.name(), newType, oldField.doc());
-    } else {
-      return Types.Field.get(oldField.fieldId(), oldField.isOptional(), oldField.name(), useColumnTypeFromFileSchema ? typeFromFileSchema : newType, oldField.doc());
-    }
   }
 
   private Types.Field dealWithRename(int fieldId, Type newType, Types.Field oldField) {
@@ -141,11 +131,20 @@ public class SchemaMerger {
   }
 
   public Type buildMapType(Types.MapType map, Type newValue) {
-    Types.Field arrayFiled = map.fields().get(1);
-    if (arrayFiled.type() == newValue) {
+    Types.Field valueFiled = map.fields().get(1);
+    if (valueFiled.type() == newValue) {
       return map;
     } else {
       return Types.MapType.get(map.keyId(), map.valueId(), map.keyType(), newValue, map.isValueOptional());
+    }
+  }
+
+  public Type buildPrimitiveType(Type.PrimitiveType typeFromQuerySchema, int currentPrimitiveTypeId) {
+    Type typeFromFileSchema = fileSchema.findType(currentPrimitiveTypeId);
+    if (typeFromFileSchema == null) {
+      return typeFromQuerySchema;
+    } else {
+      return useColumnTypeFromFileSchema ? typeFromFileSchema : typeFromQuerySchema;
     }
   }
 }

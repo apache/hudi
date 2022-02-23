@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -155,6 +156,10 @@ public class TableChanges {
       }
       if (newName == null || newName.isEmpty()) {
         throw new IllegalArgumentException(String.format("cannot rename column: %s to empty", name));
+      }
+      // keep consisitent with hive. column names insensitive, so we check 'newName.toLowerCase(Locale.ROOT)'
+      if (internalSchema.findDuplicateCol(newName.toLowerCase(Locale.ROOT))) {
+        throw new IllegalArgumentException(String.format("cannot rename column: %s to a existing name", name));
       }
       // save update info
       Types.Field update = updates.get(field.fieldId());
@@ -332,8 +337,8 @@ public class TableChanges {
         }
         fullName = parent + "." + name;
       } else {
-        Types.Field field = internalSchema.findField(name);
-        if (field != null) {
+        // keep consistent with hive, column name case insensitive
+        if (internalSchema.findDuplicateCol(name.toLowerCase(Locale.ROOT))) {
           throw new HoodieSchemaException(String.format("cannot add column: %s which already exist", name));
         }
       }
