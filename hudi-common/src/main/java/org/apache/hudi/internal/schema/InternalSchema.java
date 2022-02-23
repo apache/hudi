@@ -27,6 +27,7 @@ import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -230,6 +231,18 @@ public class InternalSchema implements Serializable {
       return buildIdToField().get(id);
     }
     return null;
+  }
+
+  /**
+   * Whether colName exists in current Schema.
+   * Case insensitive.
+   *
+   * @param colName a colName
+   * @return Whether colName exists in current Schema
+   */
+  public boolean findDuplicateCol(String colName) {
+    return idToName.entrySet().stream().map(e -> e.getValue().toLowerCase(Locale.ROOT))
+        .collect(Collectors.toSet()).contains(colName);
   }
 
   public int findIdByName(String name) {

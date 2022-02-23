@@ -29,7 +29,7 @@ import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.internal.schema.Types.Field;
 import org.apache.hudi.internal.schema.Types.RecordType;
-import org.apache.hudi.internal.schema.action.SchemaMerger;
+import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.hudi.internal.schema.visitor.InternalSchemaVisitor;
 import org.apache.hudi.internal.schema.visitor.NameToIDVisitor;
@@ -628,7 +628,7 @@ public class InternalSchemaUtils {
    *
    * @param fileSchema the real schema of avro/parquet file.
    * @param querySchema the query schema which query engine produced.
-   * @param mergeRequiredFiledForce now sparksql will change col nullability attribute from optional to required which is a bug.
+   * @param ignoreRequiredAttribute now sparksql will change col nullability attribute from optional to required which is a bug.
    *                                if this situation occur and mergeRequiredFiledForce is set to be true,
    *                                just ignore the nullability changes, and merge force.
    * @param useColumnTypeFromFileSchema Whether to use column Type from file schema to read files when we find some column type changed.
@@ -636,9 +636,9 @@ public class InternalSchemaUtils {
    *                                    when read log file this value should be set to false.
    * @return read schema to read avro/parquet file.
    */
-  public static InternalSchema mergeSchema(InternalSchema fileSchema, InternalSchema querySchema, boolean mergeRequiredFiledForce, boolean useColumnTypeFromFileSchema) {
-    SchemaMerger schemaMerger = new SchemaMerger(fileSchema, querySchema, mergeRequiredFiledForce, useColumnTypeFromFileSchema);
-    Types.RecordType record = (Types.RecordType) mergeType(schemaMerger, querySchema.getRecord());
+  public static InternalSchema mergeSchema(InternalSchema fileSchema, InternalSchema querySchema, boolean ignoreRequiredAttribute, boolean useColumnTypeFromFileSchema) {
+    InternalSchemaMerger schemaMerger = new InternalSchemaMerger(fileSchema, querySchema, ignoreRequiredAttribute, useColumnTypeFromFileSchema);
+    Types.RecordType record = (Types.RecordType) mergeType(schemaMerger, querySchema.getRecord(), 0);
     return new InternalSchema(record.fields());
   }
 
@@ -647,13 +647,13 @@ public class InternalSchemaUtils {
    * create final read schema to read avro/parquet file.
    * this is auxiliary function used by mergeSchema.
    */
-  private static Type mergeType(SchemaMerger schemaMerger, Type type) {
+  private static Type mergeType(InternalSchemaMerger schemaMerger, Type type, int currentTypeId) {
     switch (type.typeId()) {
       case RECORD:
         Types.RecordType record = (Types.RecordType) type;
         List<Type> newTypes = new ArrayList<>();
         for (Types.Field f : record.fields()) {
-          Type newType = mergeType(schemaMerger, f.type());
+          Type newType = mergeType(schemaMerger, f.type(), f.fieldId());
           newTypes.add(newType);
         }
         return Types.RecordType.get(schemaMerger.buildRecordType(record.fields(), newTypes));
@@ -661,14 +661,14 @@ public class InternalSchemaUtils {
         Types.ArrayType array = (Types.ArrayType) type;
         Type newElementType;
         Types.Field elementField = array.fields().get(0);
-        newElementType = mergeType(schemaMerger, elementField.type());
+        newElementType = mergeType(schemaMerger, elementField.type(), elementField.fieldId());
         return schemaMerger.buildArrayType(array, newElementType);
       case MAP:
         Types.MapType map = (Types.MapType) type;
-        Type newValueType = mergeType(schemaMerger, map.valueType());
+        Type newValueType = mergeType(schemaMerger, map.valueType(), map.valueId());
         return schemaMerger.buildMapType(map, newValueType);
       default:
-        return type;
+        return schemaMerger.buildPrimitiveType((Type.PrimitiveType) type, currentTypeId);
     }
   }
 
