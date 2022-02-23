@@ -23,10 +23,10 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -92,7 +92,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   // Buffer for holding records in memory before they are flushed to disk
   private final List<IndexedRecord> recordList = new ArrayList<>();
   // Buffer for holding records (to be deleted) in memory before they are flushed to disk
-  private final List<HoodieKey> keysToDelete = new ArrayList<>();
+  private final List<DeleteRecord> recordsToDelete = new ArrayList<>();
   // Incoming records to be written to logs.
   protected Iterator<HoodieRecord<T>> recordItr;
   // Writer to log into the file group's latest slice.
@@ -402,15 +402,15 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
         blocks.add(getBlock(config, pickLogDataBlockFormat(), recordList, header, keyField));
       }
 
-      if (keysToDelete.size() > 0) {
-        blocks.add(new HoodieDeleteBlock(keysToDelete.toArray(new HoodieKey[keysToDelete.size()]), header));
+      if (recordsToDelete.size() > 0) {
+        blocks.add(new HoodieDeleteBlock(recordsToDelete.toArray(new DeleteRecord[0]), header));
       }
 
       if (blocks.size() > 0) {
         AppendResult appendResult = writer.appendBlocks(blocks);
         processAppendResult(appendResult, recordList);
         recordList.clear();
-        keysToDelete.clear();
+        recordsToDelete.clear();
       }
     } catch (Exception e) {
       throw new HoodieAppendException("Failed while appending records to " + writer.getLogFile().getPath(), e);
@@ -472,7 +472,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   }
 
   private Writer createLogWriter(Option<FileSlice> fileSlice, String baseCommitTime)
-      throws IOException, InterruptedException {
+      throws IOException {
     Option<HoodieLogFile> latestLogFile = fileSlice.get().getLatestLogFile();
 
     return HoodieLogFormat.newWriterBuilder()
@@ -507,14 +507,16 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
       record.seal();
     }
+    // fetch the ordering val first in case the record was deflated.
+    final Comparable<?> orderingVal = record.getData().getOrderingValue();
     Option<IndexedRecord> indexedRecord = getIndexedRecord(record);
     if (indexedRecord.isPresent()) {
-      // Skip the Ignore Record.
+      // Skip the ignored record.
       if (!indexedRecord.get().equals(IGNORE_RECORD)) {
         recordList.add(indexedRecord.get());
       }
     } else {
-      keysToDelete.add(record.getKey());
+      recordsToDelete.add(DeleteRecord.create(record.getKey(), orderingVal));
     }
     numberOfRecords++;
   }

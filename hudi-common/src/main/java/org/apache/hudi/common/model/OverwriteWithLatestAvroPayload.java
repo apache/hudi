@@ -105,4 +105,9 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
     }
     return Objects.equals(value, defaultValue);
   }
+
+  @Override
+  public Comparable<?> getOrderingValue() {
+    return this.orderingVal;
+  }
 }
