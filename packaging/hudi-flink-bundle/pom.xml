@@ -136,7 +136,8 @@
                   <include>org.apache.hive:hive-common</include>
                   <include>org.apache.hive:hive-service</include>
                   <include>org.apache.hive:hive-service-rpc</include>
-                  <include>org.apache.hive:hive-exec</include>
+		  <include>org.apache.hive:hive-exec</include>
+		  <include>org.apache.hive:hive-standalone-metastore</include>
                   <include>org.apache.hive:hive-metastore</include>
                   <include>org.apache.hive:hive-jdbc</include>
                   <include>org.datanucleus:datanucleus-core</include>
@@ -640,6 +641,12 @@
         <dependency>
           <groupId>${hive.groupid}</groupId>
           <artifactId>hive-service-rpc</artifactId>
+          <version>${hive.version}</version>
+          <scope>${flink.bundle.hive.scope}</scope>
+        </dependency>
+        <dependency>
+          <groupId>${hive.groupid}</groupId>
+          <artifactId>hive-standalone-metastore</artifactId>
           <version>${hive.version}</version>
           <scope>${flink.bundle.hive.scope}</scope>
         </dependency>
