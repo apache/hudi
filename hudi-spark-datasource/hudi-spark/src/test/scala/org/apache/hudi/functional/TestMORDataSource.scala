@@ -573,12 +573,7 @@ class TestMORDataSource extends HoodieClientTestBase {
     assertEquals(sampleRow.getDate(1), sampleRow.get(1))
     assertEquals(sampleRow.getString(2), sampleRow.get(2))
     assertEquals(sampleRow.getSeq(3), sampleRow.get(3))
-    if (HoodieSparkUtils.gteqSpark3_2) {
-      // Since Spark3.2, the `nation` column is parsed as String, not Struct.
-      assertEquals(sampleRow.getAs[Array[Byte]](4), sampleRow.get(4))
-    } else {
-      assertEquals(sampleRow.getString(4), sampleRow.get(4))
-    }
+    assertEquals(sampleRow.getAs[Array[Byte]](4), sampleRow.get(4))
   }
 
   def verifyShow(df: DataFrame): Unit = {
