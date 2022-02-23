@@ -56,7 +56,9 @@ case class HoodieTableSchema(structTypeSchema: StructType, avroSchemaStr: String
 case class HoodieTableState(tablePath: String,
                             latestCommit: String,
                             recordKeyField: String,
-                            preCombineFieldOpt: Option[String])
+                            preCombineFieldOpt: Option[String],
+                            usesVirtualKeys: Boolean,
+                            recordPayloadClassName: String)
 
 /**
  * Hoodie BaseRelation which extends [[PrunedFilteredScan]].
@@ -83,18 +85,18 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   // If meta fields are enabled, always prefer key from the meta field as opposed to user-specified one
   // NOTE: This is historical behavior which is preserved as is
   protected lazy val recordKeyField: String =
-    if (tableConfig.populateMetaFields()) HoodieRecord.RECORD_KEY_METADATA_FIELD
-    else tableConfig.getRecordKeyFieldProp
+  if (tableConfig.populateMetaFields()) HoodieRecord.RECORD_KEY_METADATA_FIELD
+  else tableConfig.getRecordKeyFieldProp
 
   protected lazy val preCombineFieldOpt: Option[String] =
     Option(tableConfig.getPreCombineField)
       .orElse(optParams.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key)) match {
-        // NOTE: This is required to compensate for cases when empty string is used to stub
-        //       property value to avoid it being set with the default value
-        // TODO(HUDI-3456) cleanup
-        case Some(f) if !StringUtils.isNullOrEmpty(f) => Some(f)
-        case _ => None
-      }
+      // NOTE: This is required to compensate for cases when empty string is used to stub
+      //       property value to avoid it being set with the default value
+      // TODO(HUDI-3456) cleanup
+      case Some(f) if !StringUtils.isNullOrEmpty(f) => Some(f)
+      case _ => None
+    }
 
   protected lazy val specifiedQueryTimestamp: Option[String] =
     optParams.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key)
@@ -268,7 +270,14 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected def getTableState: HoodieTableState = {
     // Subset of the state of table's configuration as of at the time of the query
-    HoodieTableState(basePath, queryTimestamp.get, recordKeyField, preCombineFieldOpt)
+    HoodieTableState(
+      tablePath = basePath,
+      latestCommit = queryTimestamp.get,
+      recordKeyField = recordKeyField,
+      preCombineFieldOpt = preCombineFieldOpt,
+      usesVirtualKeys = !tableConfig.populateMetaFields(),
+      recordPayloadClassName = tableConfig.getPayloadClass
+    )
   }
 
   private def imbueConfigs(sqlContext: SQLContext): Unit = {

@@ -90,7 +90,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
 
     val tableState = getTableState
     new HoodieMergeOnReadRDD(sqlContext.sparkContext, jobConf, fullSchemaParquetReader, requiredSchemaParquetReader,
-      tableState, tableSchema, requiredSchema, maxCompactionMemoryInBytes, mergeType, fileSplits)
+      tableSchema, requiredSchema, tableState, maxCompactionMemoryInBytes, mergeType, fileSplits)
   }
 
   protected override def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {

@@ -28,7 +28,7 @@ import org.apache.hudi.MergeOnReadSnapshotRelation.getFilePath
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieLogFile, HoodieRecord, HoodieRecordPayload}
+import org.apache.hudi.common.model.{HoodieLogFile, HoodieRecord, HoodieRecordPayload, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
 import org.apache.hudi.config.HoodiePayloadConfig
@@ -56,16 +56,15 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            @transient config: Configuration,
                            fullSchemaFileReader: PartitionedFile => Iterator[InternalRow],
                            requiredSchemaFileReader: PartitionedFile => Iterator[InternalRow],
-                           tableState: HoodieTableState,
                            tableSchema: HoodieTableSchema,
                            requiredSchema: HoodieTableSchema,
+                           tableState: HoodieTableState,
                            maxCompactionMemoryInBytes: Long,
                            mergeType: String,
                            @transient fileSplits: Seq[HoodieMergeOnReadFileSplit])
   extends RDD[InternalRow](sc, Nil) with HoodieUnsafeRDD {
 
   private val confBroadcast = sc.broadcast(new SerializableWritable(config))
-  private val recordKeyField = tableState.recordKeyField
   private val payloadProps = tableState.preCombineFieldOpt
     .map(preCombineField =>
       HoodiePayloadConfig.newBuilder
@@ -74,6 +73,10 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
         .getProps
     )
     .getOrElse(new Properties())
+
+  private val whitelistedPayloadClasses: Set[String] = Seq(
+    classOf[OverwriteWithLatestAvroPayload]
+  ).map(_.getName).toSet
 
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
     val mergeOnReadPartition = split.asInstanceOf[HoodieMergeOnReadPartition]
@@ -84,14 +87,13 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       case logFileOnlySplit if logFileOnlySplit.dataFile.isEmpty =>
         new LogFileIterator(logFileOnlySplit, getConfig)
 
-      case skipMergeSplit if mergeType.equals(DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL) =>
-        val baseFileIterator = requiredSchemaFileReader(skipMergeSplit.dataFile.get)
-        new SkipMergeIterator(skipMergeSplit, baseFileIterator, getConfig)
+      case split if mergeType.equals(DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL) =>
+        val baseFileIterator = requiredSchemaFileReader(split.dataFile.get)
+        new SkipMergeIterator(split, baseFileIterator, getConfig)
 
-      case recordMergingSplit
-        if mergeType.equals(DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL) =>
-        val (baseFileIterator, schema) = (fullSchemaFileReader(recordMergingSplit.dataFile.get), tableSchema)
-        new RecordMergingFileIterator(recordMergingSplit, baseFileIterator, schema, getConfig)
+      case split if mergeType.equals(DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL) =>
+        val (baseFileIterator, schema) = readBaseFile(split)
+        new RecordMergingFileIterator(split, baseFileIterator, schema, getConfig)
 
       case _ => throw new HoodieException(s"Unable to select an Iterator to read the Hoodie MOR File Split for " +
         s"file path: ${mergeOnReadPartition.split.dataFile.get.filePath}" +
@@ -108,6 +110,21 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     }
 
     iter
+  }
+
+  private def readBaseFile(split: HoodieMergeOnReadFileSplit): (Iterator[InternalRow], HoodieTableSchema) = {
+    // NOTE: This is an optimization making sure that even for MOR tables we fetch absolute minimum
+    //       of the stored data possible, while still meeting the query's requirements.
+    //
+    //       Here we assume that iff queried table
+    //          a) Does NOT rely on virtual-keys (ie, it's relying on Hudi metadata fields)
+    //          b) It does use one of the standard (and whitelisted) Record Payload classes
+    //       then we can avoid reading and parsing the records w/ _full_ schema, and instead only
+    //       rely on projected one, nevertheless being able to perform merging correctly (
+    if (tableState.usesVirtualKeys || !whitelistedPayloadClasses.contains(tableState.recordPayloadClassName))
+      (fullSchemaFileReader(split.dataFile.get), tableSchema)
+    else
+      (requiredSchemaFileReader(split.dataFile.get), requiredSchema)
   }
 
   override protected def getPartitions: Array[Partition] =
@@ -232,7 +249,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     private val serializer = sparkAdapter.createAvroSerializer(baseFileReaderSchema.structTypeSchema,
       baseFileReaderAvroSchema, resolveAvroSchemaNullability(baseFileReaderAvroSchema))
 
-    private val recordKeyOrdinal = baseFileReaderSchema.structTypeSchema.fieldIndex(recordKeyField)
+    private val recordKeyOrdinal = baseFileReaderSchema.structTypeSchema.fieldIndex(tableState.recordKeyField)
 
     override def hasNext: Boolean = {
       if (baseFileIterator.hasNext) {
