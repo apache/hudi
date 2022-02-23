@@ -28,6 +28,7 @@ import org.apache.hudi.MergeOnReadSnapshotRelation.getFilePath
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
 import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.exception.HoodieException
@@ -321,6 +322,7 @@ private object HoodieMergeOnReadRDD {
 
   def scanLog(split: HoodieMergeOnReadFileSplit, logSchema: Schema, config: Configuration): HoodieMergedLogRecordScanner = {
     val fs = FSUtils.getFs(split.tablePath, config)
+    val logFiles = split.logFiles.get
 
     if (HoodieTableMetadata.isMetadataTable(split.tablePath)) {
       val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build()
@@ -332,18 +334,13 @@ private object HoodieMergeOnReadRDD {
 
       // NOTE: In case of Metadata Table partition path equates to partition name (since there's just one level
       //       of indirection among MT partitions)
-      val relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(split.tablePath), getPartitionPath(split))
-      metadataTable.getLogRecordScanner(split.logFiles.get.asJava, relativePartitionPath).getLeft
+      val relativePartitionPath = getRelativePartitionPath(new Path(split.tablePath), getPartitionPath(split))
+      metadataTable.getLogRecordScanner(logFiles.asJava, relativePartitionPath).getLeft
     } else {
-      val partitionPath: String = if (split.logPaths.isEmpty || split.logPaths.get.asJava.isEmpty) {
-        null
-      } else {
-        new Path(split.logPaths.get.asJava.get(0)).getParent.getName
-      }
       val logRecordScannerBuilder = HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
         .withBasePath(split.tablePath)
-        .withLogFilePaths(split.logFiles.get.asJava)
+        .withLogFilePaths(split.logFiles.get.map(logFile => getFilePath(logFile.getPath)).asJava)
         .withReaderSchema(logSchema)
         .withLatestInstantTime(split.latestCommit)
         .withReadBlocksLazily(
@@ -358,9 +355,11 @@ private object HoodieMergeOnReadRDD {
         .withSpillableMapBasePath(
           config.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP,
             HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
-      if (partitionPath != null) {
-        logRecordScannerBuilder.withPartition(partitionPath)
+
+      if (logFiles.nonEmpty) {
+        logRecordScannerBuilder.withPartition(getRelativePartitionPath(new Path(split.tablePath), logFiles.head.getPath.getParent))
       }
+
       logRecordScannerBuilder.build()
     }
   }
