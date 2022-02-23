@@ -57,9 +57,7 @@ trait HoodieIncrementalRelationTrait {
 }
 
 /**
- * Experimental.
- * Relation, that implements the Hoodie incremental view for Merge On Read table.
- *
+ * @Experimental
  */
 class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
                                      optParams: Map[String, String],
@@ -71,14 +69,14 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
 
   validate()
 
-  private lazy val commitsToReturn = timeline.getInstants.iterator().asScala.toList
+  private lazy val includedCommits = timeline.getInstants.iterator().asScala.toList
 
   // Record filters making sure that only records w/in the requested bounds are being fetched as part of the
   // scan collected by this relation
-  private lazy val incrementalSpanRecordsFilters: Seq[Filter] = {
+  private lazy val incrementalSpanRecordFilters: Seq[Filter] = {
     val isNotNullFilter = IsNotNull(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
-    val largerThanFilter = GreaterThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.head.getTimestamp)
-    val lessThanFilter = LessThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.last.getTimestamp)
+    val largerThanFilter = GreaterThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, includedCommits.head.getTimestamp)
+    val lessThanFilter = LessThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, includedCommits.last.getTimestamp)
 
     Seq(isNotNullFilter, largerThanFilter, lessThanFilter)
   }
@@ -113,7 +111,7 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
       //
       // The only filtering applicable here is the filtering to make sure we're only fetching records that
       // fall into incremental span of the timeline being queried
-      filters = incrementalSpanRecordsFilters,
+      filters = incrementalSpanRecordFilters,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
@@ -125,7 +123,7 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
       partitionSchema = partitionSchema,
       tableSchema = tableSchema,
       requiredSchema = requiredSchema,
-      filters = filters ++ incrementalSpanRecordsFilters,
+      filters = filters ++ incrementalSpanRecordFilters,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
@@ -141,8 +139,8 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
   }
 
   override protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
-    val latestCommit = commitsToReturn.last.getTimestamp
-    val commitsMetadata = commitsToReturn.map(getCommitMetadata(_, timeline)).asJava
+    val latestCommit = includedCommits.last.getTimestamp
+    val commitsMetadata = includedCommits.map(getCommitMetadata(_, timeline)).asJava
 
     val modifiedFiles = listAffectedFilesForCommits(conf, new Path(metaClient.getBasePath), commitsMetadata)
     val fsView = new HoodieTableFileSystemView(metaClient, timeline, modifiedFiles)
