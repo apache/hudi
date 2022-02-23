@@ -52,14 +52,21 @@ public class WorkloadProfile implements Serializable {
    */
   private WriteOperationType operationType;
 
+  private final boolean hasOutputWorkLoadStats;
+
   public WorkloadProfile(Pair<HashMap<String, WorkloadStat>, WorkloadStat> profile) {
+    this(profile, false);
+  }
+
+  public WorkloadProfile(Pair<HashMap<String, WorkloadStat>, WorkloadStat> profile, boolean hasOutputWorkLoadStats) {
     this.inputPartitionPathStatMap = profile.getLeft();
     this.globalStat = profile.getRight();
     this.outputPartitionPathStatMap = new HashMap<>();
+    this.hasOutputWorkLoadStats = hasOutputWorkLoadStats;
   }
 
-  public WorkloadProfile(Pair<HashMap<String, WorkloadStat>, WorkloadStat> profile, WriteOperationType operationType) {
-    this(profile);
+  public WorkloadProfile(Pair<HashMap<String, WorkloadStat>, WorkloadStat> profile, WriteOperationType operationType, boolean hasOutputWorkLoadStats) {
+    this(profile, hasOutputWorkLoadStats);
     this.operationType = operationType;
   }
 
@@ -72,7 +79,7 @@ public class WorkloadProfile implements Serializable {
   }
 
   public Set<String> getOutputPartitionPaths() {
-    return outputPartitionPathStatMap.keySet();
+    return hasOutputWorkLoadStats ? outputPartitionPathStatMap.keySet() : inputPartitionPathStatMap.keySet();
   }
 
   public HashMap<String, WorkloadStat> getInputPartitionPathStatMap() {
@@ -83,12 +90,22 @@ public class WorkloadProfile implements Serializable {
     return outputPartitionPathStatMap;
   }
 
+  public boolean hasOutputWorkLoadStats() {
+    return hasOutputWorkLoadStats;
+  }
+
+  public void updateOutputPartitionPathStatMap(String partitionPath, WorkloadStat workloadStat) {
+    if (hasOutputWorkLoadStats) {
+      outputPartitionPathStatMap.put(partitionPath, workloadStat);
+    }
+  }
+
   public WorkloadStat getWorkloadStat(String partitionPath) {
     return inputPartitionPathStatMap.get(partitionPath);
   }
 
   public WorkloadStat getOutputWorkloadStat(String partitionPath) {
-    return outputPartitionPathStatMap.get(partitionPath);
+    return hasOutputWorkLoadStats ? outputPartitionPathStatMap.get(partitionPath) : inputPartitionPathStatMap.get(partitionPath);
   }
 
   public WriteOperationType getOperationType() {

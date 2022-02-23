@@ -93,7 +93,7 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
 
     WorkloadProfile workloadProfile = null;
     if (isWorkloadProfileNeeded()) {
-      workloadProfile = new WorkloadProfile(buildProfile(inputRecords));
+      workloadProfile = new WorkloadProfile(buildProfile(inputRecords), table.getIndex().canIndexLogFiles());
       LOG.info("Input workload profile :" + workloadProfile);
     }
 
