@@ -133,7 +133,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       // This can be simplified using SpecificData.deepcopy once this bug is fixed
       // https://issues.apache.org/jira/browse/AVRO-1811
       //
-      // NOTE: {@code HoodieMetadataRecord} has to always carry both "key" nad "type" fields
+      // NOTE: {@code HoodieMetadataRecord} has to always carry both "key" and "type" fields
       //       for it to be handled appropriately, therefore these fields have to be reflected
       //       in any (read-)projected schema
       key = record.get(KEY_FIELD_NAME).toString();
