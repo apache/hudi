@@ -1,5 +1,5 @@
 ---
-title: Disaster and Recovery with Apache Hudi
+title: Disaster Recovery with Apache Hudi
 toc: true
 ---
 
@@ -282,7 +282,7 @@ at regular cadence and keep deleting older savepoints when new ones are created.
 to assist in deleting a savepoint. Please do remember that cleaner may not clean the files that are savepointed. And so users 
 should ensure they delete the savepoints from time to time. If not, the storage reclamation may not happen. 
 
-
+Note: Savepoint and restore for MOR table is available only from 0.11. 
 
 
 
