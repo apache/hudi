@@ -123,13 +123,13 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     new LogFileIterator(split, config)
 
   private def skipMergingFileIterator(split: HoodieMergeOnReadFileSplit,
-                                    baseFileIterator: Iterator[InternalRow],
-                                    config: Configuration): Iterator[InternalRow] =
+                                      baseFileIterator: Iterator[InternalRow],
+                                      config: Configuration): Iterator[InternalRow] =
     new SkipMergeIterator(split, baseFileIterator, config)
 
   private def recordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
-                                         baseFileIterator: Iterator[InternalRow],
-                                         config: Configuration): Iterator[InternalRow] =
+                                        baseFileIterator: Iterator[InternalRow],
+                                        config: Configuration): Iterator[InternalRow] =
     new RecordMergingFileIterator(split, baseFileIterator, config)
 
   class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
@@ -199,7 +199,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     protected val tableAvroSchema: Schema = new Schema.Parser().parse(tableSchema.avroSchemaStr)
     protected val requiredAvroSchema: Schema = new Schema.Parser().parse(requiredSchema.avroSchemaStr)
     protected val requiredFieldPosition: Seq[Int] = requiredSchema.structTypeSchema.map(f => tableAvroSchema.getField(f.name).pos()).toList
-    protected val recordBuilder: GenericRecordBuilder= new GenericRecordBuilder(requiredAvroSchema)
+    protected val recordBuilder: GenericRecordBuilder = new GenericRecordBuilder(requiredAvroSchema)
     protected val deserializer: HoodieAvroDeserializer = sparkAdapter.createAvroDeserializer(requiredAvroSchema, requiredSchema.structTypeSchema)
     // NOTE: This have to stay lazy to make sure it's initialized only at the point where it's
     //       going to be used, since we modify `logRecords` before that and can do it any earlier
