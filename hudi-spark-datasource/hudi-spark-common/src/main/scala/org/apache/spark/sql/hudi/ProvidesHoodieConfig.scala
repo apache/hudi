@@ -1,13 +1,12 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi.catalog
+package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
@@ -76,18 +75,19 @@ trait ProvidesHoodieConfig extends Logging {
 
   /**
    * Build the default config for insert.
+   *
    * @return
    */
-    def buildHoodieInsertConfig(hoodieCatalogTable: HoodieCatalogTable,
-                                sparkSession: SparkSession,
-                                isOverwrite: Boolean,
-                                insertPartitions: Map[String, Option[String]] = Map.empty,
-                                extraOptions: Map[String, String]): Map[String, String] = {
+  def buildHoodieInsertConfig(hoodieCatalogTable: HoodieCatalogTable,
+                              sparkSession: SparkSession,
+                              isOverwrite: Boolean,
+                              insertPartitions: Map[String, Option[String]] = Map.empty,
+                              extraOptions: Map[String, String]): Map[String, String] = {
 
     if (insertPartitions.nonEmpty &&
       (insertPartitions.keys.toSet != hoodieCatalogTable.partitionFields.toSet)) {
       throw new IllegalArgumentException(s"Insert partition fields" +
-        s"[${insertPartitions.keys.mkString(" " )}]" +
+        s"[${insertPartitions.keys.mkString(" ")}]" +
         s" not equal to the defined partition in table[${hoodieCatalogTable.partitionFields.mkString(",")}]")
     }
     val path = hoodieCatalogTable.tableLocation
