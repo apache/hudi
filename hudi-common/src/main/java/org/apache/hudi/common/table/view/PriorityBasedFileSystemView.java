@@ -184,6 +184,12 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   @Override
+  public Stream<FileSlice> getLatestFileSlicesBeforeOrOnForFlink(String partitionPath, String maxCommitTime, boolean includeFileSlicesInPendingCompaction) {
+    return execute(partitionPath, maxCommitTime, includeFileSlicesInPendingCompaction,
+            preferredView::getLatestFileSlicesBeforeOrOn, secondaryView::getLatestFileSlicesBeforeOrOn);
+  }
+
+  @Override
   public Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime) {
     return execute(partitionPath, maxInstantTime, preferredView::getLatestMergedFileSlicesBeforeOrOn,
         secondaryView::getLatestMergedFileSlicesBeforeOrOn);
