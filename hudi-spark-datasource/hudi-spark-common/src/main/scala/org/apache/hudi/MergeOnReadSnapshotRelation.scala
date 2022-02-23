@@ -63,7 +63,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
                                     partitionSchema: StructType,
                                     tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
-                                    filters: Array[Filter]): HoodieUnsafeRDD = {
+                                    filters: Array[Filter]): HoodieMergeOnReadRDD = {
     val fullSchemaParquetReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
       partitionSchema = partitionSchema,
@@ -104,7 +104,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
 
     if (globPaths.isEmpty) {
       val fileSlices = fileIndex.listFileSlices(convertedPartitionFilters)
-      buildSplits(fileSlices.values.flatten.toSeq).toList
+      buildSplits(fileSlices.values.flatten.toSeq)
     } else {
       val partitions = listLatestBaseFiles(globPaths, convertedPartitionFilters, dataFilters)
       val partitionPaths = partitions.keys.toSeq
@@ -113,9 +113,24 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
         List.empty[HoodieMergeOnReadFileSplit]
       } else {
         val fileSlices = listFileSlices(partitionPaths)
-        buildSplits(fileSlices).toList
+        buildSplits(fileSlices)
       }
     }
+  }
+
+  protected def buildSplits(fileSlices: Seq[FileSlice]): List[HoodieMergeOnReadFileSplit] = {
+    fileSlices.map { fileSlice =>
+      val baseFile = toScalaOption(fileSlice.getBaseFile)
+      val logFiles = Option(fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList)
+
+      val partitionedBaseFile = baseFile.map { file =>
+        val filePath = getFilePath(file.getFileStatus.getPath)
+        PartitionedFile(InternalRow.empty, filePath, 0, file.getFileLen)
+      }
+
+      HoodieMergeOnReadFileSplit(partitionedBaseFile, logFiles, queryTimestamp.get,
+        metaClient.getBasePath, maxCompactionMemoryInBytes, mergeType)
+    }.toList
   }
 
   private def listFileSlices(partitionPaths: Seq[Path]): Seq[FileSlice] = {
@@ -129,21 +144,6 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
     partitionPaths.flatMap { partitionPath =>
       val relativePath = getRelativePartitionPath(new Path(basePath), partitionPath)
       fsView.getLatestMergedFileSlicesBeforeOrOn(relativePath, queryTimestamp).iterator().asScala.toSeq
-    }
-  }
-
-  private def buildSplits(fileSlices: Seq[FileSlice]): Seq[HoodieMergeOnReadFileSplit] = {
-    fileSlices.map { fileSlice =>
-      val baseFile = toScalaOption(fileSlice.getBaseFile)
-      val logFiles = Option(fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList)
-
-      val partitionedBaseFile = baseFile.map { file =>
-        val filePath = getFilePath(file.getFileStatus.getPath)
-        PartitionedFile(InternalRow.empty, filePath, 0, file.getFileLen)
-      }
-
-      HoodieMergeOnReadFileSplit(partitionedBaseFile, logFiles, queryTimestamp.get,
-        metaClient.getBasePath, maxCompactionMemoryInBytes, mergeType)
     }
   }
 }

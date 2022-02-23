@@ -60,12 +60,14 @@ case class HoodieTableState(recordKeyField: String,
  * Hoodie BaseRelation which extends [[PrunedFilteredScan]].
  */
 abstract class HoodieBaseRelation(val sqlContext: SQLContext,
-                                  metaClient: HoodieTableMetaClient,
-                                  optParams: Map[String, String],
+                                  val metaClient: HoodieTableMetaClient,
+                                  val optParams: Map[String, String],
                                   userSchema: Option[StructType])
   extends BaseRelation with PrunedFilteredScan with Logging {
 
   type FileSplit <: HoodieFileSplit
+
+  imbueConfigs(sqlContext)
 
   protected val sparkSession: SparkSession = sqlContext.sparkSession
 
@@ -251,6 +253,12 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       case Some(f) if !StringUtils.isNullOrEmpty(f) => Some(f)
       case _ => None
     }
+
+  private def imbueConfigs(sqlContext: SQLContext): Unit = {
+    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.filterPushdown", "true")
+    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.recordLevelFilter.enabled", "true")
+    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "true")
+  }
 }
 
 object HoodieBaseRelation {
