@@ -502,7 +502,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   public List<HoodieRecord> generateInsertsForPartition(String instantTime, Integer n, String partition) {
-    return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, false, () -> partition, () -> UUID.randomUUID().toString()).collect(Collectors.toList());
+    return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, false, () -> partition, () -> genPseudoRandomUUID(r).toString()).collect(Collectors.toList());
   }
 
   public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n, boolean isFlattened, String schemaStr, boolean containsAllPartitions) {
@@ -571,7 +571,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     int currSize = getNumExistingKeys(TRIP_EXAMPLE_SCHEMA);
     for (int i = 0; i < limit; i++) {
       String partitionPath = partitionPaths[r.nextInt(partitionPaths.length)];
-      HoodieKey key = new HoodieKey(UUID.randomUUID().toString(), partitionPath);
+      HoodieKey key = new HoodieKey(genPseudoRandomUUID(r).toString(), partitionPath);
       HoodieRecord record = new HoodieAvroRecord(key, generateAvroPayload(key, instantTime));
       inserts.add(record);
 
@@ -859,8 +859,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public List<GenericRecord> generateGenericRecords(int numRecords) {
     List<GenericRecord> list = new ArrayList<>();
     IntStream.range(0, numRecords).forEach(i -> {
-      list.add(generateGenericRecord(UUID.randomUUID().toString(), "0", UUID.randomUUID().toString(), UUID.randomUUID()
-          .toString(), r.nextLong()));
+      list.add(generateGenericRecord(genPseudoRandomUUID(r).toString(), "0",
+          genPseudoRandomUUID(r).toString(), genPseudoRandomUUID(r).toString(), r.nextLong()));
     });
     return list;
   }
