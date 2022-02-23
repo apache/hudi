@@ -36,6 +36,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection
 import org.apache.spark.sql.execution.datasources.PartitionedFile
@@ -57,7 +58,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            tableSchema: HoodieTableSchema,
                            requiredSchema: HoodieTableSchema,
                            @transient fileSplits: Seq[HoodieMergeOnReadFileSplit])
-  extends HoodieUnsafeRDD(sc) {
+  extends RDD[InternalRow](sc, Nil) with HoodieUnsafeRDD {
 
   private val confBroadcast = sc.broadcast(new SerializableWritable(config))
   private val recordKeyField = tableState.recordKeyField
