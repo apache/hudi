@@ -157,16 +157,16 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         if (v == null) {
           throw new HoodieMetadataException("Valid " + SCHEMA_FIELD_ID_COLUMN_STATS + " record expected for type: " + METADATA_TYPE_COLUMN_STATS);
         }
-        columnStatMetadata = new HoodieMetadataColumnStats(
-            (String) v.get(COLUMN_STATS_FIELD_RESOURCE_NAME),
-            (String) v.get(COLUMN_STATS_FIELD_MIN_VALUE),
-            (String) v.get(COLUMN_STATS_FIELD_MAX_VALUE),
-            (Long) v.get(COLUMN_STATS_FIELD_NULL_COUNT),
-            (Long) v.get(COLUMN_STATS_FIELD_VALUE_COUNT),
-            (Long) v.get(COLUMN_STATS_FIELD_TOTAL_SIZE),
-            (Long) v.get(COLUMN_STATS_FIELD_TOTAL_UNCOMPRESSED_SIZE),
-            (Boolean) v.get(COLUMN_STATS_FIELD_IS_DELETED)
-        );
+        columnStatMetadata = HoodieMetadataColumnStats.newBuilder()
+            .setFileName((String) v.get(COLUMN_STATS_FIELD_RESOURCE_NAME))
+            .setMinValue((String) v.get(COLUMN_STATS_FIELD_MIN_VALUE))
+            .setMaxValue((String) v.get(COLUMN_STATS_FIELD_MAX_VALUE))
+            .setValueCount((Long) v.get(COLUMN_STATS_FIELD_VALUE_COUNT))
+            .setNullCount((Long) v.get(COLUMN_STATS_FIELD_NULL_COUNT))
+            .setTotalSize((Long) v.get(COLUMN_STATS_FIELD_TOTAL_SIZE))
+            .setTotalUncompressedSize((Long) v.get(COLUMN_STATS_FIELD_TOTAL_UNCOMPRESSED_SIZE))
+            .setIsDeleted((Boolean) v.get(COLUMN_STATS_FIELD_IS_DELETED))
+            .build();
       }
     }
   }
