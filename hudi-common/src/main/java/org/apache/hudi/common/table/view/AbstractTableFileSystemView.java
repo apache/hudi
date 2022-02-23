@@ -650,21 +650,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   @Override
-  public final Stream<FileSlice> getLatestFileSlicesBeforeOrOnForFlink(String partitionStr, String maxCommitTime,
-                                                               boolean includeFileSlicesInPendingCompaction) {
-    try {
-      readLock.lock();
-      String partitionPath = formatPartitionKey(partitionStr);
-      ensurePartitionLoadedCorrectly(partitionPath);
-      Stream<FileSlice> fileSliceStream = fetchLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime)
-              .filter(slice -> !isFileGroupReplacedBeforeOrOn(slice.getFileGroupId(), maxCommitTime));
-      return fileSliceStream;
-    } finally {
-      readLock.unlock();
-    }
-  }
-
-  @Override
   public final Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionStr, String maxInstantTime) {
     try {
       readLock.lock();

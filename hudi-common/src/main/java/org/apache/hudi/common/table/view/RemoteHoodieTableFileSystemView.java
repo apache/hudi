@@ -326,20 +326,6 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   @Override
-  public Stream<FileSlice> getLatestFileSlicesBeforeOrOnForFlink(String partitionPath, String maxCommitTime, boolean includeFileSlicesInPendingCompaction) {
-    Map<String, String> paramsMap = getParamsWithAdditionalParams(partitionPath,
-            new String[] {MAX_INSTANT_PARAM, INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM},
-            new String[] {maxCommitTime, String.valueOf(includeFileSlicesInPendingCompaction)});
-    try {
-      List<FileSliceDTO> dataFiles = executeRequest(LATEST_SLICES_BEFORE_ON_INSTANT_URL, paramsMap,
-              new TypeReference<List<FileSliceDTO>>() {}, RequestMethod.GET);
-      return dataFiles.stream().map(FileSliceDTO::toFileSlice);
-    } catch (IOException e) {
-      throw new HoodieRemoteException(e);
-    }
-  }
-
-  @Override
   public Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime) {
     Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, MAX_INSTANT_PARAM, maxInstantTime);
     try {

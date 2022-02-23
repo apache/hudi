@@ -117,16 +117,6 @@ public interface TableFileSystemView {
         boolean includeFileSlicesInPendingCompaction);
 
     /**
-     * this is a function for flink to get small files.
-     *
-     * @param partitionPath Partition path
-     * @param maxCommitTime Max Instant Time
-     * @param includeFileSlicesInPendingCompaction include file-slices that are in pending compaction
-     */
-    Stream<FileSlice> getLatestFileSlicesBeforeOrOnForFlink(String partitionPath, String maxCommitTime,
-                                                    boolean includeFileSlicesInPendingCompaction);
-
-    /**
      * Stream all "merged" file-slices before on an instant time If a file-group has a pending compaction request, the
      * file-slice before and after compaction request instant is merged and returned.
      * 
