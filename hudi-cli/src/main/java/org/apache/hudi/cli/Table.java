@@ -118,12 +118,14 @@ public class Table implements Iterable<List<String>> {
    * @return
    */
   private List<List<Comparable>> orderRows() {
-    return orderingFieldNameOptional.map(orderingColumnName -> rawRows.stream().sorted((row1, row2) -> {
-      Comparable fieldForRow1 = row1.get(rowHeader.indexOf(orderingColumnName));
-      Comparable fieldForRow2 = row2.get(rowHeader.indexOf(orderingColumnName));
-      int cmpRawResult = fieldForRow1.compareTo(fieldForRow2);
-      return isDescendingOptional.map(isDescending -> isDescending ? -1 * cmpRawResult : cmpRawResult).orElse(cmpRawResult);
-    }).collect(Collectors.toList())).orElse(rawRows);
+    return orderingFieldNameOptional.map(orderingColumnName -> {
+      return rawRows.stream().sorted((row1, row2) -> {
+        Comparable fieldForRow1 = row1.get(rowHeader.indexOf(orderingColumnName));
+        Comparable fieldForRow2 = row2.get(rowHeader.indexOf(orderingColumnName));
+        int cmpRawResult = fieldForRow1.compareTo(fieldForRow2);
+        return isDescendingOptional.map(isDescending -> isDescending ? -1 * cmpRawResult : cmpRawResult).orElse(cmpRawResult);
+      }).collect(Collectors.toList());
+    }).orElse(rawRows);
   }
 
   /**

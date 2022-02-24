@@ -28,6 +28,8 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 
 abstract class BaseProcedure extends Procedure {
+  val INVALID_ARG_INDEX: Int = -1
+
   val spark: SparkSession = SparkSession.active
   val jsc = new JavaSparkContext(spark.sparkContext)
 
@@ -63,17 +65,17 @@ abstract class BaseProcedure extends Procedure {
   }
 
   protected def getArgsIndex(key: String, args: ProcedureArgs): Integer = {
-    args.map.getOrDefault(key, -1)
+    args.map.getOrDefault(key, INVALID_ARG_INDEX)
   }
 
   protected def getArgValueOrDefault(args: ProcedureArgs, parameter: ProcedureParameter): Any = {
-    var argsIndex: Int = -1
+    var argsIndex: Int = INVALID_ARG_INDEX
     if (args.isNamedArgs) {
       argsIndex = getArgsIndex(parameter.name, args)
     } else {
       argsIndex = getArgsIndex(parameter.index.toString, args)
     }
-    if (argsIndex.equals(-1)) parameter.default else getInternalRowValue(args.internalRow, argsIndex, parameter.dataType)
+    if (argsIndex.equals(INVALID_ARG_INDEX)) parameter.default else getInternalRowValue(args.internalRow, argsIndex, parameter.dataType)
   }
 
   protected def getInternalRowValue(row: InternalRow, index: Int, dataType: DataType): Any = {

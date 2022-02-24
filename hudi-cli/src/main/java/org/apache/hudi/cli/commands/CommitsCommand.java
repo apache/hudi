@@ -37,6 +37,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+
 import org.apache.spark.launcher.SparkLauncher;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
@@ -87,8 +88,9 @@ public class CommitsCommand implements CommandMarker {
     }
 
     final Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
-    fieldNameToConverterMap.put(HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN,
-        entry -> NumericUtils.humanReadableByteCount((Double.parseDouble(entry.toString()))));
+    fieldNameToConverterMap.put(HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN, entry -> {
+      return NumericUtils.humanReadableByteCount((Double.valueOf(entry.toString())));
+    });
 
     final TableHeader header = new TableHeader()
             .addTableHeaderField(HoodieTableHeaderFields.HEADER_COMMIT_TIME)
