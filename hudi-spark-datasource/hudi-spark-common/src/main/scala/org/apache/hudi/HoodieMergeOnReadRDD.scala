@@ -39,6 +39,7 @@ import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.hudi.HoodieMergeOnReadRDD.{getPartitionPath, projectAvro, projectRow, resolveAvroSchemaNullability}
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, HoodieMergeOnReadFileSplit, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, rdd}
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
@@ -296,7 +297,6 @@ private object HoodieMergeOnReadRDD {
               hadoopConf: Configuration): HoodieMergedLogRecordScanner = {
     val tablePath = tableState.tablePath
     val fs = FSUtils.getFs(tablePath, hadoopConf)
-    val logFiles = split.logFiles.get
 
     if (HoodieTableMetadata.isMetadataTable(tablePath)) {
       val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build()
@@ -331,7 +331,8 @@ private object HoodieMergeOnReadRDD {
             HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
 
       if (logFiles.nonEmpty) {
-        logRecordScannerBuilder.withPartition(getRelativePartitionPath(new Path(split.tablePath), logFiles.head.getPath.getParent))
+        logRecordScannerBuilder.withPartition(
+          getRelativePartitionPath(new Path(tableState.tablePath), logFiles.head.getPath.getParent))
       }
 
       logRecordScannerBuilder.build()
