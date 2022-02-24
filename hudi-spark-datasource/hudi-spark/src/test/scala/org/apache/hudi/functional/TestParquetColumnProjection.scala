@@ -18,12 +18,13 @@
 package org.apache.hudi.functional
 
 import org.apache.avro.Schema
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSource, HoodieBaseRelation, HoodieSparkUtils, HoodieUnsafeRDD}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSource, HoodieBaseRelation, HoodieSparkUtils}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.testutils.{HadoopMapRedUtils, HoodieTestDataGenerator}
 import org.apache.hudi.config.{HoodieStorageConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
+import org.apache.hudi.rdd.HoodieUnsafeRDD
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.parquet.hadoop.util.counters.BenchmarkCounter
 import org.apache.spark.HoodieUnsafeRDDUtils
