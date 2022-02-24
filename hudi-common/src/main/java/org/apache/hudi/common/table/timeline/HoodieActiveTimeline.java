@@ -170,8 +170,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * Call this method for each of operation
    */
   @Override
-  protected void loadIncrementally() {
+  protected void loadIncrementally() {}
+
+  protected void loadIncrementally0() {
     try {
+      // No latestInstant or latestInstant is not valid any more, load fully.
       if (latestInstant == null
           || !metaClient.getFs().exists(new Path(metaClient.getMetaPath(), latestInstant.getFileName()))) {
         loadFully();
@@ -183,6 +186,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       if (!increment.isEmpty()) {
         synchronized (this) {
           if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
+            // For VERSION_0, rename meta file directly instead of creating a new meta file.
             loadFully();
           } else {
             List<HoodieInstant> hoodieInstants = getInstants().collect(Collectors.toList());

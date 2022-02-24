@@ -91,6 +91,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   private State state = State.COMPLETED;
   private String action;
   private String timestamp;
+  private String fileName;
 
   /**
    * Load the instant from the file name
@@ -153,6 +154,13 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
    * Get the filename for this instant.
    */
   public String getFileName() {
+    if (fileName == null) {
+      fileName = getFileName0();
+    }
+    return fileName;
+  }
+
+  private String getFileName0() {
     if (HoodieTimeline.COMMIT_ACTION.equals(action)) {
       return isInflight() ? HoodieTimeline.makeInflightCommitFileName(timestamp)
           : isRequested() ? HoodieTimeline.makeRequestedCommitFileName(timestamp)
