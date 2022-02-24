@@ -170,7 +170,9 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * Call this method for each of operation
    */
   @Override
-  protected void loadIncrementally() {}
+  protected void loadIncrementally() {
+    loadIncrementally0();
+  }
 
   protected void loadIncrementally0() {
     try {

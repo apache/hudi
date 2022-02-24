@@ -628,10 +628,6 @@ public class HoodieTableMetaClient implements Serializable {
     this.metaPath = metaPath;
   }
 
-  public void setActiveTimeline(HoodieActiveTimeline activeTimeline) {
-    this.activeTimeline = activeTimeline;
-  }
-
   public static Builder builder() {
     return new Builder();
   }
