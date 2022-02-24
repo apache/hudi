@@ -102,7 +102,7 @@ public class OptionsResolver {
     return FilePathUtils.extractPartitionKeys(conf).length > 0;
   }
 
-  public static boolean isBucketIndexTable(Configuration conf) {
+  public static boolean isBucketIndexType(Configuration conf) {
     return conf.getString(FlinkOptions.INDEX_TYPE).equals(HoodieIndex.IndexType.BUCKET.name());
   }
 

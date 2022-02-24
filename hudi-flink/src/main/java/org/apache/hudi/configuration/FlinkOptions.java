@@ -109,7 +109,7 @@ public class FlinkOptions extends HoodieConfig {
   //  Index Options
   // ------------------------------------------------------------------------
   public static final ConfigOption<String> INDEX_TYPE = ConfigOptions
-      .key("write.index.type")
+      .key("index.type")
       .stringType()
       .defaultValue(HoodieIndex.IndexType.FLINK_STATE.name())
       .withDescription("Index type of Flink write job, default is using state backed index.");
@@ -322,7 +322,7 @@ public class FlinkOptions extends HoodieConfig {
       .key(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key())
       .stringType()
       .defaultValue("uuid")
-      .withDescription("Record key field. Value to be used as the `recordKey` component of `HoodieKey`.\n"
+      .withDescription("Index key field. Value to be used as hashing to find the bucket ID. Should be a subset of or equal to the recordKey fields.\n"
         + "Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using "
         + "the dot notation eg: `a.b.c`");
 

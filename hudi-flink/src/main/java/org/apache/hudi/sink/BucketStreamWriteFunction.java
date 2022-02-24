@@ -45,9 +45,9 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
 
   private static final Logger LOG = LoggerFactory.getLogger(BucketStreamWriteFunction.class);
 
-  private int taskTotalParallelism;
+  private int maxParallelism;
 
-  private int currentParallelism;
+  private int parallelism;
 
   private int hiveBucketNum;
 
@@ -73,8 +73,8 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     this.hiveBucketNum = config.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
     this.indexKeyFields = config.getString(FlinkOptions.INDEX_KEY_FIELD);
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
-    this.currentParallelism = getRuntimeContext().getNumberOfParallelSubtasks();
-    this.taskTotalParallelism = getRuntimeContext().getMaxNumberOfParallelSubtasks();
+    this.parallelism = getRuntimeContext().getNumberOfParallelSubtasks();
+    this.maxParallelism = getRuntimeContext().getMaxNumberOfParallelSubtasks();
     bootstrapIndex();
   }
 
@@ -119,11 +119,11 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     // bucketNum % totalParallelism == this taskID belongs to this task
     HashSet<Integer> bucketToLoad = new HashSet<>();
     for (int i = 0; i < hiveBucketNum; i++) {
-      int partitionOfBucket = BucketIdentifier.mod(i, currentParallelism);
+      int partitionOfBucket = BucketIdentifier.mod(i, parallelism);
       if (partitionOfBucket == taskID) {
         LOG.info(String.format("Bootstrapping index. Adding bucket %s , "
             + "Current parallelism: %s , Max parallelism: %s , Current task id: %s",
-            i, currentParallelism, taskTotalParallelism, taskID));
+            i, parallelism, maxParallelism, taskID));
         bucketToLoad.add(i);
       }
     }
