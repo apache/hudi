@@ -68,13 +68,13 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
   }
 
   // Return parquet file with a list of log files in the same file group.
-  public static List<Pair<Option<HoodieBaseFile>, List<String>>> groupLogsByBaseFile(Configuration conf, List<Path> partitionPaths) {
+  public static List<Pair<Option<HoodieBaseFile>, List<HoodieLogFile>>> groupLogsByBaseFile(Configuration conf, List<Path> partitionPaths) {
     Set<Path> partitionSet = new HashSet<>(partitionPaths);
     // TODO(vc): Should we handle also non-hoodie splits here?
     Map<Path, HoodieTableMetaClient> partitionsToMetaClient = getTableMetaClientByPartitionPath(conf, partitionSet);
 
     // Get all the base file and it's log files pairs in required partition paths.
-    List<Pair<Option<HoodieBaseFile>, List<String>>> baseAndLogsList = new ArrayList<>();
+    List<Pair<Option<HoodieBaseFile>, List<HoodieLogFile>>> baseAndLogsList = new ArrayList<>();
     partitionSet.forEach(partitionPath -> {
       // for each partition path obtain the data & log file groupings, then map back to inputsplits
       HoodieTableMetaClient metaClient = partitionsToMetaClient.get(partitionPath);
@@ -91,8 +91,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
             .orElse(Stream.empty());
 
         latestFileSlices.forEach(fileSlice -> {
-          List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
-                  .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList());
+          List<HoodieLogFile> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
           baseAndLogsList.add(Pair.of(fileSlice.getBaseFile(), logFilePaths));
         });
       } catch (Exception e) {

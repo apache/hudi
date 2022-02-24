@@ -42,17 +42,21 @@ trait ProvidesHoodieConfig extends Logging {
     val tableConfig = hoodieCatalogTable.tableConfig
     val tableId = hoodieCatalogTable.table.identifier
 
+    // NOTE: Here we fallback to "" to make sure that null value is not overridden with
+    // default value ("ts")
+    // TODO(HUDI-3456) clean up
     val preCombineField = Option(tableConfig.getPreCombineField).getOrElse("")
+
     require(hoodieCatalogTable.primaryKeys.nonEmpty,
       s"There are no primary key in table ${hoodieCatalogTable.table.identifier}, cannot execute update operator")
     val enableHive = isEnableHive(sparkSession)
 
     withSparkConf(sparkSession, catalogProperties) {
-      Map(
+      Map.apply(
         "path" -> hoodieCatalogTable.tableLocation,
         RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
-        PRECOMBINE_FIELD.key -> preCombineField,
         TBL_NAME.key -> hoodieCatalogTable.tableName,
+        PRECOMBINE_FIELD.key -> preCombineField,
         HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
         URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
         KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
@@ -70,6 +74,7 @@ trait ProvidesHoodieConfig extends Logging {
         HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "200",
         SqlKeyGenerator.PARTITION_SCHEMA -> hoodieCatalogTable.partitionSchema.toDDL
       )
+        .filter { case(_, v) => v != null }
     }
   }
 
@@ -98,8 +103,12 @@ trait ProvidesHoodieConfig extends Logging {
     val options = hoodieCatalogTable.catalogProperties ++ tableConfig.getProps.asScala.toMap ++ extraOptions
     val parameters = withSparkConf(sparkSession, options)()
 
-    val preCombineColumn = hoodieCatalogTable.preCombineKey.getOrElse("")
-    val partitionFields = hoodieCatalogTable.partitionFields.mkString(",")
+    val partitionFieldsStr = hoodieCatalogTable.partitionFields.mkString(",")
+
+    // NOTE: Here we fallback to "" to make sure that null value is not overridden with
+    // default value ("ts")
+    // TODO(HUDI-3456) clean up
+    val preCombineField = hoodieCatalogTable.preCombineKey.getOrElse("")
 
     val hiveStylePartitioningEnable = Option(tableConfig.getHiveStylePartitioningEnable).getOrElse("true")
     val urlEncodePartitioning = Option(tableConfig.getUrlEncodePartitioning).getOrElse("false")
@@ -115,7 +124,7 @@ trait ProvidesHoodieConfig extends Logging {
       DataSourceWriteOptions.SQL_INSERT_MODE.defaultValue()))
     val isNonStrictMode = insertMode == InsertMode.NON_STRICT
     val isPartitionedTable = hoodieCatalogTable.partitionFields.nonEmpty
-    val hasPrecombineColumn = preCombineColumn.nonEmpty
+    val hasPrecombineColumn = hoodieCatalogTable.preCombineKey.nonEmpty
     val operation =
       (enableBulkInsert, isOverwrite, dropDuplicate, isNonStrictMode, isPartitionedTable) match {
         case (true, _, _, false, _) =>
@@ -147,37 +156,41 @@ trait ProvidesHoodieConfig extends Logging {
     } else {
       classOf[OverwriteWithLatestAvroPayload].getCanonicalName
     }
-    logInfo(s"insert statement use write operation type: $operation, payloadClass: $payloadClassName")
+
+    logInfo(s"Insert statement use write operation type: $operation, payloadClass: $payloadClassName")
 
     val enableHive = isEnableHive(sparkSession)
+
     withSparkConf(sparkSession, options) {
       Map(
         "path" -> path,
         TABLE_TYPE.key -> tableType,
         TBL_NAME.key -> hoodieCatalogTable.tableName,
-        PRECOMBINE_FIELD.key -> preCombineColumn,
         OPERATION.key -> operation,
         HIVE_STYLE_PARTITIONING.key -> hiveStylePartitioningEnable,
         URL_ENCODE_PARTITIONING.key -> urlEncodePartitioning,
         KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
         SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME -> keyGeneratorClassName,
         RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
-        PARTITIONPATH_FIELD.key -> partitionFields,
+        PRECOMBINE_FIELD.key -> preCombineField,
+        PARTITIONPATH_FIELD.key -> partitionFieldsStr,
         PAYLOAD_CLASS_NAME.key -> payloadClassName,
         ENABLE_ROW_WRITER.key -> enableBulkInsert.toString,
         HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(hasPrecombineColumn),
+        HIVE_PARTITION_FIELDS.key -> partitionFieldsStr,
         META_SYNC_ENABLED.key -> enableHive.toString,
         HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
         HIVE_USE_JDBC.key -> "false",
         HIVE_DATABASE.key -> hoodieCatalogTable.table.identifier.database.getOrElse("default"),
         HIVE_TABLE.key -> hoodieCatalogTable.table.identifier.table,
         HIVE_SUPPORT_TIMESTAMP_TYPE.key -> "true",
-        HIVE_PARTITION_FIELDS.key -> partitionFields,
         HIVE_PARTITION_EXTRACTOR_CLASS.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
         HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "200",
         HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "200",
         SqlKeyGenerator.PARTITION_SCHEMA -> hoodieCatalogTable.partitionSchema.toDDL
       )
+        .filter { case (_, v) => v != null }
     }
   }
+
 }

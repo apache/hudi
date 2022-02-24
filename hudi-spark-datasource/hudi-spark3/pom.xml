@@ -158,6 +158,7 @@
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-sql_2.12</artifactId>
       <version>${spark3.version}</version>
+      <scope>provided</scope>
       <optional>true</optional>
     </dependency>
 

@@ -443,13 +443,18 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val partitionColumns = tableConfig.getPartitionFieldProp.split(",").map(_.toLowerCase)
     val partitionSchema = StructType(tableSchema.filter(f => partitionColumns.contains(f.name)))
 
+    // NOTE: Here we fallback to "" to make sure that null value is not overridden with
+    // default value ("ts")
+    // TODO(HUDI-3456) clean up
+    val preCombineField = hoodieCatalogTable.preCombineKey.getOrElse("")
+
     // Enable the hive sync by default if spark have enable the hive metastore.
     val enableHive = isEnableHive(sparkSession)
     withSparkConf(sparkSession, hoodieCatalogTable.catalogProperties) {
       Map(
         "path" -> path,
         RECORDKEY_FIELD.key -> tableConfig.getRecordKeyFieldProp,
-        PRECOMBINE_FIELD.key -> hoodieCatalogTable.preCombineKey.getOrElse(""),
+        PRECOMBINE_FIELD.key -> preCombineField,
         TBL_NAME.key -> hoodieCatalogTable.tableName,
         PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp,
         PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
@@ -470,6 +475,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> "200",
         SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL
       )
+        .filter { case (_, v) => v != null }
     }
   }
 }

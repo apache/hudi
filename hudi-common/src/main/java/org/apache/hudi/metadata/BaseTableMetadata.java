@@ -19,8 +19,10 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
+import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -38,9 +40,6 @@ import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieMetadataException;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -60,8 +59,8 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
   private static final Logger LOG = LogManager.getLogger(BaseTableMetadata.class);
 
-  static final long MAX_MEMORY_SIZE_IN_BYTES = 1024 * 1024 * 1024;
-  static final int BUFFER_SIZE = 10 * 1024 * 1024;
+  public static final long MAX_MEMORY_SIZE_IN_BYTES = 1024 * 1024 * 1024;
+  public static final int BUFFER_SIZE = 10 * 1024 * 1024;
 
   protected final transient HoodieEngineContext engineContext;
   protected final SerializableConfiguration hadoopConf;

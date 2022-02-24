@@ -20,22 +20,18 @@ package org.apache.hudi
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-
+import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.testutils.DataSourceTestUtils
-
 import org.apache.spark.sql.types.{StructType, TimestampType}
 import org.apache.spark.sql.{Row, SparkSession}
-
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 
 import java.io.File
 import java.nio.file.Paths
-
 import scala.collection.JavaConverters
 
 class TestHoodieSparkUtils {
@@ -232,8 +228,9 @@ class TestHoodieSparkUtils {
       fail("createRdd should fail, because records don't have a column which is not nullable in the passed in schema")
     } catch {
       case e: Exception =>
-        e.getCause.asInstanceOf[NullPointerException]
-        assertTrue(e.getMessage.contains("null of string in field new_nested_col of"))
+        val cause = e.getCause
+        assertTrue(cause.isInstanceOf[SchemaCompatibilityException])
+        assertTrue(e.getMessage.contains("Unable to validate the rewritten record {\"innerKey\": \"innerKey1_2\", \"innerValue\": 2} against schema"))
     }
     spark.stop()
   }

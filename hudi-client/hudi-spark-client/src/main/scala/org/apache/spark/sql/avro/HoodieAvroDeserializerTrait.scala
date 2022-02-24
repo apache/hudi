@@ -17,13 +17,19 @@
 
 package org.apache.spark.sql.avro
 
-import org.apache.avro.Schema
-import org.apache.spark.sql.types.DataType
+/**
+ * Deserializes Avro payload into Catalyst object
+ *
+ * NOTE: This is low-level component operating on Spark internal data-types (comprising [[InternalRow]]).
+ *       If you're looking to convert Avro into "deserialized" [[Row]] (comprised of Java native types),
+ *       please check [[AvroConversionUtils]]
+ */
+trait HoodieAvroDeserializerTrait {
+  final def deserialize(data: Any): Option[Any] =
+    doDeserialize(data) match {
+      case opt: Option[_] => opt    // As of Spark 3.1, this will return data wrapped with Option, so we fetch the data
+      case row => Some(row)         // For other Spark versions, return the data as is
+    }
 
-class HoodieAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean)
-  extends HoodieAvroSerializerTrait {
-
-  val avroSerializer = new AvroSerializer(rootCatalystType, rootAvroType, nullable)
-
-  override def serialize(catalystData: Any): Any = avroSerializer.serialize(catalystData)
+  protected def doDeserialize(data: Any): Any
 }
