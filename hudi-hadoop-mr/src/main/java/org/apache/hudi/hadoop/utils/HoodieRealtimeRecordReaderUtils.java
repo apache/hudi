@@ -25,6 +25,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
@@ -186,7 +187,8 @@ public class HoodieRealtimeRecordReaderUtils {
         Writable[] recordValues = new Writable[schema.getFields().size()];
         int recordValueIndex = 0;
         for (Schema.Field field : schema.getFields()) {
-          recordValues[recordValueIndex++] = avroToArrayWritable(record.get(field.name()), field.schema());
+          Object fieldVal = record.hasField(field.name()) ? record.get(field.name()) : null;
+          recordValues[recordValueIndex++] = avroToArrayWritable(fieldVal, field.schema());
         }
         return new ArrayWritable(Writable.class, recordValues);
       case ENUM:
