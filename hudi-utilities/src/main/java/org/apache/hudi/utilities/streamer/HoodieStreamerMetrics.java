@@ -109,6 +109,20 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
   }
 
   @Override
+  public void emitStreamerJobSuccessMetrics() {
+    if (writeConfig.isMetricsOn()) {
+      metrics.registerGauge(getMetricsName("deltastreamer", "success"), 1);
+    }
+  }
+
+  @Override
+  public void emitStreamerJobFailedMetrics() {
+    if (writeConfig.isMetricsOn()) {
+      metrics.registerGauge(getMetricsName("deltastreamer", "failure"), 1);
+    }
+  }
+
+  @Override
   public void updateStreamerMetaSyncMetrics(String syncClassShortName, long syncNs) {
     if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", syncClassShortName), getDurationInMs(syncNs));
@@ -198,9 +212,18 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
     }
   }
 
+  @Override
   public void updateStreamerSourceBytesToBeIngestedInSyncRound(long sourceBytesToBeIngested) {
     if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", "sourceBytesToBeIngestedInSyncRound"), sourceBytesToBeIngested);
+    }
+  }
+
+  @Override
+  public void updateHoodieIncrSourceMetrics(long commitsInProgress, long unprocessedCommits) {
+    if (writeConfig.isMetricsOn()) {
+      metrics.registerGauge(getMetricsName("deltastreamer", "commitsInProgress"), commitsInProgress);
+      metrics.registerGauge(getMetricsName("deltastreamer", "unprocessedCommits"), unprocessedCommits);
     }
   }
 
