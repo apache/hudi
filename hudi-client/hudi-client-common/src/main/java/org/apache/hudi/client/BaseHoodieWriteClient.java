@@ -90,6 +90,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -984,7 +985,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   /**
    * Rollback all failed writes.
    */
-  public Boolean rollbackFailedWrites() {
+  protected Boolean rollbackFailedWrites() {
     return rollbackFailedWrites(false);
   }
 
@@ -992,8 +993,8 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * Rollback all failed writes.
    * @param skipLocking if this is triggered by another parent transaction, locking can be skipped.
    */
-  public Boolean rollbackFailedWrites(boolean skipLocking) {
-    HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty());
+  protected Boolean rollbackFailedWrites(boolean skipLocking) {
+    HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
     List<String> instantsToRollback = getInstantsToRollback(table.getMetaClient(), config.getFailedWritesCleanPolicy(), Option.empty());
     Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(table.getMetaClient());
     instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
@@ -1310,6 +1311,15 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     }
 
     return table;
+  }
+
+  protected <R> R withLock(Supplier<R> s) {
+    this.txnManager.beginTransaction();
+    try {
+      return s.get();
+    } finally {
+      this.txnManager.endTransaction();
+    }
   }
 
   /**
