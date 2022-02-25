@@ -335,6 +335,12 @@ class TestDataSourceForBootstrap {
 
   @Test def testMetadataBootstrapMORPartitioned(): Unit = {
     val timestamp = Instant.now.toEpochMilli
+    spark = SparkSession.builder
+      .appName("Hoodie Datasource test")
+      .master("local[2]")
+      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      .config("spark.sql.hive.convertMetastoreParquet", "false")
+      .getOrCreate
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
     val sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths.asJava, jsc,
@@ -353,7 +359,8 @@ class TestDataSourceForBootstrap {
 
     // Perform bootstrap
     val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
-      DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL, Some("datestr"))
+      DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL, Some("datestr"),
+      Map(DataSourceWriteOptions.HIVE_SYNC_ENABLED.key -> "true"))
 
     // Read bootstrapped table and verify count
     val hoodieROViewDF1 = spark.read.format("hudi")
@@ -376,6 +383,7 @@ class TestDataSourceForBootstrap {
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "datestr")
+      .option(DataSourceWriteOptions.HIVE_SYNC_ENABLED.key, "true")
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -399,6 +407,7 @@ class TestDataSourceForBootstrap {
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "datestr")
+      .option(DataSourceWriteOptions.HIVE_SYNC_ENABLED.key, "true")
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -413,6 +422,9 @@ class TestDataSourceForBootstrap {
                             .load(basePath + "/*")
     assertEquals(numRecords, hoodieROViewDF3.count())
     assertEquals(0, hoodieROViewDF3.filter(s"timestamp == $updateTimestamp").count())
+
+    val hoodieRTViewDF0 = spark.sql("select _row_key from hoodie_test")
+    assertEquals(numRecordsUpdate, hoodieRTViewDF0.count())
   }
 
   @Test def testFullBootstrapCOWPartitioned(): Unit = {
