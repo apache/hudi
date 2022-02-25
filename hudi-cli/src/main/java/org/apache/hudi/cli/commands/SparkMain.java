@@ -76,7 +76,7 @@ public class SparkMain {
   enum SparkCommand {
     BOOTSTRAP, ROLLBACK, DEDUPLICATE, ROLLBACK_TO_SAVEPOINT, SAVEPOINT, IMPORT, UPSERT, COMPACT_SCHEDULE, COMPACT_RUN, COMPACT_SCHEDULE_AND_EXECUTE,
     COMPACT_UNSCHEDULE_PLAN, COMPACT_UNSCHEDULE_FILE, COMPACT_VALIDATE, COMPACT_REPAIR, CLUSTERING_SCHEDULE,
-    CLUSTERING_RUN, CLEAN, DELETE_SAVEPOINT, UPGRADE, DOWNGRADE
+    CLUSTERING_RUN, CLUSTERING_SCHEDULE_AND_EXECUTE, CLEAN, DELETE_SAVEPOINT, UPGRADE, DOWNGRADE
   }
 
   public static void main(String[] args) throws Exception {
@@ -190,7 +190,20 @@ public class SparkMain {
             configs.addAll(Arrays.asList(args).subList(9, args.length));
           }
           returnCode = cluster(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]), args[2],
-              Integer.parseInt(args[7]), false, propsFilePath, configs);
+              Integer.parseInt(args[7]), HoodieClusteringJob.EXECUTE, propsFilePath, configs);
+          break;
+        case CLUSTERING_SCHEDULE_AND_EXECUTE:
+          assert (args.length >= 8);
+          propsFilePath = null;
+          if (!StringUtils.isNullOrEmpty(args[7])) {
+            propsFilePath = args[7];
+          }
+          configs = new ArrayList<>();
+          if (args.length > 8) {
+            configs.addAll(Arrays.asList(args).subList(8, args.length));
+          }
+          returnCode = cluster(jsc, args[3], args[4], null, Integer.parseInt(args[5]), args[2],
+              Integer.parseInt(args[6]), HoodieClusteringJob.SCHEDULE_AND_EXECUTE, propsFilePath, configs);
           break;
         case CLUSTERING_SCHEDULE:
           assert (args.length >= 7);
@@ -203,7 +216,7 @@ public class SparkMain {
             configs.addAll(Arrays.asList(args).subList(7, args.length));
           }
           returnCode = cluster(jsc, args[3], args[4], args[5], 1, args[2],
-              0, true, propsFilePath, configs);
+              0, HoodieClusteringJob.SCHEDULE, propsFilePath, configs);
           break;
         case CLEAN:
           assert (args.length >= 5);
@@ -351,13 +364,13 @@ public class SparkMain {
   }
 
   private static int cluster(JavaSparkContext jsc, String basePath, String tableName, String clusteringInstant,
-      int parallelism, String sparkMemory, int retry, boolean schedule, String propsFilePath, List<String> configs) {
+      int parallelism, String sparkMemory, int retry, String runningMode, String propsFilePath, List<String> configs) {
     HoodieClusteringJob.Config cfg = new HoodieClusteringJob.Config();
     cfg.basePath = basePath;
     cfg.tableName = tableName;
     cfg.clusteringInstantTime = clusteringInstant;
     cfg.parallelism = parallelism;
-    cfg.runSchedule = schedule;
+    cfg.runningMode = runningMode;
     cfg.propsFilePath = propsFilePath;
     cfg.configs = configs;
     jsc.getConf().set("spark.executor.memory", sparkMemory);
