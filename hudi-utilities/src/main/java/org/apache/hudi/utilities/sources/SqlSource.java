@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.config.SqlSourceConfig;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import lombok.extern.slf4j.Slf4j;
@@ -61,17 +62,20 @@ public class SqlSource extends RowSource {
   private static final long serialVersionUID = 1L;
   private final String sourceSql;
   private final SparkSession spark;
+  private final HoodieIngestionMetrics metrics;
 
   public SqlSource(
       TypedProperties props,
       JavaSparkContext sparkContext,
       SparkSession sparkSession,
-      SchemaProvider schemaProvider) {
+      SchemaProvider schemaProvider,
+      HoodieIngestionMetrics metrics) {
     super(props, sparkContext, sparkSession, schemaProvider);
     checkRequiredConfigProperties(
         props, Collections.singletonList(SqlSourceConfig.SOURCE_SQL));
-    sourceSql = getStringWithAltKeys(props, SqlSourceConfig.SOURCE_SQL);
-    spark = sparkSession;
+    this.sourceSql = getStringWithAltKeys(props, SqlSourceConfig.SOURCE_SQL);
+    this.spark = sparkSession;
+    this.metrics = metrics;
   }
 
   @Override
