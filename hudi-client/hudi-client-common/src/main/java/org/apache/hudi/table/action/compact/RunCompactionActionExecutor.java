@@ -30,8 +30,11 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.TableInternalSchemaUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
+import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
@@ -70,6 +73,14 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
       HoodieCompactionPlan compactionPlan =
           CompactionUtils.getCompactionPlan(table.getMetaClient(), instantTime);
 
+      // try to load internalSchema to support schema Evolution
+      Pair<Option<String>, Option<String>> schemaPair = TableInternalSchemaUtils
+          .getInternalSchemaAndAvroSchemaForClusteringAndCompaction(table.getMetaClient(), instantTime);
+      if (schemaPair.getLeft().isPresent() && schemaPair.getRight().isPresent()) {
+        config.setInternalSchemaString(schemaPair.getLeft().get());
+        config.setSchema(schemaPair.getRight().get());
+      }
+
       HoodieData<WriteStatus> statuses = compactor.compact(
           context, compactionPlan, table, config, instantTime, compactionHandler);
 
@@ -81,7 +92,9 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
         metadata.addWriteStat(stat.getPartitionPath(), stat);
       }
       metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, config.getSchema());
-
+      if (schemaPair.getLeft().isPresent()) {
+        metadata.addMetadata(SerDeHelper.LATESTSCHEMA, schemaPair.getLeft().get());
+      }
       compactionMetadata.setWriteStatuses(statuses);
       compactionMetadata.setCommitted(false);
       compactionMetadata.setCommitMetadata(Option.of(metadata));

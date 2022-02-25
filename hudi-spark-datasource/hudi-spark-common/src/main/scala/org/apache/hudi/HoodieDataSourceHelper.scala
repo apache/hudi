@@ -20,6 +20,9 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FileStatus
+import org.apache.hudi.client.utils.SparkSchemaUtils
+import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{PredicateHelper, SpecificInternalRow, UnsafeProjection}
@@ -31,7 +34,7 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
 
 import scala.collection.JavaConverters._
 
-object HoodieDataSourceHelper extends PredicateHelper {
+object HoodieDataSourceHelper extends PredicateHelper with SparkAdapterSupport {
 
 
   /**
@@ -46,7 +49,7 @@ object HoodieDataSourceHelper extends PredicateHelper {
                                options: Map[String, String],
                                hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
 
-    val readParquetFile: PartitionedFile => Iterator[Any] = new ParquetFileFormat().buildReaderWithPartitionValues(
+    val readParquetFile: PartitionedFile => Iterator[Any] = sparkAdapter.createHoodieParquetFileFormat().get.buildReaderWithPartitionValues(
       sparkSession = sparkSession,
       dataSchema = dataSchema,
       partitionSchema = partitionSchema,
@@ -76,6 +79,12 @@ object HoodieDataSourceHelper extends PredicateHelper {
       val size = if (remaining > maxSplitBytes) maxSplitBytes else remaining
       PartitionedFile(partitionValues, filePath.toUri.toString, offset, size)
     }
+  }
+
+  def getConfigurationForInternalSchema(conf: Configuration, internalSchema: InternalSchema, tablePath: String): Configuration = {
+    conf.set(SparkSchemaUtils.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
+    conf.set(SparkSchemaUtils.HOODIE_TABLE_PATH, tablePath)
+    conf
   }
 
 }

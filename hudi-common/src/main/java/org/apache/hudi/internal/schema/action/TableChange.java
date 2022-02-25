@@ -39,7 +39,7 @@ import java.util.Map;
 public interface TableChange {
   /* The action Type of schema change. */
   enum ColumnChangeID {
-    ADD, UPDATE, DELETE, PROPERTY_CHANGE;
+    ADD, UPDATE, DELETE, PROPERTY_CHANGE, REPLACE;
     private String name;
 
     private ColumnChangeID() {
@@ -61,6 +61,8 @@ public interface TableChange {
         return ColumnChangeID.DELETE;
       case "property":
         return ColumnChangeID.PROPERTY_CHANGE;
+      case "replace":
+        return ColumnChangeID.REPLACE;
       default:
         throw new IllegalArgumentException("Invalid value of Type.");
     }

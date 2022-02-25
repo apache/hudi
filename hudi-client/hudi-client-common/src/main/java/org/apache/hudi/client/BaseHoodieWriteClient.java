@@ -21,6 +21,7 @@ package org.apache.hudi.client;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.async.AsyncArchiveService;
 import org.apache.hudi.async.AsyncCleanerService;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -77,6 +78,7 @@ import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.action.TableChange;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
+import org.apache.hudi.internal.schema.utils.AvroSchemaUtil;
 import org.apache.hudi.internal.schema.utils.SchemaChangePersistHelper;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
@@ -110,6 +112,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
 
 /**
  * Abstract Write Client providing functionality for performing commit, index updates and rollback
@@ -256,6 +260,30 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     // Finalize write
     finalizeWrite(table, instantTime, stats);
+    // do save internal schema to support Implicitly add columns in write process
+    if (!metadata.getExtraMetadata().containsKey(SerDeHelper.LATESTSCHEMA)
+        && metadata.getExtraMetadata().containsKey(SCHEMA_KEY) && table.getConfig().getSchemaEvolutionEnable()) {
+      TableSchemaResolver schemaUtil = new TableSchemaResolver(table.getMetaClient());
+      String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElse("");
+      FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(table.getMetaClient());
+      if (!historySchemaStr.isEmpty()) {
+        InternalSchema internalSchema = SerDeHelper.searchSchema(Long.parseLong(instantTime),
+            SerDeHelper.parseSchemas(historySchemaStr));
+        Schema avroSchema = HoodieAvroUtils.createHoodieWriteSchema(new Schema.Parser().parse(config.getSchema()));
+        InternalSchema evolutionSchema = AvroSchemaUtil.evolutionSchemaFromNewAvroSchema(avroSchema, internalSchema);
+        if (evolutionSchema.equals(internalSchema)) {
+          metadata.addMetadata(SerDeHelper.LATESTSCHEMA, SerDeHelper.toJson(evolutionSchema));
+          schemasManager.persistHistorySchemaStr(instantTime, historySchemaStr);
+        } else {
+          evolutionSchema.setSchemaId(Long.parseLong(instantTime));
+          String newSchemaStr = SerDeHelper.toJson(evolutionSchema);
+          metadata.addMetadata(SerDeHelper.LATESTSCHEMA, newSchemaStr);
+          schemasManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(evolutionSchema, historySchemaStr));
+        }
+        // update SCHEMA_KEY
+        metadata.addMetadata(SCHEMA_KEY, AvroInternalSchemaConverter.convert(evolutionSchema, avroSchema.getName()).toString());
+      }
+    }
     // update Metadata table
     writeTableMetadata(table, instantTime, commitActionType, metadata);
     activeTimeline.saveAsComplete(new HoodieInstant(true, commitActionType, instantTime),
@@ -1452,8 +1480,8 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       if (lastInstant.isPresent()) {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
             activeTimeline.getInstantDetails(lastInstant.get()).get(), HoodieCommitMetadata.class);
-        if (commitMetadata.getExtraMetadata().containsKey(HoodieCommitMetadata.SCHEMA_KEY)) {
-          config.setSchema(commitMetadata.getExtraMetadata().get(HoodieCommitMetadata.SCHEMA_KEY));
+        if (commitMetadata.getExtraMetadata().containsKey(SCHEMA_KEY)) {
+          config.setSchema(commitMetadata.getExtraMetadata().get(SCHEMA_KEY));
         } else {
           throw new HoodieIOException("Latest commit does not have any schema in commit metadata");
         }

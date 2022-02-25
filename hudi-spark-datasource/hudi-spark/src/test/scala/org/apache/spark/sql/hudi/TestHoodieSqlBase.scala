@@ -102,6 +102,22 @@ class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
     assertResult(expects.map(row => Row(row: _*)).toArray.sortBy(_.toString()))(spark.sql(sql).collect().sortBy(_.toString()))
   }
 
+  protected def checkAnswer(array: Array[Row])(expects: Seq[Any]*): Unit = {
+    assertResult(expects.map(row => Row(row: _*)).toArray)(array)
+  }
+
+  protected def checkExceptions(sql: String)(errorMsgs: Seq[String]): Unit = {
+    var hasException = false
+    try {
+      spark.sql(sql)
+    } catch {
+      case e: Throwable =>
+        assertResult(errorMsgs.contains(e.getMessage.split("\n")(0)))(true)
+        hasException = true
+    }
+    assertResult(true)(hasException)
+  }
+
   protected def checkException(sql: String)(errorMsg: String): Unit = {
     var hasException = false
     try {
