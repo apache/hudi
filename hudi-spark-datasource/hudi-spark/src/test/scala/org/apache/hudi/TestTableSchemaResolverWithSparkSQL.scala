@@ -223,7 +223,7 @@ class TestTableSchemaResolverWithSparkSQL {
     metaClient.reloadActiveTimeline()
     var tableSchemaResolverParsingException: Exception = null
     try {
-      val schemaFromData = new TableSchemaResolver(metaClient).getTableAvroSchemaFromDataFile
+      val schemaFromData = new TableSchemaResolver(metaClient).getTableAvroSchemaFromDataFile.get
       val structFromData = AvroConversionUtils.convertAvroSchemaToStructType(HoodieAvroUtils.removeMetadataFields(schemaFromData))
       val schemeDesign = new Schema.Parser().parse(schemaString)
       val structDesign = AvroConversionUtils.convertAvroSchemaToStructType(schemeDesign)

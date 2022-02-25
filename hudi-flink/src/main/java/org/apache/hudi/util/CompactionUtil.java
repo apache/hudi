@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.sink.compact.FlinkCompactionConfig;
 import org.apache.hudi.table.HoodieFlinkTable;
@@ -115,7 +116,8 @@ public class CompactionUtil {
    */
   public static void inferChangelogMode(Configuration conf, HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
-    Schema tableAvroSchema = tableSchemaResolver.getTableAvroSchemaFromDataFile();
+    Schema tableAvroSchema = tableSchemaResolver.getTableAvroSchemaFromDataFile().orElseThrow(
+        () -> new HoodieException("Failed to get table avro schema"));
     if (tableAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null) {
       conf.setBoolean(FlinkOptions.CHANGELOG_ENABLED, true);
     }
