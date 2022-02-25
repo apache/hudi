@@ -373,23 +373,23 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
             .setClusteringPlan(clusteringPlan).setOperationType(WriteOperationType.CLUSTER.name()).build();
     FileCreateUtils.createRequestedReplaceCommit(basePath,"002", Option.of(requestedReplaceMetadata));
 
-    // create file slice 002
-    FileCreateUtils.createBaseFile(basePath, testPartitionPath, "002", "2", 1);
-    FileCreateUtils.createCommit(basePath, "002");
+    // create file slice 003
+    FileCreateUtils.createBaseFile(basePath, testPartitionPath, "003", "3", 1);
+    FileCreateUtils.createCommit(basePath, "003");
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
     // generate new data to be ingested
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {testPartitionPath});
-    List<HoodieRecord> insertRecords = dataGenerator.generateInserts("003", 100);
+    List<HoodieRecord> insertRecords = dataGenerator.generateInserts("004", 100);
     WorkloadProfile profile = new WorkloadProfile(buildProfile(jsc.parallelize(insertRecords)));
 
     HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
     // create UpsertPartitioner
     UpsertPartitioner partitioner = new UpsertPartitioner(profile, context, table, config);
 
-    // for now we have file slice1 and file slice2 and file slice1 is contained in pending clustering plan
-    // So that only file slice2 can be used for ingestion.
+    // for now we have file slice1 and file slice3 and file slice1 is contained in pending clustering plan
+    // So that only file slice3 can be used for ingestion.
     assertEquals(1, partitioner.smallFiles.size(), "Should have 1 small file to be ingested.");
   }
 
