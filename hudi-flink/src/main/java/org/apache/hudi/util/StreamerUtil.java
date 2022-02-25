@@ -18,6 +18,8 @@
 
 package org.apache.hudi.util;
 
+import org.apache.flink.configuration.TaskManagerOptions;
+import org.apache.flink.runtime.clusterframework.TaskExecutorProcessUtils;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
@@ -81,6 +83,8 @@ import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
+import static org.apache.hudi.configuration.FlinkOptions.COMPACTION_MEMORY_FRACTION_PROP;
+import static org.apache.hudi.configuration.FlinkOptions.COMPACTION_MEMORY_SIZE;
 
 /**
  * Utilities for Flink stream read and write.
@@ -508,5 +512,20 @@ public class StreamerUtil {
    */
   public static boolean haveSuccessfulCommits(HoodieTableMetaClient metaClient) {
     return !metaClient.getCommitsTimeline().filterCompletedInstants().empty();
+  }
+
+  /**
+   * get the max compaction memory in bytes from conf.
+   */
+  public static long getMaxCompactionMemoryInBytes(Configuration conf) {
+    if (conf.contains(COMPACTION_MEMORY_SIZE)) {
+      return conf.get(COMPACTION_MEMORY_SIZE).getBytes();
+    }
+    return (long)Math
+        .ceil(conf.getDouble(COMPACTION_MEMORY_FRACTION_PROP)
+            * TaskExecutorProcessUtils.processSpecFromConfig(
+                TaskExecutorProcessUtils.getConfigurationMapLegacyTaskManagerHeapSizeToConfigOption(
+                    conf, TaskManagerOptions.TOTAL_PROCESS_MEMORY))
+                .getManagedMemorySize().getBytes());
   }
 }

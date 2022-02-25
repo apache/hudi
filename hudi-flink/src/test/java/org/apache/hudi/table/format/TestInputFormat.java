@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.format;
 
+import org.apache.flink.configuration.MemorySize;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -73,6 +74,7 @@ public class TestInputFormat {
     conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setString(FlinkOptions.TABLE_TYPE, tableType.name());
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false); // close the async compaction
+    conf.set(FlinkOptions.COMPACTION_MEMORY_SIZE, MemorySize.ofMebiBytes(1024));
     options.forEach((key, value) -> conf.setString(key, value));
 
     StreamerUtil.initTableIfNotExists(conf);

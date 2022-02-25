@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.flink.configuration.MemorySize;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.utils.TestConfigurations;
@@ -64,6 +65,7 @@ public class TestHoodieTableSource {
   void beforeEach() throws Exception {
     final String path = tempFile.getAbsolutePath();
     conf = TestConfigurations.getDefaultConf(path);
+    conf.set(FlinkOptions.COMPACTION_MEMORY_SIZE, MemorySize.ofMebiBytes(1024));
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
   }
 
@@ -122,6 +124,7 @@ public class TestHoodieTableSource {
     final String path = tempFile.getAbsolutePath();
     conf = TestConfigurations.getDefaultConf(path);
     conf.setBoolean(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.COMPACTION_MEMORY_SIZE, MemorySize.ofMebiBytes(1024));
 
     HoodieTableSource tableSource = new HoodieTableSource(
         TestConfigurations.TABLE_SCHEMA,

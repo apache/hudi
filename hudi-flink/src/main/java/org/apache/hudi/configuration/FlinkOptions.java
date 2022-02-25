@@ -18,6 +18,7 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.flink.configuration.MemorySize;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.HoodieConfig;
@@ -26,6 +27,7 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -480,6 +482,18 @@ public class FlinkOptions extends HoodieConfig {
   // ------------------------------------------------------------------------
   //  Compaction Options
   // ------------------------------------------------------------------------
+
+  public static final ConfigOption<Double> COMPACTION_MEMORY_FRACTION_PROP = ConfigOptions
+      .key(HoodieRealtimeConfig.COMPACTION_MEMORY_FRACTION_PROP)
+      .doubleType()
+      .defaultValue(0.1)
+      .withDescription("Fraction of Flink TM memory used for compaction of log files.");
+
+  public static final ConfigOption<MemorySize> COMPACTION_MEMORY_SIZE = ConfigOptions
+          .key("compaction.memory.size")
+          .memoryType()
+          .noDefaultValue()
+          .withDescription("Specify the memory of Flink TM used for compaction of log files.");
 
   public static final ConfigOption<Boolean> COMPACTION_SCHEDULE_ENABLED = ConfigOptions
       .key("compaction.schedule.enabled")
