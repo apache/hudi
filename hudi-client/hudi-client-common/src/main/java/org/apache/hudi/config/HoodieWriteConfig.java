@@ -448,7 +448,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Master control to disable all table services including archive, clean, compact, cluster, etc.");
 
   public static final ConfigProperty<Boolean> RELEASE_RESOURCE_ENABLE = ConfigProperty
-      .key("hoodie.release.resource.enabled")
+      .key("hoodie.release.resource.on.completion.enable")
       .defaultValue(true)
       .sinceVersion("0.11.0")
       .withDocumentation("Control to enable release all persist rdds when the spark job finish.");
