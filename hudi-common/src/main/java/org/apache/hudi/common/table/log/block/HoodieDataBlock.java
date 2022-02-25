@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.log.block;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -52,7 +53,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    */
   private final String keyFieldName;
 
-  private final boolean enablePointLookups;
+  protected final boolean enablePointLookups;
 
   protected final Schema readerSchema;
 
@@ -135,7 +136,9 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    * @param keys keys of interest.
    * @return List of IndexedRecords for the keys of interest.
    * @throws IOException in case of failures encountered when reading/parsing records
+   * @deprecated Use {@link #getRecordItr(Option)} instead.
    */
+  @Deprecated
   public final List<IndexedRecord> getRecords(List<String> keys) throws IOException {
     boolean fullScan = keys.isEmpty();
     if (enablePointLookups && !fullScan) {
@@ -180,6 +183,8 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   protected abstract List<IndexedRecord> deserializeRecords(byte[] content) throws IOException;
 
   public abstract HoodieLogBlockType getBlockType();
+
+  public abstract ClosableIterator<IndexedRecord> getRecordItr(Option<List<String>> keys) throws IOException;
 
   protected Option<Schema.Field> getKeyField(Schema schema) {
     return Option.ofNullable(schema.getField(keyFieldName));

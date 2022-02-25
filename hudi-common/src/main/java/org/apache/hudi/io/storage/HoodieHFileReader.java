@@ -229,6 +229,36 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
 
   @Override
   public Iterator getRecordIterator(Schema readerSchema) throws IOException {
+    return getRecordIterator(null, readerSchema);
+  }
+
+  public Iterator filterRecordIterator(List<String> keys, Schema schema) throws IOException {
+    this.schema = schema;
+    reader.loadFileInfo();
+    Iterator<String> iterator = keys.iterator();
+    return new Iterator<Pair<String, R>>() {
+      @Override
+      public boolean hasNext() {
+        return iterator.hasNext();
+      }
+
+      @Override
+      public Pair<String, R> next() {
+        try {
+          String key = iterator.next();
+          Option<R> value = getRecordByKey(key, schema);
+          if (value.isPresent()) {
+            return new Pair(key, value.get());
+          }
+          return null;
+        } catch (IOException e) {
+          throw new HoodieIOException("Unable to convert bytes to record.", e);
+        }
+      }
+    };
+  }
+
+  public Iterator getRecordIterator(Schema writerSchema, Schema readerSchema) throws IOException {
     final HFileScanner scanner = reader.getScanner(false, false);
     final Option<Schema.Field> keyFieldSchema = Option.ofNullable(readerSchema.getField(KEY_FIELD_NAME));
     ValidationUtils.checkState(keyFieldSchema != null,
@@ -243,7 +273,8 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
           // To handle when hasNext() is called multiple times for idempotency and/or the first time
           if (this.next == null && !this.eof) {
             if (!scanner.isSeeked() && scanner.seekTo()) {
-              final Pair<String, R> keyAndRecordPair = getRecordFromCell(scanner.getKeyValue(), getSchema(), readerSchema, keyFieldSchema);
+              final Pair<String, R> keyAndRecordPair = getRecordFromCell(scanner.getKeyValue(),
+                      writerSchema == null ? getSchema() : writerSchema, readerSchema, keyFieldSchema);
               this.next = keyAndRecordPair.getSecond();
             }
           }
@@ -264,7 +295,8 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
           }
           R retVal = this.next;
           if (scanner.next()) {
-            final Pair<String, R> keyAndRecordPair = getRecordFromCell(scanner.getKeyValue(), getSchema(), readerSchema, keyFieldSchema);
+            final Pair<String, R> keyAndRecordPair = getRecordFromCell(scanner.getKeyValue(),
+                    writerSchema == null ? getSchema() : writerSchema, readerSchema, keyFieldSchema);
             this.next = keyAndRecordPair.getSecond();
           } else {
             this.next = null;

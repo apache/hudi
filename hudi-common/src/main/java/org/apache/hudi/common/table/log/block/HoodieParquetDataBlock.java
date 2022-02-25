@@ -27,6 +27,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.hudi.io.storage.HoodieAvroParquetConfig;
@@ -45,6 +46,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -167,5 +169,55 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
   @Override
   protected List<IndexedRecord> deserializeRecords(byte[] content) throws IOException {
     throw new UnsupportedOperationException("Should not be invoked");
+  }
+
+  @Override
+  public ClosableIterator<IndexedRecord> getRecordItr(Option<List<String>> keys) throws IOException {
+    if (this.enablePointLookups && keys.isPresent() && !keys.get().isEmpty()) {
+      throw new UnsupportedOperationException(
+              String.format("Point lookups are not supported by this Data block type (%s)", getBlockType())
+      );
+    }
+    HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
+
+    // NOTE: It's important to extend Hadoop configuration here to make sure configuration
+    //       is appropriately carried over
+    Configuration inlineConf = new Configuration(blockContentLoc.getHadoopConf());
+    inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
+
+    Path inlineLogFilePath = InLineFSUtils.getInlineFilePath(
+            blockContentLoc.getLogFile().getPath(),
+            blockContentLoc.getLogFile().getPath().getFileSystem(inlineConf).getScheme(),
+            blockContentLoc.getContentPositionInLogFile(),
+            blockContentLoc.getBlockSize());
+
+    ClosableIterator<IndexedRecord> recordsIterator = (ClosableIterator) getProjectedParquetRecordsIterator(
+            inlineConf,
+            readerSchema,
+            HadoopInputFile.fromPath(inlineLogFilePath, inlineConf)
+    );
+
+    final HashSet<String> keySet = keys.isPresent() && !keys.get().isEmpty() ? new HashSet<>(keys.get()) : null;
+
+    return new ClosableIterator<IndexedRecord>() {
+      @Override
+      public void close() {
+        recordsIterator.close();
+      }
+
+      @Override
+      public boolean hasNext() {
+        return recordsIterator.hasNext();
+      }
+
+      @Override
+      public IndexedRecord next() {
+        IndexedRecord record = recordsIterator.next();
+        if (keySet != null) {
+          return keySet.contains(getRecordKey(record).orElse(null)) ? record : null;
+        }
+        return record;
+      }
+    };
   }
 }

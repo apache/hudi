@@ -31,6 +31,7 @@ import org.apache.avro.io.EncoderFactory;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -46,6 +47,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -60,7 +62,6 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 public class HoodieAvroDataBlock extends HoodieDataBlock {
 
   private final ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
-  private final ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
 
   public HoodieAvroDataBlock(FSDataInputStream inputStream,
                              Option<byte[]> content,
@@ -120,6 +121,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
         throw new HoodieIOException("IOException converting HoodieAvroDataBlock to bytes", e);
       }
     }
+    encoderCache.remove();
     output.close();
     return baos.toByteArray();
   }
@@ -128,41 +130,97 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   // TODO (na) - Implement a recordItr instead of recordList
   @Override
   protected List<IndexedRecord> deserializeRecords(byte[] content) throws IOException {
-    checkState(readerSchema != null, "Reader's schema has to be non-null");
-
-    SizeAwareDataInputStream dis =
-        new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(content)));
-
-    // 1. Read version for this data block
-    int version = dis.readInt();
-    HoodieAvroDataBlockVersion logBlockVersion = new HoodieAvroDataBlockVersion(version);
-
-    // Get schema from the header
-    Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
-
-    GenericDatumReader<IndexedRecord> reader = new GenericDatumReader<>(writerSchema, readerSchema);
-
-    // 2. Get the total records
-    int totalRecords = 0;
-    if (logBlockVersion.hasRecordCount()) {
-      totalRecords = dis.readInt();
+    List<IndexedRecord> records = new ArrayList<>();
+    try (ClosableIterator<IndexedRecord> recordItr = getRecordItr(Option.empty())) {
+      recordItr.forEachRemaining(records::add);
     }
-    List<IndexedRecord> records = new ArrayList<>(totalRecords);
-
-    // 3. Read the content
-    for (int i = 0; i < totalRecords; i++) {
-      int recordLength = dis.readInt();
-      BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(content, dis.getNumberOfBytesRead(),
-          recordLength, decoderCache.get());
-      decoderCache.set(decoder);
-      IndexedRecord record = reader.read(null, decoder);
-      records.add(record);
-      dis.skipBytes(recordLength);
-    }
-
-    dis.close();
 
     return records;
+  }
+
+  @Override
+  public ClosableIterator<IndexedRecord> getRecordItr(Option<List<String>> keys) throws IOException {
+    return new IndexRecordIterator(this, keys);
+  }
+
+  private static class IndexRecordIterator implements ClosableIterator<IndexedRecord> {
+    private final HoodieAvroDataBlock block;
+    private final SizeAwareDataInputStream dis;
+    private final GenericDatumReader<IndexedRecord> reader;
+    private final ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
+    private final HashSet<String> keySet;
+    private int totalRecords = 0;
+    private int readRecords = 0;
+
+    private IndexRecordIterator(HoodieAvroDataBlock block, Option<List<String>> keys) throws IOException {
+      this.block = block;
+      checkState(this.block.readerSchema != null, "Reader's schema has to be non-null");
+      if (this.block.readBlockLazily && !this.block.getContent().isPresent()) {
+        // read log block contents from disk
+        this.block.inflate();
+      }
+
+      this.dis = new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(this.block.getContent().get())));
+
+      // 1. Read version for this data block
+      int version = this.dis.readInt();
+      HoodieAvroDataBlockVersion logBlockVersion = new HoodieAvroDataBlockVersion(version);
+
+      // Get schema from the header
+      Schema writerSchema = new Schema.Parser().parse(this.block.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
+
+      this.reader = new GenericDatumReader<>(writerSchema, this.block.readerSchema);
+
+      if (logBlockVersion.hasRecordCount()) {
+        this.totalRecords = this.dis.readInt();
+      }
+
+      if (this.block.enablePointLookups && keys.isPresent() && !keys.get().isEmpty()) {
+        throw new UnsupportedOperationException(
+                String.format("Point lookups are not supported by this Data block type (%s)", this.block.getBlockType())
+        );
+      }
+      if (keys.isPresent()) {
+        keySet = new HashSet<>(keys.get());
+      } else {
+        keySet = null;
+      }
+    }
+
+    @Override
+    public void close() {
+      try {
+        this.dis.close();
+        this.block.deflate();
+        this.decoderCache.remove();
+      } catch (IOException e) {
+        // ignore
+      }
+    }
+
+    @Override
+    public boolean hasNext() {
+      return readRecords < totalRecords;
+    }
+
+    @Override
+    public IndexedRecord next() {
+      try {
+        int recordLength = this.dis.readInt();
+        BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(this.block.getContent().get(), this.dis.getNumberOfBytesRead(),
+                recordLength, this.decoderCache.get());
+        this.decoderCache.set(decoder);
+        IndexedRecord record = this.reader.read(null, decoder);
+        this.dis.skipBytes(recordLength);
+        this.readRecords++;
+        if (keySet != null) {
+          return keySet.contains(this.block.getRecordKey(record).orElse(null)) ? record : null;
+        }
+        return record;
+      } catch (IOException e) {
+        throw new HoodieIOException("Unable to convert bytes to record.", e);
+      }
+    }
   }
 
   //----------------------------------------------------------------------------------------
