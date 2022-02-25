@@ -121,6 +121,8 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
   protected Option<SchemaProvider> schemaProvider;
   private HoodieTableMetaClient metaClient;
   private JavaSparkContext jsc;
+  @Mock
+  HoodieIngestionMetrics metrics;
 
   private static final Logger LOG = LoggerFactory.getLogger(TestGcsEventsHoodieIncrSource.class);
 
