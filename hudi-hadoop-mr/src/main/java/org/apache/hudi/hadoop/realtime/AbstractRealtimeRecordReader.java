@@ -54,6 +54,7 @@ public abstract class AbstractRealtimeRecordReader {
   private Schema readerSchema;
   private Schema writerSchema;
   private Schema hiveSchema;
+  private HoodieTableMetaClient metaClient;
 
   public AbstractRealtimeRecordReader(RealtimeSplit split, JobConf job) {
     this.split = split;
@@ -62,7 +63,7 @@ public abstract class AbstractRealtimeRecordReader {
     LOG.info("columnIds ==> " + job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
     LOG.info("partitioningColumns ==> " + job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, ""));
     try {
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jobConf).setBasePath(split.getBasePath()).build();
+      metaClient = HoodieTableMetaClient.builder().setConf(jobConf).setBasePath(split.getBasePath()).build();
       if (metaClient.getTableConfig().getPreCombineField() != null) {
         this.payloadProps.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, metaClient.getTableConfig().getPreCombineField());
       }
@@ -85,11 +86,8 @@ public abstract class AbstractRealtimeRecordReader {
    * job conf.
    */
   private void init() throws Exception {
-
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(split.getPath().getFileSystem(jobConf).getConf()).setBasePath(split.getBasePath()).build();
-    TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
     LOG.info("Getting writer schema from table avro schema ");
-    writerSchema = schemaUtil.getTableAvroSchema();
+    writerSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
 
     // Add partitioning fields to writer schema for resulting row to contain null values for these fields
     String partitionFields = jobConf.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
