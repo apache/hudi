@@ -885,11 +885,12 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   private static long genRandomTimeMillis(Random r) {
-    // NOTE: {@code Date} expects a number representing a number of millis elapsed since epoch
-    //       (01/01/1970 00:00:00) until approx year 8099
-    //       This modulo represents approx 6000 years in millis, which should be sufficient to
-    //       cover all possible use-cases
-    return Math.abs(r.nextLong()) % 189216000000000L;
+    // Fri Feb 13 15:31:30 PST 2009
+    long anchorTs = 1234567890L;
+    // NOTE: To provide for certainty and not generate overly random dates, we will limit
+    //       dispersion to be w/in +/- 3 days from the anchor date
+    // return anchorTs + r.nextLong() % 259200000L;
+    return anchorTs + r.nextLong() % 2592000000L;
   }
 
   private static UUID genPseudoRandomUUID(Random r) {
