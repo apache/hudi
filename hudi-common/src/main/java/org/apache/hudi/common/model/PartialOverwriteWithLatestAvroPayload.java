@@ -25,9 +25,9 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.function.BiFunction;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro;
 
@@ -72,66 +72,62 @@ public class PartialOverwriteWithLatestAvroPayload extends OverwriteWithLatestAv
     }
 
     GenericRecord incomingRecord = bytesToAvro(recordBytes, schema);
+    GenericRecord currentRecord = (GenericRecord) currentValue;
     if (isDeleteRecord(incomingRecord)) {
       return Option.empty();
     }
-
-    GenericRecord currentRecord = (GenericRecord) currentValue;
-    List<Schema.Field> fields = schema.getFields();
-    fields.forEach(field -> {
-      Object value = incomingRecord.get(field.name());
-      if (Objects.nonNull(value)) {
-        currentRecord.put(field.name(), value);
-      }
-    });
-
-    return Option.of(currentRecord);
+    return Option.of(overwriteWithNonNullValue(schema, currentRecord, incomingRecord));
   }
 
   @Override
   public int compareTo(OverwriteWithLatestAvroPayload oldValue) {
-    return orderingVal.compareTo(oldValue.orderingVal);
+    return this.orderingVal.compareTo(oldValue.orderingVal);
   }
 
   @Override
   public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue, Properties properties, Schema schema) {
     if (null == schema) {
+      // using default preCombine logic
       return super.preCombine(oldValue);
     }
 
     try {
-      Option<IndexedRecord> incomingOption = getInsertValue(schema);
+      Option<IndexedRecord> incomingOption = this.getInsertValue(schema);
       Option<IndexedRecord> oldRecordOption = oldValue.getInsertValue(schema);
 
       if (incomingOption.isPresent() && oldRecordOption.isPresent()) {
-        GenericRecord incomingRecord = (GenericRecord) incomingOption.get();
-        GenericRecord oldRecord = (GenericRecord) oldRecordOption.get();
-        boolean chooseIncomingRecord = this.orderingVal.compareTo(oldValue.orderingVal) > 0;
-
-        if (!isDeleteRecord(oldRecord) && !isDeleteRecord(incomingRecord)) {
-          schema.getFields().forEach(field -> {
-            Object insertValue = oldRecord.get(field.name());
-            Object incomingValue = incomingRecord.get(field.name());
-            incomingRecord.put(field.name(), mergeValue(incomingValue, insertValue, chooseIncomingRecord));
-          });
-          return new PartialOverwriteWithLatestAvroPayload(incomingRecord, chooseIncomingRecord ? this.orderingVal : oldValue.orderingVal);
-        } else {
-          return isDeleteRecord(oldRecord) ? this : oldValue;
-        }
+        boolean inComingRecordIsLatest = this.compareTo(oldValue) >= 0;
+        // ordering two records by ordering value
+        GenericRecord firstRecord = (GenericRecord) (inComingRecordIsLatest ? oldRecordOption.get() : incomingOption.get());
+        GenericRecord secondRecord = (GenericRecord) (inComingRecordIsLatest ? incomingOption.get() : oldRecordOption.get());
+        GenericRecord mergedRecord = overwriteWithNonNullValue(schema, firstRecord, secondRecord);
+        return new PartialOverwriteWithLatestAvroPayload(mergedRecord, inComingRecordIsLatest ? this.orderingVal : oldValue.orderingVal);
       } else {
-        return oldRecordOption.isPresent() ? oldValue : this;
+        return super.preCombine(oldValue);
       }
     } catch (IOException e) {
       return super.preCombine(oldValue);
     }
   }
 
-  private Object mergeValue(Object left, Object right, Boolean chooseLeft) {
-    if (null != left && null != right) {
-      return chooseLeft ? left : right;
-    } else {
-      return null == left ? right : left;
-    }
+  private GenericRecord mergeRecord(Schema schema, GenericRecord first, GenericRecord second, BiFunction<Object, Object, Object> mergeFunc) {
+    schema.getFields().forEach(field -> {
+      Object firstValue = first.get(field.name());
+      Object secondValue = second.get(field.name());
+      first.put(field.name(), mergeFunc.apply(firstValue, secondValue));
+    });
+    return first;
   }
 
+  /**
+   * Merge two records, the merged value of each filed will adopt the filed value from secondRecord if the value is not null, otherwise, adopt the filed value from firstRecord.
+   *
+   * @param schema record schema to loop fields
+   * @param firstRecord the base record need to be updated
+   * @param secondRecord the new record provide new field value
+   * @return merged records
+   */
+  private GenericRecord overwriteWithNonNullValue(Schema schema, GenericRecord firstRecord, GenericRecord secondRecord) {
+    return mergeRecord(schema, firstRecord, secondRecord, (first, second) -> Objects.isNull(second) ? first : second);
+  }
 }

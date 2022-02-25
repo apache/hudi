@@ -167,8 +167,11 @@ class PartialOverwriteWithLatestAvroPayloadTest {
     PartialOverwriteWithLatestAvroPayload payload1 = new PartialOverwriteWithLatestAvroPayload(record1, 1);
     PartialOverwriteWithLatestAvroPayload payload2 = new PartialOverwriteWithLatestAvroPayload(delRecord1, 2);
 
-    assertEquals(payload1.preCombine(payload2, null, schema), payload1);
-    assertEquals(payload2.preCombine(payload1, null, schema), payload1);
+    assertEquals(payload1.preCombine(payload2, null, schema), payload2);
+    assertEquals(payload2.preCombine(payload1, null, schema), payload2);
+
+    assertEquals(payload1.preCombine(payload2, null, null), payload2);
+    assertEquals(payload2.preCombine(payload1, null, null), payload2);
   }
 
 }
