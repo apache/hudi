@@ -47,7 +47,7 @@ class SqlKeyGenerator(props: TypedProperties) extends ComplexKeyGenerator(props)
   // The origin key generator class for this table.
   private lazy val originKeyGen = {
     val beforeKeyGenClassName = props.getString(SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME, null)
-    if (beforeKeyGenClassName != null) {
+    if (beforeKeyGenClassName != null && beforeKeyGenClassName.nonEmpty) {
       val keyGenProps = new TypedProperties()
       keyGenProps.putAll(props)
       keyGenProps.remove(SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME)
@@ -132,7 +132,7 @@ object SqlKeyGenerator {
 
   def getRealKeyGenClassName(props: TypedProperties): String = {
     val beforeKeyGenClassName = props.getString(SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME, null)
-    if (beforeKeyGenClassName != null) {
+    if (beforeKeyGenClassName != null && beforeKeyGenClassName.nonEmpty) {
       HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(beforeKeyGenClassName)
     } else {
       classOf[ComplexKeyGenerator].getCanonicalName
