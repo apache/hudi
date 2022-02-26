@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.util.{HoodieTimer, TableInternalSchemaUtils}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.log4j.LogManager
@@ -85,16 +86,16 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
   // use schema from a file produced in the end/latest instant
 
-  val (usedSchema, internalSchemaOpt) = {
+  val (usedSchema, internalSchema) = {
     log.info("Inferring schema..")
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val internalSchema = if (useEndInstantSchema && !commitsToReturn.isEmpty) {
+    val iSchema = if (useEndInstantSchema && !commitsToReturn.isEmpty) {
       TableInternalSchemaUtils.searchSchemaAndCache(commitsToReturn.last.getTimestamp.toLong, metaClient.getBasePath, metaClient.getHadoopConf)
     } else {
       schemaResolver.getTableInternalSchemaFromCommitMetadata.orElse(null)
     }
 
-    val tableSchema = if (useEndInstantSchema && internalSchema == null) {
+    val tableSchema = if (useEndInstantSchema && iSchema.isDummySchema) {
       if (commitsToReturn.isEmpty) schemaResolver.getTableAvroSchemaWithoutMetadataFields() else
         schemaResolver.getTableAvroSchemaWithoutMetadataFields(commitsToReturn.last)
     } else {
@@ -102,14 +103,14 @@ class IncrementalRelation(val sqlContext: SQLContext,
     }
     if (tableSchema.getType == Schema.Type.NULL) {
       // if there is only one commit in the table and is an empty commit without schema, return empty RDD here
-      (StructType(Nil), None)
+      (StructType(Nil), InternalSchema.getDummyInternalSchema)
     } else {
       val dataSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema)
-      if (internalSchema != null) {
+      if (iSchema != null && !iSchema.isDummySchema) {
         // if internalSchema is ready, dataSchema will contains skeletonSchema
-        (dataSchema, Some(internalSchema))
+        (dataSchema, iSchema)
       } else {
-        (StructType(skeletonSchema.fields ++ dataSchema.fields), null)
+        (StructType(skeletonSchema.fields ++ dataSchema.fields), InternalSchema.getDummyInternalSchema)
       }
     }
   }
@@ -176,10 +177,10 @@ class IncrementalRelation(val sqlContext: SQLContext,
       // unset the path filter, otherwise if end_instant_time is not the latest instant, path filter set for RO view
       // will filter out all the files incorrectly.
       // pass internalSchema to hadoopConf, so it can be used in executors.
-      sqlContext.sparkContext.hadoopConfiguration.set(SparkSchemaUtils.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchemaOpt.getOrElse(null)))
+      sqlContext.sparkContext.hadoopConfiguration.set(SparkSchemaUtils.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
       sqlContext.sparkContext.hadoopConfiguration.set(SparkSchemaUtils.HOODIE_TABLE_PATH, metaClient.getBasePath)
       val formatClassName = metaClient.getTableConfig.getBaseFileFormat match {
-        case HoodieFileFormat.PARQUET => if (internalSchemaOpt.nonEmpty != null ) "HoodieParquet" else "parquet"
+        case HoodieFileFormat.PARQUET => if (!internalSchema.isDummySchema) "HoodieParquet" else "parquet"
         case HoodieFileFormat.ORC => "orc"
       }
       sqlContext.sparkContext.hadoopConfiguration.unset("mapreduce.input.pathFilter.class")

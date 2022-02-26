@@ -104,7 +104,7 @@ public class SerDeHelper {
    * @return a string
    */
   public static String toJson(InternalSchema internalSchema) {
-    if (internalSchema == null) {
+    if (internalSchema == null || internalSchema.isDummySchema()) {
       return "";
     }
     try {
@@ -355,7 +355,7 @@ public class SerDeHelper {
         return headMap.get(headMap.lastKey());
       }
     }
-    return null;
+    return InternalSchema.getDummyInternalSchema();
   }
 
   /**

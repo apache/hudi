@@ -116,7 +116,7 @@ public abstract class AbstractHoodieLogRecordReader {
   // Total log files read - for metrics
   private AtomicLong totalLogFiles = new AtomicLong(0);
   // Internal schema
-  private final InternalSchema internalSchema;
+  private InternalSchema internalSchema = InternalSchema.getDummyInternalSchema();
   private final String path;
   // Total log blocks read - for metrics
   private AtomicLong totalLogBlocks = new AtomicLong(0);
@@ -144,7 +144,7 @@ public abstract class AbstractHoodieLogRecordReader {
                                           int bufferSize, Option<InstantRange> instantRange,
                                           boolean withOperationField) {
     this(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
-        instantRange, withOperationField, true, Option.empty(), null);
+        instantRange, withOperationField, true, Option.empty(), InternalSchema.getDummyInternalSchema());
   }
 
   protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
@@ -168,7 +168,7 @@ public abstract class AbstractHoodieLogRecordReader {
     this.instantRange = instantRange;
     this.withOperationField = withOperationField;
     this.enableFullScan = enableFullScan;
-    this.internalSchema = internalSchema;
+    this.internalSchema = internalSchema == null ? InternalSchema.getDummyInternalSchema() : internalSchema;
     this.path = basePath;
 
     // Key fields when populate meta fields is disabled (that is, virtual keys enabled)
@@ -390,8 +390,8 @@ public abstract class AbstractHoodieLogRecordReader {
 
   private Option<Schema> getMergedSchema(HoodieDataBlock dataBlock, IndexedRecord record) {
     Option<Schema> result = Option.empty();
-    if (internalSchema != null) {
-      long currentTime = Long.parseLong(dataBlock.getLogBlockHeader().get(INSTANT_TIME));
+    if (!internalSchema.isDummySchema()) {
+      Long currentTime = Long.parseLong(dataBlock.getLogBlockHeader().get(INSTANT_TIME));
       InternalSchema fileSchema = TableInternalSchemaUtils.searchSchemaAndCache(currentTime, path, fs.getConf());
 
       if (!TableSchemaResolver.isSchemaCompatible(AvroInternalSchemaConverter.convert(fileSchema, readerSchema.getName()),

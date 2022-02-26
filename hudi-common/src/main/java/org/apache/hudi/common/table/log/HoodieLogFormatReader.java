@@ -43,7 +43,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private HoodieLogFileReader currentReader;
   private final FileSystem fs;
   private final Schema readerSchema;
-  private final InternalSchema internaSchema;
+  private InternalSchema internalSchema = InternalSchema.getDummyInternalSchema();
   private final boolean readBlocksLazily;
   private final boolean reverseLogReader;
   private final String recordKeyField;
@@ -55,7 +55,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   HoodieLogFormatReader(FileSystem fs, List<HoodieLogFile> logFiles, Schema readerSchema, boolean readBlocksLazily,
                         boolean reverseLogReader, int bufferSize, boolean enableInlineReading,
                         String recordKeyField) throws IOException {
-    this(fs, logFiles, readerSchema, readBlocksLazily, reverseLogReader, bufferSize, enableInlineReading, recordKeyField, null);
+    this(fs, logFiles, readerSchema, readBlocksLazily, reverseLogReader, bufferSize, enableInlineReading, recordKeyField, InternalSchema.getDummyInternalSchema());
   }
 
   HoodieLogFormatReader(FileSystem fs, List<HoodieLogFile> logFiles, Schema readerSchema, boolean readBlocksLazily,
@@ -70,7 +70,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     this.prevReadersInOpenState = new ArrayList<>();
     this.recordKeyField = recordKeyField;
     this.enableInlineReading = enableInlineReading;
-    this.internaSchema = internalSchema;
+    this.internalSchema = internalSchema == null ? InternalSchema.getDummyInternalSchema() : internalSchema;
     if (logFiles.size() > 0) {
       HoodieLogFile nextLogFile = logFiles.remove(0);
       this.currentReader = new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, readBlocksLazily, false,
@@ -114,7 +114,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
           this.prevReadersInOpenState.add(currentReader);
         }
         this.currentReader = new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, readBlocksLazily, false,
-            enableInlineReading, recordKeyField, internaSchema);
+            enableInlineReading, recordKeyField, internalSchema);
       } catch (IOException io) {
         throw new HoodieIOException("unable to initialize read with log file ", io);
       }

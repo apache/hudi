@@ -24,6 +24,7 @@ import org.apache.hudi.internal.schema.Types.RecordType;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
@@ -49,6 +50,14 @@ public class InternalSchema implements Serializable {
   private transient Map<String, Integer> nameToId = null;
   private transient Map<Integer, String> idToName = null;
 
+  public static InternalSchema getDummyInternalSchema() {
+    return new InternalSchema(-1L, new ArrayList<>());
+  }
+
+  public boolean isDummySchema() {
+    return versionId < 0;
+  }
+
   public InternalSchema(List<Field> columns) {
     this(DEFAULT_VERSION_ID, columns);
   }
@@ -60,8 +69,10 @@ public class InternalSchema implements Serializable {
   public InternalSchema(long versionId, List<Field> cols) {
     this.versionId = versionId;
     this.record = RecordType.get(cols);
-    buildIdToName();
-    maxColumnId = idToName.keySet().stream().max(Comparator.comparing(Integer::valueOf)).get();
+    if (versionId >= 0) {
+      buildIdToName();
+      maxColumnId = idToName.keySet().stream().max(Comparator.comparing(Integer::valueOf)).get();
+    }
   }
 
   public InternalSchema(long versionId, int maxColumnId, List<Field> cols) {

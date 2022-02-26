@@ -44,6 +44,7 @@ import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -119,7 +120,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
     // log file.That is because in the case of MergeInto, the config.getSchema may not
     // the same with the table schema.
     try {
-      if (config.getInternalSchema() == null) {
+      if (StringUtils.isNullOrEmpty(config.getInternalSchema())) {
         Schema readerSchema = schemaResolver.getTableAvroSchema(false);
         config.setSchema(readerSchema.toString());
       }
@@ -151,7 +152,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
     FileSystem fs = metaClient.getFs();
     Schema readerSchema;
     Option<InternalSchema> internalSchemaOption = Option.empty();
-    if (config.getInternalSchema() != null) {
+    if (!StringUtils.isNullOrEmpty(config.getInternalSchema())) {
       readerSchema = new Schema.Parser().parse(config.getSchema());
       internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
     } else {
@@ -182,7 +183,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         .withLogFilePaths(logFiles)
         .withReaderSchema(readerSchema)
         .withLatestInstantTime(maxInstantTime)
-        .withInternalSchema(internalSchemaOption.orElse(null))
+        .withInternalSchema(internalSchemaOption.orElse(InternalSchema.getDummyInternalSchema()))
         .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
         .withReadBlocksLazily(config.getCompactionLazyBlockReadEnabled())
         .withReverseReader(config.getCompactionReverseLogReadEnabled())

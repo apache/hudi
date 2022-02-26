@@ -76,7 +76,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private final HoodieLogFile logFile;
   private final byte[] magicBuffer = new byte[6];
   private final Schema readerSchema;
-  private InternalSchema internalSchema;
+  private InternalSchema internalSchema = InternalSchema.getDummyInternalSchema();
   private final String keyField;
   private boolean readBlockLazily;
   private long reverseLogFilePosition;
@@ -100,7 +100,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
                              boolean readBlockLazily, boolean reverseReader, boolean enableRecordLookups,
                              String keyField) throws IOException {
-    this(fs, logFile, readerSchema, bufferSize, readBlockLazily, reverseReader, enableRecordLookups, keyField, null);
+    this(fs, logFile, readerSchema, bufferSize, readBlockLazily, reverseReader, enableRecordLookups, keyField, InternalSchema.getDummyInternalSchema());
   }
 
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
@@ -117,7 +117,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     this.reverseReader = reverseReader;
     this.enableRecordLookups = enableRecordLookups;
     this.keyField = keyField;
-    this.internalSchema = internalSchema;
+    this.internalSchema = internalSchema == null ? InternalSchema.getDummyInternalSchema() : internalSchema;
     if (this.reverseReader) {
       this.reverseLogFilePosition = this.lastReverseLogFilePosition = this.logFile.getFileSize();
     }
