@@ -32,12 +32,11 @@ import org.apache.spark.api.java.JavaRDD;
  * @param <T> HoodieRecordPayload type
  */
 public class GlobalSortPartitioner<T extends HoodieRecordPayload>
-    extends BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
                                                      int outputSparkPartitions) {
-    generateFileIdPfx(outputSparkPartitions);
     // Now, sort the records and line them up nicely for loading.
     return records.sortBy(record -> {
       // Let's use "partitionPath + key" as the sort key. Spark, will ensure

@@ -30,6 +30,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.JavaLazyInsertIterable;
 import org.apache.hudi.execution.bulkinsert.JavaBulkInsertInternalPartitionerFactory;
 import org.apache.hudi.io.CreateHandleFactory;
+import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.FileIdPrefixProvider;
 import org.apache.hudi.table.HoodieTable;
@@ -79,10 +80,9 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Base
     BulkInsertPartitioner partitioner = userDefinedBulkInsertPartitioner.isPresent()
             ? userDefinedBulkInsertPartitioner.get()
             : JavaBulkInsertInternalPartitionerFactory.get(config.getBulkInsertSortMode());
-    partitioner.setDefaultWriteHandleFactory(new CreateHandleFactory(false));
 
     // write new files
-    List<WriteStatus> writeStatuses = bulkInsert(inputRecords, instantTime, table, config, performDedupe, partitioner, false, config.getBulkInsertShuffleParallelism());
+    List<WriteStatus> writeStatuses = bulkInsert(inputRecords, instantTime, table, config, performDedupe, partitioner, false, config.getBulkInsertShuffleParallelism(), new CreateHandleFactory(false));
     //update index
     ((BaseJavaCommitActionExecutor) executor).updateIndexAndCommitIfNeeded(writeStatuses, result);
     return result;
@@ -96,7 +96,8 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Base
                                       boolean performDedupe,
                                       BulkInsertPartitioner partitioner,
                                       boolean useWriterSchema,
-                                      int parallelism) {
+                                      int parallelism,
+                                      WriteHandleFactory writeHandleFactory) {
 
     // De-dupe/merge if needed
     List<HoodieRecord<T>> dedupedRecords = inputRecords;
@@ -117,7 +118,7 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Base
     new JavaLazyInsertIterable<>(repartitionedRecords.iterator(), true,
         config, instantTime, table,
         fileIdPrefixProvider.createFilePrefix(""), table.getTaskContextSupplier(),
-        partitioner.getWriteHandleFactory(0)).forEachRemaining(writeStatuses::addAll);
+        (WriteHandleFactory) partitioner.getWriteHandleFactory(0).orElse(writeHandleFactory)).forEachRemaining(writeStatuses::addAll);
 
     return writeStatuses;
   }

@@ -46,7 +46,8 @@ import java.util.List;
  * support z-curve optimization, hilbert will come soon.
  * @param <T> HoodieRecordPayload type
  */
-public class RDDSpatialCurveSortPartitioner<T extends HoodieRecordPayload> extends BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+public class RDDSpatialCurveSortPartitioner<T extends HoodieRecordPayload>
+    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   private final transient HoodieSparkEngineContext sparkEngineContext;
   private final String[] orderByColumns;
@@ -68,7 +69,6 @@ public class RDDSpatialCurveSortPartitioner<T extends HoodieRecordPayload> exten
 
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {
-    generateFileIdPfx(outputSparkPartitions);
     JavaRDD<GenericRecord> genericRecordsRDD =
         records.map(f -> (GenericRecord) f.getData().getInsertValue(schema.get()).get());
 

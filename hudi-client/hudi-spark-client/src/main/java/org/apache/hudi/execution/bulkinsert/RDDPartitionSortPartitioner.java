@@ -38,12 +38,11 @@ import scala.Tuple2;
  * @param <T> HoodieRecordPayload type
  */
 public class RDDPartitionSortPartitioner<T extends HoodieRecordPayload>
-    extends BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
                                                      int outputSparkPartitions) {
-    generateFileIdPfx(outputSparkPartitions);
     return records.coalesce(outputSparkPartitions)
         .mapToPair(record ->
             new Tuple2<>(

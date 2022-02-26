@@ -28,11 +28,10 @@ import org.apache.spark.sql.Row;
  * corresponding to the {@code BulkInsertSortMode.NONE} mode.
  *
  */
-public class NonSortPartitionerWithRows extends BulkInsertPartitioner<Dataset<Row>> {
+public class NonSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
-    generateFileIdPfx(outputSparkPartitions);
     return rows.coalesce(outputSparkPartitions);
   }
 
