@@ -58,9 +58,9 @@ import java.lang.reflect.InvocationTargetException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.sql.Date;
 import java.time.Instant;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -316,8 +316,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       byte[] bytes = "Canada".getBytes();
       rec.put("nation", ByteBuffer.wrap(bytes));
       long randomMillis = genRandomTimeMillis(r);
-      Instant ins = Instant.ofEpochMilli(randomMillis);
-      rec.put("current_date", (int) LocalDate.from(ins).toEpochDay());
+      Instant instant = Instant.ofEpochMilli(randomMillis);
+      rec.put("current_date", (int) LocalDateTime.ofInstant(instant, ZoneOffset.UTC).toLocalDate().toEpochDay());
       rec.put("current_ts", randomMillis);
 
       BigDecimal bigDecimal = new BigDecimal(String.format("%5f", r.nextFloat()));
