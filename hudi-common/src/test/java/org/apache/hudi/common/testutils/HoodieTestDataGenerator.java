@@ -59,6 +59,8 @@ import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.sql.Date;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -314,8 +316,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       byte[] bytes = "Canada".getBytes();
       rec.put("nation", ByteBuffer.wrap(bytes));
       long randomMillis = genRandomTimeMillis(r);
-      Date date = new Date(randomMillis);
-      rec.put("current_date", (int) date.toLocalDate().toEpochDay());
+      Instant ins = Instant.ofEpochMilli(randomMillis);
+      rec.put("current_date", (int) LocalDate.from(ins).toEpochDay());
       rec.put("current_ts", randomMillis);
 
       BigDecimal bigDecimal = new BigDecimal(String.format("%5f", r.nextFloat()));
@@ -889,8 +891,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     long anchorTs = 1234567890L;
     // NOTE: To provide for certainty and not generate overly random dates, we will limit
     //       dispersion to be w/in +/- 3 days from the anchor date
-    // return anchorTs + r.nextLong() % 259200000L;
-    return anchorTs + r.nextLong() % 2592000000L;
+    return anchorTs + r.nextLong() % 259200000L;
   }
 
   private static UUID genPseudoRandomUUID(Random r) {
