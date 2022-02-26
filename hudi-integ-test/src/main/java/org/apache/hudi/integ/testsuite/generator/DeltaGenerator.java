@@ -110,6 +110,10 @@ public class DeltaGenerator implements Serializable {
     return ws;
   }
 
+  public int getBatchId() {
+    return batchId;
+  }
+
   public JavaRDD<GenericRecord> generateInserts(Config operation) {
     int numPartitions = operation.getNumInsertPartitions();
     long recordsPerPartition = operation.getNumRecordsInsert();
