@@ -161,7 +161,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       HoodieAvroDataBlockVersion logBlockVersion = new HoodieAvroDataBlockVersion(version);
 
       Schema finalReadSchema = readerSchema;
-      if (!internalSchema.isDummySchema() || !TableSchemaResolver.isSchemaCompatible(readerSchema, writerSchema)) {
+      if (!internalSchema.isDummySchema() && !TableSchemaResolver.isSchemaCompatible(readerSchema, writerSchema)) {
         finalReadSchema = writerSchema;
       }
 
