@@ -142,7 +142,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
       HoodieRecord<? extends HoodieRecordPayload> oldRecord = records.get(key);
       HoodieRecordPayload oldValue = oldRecord.getData();
-      HoodieRecordPayload combinedValue = hoodieRecord.getData().preCombine(oldValue);
+      HoodieRecordPayload combinedValue = hoodieRecord.getData().preCombine(oldValue, null, this.readerSchema);
       boolean choosePrev = combinedValue.equals(oldValue);
       HoodieOperation operation = choosePrev ? oldRecord.getOperation() : hoodieRecord.getOperation();
       records.put(key, new HoodieAvroRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()), combinedValue, operation));
