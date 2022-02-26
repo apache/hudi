@@ -22,7 +22,8 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.execution.{SparkSqlAstBuilder, SparkSqlParser}
 
-class HoodieSpark32ExtendedSqlParser(session: SparkSession, delegate: ParserInterface) extends SparkSqlParser with Logging {
-  override val astBuilder: SparkSqlAstBuilder = new HoodieSpark3SqlAstBuilder
+// TODO: we should remove this file when we support datasourceV2 for hoodie on spark3.1x
+class HoodieSpark312ExtendedSqlParser(session: SparkSession, delegate: ParserInterface) extends SparkSqlParser with Logging {
+  override val astBuilder: SparkSqlAstBuilder = new HoodieSpark312SqlAstBuilder(session)
 }
 

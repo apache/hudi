@@ -65,7 +65,7 @@ class TestSpark3DDL extends TestHoodieSqlBase {
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-        if (HoodieSparkUtils.gteqSpark3_2) {
+        if (HoodieSparkUtils.gteqSpark3_1) {
           spark.sql("set hoodie.schema.evolution.enable=true")
           createAndPreparePartitionTable(spark, tableName, tablePath, tableType)
           // date -> string -> date
@@ -133,7 +133,7 @@ class TestSpark3DDL extends TestHoodieSqlBase {
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-        if (HoodieSparkUtils.gteqSpark3_2) {
+        if (HoodieSparkUtils.gteqSpark3_1) {
           spark.sql("set hoodie.schema.evolution.enable=true")
           createAndPreparePartitionTable(spark, tableName, tablePath, tableType)
           // float -> double -> decimal -> String
@@ -167,7 +167,7 @@ class TestSpark3DDL extends TestHoodieSqlBase {
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-        if (HoodieSparkUtils.gteqSpark3_2) {
+        if (HoodieSparkUtils.gteqSpark3_1) {
           spark.sql("set hoodie.schema.evolution.enable=true")
           createAndPreparePartitionTable(spark, tableName, tablePath, tableType)
 
@@ -266,7 +266,7 @@ class TestSpark3DDL extends TestHoodieSqlBase {
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-        if (HoodieSparkUtils.gteqSpark3_2) {
+        if (HoodieSparkUtils.gteqSpark3_1) {
           spark.sql("set hoodie.schema.evolution.enable=true")
           spark.sql(
             s"""
@@ -317,7 +317,7 @@ class TestSpark3DDL extends TestHoodieSqlBase {
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-        if (HoodieSparkUtils.gteqSpark3_2) {
+        if (HoodieSparkUtils.gteqSpark3_1) {
           spark.sql("set hoodie.schema.evolution.enable=true")
           spark.sql(
             s"""
@@ -378,7 +378,7 @@ class TestSpark3DDL extends TestHoodieSqlBase {
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-        if (HoodieSparkUtils.gteqSpark3_2) {
+        if (HoodieSparkUtils.gteqSpark3_1) {
           spark.sql("set hoodie.schema.evolution.enable=true")
           spark.sql(
             s"""
