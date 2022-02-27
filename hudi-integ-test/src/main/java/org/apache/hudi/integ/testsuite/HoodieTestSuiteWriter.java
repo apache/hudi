@@ -54,6 +54,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.rdd.RDD;
+import org.apache.spark.sql.SparkSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -88,20 +89,20 @@ public class HoodieTestSuiteWriter implements Serializable {
       Arrays.asList(RollbackNode.class.getName(), CleanNode.class.getName(), ScheduleCompactNode.class.getName()));
   private static final String GENERATED_DATA_PATH = "generated.data.path";
 
-  public HoodieTestSuiteWriter(JavaSparkContext jsc, Properties props, HoodieTestSuiteConfig cfg, String schema) throws Exception {
+  public HoodieTestSuiteWriter(SparkSession sparkSession, Properties props, HoodieTestSuiteConfig cfg, String schema) throws Exception {
     // We ensure that only 1 instance of HoodieWriteClient is instantiated for a HoodieTestSuiteWriter
     // This does not instantiate a HoodieWriteClient until a
     // {@link HoodieDeltaStreamer#commit(HoodieWriteClient, JavaRDD, Option)} is invoked.
-    HoodieSparkEngineContext context = new HoodieSparkEngineContext(jsc);
-    this.deltaStreamerWrapper = new HoodieDeltaStreamerWrapper(cfg, jsc);
+    HoodieSparkEngineContext context = new HoodieSparkEngineContext(JavaSparkContext.fromSparkContext(sparkSession.sparkContext()));
+    this.deltaStreamerWrapper = new HoodieDeltaStreamerWrapper(cfg, sparkSession);
     this.hoodieReadClient = new HoodieReadClient(context, cfg.targetBasePath);
     this.writeConfig = getHoodieClientConfig(cfg, props, schema);
     if (!cfg.useDeltaStreamer) {
       this.writeClient = new SparkRDDWriteClient(context, writeConfig);
     }
     this.cfg = cfg;
-    this.configuration = jsc.hadoopConfiguration();
-    this.sparkContext = jsc;
+    this.configuration = sparkSession.sparkContext().hadoopConfiguration();
+    this.sparkContext = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
     this.props = props;
     this.schema = schema;
   }

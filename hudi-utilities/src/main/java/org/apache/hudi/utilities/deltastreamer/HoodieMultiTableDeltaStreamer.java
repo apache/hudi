@@ -40,7 +40,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.utilities.sources.JsonDFSSource;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.SparkSession;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -64,20 +64,20 @@ public class HoodieMultiTableDeltaStreamer {
   private static Logger logger = LogManager.getLogger(HoodieMultiTableDeltaStreamer.class);
 
   private List<TableExecutionContext> tableExecutionContexts;
-  private transient JavaSparkContext jssc;
+  private transient SparkSession sparkSession;
   private Set<String> successTables;
   private Set<String> failedTables;
 
-  public HoodieMultiTableDeltaStreamer(Config config, JavaSparkContext jssc) throws IOException {
+  public HoodieMultiTableDeltaStreamer(Config config, SparkSession sparkSession) throws IOException {
     this.tableExecutionContexts = new ArrayList<>();
     this.successTables = new HashSet<>();
     this.failedTables = new HashSet<>();
-    this.jssc = jssc;
+    this.sparkSession = sparkSession;
     String commonPropsFile = config.propsFilePath;
     String configFolder = config.configFolder;
     ValidationUtils.checkArgument(!config.filterDupes || config.operation != WriteOperationType.UPSERT,
         "'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed.");
-    FileSystem fs = FSUtils.getFs(commonPropsFile, jssc.hadoopConfiguration());
+    FileSystem fs = FSUtils.getFs(commonPropsFile, sparkSession.sparkContext().hadoopConfiguration());
     configFolder = configFolder.charAt(configFolder.length() - 1) == '/' ? configFolder.substring(0, configFolder.length() - 1) : configFolder;
     checkIfPropsFileAndConfigFolderExist(commonPropsFile, configFolder, fs);
     TypedProperties commonProperties = UtilHelpers.readConfig(fs.getConf(), new Path(commonPropsFile), new ArrayList<String>()).getProps();
@@ -240,11 +240,11 @@ public class HoodieMultiTableDeltaStreamer {
       cmd.usage();
       System.exit(1);
     }
-    JavaSparkContext jssc = UtilHelpers.buildSparkContext("multi-table-delta-streamer", Constants.LOCAL_SPARK_MASTER);
+    SparkSession sparkSession = UtilHelpers.buildSparkSession("multi-table-delta-streamer", Constants.LOCAL_SPARK_MASTER);
     try {
-      new HoodieMultiTableDeltaStreamer(config, jssc).sync();
+      new HoodieMultiTableDeltaStreamer(config, SparkSession.builder().getOrCreate()).sync();
     } finally {
-      jssc.stop();
+      sparkSession.stop();
     }
   }
 
@@ -403,7 +403,7 @@ public class HoodieMultiTableDeltaStreamer {
   public void sync() {
     for (TableExecutionContext context : tableExecutionContexts) {
       try {
-        new HoodieDeltaStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties())).sync();
+        new HoodieDeltaStreamer(context.getConfig(), sparkSession, Option.ofNullable(context.getProperties())).sync();
         successTables.add(Helpers.getTableWithDatabase(context));
       } catch (Exception e) {
         logger.error("error while running MultiTableDeltaStreamer for table: " + context.getTableName(), e);

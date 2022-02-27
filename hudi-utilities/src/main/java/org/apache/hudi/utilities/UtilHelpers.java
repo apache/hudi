@@ -153,6 +153,16 @@ public class UtilHelpers {
     }
   }
 
+  public static SchemaProvider createSchemaProvider(String schemaProviderClass, TypedProperties cfg,
+                                                    SparkSession sparkSession) throws IOException {
+    try {
+      return StringUtils.isNullOrEmpty(schemaProviderClass) ? null
+          : (SchemaProvider) ReflectionUtils.loadClass(schemaProviderClass, cfg, sparkSession);
+    } catch (Throwable e) {
+      throw new IOException("Could not load schema provider class " + schemaProviderClass, e);
+    }
+  }
+
   public static SchemaPostProcessor createSchemaPostProcessor(
       String schemaPostProcessorClassNames, TypedProperties cfg, JavaSparkContext jssc) {
 
@@ -295,6 +305,20 @@ public class UtilHelpers {
     SparkConf sparkConf = buildSparkConf(appName, sparkMaster);
     sparkConf.set("spark.executor.memory", sparkMemory);
     return new JavaSparkContext(sparkConf);
+  }
+
+  public static SparkSession buildSparkSession(String appName, String sparkMaster) {
+    return SparkSession.builder()
+        .config(buildSparkConf(appName, sparkMaster))
+        .enableHiveSupport()
+        .getOrCreate();
+  }
+
+  public static SparkSession buildSparkSession(String appName, String sparkMaster, Map<String, String> additionalSparkConfigs) {
+    return SparkSession.builder()
+        .config(buildSparkConf(appName, sparkMaster, additionalSparkConfigs))
+        .enableHiveSupport()
+        .getOrCreate();
   }
 
   /**

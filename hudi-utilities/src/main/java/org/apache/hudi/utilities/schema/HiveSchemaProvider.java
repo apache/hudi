@@ -52,12 +52,11 @@ public class HiveSchemaProvider extends SchemaProvider {
   private final Schema sourceSchema;
   private Schema targetSchema;
 
-  public HiveSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
-    super(props, jssc);
+  public HiveSchemaProvider(TypedProperties props, SparkSession spark) {
+    super(props, JavaSparkContext.fromSparkContext(spark.sparkContext()));
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.SOURCE_SCHEMA_TABLE_PROP));
     String sourceSchemaDatabaseName = props.getString(Config.SOURCE_SCHEMA_DATABASE_PROP, "default");
     String sourceSchemaTableName = props.getString(Config.SOURCE_SCHEMA_TABLE_PROP);
-    SparkSession spark = SparkSession.builder().config(jssc.getConf()).enableHiveSupport().getOrCreate();
 
     // source schema
     try {

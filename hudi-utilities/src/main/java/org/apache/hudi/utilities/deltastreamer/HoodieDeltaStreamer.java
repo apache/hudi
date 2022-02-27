@@ -55,6 +55,7 @@ import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
+import org.apache.hudi.utilities.schema.HiveSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.JsonDFSSource;
 
@@ -110,23 +111,26 @@ public class HoodieDeltaStreamer implements Serializable {
 
   public static final String DELTASYNC_POOL_NAME = "hoodiedeltasync";
 
-  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc) throws IOException {
-    this(cfg, jssc, FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
-        jssc.hadoopConfiguration(), Option.empty());
+  private JavaSparkContext jsc;
+
+  public HoodieDeltaStreamer(Config cfg, SparkSession sparkSession) throws IOException {
+    this(cfg, sparkSession, FSUtils.getFs(cfg.targetBasePath, sparkSession.sparkContext().hadoopConfiguration()),
+        sparkSession.sparkContext().hadoopConfiguration(), Option.empty());
+    this.jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
   }
 
-  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, Option<TypedProperties> props) throws IOException {
-    this(cfg, jssc, FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
-        jssc.hadoopConfiguration(), props);
+  public HoodieDeltaStreamer(Config cfg, SparkSession sparkSession, Option<TypedProperties> props) throws IOException {
+    this(cfg, sparkSession, FSUtils.getFs(cfg.targetBasePath, sparkSession.sparkContext().hadoopConfiguration()),
+        sparkSession.sparkContext().hadoopConfiguration(), props);
   }
 
-  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf) throws IOException {
-    this(cfg, jssc, fs, conf, Option.empty());
+  public HoodieDeltaStreamer(Config cfg, SparkSession sparkSession, FileSystem fs, Configuration conf) throws IOException {
+    this(cfg, sparkSession, fs, conf, Option.empty());
   }
 
-  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
+  public HoodieDeltaStreamer(Config cfg, SparkSession sparkSession, FileSystem fs, Configuration conf,
                              Option<TypedProperties> propsOverride) throws IOException {
-    this.properties = combineProperties(cfg, propsOverride, jssc.hadoopConfiguration());
+    this.properties = combineProperties(cfg, propsOverride, sparkSession.sparkContext().hadoopConfiguration());
 
     if (cfg.initialCheckpointProvider != null && cfg.checkpoint == null) {
       InitialCheckPointProvider checkPointProvider =
@@ -137,9 +141,9 @@ public class HoodieDeltaStreamer implements Serializable {
 
     this.cfg = cfg;
     this.bootstrapExecutor = Option.ofNullable(
-        cfg.runBootstrap ? new BootstrapExecutor(cfg, jssc, fs, conf, this.properties) : null);
+        cfg.runBootstrap ? new BootstrapExecutor(cfg, jsc, fs, conf, this.properties) : null);
     this.deltaSyncService = Option.ofNullable(
-        cfg.runBootstrap ? null : new DeltaSyncService(cfg, jssc, fs, conf, Option.ofNullable(this.properties)));
+        cfg.runBootstrap ? null : new DeltaSyncService(cfg, sparkSession, fs, conf, Option.ofNullable(this.properties)));
   }
 
   private static TypedProperties combineProperties(Config cfg, Option<TypedProperties> propsOverride, Configuration hadoopConf) {
@@ -245,7 +249,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
         + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
-            splitter = IdentitySplitter.class)
+        splitter = IdentitySplitter.class)
     public List<String> configs = new ArrayList<>();
 
     @Parameter(names = {"--source-class"},
@@ -409,82 +413,82 @@ public class HoodieDeltaStreamer implements Serializable {
       }
       Config config = (Config) o;
       return sourceLimit == config.sourceLimit
-              && Objects.equals(targetBasePath, config.targetBasePath)
-              && Objects.equals(targetTableName, config.targetTableName)
-              && Objects.equals(tableType, config.tableType)
-              && Objects.equals(baseFileFormat, config.baseFileFormat)
-              && Objects.equals(propsFilePath, config.propsFilePath)
-              && Objects.equals(configs, config.configs)
-              && Objects.equals(sourceClassName, config.sourceClassName)
-              && Objects.equals(sourceOrderingField, config.sourceOrderingField)
-              && Objects.equals(payloadClassName, config.payloadClassName)
-              && Objects.equals(schemaProviderClassName, config.schemaProviderClassName)
-              && Objects.equals(transformerClassNames, config.transformerClassNames)
-              && operation == config.operation
-              && Objects.equals(filterDupes, config.filterDupes)
-              && Objects.equals(enableHiveSync, config.enableHiveSync)
-              && Objects.equals(maxPendingCompactions, config.maxPendingCompactions)
-              && Objects.equals(maxPendingClustering, config.maxPendingClustering)
-              && Objects.equals(continuousMode, config.continuousMode)
-              && Objects.equals(minSyncIntervalSeconds, config.minSyncIntervalSeconds)
-              && Objects.equals(sparkMaster, config.sparkMaster)
-              && Objects.equals(commitOnErrors, config.commitOnErrors)
-              && Objects.equals(deltaSyncSchedulingWeight, config.deltaSyncSchedulingWeight)
-              && Objects.equals(compactSchedulingWeight, config.compactSchedulingWeight)
-              && Objects.equals(deltaSyncSchedulingMinShare, config.deltaSyncSchedulingMinShare)
-              && Objects.equals(compactSchedulingMinShare, config.compactSchedulingMinShare)
-              && Objects.equals(forceDisableCompaction, config.forceDisableCompaction)
-              && Objects.equals(checkpoint, config.checkpoint)
-              && Objects.equals(initialCheckpointProvider, config.initialCheckpointProvider)
-              && Objects.equals(help, config.help);
+          && Objects.equals(targetBasePath, config.targetBasePath)
+          && Objects.equals(targetTableName, config.targetTableName)
+          && Objects.equals(tableType, config.tableType)
+          && Objects.equals(baseFileFormat, config.baseFileFormat)
+          && Objects.equals(propsFilePath, config.propsFilePath)
+          && Objects.equals(configs, config.configs)
+          && Objects.equals(sourceClassName, config.sourceClassName)
+          && Objects.equals(sourceOrderingField, config.sourceOrderingField)
+          && Objects.equals(payloadClassName, config.payloadClassName)
+          && Objects.equals(schemaProviderClassName, config.schemaProviderClassName)
+          && Objects.equals(transformerClassNames, config.transformerClassNames)
+          && operation == config.operation
+          && Objects.equals(filterDupes, config.filterDupes)
+          && Objects.equals(enableHiveSync, config.enableHiveSync)
+          && Objects.equals(maxPendingCompactions, config.maxPendingCompactions)
+          && Objects.equals(maxPendingClustering, config.maxPendingClustering)
+          && Objects.equals(continuousMode, config.continuousMode)
+          && Objects.equals(minSyncIntervalSeconds, config.minSyncIntervalSeconds)
+          && Objects.equals(sparkMaster, config.sparkMaster)
+          && Objects.equals(commitOnErrors, config.commitOnErrors)
+          && Objects.equals(deltaSyncSchedulingWeight, config.deltaSyncSchedulingWeight)
+          && Objects.equals(compactSchedulingWeight, config.compactSchedulingWeight)
+          && Objects.equals(deltaSyncSchedulingMinShare, config.deltaSyncSchedulingMinShare)
+          && Objects.equals(compactSchedulingMinShare, config.compactSchedulingMinShare)
+          && Objects.equals(forceDisableCompaction, config.forceDisableCompaction)
+          && Objects.equals(checkpoint, config.checkpoint)
+          && Objects.equals(initialCheckpointProvider, config.initialCheckpointProvider)
+          && Objects.equals(help, config.help);
     }
 
     @Override
     public int hashCode() {
       return Objects.hash(targetBasePath, targetTableName, tableType,
-              baseFileFormat, propsFilePath, configs, sourceClassName,
-              sourceOrderingField, payloadClassName, schemaProviderClassName,
-              transformerClassNames, sourceLimit, operation, filterDupes,
-              enableHiveSync, maxPendingCompactions, maxPendingClustering, continuousMode,
-              minSyncIntervalSeconds, sparkMaster, commitOnErrors,
-              deltaSyncSchedulingWeight, compactSchedulingWeight, deltaSyncSchedulingMinShare,
-              compactSchedulingMinShare, forceDisableCompaction, checkpoint,
-              initialCheckpointProvider, help);
+          baseFileFormat, propsFilePath, configs, sourceClassName,
+          sourceOrderingField, payloadClassName, schemaProviderClassName,
+          transformerClassNames, sourceLimit, operation, filterDupes,
+          enableHiveSync, maxPendingCompactions, maxPendingClustering, continuousMode,
+          minSyncIntervalSeconds, sparkMaster, commitOnErrors,
+          deltaSyncSchedulingWeight, compactSchedulingWeight, deltaSyncSchedulingMinShare,
+          compactSchedulingMinShare, forceDisableCompaction, checkpoint,
+          initialCheckpointProvider, help);
     }
-  
+
     @Override
     public String toString() {
       return "Config{"
-              + "targetBasePath='" + targetBasePath + '\''
-              + ", targetTableName='" + targetTableName + '\''
-              + ", tableType='" + tableType + '\''
-              + ", baseFileFormat='" + baseFileFormat + '\''
-              + ", propsFilePath='" + propsFilePath + '\''
-              + ", configs=" + configs
-              + ", sourceClassName='" + sourceClassName + '\''
-              + ", sourceOrderingField='" + sourceOrderingField + '\''
-              + ", payloadClassName='" + payloadClassName + '\''
-              + ", schemaProviderClassName='" + schemaProviderClassName + '\''
-              + ", transformerClassNames=" + transformerClassNames
-              + ", sourceLimit=" + sourceLimit
-              + ", operation=" + operation
-              + ", filterDupes=" + filterDupes
-              + ", enableHiveSync=" + enableHiveSync
-              + ", maxPendingCompactions=" + maxPendingCompactions
-              + ", maxPendingClustering=" + maxPendingClustering
-              + ", continuousMode=" + continuousMode
-              + ", minSyncIntervalSeconds=" + minSyncIntervalSeconds
-              + ", sparkMaster='" + sparkMaster + '\''
-              + ", commitOnErrors=" + commitOnErrors
-              + ", deltaSyncSchedulingWeight=" + deltaSyncSchedulingWeight
-              + ", compactSchedulingWeight=" + compactSchedulingWeight
-              + ", deltaSyncSchedulingMinShare=" + deltaSyncSchedulingMinShare
-              + ", compactSchedulingMinShare=" + compactSchedulingMinShare
-              + ", forceDisableCompaction=" + forceDisableCompaction
-              + ", checkpoint='" + checkpoint + '\''
-              + ", initialCheckpointProvider='" + initialCheckpointProvider + '\''
-              + ", help=" + help
-              + '}';
+          + "targetBasePath='" + targetBasePath + '\''
+          + ", targetTableName='" + targetTableName + '\''
+          + ", tableType='" + tableType + '\''
+          + ", baseFileFormat='" + baseFileFormat + '\''
+          + ", propsFilePath='" + propsFilePath + '\''
+          + ", configs=" + configs
+          + ", sourceClassName='" + sourceClassName + '\''
+          + ", sourceOrderingField='" + sourceOrderingField + '\''
+          + ", payloadClassName='" + payloadClassName + '\''
+          + ", schemaProviderClassName='" + schemaProviderClassName + '\''
+          + ", transformerClassNames=" + transformerClassNames
+          + ", sourceLimit=" + sourceLimit
+          + ", operation=" + operation
+          + ", filterDupes=" + filterDupes
+          + ", enableHiveSync=" + enableHiveSync
+          + ", maxPendingCompactions=" + maxPendingCompactions
+          + ", maxPendingClustering=" + maxPendingClustering
+          + ", continuousMode=" + continuousMode
+          + ", minSyncIntervalSeconds=" + minSyncIntervalSeconds
+          + ", sparkMaster='" + sparkMaster + '\''
+          + ", commitOnErrors=" + commitOnErrors
+          + ", deltaSyncSchedulingWeight=" + deltaSyncSchedulingWeight
+          + ", compactSchedulingWeight=" + compactSchedulingWeight
+          + ", deltaSyncSchedulingMinShare=" + deltaSyncSchedulingMinShare
+          + ", compactSchedulingMinShare=" + compactSchedulingMinShare
+          + ", forceDisableCompaction=" + forceDisableCompaction
+          + ", checkpoint='" + checkpoint + '\''
+          + ", initialCheckpointProvider='" + initialCheckpointProvider + '\''
+          + ", help=" + help
+          + '}';
     }
   }
 
@@ -519,17 +523,17 @@ public class HoodieDeltaStreamer implements Serializable {
   public static void main(String[] args) throws Exception {
     final Config cfg = getConfig(args);
     Map<String, String> additionalSparkConfigs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
-    JavaSparkContext jssc =
-        UtilHelpers.buildSparkContext("delta-streamer-" + cfg.targetTableName, cfg.sparkMaster, additionalSparkConfigs);
+    SparkSession sparkSession =
+        UtilHelpers.buildSparkSession("delta-streamer-" + cfg.targetTableName, cfg.sparkMaster, additionalSparkConfigs);
 
     if (cfg.enableHiveSync) {
       LOG.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");
     }
 
     try {
-      new HoodieDeltaStreamer(cfg, jssc).sync();
+      new HoodieDeltaStreamer(cfg, sparkSession).sync();
     } finally {
-      jssc.stop();
+      sparkSession.stop();
     }
   }
 
@@ -584,11 +588,11 @@ public class HoodieDeltaStreamer implements Serializable {
      */
     private transient DeltaSync deltaSync;
 
-    public DeltaSyncService(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
+    public DeltaSyncService(Config cfg, SparkSession sparkSession, FileSystem fs, Configuration conf,
                             Option<TypedProperties> properties) throws IOException {
       this.cfg = cfg;
-      this.jssc = jssc;
-      this.sparkSession = SparkSession.builder().config(jssc.getConf()).getOrCreate();
+      this.jssc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
+      this.sparkSession = sparkSession;
       this.asyncCompactService = Option.empty();
       this.asyncClusteringService = Option.empty();
 
@@ -621,16 +625,21 @@ public class HoodieDeltaStreamer implements Serializable {
       this.props = properties.get();
       LOG.info(toSortedTruncatedString(props));
 
-      this.schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
-          UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc), props, jssc, cfg.transformerClassNames);
+      if (HiveSchemaProvider.class.getName().equals(cfg.schemaProviderClassName)) {
+        this.schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
+            UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, sparkSession), props, jssc, cfg.transformerClassNames);
+      } else {
+        this.schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
+            UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc), props, jssc, cfg.transformerClassNames);
+      }
 
       deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, props, jssc, fs, conf,
           this::onInitializingWriteClient);
     }
 
-    public DeltaSyncService(HoodieDeltaStreamer.Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf)
+    public DeltaSyncService(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, FileSystem fs, Configuration conf)
         throws IOException {
-      this(cfg, jssc, fs, conf, Option.empty());
+      this(cfg, sparkSession, fs, conf, Option.empty());
     }
 
     public DeltaSync getDeltaSync() {

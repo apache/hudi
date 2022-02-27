@@ -67,7 +67,7 @@ public class WriterContext {
     try {
       this.schemaProvider = UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jsc);
       String schemaStr = schemaProvider.getSourceSchema().toString();
-      this.hoodieTestSuiteWriter = new HoodieTestSuiteWriter(jsc, props, cfg, schemaStr);
+      this.hoodieTestSuiteWriter = new HoodieTestSuiteWriter(sparkSession, props, cfg, schemaStr);
       int inputParallelism = cfg.inputParallelism > 0 ? cfg.inputParallelism : jsc.defaultParallelism();
       this.deltaGenerator = new DeltaGenerator(
           new DFSDeltaConfig(DeltaOutputMode.valueOf(cfg.outputTypeName), DeltaInputType.valueOf(cfg.inputFormatName),

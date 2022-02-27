@@ -96,7 +96,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     prepJobConfig.continuousMode = true;
     prepJobConfig.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     prepJobConfig.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN.key()));
-    HoodieDeltaStreamer prepJob = new HoodieDeltaStreamer(prepJobConfig, jsc());
+    HoodieDeltaStreamer prepJob = new HoodieDeltaStreamer(prepJobConfig, spark());
 
     // Prepare base dataset with some commits
     deltaStreamerTestRunner(prepJob, prepJobConfig, (r) -> {
@@ -128,10 +128,10 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     cfgBackfillJob.checkpoint = commitMetadata.getMetadata(CHECKPOINT_KEY);
     cfgBackfillJob.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     cfgBackfillJob.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN.key()));
-    HoodieDeltaStreamer backfillJob = new HoodieDeltaStreamer(cfgBackfillJob, jsc());
+    HoodieDeltaStreamer backfillJob = new HoodieDeltaStreamer(cfgBackfillJob, spark());
 
     // re-init ingestion job to start sync service
-    HoodieDeltaStreamer ingestionJob2 = new HoodieDeltaStreamer(cfgIngestionJob, jsc());
+    HoodieDeltaStreamer ingestionJob2 = new HoodieDeltaStreamer(cfgIngestionJob, spark());
 
     // run ingestion & backfill in parallel, create conflict and fail one
     runJobsInParallel(tableBasePath, tableType, totalRecords, ingestionJob2,
@@ -158,7 +158,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     prepJobConfig.continuousMode = true;
     prepJobConfig.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     prepJobConfig.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN.key()));
-    HoodieDeltaStreamer prepJob = new HoodieDeltaStreamer(prepJobConfig, jsc());
+    HoodieDeltaStreamer prepJob = new HoodieDeltaStreamer(prepJobConfig, spark());
 
     // Prepare base dataset with some commits
     deltaStreamerTestRunner(prepJob, prepJobConfig, (r) -> {
@@ -196,9 +196,9 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     cfgIngestionJob2.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     cfgIngestionJob2.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN.key()));
     // re-init ingestion job
-    HoodieDeltaStreamer ingestionJob3 = new HoodieDeltaStreamer(cfgIngestionJob2, jsc());
+    HoodieDeltaStreamer ingestionJob3 = new HoodieDeltaStreamer(cfgIngestionJob2, spark());
     // re-init backfill job
-    HoodieDeltaStreamer backfillJob2 = new HoodieDeltaStreamer(cfgBackfillJob2, jsc());
+    HoodieDeltaStreamer backfillJob2 = new HoodieDeltaStreamer(cfgBackfillJob2, spark());
 
     // run ingestion & backfill in parallel, avoid conflict and succeed both
     runJobsInParallel(tableBasePath, tableType, totalRecords, ingestionJob3,
@@ -226,7 +226,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     prepJobConfig.continuousMode = true;
     prepJobConfig.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     prepJobConfig.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN.key()));
-    HoodieDeltaStreamer prepJob = new HoodieDeltaStreamer(prepJobConfig, jsc());
+    HoodieDeltaStreamer prepJob = new HoodieDeltaStreamer(prepJobConfig, spark());
 
     // Prepare base dataset with some commits
     deltaStreamerTestRunner(prepJob, prepJobConfig, (r) -> {
@@ -264,7 +264,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     cfgBackfillJob.checkpoint = commitMetadataForLastInstant.getMetadata(CHECKPOINT_KEY);
     cfgBackfillJob.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     cfgBackfillJob.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN.key()));
-    HoodieDeltaStreamer backfillJob = new HoodieDeltaStreamer(cfgBackfillJob, jsc());
+    HoodieDeltaStreamer backfillJob = new HoodieDeltaStreamer(cfgBackfillJob, spark());
     backfillJob.sync();
 
     meta.reloadActiveTimeline();
@@ -276,7 +276,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     verifyCommitMetadataCheckpoint(meta, null);
 
     cfgBackfillJob.checkpoint = null;
-    new HoodieDeltaStreamer(cfgBackfillJob, jsc()).sync(); // if deltastreamer checkpoint fetch does not walk back to older commits, this sync will fail
+    new HoodieDeltaStreamer(cfgBackfillJob, spark()).sync(); // if deltastreamer checkpoint fetch does not walk back to older commits, this sync will fail
     meta.reloadActiveTimeline();
     Assertions.assertEquals(totalCommits + 2, meta.getCommitsTimeline().filterCompletedInstants().countInstants());
     verifyCommitMetadataCheckpoint(meta, "00008");

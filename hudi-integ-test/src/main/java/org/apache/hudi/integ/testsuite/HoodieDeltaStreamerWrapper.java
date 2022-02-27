@@ -27,7 +27,7 @@ import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.SparkSession;
 
 /**
  * Extends the {@link HoodieDeltaStreamer} to expose certain operations helpful in running the Test Suite. This is done to achieve 2 things 1) Leverage some components of {@link HoodieDeltaStreamer}
@@ -35,8 +35,8 @@ import org.apache.spark.api.java.JavaSparkContext;
  */
 public class HoodieDeltaStreamerWrapper extends HoodieDeltaStreamer {
 
-  public HoodieDeltaStreamerWrapper(Config cfg, JavaSparkContext jssc) throws Exception {
-    super(cfg, jssc);
+  public HoodieDeltaStreamerWrapper(Config cfg, SparkSession sparkSession) throws Exception {
+    super(cfg, sparkSession);
   }
 
   public JavaRDD<WriteStatus> upsert(WriteOperationType operation) throws Exception {
