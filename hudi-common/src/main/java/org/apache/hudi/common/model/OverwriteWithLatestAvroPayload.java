@@ -85,7 +85,7 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
    * @returns {@code true} if record represents a delete record. {@code false} otherwise.
    */
   protected boolean isDeleteRecord(GenericRecord genericRecord) {
-    final String isDeleteKey = "_hoodie_is_deleted";
+    final String isDeleteKey = HoodieRecord.HOODIE_IS_DELETED;
     // Modify to be compatible with new version Avro.
     // The new version Avro throws for GenericRecord.get if the field name
     // does not exist in the schema.
