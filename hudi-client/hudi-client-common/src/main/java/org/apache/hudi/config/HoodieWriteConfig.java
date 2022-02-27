@@ -31,6 +31,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.common.fs.FileSystemRetryConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -447,7 +448,14 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("Master control to disable all table services including archive, clean, compact, cluster, etc.");
 
+  public static final ConfigProperty<Boolean> RELEASE_RESOURCE_ENABLE = ConfigProperty
+      .key("hoodie.release.resource.on.completion.enable")
+      .defaultValue(true)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Control to enable release all persist rdds when the spark job finish.");
+
   private ConsistencyGuardConfig consistencyGuardConfig;
+  private FileSystemRetryConfig fileSystemRetryConfig;
 
   // Hoodie Write Client transparently rewrites File System View config when embedded mode is enabled
   // We keep track of original config and rewritten config
@@ -841,6 +849,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     newProps.putAll(props);
     this.engineType = engineType;
     this.consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().fromProperties(newProps).build();
+    this.fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().fromProperties(newProps).build();
     this.clientSpecifiedViewStorageConfig = FileSystemViewStorageConfig.newBuilder().fromProperties(newProps).build();
     this.viewStorageConfig = clientSpecifiedViewStorageConfig;
     this.hoodiePayloadConfig = HoodiePayloadConfig.newBuilder().fromProperties(newProps).build();
@@ -1083,6 +1092,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED);
   }
 
+  public int getCleanerHoursRetained() {
+    return getInt(HoodieCompactionConfig.CLEANER_HOURS_RETAINED);
+  }
+
   public int getMaxCommitsToKeep() {
     return getInt(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP);
   }
@@ -1109,6 +1122,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getCopyOnWriteRecordSizeEstimate() {
     return getInt(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE);
+  }
+
+  public boolean allowMultipleCleans() {
+    return getBoolean(HoodieCompactionConfig.ALLOW_MULTIPLE_CLEANS);
   }
 
   public boolean shouldAutoTuneInsertSplits() {
@@ -1714,7 +1731,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public String getMetricReporterMetricsNamePrefix() {
     return getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_PREFIX);
   }
-  
+
   /**
    * memory configs.
    */
@@ -1732,6 +1749,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public ConsistencyGuardConfig getConsistencyGuardConfig() {
     return consistencyGuardConfig;
+  }
+
+  public FileSystemRetryConfig getFileSystemRetryConfig() {
+    return fileSystemRetryConfig;
   }
 
   public void setConsistencyGuardConfig(ConsistencyGuardConfig consistencyGuardConfig) {
@@ -1937,6 +1958,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean areTableServicesEnabled() {
     return getBooleanOrDefault(TABLE_SERVICES_ENABLED);
+  }
+
+  public boolean areReleaseResourceEnabled() {
+    return getBooleanOrDefault(RELEASE_RESOURCE_ENABLE);
   }
 
   /**
@@ -2306,6 +2331,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withTableServicesEnabled(boolean enabled) {
       writeConfig.setValue(TABLE_SERVICES_ENABLED, Boolean.toString(enabled));
+      return this;
+    }
+
+    public Builder withReleaseResourceEnabled(boolean enabled) {
+      writeConfig.setValue(RELEASE_RESOURCE_ENABLE, Boolean.toString(enabled));
       return this;
     }
 

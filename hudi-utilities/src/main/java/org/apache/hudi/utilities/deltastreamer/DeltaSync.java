@@ -585,6 +585,10 @@ public class DeltaSync implements Serializable {
       case INSERT_OVERWRITE_TABLE:
         writeStatusRDD = writeClient.insertOverwriteTable(records, instantTime).getWriteStatuses();
         break;
+      case DELETE_PARTITION:
+        List<String> partitions = records.map(record -> record.getPartitionPath()).distinct().collect();
+        writeStatusRDD = writeClient.deletePartitions(partitions, instantTime).getWriteStatuses();
+        break;
       default:
         throw new HoodieDeltaStreamerException("Unknown operation : " + cfg.operation);
     }

@@ -531,7 +531,11 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   protected void releaseResources() {
-    ((HoodieSparkEngineContext) context).getJavaSparkContext().getPersistentRDDs().values()
-        .forEach(rdd -> rdd.unpersist());
+    // If we do not explicitly release the resource, spark will automatically manage the resource and clean it up automatically
+    // see: https://spark.apache.org/docs/latest/rdd-programming-guide.html#removing-data
+    if (config.areReleaseResourceEnabled()) {
+      ((HoodieSparkEngineContext) context).getJavaSparkContext().getPersistentRDDs().values()
+          .forEach(JavaRDD::unpersist);
+    }
   }
 }

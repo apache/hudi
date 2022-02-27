@@ -18,12 +18,10 @@
 
 package org.apache.hudi.testutils;
 
-import org.apache.hudi.AvroConversionHelper;
-import org.apache.hudi.AvroConversionUtils;
-
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.AvroConversionUtils;
 import org.apache.spark.package$;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -33,15 +31,14 @@ import org.apache.spark.sql.catalyst.encoders.RowEncoder;
 import org.apache.spark.sql.catalyst.expressions.Attribute;
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema;
 import org.apache.spark.sql.types.StructType;
+import scala.Function1;
+import scala.collection.JavaConversions;
+import scala.collection.JavaConverters;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.stream.Collectors;
-
-import scala.Function1;
-import scala.collection.JavaConversions;
-import scala.collection.JavaConverters;
 
 public class KeyGeneratorTestUtilities {
 
@@ -51,8 +48,7 @@ public class KeyGeneratorTestUtilities {
       + "{\"name\": \"timestamp\",\"type\": \"long\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
       + "{\"name\": \"ts_ms\", \"type\": \"string\"},"
       + "{\"name\": \"pii_col\", \"type\": \"string\"},"
-      + "{\"name\": \"nested_col\",\"type\": "
-      + NESTED_COL_SCHEMA + "}"
+      + "{\"name\": \"nested_col\",\"type\": [\"null\", " + NESTED_COL_SCHEMA + "]}"
       + "]}";
 
   public static final String TEST_STRUCTNAME = "test_struct_name";
@@ -86,8 +82,8 @@ public class KeyGeneratorTestUtilities {
   }
 
   public static Row getRow(GenericRecord record, Schema schema, StructType structType) {
-    Function1<Object, Object> converterFn = AvroConversionHelper.createConverterToRow(schema, structType);
-    Row row = (Row) converterFn.apply(record);
+    Function1<GenericRecord, Row> converterFn = AvroConversionUtils.createConverterToRow(schema, structType);
+    Row row = converterFn.apply(record);
     int fieldCount = structType.fieldNames().length;
     Object[] values = new Object[fieldCount];
     for (int i = 0; i < fieldCount; i++) {

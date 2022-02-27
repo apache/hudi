@@ -104,7 +104,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     final int numRecords = 1000;
     // Create 3 partitions, each partition holds one parquet file and 1000 records
     List<File> partitionDirs = InputFormatTestUtil
-        .prepareMultiPartitionedParquetTable(tempDir, schema, 3, numRecords, commitTime);
+        .prepareMultiPartitionedParquetTable(tempDir, schema, 3, numRecords, commitTime, HoodieTableType.MERGE_ON_READ);
     InputFormatTestUtil.commit(tempDir, commitTime);
 
     TableDesc tblDesc = Utilities.defaultTd;

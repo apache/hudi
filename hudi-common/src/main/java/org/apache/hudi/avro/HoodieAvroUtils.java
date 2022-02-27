@@ -40,7 +40,6 @@ import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.specific.SpecificRecordBase;
-
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -341,14 +340,24 @@ public class HoodieAvroUtils {
   /**
    * Given an Avro record with a given schema, rewrites it into the new schema while setting fields only from the new
    * schema.
+   *
+   * NOTE: This method is rewriting every record's field that is record itself recursively. It's
+   *       caller's responsibility to make sure that no unnecessary re-writing occurs (by preemptively
+   *       checking whether the record does require re-writing to adhere to the new schema)
+   *
    * NOTE: Here, the assumption is that you cannot go from an evolved schema (schema with (N) fields)
-   * to an older schema (schema with (N-1) fields). All fields present in the older record schema MUST be present in the
-   * new schema and the default/existing values are carried over.
-   * This particular method does the following things :
-   * a) Create a new empty GenericRecord with the new schema.
-   * b) For GenericRecord, copy over the data from the old schema to the new schema or set default values for all fields of this
-   * transformed schema
-   * c) For SpecificRecord, hoodie_metadata_fields have a special treatment. This is done because for code generated
+   *       to an older schema (schema with (N-1) fields). All fields present in the older record schema MUST be present in the
+   *       new schema and the default/existing values are carried over.
+   *
+   * This particular method does the following:
+   * <ol>
+   *   <li>Create a new empty GenericRecord with the new schema.</li>
+   *   <li>For GenericRecord, copy over the data from the old schema to the new schema or set default values for all
+   *   fields of this transformed schema</li>
+   *   <li>For SpecificRecord, hoodie_metadata_fields have a special treatment (see below)</li>
+   * </ol>
+   *
+   * For SpecificRecord we ignore Hudi Metadata fields, because for code generated
    * avro classes (HoodieMetadataRecord), the avro record is a SpecificBaseRecord type instead of a GenericRecord.
    * SpecificBaseRecord throws null pointer exception for record.get(name) if name is not present in the schema of the
    * record (which happens when converting a SpecificBaseRecord without hoodie_metadata_fields to a new record with it).
@@ -360,16 +369,16 @@ public class HoodieAvroUtils {
     GenericRecord newRecord = new GenericData.Record(newSchema);
     boolean isSpecificRecord = oldRecord instanceof SpecificRecordBase;
     for (Schema.Field f : newSchema.getFields()) {
-      if (!isSpecificRecord) {
-        copyOldValueOrSetDefault(oldRecord, newRecord, f);
-      } else if (!isMetadataField(f.name())) {
+      if (!(isSpecificRecord && isMetadataField(f.name()))) {
         copyOldValueOrSetDefault(oldRecord, newRecord, f);
       }
     }
+
     if (!GenericData.get().validate(newSchema, newRecord)) {
       throw new SchemaCompatibilityException(
           "Unable to validate the rewritten record " + oldRecord + " against schema " + newSchema);
     }
+
     return newRecord;
   }
 
@@ -383,18 +392,20 @@ public class HoodieAvroUtils {
     return records.stream().map(r -> rewriteRecord(r, newSchema)).collect(Collectors.toList());
   }
 
-  private static void copyOldValueOrSetDefault(GenericRecord oldRecord, GenericRecord newRecord, Schema.Field f) {
-    // cache the result of oldRecord.get() to save CPU expensive hash lookup
+  private static void copyOldValueOrSetDefault(GenericRecord oldRecord, GenericRecord newRecord, Schema.Field field) {
     Schema oldSchema = oldRecord.getSchema();
-    Object fieldValue = oldSchema.getField(f.name()) == null ? null : oldRecord.get(f.name());
-    if (fieldValue == null) {
-      if (f.defaultVal() instanceof JsonProperties.Null) {
-        newRecord.put(f.name(), null);
-      } else {
-        newRecord.put(f.name(), f.defaultVal());
-      }
+    Object fieldValue = oldSchema.getField(field.name()) == null ? null : oldRecord.get(field.name());
+
+    if (fieldValue != null) {
+      // In case field's value is a nested record, we have to rewrite it as well
+      Object newFieldValue = fieldValue instanceof GenericRecord
+          ? rewriteRecord((GenericRecord) fieldValue, resolveNullableSchema(field.schema()))
+          : fieldValue;
+      newRecord.put(field.name(), newFieldValue);
+    } else if (field.defaultVal() instanceof JsonProperties.Null) {
+      newRecord.put(field.name(), null);
     } else {
-      newRecord.put(f.name(), fieldValue);
+      newRecord.put(field.name(), field.defaultVal());
     }
   }
 
@@ -609,5 +620,25 @@ public class HoodieAvroUtils {
                                              String[] columns,
                                              SerializableSchema schema, boolean consistentLogicalTimestampEnabled) {
     return getRecordColumnValues(record, columns, schema.get(), consistentLogicalTimestampEnabled);
+  }
+
+  private static Schema resolveNullableSchema(Schema schema) {
+    if (schema.getType() != Schema.Type.UNION) {
+      return schema;
+    }
+
+    List<Schema> innerTypes = schema.getTypes();
+    Schema nonNullType =
+        innerTypes.stream()
+          .filter(it -> it.getType() != Schema.Type.NULL)
+          .findFirst()
+          .orElse(null);
+
+    if (innerTypes.size() != 2 || nonNullType == null) {
+      throw new AvroRuntimeException(
+          String.format("Unsupported Avro UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
+    }
+
+    return nonNullType;
   }
 }
