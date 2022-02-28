@@ -29,7 +29,7 @@ import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
 /**
- * CLI command to for marker options.
+ * CLI command for marker options.
  */
 @Component
 public class MarkersCommand implements CommandMarker {
@@ -38,7 +38,7 @@ public class MarkersCommand implements CommandMarker {
   public String deleteMarker(@CliOption(key = {"commit"}, help = "Delete a marker") final String instantTime,
       @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath,
       @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
-      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
+      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "1G",
           help = "Spark executor memory") final String sparkMemory)
       throws Exception {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
