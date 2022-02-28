@@ -112,8 +112,12 @@ public class EmbeddedTimelineService {
     FileSystemViewStorageType viewStorageType = writeConfig.getClientSpecifiedViewStorageConfig()
         .shouldEnableBackupForRemoteFileSystemView()
         ? FileSystemViewStorageType.REMOTE_FIRST : FileSystemViewStorageType.REMOTE_ONLY;
-    return FileSystemViewStorageConfig.newBuilder().withStorageType(viewStorageType)
-        .withRemoteServerHost(hostAddr).withRemoteServerPort(serverPort).build();
+    return FileSystemViewStorageConfig.newBuilder()
+        .withStorageType(viewStorageType)
+        .withRemoteServerHost(hostAddr)
+        .withRemoteServerPort(serverPort)
+        .withRemoteTimelineClientTimeoutSecs(writeConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientTimeoutSecs())
+        .build();
   }
 
   public FileSystemViewManager getViewManager() {

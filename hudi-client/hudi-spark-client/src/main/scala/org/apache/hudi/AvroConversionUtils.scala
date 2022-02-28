@@ -17,7 +17,6 @@
  */
 
 package org.apache.hudi
-
 import org.apache.avro.Schema.Type
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedRecord}
 import org.apache.avro.{AvroRuntimeException, JsonProperties, Schema}
