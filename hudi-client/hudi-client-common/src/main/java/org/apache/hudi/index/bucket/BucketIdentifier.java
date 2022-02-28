@@ -81,11 +81,6 @@ public class BucketIdentifier {
   }
 
   public static int mod(int x, int y) {
-    int r = x % y;
-    if (r < 0) {
-      return (r + y) % y;
-    } else {
-      return r;
-    }
+    return x % y;
   }
 }

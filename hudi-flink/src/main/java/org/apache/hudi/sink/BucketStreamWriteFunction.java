@@ -49,7 +49,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
 
   private int parallelism;
 
-  private int hiveBucketNum;
+  private int bucketNum;
 
   protected transient HoodieFlinkTable table;
 
@@ -70,7 +70,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
   @Override
   public void open(Configuration parameters) throws IOException {
     super.open(parameters);
-    this.hiveBucketNum = config.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
+    this.bucketNum = config.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
     this.indexKeyFields = config.getString(FlinkOptions.INDEX_KEY_FIELD);
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.parallelism = getRuntimeContext().getNumberOfParallelSubtasks();
@@ -90,7 +90,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     final HoodieKey hoodieKey = record.getKey();
     final HoodieRecordLocation location;
 
-    final int bucketNum = BucketIdentifier.getBucketId(hoodieKey, indexKeyFields, hiveBucketNum);
+    final int bucketNum = BucketIdentifier.getBucketId(hoodieKey, indexKeyFields, this.bucketNum);
     final String partitionBucketId = BucketIdentifier.partitionBucketIdStr(hoodieKey.getPartitionPath(), bucketNum);
 
     if (bucketToFileIDMap.containsKey(partitionBucketId)) {
@@ -118,7 +118,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     // bootstrap bucket info from existing file system
     // bucketNum % totalParallelism == this taskID belongs to this task
     HashSet<Integer> bucketToLoad = new HashSet<>();
-    for (int i = 0; i < hiveBucketNum; i++) {
+    for (int i = 0; i < bucketNum; i++) {
       int partitionOfBucket = BucketIdentifier.mod(i, parallelism);
       if (partitionOfBucket == taskID) {
         LOG.info(String.format("Bootstrapping index. Adding bucket %s , "
