@@ -29,7 +29,7 @@ import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
 /**
- * CLI command to display marker options.
+ * CLI command to for marker options.
  */
 @Component
 public class MarkersCommand implements CommandMarker {
