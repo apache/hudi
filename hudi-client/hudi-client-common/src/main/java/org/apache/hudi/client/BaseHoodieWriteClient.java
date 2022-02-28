@@ -141,7 +141,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   public BaseHoodieWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
                                    Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService);
-    this.metrics = new HoodieMetrics(config);
+    this.metrics = new HoodieMetrics(config.getMetricsConfig());
     this.index = createIndex(writeConfig);
     this.txnManager = new TransactionManager(config, fs);
   }

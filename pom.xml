@@ -36,6 +36,7 @@
 
   <modules>
     <module>hudi-common</module>
+    <module>hudi-metrics-common</module>
     <module>hudi-cli</module>
     <module>hudi-client</module>
     <module>hudi-aws</module>

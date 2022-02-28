@@ -18,7 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
@@ -57,13 +56,14 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.metrics.config.HoodieMetricsConfig;
+import org.apache.hudi.metrics.config.HoodieMetricsGraphiteConfig;
+import org.apache.hudi.metrics.config.HoodieMetricsJmxConfig;
 
+import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -262,33 +262,33 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .withParallelism(parallelism, parallelism)
         .withDeleteParallelism(parallelism)
         .withRollbackParallelism(parallelism)
-        .withFinalizeWriteParallelism(parallelism)
-        .withAllowMultiWriteOnSameInstant(true)
-        .withKeyGenerator(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
-        .withPopulateMetaFields(dataWriteConfig.getMetadataConfig().populateMetaFields());
+            .withFinalizeWriteParallelism(parallelism)
+            .withAllowMultiWriteOnSameInstant(true)
+            .withKeyGenerator(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
+            .withPopulateMetaFields(dataWriteConfig.getMetadataConfig().populateMetaFields());
 
     // RecordKey properties are needed for the metadata table records
     final Properties properties = new Properties();
     properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), RECORD_KEY_FIELD_NAME);
     properties.put("hoodie.datasource.write.recordkey.field", RECORD_KEY_FIELD_NAME);
     builder.withProperties(properties);
-
-    if (writeConfig.isMetricsOn()) {
+    HoodieMetricsConfig metricsConfig = writeConfig.getMetricsConfig();
+    if (metricsConfig.isMetricsOn()) {
       builder.withMetricsConfig(HoodieMetricsConfig.newBuilder()
-          .withReporterType(writeConfig.getMetricsReporterType().toString())
-          .withExecutorMetrics(writeConfig.isExecutorMetricsEnabled())
-          .on(true).build());
-      switch (writeConfig.getMetricsReporterType()) {
+              .withReporterType(metricsConfig.getMetricsReporterType().toString())
+              .withExecutorMetrics(metricsConfig.isExecutorMetricsEnabled())
+              .on(true).build());
+      switch (metricsConfig.getMetricsReporterType()) {
         case GRAPHITE:
           builder.withMetricsGraphiteConfig(HoodieMetricsGraphiteConfig.newBuilder()
-              .onGraphitePort(writeConfig.getGraphiteServerPort())
-              .toGraphiteHost(writeConfig.getGraphiteServerHost())
-              .usePrefix(writeConfig.getGraphiteMetricPrefix()).build());
+                  .onGraphitePort(metricsConfig.getGraphiteServerPort())
+                  .toGraphiteHost(metricsConfig.getGraphiteServerHost())
+                  .usePrefix(metricsConfig.getGraphiteMetricPrefix()).build());
           break;
         case JMX:
           builder.withMetricsJmxConfig(HoodieMetricsJmxConfig.newBuilder()
-              .onJmxPort(writeConfig.getJmxPort())
-              .toJmxHost(writeConfig.getJmxHost())
+                  .onJmxPort(metricsConfig.getJmxPort())
+                  .toJmxHost(metricsConfig.getJmxHost())
               .build());
           break;
         case DATADOG:
@@ -299,7 +299,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         case CLOUDWATCH:
           break;
         default:
-          throw new HoodieMetadataException("Unsupported Metrics Reporter type " + writeConfig.getMetricsReporterType());
+          throw new HoodieMetadataException("Unsupported Metrics Reporter type " + metricsConfig.getMetricsReporterType());
       }
     }
     return builder.build();

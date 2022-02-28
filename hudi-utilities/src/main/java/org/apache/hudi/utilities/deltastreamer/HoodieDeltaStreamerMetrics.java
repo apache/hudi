@@ -41,7 +41,7 @@ public class HoodieDeltaStreamerMetrics implements Serializable {
     this.config = config;
     this.tableName = config.getTableName();
     if (config.isMetricsOn()) {
-      Metrics.init(config);
+      Metrics.init(config.getMetricsConfig());
       this.overallTimerName = getMetricsName("timer", "deltastreamer");
       this.hiveSyncTimerName = getMetricsName("timer", "deltastreamerHiveSync");
       this.metaSyncTimerName = getMetricsName("timer", "deltastreamerMetaSync");
@@ -74,7 +74,7 @@ public class HoodieDeltaStreamerMetrics implements Serializable {
   }
 
   String getMetricsName(String action, String metric) {
-    return config == null ? null : String.format("%s.%s.%s", config.getMetricReporterMetricsNamePrefix(), action, metric);
+    return config == null ? null : String.format("%s.%s.%s", config.getMetricsConfig().getMetricReporterMetricsNamePrefix(), action, metric);
   }
 
   public void updateDeltaStreamerMetrics(long durationInNs) {

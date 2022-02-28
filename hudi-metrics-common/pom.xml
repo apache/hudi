@@ -17,16 +17,13 @@
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <parent>
-    <artifactId>hudi-client</artifactId>
+    <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
     <version>0.11.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
-  <artifactId>hudi-client-common</artifactId>
-  <version>0.11.0-SNAPSHOT</version>
-
-  <name>hudi-client-common</name>
+  <artifactId>hudi-metrics-common</artifactId>
   <packaging>jar</packaging>
 
   <dependencies>
@@ -38,20 +35,9 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-metrics-common</artifactId>
+      <artifactId>hudi-aws</artifactId>
       <version>${project.version}</version>
     </dependency>
-    <!--    <dependency>-->
-    <!--      <groupId>org.apache.hudi</groupId>-->
-    <!--      <artifactId>hudi-aws</artifactId>-->
-    <!--      <version>${project.version}</version>-->
-    <!--    </dependency>-->
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-timeline-service</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-
     <dependency>
       <groupId>joda-time</groupId>
       <artifactId>joda-time</artifactId>
@@ -69,48 +55,41 @@
       <artifactId>parquet-avro</artifactId>
     </dependency>
 
-    <!-- Hilbert Curve -->
-    <dependency>
-      <groupId>com.github.davidmoten</groupId>
-      <artifactId>hilbert-curve</artifactId>
-      <version>0.2.2</version>
-    </dependency>
-
     <!-- Dropwizard Metrics -->
-    <!--    <dependency>-->
-    <!--      <groupId>io.dropwizard.metrics</groupId>-->
-    <!--      <artifactId>metrics-graphite</artifactId>-->
-    <!--      <exclusions>-->
-    <!--        <exclusion>-->
-    <!--          <groupId>com.rabbitmq</groupId>-->
-    <!--          <artifactId>*</artifactId>-->
-    <!--        </exclusion>-->
-    <!--      </exclusions>-->
-    <!--    </dependency>-->
-    <!--    <dependency>-->
-    <!--      <groupId>io.dropwizard.metrics</groupId>-->
-    <!--      <artifactId>metrics-core</artifactId>-->
-    <!--    </dependency>-->
-    <!--    <dependency>-->
-    <!--      <groupId>io.dropwizard.metrics</groupId>-->
-    <!--      <artifactId>metrics-jmx</artifactId>-->
-    <!--    </dependency>-->
-    <!--    <dependency>-->
-    <!--      <groupId>io.prometheus</groupId>-->
-    <!--      <artifactId>simpleclient</artifactId>-->
-    <!--    </dependency>-->
-    <!--    <dependency>-->
-    <!--      <groupId>io.prometheus</groupId>-->
-    <!--      <artifactId>simpleclient_httpserver</artifactId>-->
-    <!--    </dependency>-->
-    <!--    <dependency>-->
-    <!--      <groupId>io.prometheus</groupId>-->
-    <!--      <artifactId>simpleclient_dropwizard</artifactId>-->
-    <!--    </dependency>-->
-    <!--    <dependency>-->
-    <!--      <groupId>io.prometheus</groupId>-->
-    <!--      <artifactId>simpleclient_pushgateway</artifactId>-->
-    <!--    </dependency>-->
+    <dependency>
+      <groupId>io.dropwizard.metrics</groupId>
+      <artifactId>metrics-graphite</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>com.rabbitmq</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>io.dropwizard.metrics</groupId>
+      <artifactId>metrics-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.dropwizard.metrics</groupId>
+      <artifactId>metrics-jmx</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.prometheus</groupId>
+      <artifactId>simpleclient</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.prometheus</groupId>
+      <artifactId>simpleclient_httpserver</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.prometheus</groupId>
+      <artifactId>simpleclient_dropwizard</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.prometheus</groupId>
+      <artifactId>simpleclient_pushgateway</artifactId>
+    </dependency>
     <!-- Hoodie - Tests -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
@@ -119,49 +98,6 @@
       <classifier>tests</classifier>
       <type>test-jar</type>
       <scope>test</scope>
-    </dependency>
-
-    <!-- Hadoop -->
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-hdfs</artifactId>
-      <classifier>tests</classifier>
-      <scope>test</scope>
-      <!-- Need these exclusions to make sure JavaSparkContext can be setup. https://issues.apache.org/jira/browse/SPARK-1693 -->
-      <exclusions>
-        <exclusion>
-          <groupId>org.mortbay.jetty</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>javax.servlet.jsp</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>javax.servlet</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-common</artifactId>
-      <classifier>tests</classifier>
-      <scope>test</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>org.mortbay.jetty</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>javax.servlet.jsp</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>javax.servlet</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
 
     <!-- Other Utils -->
