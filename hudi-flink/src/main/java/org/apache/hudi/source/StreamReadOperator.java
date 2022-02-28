@@ -64,7 +64,7 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
 
   private static final Logger LOG = LoggerFactory.getLogger(StreamReadOperator.class);
 
-  private static final int MINI_BATCH_SIZE = 1000;
+  private static final int MINI_BATCH_SIZE = 2048;
 
   // It's the same thread that runs this operator and checkpoint actions. Use this executor to schedule only
   // splits for subsequent reading, so that a new checkpoint could be triggered without blocking a long time
