@@ -76,6 +76,8 @@
                   <include>com.esotericsoftware:minlog</include>
                   <include>org.apache.hbase:hbase-common</include>
                   <include>org.apache.hbase:hbase-client</include>
+                  <include>org.apache.hbase:hbase-hadoop-compat</include>
+                  <include>org.apache.hbase:hbase-hadoop2-compat</include>
                   <include>org.apache.hbase:hbase-metrics</include>
                   <include>org.apache.hbase:hbase-metrics-api</include>
                   <include>org.apache.hbase:hbase-protocol-shaded</include>
@@ -84,13 +86,11 @@
                   <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
                   <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
                   <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
-                  <include>org.apache.hbase:hbase-hadoop-compat</include>
-                  <include>org.apache.hbase:hbase-hadoop2-compat</include>
-                  <include>commons-io:commons-io</include>
                   <include>org.apache.htrace:htrace-core4</include>
                   <include>com.yammer.metrics:metrics-core</include>
                   <include>com.google.guava:guava</include>
                   <include>commons-lang:commons-lang</include>
+                  <include>commons-io:commons-io</include>
                   <include>com.google.protobuf:protobuf-java</include>
                 </includes>
               </artifactSet>
@@ -102,6 +102,22 @@
                 <relocation>
                   <pattern>org.apache.avro.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.commons.io</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.commons.io</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.hbase.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.hbase.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hbase.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hbase.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.htrace.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.codehaus.jackson.</pattern>
@@ -152,7 +168,15 @@
                     <exclude>META-INF/*.SF</exclude>
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.RSA</exclude>
+                    <exclude>META-INF/maven/com.google.protobuf/**</exclude>
+                    <excldue>META-INF/maven/commons-io/**</excldue>
+                    <exclude>META-INF/maven/org.apache.hbase/**</exclude>
+                    <exclude>META-INF/maven/org.apache.hbase.thirdparty/**</exclude>
+                    <exclude>META-INF/maven/org.apache.htrace/**</exclude>
                     <exclude>META-INF/services/javax.*</exclude>
+                    <exclude>META-INF/services/org.apache.hadoop.hbase.*</exclude>
+                    <exclude>**/*.proto</exclude>
+                    <exclude>hbase-webapps/**</exclude>
                   </excludes>
                 </filter>
               </filters>
