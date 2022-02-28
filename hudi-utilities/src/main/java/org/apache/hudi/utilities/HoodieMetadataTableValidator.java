@@ -718,6 +718,7 @@ public class HoodieMetadataTableValidator implements Serializable {
             .map(filename -> readBloomFilterFromFile(partitionPath, filename))
             .filter(Option::isPresent)
             .map(Option::get)
+            .sorted()
             .collect(Collectors.toList());
       }
     }
