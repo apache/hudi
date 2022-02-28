@@ -181,8 +181,8 @@
                   <shadedPattern>${utilities.bundle.hive.shade.prefix}org.apache.hive.jdbc.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.apache.commons.io</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.commons.io</shadedPattern>
+                  <pattern>org.apache.commons.io.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.commons.io.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hadoop.hbase.</pattern>
