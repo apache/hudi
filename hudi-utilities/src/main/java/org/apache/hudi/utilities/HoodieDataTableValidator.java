@@ -21,18 +21,12 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.async.HoodieAsyncService;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.FileSystemViewManager;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -43,20 +37,15 @@ import org.apache.hudi.table.repair.RepairUtils;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -125,7 +114,7 @@ public class HoodieDataTableValidator implements Serializable {
     this.metaClient = metaClient;
   }
 
-  public HoodieDataTableValidator(JavaSparkContext jsc,Config cfg) {
+  public HoodieDataTableValidator(JavaSparkContext jsc, Config cfg) {
     this.jsc = jsc;
     this.cfg = cfg;
 
@@ -165,7 +154,7 @@ public class HoodieDataTableValidator implements Serializable {
         description = "the min validate interval of each validate when set --continuous, default is 10 minutes.")
     public Integer minValidateIntervalSeconds = 10 * 60;
 
-    @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for valuation", required = false)
+    @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for validation", required = false)
     public int parallelism = 200;
 
     @Parameter(names = {"--ignore-failed", "-ig"}, description = "Ignore data table validate failure and continue.", required = false)
@@ -375,47 +364,6 @@ public class HoodieDataTableValidator implements Serializable {
     }
   }
 
-  /**
-   * Compare the listing partitions result between metadata table and fileSystem.
-   */
-  private List<Path> getAllFiles(HoodieSparkEngineContext engineContext, String basePath) throws IOException {
-    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(engineContext, basePath, false, cfg.assumeDatePartitioning);
-    HoodieTableMetadata tableMetadata = new FileSystemBackedTableMetadata(
-        engineContext, engineContext.getHadoopConf(), cfg.basePath, cfg.assumeDatePartitioning);
-
-    return tableMetadata.getAllFilesInPartitions(allPartitionPaths).values().stream()
-        .map(fileStatuses ->
-            Arrays.stream(fileStatuses).map(FileStatus::getPath).collect(Collectors.toList()))
-        .flatMap(Collection::stream)
-        .collect(Collectors.toList());
-  }
-
-  /**
-   * Compare the listing files result between metadata table and fileSystem.
-   * For now, validate two kinds of apis:
-   * 1. getLatestFileSlices
-   * 2. getLatestBaseFiles
-   * 3. getAllFileGroups and getAllFileSlices
-   *
-   * @param metaFsView
-   * @param fsView
-   * @param partitionPath
-   */
-  private void validateFilesInPartition(HoodieTableFileSystemView metaFsView, HoodieTableFileSystemView fsView, String partitionPath) {
-
-  }
-
-  private HoodieTableFileSystemView createHoodieTableFileSystemView(HoodieSparkEngineContext engineContext, boolean enableMetadataTable) {
-
-    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
-        .enable(enableMetadataTable)
-        .withAssumeDatePartitioning(cfg.assumeDatePartitioning)
-        .build();
-
-    return FileSystemViewManager.createInMemoryFileSystemView(engineContext,
-        metaClient, metadataConfig);
-  }
-
   public class AsyncDataTableValidateService extends HoodieAsyncService {
     private final transient ExecutorService executor = Executors.newSingleThreadExecutor();
 
@@ -443,31 +391,6 @@ public class HoodieDataTableValidator implements Serializable {
           }
         }
       }, executor), executor);
-    }
-  }
-
-  public static class FileSliceCompactor implements Comparator<FileSlice>, Serializable {
-
-    @Override
-    public int compare(FileSlice o1, FileSlice o2) {
-      return (o1.getPartitionPath() + o1.getFileId() + o1.getBaseInstantTime())
-          .compareTo(o2.getPartitionPath() + o2.getFileId() + o2.getBaseInstantTime());
-    }
-  }
-
-  public static class HoodieBaseFileCompactor implements Comparator<HoodieBaseFile>, Serializable {
-
-    @Override
-    public int compare(HoodieBaseFile o1, HoodieBaseFile o2) {
-      return o1.getPath().compareTo(o2.getPath());
-    }
-  }
-
-  public static class HoodieFileGroupCompactor implements Comparator<HoodieFileGroup>, Serializable {
-
-    @Override
-    public int compare(HoodieFileGroup o1, HoodieFileGroup o2) {
-      return o1.getFileGroupId().compareTo(o2.getFileGroupId());
     }
   }
 }
