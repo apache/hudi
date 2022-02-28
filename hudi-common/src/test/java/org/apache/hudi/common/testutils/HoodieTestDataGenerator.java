@@ -126,6 +126,10 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public static final String TRIP_SCHEMA = "{\"type\":\"record\",\"name\":\"tripUberRec\",\"fields\":["
       + "{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
       + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false}]}";
+  public static final String LONG_TRIP_SCHEMA = "{\"type\":\"record\",\"name\":\"longTripRec\",\"fields\":["
+      + "{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
+      + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false},"
+      + "{\"name\":\"mileage\",\"type\":\"double\"}]}";
   public static final String SHORT_TRIP_SCHEMA = "{\"type\":\"record\",\"name\":\"shortTripRec\",\"fields\":["
       + "{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
       + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false}]}";
@@ -141,6 +145,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       HoodieAvroUtils.addMetadataFields(AVRO_SCHEMA);
   public static final Schema AVRO_SHORT_TRIP_SCHEMA = new Schema.Parser().parse(SHORT_TRIP_SCHEMA);
   public static final Schema AVRO_TRIP_SCHEMA = new Schema.Parser().parse(TRIP_SCHEMA);
+  public static final Schema AVRO_LONG_TRIP_SCHEMA = new Schema.Parser().parse(LONG_TRIP_SCHEMA);
   public static final TypeDescription ORC_TRIP_SCHEMA = AvroOrcUtils.createOrcSchema(new Schema.Parser().parse(TRIP_SCHEMA));
   public static final Schema FLATTENED_AVRO_SCHEMA = new Schema.Parser().parse(TRIP_FLATTENED_SCHEMA);
 
@@ -220,6 +225,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       return generatePayloadForTripSchema(key, commitTime);
     } else if (SHORT_TRIP_SCHEMA.equals(schemaStr)) {
       return generatePayloadForShortTripSchema(key, commitTime);
+    } else if (LONG_TRIP_SCHEMA.equals(schemaStr)) {
+      return generatePayloadForLongTripSchema(key, commitTime);
     }
 
     return null;
@@ -264,13 +271,18 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    * Generates a new avro record with TRIP_SCHEMA, retaining the key if optionally provided.
    */
   public RawTripTestPayload generatePayloadForTripSchema(HoodieKey key, String commitTime) throws IOException {
-    GenericRecord rec = generateRecordForTripSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0);
+    GenericRecord rec = generateRecordForTripSchema(key.getRecordKey(), key.getPartitionPath(), "driver-" + commitTime, 0);
     return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_SCHEMA);
   }
 
   public RawTripTestPayload generatePayloadForShortTripSchema(HoodieKey key, String commitTime) throws IOException {
-    GenericRecord rec = generateRecordForShortTripSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0);
+    GenericRecord rec = generateRecordForShortTripSchema(key.getRecordKey(), key.getPartitionPath(), "driver-" + commitTime, 0);
     return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), SHORT_TRIP_SCHEMA);
+  }
+
+  public RawTripTestPayload generatePayloadForLongTripSchema(HoodieKey key, String commitTime) throws IOException {
+    GenericRecord rec = generateRecordForLongTripSchema(key.getRecordKey(), key.getPartitionPath(), "driver-" + commitTime, 0);
+    return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), LONG_TRIP_SCHEMA);
   }
 
   /**
@@ -373,6 +385,18 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     rec.put("rider", riderName);
     rec.put("driver", driverName);
     rec.put("fare", rand.nextDouble() * 100);
+    rec.put("_hoodie_is_deleted", false);
+    return rec;
+  }
+
+  public GenericRecord generateRecordForLongTripSchema(String rowKey, String riderName, String driverName, long timestamp) {
+    GenericRecord rec = new GenericData.Record(AVRO_LONG_TRIP_SCHEMA);
+    rec.put("_row_key", rowKey);
+    rec.put("timestamp", timestamp);
+    rec.put("rider", riderName);
+    rec.put("driver", driverName);
+    rec.put("fare", rand.nextDouble() * 100);
+    rec.put("mileage", rand.nextDouble() * 100);
     rec.put("_hoodie_is_deleted", false);
     return rec;
   }

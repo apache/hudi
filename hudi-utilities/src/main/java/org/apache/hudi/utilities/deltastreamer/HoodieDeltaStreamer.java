@@ -396,6 +396,9 @@ public class HoodieDeltaStreamer implements Serializable {
         + "https://spark.apache.org/docs/latest/job-scheduling.html")
     public Integer clusterSchedulingMinShare = 0;
 
+    @Parameter(names = {"--allow-fetch-from-multiple-sources"}, description = "Fetch data from multiple sources and ingest to single sink table")
+    public Boolean allowFetchFromMultipleSources = false;
+
     public boolean isAsyncCompactionEnabled() {
       return continuousMode && !forceDisableCompaction
           && HoodieTableType.MERGE_ON_READ.equals(HoodieTableType.valueOf(tableType));
@@ -461,7 +464,7 @@ public class HoodieDeltaStreamer implements Serializable {
               compactSchedulingMinShare, clusterSchedulingMinShare, forceDisableCompaction, checkpoint,
               initialCheckpointProvider, help);
     }
-  
+
     @Override
     public String toString() {
       return "Config{"
