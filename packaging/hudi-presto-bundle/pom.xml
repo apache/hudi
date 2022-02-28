@@ -103,8 +103,8 @@
                   <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.apache.commons.io</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.commons.io</shadedPattern>
+                  <pattern>org.apache.commons.io.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.commons.io.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hadoop.hbase.</pattern>
@@ -135,10 +135,6 @@
                   <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.apache.htrace.</pattern>
-                  <shadedPattern>${trino.bundle.bootstrap.shade.prefix}org.apache.htrace.</shadedPattern>
-                </relocation>
-                <relocation>
                   <pattern>com.yammer.metrics.</pattern>
                   <shadedPattern>org.apache.hudi.com.yammer.metrics.</shadedPattern>
                 </relocation>
@@ -147,20 +143,12 @@
                   <shadedPattern>${presto.bundle.bootstrap.shade.prefix}com.google.common.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.apache.commons.io.</pattern>
-                  <shadedPattern>${trino.bundle.bootstrap.shade.prefix}org.apache.commons.io.</shadedPattern>
-                </relocation>
-                <relocation>
                   <pattern>org.apache.commons.lang.</pattern>
                   <shadedPattern>${presto.bundle.bootstrap.shade.prefix}org.apache.commons.lang.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.google.protobuf.</pattern>
                   <shadedPattern>${presto.bundle.bootstrap.shade.prefix}com.google.protobuf.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.htrace.</pattern>
-                  <shadedPattern>${presto.bundle.bootstrap.shade.prefix}org.apache.htrace.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.parquet.avro.</pattern>
