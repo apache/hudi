@@ -35,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Integration test class for {@link org.apache.hudi.cli.commands.SavepointsCommand}.
+ * Integration test class for {@link org.apache.hudi.cli.commands.MarkersCommand}.
  * <p/>
  * A command use SparkLauncher need load jars under lib which generate during mvn package.
  * Use integration test instead of unit test.
@@ -56,7 +56,7 @@ public class ITTestMarkersCommand extends AbstractShellIntegrationTest {
   }
 
   /**
-   * Test case of command 'savepoint delete'.
+   * Test case of command 'marker delete'.
    */
   @Test
   public void testDeleteMarker() throws IOException {
