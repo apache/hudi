@@ -18,14 +18,10 @@
 
 package org.apache.hudi.utilities.functional;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.deltastreamer.HoodieMultiTableDeltaStreamer;
 import org.apache.hudi.utilities.deltastreamer.TableExecutionContext;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
@@ -40,7 +36,6 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -132,7 +127,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     assertTrue(e.getMessage().contains("Please provide valid table config arguments!"));
   }
 
-  @Test
+  @Test //0 corresponds to fg
   public void testMultiTableExecutionWithKafkaSource() throws IOException {
     //create topics for each table
     String topicName1 = "topic" + testNum++;
@@ -179,73 +174,6 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     //assert the record count matches now
     TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(5, targetBasePath1 + "/*/*.parquet", sqlContext);
     TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(10, targetBasePath2 + "/*/*.parquet", sqlContext);
-    testNum++;
-  }
-
-  @Test
-  public void testMultiTableExecutionWithMultipleSourceAndSingleTarget() throws IOException {
-    //create topics for each table
-    String topicName1 = "topic" + testNum++;
-    String topicName2 = "topic" + testNum;
-    testUtils.createTopic(topicName1, 2);
-    testUtils.createTopic(topicName2, 2);
-
-    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    testUtils.sendMessages(topicName1, Helpers.jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", 5, HoodieTestDataGenerator.TRIP_SCHEMA)));
-    testUtils.sendMessages(topicName2, Helpers.jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", 10, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA)));
-
-    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1, dfsBasePath + "/config", JsonKafkaSource.class.getName(), false, false);
-    String commonPropsFile = cfg.propsFilePath;
-    FileSystem fs = FSUtils.getFs(commonPropsFile, jsc.hadoopConfiguration());
-    TypedProperties commonProperties = UtilHelpers.readConfig(fs.getConf(), new Path(commonPropsFile), new ArrayList<>()).getProps();
-    commonProperties.setProperty("hoodie.deltastreamer.ingestion.tablesToBeIngested", "target_table");
-    commonProperties.setProperty("hoodie.deltastreamer.source.sourcesToBeBound", topicName2 + "," + topicName1);
-    commonProperties.setProperty("hoodie.deltastreamer.source.default." + topicName2 + ".configFile", dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE1);
-    commonProperties.setProperty("hoodie.deltastreamer.source.default." + topicName1 + ".configFile", dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE1);
-    commonProperties.setProperty("hoodie.deltastreamer.source.kafka.enable.commit.offset", "true");
-    UtilitiesTestBase.Helpers.savePropsToDFS(commonProperties, fs, dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE2);
-
-    HoodieMultiTableDeltaStreamer.Config cfg1 = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE2, dfsBasePath + "/config", JsonKafkaSource.class.getName(), false, false);
-    HoodieMultiTableDeltaStreamer streamer = new HoodieMultiTableDeltaStreamer(cfg1, jsc);
-    List<TableExecutionContext> executionContexts = streamer.getTableExecutionContexts();
-    TypedProperties properties = executionContexts.get(1).getProperties();
-    properties.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source_uber.avsc");
-    properties.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target_uber.avsc");
-    properties.setProperty("hoodie.deltastreamer.source.kafka.topic", topicName2);
-    properties.setProperty("hoodie.deltastreamer.current.source.name", topicName2);
-    properties.setProperty("hoodie.deltastreamer.current.source.checkpoint", topicName2 + ",0:0,1:0");
-    executionContexts.get(1).setProperties(properties);
-
-    TypedProperties properties1 = executionContexts.get(0).getProperties();
-    properties1.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source_short_trip_uber.avsc");
-    properties1.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target_short_trip_uber.avsc");
-    properties1.setProperty("hoodie.deltastreamer.source.kafka.topic", topicName1);
-    properties1.setProperty("hoodie.deltastreamer.current.source.name", topicName1);
-    properties1.setProperty("hoodie.deltastreamer.current.source.checkpoint", topicName1 + ",0:0,1:0");
-    executionContexts.get(0).setProperties(properties1);
-
-    String targetBasePath1 = executionContexts.get(0).getConfig().targetBasePath;
-    String targetBasePath2 = executionContexts.get(1).getConfig().targetBasePath;
-    streamer.sync();
-
-    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(15, targetBasePath1 + "/*/*.parquet", sqlContext);
-    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(15, targetBasePath2 + "/*/*.parquet", sqlContext);
-
-    //insert updates for already existing records in kafka topics
-    testUtils.sendMessages(topicName1, Helpers.jsonifyRecords(dataGenerator.generateUpdatesAsPerSchema("001", 5, HoodieTestDataGenerator.TRIP_SCHEMA)));
-    testUtils.sendMessages(topicName2, Helpers.jsonifyRecords(dataGenerator.generateUpdatesAsPerSchema("001", 10, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA)));
-
-    streamer = new HoodieMultiTableDeltaStreamer(cfg1, jsc);
-    streamer.getTableExecutionContexts().get(1).setProperties(properties);
-    streamer.getTableExecutionContexts().get(0).setProperties(properties1);
-    streamer.sync();
-
-    assertEquals(2, streamer.getSuccessTables().size());
-    assertTrue(streamer.getFailedTables().isEmpty());
-
-    //assert the record count matches now
-    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(15, targetBasePath1 + "/*/*.parquet", sqlContext);
-    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(15, targetBasePath2 + "/*/*.parquet", sqlContext);
     testNum++;
   }
 
