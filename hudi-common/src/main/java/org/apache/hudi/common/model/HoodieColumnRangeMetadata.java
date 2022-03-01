@@ -105,7 +105,7 @@ public class HoodieColumnRangeMetadata<T> {
   public String toString() {
     return "HoodieColumnRangeMetadata{"
         + "filePath ='" + filePath + '\''
-        + "columnName='" + columnName + '\''
+        + ", columnName='" + columnName + '\''
         + ", minValue=" + minValue
         + ", maxValue=" + maxValue
         + ", nullCount=" + nullCount
