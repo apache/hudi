@@ -40,6 +40,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.text.ParseException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Collections;
@@ -141,7 +142,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   public HoodieActiveTimeline(HoodieTableMetaClient metaClient, List<HoodieInstant> instants) {
     this.metaClient = metaClient;
     setInstants(instants);
-    this.latestInstant = getInstants().max(HoodieInstant.COMPARATOR).orElse(null);
+    this.latestInstant = instants.stream().max(HoodieInstant.COMPARATOR).orElse(null);
     this.details = (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
     LOG.info("Loaded instants upto : " + lastInstant());
   }
@@ -191,9 +192,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
             // For VERSION_0, rename meta file directly instead of creating a new meta file.
             loadFully();
           } else {
-            List<HoodieInstant> hoodieInstants = getInstants().collect(Collectors.toList());
+            Set<HoodieInstant> hoodieInstants = new HashSet<>(instants);
             hoodieInstants.addAll(increment);
-            setInstants(hoodieInstants);
+            List<HoodieInstant> sorted = new ArrayList(hoodieInstants);
+            sorted.sort(HoodieInstant.COMPARATOR);
+            setInstants(sorted);
             latestInstant = increment.stream().max(HoodieInstant::compareTo).get();
           }
         }
@@ -224,7 +227,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
           if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
             loadFully();
           } else {
-            List<HoodieInstant> hoodieInstants = getInstants().collect(Collectors.toList());
+            List<HoodieInstant> hoodieInstants = new ArrayList<>(instants);
             hoodieInstants.add(instant);
             setInstants(hoodieInstants);
             latestInstant = instant;

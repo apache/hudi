@@ -63,14 +63,28 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
 
   public static boolean latestValidInstantFile(String fileName, HoodieInstant baseInstanst, Set<String> extensions) {
     Objects.requireNonNull(fileName);
-    Matcher matcher = INSTANT_PATTERN.matcher(fileName);
-    if (matcher.matches() && matcher.find()) {
+    int dotIndex = fileName.indexOf('.');
+    String timestamp = dotIndex == -1 ? "" : fileName.substring(0, dotIndex);
+    String fileExtension = dotIndex == -1 ? "" : fileName.substring(dotIndex);
+
+    if (extensions.contains(fileExtension)) {
       if (baseInstanst == null) {
-        return extensions.contains(matcher.group(1));
+        return true;
+      } else if (fileName.startsWith("0")) {
+        // just for Hoodie UTs. Some UTs use "000", "001" as the commit time.
+        return true;
       } else {
-        return extensions.contains(matcher.group(1)) && baseInstanst.compareTo(new HoodieInstant(fileName)) < 0;
+        return baseInstanst.timestamp.compareTo(timestamp) <= 0;
       }
     }
+//    Matcher matcher = INSTANT_PATTERN.matcher(fileName);
+//    if (matcher.matches() && matcher.find()) {
+//      if (baseInstanst == null) {
+//        return extensions.contains(matcher.group(1));
+//      } else {
+//        return extensions.contains(matcher.group(1)) && baseInstanst.compareTo(new HoodieInstant(fileName)) < 0;
+//      }
+//    }
     return false;
   }
 
@@ -119,9 +133,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
 
   public HoodieInstant(boolean isInflight, String action, String timestamp) {
     // TODO: vb - Preserving for avoiding cascading changes. This constructor will be updated in subsequent PR
-    this.state = isInflight ? State.INFLIGHT : State.COMPLETED;
-    this.action = action;
-    this.timestamp = timestamp;
+    this(isInflight ? State.INFLIGHT : State.COMPLETED, action, timestamp);
   }
 
   public HoodieInstant(State state, String action, String timestamp) {

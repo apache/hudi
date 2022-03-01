@@ -50,7 +50,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   private static final String HASHING_ALGORITHM = "SHA-256";
 
   protected transient Function<HoodieInstant, Option<byte[]>> details;
-  private List<HoodieInstant> instants;
+  protected List<HoodieInstant> instants;
   private String timelineHash;
 
   public HoodieDefaultTimeline(Stream<HoodieInstant> instants, Function<HoodieInstant, Option<byte[]>> details) {
