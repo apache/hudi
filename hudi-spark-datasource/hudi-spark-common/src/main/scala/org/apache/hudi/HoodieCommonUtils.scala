@@ -29,16 +29,13 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.catalog.SessionCatalog
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, Expression, InterpretedPredicate}
-import org.apache.spark.sql.catalyst.plans.logical.{Filter, LocalRelation, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.logical.{Filter, LocalRelation}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier, expressions}
-import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation, SparkParsePartitionUtil}
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
+import org.apache.spark.sql.catalyst.{InternalRow, expressions}
+import org.apache.spark.sql.execution.datasources.SparkParsePartitionUtil
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.withSparkConf
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.sources.v2.DataSourceOptions
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -264,24 +261,6 @@ object HoodieCommonUtils extends Logging {
         HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS.toString))
     properties.putAll(options.asJava)
     properties
-  }
-
-  def getBasePath(tableId: TableIdentifier, spark: SparkSession): Option[String] = {
-    var basePath: Option[String] = Option.empty
-
-    val catalog: SessionCatalog = spark.sessionState.catalog
-    if (catalog.isTemporaryTable(tableId)) {
-      val logicalPlan: Option[LogicalPlan] = catalog.getTempView(tableId.table)
-      if (logicalPlan.isDefined && logicalPlan.get.isInstanceOf[LogicalRelation]) {
-        basePath = logicalPlan.get.asInstanceOf[LogicalRelation].relation.asInstanceOf[HadoopFsRelation]
-          .options.get(DataSourceOptions.PATH_KEY)
-      }
-    } else {
-      val catalogTable = catalog.getTableMetadata(tableId)
-      basePath = Option.apply(HoodieSqlCommonUtils.getTableLocation(catalogTable, spark))
-    }
-
-    basePath
   }
 
   def resolveFilterExpr(spark: SparkSession, exprString: String, tableSchema: StructType): Expression = {
