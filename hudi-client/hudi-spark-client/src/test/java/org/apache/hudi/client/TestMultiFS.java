@@ -30,6 +30,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 
@@ -69,21 +70,31 @@ public class TestMultiFS extends HoodieClientTestHarness {
   protected HoodieWriteConfig getHoodieWriteConfig(String basePath) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withEmbeddedTimelineServerEnabled(true)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable(tableName)
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
+        .build();
   }
 
   @Test
   public void readLocalWriteHDFS() throws Exception {
     // Initialize table and filesystem
     HoodieTableMetaClient.withPropertyBuilder()
-      .setTableType(tableType)
-      .setTableName(tableName)
-      .setPayloadClass(HoodieAvroPayload.class)
-      .initTable(hadoopConf, dfsBasePath);
+        .setTableType(tableType)
+        .setTableName(tableName)
+        .setPayloadClass(HoodieAvroPayload.class)
+        .initTable(hadoopConf, dfsBasePath);
 
     // Create write client to write some records in
     HoodieWriteConfig cfg = getHoodieWriteConfig(dfsBasePath);
     HoodieWriteConfig localConfig = getHoodieWriteConfig(tablePath);
+
+    HoodieTableMetaClient.withPropertyBuilder()
+        .setTableType(tableType)
+        .setTableName(tableName)
+        .setPayloadClass(HoodieAvroPayload.class)
+        .setRecordKeyFields(localConfig.getProps().getProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()))
+        .setPartitionFields(localConfig.getProps().getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()))
+        .initTable(hadoopConf, tablePath);
+
 
     try (SparkRDDWriteClient hdfsWriteClient = getHoodieWriteClient(cfg);
          SparkRDDWriteClient localWriteClient = getHoodieWriteClient(localConfig)) {

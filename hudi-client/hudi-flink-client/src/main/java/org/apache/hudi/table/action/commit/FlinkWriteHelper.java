@@ -19,11 +19,14 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
@@ -46,7 +49,7 @@ import java.util.stream.Collectors;
  * <p>Computing the records batch locations all at a time is a pressure to the engine,
  * we should avoid that in streaming system.
  */
-public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends AbstractWriteHelper<T, List<HoodieRecord<T>>,
+public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends BaseWriteHelper<T, List<HoodieRecord<T>>,
     List<HoodieKey>, List<WriteStatus>, R> {
 
   private FlinkWriteHelper() {
@@ -63,7 +66,7 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends Abstract
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> write(String instantTime, List<HoodieRecord<T>> inputRecords, HoodieEngineContext context,
                                                       HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table, boolean shouldCombine, int shuffleParallelism,
-                                                      BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, R> executor, boolean performTagging) {
+                                                      BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, R> executor, WriteOperationType operationType) {
     try {
       Instant lookupBegin = Instant.now();
       Duration indexLookupDuration = Duration.between(lookupBegin, Instant.now());
@@ -80,9 +83,14 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends Abstract
   }
 
   @Override
-  public List<HoodieRecord<T>> deduplicateRecords(List<HoodieRecord<T>> records,
-                                                  HoodieIndex<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> index,
-                                                  int parallelism) {
+  protected List<HoodieRecord<T>> tag(List<HoodieRecord<T>> dedupedRecords, HoodieEngineContext context, HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table) {
+    return HoodieList.getList(
+        table.getIndex().tagLocation(HoodieList.of(dedupedRecords), context, table));
+  }
+
+  @Override
+  public List<HoodieRecord<T>> deduplicateRecords(
+      List<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism) {
     Map<Object, List<Pair<Object, HoodieRecord<T>>>> keyedRecords = records.stream().map(record -> {
       // If index used is global, then records are expected to differ in their partitionPath
       final Object key = record.getKey().getRecordKey();
@@ -100,7 +108,7 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends Abstract
       boolean choosePrev = data1.equals(reducedData);
       HoodieKey reducedKey = choosePrev ? rec1.getKey() : rec2.getKey();
       HoodieOperation operation = choosePrev ? rec1.getOperation() : rec2.getOperation();
-      HoodieRecord<T> hoodieRecord = new HoodieRecord<>(reducedKey, reducedData, operation);
+      HoodieRecord<T> hoodieRecord = new HoodieAvroRecord<>(reducedKey, reducedData, operation);
       // reuse the location from the first record.
       hoodieRecord.setCurrentLocation(rec1.getCurrentLocation());
       return hoodieRecord;

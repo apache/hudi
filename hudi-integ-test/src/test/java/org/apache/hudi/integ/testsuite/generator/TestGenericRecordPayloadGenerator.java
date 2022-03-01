@@ -57,8 +57,8 @@ public class TestGenericRecordPayloadGenerator {
   @Test
   public void testComplexPayload() throws IOException {
     Schema schema = new Schema.Parser().parse(UtilitiesTestBase.Helpers
-        .readFileFromAbsolutePath(System.getProperty("user.dir") + "/.." +
-            COMPLEX_SOURCE_SCHEMA_DOCKER_DEMO_RELATIVE_PATH));
+        .readFileFromAbsolutePath(System.getProperty("user.dir") + "/.."
+            + COMPLEX_SOURCE_SCHEMA_DOCKER_DEMO_RELATIVE_PATH));
     GenericRecordFullPayloadGenerator payloadGenerator = new GenericRecordFullPayloadGenerator(schema);
     GenericRecord record = payloadGenerator.getNewPayload();
     // The generated payload should validate with the provided schema
@@ -68,8 +68,8 @@ public class TestGenericRecordPayloadGenerator {
   @Test
   public void testComplexPartialPayload() throws IOException {
     Schema schema = new Schema.Parser().parse(UtilitiesTestBase.Helpers
-        .readFileFromAbsolutePath(System.getProperty("user.dir") + "/.." +
-            COMPLEX_SOURCE_SCHEMA_DOCKER_DEMO_RELATIVE_PATH));
+        .readFileFromAbsolutePath(System.getProperty("user.dir") + "/.."
+            + COMPLEX_SOURCE_SCHEMA_DOCKER_DEMO_RELATIVE_PATH));
     GenericRecordPartialPayloadGenerator payloadGenerator = new GenericRecordPartialPayloadGenerator(schema);
     IntStream.range(0, 10).forEach(a -> {
       GenericRecord record = payloadGenerator.getNewPayload();
@@ -124,8 +124,8 @@ public class TestGenericRecordPayloadGenerator {
   @Test
   public void testComplexPayloadWithLargeMinSize() throws Exception {
     Schema schema = new Schema.Parser().parse(UtilitiesTestBase.Helpers
-        .readFileFromAbsolutePath(System.getProperty("user.dir") + "/.." +
-            COMPLEX_SOURCE_SCHEMA_DOCKER_DEMO_RELATIVE_PATH));
+        .readFileFromAbsolutePath(System.getProperty("user.dir") + "/.."
+            + COMPLEX_SOURCE_SCHEMA_DOCKER_DEMO_RELATIVE_PATH));
     int minPayloadSize = 10000;
     GenericRecordFullPayloadGenerator payloadGenerator = new GenericRecordFullPayloadGenerator(
         schema, minPayloadSize);

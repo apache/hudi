@@ -20,6 +20,7 @@ package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
 import org.apache.hudi.common.util.BufferedRandomAccessFile;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.exception.HoodieException;
@@ -37,11 +38,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
 import java.io.Serializable;
-import java.net.InetAddress;
 import java.util.AbstractMap;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
@@ -53,6 +55,8 @@ import java.util.stream.Stream;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
+
+import static org.apache.hudi.common.util.BinaryUtil.generateChecksum;
 
 /**
  * This class provides a disk spillable only map implementation. All of the data is currenly written to one file,
@@ -87,6 +91,8 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
   // Thread-safe random access file
   private final ThreadLocal<BufferedRandomAccessFile> randomAccessFile = new ThreadLocal<>();
   private final Queue<BufferedRandomAccessFile> openedAccessFiles = new ConcurrentLinkedQueue<>();
+
+  private final List<ClosableIterator<R>> iterators = new ArrayList<>();
 
   public BitCaskDiskMap(String baseFilePath, boolean isCompressionEnabled) throws IOException {
     super(baseFilePath, ExternalSpillableMap.DiskMapType.BITCASK.name());
@@ -133,9 +139,7 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
       writeOnlyFile.getParentFile().mkdir();
     }
     writeOnlyFile.createNewFile();
-    LOG.info("Spilling to file location " + writeOnlyFile.getAbsolutePath() + " in host ("
-        + InetAddress.getLocalHost().getHostAddress() + ") with hostname (" + InetAddress.getLocalHost().getHostName()
-        + ")");
+    LOG.debug("Spilling to file location " + writeOnlyFile.getAbsolutePath());
     // Make sure file is deleted when JVM exits
     writeOnlyFile.deleteOnExit();
   }
@@ -153,7 +157,9 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
    */
   @Override
   public Iterator<R> iterator() {
-    return new LazyFileIterable(filePath, valueMetadataMap, isCompressionEnabled).iterator();
+    ClosableIterator<R> iterator = new LazyFileIterable(filePath, valueMetadataMap, isCompressionEnabled).iterator();
+    this.iterators.add(iterator);
+    return iterator;
   }
 
   /**
@@ -219,7 +225,7 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
           new BitCaskDiskMap.ValueMetadata(this.filePath, valueSize, filePosition.get(), timestamp));
       byte[] serializedKey = SerializationUtils.serialize(key);
       filePosition
-          .set(SpillableMapUtils.spillToDisk(writeOnlyFileHandle, new FileEntry(SpillableMapUtils.generateChecksum(val),
+          .set(SpillableMapUtils.spillToDisk(writeOnlyFileHandle, new FileEntry(generateChecksum(val),
               serializedKey.length, valueSize, serializedKey, val, timestamp)));
       if (flush) {
         flushToDisk();
@@ -278,6 +284,7 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
         }
       }
       writeOnlyFile.delete();
+      this.iterators.forEach(ClosableIterator::close);
     } catch (Exception e) {
       // delete the file for any sort of exception
       writeOnlyFile.delete();

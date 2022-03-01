@@ -35,6 +35,13 @@ public class TestSQL {
       + "('id7','Bob',44,TIMESTAMP '1970-01-01 00:00:07','par4'),\n"
       + "('id8','Han',56,TIMESTAMP '1970-01-01 00:00:08','par4')";
 
+  public static final String INSERT_SAME_KEY_T1 = "insert into t1 values\n"
+      + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:05','par1'),\n"
+      + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:04','par1'),\n"
+      + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:03','par1'),\n"
+      + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:02','par1'),\n"
+      + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1')";
+
   public static final String UPDATE_INSERT_T1 = "insert into t1 values\n"
       + "('id1','Danny',24,TIMESTAMP '1970-01-01 00:00:01','par1'),\n"
       + "('id2','Stephen',34,TIMESTAMP '1970-01-01 00:00:02','par1'),\n"
@@ -44,4 +51,14 @@ public class TestSQL {
       + "('id9','Jane',19,TIMESTAMP '1970-01-01 00:00:06','par3'),\n"
       + "('id10','Ella',38,TIMESTAMP '1970-01-01 00:00:07','par4'),\n"
       + "('id11','Phoebe',52,TIMESTAMP '1970-01-01 00:00:08','par4')";
+
+  public static final String COMPLEX_TYPE_INSERT_T1 = "insert into t1 values\n"
+      + "(1, array['abc1', 'def1'], map['abc1', 1, 'def1', 3], row(1, 'abc1')),\n"
+      + "(2, array['abc2', 'def2'], map['abc2', 1, 'def2', 3], row(2, 'abc2')),\n"
+      + "(3, array['abc3', 'def3'], map['abc3', 1, 'def3', 3], row(3, 'abc3'))";
+
+  public static final String COMPLEX_NESTED_ROW_TYPE_INSERT_T1 = "insert into t1 values\n"
+      + "(1, array['abc1', 'def1'], array[1, 1], map['abc1', 1, 'def1', 3], row(array['abc1', 'def1'], row(1, 'abc1'))),\n"
+      + "(2, array['abc2', 'def2'], array[2, 2], map['abc2', 1, 'def2', 3], row(array['abc2', 'def2'], row(2, 'abc2'))),\n"
+      + "(3, array['abc3', 'def3'], array[3, 3], map['abc3', 1, 'def3', 3], row(array['abc3', 'def3'], row(3, 'abc3')))";
 }

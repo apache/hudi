@@ -21,6 +21,7 @@ package org.apache.hudi.source;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 
+import org.apache.flink.api.common.operators.MailboxExecutor;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.runtime.state.JavaSerializer;
@@ -29,7 +30,6 @@ import org.apache.flink.runtime.state.StateSnapshotContext;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperatorFactory;
-import org.apache.flink.streaming.api.operators.MailboxExecutor;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
 import org.apache.flink.streaming.api.operators.StreamOperator;
@@ -54,7 +54,7 @@ import java.util.concurrent.LinkedBlockingDeque;
  * StreamReadMonitoringFunction}. Contrary to the {@link StreamReadMonitoringFunction} which has a parallelism of 1,
  * this operator can have multiple parallelism.
  *
- * <p>As soon as an input split {@link MergeOnReadInputSplit} is received, it is put in a queue,
+ * <p>As soon as an input split {@link MergeOnReadInputSplit} is received, it is put into a queue,
  * the {@link MailboxExecutor} read the actual data of the split.
  * This architecture allows the separation of split reading from processing the checkpoint barriers,
  * thus removing any potential back-pressure.
@@ -63,6 +63,8 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
     implements OneInputStreamOperator<MergeOnReadInputSplit, RowData> {
 
   private static final Logger LOG = LoggerFactory.getLogger(StreamReadOperator.class);
+
+  private static final int MINI_BATCH_SIZE = 1000;
 
   // It's the same thread that runs this operator and checkpoint actions. Use this executor to schedule only
   // splits for subsequent reading, so that a new checkpoint could be triggered without blocking a long time
@@ -74,6 +76,7 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
   private transient SourceFunction.SourceContext<RowData> sourceContext;
 
   private transient ListState<MergeOnReadInputSplit> inputSplitsState;
+
   private transient Queue<MergeOnReadInputSplit> splits;
 
   // Splits are read by the same thread that calls #processElement. Each read task is submitted to that thread by adding
@@ -115,10 +118,10 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
         getOperatorConfig().getTimeCharacteristic(),
         getProcessingTimeService(),
         new Object(), // no actual locking needed
-        getContainingTask().getStreamStatusMaintainer(),
         output,
         getRuntimeContext().getExecutionConfig().getAutoWatermarkInterval(),
-        -1);
+        -1,
+        true);
 
     // Enqueue to process the recovered input splits.
     enqueueProcessSplits();
@@ -146,29 +149,54 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
   }
 
   private void processSplits() throws IOException {
-    MergeOnReadInputSplit split = splits.poll();
+    MergeOnReadInputSplit split = splits.peek();
     if (split == null) {
       currentSplitState = SplitState.IDLE;
       return;
     }
 
-    // This log is important to indicate the consuming process, there is only one log message for one data bucket.
-    LOG.info("Processing input split : {}", split);
-
-    try {
+    // 1. open a fresh new input split and start reading as mini-batch
+    // 2. if the input split has remaining records to read, switches to another runnable to handle
+    // 3. if the input split reads to the end, close the format and remove the split from the queue #splits
+    // 4. for each runnable, reads at most #MINI_BATCH_SIZE number of records
+    if (format.isClosed()) {
+      // This log is important to indicate the consuming process,
+      // there is only one log message for one data bucket.
+      LOG.info("Processing input split : {}", split);
       format.open(split);
-      RowData nextElement = null;
-      while (!format.reachedEnd()) {
-        nextElement = format.nextRecord(nextElement);
-        sourceContext.collect(nextElement);
-      }
+    }
+    try {
+      consumeAsMiniBatch(split);
     } finally {
       currentSplitState = SplitState.IDLE;
-      format.close();
     }
 
     // Re-schedule to process the next split.
     enqueueProcessSplits();
+  }
+
+  /**
+   * Consumes at most {@link #MINI_BATCH_SIZE} number of records
+   * for the given input split {@code split}.
+   *
+   * <p>Note: close the input format and remove the input split for the queue {@link #splits}
+   * if the split reads to the end.
+   *
+   * @param split The input split
+   */
+  private void consumeAsMiniBatch(MergeOnReadInputSplit split) throws IOException {
+    for (int i = 0; i < MINI_BATCH_SIZE; i++) {
+      if (!format.reachedEnd()) {
+        sourceContext.collect(format.nextRecord(null));
+        split.consume();
+      } else {
+        // close the input format
+        format.close();
+        // remove the split
+        splits.poll();
+        break;
+      }
+    }
   }
 
   @Override
@@ -177,8 +205,8 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
   }
 
   @Override
-  public void dispose() throws Exception {
-    super.dispose();
+  public void close() throws Exception {
+    super.close();
 
     if (format != null) {
       format.close();
@@ -190,8 +218,8 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
   }
 
   @Override
-  public void close() throws Exception {
-    super.close();
+  public void finish() throws Exception {
+    super.finish();
     output.close();
     if (sourceContext != null) {
       sourceContext.emitWatermark(Watermark.MAX_WATERMARK);

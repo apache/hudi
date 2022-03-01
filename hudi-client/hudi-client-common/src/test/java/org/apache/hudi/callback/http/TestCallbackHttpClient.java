@@ -18,14 +18,16 @@
 
 package org.apache.hudi.callback.http;
 
+import org.apache.hudi.callback.client.http.HoodieWriteCommitHttpCallbackClient;
+
 import org.apache.http.StatusLine;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.hudi.callback.client.http.HoodieWriteCommitHttpCallbackClient;
 import org.apache.log4j.AppenderSkeleton;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.spi.LoggingEvent;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -39,6 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -62,6 +65,11 @@ public class TestCallbackHttpClient {
 
   @Mock
   StatusLine statusLine;
+
+  @AfterEach
+  void resetMocks() {
+    reset(appender, httpClient, httpResponse, statusLine);
+  }
 
   private void mockResponse(int statusCode) {
     when(statusLine.getStatusCode()).thenReturn(statusCode);

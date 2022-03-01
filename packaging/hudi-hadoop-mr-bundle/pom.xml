@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.10.0-SNAPSHOT</version>
+    <version>0.11.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -68,10 +68,10 @@
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
 
                   <include>org.apache.parquet:parquet-avro</include>
+                  <include>org.apache.avro:avro</include>
                   <include>com.esotericsoftware:kryo-shaded</include>
                   <include>org.objenesis:objenesis</include>
                   <include>com.esotericsoftware:minlog</include>
-                  <include>org.apache.avro:avro</include>
                   <include>org.apache.hbase:hbase-common</include>
                   <include>org.apache.hbase:hbase-client</include>
                   <include>org.apache.hbase:hbase-protocol</include>
@@ -101,6 +101,10 @@
                 <relocation>
                   <pattern>org.apache.avro.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.parquet.avro.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.parquet.avro.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.google.common.</pattern>
@@ -152,12 +156,15 @@
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
+      <version>${parquet.version}</version>
       <scope>compile</scope>
     </dependency>
 
+    <!-- Avro -->
     <dependency>
       <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>
+      <version>${avro.version}</version>
       <scope>compile</scope>
     </dependency>
 
@@ -168,12 +175,23 @@
       <scope>compile</scope>
     </dependency>
 
+    <!-- HBase -->
+    <dependency>
+      <groupId>org.apache.hbase</groupId>
+      <artifactId>hbase-common</artifactId>
+      <version>${hbase.version}</version>
+    </dependency>
+
     <dependency>
       <groupId>org.apache.hbase</groupId>
       <artifactId>hbase-server</artifactId>
       <version>${hbase.version}</version>
       <scope>compile</scope>
       <exclusions>
+        <exclusion>
+          <groupId>org.apache.hbase</groupId>
+          <artifactId>hbase-common</artifactId>
+        </exclusion>
         <exclusion>
           <groupId>javax.servlet</groupId>
           <artifactId>*</artifactId>

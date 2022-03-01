@@ -18,17 +18,18 @@
 
 package org.apache.hudi.sync.common;
 
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
-
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -54,17 +55,21 @@ public abstract class AbstractSyncHoodieClient {
   private final String basePath;
   private final boolean assumeDatePartitioning;
   private final boolean useFileListingFromMetadata;
-  private final boolean verifyMetadataFileListing;
   private final boolean withOperationField;
 
+  @Deprecated
   public AbstractSyncHoodieClient(String basePath, boolean assumeDatePartitioning, boolean useFileListingFromMetadata,
                                   boolean verifyMetadataFileListing, boolean withOperationField, FileSystem fs) {
+    this(basePath, assumeDatePartitioning, useFileListingFromMetadata, withOperationField, fs);
+  }
+
+  public AbstractSyncHoodieClient(String basePath, boolean assumeDatePartitioning, boolean useFileListingFromMetadata,
+                                  boolean withOperationField, FileSystem fs) {
     this.metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
     this.tableType = metaClient.getTableType();
     this.basePath = basePath;
     this.assumeDatePartitioning = assumeDatePartitioning;
     this.useFileListingFromMetadata = useFileListingFromMetadata;
-    this.verifyMetadataFileListing = verifyMetadataFileListing;
     this.withOperationField = withOperationField;
     this.fs = fs;
   }
@@ -76,7 +81,7 @@ public abstract class AbstractSyncHoodieClient {
    * @param inputFormatClass The input format class of this table.
    * @param outputFormatClass The output format class of this table.
    * @param serdeClass The serde class of this table.
-   * @param serdeProperties The serde properites of this table.
+   * @param serdeProperties The serde properties of this table.
    * @param tableProperties The table properties for this table.
    */
   public abstract void createTable(String tableName, MessageType storageSchema,
@@ -93,6 +98,8 @@ public abstract class AbstractSyncHoodieClient {
   public abstract void addPartitionsToTable(String tableName, List<String> partitionsToAdd);
 
   public abstract void updatePartitionsToTable(String tableName, List<String> changedPartitions);
+
+  public abstract void dropPartitionsToTable(String tableName, List<String> partitionsToDrop);
 
   public  void updateTableProperties(String tableName, Map<String, String> tableProperties) {}
 
@@ -141,14 +148,25 @@ public abstract class AbstractSyncHoodieClient {
    */
   public MessageType getDataSchema() {
     try {
-      if (withOperationField) {
-        return new TableSchemaResolver(metaClient, true).getTableParquetSchema();
-      } else {
-        return new TableSchemaResolver(metaClient).getTableParquetSchema();
-      }
+      return new TableSchemaResolver(metaClient).getTableParquetSchema();
     } catch (Exception e) {
       throw new HoodieSyncException("Failed to read data schema", e);
     }
+  }
+
+  public boolean isDropPartition() {
+    try {
+      Option<HoodieCommitMetadata> hoodieCommitMetadata;
+      hoodieCommitMetadata = new TableSchemaResolver(metaClient).getLatestCommitMetadata();
+
+      if (hoodieCommitMetadata.isPresent()
+          && WriteOperationType.DELETE_PARTITION.equals(hoodieCommitMetadata.get().getOperationType())) {
+        return true;
+      }
+    } catch (Exception e) {
+      throw new HoodieSyncException("Failed to get commit metadata", e);
+    }
+    return false;
   }
 
   @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
@@ -156,8 +174,7 @@ public abstract class AbstractSyncHoodieClient {
     if (!lastCommitTimeSynced.isPresent()) {
       LOG.info("Last commit time synced is not known, listing all partitions in " + basePath + ",FS :" + fs);
       HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
-      return FSUtils.getAllPartitionPaths(engineContext, basePath, useFileListingFromMetadata, verifyMetadataFileListing,
-          assumeDatePartitioning);
+      return FSUtils.getAllPartitionPaths(engineContext, basePath, useFileListingFromMetadata, assumeDatePartitioning);
     } else {
       LOG.info("Last commit time synced is " + lastCommitTimeSynced.get() + ", Getting commits since then");
       return TimelineUtils.getPartitionsWritten(metaClient.getActiveTimeline().getCommitsTimeline()
@@ -221,7 +238,7 @@ public abstract class AbstractSyncHoodieClient {
   public static class PartitionEvent {
 
     public enum PartitionEventType {
-      ADD, UPDATE
+      ADD, UPDATE, DROP
     }
 
     public PartitionEventType eventType;
@@ -238,6 +255,10 @@ public abstract class AbstractSyncHoodieClient {
 
     public static PartitionEvent newPartitionUpdateEvent(String storagePartition) {
       return new PartitionEvent(PartitionEventType.UPDATE, storagePartition);
+    }
+
+    public static PartitionEvent newPartitionDropEvent(String storagePartition) {
+      return new PartitionEvent(PartitionEventType.DROP, storagePartition);
     }
   }
 }

@@ -18,49 +18,18 @@
 
 package org.apache.hudi.sink;
 
-import org.apache.hudi.client.FlinkTaskContextSupplier;
-import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.config.SerializableConfiguration;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.table.HoodieFlinkTable;
-import org.apache.hudi.util.StreamerUtil;
-import org.apache.hudi.utils.TestData;
 
-import org.apache.avro.Schema;
 import org.apache.flink.configuration.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.junit.jupiter.api.BeforeEach;
 
-import java.io.File;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Test cases for delta stream write.
  */
 public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
-  private FileSystem fs;
-  private HoodieWriteConfig writeConfig;
-  private HoodieFlinkEngineContext context;
-
-  @BeforeEach
-  public void before() throws Exception {
-    super.before();
-    fs = FSUtils.getFs(tempFile.getAbsolutePath(), new org.apache.hadoop.conf.Configuration());
-    writeConfig = StreamerUtil.getHoodieClientConfig(conf);
-    context = new HoodieFlinkEngineContext(
-        new SerializableConfiguration(StreamerUtil.getHadoopConf()),
-        new FlinkTaskContextSupplier(null));
-  }
 
   @Override
   protected void setUp(Configuration conf) {
@@ -68,17 +37,8 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
   }
 
   @Override
-  protected void checkWrittenData(File baseFile, Map<String, String> expected, int partitions) throws Exception {
-    HoodieTableMetaClient metaClient = HoodieFlinkTable.create(writeConfig, context).getMetaClient();
-    Schema schema = new TableSchemaResolver(metaClient).getTableAvroSchema();
-    String latestInstant = metaClient.getCommitsTimeline().filterCompletedInstants()
-        .getInstants()
-        .filter(x -> x.getAction().equals(HoodieActiveTimeline.DELTA_COMMIT_ACTION))
-        .map(HoodieInstant::getTimestamp)
-        .collect(Collectors.toList()).stream()
-        .max(Comparator.naturalOrder())
-        .orElse(null);
-    TestData.checkWrittenDataMOR(fs, latestInstant, baseFile, expected, partitions, schema);
+  public void testInsertClustering() {
+    // insert clustering is only valid for cow table.
   }
 
   @Override

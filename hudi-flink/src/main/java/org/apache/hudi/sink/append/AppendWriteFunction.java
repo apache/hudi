@@ -30,7 +30,10 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -43,6 +46,7 @@ import java.util.List;
  * @see StreamWriteOperatorCoordinator
  */
 public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
+  private static final Logger LOG = LoggerFactory.getLogger(AppendWriteFunction.class);
 
   private static final long serialVersionUID = 1L;
 
@@ -72,8 +76,6 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     // it would check the validity.
     // wait for the buffer data flush out and request a new instant
     flushData(false);
-    // nullify the write helper for next ckp
-    this.writerHelper = null;
   }
 
   @Override
@@ -84,20 +86,11 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     this.writerHelper.write((RowData) value);
   }
 
-  @Override
-  public void close() {
-    if (this.writeClient != null) {
-      this.writeClient.cleanHandlesGracefully();
-      this.writeClient.close();
-    }
-  }
-
   /**
    * End input action for batch source.
    */
   public void endInput() {
     flushData(true);
-    this.writeClient.cleanHandles();
     this.writeStatuses.clear();
   }
 
@@ -124,14 +117,28 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   }
 
   private void flushData(boolean endInput) {
-    final List<WriteStatus> writeStatus = this.writerHelper.getWriteStatuses(this.taskID);
+    final List<WriteStatus> writeStatus;
+    final String instant;
+    if (this.writerHelper != null) {
+      writeStatus = this.writerHelper.getWriteStatuses(this.taskID);
+      instant = this.writerHelper.getInstantTime();
+    } else {
+      LOG.info("No data to write in subtask [{}] for instant [{}]", taskID, currentInstant);
+      writeStatus = Collections.emptyList();
+      instant = instantToWrite(false);
+    }
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
         .taskID(taskID)
-        .instantTime(this.writerHelper.getInstantTime())
+        .instantTime(instant)
         .writeStatus(writeStatus)
         .lastBatch(true)
         .endInput(endInput)
         .build();
     this.eventGateway.sendEventToCoordinator(event);
+    // nullify the write helper for next ckp
+    this.writerHelper = null;
+    this.writeStatuses.addAll(writeStatus);
+    // blocks flushing until the coordinator starts a new instant
+    this.confirming = true;
   }
 }

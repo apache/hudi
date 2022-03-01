@@ -22,11 +22,13 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
@@ -41,13 +43,13 @@ import java.time.Instant;
 import java.util.HashMap;
 
 /**
- * A spark implementation of {@link AbstractDeleteHelper}.
+ * A spark implementation of {@link BaseDeleteHelper}.
  *
  * @param <T>
  */
 @SuppressWarnings("checkstyle:LineLength")
 public class SparkDeleteHelper<T extends HoodieRecordPayload,R> extends
-    AbstractDeleteHelper<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, R> {
+    BaseDeleteHelper<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, R> {
   private SparkDeleteHelper() {
   }
 
@@ -92,11 +94,11 @@ public class SparkDeleteHelper<T extends HoodieRecordPayload,R> extends
       }
 
       JavaRDD<HoodieRecord<T>> dedupedRecords =
-          dedupedKeys.map(key -> new HoodieRecord(key, new EmptyHoodieRecordPayload()));
+          dedupedKeys.map(key -> new HoodieAvroRecord(key, new EmptyHoodieRecordPayload()));
       Instant beginTag = Instant.now();
       // perform index loop up to get existing location of records
-      JavaRDD<HoodieRecord<T>> taggedRecords =
-          table.getIndex().tagLocation(dedupedRecords, context, table);
+      JavaRDD<HoodieRecord<T>> taggedRecords = HoodieJavaRDD.getJavaRDD(
+          table.getIndex().tagLocation(HoodieJavaRDD.of(dedupedRecords), context, table));
       Duration tagLocationDuration = Duration.between(beginTag, Instant.now());
 
       // filter out non existent keys/records

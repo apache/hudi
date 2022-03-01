@@ -21,8 +21,8 @@ Hudi manages the storage of large analytical datasets on DFS (Cloud stores, HDFS
 
 <https://hudi.apache.org/>
 
-[![Build Status](https://travis-ci.com/apache/hudi.svg?branch=master)](https://travis-ci.com/apache/hudi)
-[![Build Status](https://dev.azure.com/apache-hudi-ci-org/apache-hudi-ci/_apis/build/status/apachehudi-ci.hudi-mirror?branchName=master)](https://dev.azure.com/apache-hudi-ci-org/apache-hudi-ci/_build/latest?definitionId=3&branchName=master)
+[![Build](https://github.com/apache/hudi/actions/workflows/bot.yml/badge.svg)](https://github.com/apache/hudi/actions/workflows/bot.yml)
+[![Test](https://dev.azure.com/apache-hudi-ci-org/apache-hudi-ci/_apis/build/status/apachehudi-ci.hudi-mirror?branchName=master)](https://dev.azure.com/apache-hudi-ci-org/apache-hudi-ci/_build/latest?definitionId=3&branchName=master)
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/org.apache.hudi/hudi/badge.svg)](http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22org.apache.hudi%22)
 [![Join on Slack](https://img.shields.io/badge/slack-%23hudi-72eff8?logo=slack&color=48c628&label=Join%20on%20Slack)](https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE)
@@ -51,7 +51,7 @@ Prerequisites for building Apache Hudi:
 * Unix-like system (like Linux, Mac OS X)
 * Java 8 (Java 9 or 10 may work)
 * Git
-* Maven
+* Maven (>=3.3.1)
 
 ```
 # Checkout code and build
@@ -78,12 +78,16 @@ The default Scala version supported is 2.11. To build for Scala 2.12 version, bu
 mvn clean package -DskipTests -Dscala-2.12
 ```
 
-### Build with Spark 3.0.0
+### Build with Spark 3
 
-The default Spark version supported is 2.4.4. To build for Spark 3.0.0 version, build using `spark3` profile
+The default Spark version supported is 2.4.4. To build for different Spark 3 versions, use the corresponding profile
 
 ```
+# Build against Spark 3.2.1 (the default build shipped with the public Spark 3 bundle)
 mvn clean package -DskipTests -Dspark3
+
+# Build against Spark 3.1.2
+mvn clean package -DskipTests -Dspark3.1.x
 ```
 
 ### Build without spark-avro module

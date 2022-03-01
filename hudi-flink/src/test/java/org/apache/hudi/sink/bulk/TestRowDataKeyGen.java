@@ -20,9 +20,11 @@ package org.apache.hudi.sink.bulk;
 
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieKeyException;
+import org.apache.hudi.table.HoodieTableFactory;
 import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
@@ -92,5 +94,36 @@ public class TestRowDataKeyGen {
     assertThat(keyGen2.getPartitionPath(rowData1), is("partition=par1/ts=1970-01-01T00:00:00.001"));
     assertThat(keyGen2.getPartitionPath(rowData2), is("partition=default/ts=default"));
     assertThat(keyGen2.getPartitionPath(rowData3), is("partition=default/ts=1970-01-01T00:00:00.001"));
+  }
+
+  @Test
+  void testTimestampBasedKeyGenerator() {
+    Configuration conf = TestConfigurations.getDefaultConf("path1");
+    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, "ts");
+    HoodieTableFactory.setupTimestampKeygenOptions(conf, DataTypes.TIMESTAMP(3));
+    final RowData rowData1 = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+        TimestampData.fromEpochMillis(7200000), StringData.fromString("par1"));
+    final RowDataKeyGen keyGen1 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
+
+    assertThat(keyGen1.getRecordKey(rowData1), is("id1"));
+    assertThat(keyGen1.getPartitionPath(rowData1), is("1970010102"));
+
+    // null record key and partition path
+    final RowData rowData2 = insertRow(TestConfigurations.ROW_TYPE, null, StringData.fromString("Danny"), 23,
+        null, StringData.fromString("par1"));
+    assertThrows(HoodieKeyException.class, () -> keyGen1.getRecordKey(rowData2));
+    assertThat(keyGen1.getPartitionPath(rowData2), is("1970010100"));
+    // empty record key and partition path
+    final RowData rowData3 = insertRow(StringData.fromString(""), StringData.fromString("Danny"), 23,
+        TimestampData.fromEpochMillis(1), StringData.fromString("par1"));
+    assertThrows(HoodieKeyException.class, () -> keyGen1.getRecordKey(rowData3));
+    assertThat(keyGen1.getPartitionPath(rowData3), is("1970010100"));
+
+    // hive style partitioning
+    conf.set(FlinkOptions.HIVE_STYLE_PARTITIONING, true);
+    final RowDataKeyGen keyGen2 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
+    assertThat(keyGen2.getPartitionPath(rowData1), is("ts=1970010102"));
+    assertThat(keyGen2.getPartitionPath(rowData2), is("ts=1970010100"));
+    assertThat(keyGen2.getPartitionPath(rowData3), is("ts=1970010100"));
   }
 }

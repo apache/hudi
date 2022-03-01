@@ -22,12 +22,13 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metrics.cloudwatch.CloudWatchMetricsReporter;
+import org.apache.hudi.metrics.custom.CustomizableMetricsReporter;
 import org.apache.hudi.metrics.datadog.DatadogMetricsReporter;
-
-import com.codahale.metrics.MetricRegistry;
 import org.apache.hudi.metrics.prometheus.PrometheusReporter;
 import org.apache.hudi.metrics.prometheus.PushGatewayMetricsReporter;
-import org.apache.hudi.metrics.userdefined.AbstractUserDefinedMetricsReporter;
+
+import com.codahale.metrics.MetricRegistry;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -46,9 +47,9 @@ public class MetricsReporterFactory {
     if (!StringUtils.isNullOrEmpty(reporterClassName)) {
       Object instance = ReflectionUtils.loadClass(
           reporterClassName, new Class<?>[] {Properties.class, MetricRegistry.class}, config.getProps(), registry);
-      if (!(instance instanceof AbstractUserDefinedMetricsReporter)) {
+      if (!(instance instanceof CustomizableMetricsReporter)) {
         throw new HoodieException(config.getMetricReporterClassName()
-            + " is not a subclass of AbstractUserDefinedMetricsReporter");
+            + " is not a subclass of CustomizableMetricsReporter");
       }
       return (MetricsReporter) instance;
     }
@@ -76,6 +77,9 @@ public class MetricsReporterFactory {
         break;
       case CONSOLE:
         reporter = new ConsoleMetricsReporter(registry);
+        break;
+      case CLOUDWATCH:
+        reporter = new CloudWatchMetricsReporter(config, registry);
         break;
       default:
         LOG.error("Reporter type[" + type + "] is not supported.");

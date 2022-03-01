@@ -135,7 +135,7 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
       WorkloadStat pStat = profile.getWorkloadStat(partitionPath);
       if (pStat.getNumInserts() > 0) {
 
-        List<SmallFile> smallFiles = partitionSmallFilesMap.get(partitionPath);
+        List<SmallFile> smallFiles = partitionSmallFilesMap.getOrDefault(partitionPath, new ArrayList<>());
         this.smallFiles.addAll(smallFiles);
 
         LOG.info("For partitionPath : " + partitionPath + " Small Files => " + smallFiles);
@@ -189,13 +189,13 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
 
         // Go over all such buckets, and assign weights as per amount of incoming inserts.
         List<InsertBucketCumulativeWeightPair> insertBuckets = new ArrayList<>();
-        double curentCumulativeWeight = 0;
+        double currentCumulativeWeight = 0;
         for (int i = 0; i < bucketNumbers.size(); i++) {
           InsertBucket bkt = new InsertBucket();
           bkt.bucketNumber = bucketNumbers.get(i);
           bkt.weight = (1.0 * recordsPerBucket.get(i)) / pStat.getNumInserts();
-          curentCumulativeWeight += bkt.weight;
-          insertBuckets.add(new InsertBucketCumulativeWeightPair(bkt, curentCumulativeWeight));
+          currentCumulativeWeight += bkt.weight;
+          insertBuckets.add(new InsertBucketCumulativeWeightPair(bkt, currentCumulativeWeight));
         }
         LOG.info("Total insert buckets for partition path " + partitionPath + " => " + insertBuckets);
         partitionPathToInsertBucketInfos.put(partitionPath, insertBuckets);
@@ -205,6 +205,11 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
 
   private Map<String, List<SmallFile>> getSmallFilesForPartitions(List<String> partitionPaths, HoodieEngineContext context) {
     Map<String, List<SmallFile>> partitionSmallFilesMap = new HashMap<>();
+
+    if (config.getParquetSmallFileLimit() <= 0) {
+      return partitionSmallFilesMap;
+    }
+
     if (partitionPaths != null && partitionPaths.size() > 0) {
       context.setJobStatus(this.getClass().getSimpleName(), "Getting small files from partitions");
       partitionSmallFilesMap = context.mapToPair(partitionPaths,

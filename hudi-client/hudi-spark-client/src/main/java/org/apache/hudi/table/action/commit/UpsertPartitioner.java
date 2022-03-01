@@ -37,7 +37,6 @@ import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.PairFunction;
@@ -57,7 +56,7 @@ import scala.Tuple2;
 /**
  * Packs incoming records to be upserted, into buckets (1 bucket = 1 RDD partition).
  */
-public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partitioner {
+public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHoodiePartitioner<T> {
 
   private static final Logger LOG = LogManager.getLogger(UpsertPartitioner.class);
 
@@ -69,10 +68,6 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
    * Total number of RDD partitions, is determined by total buckets we want to pack the incoming workload into.
    */
   private int totalBuckets = 0;
-  /**
-   * Stat for the current workload. Helps in determining inserts, upserts etc.
-   */
-  private WorkloadProfile profile;
   /**
    * Helps decide which bucket an incoming update should go to.
    */
@@ -86,17 +81,14 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
    */
   private HashMap<Integer, BucketInfo> bucketInfoMap;
 
-  protected final HoodieTable table;
-
   protected final HoodieWriteConfig config;
 
   public UpsertPartitioner(WorkloadProfile profile, HoodieEngineContext context, HoodieTable table,
       HoodieWriteConfig config) {
+    super(profile, table);
     updateLocationToBucket = new HashMap<>();
     partitionPathToInsertBucketInfos = new HashMap<>();
     bucketInfoMap = new HashMap<>();
-    this.profile = profile;
-    this.table = table;
     this.config = config;
     assignUpdates(profile);
     assignInserts(profile, context);
@@ -173,7 +165,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
 
         List<SmallFile> smallFiles =
             filterSmallFilesInClustering(partitionPathToPendingClusteringFileGroupsId.getOrDefault(partitionPath, Collections.emptySet()),
-                partitionSmallFilesMap.get(partitionPath));
+                partitionSmallFilesMap.getOrDefault(partitionPath, new ArrayList<>()));
 
         this.smallFiles.addAll(smallFiles);
 
@@ -232,13 +224,13 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
 
         // Go over all such buckets, and assign weights as per amount of incoming inserts.
         List<InsertBucketCumulativeWeightPair> insertBuckets = new ArrayList<>();
-        double curentCumulativeWeight = 0;
+        double currentCumulativeWeight = 0;
         for (int i = 0; i < bucketNumbers.size(); i++) {
           InsertBucket bkt = new InsertBucket();
           bkt.bucketNumber = bucketNumbers.get(i);
           bkt.weight = (1.0 * recordsPerBucket.get(i)) / pStat.getNumInserts();
-          curentCumulativeWeight += bkt.weight;
-          insertBuckets.add(new InsertBucketCumulativeWeightPair(bkt, curentCumulativeWeight));
+          currentCumulativeWeight += bkt.weight;
+          insertBuckets.add(new InsertBucketCumulativeWeightPair(bkt, currentCumulativeWeight));
         }
         LOG.info("Total insert buckets for partition path " + partitionPath + " => " + insertBuckets);
         partitionPathToInsertBucketInfos.put(partitionPath, insertBuckets);
@@ -249,6 +241,11 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
   private Map<String, List<SmallFile>> getSmallFilesForPartitions(List<String> partitionPaths, HoodieEngineContext context) {
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
     Map<String, List<SmallFile>> partitionSmallFilesMap = new HashMap<>();
+
+    if (config.getParquetSmallFileLimit() <= 0) {
+      return partitionSmallFilesMap;
+    }
+
     if (partitionPaths != null && partitionPaths.size() > 0) {
       context.setJobStatus(this.getClass().getSimpleName(), "Getting small files from partitions");
       JavaRDD<String> partitionPathRdds = jsc.parallelize(partitionPaths, partitionPaths.size());
@@ -286,6 +283,10 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
     }
 
     return smallFileLocations;
+  }
+
+  public List<BucketInfo> getBucketInfos() {
+    return Collections.unmodifiableList(new ArrayList<>(bucketInfoMap.values()));
   }
 
   public BucketInfo getBucketInfo(int bucketNumber) {

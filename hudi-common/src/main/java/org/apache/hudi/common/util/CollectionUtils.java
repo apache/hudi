@@ -18,15 +18,18 @@
 
 package org.apache.hudi.common.util;
 
-import java.util.Properties;
 import org.apache.hudi.common.util.collection.Pair;
 
+import java.lang.reflect.Array;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -34,6 +37,73 @@ import java.util.stream.Stream;
 public class CollectionUtils {
 
   public static final Properties EMPTY_PROPERTIES = new Properties();
+
+  /**
+   * Combines provided arrays into one
+   */
+  @SuppressWarnings("unchecked")
+  public static <T> T[] combine(T[] one, T[] another) {
+    T[] combined = (T[]) Array.newInstance(one.getClass().getComponentType(), one.length + another.length);
+    System.arraycopy(one, 0, combined, 0, one.length);
+    System.arraycopy(another, 0, combined, one.length, another.length);
+    return combined;
+  }
+
+  /**
+   * Combines provided array and an element into a new array
+   */
+  @SuppressWarnings("unchecked")
+  public static <T> T[] append(T[] array, T elem) {
+    T[] combined = (T[]) Array.newInstance(array.getClass().getComponentType(), array.length + 1);
+    System.arraycopy(array, 0, combined, 0, array.length);
+    combined[array.length] = elem;
+    return combined;
+  }
+
+
+  /**
+   * Combines provided {@link List}s into one, returning new instance of {@link ArrayList}
+   */
+  public static <E> List<E> combine(List<E> one, List<E> another) {
+    ArrayList<E> combined = new ArrayList<>(one.size() + another.size());
+    combined.addAll(one);
+    combined.addAll(another);
+    return combined;
+  }
+
+  /**
+   * Combines provided {@link Map}s into one, returning new instance of {@link HashMap}.
+   *
+   * NOTE: That values associated with overlapping keys from the second map, will override
+   *       values from the first one
+   */
+  public static <K, V> Map<K, V> combine(Map<K, V> one, Map<K, V> another) {
+    Map<K, V> combined = new HashMap<>(one.size() + another.size());
+    combined.putAll(one);
+    combined.putAll(another);
+    return combined;
+  }
+
+  /**
+   * Returns difference b/w {@code one} {@link Set} of elements and {@code another}
+   */
+  public static <E> Set<E> diff(Set<E> one, Set<E> another) {
+    Set<E> diff = new HashSet<>(one);
+    diff.removeAll(another);
+    return diff;
+  }
+
+  /**
+   * Returns difference b/w {@code one} {@link List} of elements and {@code another}
+   *
+   * NOTE: This is less optimal counterpart to {@link #diff(Set, Set)}, accepting {@link List}
+   *       as a holding collection to support duplicate elements use-cases
+   */
+  public static <E> List<E> diff(List<E> one, List<E> another) {
+    List<E> diff = new ArrayList<>(one);
+    diff.removeAll(another);
+    return diff;
+  }
 
   /**
    * Determines whether two iterators contain equal elements in the same order. More specifically,

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.exception.HoodieException;
+
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.function.ThrowingRunnable;
@@ -25,17 +27,21 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * A mock {@link CoordinatorExecutor} that executes the actions synchronously.
+ * A mock {@link NonThrownExecutor} that executes the actions synchronously.
  */
-public class MockCoordinatorExecutor extends CoordinatorExecutor {
+public class MockCoordinatorExecutor extends NonThrownExecutor {
   private static final Logger LOG = LoggerFactory.getLogger(MockCoordinatorExecutor.class);
 
   public MockCoordinatorExecutor(OperatorCoordinator.Context context) {
-    super(context, LOG);
+    super(LOG, (errMsg, t) -> context.failJob(new HoodieException(errMsg, t)), true);
   }
 
   @Override
-  public void execute(ThrowingRunnable<Throwable> action, String actionName, Object... actionParams) {
+  public void execute(
+      ThrowingRunnable<Throwable> action,
+      ExceptionHook hook,
+      String actionName,
+      Object... actionParams) {
     final String actionString = String.format(actionName, actionParams);
     try {
       action.run();
@@ -43,9 +49,12 @@ public class MockCoordinatorExecutor extends CoordinatorExecutor {
     } catch (Throwable t) {
       // if we have a JVM critical error, promote it immediately, there is a good
       // chance the
-      // logging or job failing will not succeed any more
+      // logging or job failing will not succeed anymore
       ExceptionUtils.rethrowIfFatalErrorOrOOM(t);
-      exceptionHook(actionString, t);
+      final String errMsg = String.format("Executor executes action [%s] error", actionString);
+      if (hook != null) {
+        hook.apply(errMsg, t);
+      }
     }
   }
 }

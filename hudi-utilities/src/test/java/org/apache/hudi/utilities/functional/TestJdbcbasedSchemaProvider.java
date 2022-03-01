@@ -20,7 +20,7 @@ package org.apache.hudi.utilities.functional;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.testutils.FunctionalTestHarness;
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.JdbcbasedSchemaProvider;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
@@ -32,7 +32,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -41,7 +40,7 @@ import java.sql.SQLException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("functional")
-public class TestJdbcbasedSchemaProvider extends FunctionalTestHarness {
+public class TestJdbcbasedSchemaProvider extends SparkClientFunctionalTestHarness {
 
   private static final Logger LOG = LogManager.getLogger(TestJdbcbasedSchemaProvider.class);
   private static final TypedProperties PROPS = new TypedProperties();
@@ -72,11 +71,11 @@ public class TestJdbcbasedSchemaProvider extends FunctionalTestHarness {
    * Initialize the H2 database and obtain a connection, then create a table as a test.
    * Based on the characteristics of the H2 in-memory database, we do not need to display the initialized database.
    * @throws SQLException
-   * @throws IOException
    */
-  private void initH2Database() throws SQLException, IOException {
-    Connection conn = DriverManager.getConnection("jdbc:h2:mem:test_mem", "sa", "");
-    PreparedStatement ps = conn.prepareStatement(UtilitiesTestBase.Helpers.readFile("delta-streamer-config/triprec.sql"));
-    ps.executeUpdate();
+  private void initH2Database() throws SQLException {
+    try (Connection conn = DriverManager.getConnection("jdbc:h2:mem:test_mem", "sa", "")) {
+      PreparedStatement ps = conn.prepareStatement(UtilitiesTestBase.Helpers.readFile("delta-streamer-config/triprec.sql"));
+      ps.executeUpdate();
+    }
   }
 }

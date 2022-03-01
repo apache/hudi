@@ -19,7 +19,7 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.state.KeyedStateStore;
-import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.metrics.groups.OperatorMetricGroup;
 import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.memory.MemoryManager;
@@ -69,8 +69,8 @@ public class MockStreamingRuntimeContext extends StreamingRuntimeContext {
   }
 
   @Override
-  public MetricGroup getMetricGroup() {
-    return new UnregisteredMetricsGroup();
+  public OperatorMetricGroup getMetricGroup() {
+    return UnregisteredMetricsGroup.createOperatorMetricGroup();
   }
 
   @Override

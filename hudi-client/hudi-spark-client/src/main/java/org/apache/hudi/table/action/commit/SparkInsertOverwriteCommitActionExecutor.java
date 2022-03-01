@@ -58,12 +58,14 @@ public class SparkInsertOverwriteCommitActionExecutor<T extends HoodieRecordPayl
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> execute() {
     return SparkWriteHelper.newInstance().write(instantTime, inputRecordsRDD, context, table,
-        config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, false);
+        config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, operationType);
   }
 
   @Override
   protected Partitioner getPartitioner(WorkloadProfile profile) {
-    return new SparkInsertOverwritePartitioner(profile, context, table, config);
+    return table.getStorageLayout().layoutPartitionerClass()
+        .map(c -> getLayoutPartitioner(profile, c))
+        .orElse(new SparkInsertOverwritePartitioner(profile, context, table, config));
   }
 
   @Override

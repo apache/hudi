@@ -85,7 +85,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Unit tests {@link SparkUpgradeDowngrade}.
+ * Unit tests {@link UpgradeDowngrade}.
  */
 public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
@@ -177,7 +177,8 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     }
 
     // should re-create marker files for 2nd commit since its pending.
-    new SparkUpgradeDowngrade(metaClient, cfg, context).run(metaClient, HoodieTableVersion.ONE, cfg, context, null);
+    new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance())
+        .run(HoodieTableVersion.ONE, null);
 
     // assert marker files
     assertMarkerFilesForUpgrade(table, commitInstant, firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices);
@@ -218,7 +219,8 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     downgradeTableConfigsFromTwoToOne(cfg);
 
     // perform upgrade
-    new SparkUpgradeDowngrade(metaClient, cfg, context).run(metaClient, HoodieTableVersion.TWO, cfg, context, null);
+    new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance())
+        .run(HoodieTableVersion.TWO, null);
 
     // verify hoodie.table.version got upgraded
     metaClient = HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(cfg.getBasePath())
@@ -228,6 +230,43 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
     // verify table props
     assertTableProps(cfg);
+  }
+
+  @Test
+  public void testUpgradeDowngradeBetweenThreeAndCurrentVersion() throws IOException {
+    // init config, table and client.
+    Map<String, String> params = new HashMap<>();
+    addNewTableParamsToProps(params);
+    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).withRollbackUsingMarkers(false).withProps(params).build();
+
+    // write inserts
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
+    doInsert(client);
+
+    // current version should have TABLE_CHECKSUM key
+    assertEquals(HoodieTableVersion.current(), metaClient.getTableConfig().getTableVersion());
+    assertTableVersionFromPropertyFile(HoodieTableVersion.current());
+    assertTrue(metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.TABLE_CHECKSUM.key()));
+    String checksum = metaClient.getTableConfig().getProps().getString(HoodieTableConfig.TABLE_CHECKSUM.key());
+
+    // downgrade to version 3 and check TABLE_CHECKSUM is still present
+    new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.THREE, null);
+    assertEquals(HoodieTableVersion.THREE.versionCode(), metaClient.getTableConfig().getTableVersion().versionCode());
+    assertTableVersionFromPropertyFile(HoodieTableVersion.THREE);
+    assertTrue(metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.TABLE_CHECKSUM.key()));
+    assertEquals(checksum, metaClient.getTableConfig().getProps().getString(HoodieTableConfig.TABLE_CHECKSUM.key()));
+
+    // remove TABLE_CHECKSUM and upgrade to current version
+    metaClient.getTableConfig().getProps().remove(HoodieTableConfig.TABLE_CHECKSUM.key());
+    new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.current(), null);
+
+    // verify upgrade and TABLE_CHECKSUM
+    metaClient = HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(cfg.getBasePath())
+        .setLayoutVersion(Option.of(new TimelineLayoutVersion(cfg.getTimelineLayoutVersion()))).build();
+    assertEquals(HoodieTableVersion.current().versionCode(), metaClient.getTableConfig().getTableVersion().versionCode());
+    assertTableVersionFromPropertyFile(HoodieTableVersion.current());
+    assertTrue(metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.TABLE_CHECKSUM.key()));
+    assertEquals(checksum, metaClient.getTableConfig().getProps().getString(HoodieTableConfig.TABLE_CHECKSUM.key()));
   }
 
   private void addNewTableParamsToProps(Map<String, String> params) {
@@ -321,11 +360,14 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     }
 
     // downgrade should be performed. all marker files should be deleted
-    new SparkUpgradeDowngrade(metaClient, cfg, context).run(metaClient, toVersion, cfg, context, null);
+    new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance())
+        .run(toVersion, null);
 
-    // assert marker files
-    assertMarkerFilesForDowngrade(table, commitInstant, toVersion == HoodieTableVersion.ONE);
-
+    if (fromVersion == HoodieTableVersion.TWO) {
+      // assert marker files
+      assertMarkerFilesForDowngrade(table, commitInstant, toVersion == HoodieTableVersion.ONE);
+    }
+    
     // verify hoodie.table.version got downgraded
     metaClient = HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(cfg.getBasePath())
         .setLayoutVersion(Option.of(new TimelineLayoutVersion(cfg.getTimelineLayoutVersion()))).build();
@@ -557,7 +599,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
   private void createResidualFile() throws IOException {
     Path propertyFile = new Path(metaClient.getMetaPath() + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE);
-    Path updatedPropertyFile = new Path(metaClient.getMetaPath() + "/" + SparkUpgradeDowngrade.HOODIE_UPDATED_PROPERTY_FILE);
+    Path updatedPropertyFile = new Path(metaClient.getMetaPath() + "/" + UpgradeDowngrade.HOODIE_UPDATED_PROPERTY_FILE);
 
     // Step1: Copy hoodie.properties to hoodie.properties.orig
     FileUtil.copy(metaClient.getFs(), propertyFile, metaClient.getFs(), updatedPropertyFile,

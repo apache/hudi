@@ -21,6 +21,7 @@ package org.apache.hudi.common.testutils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.MercifulJsonConverter;
 import org.apache.hudi.common.model.HoodieAvroPayload;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -71,17 +72,24 @@ public final class SchemaTestUtil {
     return toRecords(getSimpleSchema(), getSimpleSchema(), from, limit);
   }
 
-  private static List<IndexedRecord> toRecords(Schema writerSchema, Schema readerSchema, int from, int limit)
-      throws IOException, URISyntaxException {
-    GenericDatumReader<IndexedRecord> reader = new GenericDatumReader<>(writerSchema, readerSchema);
-    // Required to register the necessary JAR:// file system
-    URI resource = SchemaTestUtil.class.getResource(RESOURCE_SAMPLE_DATA).toURI();
-    Path dataPath;
-    if (resource.toString().contains("!")) {
-      dataPath = uriToPath(resource);
-    } else {
-      dataPath = Paths.get(SchemaTestUtil.class.getResource(RESOURCE_SAMPLE_DATA).toURI());
+  public static List<GenericRecord> generateTestGenericRecords(int from, int limit) throws IOException, URISyntaxException {
+    return toRecords(getSimpleSchema(), getSimpleSchema(), from, limit);
+  }
+
+  public static List<String> generateTestJsonRecords(int from, int limit) throws IOException, URISyntaxException {
+    Path dataPath = initializeSampleDataPath();
+
+    try (Stream<String> stream = Files.lines(dataPath)) {
+      return stream.skip(from).limit(limit).collect(Collectors.toList());
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not read data from " + RESOURCE_SAMPLE_DATA, e);
     }
+  }
+
+  private static <T extends IndexedRecord> List<T> toRecords(Schema writerSchema, Schema readerSchema, int from, int limit)
+      throws IOException, URISyntaxException {
+    GenericDatumReader<T> reader = new GenericDatumReader<>(writerSchema, readerSchema);
+    Path dataPath = initializeSampleDataPath();
 
     try (Stream<String> stream = Files.lines(dataPath)) {
       return stream.skip(from).limit(limit).map(s -> {
@@ -93,6 +101,21 @@ public final class SchemaTestUtil {
       }).collect(Collectors.toList());
     } catch (IOException e) {
       throw new HoodieIOException("Could not read data from " + RESOURCE_SAMPLE_DATA, e);
+    }
+  }
+
+  /**
+   * Required to register the necessary JAR:// file system.
+   * @return Path to the sample data in the resource file.
+   * @throws IOException
+   * @throws URISyntaxException
+   */
+  private static Path initializeSampleDataPath() throws IOException, URISyntaxException {
+    URI resource = SchemaTestUtil.class.getResource(RESOURCE_SAMPLE_DATA).toURI();
+    if (resource.toString().contains("!")) {
+      return uriToPath(resource);
+    } else {
+      return Paths.get(SchemaTestUtil.class.getResource(RESOURCE_SAMPLE_DATA).toURI());
     }
   }
 
@@ -130,7 +153,7 @@ public final class SchemaTestUtil {
   }
 
   private static HoodieRecord convertToHoodieRecords(IndexedRecord iRecord, String key, String partitionPath) {
-    return new HoodieRecord<>(new HoodieKey(key, partitionPath),
+    return new HoodieAvroRecord<>(new HoodieKey(key, partitionPath),
         new HoodieAvroPayload(Option.of((GenericRecord) iRecord)));
   }
 
@@ -150,7 +173,7 @@ public final class SchemaTestUtil {
       throws IOException, URISyntaxException {
 
     List<IndexedRecord> iRecords = generateTestRecords(from, limit);
-    return iRecords.stream().map(r -> new HoodieRecord<>(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
+    return iRecords.stream().map(r -> new HoodieAvroRecord<>(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
         new HoodieAvroPayload(Option.of((GenericRecord) r)))).collect(Collectors.toList());
   }
 
@@ -158,9 +181,9 @@ public final class SchemaTestUtil {
       Schema schema, String fieldNameToUpdate, String newValue) {
     return oldRecords.stream().map(r -> {
       try {
-        GenericRecord rec = (GenericRecord) r.getData().getInsertValue(schema).get();
+        GenericRecord rec = (GenericRecord) ((HoodieAvroRecord) r).getData().getInsertValue(schema).get();
         rec.put(fieldNameToUpdate, newValue);
-        return new HoodieRecord<>(r.getKey(), new HoodieAvroPayload(Option.of(rec)));
+        return new HoodieAvroRecord<>(r.getKey(), new HoodieAvroPayload(Option.of(rec)));
       } catch (IOException io) {
         throw new HoodieIOException("unable to get data from hoodie record", io);
       }
@@ -182,6 +205,10 @@ public final class SchemaTestUtil {
 
   public static Schema getTimestampEvolvedSchema() throws IOException {
     return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/timestamp-test-evolved.avsc"));
+  }
+
+  public static Schema getTimestampWithLogicalTypeSchema() throws IOException {
+    return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/timestamp-logical-type.avsc"));
   }
 
   public static GenericRecord generateAvroRecordFromJson(Schema schema, int recordNumber, String instantTime,

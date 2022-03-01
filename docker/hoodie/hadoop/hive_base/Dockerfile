@@ -64,6 +64,8 @@ COPY entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 ENV PATH $HIVE_HOME/bin/:$PATH
+# NOTE: This is the only battle-proven method to inject jars into Hive CLI
+ENV AUX_CLASSPATH=file://${HUDI_HADOOP_BUNDLE}
 
 ENTRYPOINT ["entrypoint.sh"]
 CMD startup.sh

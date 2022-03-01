@@ -25,13 +25,13 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
-
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.SparkWriteHelper;
+
 import org.apache.spark.api.java.JavaRDD;
 
 public class SparkInsertDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>>
-    extends AbstractSparkDeltaCommitActionExecutor<T> {
+    extends BaseSparkDeltaCommitActionExecutor<T> {
 
   private final JavaRDD<HoodieRecord<T>> inputRecordsRDD;
 
@@ -45,6 +45,6 @@ public class SparkInsertDeltaCommitActionExecutor<T extends HoodieRecordPayload<
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> execute() {
     return SparkWriteHelper.newInstance().write(instantTime, inputRecordsRDD, context, table,
-        config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(),this, false);
+        config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(),this, operationType);
   }
 }

@@ -32,9 +32,11 @@ import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -177,7 +179,7 @@ public class TestBootstrap extends HoodieClientTestBase {
   }
 
   @Test
-  public void testMetadataBootstrapUnpartitionedCOW() throws Exception {
+  public void testMetadataBootstrapNonpartitionedCOW() throws Exception {
     testBootstrapCommon(false, false, EffectiveMode.METADATA_BOOTSTRAP_MODE);
   }
 
@@ -195,9 +197,9 @@ public class TestBootstrap extends HoodieClientTestBase {
   private void testBootstrapCommon(boolean partitioned, boolean deltaCommit, EffectiveMode mode) throws Exception {
 
     if (deltaCommit) {
-      metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ, bootstrapBasePath);
+      metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ, bootstrapBasePath, true);
     } else {
-      metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE, bootstrapBasePath);
+      metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE, bootstrapBasePath, true);
     }
 
     int totalRecords = 100;
@@ -227,7 +229,7 @@ public class TestBootstrap extends HoodieClientTestBase {
         bootstrapInstants = Arrays.asList(bootstrapCommitInstantTs);
         break;
       default:
-        bootstrapModeSelectorClass = TestRandomBootstapModeSelector.class.getName();
+        bootstrapModeSelectorClass = TestRandomBootstrapModeSelector.class.getName();
         bootstrapCommitInstantTs = HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS;
         checkNumRawFiles = false;
         isBootstrapIndexCreated = true;
@@ -258,8 +260,9 @@ public class TestBootstrap extends HoodieClientTestBase {
         numInstantsAfterBootstrap, timestamp, timestamp, deltaCommit, bootstrapInstants);
 
     // Rollback Bootstrap
-    FSUtils.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), new HoodieInstant(State.COMPLETED,
+    HoodieActiveTimeline.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), new HoodieInstant(State.COMPLETED,
         deltaCommit ? HoodieTimeline.DELTA_COMMIT_ACTION : HoodieTimeline.COMMIT_ACTION, bootstrapCommitInstantTs));
+    metaClient.reloadActiveTimeline();
     client.rollbackFailedBootstrap();
     metaClient.reloadActiveTimeline();
     assertEquals(0, metaClient.getCommitsTimeline().countInstants());
@@ -374,8 +377,7 @@ public class TestBootstrap extends HoodieClientTestBase {
     reloadInputFormats();
     List<GenericRecord> records = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(
         jsc.hadoopConfiguration(),
-        FSUtils.getAllPartitionPaths(context, basePath, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS,
-            HoodieMetadataConfig.VALIDATE_ENABLE.defaultValue(), false).stream()
+        FSUtils.getAllPartitionPaths(context, basePath, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS, false).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
         basePath, roJobConf, false, schema, TRIP_HIVE_COLUMN_TYPES, false, new ArrayList<>());
     assertEquals(totalRecords, records.size());
@@ -393,8 +395,7 @@ public class TestBootstrap extends HoodieClientTestBase {
     seenKeys = new HashSet<>();
     records = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(
         jsc.hadoopConfiguration(),
-        FSUtils.getAllPartitionPaths(context, basePath, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS,
-            HoodieMetadataConfig.VALIDATE_ENABLE.defaultValue(), false).stream()
+        FSUtils.getAllPartitionPaths(context, basePath, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS, false).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
         basePath, rtJobConf, true, schema,  TRIP_HIVE_COLUMN_TYPES, false, new ArrayList<>());
     assertEquals(totalRecords, records.size());
@@ -410,8 +411,7 @@ public class TestBootstrap extends HoodieClientTestBase {
     reloadInputFormats();
     records = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(
         jsc.hadoopConfiguration(),
-        FSUtils.getAllPartitionPaths(context, basePath, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS,
-            HoodieMetadataConfig.VALIDATE_ENABLE.defaultValue(), false).stream()
+        FSUtils.getAllPartitionPaths(context, basePath, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS, false).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
         basePath, roJobConf, false, schema, TRIP_HIVE_COLUMN_TYPES,
         true, HoodieRecord.HOODIE_META_COLUMNS);
@@ -428,8 +428,7 @@ public class TestBootstrap extends HoodieClientTestBase {
     seenKeys = new HashSet<>();
     records = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(
         jsc.hadoopConfiguration(),
-        FSUtils.getAllPartitionPaths(context, basePath, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS,
-            HoodieMetadataConfig.VALIDATE_ENABLE.defaultValue(), false).stream()
+        FSUtils.getAllPartitionPaths(context, basePath, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS, false).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
         basePath, rtJobConf, true, schema,  TRIP_HIVE_COLUMN_TYPES, true,
         HoodieRecord.HOODIE_META_COLUMNS);
@@ -444,8 +443,7 @@ public class TestBootstrap extends HoodieClientTestBase {
     reloadInputFormats();
     records = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(
         jsc.hadoopConfiguration(),
-        FSUtils.getAllPartitionPaths(context, basePath, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS,
-            HoodieMetadataConfig.VALIDATE_ENABLE.defaultValue(), false).stream()
+        FSUtils.getAllPartitionPaths(context, basePath, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS, false).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
         basePath, roJobConf, false, schema, TRIP_HIVE_COLUMN_TYPES, true,
         Arrays.asList("_row_key"));
@@ -462,8 +460,7 @@ public class TestBootstrap extends HoodieClientTestBase {
     seenKeys = new HashSet<>();
     records = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(
         jsc.hadoopConfiguration(),
-        FSUtils.getAllPartitionPaths(context, basePath, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS,
-            HoodieMetadataConfig.VALIDATE_ENABLE.defaultValue(), false).stream()
+        FSUtils.getAllPartitionPaths(context, basePath, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS, false).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
         basePath, rtJobConf, true, schema,  TRIP_HIVE_COLUMN_TYPES, true,
         Arrays.asList("_row_key"));
@@ -513,7 +510,7 @@ public class TestBootstrap extends HoodieClientTestBase {
           try {
             String key = gr.get("_row_key").toString();
             String pPath = p.getKey();
-            return new HoodieRecord<>(new HoodieKey(key, pPath), new RawTripTestPayload(gr.toString(), key, pPath,
+            return new HoodieAvroRecord<>(new HoodieKey(key, pPath), new RawTripTestPayload(gr.toString(), key, pPath,
                 HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA));
           } catch (IOException e) {
             throw new HoodieIOException(e.getMessage(), e);
@@ -525,11 +522,11 @@ public class TestBootstrap extends HoodieClientTestBase {
     }).collect(Collectors.toList()));
   }
 
-  public static class TestRandomBootstapModeSelector extends BootstrapModeSelector {
+  public static class TestRandomBootstrapModeSelector extends BootstrapModeSelector {
 
     private int currIdx = new Random().nextInt(2);
 
-    public TestRandomBootstapModeSelector(HoodieWriteConfig writeConfig) {
+    public TestRandomBootstrapModeSelector(HoodieWriteConfig writeConfig) {
       super(writeConfig);
     }
 
@@ -550,6 +547,7 @@ public class TestBootstrap extends HoodieClientTestBase {
     }
   }
 
+  @Override
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr) {
     HoodieWriteConfig.Builder builder = getConfigBuilder(schemaStr, IndexType.BLOOM)
         .withExternalSchemaTrasformation(true);

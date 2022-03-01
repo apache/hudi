@@ -19,9 +19,12 @@
 package org.apache.hudi.utils;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.util.ViewStorageProperties;
 
 import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.Test;
@@ -80,12 +83,15 @@ public class TestStreamerUtil {
   void testMedianInstantTime() {
     String higher = "20210705125921";
     String lower = "20210705125806";
-    String median1 = StreamerUtil.medianInstantTime(higher, lower);
-    assertThat(median1, is("20210705125843"));
+    String expectedMedianInstant = "20210705125844499";
+    String median1 = StreamerUtil.medianInstantTime(higher, lower).get();
+    assertThat(median1, is(expectedMedianInstant));
     // test symmetry
     assertThrows(IllegalArgumentException.class,
         () -> StreamerUtil.medianInstantTime(lower, higher),
         "The first argument should have newer instant time");
+    // test very near instant time
+    assertFalse(StreamerUtil.medianInstantTime("20211116115634", "20211116115633").isPresent());
   }
 
   @Test
@@ -94,6 +100,14 @@ public class TestStreamerUtil {
     String lower = "20210705125806";
     long diff = StreamerUtil.instantTimeDiffSeconds(higher, lower);
     assertThat(diff, is(75L));
+  }
+
+  @Test
+  void testDumpRemoteViewStorageConfig() throws IOException {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    StreamerUtil.createWriteClient(conf);
+    FileSystemViewStorageConfig storageConfig = ViewStorageProperties.loadFromProperties(conf.getString(FlinkOptions.PATH));
+    assertThat(storageConfig.getStorageType(), is(FileSystemViewStorageType.REMOTE_FIRST));
   }
 }
 

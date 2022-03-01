@@ -18,8 +18,8 @@
 
 package org.apache.hudi.timeline.service.handlers.marker;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -31,7 +31,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.util.StringUtils;
@@ -44,7 +43,6 @@ import java.io.OutputStreamWriter;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -237,31 +235,7 @@ public class MarkerDirState implements Serializable {
    * @return {@code true} if successful; {@code false} otherwise.
    */
   public boolean deleteAllMarkers() {
-    Path dirPath = new Path(markerDirPath);
-    boolean result = false;
-    try {
-      if (fileSystem.exists(dirPath)) {
-        FileStatus[] fileStatuses = fileSystem.listStatus(dirPath);
-        List<String> markerDirSubPaths = Arrays.stream(fileStatuses)
-            .map(fileStatus -> fileStatus.getPath().toString())
-            .collect(Collectors.toList());
-
-        if (markerDirSubPaths.size() > 0) {
-          SerializableConfiguration conf = new SerializableConfiguration(fileSystem.getConf());
-          int actualParallelism = Math.min(markerDirSubPaths.size(), parallelism);
-          hoodieEngineContext.foreach(markerDirSubPaths, subPathStr -> {
-            Path subPath = new Path(subPathStr);
-            FileSystem fileSystem = subPath.getFileSystem(conf.get());
-            fileSystem.delete(subPath, true);
-          }, actualParallelism);
-        }
-
-        result = fileSystem.delete(dirPath, false);
-        LOG.info("Removing marker directory at " + dirPath);
-      }
-    } catch (IOException ioe) {
-      throw new HoodieIOException(ioe.getMessage(), ioe);
-    }
+    boolean result = FSUtils.deleteDir(hoodieEngineContext, fileSystem, new Path(markerDirPath), parallelism);
     allMarkers.clear();
     fileMarkersMap.clear();
     return result;

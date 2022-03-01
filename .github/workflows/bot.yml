@@ -18,8 +18,20 @@ jobs:
         include:
           - scala: "scala-2.11"
             spark: "spark2"
+            skipModules: ""
+          - scala: "scala-2.11"
+            spark: "spark2,spark-shade-unbundle-avro"
+            skipModules: ""
+          - scala: "scala-2.12"
+            spark: "spark3.1.x"
+            skipModules: "!hudi-spark-datasource/hudi-spark3"
+          - scala: "scala-2.12"
+            spark: "spark3.1.x,spark-shade-unbundle-avro"
+            skipModules: "!hudi-spark-datasource/hudi-spark3"
           - scala: "scala-2.12"
             spark: "spark3"
+          - scala: "scala-2.12"
+            spark: "spark3,spark-shade-unbundle-avro"
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 8
@@ -31,5 +43,6 @@ jobs:
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scala }}
-          SPAKR_PROFILE: ${{ matrix.spark }}
-        run: mvn install -P "$SCALA_PROFILE,$SPAKR_PROFILE" -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+          SPARK_PROFILE: ${{ matrix.spark }}
+          SKIP_MODULES: ${{ matrix.skipModules }}
+        run: mvn install -P "$SCALA_PROFILE,$SPARK_PROFILE" -pl "$SKIP_MODULES" -DskipTests=true -Dmaven.javadoc.skip=true -B -V

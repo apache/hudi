@@ -18,11 +18,16 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
+import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.SchemaBuilder;
 import org.apache.hudi.utils.TestConfigurations;
@@ -31,7 +36,6 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.Schema;
-import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.catalog.ResolvedCatalogTable;
@@ -83,39 +87,70 @@ public class TestHoodieTableFactory {
 
   @Test
   void testRequiredOptionsForSource() {
-    // miss pk and pre combine key will throw exception
+    // miss pk and precombine key will throw exception
     ResolvedSchema schema1 = SchemaBuilder.instance()
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20))
         .field("f2", DataTypes.TIMESTAMP(3))
         .build();
     final MockContext sourceContext1 = MockContext.getInstance(this.conf, schema1, "f2");
-    assertThrows(ValidationException.class, () -> new HoodieTableFactory().createDynamicTableSource(sourceContext1));
-    assertThrows(ValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext1));
+    assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSource(sourceContext1));
+    assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext1));
 
-    // given the pk and miss the pre combine key will throw exception
+    // a non-exists precombine key will throw exception
     ResolvedSchema schema2 = SchemaBuilder.instance()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .build();
+    this.conf.setString(FlinkOptions.PRECOMBINE_FIELD, "non_exist_field");
+    final MockContext sourceContext2 = MockContext.getInstance(this.conf, schema2, "f2");
+    assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSource(sourceContext2));
+    assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext2));
+    this.conf.setString(FlinkOptions.PRECOMBINE_FIELD, FlinkOptions.PRECOMBINE_FIELD.defaultValue());
+
+    // given the pk but miss the pre combine key will be ok
+    ResolvedSchema schema3 = SchemaBuilder.instance()
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20))
         .field("f2", DataTypes.TIMESTAMP(3))
         .primaryKey("f0")
         .build();
-    final MockContext sourceContext2 = MockContext.getInstance(this.conf, schema2, "f2");
-    assertThrows(ValidationException.class, () -> new HoodieTableFactory().createDynamicTableSource(sourceContext2));
-    assertThrows(ValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext2));
+    final MockContext sourceContext3 = MockContext.getInstance(this.conf, schema3, "f2");
+    HoodieTableSource tableSource = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext3);
+    HoodieTableSink tableSink = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sourceContext3);
+    // the precombine field is overwritten
+    assertThat(tableSource.getConf().getString(FlinkOptions.PRECOMBINE_FIELD), is(FlinkOptions.NO_PRE_COMBINE));
+    assertThat(tableSink.getConf().getString(FlinkOptions.PRECOMBINE_FIELD), is(FlinkOptions.NO_PRE_COMBINE));
+    // precombine field not specified, use the default payload clazz
+    assertThat(tableSource.getConf().getString(FlinkOptions.PAYLOAD_CLASS_NAME), is(FlinkOptions.PAYLOAD_CLASS_NAME.defaultValue()));
+    assertThat(tableSink.getConf().getString(FlinkOptions.PAYLOAD_CLASS_NAME), is(FlinkOptions.PAYLOAD_CLASS_NAME.defaultValue()));
+
+    // given pk but miss the pre combine key with DefaultHoodieRecordPayload should throw
+    this.conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, DefaultHoodieRecordPayload.class.getName());
+    final MockContext sourceContext4 = MockContext.getInstance(this.conf, schema3, "f2");
+
+    assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSource(sourceContext4));
+    assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext4));
+    this.conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, FlinkOptions.PAYLOAD_CLASS_NAME.defaultValue());
 
     // given pk and pre combine key will be ok
-    ResolvedSchema schema3 = SchemaBuilder.instance()
+    ResolvedSchema schema4 = SchemaBuilder.instance()
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20))
         .field("f2", DataTypes.TIMESTAMP(3))
         .field("ts", DataTypes.TIMESTAMP(3))
         .primaryKey("f0")
         .build();
-    final MockContext sourceContext3 = MockContext.getInstance(this.conf, schema3, "f2");
+    final MockContext sourceContext5 = MockContext.getInstance(this.conf, schema4, "f2");
 
-    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSource(sourceContext3));
-    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext3));
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSource(sourceContext5));
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext5));
+    // precombine field specified(default ts), use DefaultHoodieRecordPayload as payload clazz
+    HoodieTableSource tableSource5 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext5);
+    HoodieTableSink tableSink5 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sourceContext5);
+    assertThat(tableSource5.getConf().getString(FlinkOptions.PAYLOAD_CLASS_NAME), is(EventTimeAvroPayload.class.getName()));
+    assertThat(tableSink5.getConf().getString(FlinkOptions.PAYLOAD_CLASS_NAME), is(EventTimeAvroPayload.class.getName()));
   }
 
   @Test
@@ -142,7 +177,7 @@ public class TestHoodieTableFactory {
     ResolvedSchema schema1 = SchemaBuilder.instance()
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20))
-        .field("f2", DataTypes.TIMESTAMP(3))
+        .field("f2", DataTypes.BIGINT())
         .field("ts", DataTypes.TIMESTAMP(3))
         .primaryKey("f0")
         .build();
@@ -231,6 +266,32 @@ public class TestHoodieTableFactory {
   }
 
   @Test
+  void testSetupReadOptionsForSource() {
+    // definition with simple primary key and partition path
+    ResolvedSchema schema1 = SchemaBuilder.instance()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .field("ts", DataTypes.TIMESTAMP(3))
+        .primaryKey("f0")
+        .build();
+    // set up new retains commits that is less than min archive commits
+    this.conf.setString(FlinkOptions.READ_END_COMMIT, "123");
+
+    final MockContext sourceContext1 = MockContext.getInstance(this.conf, schema1, "f2");
+    final HoodieTableSource tableSource1 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext1);
+    final Configuration conf1 = tableSource1.getConf();
+    assertThat(conf1.getString(FlinkOptions.QUERY_TYPE), is(FlinkOptions.QUERY_TYPE_INCREMENTAL));
+
+    this.conf.removeConfig(FlinkOptions.READ_END_COMMIT);
+    this.conf.setString(FlinkOptions.READ_START_COMMIT, "123");
+    final MockContext sourceContext2 = MockContext.getInstance(this.conf, schema1, "f2");
+    final HoodieTableSource tableSource2 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext2);
+    final Configuration conf2 = tableSource2.getConf();
+    assertThat(conf2.getString(FlinkOptions.QUERY_TYPE), is(FlinkOptions.QUERY_TYPE_INCREMENTAL));
+  }
+
+  @Test
   void testInferAvroSchemaForSink() {
     // infer the schema if not specified
     final HoodieTableSink tableSink1 =
@@ -254,7 +315,7 @@ public class TestHoodieTableFactory {
     ResolvedSchema schema1 = SchemaBuilder.instance()
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20))
-        .field("f2", DataTypes.TIMESTAMP(3))
+        .field("f2", DataTypes.BIGINT())
         .field("ts", DataTypes.TIMESTAMP(3))
         .primaryKey("f0")
         .build();
@@ -340,6 +401,46 @@ public class TestHoodieTableFactory {
     final Configuration conf2 = tableSink2.getConf();
     assertThat(conf2.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), is(35));
     assertThat(conf2.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS), is(45));
+  }
+
+  @Test
+  void testSetupTimestampBasedKeyGenForSink() {
+    this.conf.setString(FlinkOptions.RECORD_KEY_FIELD, "dummyField");
+    this.conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, "dummyKeyGenClass");
+    // definition with simple primary key and partition path
+    ResolvedSchema schema1 = SchemaBuilder.instance()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .field("ts", DataTypes.TIMESTAMP(3))
+        .primaryKey("f0")
+        .build();
+    final MockContext sourceContext1 = MockContext.getInstance(this.conf, schema1, "ts");
+    final HoodieTableSource tableSource1 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext1);
+    final Configuration conf1 = tableSource1.getConf();
+    assertThat(conf1.get(FlinkOptions.RECORD_KEY_FIELD), is("f0"));
+    assertThat(conf1.get(FlinkOptions.KEYGEN_CLASS_NAME), is(TimestampBasedAvroKeyGenerator.class.getName()));
+    assertThat(conf1.getString(KeyGeneratorOptions.Config.TIMESTAMP_TYPE_FIELD_PROP, "dummy"),
+        is("EPOCHMILLISECONDS"));
+    assertThat(conf1.getString(KeyGeneratorOptions.Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "dummy"),
+        is(FlinkOptions.PARTITION_FORMAT_HOUR));
+    assertThat(conf1.getString(KeyGeneratorOptions.Config.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT_PROP, "dummy"),
+        is("UTC"));
+  }
+
+  @Test
+  void testSetupWriteOptionsForSink() {
+    final HoodieTableSink tableSink1 =
+        (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(this.conf));
+    final Configuration conf1 = tableSink1.getConf();
+    assertThat(conf1.get(FlinkOptions.PRE_COMBINE), is(true));
+
+    // set up operation as 'insert'
+    this.conf.setString(FlinkOptions.OPERATION, "insert");
+    HoodieTableSink tableSink2 =
+        (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(this.conf));
+    Configuration conf2 = tableSink2.getConf();
+    assertThat(conf2.get(FlinkOptions.PRE_COMBINE), is(false));
   }
 
   // -------------------------------------------------------------------------

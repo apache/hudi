@@ -18,11 +18,11 @@
 
 package org.apache.hudi.sink.transform;
 
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.sink.utils.PayloadCreation;
@@ -87,7 +87,7 @@ public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord>
     this.converter = RowDataToAvroConverters.createConverter(this.rowType);
     this.keyGenerator =
         HoodieAvroKeyGeneratorFactory
-            .createKeyGenerator(flinkConf2TypedProperties(FlinkOptions.flatOptions(this.config)));
+            .createKeyGenerator(flinkConf2TypedProperties(this.config));
     this.payloadCreation = PayloadCreation.instance(config);
   }
 
@@ -111,6 +111,6 @@ public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord>
 
     HoodieRecordPayload payload = payloadCreation.createPayload(gr);
     HoodieOperation operation = HoodieOperation.fromValue(record.getRowKind().toByteValue());
-    return new HoodieRecord<>(hoodieKey, payload, operation);
+    return new HoodieAvroRecord<>(hoodieKey, payload, operation);
   }
 }

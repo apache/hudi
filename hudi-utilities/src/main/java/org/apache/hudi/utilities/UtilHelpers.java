@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -25,7 +26,9 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Functions.Function1;
@@ -157,22 +160,12 @@ public class UtilHelpers {
     }
   }
 
-  /**
-   *
-   */
-  public static DFSPropertiesConfiguration readConfig(FileSystem fs, Path cfgPath, List<String> overriddenProps) {
-    DFSPropertiesConfiguration conf;
-    try {
-      conf = new DFSPropertiesConfiguration(cfgPath.getFileSystem(fs.getConf()), cfgPath);
-    } catch (Exception e) {
-      conf = new DFSPropertiesConfiguration();
-      LOG.warn("Unexpected error read props file at :" + cfgPath, e);
-    }
-
+  public static DFSPropertiesConfiguration readConfig(Configuration hadoopConfig, Path cfgPath, List<String> overriddenProps) {
+    DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(hadoopConfig, cfgPath);
     try {
       if (!overriddenProps.isEmpty()) {
         LOG.info("Adding overridden properties to file properties.");
-        conf.addProperties(new BufferedReader(new StringReader(String.join("\n", overriddenProps))));
+        conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))));
       }
     } catch (IOException ioe) {
       throw new HoodieIOException("Unexpected error adding config overrides", ioe);
@@ -186,7 +179,7 @@ public class UtilHelpers {
     try {
       if (!overriddenProps.isEmpty()) {
         LOG.info("Adding overridden properties to file properties.");
-        conf.addProperties(new BufferedReader(new StringReader(String.join("\n", overriddenProps))));
+        conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))));
       }
     } catch (IOException ioe) {
       throw new HoodieIOException("Unexpected error adding config overrides", ioe);
@@ -196,7 +189,7 @@ public class UtilHelpers {
   }
 
   public static TypedProperties buildProperties(List<String> props) {
-    TypedProperties properties = new TypedProperties();
+    TypedProperties properties = DFSPropertiesConfiguration.getGlobalProps();
     props.forEach(x -> {
       String[] kv = x.split("=");
       ValidationUtils.checkArgument(kv.length == 2);
@@ -229,7 +222,7 @@ public class UtilHelpers {
     return new String(buf.array());
   }
 
-  private static SparkConf buildSparkConf(String appName, String defaultMaster) {
+  public static SparkConf buildSparkConf(String appName, String defaultMaster) {
     return buildSparkConf(appName, defaultMaster, new HashMap<>());
   }
 
@@ -309,6 +302,18 @@ public class UtilHelpers {
       return 0;
     }
     LOG.error(String.format("Import failed with %d errors.", errors.value()));
+    return -1;
+  }
+
+  public static int handleErrors(HoodieCommitMetadata metadata, String instantTime) {
+    List<HoodieWriteStat> writeStats = metadata.getWriteStats();
+    long errorsCount = writeStats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum();
+    if (errorsCount == 0) {
+      LOG.info(String.format("Finish job with %s instant time.", instantTime));
+      return 0;
+    }
+
+    LOG.error(String.format("Job failed with %d errors.", errorsCount));
     return -1;
   }
 
@@ -474,6 +479,15 @@ public class UtilHelpers {
         return finalLatestTableSchema;
       }
     };
+  }
+
+  public static HoodieTableMetaClient createMetaClient(
+      JavaSparkContext jsc, String basePath, boolean shouldLoadActiveTimelineOnLoad) {
+    return HoodieTableMetaClient.builder()
+        .setConf(jsc.hadoopConfiguration())
+        .setBasePath(basePath)
+        .setLoadActiveTimelineOnLoad(shouldLoadActiveTimelineOnLoad)
+        .build();
   }
 
   @FunctionalInterface

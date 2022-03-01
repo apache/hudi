@@ -19,11 +19,12 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metrics.custom.CustomizableMetricsReporter;
 
 import com.codahale.metrics.MetricRegistry;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.metrics.userdefined.AbstractUserDefinedMetricsReporter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -57,12 +58,12 @@ public class TestMetricsReporterFactory {
   public void metricsReporterFactoryShouldReturnUserDefinedReporter() {
     when(config.getMetricReporterClassName()).thenReturn(DummyMetricsReporter.class.getName());
 
-    Properties props = new Properties();
+    TypedProperties props = new TypedProperties();
     props.setProperty("testKey", "testValue");
 
     when(config.getProps()).thenReturn(props);
     MetricsReporter reporter = MetricsReporterFactory.createReporter(config, registry);
-    assertTrue(reporter instanceof AbstractUserDefinedMetricsReporter);
+    assertTrue(reporter instanceof CustomizableMetricsReporter);
     assertEquals(props, ((DummyMetricsReporter) reporter).getProps());
     assertEquals(registry, ((DummyMetricsReporter) reporter).getRegistry());
   }
@@ -70,11 +71,11 @@ public class TestMetricsReporterFactory {
   @Test
   public void metricsReporterFactoryShouldThrowExceptionWhenMetricsReporterClassIsIllegal() {
     when(config.getMetricReporterClassName()).thenReturn(IllegalTestMetricsReporter.class.getName());
-    when(config.getProps()).thenReturn(new Properties());
+    when(config.getProps()).thenReturn(new TypedProperties());
     assertThrows(HoodieException.class, () -> MetricsReporterFactory.createReporter(config, registry));
   }
 
-  public static class DummyMetricsReporter extends AbstractUserDefinedMetricsReporter {
+  public static class DummyMetricsReporter extends CustomizableMetricsReporter {
 
     public DummyMetricsReporter(Properties props, MetricRegistry registry) {
       super(props, registry);

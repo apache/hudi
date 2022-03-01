@@ -28,6 +28,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
+import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -163,7 +164,7 @@ public class HoodieJavaStreamingApp {
     ExecutorService executor = Executors.newFixedThreadPool(2);
     int numInitialCommits = 0;
 
-    // thread for spark strucutured streaming
+    // thread for spark structured streaming
     try {
       Future<Void> streamFuture = executor.submit(() -> {
         LOG.info("===== Streaming Starting =====");
@@ -210,7 +211,7 @@ public class HoodieJavaStreamingApp {
     Dataset<Row> inputDF3 = newSpark.read().json(jssc.parallelize(deletes, 2));
     executor = Executors.newFixedThreadPool(2);
 
-    // thread for spark strucutured streaming
+    // thread for spark structured streaming
     try {
       Future<Void> streamFuture = executor.submit(() -> {
         LOG.info("===== Streaming Starting =====");
@@ -391,7 +392,9 @@ public class HoodieJavaStreamingApp {
             DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS().key(),
             MultiPartKeysValueExtractor.class.getCanonicalName());
       } else {
-        writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), "dateStr");
+        writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), "dateStr").option(
+            DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS().key(),
+            SlashEncodedDayPartitionValueExtractor.class.getCanonicalName());
       }
     }
     return writer;

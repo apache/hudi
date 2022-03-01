@@ -23,9 +23,10 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
-import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -44,12 +45,14 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
@@ -70,47 +73,49 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test Cases for {@link HoodieLogFileCommand}.
  */
-public class TestHoodieLogFileCommand extends AbstractShellIntegrationTest {
+@Tag("functional")
+public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
 
   private String partitionPath;
   private HoodieAvroDataBlock dataBlock;
   private String tablePath;
+  private FileSystem fs;
 
   private static final String INSTANT_TIME = "100";
 
   @BeforeEach
   public void init() throws IOException, InterruptedException, URISyntaxException {
-    HoodieCLI.conf = jsc.hadoopConfiguration();
+    HoodieCLI.conf = hadoopConf();
 
     // Create table and connect
-    String tableName = "test_table";
-    tablePath = basePath + File.separator + tableName;
-    partitionPath = tablePath + File.separator + HoodieTestCommitMetadataGenerator.DEFAULT_FIRST_PARTITION_PATH;
+    String tableName = tableName();
+    tablePath = tablePath(tableName);
+    partitionPath = Paths.get(tablePath, HoodieTestCommitMetadataGenerator.DEFAULT_FIRST_PARTITION_PATH).toString();
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.MERGE_ON_READ.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
 
     Files.createDirectories(Paths.get(partitionPath));
+    fs = FSUtils.getFs(tablePath, hadoopConf());
 
-    HoodieLogFormat.Writer writer = null;
-    try {
-      writer =
-          HoodieLogFormat.newWriterBuilder().onParentPath(new Path(partitionPath))
-              .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-              .withFileId("test-log-fileid1").overBaseCommit("100").withFs(fs).build();
+    try (HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
+        .onParentPath(new Path(partitionPath))
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+        .withFileId("test-log-fileid1").overBaseCommit("100").withFs(fs).build()) {
 
       // write data to file
       List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, INSTANT_TIME);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-      dataBlock = new HoodieAvroDataBlock(records, header);
+      dataBlock = new HoodieAvroDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       writer.appendBlock(dataBlock);
-    } finally {
-      if (writer != null) {
-        writer.close();
-      }
     }
+  }
+
+  @AfterEach
+  public void cleanUp() throws IOException {
+    fs.close();
   }
 
   /**
@@ -118,7 +123,7 @@ public class TestHoodieLogFileCommand extends AbstractShellIntegrationTest {
    */
   @Test
   public void testShowLogFileCommits() throws JsonProcessingException {
-    CommandResult cr = getShell().executeCommand("show logfile metadata --logFilePathPattern " + partitionPath + "/*");
+    CommandResult cr = shell().executeCommand("show logfile metadata --logFilePathPattern " + partitionPath + "/*");
     assertTrue(cr.isSuccess());
 
     TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT_TIME)
@@ -146,7 +151,7 @@ public class TestHoodieLogFileCommand extends AbstractShellIntegrationTest {
    */
   @Test
   public void testShowLogFileRecords() throws IOException, URISyntaxException {
-    CommandResult cr = getShell().executeCommand("show logfile records --logFilePathPattern " + partitionPath + "/*");
+    CommandResult cr = shell().executeCommand("show logfile records --logFilePathPattern " + partitionPath + "/*");
     assertTrue(cr.isSuccess());
 
     // construct expect result, get 10 records.
@@ -168,7 +173,7 @@ public class TestHoodieLogFileCommand extends AbstractShellIntegrationTest {
 
     // write to path '2015/03/16'.
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
-    partitionPath = tablePath + File.separator + HoodieTestCommitMetadataGenerator.DEFAULT_SECOND_PARTITION_PATH;
+    partitionPath = tablePath + Path.SEPARATOR + HoodieTestCommitMetadataGenerator.DEFAULT_SECOND_PARTITION_PATH;
     Files.createDirectories(Paths.get(partitionPath));
 
     HoodieLogFormat.Writer writer = null;
@@ -183,7 +188,7 @@ public class TestHoodieLogFileCommand extends AbstractShellIntegrationTest {
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, INSTANT_TIME);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-      HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records1, header);
+      HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records1, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       writer.appendBlock(dataBlock);
     } finally {
       if (writer != null) {
@@ -191,7 +196,7 @@ public class TestHoodieLogFileCommand extends AbstractShellIntegrationTest {
       }
     }
 
-    CommandResult cr = getShell().executeCommand("show logfile records --logFilePathPattern "
+    CommandResult cr = shell().executeCommand("show logfile records --logFilePathPattern "
         + partitionPath + "/* --mergeRecords true");
     assertTrue(cr.isSuccess());
 

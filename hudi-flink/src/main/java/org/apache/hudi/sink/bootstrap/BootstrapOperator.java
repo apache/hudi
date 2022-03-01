@@ -18,31 +18,28 @@
 
 package org.apache.hudi.sink.bootstrap;
 
-import org.apache.hudi.client.FlinkTaskContextSupplier;
-import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
-import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.BaseFileUtils;
-import org.apache.hudi.common.util.CommitUtils;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.table.HoodieFlinkTable;
+import org.apache.hudi.sink.bootstrap.aggregate.BootstrapAggFunction;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.format.FormatUtils;
+import org.apache.hudi.util.FlinkTables;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
@@ -54,6 +51,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.flink.runtime.state.StateInitializationContext;
 import org.apache.flink.runtime.state.StateSnapshotContext;
+import org.apache.flink.runtime.taskexecutor.GlobalAggregateManager;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
@@ -64,6 +62,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import static java.util.stream.Collectors.toList;
@@ -77,7 +76,7 @@ import static org.apache.hudi.util.StreamerUtil.isValidFile;
  *
  * <p>The output records should then shuffle by the recordKey and thus do scalable write.
  */
-public class BootstrapOperator<I, O extends HoodieRecord>
+public class BootstrapOperator<I, O extends HoodieRecord<?>>
     extends AbstractStreamOperator<O> implements OneInputStreamOperator<I, O> {
 
   private static final Logger LOG = LoggerFactory.getLogger(BootstrapOperator.class);
@@ -89,11 +88,11 @@ public class BootstrapOperator<I, O extends HoodieRecord>
   protected transient org.apache.hadoop.conf.Configuration hadoopConf;
   protected transient HoodieWriteConfig writeConfig;
 
+  private transient GlobalAggregateManager aggregateManager;
+
   private transient ListState<String> instantState;
   private final Pattern pattern;
   private String lastInstantTime;
-  private HoodieFlinkWriteClient writeClient;
-  private String actionType;
 
   public BootstrapOperator(Configuration conf) {
     this.conf = conf;
@@ -102,7 +101,8 @@ public class BootstrapOperator<I, O extends HoodieRecord>
 
   @Override
   public void snapshotState(StateSnapshotContext context) throws Exception {
-    lastInstantTime = this.writeClient.getLastPendingInstant(this.actionType);
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(this.conf);
+    lastInstantTime = StreamerUtil.getLastPendingInstant(metaClient);
     instantState.update(Collections.singletonList(lastInstantTime));
   }
 
@@ -122,13 +122,17 @@ public class BootstrapOperator<I, O extends HoodieRecord>
     }
 
     this.hadoopConf = StreamerUtil.getHadoopConf();
-    this.writeConfig = StreamerUtil.getHoodieClientConfig(this.conf);
-    this.hoodieTable = getTable();
-    this.writeClient = StreamerUtil.createWriteClient(this.conf, getRuntimeContext());
-    this.actionType = CommitUtils.getCommitActionType(
-        WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)),
-        HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE)));
+    this.writeConfig = StreamerUtil.getHoodieClientConfig(this.conf, true);
+    this.hoodieTable = FlinkTables.createTable(writeConfig, hadoopConf, getRuntimeContext());
+    this.aggregateManager = getRuntimeContext().getGlobalAggregateManager();
 
+    preLoadIndexRecords();
+  }
+
+  /**
+   * Load the index records before {@link #processElement}.
+   */
+  protected void preLoadIndexRecords() throws Exception {
     String basePath = hoodieTable.getMetaClient().getBasePath();
     int taskID = getRuntimeContext().getIndexOfThisSubtask();
     LOG.info("Start loading records in table {} into the index state, taskId = {}", basePath, taskID);
@@ -139,19 +143,33 @@ public class BootstrapOperator<I, O extends HoodieRecord>
     }
 
     LOG.info("Finish sending index records, taskId = {}.", getRuntimeContext().getIndexOfThisSubtask());
+
+    // wait for the other bootstrap tasks finish bootstrapping.
+    waitForBootstrapReady(getRuntimeContext().getIndexOfThisSubtask());
+  }
+
+  /**
+   * Wait for other bootstrap tasks to finish the index bootstrap.
+   */
+  private void waitForBootstrapReady(int taskID) {
+    int taskNum = getRuntimeContext().getNumberOfParallelSubtasks();
+    int readyTaskNum = 1;
+    while (taskNum != readyTaskNum) {
+      try {
+        readyTaskNum = aggregateManager.updateGlobalAggregate(BootstrapAggFunction.NAME, taskID, new BootstrapAggFunction());
+        LOG.info("Waiting for other bootstrap tasks to complete, taskId = {}.", taskID);
+
+        TimeUnit.SECONDS.sleep(5);
+      } catch (Exception e) {
+        LOG.warn("Update global task bootstrap summary error", e);
+      }
+    }
   }
 
   @Override
   @SuppressWarnings("unchecked")
   public void processElement(StreamRecord<I> element) throws Exception {
     output.collect((StreamRecord<O>) element);
-  }
-
-  private HoodieFlinkTable getTable() {
-    HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(
-        new SerializableConfiguration(this.hadoopConf),
-        new FlinkTaskContextSupplier(getRuntimeContext()));
-    return HoodieFlinkTable.create(this.writeConfig, context);
   }
 
   /**
@@ -162,9 +180,6 @@ public class BootstrapOperator<I, O extends HoodieRecord>
   @SuppressWarnings("unchecked")
   protected void loadRecords(String partitionPath) throws Exception {
     long start = System.currentTimeMillis();
-
-    BaseFileUtils fileUtils = BaseFileUtils.getInstance(this.hoodieTable.getBaseFileFormat());
-    Schema schema = new TableSchemaResolver(this.hoodieTable.getMetaClient()).getTableAvroSchema();
 
     final int parallelism = getRuntimeContext().getNumberOfParallelSubtasks();
     final int maxParallelism = getRuntimeContext().getMaxNumberOfParallelSubtasks();
@@ -177,6 +192,9 @@ public class BootstrapOperator<I, O extends HoodieRecord>
     Option<HoodieInstant> latestCommitTime = commitsTimeline.filterCompletedInstants().lastInstant();
 
     if (latestCommitTime.isPresent()) {
+      BaseFileUtils fileUtils = BaseFileUtils.getInstance(this.hoodieTable.getBaseFileFormat());
+      Schema schema = new TableSchemaResolver(this.hoodieTable.getMetaClient()).getTableAvroSchema();
+
       List<FileSlice> fileSlices = this.hoodieTable.getSliceView()
           .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.get().getTimestamp(), true)
           .collect(toList());
@@ -193,17 +211,10 @@ public class BootstrapOperator<I, O extends HoodieRecord>
           if (!isValidFile(baseFile.getFileStatus())) {
             return;
           }
-
-          final List<HoodieKey> hoodieKeys;
-          try {
-            hoodieKeys =
-                fileUtils.fetchRecordKeyPartitionPath(this.hadoopConf, new Path(baseFile.getPath()));
-          } catch (Exception e) {
-            throw new HoodieException(String.format("Error when loading record keys from file: %s", baseFile), e);
-          }
-
-          for (HoodieKey hoodieKey : hoodieKeys) {
-            output.collect(new StreamRecord(new IndexRecord(generateHoodieRecord(hoodieKey, fileSlice))));
+          try (ClosableIterator<HoodieKey> iterator = fileUtils.getHoodieKeyIterator(this.hadoopConf, new Path(baseFile.getPath()))) {
+            iterator.forEachRemaining(hoodieKey -> {
+              output.collect(new StreamRecord(new IndexRecord(generateHoodieRecord(hoodieKey, fileSlice))));
+            });
           }
         });
 
@@ -235,14 +246,14 @@ public class BootstrapOperator<I, O extends HoodieRecord>
 
   @SuppressWarnings("unchecked")
   public static HoodieRecord generateHoodieRecord(HoodieKey hoodieKey, FileSlice fileSlice) {
-    HoodieRecord hoodieRecord = new HoodieRecord(hoodieKey, null);
+    HoodieRecord hoodieRecord = new HoodieAvroRecord(hoodieKey, null);
     hoodieRecord.setCurrentLocation(new HoodieRecordGlobalLocation(hoodieKey.getPartitionPath(), fileSlice.getBaseInstantTime(), fileSlice.getFileId()));
     hoodieRecord.seal();
 
     return hoodieRecord;
   }
 
-  private static boolean shouldLoadFile(String fileId,
+  protected boolean shouldLoadFile(String fileId,
                                         int maxParallelism,
                                         int parallelism,
                                         int taskID) {

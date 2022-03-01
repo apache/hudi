@@ -18,17 +18,22 @@
 
 package org.apache.hudi.sink.bulk;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieKeyException;
+import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.util.RowDataProjection;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;
@@ -58,6 +63,8 @@ public class RowDataKeyGen implements Serializable {
   private final boolean hiveStylePartitioning;
   private final boolean encodePartitionPath;
 
+  private final Option<TimestampBasedAvroKeyGenerator> keyGenOpt;
+
   // efficient code path
   private boolean simpleRecordKey = false;
   private RowData.FieldGetter recordKeyFieldGetter;
@@ -72,7 +79,8 @@ public class RowDataKeyGen implements Serializable {
       String partitionFields,
       RowType rowType,
       boolean hiveStylePartitioning,
-      boolean encodePartitionPath) {
+      boolean encodePartitionPath,
+      Option<TimestampBasedAvroKeyGenerator> keyGenOpt) {
     this.recordKeyFields = recordKeys.split(",");
     this.partitionPathFields = partitionFields.split(",");
     List<String> fieldNames = rowType.getFieldNames();
@@ -102,11 +110,21 @@ public class RowDataKeyGen implements Serializable {
     } else {
       this.partitionPathProjection = getProjection(this.partitionPathFields, fieldNames, fieldTypes);
     }
+    this.keyGenOpt = keyGenOpt;
   }
 
   public static RowDataKeyGen instance(Configuration conf, RowType rowType) {
+    Option<TimestampBasedAvroKeyGenerator> keyGeneratorOpt = Option.empty();
+    if (conf.getString(FlinkOptions.KEYGEN_CLASS_NAME).equals(TimestampBasedAvroKeyGenerator.class.getName())) {
+      try {
+        keyGeneratorOpt = Option.of(new TimestampBasedAvroKeyGenerator(StreamerUtil.flinkConf2TypedProperties(conf)));
+      } catch (IOException e) {
+        throw new HoodieKeyException("Initialize TimestampBasedAvroKeyGenerator error", e);
+      }
+    }
     return new RowDataKeyGen(conf.getString(FlinkOptions.RECORD_KEY_FIELD), conf.getString(FlinkOptions.PARTITION_PATH_FIELD),
-        rowType, conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING), conf.getBoolean(FlinkOptions.URL_ENCODE_PARTITIONING));
+        rowType, conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING), conf.getBoolean(FlinkOptions.URL_ENCODE_PARTITIONING),
+        keyGeneratorOpt);
   }
 
   public String getRecordKey(RowData rowData) {
@@ -121,7 +139,7 @@ public class RowDataKeyGen implements Serializable {
   public String getPartitionPath(RowData rowData) {
     if (this.simplePartitionPath) {
       return getPartitionPath(partitionPathFieldGetter.getFieldOrNull(rowData),
-          this.partitionPathFields[0], this.hiveStylePartitioning, this.encodePartitionPath);
+          this.partitionPathFields[0], this.hiveStylePartitioning, this.encodePartitionPath, this.keyGenOpt);
     } else if (this.nonPartitioned) {
       return EMPTY_PARTITION;
     } else {
@@ -193,7 +211,12 @@ public class RowDataKeyGen implements Serializable {
       Object partValue,
       String partField,
       boolean hiveStylePartitioning,
-      boolean encodePartitionPath) {
+      boolean encodePartitionPath,
+      Option<TimestampBasedAvroKeyGenerator> keyGenOpt) {
+    if (keyGenOpt.isPresent()) {
+      TimestampBasedAvroKeyGenerator keyGenerator = keyGenOpt.get();
+      return keyGenerator.getPartitionPath(toEpochMilli(partValue, keyGenerator));
+    }
     String partitionPath = StringUtils.objToString(partValue);
     if (partitionPath == null || partitionPath.isEmpty()) {
       partitionPath = DEFAULT_PARTITION_PATH;
@@ -205,6 +228,17 @@ public class RowDataKeyGen implements Serializable {
       partitionPath = partField + "=" + partitionPath;
     }
     return partitionPath;
+  }
+
+  private static Object toEpochMilli(Object val, TimestampBasedAvroKeyGenerator keyGenerator) {
+    if (val instanceof TimestampData) {
+      return ((TimestampData) val).toInstant().toEpochMilli();
+    }
+    if (val == null) {
+      // should match the default partition path when STRING partition path re-format is supported
+      return keyGenerator.getDefaultPartitionVal();
+    }
+    return val;
   }
 
   /**

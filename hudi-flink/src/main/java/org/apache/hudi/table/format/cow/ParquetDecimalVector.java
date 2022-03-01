@@ -19,12 +19,9 @@
 package org.apache.hudi.table.format.cow;
 
 import org.apache.flink.table.data.DecimalData;
-import org.apache.flink.table.data.DecimalDataUtils;
 import org.apache.flink.table.data.vector.BytesColumnVector;
 import org.apache.flink.table.data.vector.ColumnVector;
 import org.apache.flink.table.data.vector.DecimalColumnVector;
-import org.apache.flink.table.data.vector.IntColumnVector;
-import org.apache.flink.table.data.vector.LongColumnVector;
 
 /**
  * Parquet write decimal as int32 and int64 and binary, this class wrap the real vector to
@@ -35,30 +32,18 @@ import org.apache.flink.table.data.vector.LongColumnVector;
  */
 public class ParquetDecimalVector implements DecimalColumnVector {
 
-  private final ColumnVector vector;
+  public final ColumnVector vector;
 
-  ParquetDecimalVector(ColumnVector vector) {
+  public ParquetDecimalVector(ColumnVector vector) {
     this.vector = vector;
   }
 
   @Override
   public DecimalData getDecimal(int i, int precision, int scale) {
-    if (DecimalDataUtils.is32BitDecimal(precision)) {
-      return DecimalData.fromUnscaledLong(
-          ((IntColumnVector) vector).getInt(i),
-          precision,
-          scale);
-    } else if (DecimalDataUtils.is64BitDecimal(precision)) {
-      return DecimalData.fromUnscaledLong(
-          ((LongColumnVector) vector).getLong(i),
-          precision,
-          scale);
-    } else {
-      return DecimalData.fromUnscaledBytes(
-          ((BytesColumnVector) vector).getBytes(i).getBytes(),
-          precision,
-          scale);
-    }
+    return DecimalData.fromUnscaledBytes(
+        ((BytesColumnVector) vector).getBytes(i).getBytes(),
+        precision,
+        scale);
   }
 
   @Override

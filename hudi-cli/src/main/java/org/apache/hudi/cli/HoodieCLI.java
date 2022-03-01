@@ -44,7 +44,7 @@ public class HoodieCLI {
   protected static HoodieTableMetaClient tableMetadata;
   public static HoodieTableMetaClient syncTableMetadata;
   public static TimelineLayoutVersion layoutVersion;
-  private static TempViewProvider tempViewProvider;
+  public static TempViewProvider tempViewProvider;
 
   /**
    * Enum for CLI state.
@@ -114,17 +114,4 @@ public class HoodieCLI {
 
     return tempViewProvider;
   }
-
-  /**
-   * Close tempViewProvider.
-   * <p/>
-   * For test, avoid multiple SparkContexts.
-   */
-  public static synchronized void closeTempViewProvider() {
-    if (tempViewProvider != null) {
-      tempViewProvider.close();
-      tempViewProvider = null;
-    }
-  }
-
 }

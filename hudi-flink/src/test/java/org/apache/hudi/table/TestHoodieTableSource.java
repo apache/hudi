@@ -19,9 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
-import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
@@ -32,26 +30,25 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.ThrowingSupplier;
 import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Test cases for HoodieTableSource.
@@ -64,12 +61,10 @@ public class TestHoodieTableSource {
   @TempDir
   File tempFile;
 
-  void beforeEach() throws IOException {
+  void beforeEach() throws Exception {
     final String path = tempFile.getAbsolutePath();
     conf = TestConfigurations.getDefaultConf(path);
-    StreamerUtil.initTableIfNotExists(conf);
-    IntStream.range(1, 5)
-        .forEach(i -> new File(path + File.separator + "par" + i).mkdirs());
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
   }
 
   @Test
@@ -117,9 +112,9 @@ public class TestHoodieTableSource {
     inputFormat = tableSource.getInputFormat();
     assertThat(inputFormat, is(instanceOf(MergeOnReadInputFormat.class)));
     conf.setString(FlinkOptions.QUERY_TYPE.key(), FlinkOptions.QUERY_TYPE_INCREMENTAL);
-    assertThrows(HoodieException.class,
-        () -> tableSource.getInputFormat(),
-        "Invalid query type : 'incremental'. Only 'snapshot' is supported now");
+    assertDoesNotThrow(
+        (ThrowingSupplier<? extends InputFormat<RowData, ?>>) tableSource::getInputFormat,
+        "Query type: 'incremental' should be supported");
   }
 
   @Test

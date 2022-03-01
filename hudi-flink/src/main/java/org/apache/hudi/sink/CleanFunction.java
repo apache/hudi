@@ -47,6 +47,7 @@ public class CleanFunction<T> extends AbstractRichFunction
   private final Configuration conf;
 
   protected HoodieFlinkWriteClient writeClient;
+
   private NonThrownExecutor executor;
 
   private volatile boolean isCleaning;
@@ -59,8 +60,10 @@ public class CleanFunction<T> extends AbstractRichFunction
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
     if (conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
-      this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
-      this.executor = new NonThrownExecutor(LOG);
+      // do not use the remote filesystem view because the async cleaning service
+      // local timeline is very probably to fall behind with the remote one.
+      this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext(), false);
+      this.executor = NonThrownExecutor.builder(LOG).build();
     }
   }
 
@@ -81,13 +84,25 @@ public class CleanFunction<T> extends AbstractRichFunction
   @Override
   public void snapshotState(FunctionSnapshotContext context) throws Exception {
     if (conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED) && !isCleaning) {
-      this.writeClient.startAsyncCleaning();
-      this.isCleaning = true;
+      try {
+        this.writeClient.startAsyncCleaning();
+        this.isCleaning = true;
+      } catch (Throwable throwable) {
+        // catch the exception to not affect the normal checkpointing
+        LOG.warn("Error while start async cleaning", throwable);
+      }
     }
   }
 
   @Override
   public void initializeState(FunctionInitializationContext context) throws Exception {
     // no operation
+  }
+
+  @Override
+  public void close() throws Exception {
+    if (this.writeClient != null) {
+      this.writeClient.close();
+    }
   }
 }

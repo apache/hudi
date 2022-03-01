@@ -56,7 +56,7 @@ public class TablePathUtils {
     }
 
     // Handle metadata folder or metadata sub folder path
-    Option<Path> tablePath = getTablePathFromTableMetadataPath(fs, directory);
+    Option<Path> tablePath = getTablePathFromTableMetadataPath(directory);
     if (tablePath.isPresent()) {
       return tablePath;
     }
@@ -77,7 +77,7 @@ public class TablePathUtils {
     return path != null && path.contains("/" + HoodieTableMetaClient.ERROR_TABLE_FOLDER_NAME + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/");
   }
 
-  private static Option<Path> getTablePathFromTableMetadataPath(FileSystem fs, Path path) {
+  private static Option<Path> getTablePathFromTableMetadataPath(Path path) {
     String pathStr = path.toString();
 
     if (isTableMetadataFolder(pathStr)) {

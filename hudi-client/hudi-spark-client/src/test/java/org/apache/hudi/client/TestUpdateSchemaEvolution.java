@@ -19,10 +19,12 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.BaseFileUtils;
@@ -64,6 +66,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath);
     initSparkContexts("TestUpdateSchemaEvolution");
     initFileSystem();
+    initTimelineService();
   }
 
   @AfterEach
@@ -80,7 +83,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
       for (String recordStr : recordsStrs) {
         RawTripTestPayload rowChange = new RawTripTestPayload(recordStr);
         insertRecords
-            .add(new HoodieRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange));
+            .add(new HoodieAvroRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange));
       }
       Map<String, HoodieRecord> insertRecordMap = insertRecords.stream()
           .collect(Collectors.toMap(r -> r.getRecordKey(), Function.identity()));
@@ -145,7 +148,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
     List<HoodieRecord> updateRecords = new ArrayList<>();
     RawTripTestPayload rowChange = new RawTripTestPayload(recordStr);
     HoodieRecord record =
-        new HoodieRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange);
+        new HoodieAvroRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange);
     record.setCurrentLocation(new HoodieRecordLocation("101", insertFileId));
     record.seal();
     updateRecords.add(record);
@@ -228,6 +231,9 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
 
   private HoodieWriteConfig makeHoodieClientConfig(String name) {
     Schema schema = getSchemaFromResource(getClass(), name);
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schema.toString()).build();
+    return HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withRemoteServerPort(timelineServicePort).build())
+        .withSchema(schema.toString()).build();
   }
 }
