@@ -27,8 +27,8 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class CustomizedThreadFactory implements ThreadFactory {
 
-  private static final AtomicLong POOL_NUM = new AtomicLong(1);
-  private static final AtomicLong THREAD_NUM = new AtomicLong(1);
+  private static final AtomicLong POOL_NUM = new AtomicLong(1L);
+  private final AtomicLong THREAD_NUM = new AtomicLong(1L);
 
   private final String threadName;
   private final boolean daemon;
@@ -37,12 +37,12 @@ public class CustomizedThreadFactory implements ThreadFactory {
     this("pool-" + POOL_NUM.getAndIncrement(), false);
   }
 
-  public CustomizedThreadFactory(String poolNamePrefix) {
-    this(poolNamePrefix, false);
+  public CustomizedThreadFactory(String threadNamePrefix) {
+    this(threadNamePrefix, false);
   }
 
-  public CustomizedThreadFactory(String poolNamePrefix, boolean daemon) {
-    this.threadName = poolNamePrefix + "-thread-";
+  public CustomizedThreadFactory(String threadNamePrefix, boolean daemon) {
+    this.threadName = threadNamePrefix + "-thread-";
     this.daemon = daemon;
   }
 

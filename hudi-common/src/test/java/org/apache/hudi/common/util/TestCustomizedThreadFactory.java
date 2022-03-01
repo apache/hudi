@@ -31,13 +31,13 @@ class TestCustomizedThreadFactory {
   @Test
   public void threadPrefixTest() throws ExecutionException, InterruptedException {
     int nThreads = 100;
-    String poolNamePrefix = "consumer";
-    ExecutorService executorService = Executors.newFixedThreadPool(nThreads, new CustomizedThreadFactory(poolNamePrefix));
+    String threadNamePrefix = "consumer";
+    ExecutorService executorService = Executors.newFixedThreadPool(nThreads, new CustomizedThreadFactory(threadNamePrefix));
     for (int i = 0; i < nThreads; i++) {
       Future<Boolean> resultFuture = executorService.submit(() -> {
         LockSupport.parkNanos(10000000L);
         String name = Thread.currentThread().getName();
-        return name.startsWith(poolNamePrefix);
+        return name.startsWith(threadNamePrefix);
       });
       Boolean result = resultFuture.get();
       Assertions.assertTrue(result);
@@ -47,13 +47,13 @@ class TestCustomizedThreadFactory {
   @Test
   public void defaultThreadPrefixTest() throws ExecutionException, InterruptedException {
     int nThreads = 100;
-    String defaultThreadPoolPrefix = "pool-1";
+    String defaultThreadNamePrefix = "pool-1";
     ExecutorService executorService = Executors.newFixedThreadPool(nThreads, new CustomizedThreadFactory());
     for (int i = 0; i < nThreads; i++) {
       Future<Boolean> resultFuture = executorService.submit(() -> {
         LockSupport.parkNanos(10000000L);
         String name = Thread.currentThread().getName();
-        return name.startsWith(defaultThreadPoolPrefix);
+        return name.startsWith(defaultThreadNamePrefix);
       });
       Boolean result = resultFuture.get();
       Assertions.assertTrue(result);
@@ -63,14 +63,14 @@ class TestCustomizedThreadFactory {
   @Test
   public void daemonThreadTest() throws ExecutionException, InterruptedException {
     int nThreads = 100;
-    String threadPoolPrefix = "consumer";
-    ExecutorService executorService = Executors.newFixedThreadPool(nThreads, new CustomizedThreadFactory(threadPoolPrefix, true));
+    String threadNamePrefix = "consumer";
+    ExecutorService executorService = Executors.newFixedThreadPool(nThreads, new CustomizedThreadFactory(threadNamePrefix, true));
     for (int i = 0; i < nThreads; i++) {
       Future<Boolean> resultFuture = executorService.submit(() -> {
         LockSupport.parkNanos(10000000L);
         String name = Thread.currentThread().getName();
         boolean daemon = Thread.currentThread().isDaemon();
-        return name.startsWith(threadPoolPrefix) && daemon;
+        return name.startsWith(threadNamePrefix) && daemon;
       });
       Boolean result = resultFuture.get();
       Assertions.assertTrue(result);
