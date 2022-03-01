@@ -1,5 +1,5 @@
 ---
-title: Configurations
+title: All Configurations
 keywords: [ configurations, default, flink options, spark, configs, parameters ] 
 permalink: /docs/configurations.html
 summary: This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.
