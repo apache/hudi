@@ -348,7 +348,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   /**
    * Insert the given Error HoodieRecords into the hudi error table
    * <p>
-   * This API is intended to be used to write wrong records.
+   * This API is intended to be used to write error records.
    *
    * @param records Error HoodieRecords to insert
    * @param instantTime Instant time of the commit
