@@ -144,7 +144,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public static final TypeDescription ORC_TRIP_SCHEMA = AvroOrcUtils.createOrcSchema(new Schema.Parser().parse(TRIP_SCHEMA));
   public static final Schema FLATTENED_AVRO_SCHEMA = new Schema.Parser().parse(TRIP_FLATTENED_SCHEMA);
 
-  private final Random r;
+  private final Random rand;
 
   //Maintains all the existing keys schema wise
   private final Map<String, Map<Integer, KeyPartition>> existingKeysBySchema;
@@ -157,7 +157,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   public HoodieTestDataGenerator(long seed, String[] partitionPaths, Map<Integer, KeyPartition> keyPartitionMap) {
-    this.r = new Random(seed);
+    this.rand = new Random(seed);
     this.partitionPaths = Arrays.copyOf(partitionPaths, partitionPaths.length);
     this.existingKeysBySchema = new HashMap<>();
     this.existingKeysBySchema.put(TRIP_EXAMPLE_SCHEMA, keyPartitionMap);
@@ -302,25 +302,25 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     rec.put("partition_path", partitionPath);
     rec.put("rider", riderName);
     rec.put("driver", driverName);
-    rec.put("begin_lat", r.nextDouble());
-    rec.put("begin_lon", r.nextDouble());
-    rec.put("end_lat", r.nextDouble());
-    rec.put("end_lon", r.nextDouble());
+    rec.put("begin_lat", rand.nextDouble());
+    rec.put("begin_lon", rand.nextDouble());
+    rec.put("end_lat", rand.nextDouble());
+    rec.put("end_lon", rand.nextDouble());
     if (isFlattened) {
-      rec.put("fare", r.nextDouble() * 100);
+      rec.put("fare", rand.nextDouble() * 100);
       rec.put("currency", "USD");
     } else {
-      rec.put("distance_in_meters", r.nextInt());
-      rec.put("seconds_since_epoch", r.nextLong());
-      rec.put("weight", r.nextFloat());
+      rec.put("distance_in_meters", rand.nextInt());
+      rec.put("seconds_since_epoch", rand.nextLong());
+      rec.put("weight", rand.nextFloat());
       byte[] bytes = "Canada".getBytes();
       rec.put("nation", ByteBuffer.wrap(bytes));
-      long randomMillis = genRandomTimeMillis(r);
+      long randomMillis = genRandomTimeMillis(rand);
       Instant instant = Instant.ofEpochMilli(randomMillis);
       rec.put("current_date", (int) LocalDateTime.ofInstant(instant, ZoneOffset.UTC).toLocalDate().toEpochDay());
       rec.put("current_ts", randomMillis);
 
-      BigDecimal bigDecimal = new BigDecimal(String.format("%5f", r.nextFloat()));
+      BigDecimal bigDecimal = new BigDecimal(String.format("%5f", rand.nextFloat()));
       Schema decimalSchema = AVRO_SCHEMA.getField("height").schema();
       Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();
       GenericFixed genericFixed = decimalConversions.toFixed(bigDecimal, decimalSchema, LogicalTypes.decimal(10, 6));
@@ -329,14 +329,14 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       rec.put("city_to_state", Collections.singletonMap("LA", "CA"));
 
       GenericRecord fareRecord = new GenericData.Record(AVRO_SCHEMA.getField("fare").schema());
-      fareRecord.put("amount", r.nextDouble() * 100);
+      fareRecord.put("amount", rand.nextDouble() * 100);
       fareRecord.put("currency", "USD");
       rec.put("fare", fareRecord);
 
       GenericArray<GenericRecord> tipHistoryArray = new GenericData.Array<>(1, AVRO_SCHEMA.getField("tip_history").schema());
       Schema tipSchema = new Schema.Parser().parse(AVRO_SCHEMA.getField("tip_history").schema().toString()).getElementType();
       GenericRecord tipRecord = new GenericData.Record(tipSchema);
-      tipRecord.put("amount", r.nextDouble() * 100);
+      tipRecord.put("amount", rand.nextDouble() * 100);
       tipRecord.put("currency", "USD");
       tipHistoryArray.add(tipRecord);
       rec.put("tip_history", tipHistoryArray);
@@ -359,7 +359,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     rec.put("timestamp", timestamp);
     rec.put("rider", riderName);
     rec.put("driver", driverName);
-    rec.put("fare", r.nextDouble() * 100);
+    rec.put("fare", rand.nextDouble() * 100);
     rec.put("_hoodie_is_deleted", false);
     return rec;
   }
@@ -370,7 +370,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     rec.put("timestamp", timestamp);
     rec.put("rider", riderName);
     rec.put("driver", driverName);
-    rec.put("fare", r.nextDouble() * 100);
+    rec.put("fare", rand.nextDouble() * 100);
     rec.put("_hoodie_is_deleted", false);
     return rec;
   }
@@ -504,13 +504,13 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   public List<HoodieRecord> generateInsertsForPartition(String instantTime, Integer n, String partition) {
-    return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, false, () -> partition, () -> genPseudoRandomUUID(r).toString()).collect(Collectors.toList());
+    return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, false, () -> partition, () -> genPseudoRandomUUID(rand).toString()).collect(Collectors.toList());
   }
 
   public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n, boolean isFlattened, String schemaStr, boolean containsAllPartitions) {
     return generateInsertsStream(commitTime, n, isFlattened, schemaStr, containsAllPartitions,
-        () -> partitionPaths[r.nextInt(partitionPaths.length)],
-        () -> genPseudoRandomUUID(r).toString());
+        () -> partitionPaths[rand.nextInt(partitionPaths.length)],
+        () -> genPseudoRandomUUID(rand).toString());
   }
 
   /**
@@ -572,8 +572,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     List<HoodieRecord> inserts = new ArrayList<>();
     int currSize = getNumExistingKeys(TRIP_EXAMPLE_SCHEMA);
     for (int i = 0; i < limit; i++) {
-      String partitionPath = partitionPaths[r.nextInt(partitionPaths.length)];
-      HoodieKey key = new HoodieKey(genPseudoRandomUUID(r).toString(), partitionPath);
+      String partitionPath = partitionPaths[rand.nextInt(partitionPaths.length)];
+      HoodieKey key = new HoodieKey(genPseudoRandomUUID(rand).toString(), partitionPath);
       HoodieRecord record = new HoodieAvroRecord(key, generateAvroPayload(key, instantTime));
       inserts.add(record);
 
@@ -674,7 +674,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     for (int i = 0; i < n; i++) {
       Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
       Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
-      KeyPartition kp = existingKeys.get(r.nextInt(numExistingKeys - 1));
+      KeyPartition kp = existingKeys.get(rand.nextInt(numExistingKeys - 1));
       HoodieRecord record = generateUpdateRecord(kp.key, instantTime);
       updates.add(record);
     }
@@ -746,7 +746,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     }
 
     return IntStream.range(0, n).boxed().map(i -> {
-      int index = numExistingKeys == 1 ? 0 : r.nextInt(numExistingKeys - 1);
+      int index = numExistingKeys == 1 ? 0 : rand.nextInt(numExistingKeys - 1);
       KeyPartition kp = existingKeys.get(index);
       // Find the available keyPartition starting from randomly chosen one.
       while (used.contains(kp)) {
@@ -779,7 +779,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
 
     List<HoodieKey> result = new ArrayList<>();
     for (int i = 0; i < n; i++) {
-      int index = r.nextInt(numExistingKeys);
+      int index = rand.nextInt(numExistingKeys);
       while (!existingKeys.containsKey(index)) {
         index = (index + 1) % numExistingKeys;
       }
@@ -811,7 +811,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
 
     List<HoodieRecord> result = new ArrayList<>();
     for (int i = 0; i < n; i++) {
-      int index = r.nextInt(numExistingKeys);
+      int index = rand.nextInt(numExistingKeys);
       while (!existingKeys.containsKey(index)) {
         index = (index + 1) % numExistingKeys;
       }
@@ -861,8 +861,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public List<GenericRecord> generateGenericRecords(int numRecords) {
     List<GenericRecord> list = new ArrayList<>();
     IntStream.range(0, numRecords).forEach(i -> {
-      list.add(generateGenericRecord(genPseudoRandomUUID(r).toString(), "0",
-          genPseudoRandomUUID(r).toString(), genPseudoRandomUUID(r).toString(), r.nextLong()));
+      list.add(generateGenericRecord(genPseudoRandomUUID(rand).toString(), "0",
+          genPseudoRandomUUID(rand).toString(), genPseudoRandomUUID(rand).toString(), rand.nextLong()));
     });
     return list;
   }
