@@ -59,7 +59,7 @@ public class MetricsReporterFactory {
         reporterClassName = "org.apache.hudi.metrics.InMemoryMetricsReporter";
         break;
       case JMX:
-        reporterClassName = "org.apache.hudi.metrics.JMXMetricsReporter";
+        reporterClassName = "org.apache.hudi.metrics.JmxMetricsReporter";
         break;
       case DATADOG:
         reporterClassName = "org.apache.hudi.metrics.datadog.DatadogMetricsReporter";
@@ -68,13 +68,13 @@ public class MetricsReporterFactory {
         reporterClassName = "org.apache.hudi.metrics.prometheus.PushGatewayMetricsReporter";
         break;
       case PROMETHEUS:
-        reporterClassName = "org.apache.hudi.metrics.prometheus.PrometheusMetricsReporter";
+        reporterClassName = "org.apache.hudi.metrics.prometheus.PrometheusReporter";
         break;
       case CONSOLE:
-        reporterClassName = "org.apache.hudi.aws.cloudwatch.CloudWatchMetricsReporter";
+        reporterClassName = "org.apache.hudi.metrics.ConsoleMetricsReporter";
         break;
       case CLOUDWATCH:
-        reporterClassName = "org.apache.hudi.metrics.ConsoleMetricsReporter";
+        reporterClassName = "org.apache.hudi.aws.cloudwatch.CloudWatchMetricsReporter";
         break;
       default:
         LOG.error("Reporter type[" + type + "] is not supported.");
