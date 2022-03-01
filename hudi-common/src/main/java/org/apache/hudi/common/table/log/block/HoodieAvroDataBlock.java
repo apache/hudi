@@ -47,7 +47,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -76,8 +75,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
 
   public HoodieAvroDataBlock(@Nonnull List<IndexedRecord> records,
                              @Nonnull Map<HeaderMetadataType, String> header,
-                             @Nonnull String keyField
-  ) {
+                             @Nonnull String keyField) {
     super(records, header, new HashMap<>(), keyField);
   }
 
@@ -100,9 +98,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     output.writeInt(records.size());
 
     // 3. Write the records
-    Iterator<IndexedRecord> itr = records.iterator();
-    while (itr.hasNext()) {
-      IndexedRecord s = itr.next();
+    for (IndexedRecord s : records) {
       ByteArrayOutputStream temp = new ByteArrayOutputStream();
       BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(temp, encoderCache.get());
       encoderCache.set(encoder);
@@ -127,72 +123,49 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   }
 
   // TODO (na) - Break down content into smaller chunks of byte [] to be GC as they are used
-  // TODO (na) - Implement a recordItr instead of recordList
   @Override
-  protected List<IndexedRecord> deserializeRecords(byte[] content) throws IOException {
-    List<IndexedRecord> records = new ArrayList<>();
-    try (ClosableIterator<IndexedRecord> recordItr = getRecordItr(Option.empty())) {
-      recordItr.forEachRemaining(records::add);
-    }
-
-    return records;
+  protected ClosableIterator<IndexedRecord> deserializeRecords(byte[] content) throws IOException {
+    checkState(this.readerSchema != null, "Reader's schema has to be non-null");
+    return RecordIterator.getInstance(this, content);
   }
 
-  @Override
-  public ClosableIterator<IndexedRecord> getRecordItr(Option<List<String>> keys) throws IOException {
-    return new IndexRecordIterator(this, keys);
-  }
-
-  private static class IndexRecordIterator implements ClosableIterator<IndexedRecord> {
-    private final HoodieAvroDataBlock block;
+  private static class RecordIterator implements ClosableIterator<IndexedRecord> {
+    private byte[] content;
     private final SizeAwareDataInputStream dis;
     private final GenericDatumReader<IndexedRecord> reader;
     private final ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
-    private final HashSet<String> keySet;
+
     private int totalRecords = 0;
     private int readRecords = 0;
 
-    private IndexRecordIterator(HoodieAvroDataBlock block, Option<List<String>> keys) throws IOException {
-      this.block = block;
-      checkState(this.block.readerSchema != null, "Reader's schema has to be non-null");
-      if (this.block.readBlockLazily && !this.block.getContent().isPresent()) {
-        // read log block contents from disk
-        this.block.inflate();
-      }
+    private RecordIterator(Schema readerSchema, Schema writerSchema, byte[] content) throws IOException {
+      this.content = content;
 
-      this.dis = new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(this.block.getContent().get())));
+      this.dis = new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(this.content)));
 
       // 1. Read version for this data block
       int version = this.dis.readInt();
       HoodieAvroDataBlockVersion logBlockVersion = new HoodieAvroDataBlockVersion(version);
 
-      // Get schema from the header
-      Schema writerSchema = new Schema.Parser().parse(this.block.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
-
-      this.reader = new GenericDatumReader<>(writerSchema, this.block.readerSchema);
+      this.reader = new GenericDatumReader<>(writerSchema, readerSchema);
 
       if (logBlockVersion.hasRecordCount()) {
         this.totalRecords = this.dis.readInt();
       }
+    }
 
-      if (this.block.enablePointLookups && keys.isPresent() && !keys.get().isEmpty()) {
-        throw new UnsupportedOperationException(
-                String.format("Point lookups are not supported by this Data block type (%s)", this.block.getBlockType())
-        );
-      }
-      if (keys.isPresent()) {
-        keySet = new HashSet<>(keys.get());
-      } else {
-        keySet = null;
-      }
+    public static RecordIterator getInstance(HoodieAvroDataBlock dataBlock, byte[] content) throws IOException {
+      // Get schema from the header
+      Schema writerSchema = new Schema.Parser().parse(dataBlock.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
+      return new RecordIterator(dataBlock.readerSchema, writerSchema, content);
     }
 
     @Override
     public void close() {
       try {
         this.dis.close();
-        this.block.deflate();
         this.decoderCache.remove();
+        this.content = null;
       } catch (IOException e) {
         // ignore
       }
@@ -207,15 +180,12 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     public IndexedRecord next() {
       try {
         int recordLength = this.dis.readInt();
-        BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(this.block.getContent().get(), this.dis.getNumberOfBytesRead(),
+        BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(this.content, this.dis.getNumberOfBytesRead(),
                 recordLength, this.decoderCache.get());
         this.decoderCache.set(decoder);
         IndexedRecord record = this.reader.read(null, decoder);
         this.dis.skipBytes(recordLength);
         this.readRecords++;
-        if (keySet != null) {
-          return keySet.contains(this.block.getRecordKey(record).orElse(null)) ? record : null;
-        }
         return record;
       } catch (IOException e) {
         throw new HoodieIOException("Unable to convert bytes to record.", e);
@@ -314,7 +284,10 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     output.writeInt(schemaContent.length);
     output.write(schemaContent);
 
-    List<IndexedRecord> records = getRecords();
+    List<IndexedRecord> records = new ArrayList<>();
+    try (ClosableIterator<IndexedRecord> recordItr = getRecordItr()) {
+      recordItr.forEachRemaining(records::add);
+    }
 
     // 3. Write total number of records
     output.writeInt(records.size());

@@ -52,6 +52,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
@@ -359,7 +360,7 @@ public abstract class AbstractHoodieLogRecordReader {
    * handle it.
    */
   private void processDataBlock(HoodieDataBlock dataBlock, Option<List<String>> keys) throws Exception {
-    try (ClosableIterator<IndexedRecord> recordItr = dataBlock.getRecordItr(keys)) {
+    try (ClosableIterator<IndexedRecord> recordItr = dataBlock.getRecordItr(keys.orElse(Collections.emptyList()))) {
       while (recordItr.hasNext()) {
         IndexedRecord record = recordItr.next();
         if (record != null) {

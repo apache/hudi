@@ -40,6 +40,7 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieHFileReader;
@@ -292,14 +293,14 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
       while (logFileReader.hasNext()) {
         HoodieLogBlock logBlock = logFileReader.next();
         if (logBlock instanceof HoodieDataBlock) {
-          for (IndexedRecord indexRecord : ((HoodieDataBlock) logBlock).getRecords()) {
-            final GenericRecord record = (GenericRecord) indexRecord;
-            // Metadata table records should not have meta fields!
-            assertNull(record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
-            assertNull(record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
-
-            final String key = String.valueOf(record.get(HoodieMetadataPayload.KEY_FIELD_NAME));
-            assertFalse(key.isEmpty());
+          try (ClosableIterator<IndexedRecord> recordItr = ((HoodieDataBlock) logBlock).getRecordItr()) {
+            recordItr.forEachRemaining(indexRecord -> {
+              final GenericRecord record = (GenericRecord) indexRecord;
+              assertNull(record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+              assertNull(record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+              final String key = String.valueOf(record.get(HoodieMetadataPayload.KEY_FIELD_NAME));
+              assertFalse(key.isEmpty());
+            });
           }
         }
       }
