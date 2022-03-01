@@ -18,6 +18,7 @@
 
 package org.apache.hudi.cli.commands;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.cli.DeDupeType;
 import org.apache.hudi.cli.DedupeSparkJob;
@@ -25,6 +26,7 @@ import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -38,7 +40,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.upgrade.SparkUpgradeDowngradeHelper;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.utilities.HDFSParquetImporter;
@@ -51,8 +55,6 @@ import org.apache.hudi.utilities.HoodieCompactor;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.deltastreamer.BootstrapExecutor;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
-
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
@@ -76,7 +78,7 @@ public class SparkMain {
   enum SparkCommand {
     BOOTSTRAP, ROLLBACK, DEDUPLICATE, ROLLBACK_TO_SAVEPOINT, SAVEPOINT, IMPORT, UPSERT, COMPACT_SCHEDULE, COMPACT_RUN, COMPACT_SCHEDULE_AND_EXECUTE,
     COMPACT_UNSCHEDULE_PLAN, COMPACT_UNSCHEDULE_FILE, COMPACT_VALIDATE, COMPACT_REPAIR, CLUSTERING_SCHEDULE,
-    CLUSTERING_RUN, CLUSTERING_SCHEDULE_AND_EXECUTE, CLEAN, DELETE_SAVEPOINT, UPGRADE, DOWNGRADE
+    CLUSTERING_RUN, CLUSTERING_SCHEDULE_AND_EXECUTE, CLEAN, DELETE_MARKER, DELETE_SAVEPOINT, UPGRADE, DOWNGRADE
   }
 
   public static void main(String[] args) throws Exception {
@@ -234,6 +236,10 @@ public class SparkMain {
           assert (args.length == 7);
           returnCode = createSavepoint(jsc, args[3], args[4], args[5], args[6]);
           break;
+        case DELETE_MARKER:
+          assert (args.length == 5);
+          returnCode = deleteMarker(jsc, args[3], args[4]);
+          break;
         case DELETE_SAVEPOINT:
           assert (args.length == 5);
           returnCode = deleteSavepoint(jsc, args[3], args[4]);
@@ -275,6 +281,21 @@ public class SparkMain {
     cfg.propsFilePath = propsFilePath;
     cfg.configs = configs;
     new HoodieCleaner(cfg, jsc).run();
+  }
+
+  protected static int deleteMarker(JavaSparkContext jsc, String instantTime, String basePath) {
+    try {
+      SparkRDDWriteClient client = createHoodieClient(jsc, basePath);
+      HoodieWriteConfig config = client.getConfig();
+      HoodieEngineContext context = client.getEngineContext();
+      HoodieSparkTable table = HoodieSparkTable.create(config, context, true);
+      WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
+          .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+      return 0;
+    } catch (Exception e) {
+      LOG.warn(String.format("Failed: Could not clean marker instantTime: \"%s\".", instantTime), e);
+      return -1;
+    }
   }
 
   private static int dataLoad(JavaSparkContext jsc, String command, String srcPath, String targetPath, String tableName,
