@@ -21,9 +21,11 @@ package org.apache.hudi.sink.compact;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.table.HoodieFlinkCopyOnWriteTable;
 import org.apache.hudi.table.action.compact.HoodieFlinkMergeOnReadTableCompactor;
+import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
@@ -51,7 +53,7 @@ public class CompactFunction extends ProcessFunction<CompactionPlanEvent, Compac
   /**
    * Write Client.
    */
-  private transient HoodieFlinkWriteClient writeClient;
+  private transient HoodieFlinkWriteClient<?> writeClient;
 
   /**
    * Whether to execute compaction asynchronously.
@@ -89,21 +91,24 @@ public class CompactFunction extends ProcessFunction<CompactionPlanEvent, Compac
     if (asyncCompaction) {
       // executes the compaction task asynchronously to not block the checkpoint barrier propagate.
       executor.execute(
-          () -> doCompaction(instantTime, compactionOperation, collector),
+          () -> doCompaction(instantTime, compactionOperation, collector, reloadWriteConfig()),
           (errMsg, t) -> collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), taskID)),
           "Execute compaction for instant %s from task %d", instantTime, taskID);
     } else {
       // executes the compaction task synchronously for batch mode.
       LOG.info("Execute compaction for instant {} from task {}", instantTime, taskID);
-      doCompaction(instantTime, compactionOperation, collector);
+      doCompaction(instantTime, compactionOperation, collector, writeClient.getConfig());
     }
   }
 
-  private void doCompaction(String instantTime, CompactionOperation compactionOperation, Collector<CompactionCommitEvent> collector) throws IOException {
-    HoodieFlinkMergeOnReadTableCompactor compactor = new HoodieFlinkMergeOnReadTableCompactor();
+  private void doCompaction(String instantTime,
+                            CompactionOperation compactionOperation,
+                            Collector<CompactionCommitEvent> collector,
+                            HoodieWriteConfig writeConfig) throws IOException {
+    HoodieFlinkMergeOnReadTableCompactor<?> compactor = new HoodieFlinkMergeOnReadTableCompactor<>();
     List<WriteStatus> writeStatuses = compactor.compact(
         new HoodieFlinkCopyOnWriteTable<>(
-            writeClient.getConfig(),
+            writeConfig,
             writeClient.getEngineContext(),
             writeClient.getHoodieTable().getMetaClient()),
         writeClient.getHoodieTable().getMetaClient(),
@@ -112,6 +117,12 @@ public class CompactFunction extends ProcessFunction<CompactionPlanEvent, Compac
         instantTime,
         writeClient.getHoodieTable().getTaskContextSupplier());
     collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), writeStatuses, taskID));
+  }
+
+  private HoodieWriteConfig reloadWriteConfig() throws Exception {
+    HoodieWriteConfig writeConfig = writeClient.getConfig();
+    CompactionUtil.setAvroSchema(writeConfig, writeClient.getHoodieTable().getMetaClient());
+    return writeConfig;
   }
 
   @VisibleForTesting
