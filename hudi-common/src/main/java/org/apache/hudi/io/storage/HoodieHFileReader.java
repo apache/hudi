@@ -192,7 +192,14 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     return filteredRecords;
   }
 
-  public List<Pair<String, R>> readAllRecords(Schema writerSchema, Schema readerSchema) {
+  /**
+   * Reads all the records with given schema.
+   *
+   * <p>NOTE: This should only be used for testing,
+   * the records are materialized eagerly into a list and returned,
+   * use {@code getRecordIterator} where possible.
+   */
+  private List<Pair<String, R>> readAllRecords(Schema writerSchema, Schema readerSchema) {
     final Option<Schema.Field> keyFieldSchema = Option.ofNullable(readerSchema.getField(KEY_FIELD_NAME));
     List<Pair<String, R>> recordList = new LinkedList<>();
     try {
@@ -211,18 +218,50 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     }
   }
 
+  /**
+   * Reads all the records with current schema.
+   *
+   * <p>NOTE: This should only be used for testing,
+   * the records are materialized eagerly into a list and returned,
+   * use {@code getRecordIterator} where possible.
+   */
   public List<Pair<String, R>> readAllRecords() {
     Schema schema = getSchema();
     return readAllRecords(schema, schema);
   }
 
-  /** @deprecated Use {@link #readRecordItr} and its methods instead */
-  @Deprecated
+  /**
+   * Reads all the records with current schema and filtering keys.
+   *
+   * <p>NOTE: This should only be used for testing,
+   * the records are materialized eagerly into a list and returned,
+   * use {@code getRecordIterator} where possible.
+   */
   public List<Pair<String, R>> readRecords(List<String> keys) throws IOException {
     return readRecords(keys, getSchema());
   }
 
-  public ClosableIterator<R> readRecordItr(List<String> keys, Schema schema) throws IOException {
+  /**
+   * Reads all the records with given schema and filtering keys.
+   *
+   * <p>NOTE: This should only be used for testing,
+   * the records are materialized eagerly into a list and returned,
+   * use {@code getRecordIterator} where possible.
+   */
+  public List<Pair<String, R>> readRecords(List<String> keys, Schema schema) throws IOException {
+    this.schema = schema;
+    reader.loadFileInfo();
+    List<Pair<String, R>> records = new ArrayList<>();
+    for (String key: keys) {
+      Option<R> value = getRecordByKey(key, schema);
+      if (value.isPresent()) {
+        records.add(new Pair(key, value.get()));
+      }
+    }
+    return records;
+  }
+
+  public ClosableIterator<R> getRecordIterator(List<String> keys, Schema schema) throws IOException {
     this.schema = schema;
     reader.loadFileInfo();
     Iterator<String> iterator = keys.iterator();
@@ -254,21 +293,6 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
         return next;
       }
     };
-  }
-
-  /** @deprecated Use {@link #readRecordItr} and its methods instead */
-  @Deprecated
-  public List<Pair<String, R>> readRecords(List<String> keys, Schema schema) throws IOException {
-    this.schema = schema;
-    reader.loadFileInfo();
-    List<Pair<String, R>> records = new ArrayList<>();
-    for (String key: keys) {
-      Option<R> value = getRecordByKey(key, schema);
-      if (value.isPresent()) {
-        records.add(new Pair(key, value.get()));
-      }
-    }
-    return records;
   }
 
   @Override

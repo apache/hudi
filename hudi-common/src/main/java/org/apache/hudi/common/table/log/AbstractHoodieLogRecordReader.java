@@ -363,11 +363,9 @@ public abstract class AbstractHoodieLogRecordReader {
     try (ClosableIterator<IndexedRecord> recordItr = dataBlock.getRecordItr(keys.orElse(Collections.emptyList()))) {
       while (recordItr.hasNext()) {
         IndexedRecord record = recordItr.next();
-        if (record != null) {
-          processNextRecord(createHoodieRecord(record, this.hoodieTableMetaClient.getTableConfig(), this.payloadClassFQN,
-                  this.preCombineField, this.withOperationField, this.simpleKeyGenFields, this.partitionName));
-          totalLogRecords.incrementAndGet();
-        }
+        processNextRecord(createHoodieRecord(record, this.hoodieTableMetaClient.getTableConfig(), this.payloadClassFQN,
+            this.preCombineField, this.withOperationField, this.simpleKeyGenFields, this.partitionName));
+        totalLogRecords.incrementAndGet();
       }
     }
   }

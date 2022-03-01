@@ -40,6 +40,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
 import org.apache.hudi.io.storage.HoodieHFileReader;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -195,9 +196,11 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     // HFile read will be efficient if keys are sorted, since on storage, records are sorted by key. This will avoid unnecessary seeks.
     Collections.sort(keys);
 
-    HoodieHFileReader<IndexedRecord> reader =
-             new HoodieHFileReader<>(inlineConf, inlinePath, new CacheConfig(inlineConf), inlinePath.getFileSystem(inlineConf));
-    return reader.readRecordItr(keys, readerSchema);
+    try (HoodieHFileReader<IndexedRecord> reader =
+             new HoodieHFileReader<>(inlineConf, inlinePath, new CacheConfig(inlineConf), inlinePath.getFileSystem(inlineConf))) {
+      // Get writer's schema from the header
+      return reader.getRecordIterator(keys, readerSchema);
+    }
   }
 
   private byte[] serializeRecord(IndexedRecord record) {
