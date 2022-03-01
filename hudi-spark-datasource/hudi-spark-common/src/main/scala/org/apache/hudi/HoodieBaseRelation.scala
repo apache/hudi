@@ -200,11 +200,6 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       val partitionDirs = fileIndex.listFiles(partitionFilters, dataFilters)
       partitionDirs.map(pd => (getPartitionPath(pd.files.head), pd.files)).toMap
     } else {
-      sqlContext.sparkContext.hadoopConfiguration.setClass(
-        "mapreduce.input.pathFilter.class",
-        classOf[HoodieROTablePathFilter],
-        classOf[PathFilter])
-
       val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(sparkSession, globPaths)
       val partitionDirs = inMemoryFileIndex.listFiles(partitionFilters, dataFilters)
 
