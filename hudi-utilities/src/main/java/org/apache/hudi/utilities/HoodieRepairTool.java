@@ -48,7 +48,6 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.security.SecureRandom;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -345,7 +344,7 @@ public class HoodieRepairTool {
   boolean doRepair(
       Option<String> startingInstantOption, Option<String> endingInstantOption, boolean isDryRun) throws IOException {
     // Scans all partitions to find base and log files in the base path
-    List<Path> allFilesInPartitions = getBaseAndLogFilePathsFromFileSystem();
+    List<Path> allFilesInPartitions = HoodieDataTableUtils.getBaseAndLogFilePathsFromFileSystem(tableMetadata, cfg.basePath);
     // Buckets the files based on instant time
     // instant time -> relative paths of base and log files to base path
     Map<String, List<String>> instantToFilesMap = RepairUtils.tagInstantsOfBaseAndLogFiles(
@@ -386,22 +385,6 @@ public class HoodieRepairTool {
       LOG.info(String.format("Table repair on %s is successful", cfg.basePath));
     }
     return true;
-  }
-
-  /**
-   * @return All hoodie files of the table from the file system.
-   * @throws IOException upon errors.
-   */
-  List<Path> getBaseAndLogFilePathsFromFileSystem() throws IOException {
-    List<String> allPartitionPaths = tableMetadata.getAllPartitionPaths()
-        .stream().map(partitionPath ->
-            FSUtils.getPartitionPath(cfg.basePath, partitionPath).toString())
-        .collect(Collectors.toList());
-    return tableMetadata.getAllFilesInPartitions(allPartitionPaths).values().stream()
-        .map(fileStatuses ->
-            Arrays.stream(fileStatuses).map(fileStatus -> fileStatus.getPath()).collect(Collectors.toList()))
-        .flatMap(list -> list.stream())
-        .collect(Collectors.toList());
   }
 
   /**
