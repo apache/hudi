@@ -18,8 +18,9 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.HoodieSparkUtils.sparkAdapter
+import org.apache.avro.Schema
 import org.apache.hudi.client.utils.SparkRowSerDe
+import org.apache.spark.sql.avro.{HoodieAvroDeserializerTrait, HoodieAvroSerializerTrait}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
@@ -30,6 +31,7 @@ import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan, SubqueryA
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.execution.datasources.{FilePartition, LogicalRelation, PartitionedFile, SparkParsePartitionUtil}
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.types.DataType
 import org.apache.spark.sql.{Row, SparkSession}
 
 import java.util.Locale
@@ -39,6 +41,18 @@ import java.util.Locale
  * in some spark related class.
  */
 trait SparkAdapter extends Serializable {
+
+  /**
+   * Creates instance of [[HoodieAvroSerializerTrait]] providing for ability to serialize
+   * Spark's [[InternalRow]] into Avro payloads
+   */
+  def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializerTrait
+
+  /**
+   * Creates instance of [[HoodieAvroDeserializerTrait]] providing for ability to deserialize
+   * Avro payloads into Spark's [[InternalRow]]
+   */
+  def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializerTrait
 
   /**
    * Create the SparkRowSerDe.

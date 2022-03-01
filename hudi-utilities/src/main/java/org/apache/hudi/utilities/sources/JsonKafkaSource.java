@@ -52,8 +52,8 @@ public class JsonKafkaSource extends JsonSource {
                          SchemaProvider schemaProvider, HoodieDeltaStreamerMetrics metrics) {
     super(properties, sparkContext, sparkSession, schemaProvider);
     this.metrics = metrics;
-    properties.put("key.deserializer", StringDeserializer.class);
-    properties.put("value.deserializer", StringDeserializer.class);
+    properties.put("key.deserializer", StringDeserializer.class.getName());
+    properties.put("value.deserializer", StringDeserializer.class.getName());
     offsetGen = new KafkaOffsetGen(properties);
   }
 

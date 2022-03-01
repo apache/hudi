@@ -59,7 +59,7 @@ import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.SparkBootstrapCommitActionExecutor;
 import org.apache.hudi.table.action.clean.CleanActionExecutor;
 import org.apache.hudi.table.action.clean.CleanPlanActionExecutor;
-import org.apache.hudi.table.action.cluster.SparkClusteringPlanActionExecutor;
+import org.apache.hudi.table.action.cluster.ClusteringPlanActionExecutor;
 import org.apache.hudi.table.action.cluster.SparkExecuteClusteringCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkBulkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkBulkInsertPreppedCommitActionExecutor;
@@ -244,7 +244,7 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
   public Option<HoodieClusteringPlan> scheduleClustering(HoodieEngineContext context,
                                                          String instantTime,
                                                          Option<Map<String, String>> extraMetadata) {
-    return new SparkClusteringPlanActionExecutor<>(context, config,this, instantTime, extraMetadata).execute();
+    return new ClusteringPlanActionExecutor<>(context, config,this, instantTime, extraMetadata).execute();
   }
 
   @Override

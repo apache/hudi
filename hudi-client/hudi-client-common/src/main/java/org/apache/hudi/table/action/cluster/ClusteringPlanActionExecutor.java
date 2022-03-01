@@ -41,13 +41,13 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
 
-public abstract class BaseClusteringPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieClusteringPlan>> {
+public class ClusteringPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieClusteringPlan>> {
 
-  private static final Logger LOG = LogManager.getLogger(BaseClusteringPlanActionExecutor.class);
+  private static final Logger LOG = LogManager.getLogger(ClusteringPlanActionExecutor.class);
 
   private final Option<Map<String, String>> extraMetadata;
 
-  public BaseClusteringPlanActionExecutor(HoodieEngineContext context,
+  public ClusteringPlanActionExecutor(HoodieEngineContext context,
                                           HoodieWriteConfig config,
                                           HoodieTable<T, I, K, O> table,
                                           String instantTime,

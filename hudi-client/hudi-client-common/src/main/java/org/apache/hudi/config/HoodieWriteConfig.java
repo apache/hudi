@@ -448,6 +448,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("Master control to disable all table services including archive, clean, compact, cluster, etc.");
 
+  public static final ConfigProperty<Boolean> RELEASE_RESOURCE_ENABLE = ConfigProperty
+      .key("hoodie.release.resource.on.completion.enable")
+      .defaultValue(true)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Control to enable release all persist rdds when the spark job finish.");
+
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
 
@@ -1717,7 +1723,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public String getMetricReporterMetricsNamePrefix() {
     return getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_PREFIX);
   }
-  
+
   /**
    * memory configs.
    */
@@ -1975,6 +1981,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean areTableServicesEnabled() {
     return getBooleanOrDefault(TABLE_SERVICES_ENABLED);
+  }
+
+  public boolean areReleaseResourceEnabled() {
+    return getBooleanOrDefault(RELEASE_RESOURCE_ENABLE);
   }
 
   /**
@@ -2345,6 +2355,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withTableServicesEnabled(boolean enabled) {
       writeConfig.setValue(TABLE_SERVICES_ENABLED, Boolean.toString(enabled));
+      return this;
+    }
+
+    public Builder withReleaseResourceEnabled(boolean enabled) {
+      writeConfig.setValue(RELEASE_RESOURCE_ENABLE, Boolean.toString(enabled));
       return this;
     }
 

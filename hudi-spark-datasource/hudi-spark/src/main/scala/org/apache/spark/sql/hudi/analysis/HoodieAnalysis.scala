@@ -22,7 +22,7 @@ import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedStar}
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, Expression, Literal, NamedExpression}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, Expression, GenericInternalRow, Literal, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.Inner
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
@@ -31,10 +31,12 @@ import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{getTableIdentifier, removeMetaFields}
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
 import org.apache.spark.sql.hudi.command._
+import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure, ProcedureArgs}
 import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlCommonUtils}
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 
+import java.util
 import scala.collection.JavaConverters._
 
 object HoodieAnalysis {
@@ -79,6 +81,7 @@ object HoodieAnalysis {
 
 /**
  * Rule for convert the logical plan to command.
+ *
  * @param sparkSession
  */
 case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
@@ -133,26 +136,69 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
       // Convert to CompactionShowHoodiePathCommand
       case CompactionShowOnPath(path, limit) =>
         CompactionShowHoodiePathCommand(path, limit)
-      case _=> plan
+      // Convert to HoodieCallProcedureCommand
+      case c@CallCommand(_, _) =>
+        val procedure: Option[Procedure] = loadProcedure(c.name)
+        val input = buildProcedureArgs(c.args)
+        if (procedure.nonEmpty) {
+          CallProcedureHoodieCommand(procedure.get, input)
+        } else {
+          c
+        }
+      case _ => plan
     }
+  }
+
+  private def loadProcedure(name: Seq[String]): Option[Procedure] = {
+    val procedure: Option[Procedure] = if (name.nonEmpty) {
+      val builder = HoodieProcedures.newBuilder(name.last)
+      if (builder != null) {
+        Option(builder.build)
+      } else {
+        throw new AnalysisException(s"procedure: ${name.last} is not exists")
+      }
+    } else {
+      None
+    }
+    procedure
+  }
+
+  private def buildProcedureArgs(exprs: Seq[CallArgument]): ProcedureArgs = {
+    val values = new Array[Any](exprs.size)
+    var isNamedArgs: Boolean = false
+    val map = new util.LinkedHashMap[String, Int]()
+    for (index <- exprs.indices) {
+      exprs(index) match {
+        case expr: NamedArgument =>
+          map.put(expr.name, index)
+          values(index) = expr.expr.eval()
+          isNamedArgs = true
+        case _ =>
+          map.put(index.toString, index)
+          values(index) = exprs(index).expr.eval()
+          isNamedArgs = false
+      }
+    }
+    ProcedureArgs(isNamedArgs, map, new GenericInternalRow(values))
   }
 }
 
 /**
  * Rule for resolve hoodie's extended syntax or rewrite some logical plan.
+ *
  * @param sparkSession
  */
 case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[LogicalPlan]
   with SparkAdapterSupport {
   private lazy val analyzer = sparkSession.sessionState.analyzer
 
-  def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp  {
+  def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp {
     // Resolve merge into
     case mergeInto @ MergeIntoTable(target, source, mergeCondition, matchedActions, notMatchedActions)
       if sparkAdapter.isHoodieTable(target, sparkSession) && target.resolved =>
-
       val resolver = sparkSession.sessionState.conf.resolver
       val resolvedSource = analyzer.execute(source)
+
       def isInsertOrUpdateStar(assignments: Seq[Assignment]): Boolean = {
         if (assignments.isEmpty) {
           true
@@ -363,6 +409,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
   /**
    * Check if the the query of insert statement has already append the meta fields to avoid
    * duplicate append.
+   *
    * @param query
    * @return
    */

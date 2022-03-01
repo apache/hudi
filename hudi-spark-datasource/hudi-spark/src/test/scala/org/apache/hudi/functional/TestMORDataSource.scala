@@ -17,11 +17,11 @@
 
 package org.apache.hudi.functional
 
+import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.Path
-
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieTableType}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, HoodieRecordPayload, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
@@ -30,18 +30,18 @@ import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestBase}
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkUtils}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkUtils}
 import org.apache.log4j.LogManager
-
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types.BooleanType
-
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
+import java.util
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
@@ -349,11 +349,15 @@ class TestMORDataSource extends HoodieClientTestBase {
     // First Operation:
     // Producing parquet files to three default partitions.
     // SNAPSHOT view on MOR table with parquet files only.
+
+    // Overriding the partition-path field
+    val opts = commonOpts + (DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_path")
+
     val hoodieRecords1 = dataGen.generateInserts("001", 100)
-    val records1 = recordsToStrings(hoodieRecords1).toList
-    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+
+    val inputDF1 = toDataset(hoodieRecords1)
     inputDF1.write.format("org.apache.hudi")
-      .options(commonOpts)
+      .options(opts)
       .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
@@ -376,11 +380,10 @@ class TestMORDataSource extends HoodieClientTestBase {
     // Second Operation:
     // Upsert 50 update records
     // Snopshot view should read 100 records
-    val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 50))
-      .toList
-    val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+    val records2 = dataGen.generateUniqueUpdates("002", 50)
+    val inputDF2 = toDataset(records2)
     inputDF2.write.format("org.apache.hudi")
-      .options(commonOpts)
+      .options(opts)
       .mode(SaveMode.Append)
       .save(basePath)
     val hudiSnapshotDF2 = spark.read.format("org.apache.hudi")
@@ -424,15 +427,29 @@ class TestMORDataSource extends HoodieClientTestBase {
     verifyShow(hudiIncDF2)
     verifyShow(hudiIncDF1Skipmerge)
 
-    val record3 = recordsToStrings(dataGen.generateUpdatesWithTS("003", hoodieRecords1, -1))
-    spark.read.json(spark.sparkContext.parallelize(record3, 2))
-      .write.format("org.apache.hudi").options(commonOpts)
+    val record3 = dataGen.generateUpdatesWithTS("003", hoodieRecords1, -1)
+    val inputDF3 = toDataset(record3)
+    inputDF3.write.format("org.apache.hudi").options(opts)
       .mode(SaveMode.Append).save(basePath)
+
     val hudiSnapshotDF3 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .load(basePath + "/*/*/*/*")
+
+    verifyShow(hudiSnapshotDF3);
+
     assertEquals(100, hudiSnapshotDF3.count())
     assertEquals(0, hudiSnapshotDF3.filter("rider = 'rider-003'").count())
+  }
+
+  private def toDataset(records: util.List[HoodieRecord[_]]) = {
+    val avroRecords = records.map(_.getData
+      .asInstanceOf[HoodieRecordPayload[_]]
+      .getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA)
+      .get
+      .asInstanceOf[GenericRecord])
+    val rdd: RDD[GenericRecord] = spark.sparkContext.parallelize(avroRecords, 2)
+    AvroConversionUtils.createDataFrame(rdd, HoodieTestDataGenerator.AVRO_SCHEMA.toString, spark)
   }
 
   @Test
@@ -553,15 +570,10 @@ class TestMORDataSource extends HoodieClientTestBase {
       .orderBy(desc("_hoodie_commit_time"))
       .head()
     assertEquals(sampleRow.getDouble(0), sampleRow.get(0))
-    assertEquals(sampleRow.getLong(1), sampleRow.get(1))
+    assertEquals(sampleRow.getDate(1), sampleRow.get(1))
     assertEquals(sampleRow.getString(2), sampleRow.get(2))
     assertEquals(sampleRow.getSeq(3), sampleRow.get(3))
-    if (HoodieSparkUtils.gteqSpark3_2) {
-      // Since Spark3.2, the `nation` column is parsed as String, not Struct.
-      assertEquals(sampleRow.getString(4), sampleRow.get(4))
-    } else {
-      assertEquals(sampleRow.getStruct(4), sampleRow.get(4))
-    }
+    assertEquals(sampleRow.getAs[Array[Byte]](4), sampleRow.get(4))
   }
 
   def verifyShow(df: DataFrame): Unit = {

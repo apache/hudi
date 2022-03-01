@@ -19,10 +19,11 @@ package org.apache.hudi
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
-
+import org.apache.avro.reflect.AvroSchema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.conf.HiveConf
+
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.HoodieAvroUtils
@@ -44,9 +45,7 @@ import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKey
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.sync.common.AbstractSyncTool
 import org.apache.hudi.table.BulkInsertPartitioner
-
 import org.apache.log4j.LogManager
-
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.hive.HiveExternalCatalog
@@ -57,6 +56,7 @@ import org.apache.spark.sql._
 import org.apache.spark.SparkContext
 
 import java.util.Properties
+
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SaveMode, SparkSession}
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import scala.collection.JavaConversions._
@@ -244,6 +244,7 @@ object HoodieSparkSqlWriter {
             if (reconcileSchema) {
               schema = getLatestTableSchema(fs, basePath, sparkContext, schema)
             }
+            validateSchemaForHoodieIsDeleted(schema)
             sparkContext.getConf.registerAvroSchemas(schema)
             log.info(s"Registered avro schema : ${schema.toString(true)}")
 
@@ -471,6 +472,14 @@ object HoodieSparkSqlWriter {
     }
   }
 
+  def validateSchemaForHoodieIsDeleted(schema: Schema): Unit = {
+    if (schema.getField(HoodieRecord.HOODIE_IS_DELETED) != null &&
+      AvroConversionUtils.resolveAvroTypeNullability(schema.getField(HoodieRecord.HOODIE_IS_DELETED).schema())._2.getType != Schema.Type.BOOLEAN) {
+      throw new HoodieException(HoodieRecord.HOODIE_IS_DELETED + " has to be BOOLEAN type. Passed in dataframe's schema has type "
+        + schema.getField(HoodieRecord.HOODIE_IS_DELETED).schema().getType)
+    }
+  }
+
   def bulkInsertAsRow(sqlContext: SQLContext,
                       parameters: Map[String, String],
                       df: DataFrame,
@@ -493,6 +502,7 @@ object HoodieSparkSqlWriter {
     if (dropPartitionColumns) {
       schema = generateSchemaWithoutPartitionColumns(partitionColumns, schema)
     }
+    validateSchemaForHoodieIsDeleted(schema)
     sparkContext.getConf.registerAvroSchemas(schema)
     log.info(s"Registered avro schema : ${schema.toString(true)}")
     if (parameters(INSERT_DROP_DUPS.key).toBoolean) {
