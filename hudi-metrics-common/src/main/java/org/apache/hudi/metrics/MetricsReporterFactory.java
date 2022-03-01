@@ -21,12 +21,8 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.metrics.cloudwatch.CloudWatchMetricsReporter;
 import org.apache.hudi.metrics.config.HoodieMetricsConfig;
 import org.apache.hudi.metrics.custom.CustomizableMetricsReporter;
-import org.apache.hudi.metrics.datadog.DatadogMetricsReporter;
-import org.apache.hudi.metrics.prometheus.PrometheusReporter;
-import org.apache.hudi.metrics.prometheus.PushGatewayMetricsReporter;
 
 import com.codahale.metrics.MetricRegistry;
 import org.apache.log4j.LogManager;
@@ -55,36 +51,41 @@ public class MetricsReporterFactory {
     }
 
     MetricsReporterType type = config.getMetricsReporterType();
-    MetricsReporter reporter = null;
     switch (type) {
       case GRAPHITE:
-        reporter = new MetricsGraphiteReporter(config, registry);
+        reporterClassName = "org.apache.hudi.metrics.MetricsGraphiteReporter";
         break;
       case INMEMORY:
-        reporter = new InMemoryMetricsReporter();
+        reporterClassName = "org.apache.hudi.metrics.InMemoryMetricsReporter";
         break;
       case JMX:
-        reporter = new JmxMetricsReporter(config, registry);
+        reporterClassName = "org.apache.hudi.metrics.JMXMetricsReporter";
         break;
       case DATADOG:
-        reporter = new DatadogMetricsReporter(config, registry);
+        reporterClassName = "org.apache.hudi.metrics.datadog.DatadogMetricsReporter";
         break;
       case PROMETHEUS_PUSHGATEWAY:
-        reporter = new PushGatewayMetricsReporter(config, registry);
+        reporterClassName = "org.apache.hudi.metrics.prometheus.PushGatewayMetricsReporter";
         break;
       case PROMETHEUS:
-        reporter = new PrometheusReporter(config, registry);
+        reporterClassName = "org.apache.hudi.metrics.prometheus.PrometheusMetricsReporter";
         break;
       case CONSOLE:
-        reporter = new ConsoleMetricsReporter(registry);
+        reporterClassName = "org.apache.hudi.aws.cloudwatch.CloudWatchMetricsReporter";
         break;
       case CLOUDWATCH:
-        reporter = new CloudWatchMetricsReporter(config, registry);
+        reporterClassName = "org.apache.hudi.metrics.ConsoleMetricsReporter";
         break;
       default:
         LOG.error("Reporter type[" + type + "] is not supported.");
         break;
     }
-    return reporter;
+    Object reporter = ReflectionUtils.loadClass(
+        reporterClassName, new Class<?>[] {HoodieMetricsConfig.class, MetricRegistry.class}, config, registry);
+    if (!(reporter instanceof MetricsReporter)) {
+      throw new HoodieException(reporterClassName
+          + " is not a subclass of MetricsReporter");
+    }
+    return (MetricsReporter) reporter;
   }
 }

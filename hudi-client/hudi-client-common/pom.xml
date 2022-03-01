@@ -41,11 +41,6 @@
       <artifactId>hudi-metrics-common</artifactId>
       <version>${project.version}</version>
     </dependency>
-    <!--    <dependency>-->
-    <!--      <groupId>org.apache.hudi</groupId>-->
-    <!--      <artifactId>hudi-aws</artifactId>-->
-    <!--      <version>${project.version}</version>-->
-    <!--    </dependency>-->
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-timeline-service</artifactId>
@@ -75,43 +70,7 @@
       <artifactId>hilbert-curve</artifactId>
       <version>0.2.2</version>
     </dependency>
-
-    <!-- Dropwizard Metrics -->
-    <!--    <dependency>-->
-    <!--      <groupId>io.dropwizard.metrics</groupId>-->
-    <!--      <artifactId>metrics-graphite</artifactId>-->
-    <!--      <exclusions>-->
-    <!--        <exclusion>-->
-    <!--          <groupId>com.rabbitmq</groupId>-->
-    <!--          <artifactId>*</artifactId>-->
-    <!--        </exclusion>-->
-    <!--      </exclusions>-->
-    <!--    </dependency>-->
-    <!--    <dependency>-->
-    <!--      <groupId>io.dropwizard.metrics</groupId>-->
-    <!--      <artifactId>metrics-core</artifactId>-->
-    <!--    </dependency>-->
-    <!--    <dependency>-->
-    <!--      <groupId>io.dropwizard.metrics</groupId>-->
-    <!--      <artifactId>metrics-jmx</artifactId>-->
-    <!--    </dependency>-->
-    <!--    <dependency>-->
-    <!--      <groupId>io.prometheus</groupId>-->
-    <!--      <artifactId>simpleclient</artifactId>-->
-    <!--    </dependency>-->
-    <!--    <dependency>-->
-    <!--      <groupId>io.prometheus</groupId>-->
-    <!--      <artifactId>simpleclient_httpserver</artifactId>-->
-    <!--    </dependency>-->
-    <!--    <dependency>-->
-    <!--      <groupId>io.prometheus</groupId>-->
-    <!--      <artifactId>simpleclient_dropwizard</artifactId>-->
-    <!--    </dependency>-->
-    <!--    <dependency>-->
-    <!--      <groupId>io.prometheus</groupId>-->
-    <!--      <artifactId>simpleclient_pushgateway</artifactId>-->
-    <!--    </dependency>-->
-    <!-- Hoodie - Tests -->
+    <!-- Hoodie Common Test -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-common</artifactId>

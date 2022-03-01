@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.config;
+package org.apache.hudi.metrics.config;
 
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
@@ -42,16 +42,33 @@ public class HoodieMetricsCloudWatchConfig extends HoodieConfig {
           .withDocumentation("Reporting interval in seconds");
 
   public static final ConfigProperty<String> METRIC_PREFIX = ConfigProperty
-          .key(CLOUDWATCH_PREFIX + ".metric.prefix")
-          .defaultValue("")
-          .sinceVersion("0.10.0")
-          .withDocumentation("Metric prefix of reporter");
+      .key(CLOUDWATCH_PREFIX + ".metric.prefix")
+      .defaultValue("")
+      .sinceVersion("0.10.0")
+      .withDocumentation("Metric prefix of reporter");
 
   public static final ConfigProperty<String> METRIC_NAMESPACE = ConfigProperty
-          .key(CLOUDWATCH_PREFIX + ".namespace")
-          .defaultValue("Hudi")
-          .sinceVersion("0.10.0")
-          .withDocumentation("Namespace of reporter");
+      .key(CLOUDWATCH_PREFIX + ".namespace")
+      .defaultValue("Hudi")
+      .sinceVersion("0.10.0")
+      .withDocumentation("Namespace of reporter");
+
+  public int getCloudWatchReportPeriodSeconds() {
+    return getInt(REPORT_PERIOD_SECONDS);
+  }
+
+  public String getCloudWatchMetricPrefix() {
+    return getString(METRIC_PREFIX);
+  }
+
+  public String getCloudWatchMetricNamespace() {
+    return getString(METRIC_NAMESPACE);
+  }
+
+  public int getCloudWatchMaxDatumsPerRequest() {
+    return getInt(MAX_DATUMS_PER_REQUEST);
+  }
+
   /*
   Amazon CloudWatch allows a maximum of 20 metrics per request. Choosing this as the default maximum.
   Reference: https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_PutMetricData.html
@@ -66,15 +83,15 @@ public class HoodieMetricsCloudWatchConfig extends HoodieConfig {
     super();
   }
 
-  public static HoodieMetricsCloudWatchConfig.Builder newBuilder() {
-    return new HoodieMetricsCloudWatchConfig.Builder();
+  public static Builder newBuilder() {
+    return new Builder();
   }
 
   public static class Builder {
 
     private HoodieMetricsCloudWatchConfig hoodieMetricsCloudWatchConfig = new HoodieMetricsCloudWatchConfig();
 
-    public HoodieMetricsCloudWatchConfig.Builder fromProperties(Properties props) {
+    public Builder fromProperties(Properties props) {
       this.hoodieMetricsCloudWatchConfig.getProps().putAll(props);
       return this;
     }

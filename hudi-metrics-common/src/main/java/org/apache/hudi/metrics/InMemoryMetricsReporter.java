@@ -18,6 +18,10 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.metrics.config.HoodieMetricsConfig;
+
+import com.codahale.metrics.MetricRegistry;
+
 import java.io.Closeable;
 
 /**
@@ -25,11 +29,19 @@ import java.io.Closeable;
  */
 public class InMemoryMetricsReporter extends MetricsReporter {
 
-  @Override
-  public void start() {}
+  public InMemoryMetricsReporter(HoodieMetricsConfig config, MetricRegistry registry) {
+
+  }
 
   @Override
-  public void report() {}
+  public void start() {
+
+  }
+
+  @Override
+  public void report() {
+
+  }
 
   @Override
   public Closeable getReporter() {

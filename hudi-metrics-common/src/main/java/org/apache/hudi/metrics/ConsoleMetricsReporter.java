@@ -18,15 +18,16 @@
 
 package org.apache.hudi.metrics;
 
-import java.io.Closeable;
-import java.util.concurrent.TimeUnit;
-
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hudi.metrics.config.HoodieMetricsConfig;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.MetricRegistry;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
+import java.io.Closeable;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Hudi Console metrics reporter. Reports the metrics by printing them to the stdout on the console.
@@ -36,7 +37,7 @@ public class ConsoleMetricsReporter extends MetricsReporter {
   private static final Logger LOG = LogManager.getLogger(ConsoleMetricsReporter.class);
   private final ConsoleReporter consoleReporter;
 
-  public ConsoleMetricsReporter(MetricRegistry registry) {
+  public ConsoleMetricsReporter(HoodieMetricsConfig config, MetricRegistry registry) {
     this.consoleReporter = ConsoleReporter.forRegistry(registry)
         .convertRatesTo(TimeUnit.SECONDS)
         .convertDurationsTo(TimeUnit.MILLISECONDS)
