@@ -27,8 +27,8 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class CustomizedThreadFactory implements ThreadFactory {
 
-  private static final AtomicLong POOL_NUM = new AtomicLong(1L);
-  private final AtomicLong THREAD_NUM = new AtomicLong(1L);
+  private static final AtomicLong POOL_NUM = new AtomicLong(1);
+  private final AtomicLong threadNum = new AtomicLong(1);
 
   private final String threadName;
   private final boolean daemon;
@@ -50,7 +50,7 @@ public class CustomizedThreadFactory implements ThreadFactory {
   public Thread newThread(@NotNull Runnable r) {
     Thread runThread = new Thread(r);
     runThread.setDaemon(daemon);
-    runThread.setName(threadName + THREAD_NUM.getAndIncrement());
+    runThread.setName(threadName + threadNum.getAndIncrement());
     return runThread;
   }
 }
