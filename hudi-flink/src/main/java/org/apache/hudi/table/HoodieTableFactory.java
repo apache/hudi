@@ -24,6 +24,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
@@ -198,6 +199,11 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     if (partitionKeys.size() > 0) {
       // the PARTITIONED BY syntax always has higher priority than option FlinkOptions#PARTITION_PATH_FIELD
       conf.setString(FlinkOptions.PARTITION_PATH_FIELD, String.join(",", partitionKeys));
+    }
+    // set index key for bucket index if not defined
+    if (conf.getString(FlinkOptions.INDEX_TYPE).equals(HoodieIndex.IndexType.BUCKET.name())
+        && conf.getString(FlinkOptions.INDEX_KEY_FIELD).isEmpty()) {
+      conf.setString(FlinkOptions.INDEX_KEY_FIELD, conf.getString(FlinkOptions.RECORD_KEY_FIELD));
     }
     // tweak the key gen class if possible
     final String[] partitions = conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",");

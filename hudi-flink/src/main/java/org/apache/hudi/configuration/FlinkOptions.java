@@ -321,7 +321,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> INDEX_KEY_FIELD = ConfigOptions
       .key(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key())
       .stringType()
-      .defaultValue("uuid")
+      .defaultValue("")
       .withDescription("Index key field. Value to be used as hashing to find the bucket ID. Should be a subset of or equal to the recordKey fields.\n"
         + "Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using "
         + "the dot notation eg: `a.b.c`");
