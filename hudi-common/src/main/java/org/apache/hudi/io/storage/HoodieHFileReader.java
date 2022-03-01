@@ -269,7 +269,6 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
       private R next;
       @Override
       public void close() {
-        HoodieHFileReader.this.close();
       }
 
       @Override

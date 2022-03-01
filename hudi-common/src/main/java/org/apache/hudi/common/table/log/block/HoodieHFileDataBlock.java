@@ -196,11 +196,27 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     // HFile read will be efficient if keys are sorted, since on storage, records are sorted by key. This will avoid unnecessary seeks.
     Collections.sort(keys);
 
-    try (HoodieHFileReader<IndexedRecord> reader =
-             new HoodieHFileReader<>(inlineConf, inlinePath, new CacheConfig(inlineConf), inlinePath.getFileSystem(inlineConf))) {
-      // Get writer's schema from the header
-      return reader.getRecordIterator(keys, readerSchema);
-    }
+    final HoodieHFileReader<IndexedRecord> reader =
+             new HoodieHFileReader<>(inlineConf, inlinePath, new CacheConfig(inlineConf), inlinePath.getFileSystem(inlineConf));
+    // Get writer's schema from the header
+    final ClosableIterator<IndexedRecord> recordIterator = reader.getRecordIterator(keys, readerSchema);
+    return new ClosableIterator<IndexedRecord>() {
+      @Override
+      public boolean hasNext() {
+        return recordIterator.hasNext();
+      }
+
+      @Override
+      public IndexedRecord next() {
+        return recordIterator.next();
+      }
+
+      @Override
+      public void close() {
+        recordIterator.close();
+        reader.close();
+      }
+    };
   }
 
   private byte[] serializeRecord(IndexedRecord record) {
