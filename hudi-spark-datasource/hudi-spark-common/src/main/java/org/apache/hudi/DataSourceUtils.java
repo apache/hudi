@@ -248,7 +248,7 @@ public class DataSourceUtils {
   }
 
   public static HoodieRecord createHoodieRecord() {
-    return new HoodieRecord<>();
+    return new HoodieAvroRecord<>();
   }
 
   /**

@@ -22,6 +22,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieErrorTableConfig;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -92,7 +93,7 @@ public class TestHoodieBackedErrorTable extends HoodieClientTestBase {
     for (HoodieKey hoodieKey : insertKeys) {
       OverwriteWithLatestAvroPayload payload;
       payload = dataGen.generateMissWithOverwriteWithLatestAvroSchemaPayload(hoodieKey, commitTime);
-      HoodieRecord record = new HoodieRecord(hoodieKey, payload);
+      HoodieRecord record = new HoodieAvroRecord(hoodieKey, payload);
       records.add(record);
     }
 

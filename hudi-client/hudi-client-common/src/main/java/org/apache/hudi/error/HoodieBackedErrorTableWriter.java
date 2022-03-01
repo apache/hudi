@@ -27,6 +27,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieErrorTableConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -212,7 +213,7 @@ public abstract class HoodieBackedErrorTableWriter<O>  implements Serializable {
     HoodieAvroPayload hoodieAvroPayload = new HoodieAvroPayload(Option.of(errorGenericRecord));
 
     HoodieKey errorHoodieKey = new HoodieKey(uuid, partitionPath);
-    return new HoodieRecord(errorHoodieKey, hoodieAvroPayload);
+    return new HoodieAvroRecord(errorHoodieKey, hoodieAvroPayload);
   }
 
   public List<HoodieRecord> createErrorRecord(List<HoodieRecord> failedRecords, HashMap<HoodieKey, Throwable> errorsMap, String schema, String tableName) {
