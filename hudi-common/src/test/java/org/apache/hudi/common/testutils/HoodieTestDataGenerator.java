@@ -163,6 +163,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     this.existingKeysBySchema.put(TRIP_EXAMPLE_SCHEMA, keyPartitionMap);
     this.numKeysBySchema = new HashMap<>();
     this.numKeysBySchema.put(TRIP_EXAMPLE_SCHEMA, keyPartitionMap.size());
+
+    logger.info(String.format("Test DataGenerator's seed (%s)", seed));
   }
 
   //////////////////////////////////////////////////////////////////////////////////
