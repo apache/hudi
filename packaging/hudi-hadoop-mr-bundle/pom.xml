@@ -55,12 +55,13 @@
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer">
                 </transformer>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheNoticeResourceTransformer">
-                    <addHeader>true</addHeader>
+                  <addHeader>true</addHeader>
                 </transformer>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.IncludeResourceTransformer">
                   <resource>META-INF/LICENSE</resource>
                   <file>target/classes/META-INF/LICENSE</file>
                 </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
               </transformers>
               <artifactSet>
                 <includes>
@@ -134,6 +135,70 @@
                   <pattern>com.google.common.</pattern>
                   <shadedPattern>org.apache.hudi.com.google.common.</shadedPattern>
                 </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.MetricHistogram</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.MetricHistogram
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.MetricsExecutor</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.MetricsExecutor
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.impl.JmxCacheBuster</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.impl.JmxCacheBuster</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.lib.DefaultMetricsSystemHelper</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.DefaultMetricsSystemHelper
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.lib.DynamicMetricsRegistry</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.DynamicMetricsRegistry
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.lib.MetricsExecutorImpl</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MetricsExecutorImpl
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.lib.MutableFastCounter</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableFastCounter
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.lib.MutableHistogram</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableHistogram
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.lib.MutableRangeHistogram</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableRangeHistogram
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.lib.MutableSizeHistogram</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableSizeHistogram
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.lib.MutableTimeHistogram</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableTimeHistogram
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.util.MetricQuantile</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricQuantile
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.util.MetricSampleQuantiles</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricSampleQuantiles
+                  </shadedPattern>
+                </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
               <filters>
@@ -149,7 +214,6 @@
                     <exclude>META-INF/maven/org.apache.hbase.thirdparty/**</exclude>
                     <exclude>META-INF/maven/org.apache.htrace/**</exclude>
                     <exclude>META-INF/services/javax.*</exclude>
-                    <exclude>META-INF/services/org.apache.hadoop.hbase.*</exclude>
                     <exclude>**/*.proto</exclude>
                     <exclude>hbase-webapps/**</exclude>
                   </excludes>
