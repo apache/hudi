@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -39,7 +40,7 @@ public class BucketIdentifier {
   public static int getBucketId(HoodieKey hoodieKey, String indexKeyFields, int numBuckets) {
     List<String> hashKeyFields;
     if (!hoodieKey.getRecordKey().contains(":")) {
-      hashKeyFields = Arrays.asList(hoodieKey.getRecordKey());
+      hashKeyFields = Collections.singletonList(hoodieKey.getRecordKey());
     } else {
       Map<String, String> recordKeyPairs = Arrays.stream(hoodieKey.getRecordKey().split(","))
           .map(p -> p.split(":"))

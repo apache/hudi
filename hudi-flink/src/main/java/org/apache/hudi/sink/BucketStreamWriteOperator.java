@@ -22,6 +22,11 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.hudi.sink.common.AbstractWriteOperator;
 import org.apache.hudi.sink.common.WriteOperatorFactory;
 
+/**
+ * Operator for {@link BucketStreamWriteFunction}.
+ *
+ * @param <I> The input type
+ */
 public class BucketStreamWriteOperator<I> extends AbstractWriteOperator<I> {
 
   public BucketStreamWriteOperator(Configuration conf) {
