@@ -226,14 +226,14 @@ public class TestDataSourceUtils {
 
   @Test
   public void testCreateHoodieConfigWithAsyncClustering() {
-    ArrayList<ImmutablePair<String, Boolean>> asyncClusteringKeyValues = new ArrayList<>();
+    ArrayList<ImmutablePair<String, Boolean>> asyncClusteringKeyValues = new ArrayList<>(4);
     asyncClusteringKeyValues.add(new ImmutablePair(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), true));
     asyncClusteringKeyValues.add(new ImmutablePair(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE.key(), true));
     asyncClusteringKeyValues.add(new ImmutablePair("hoodie.datasource.clustering.async.enable", true));
     asyncClusteringKeyValues.add(new ImmutablePair("hoodie.clustering.async.enabled", true));
 
     asyncClusteringKeyValues.stream().forEach(pair -> {
-      HashMap<String, String> params = new HashMap<>(2);
+      HashMap<String, String> params = new HashMap<>(3);
       params.put(DataSourceWriteOptions.TABLE_TYPE().key(), DataSourceWriteOptions.TABLE_TYPE().defaultValue());
       params.put(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key(),
               DataSourceWriteOptions.PAYLOAD_CLASS_NAME().defaultValue());
