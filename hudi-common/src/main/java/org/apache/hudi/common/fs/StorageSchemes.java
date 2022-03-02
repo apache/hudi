@@ -67,7 +67,9 @@ public enum StorageSchemes {
   // JuiceFileSystem
   JFS("jfs", true),
   // Baidu Object Storage
-  BOS("bos", false);
+  BOS("bos", false),
+  // Oracle Cloud Infrastructure Object Storage
+  OCI("oci", false);
 
   private String scheme;
   private boolean supportsAppend;
