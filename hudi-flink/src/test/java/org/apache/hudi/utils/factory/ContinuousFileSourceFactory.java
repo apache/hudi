@@ -53,7 +53,7 @@ public class ContinuousFileSourceFactory implements DynamicTableSourceFactory {
     Configuration conf = (Configuration) helper.getOptions();
     Path path = new Path(conf.getOptional(FlinkOptions.PATH).orElseThrow(() ->
         new ValidationException("Option [path] should be not empty.")));
-    return new ContinuousFileSource(context.getCatalogTable().getSchema(), path, conf);
+    return new ContinuousFileSource(context.getCatalogTable().getResolvedSchema(), path, conf);
   }
 
   @Override
