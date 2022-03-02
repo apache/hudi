@@ -30,16 +30,17 @@ import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
-import org.apache.hadoop.hbase.util.Pair;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
 import org.apache.hudi.io.storage.HoodieHFileReader;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -51,7 +52,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -148,7 +148,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   }
 
   @Override
-  protected List<IndexedRecord> deserializeRecords(byte[] content) throws IOException {
+  protected ClosableIterator<IndexedRecord> deserializeRecords(byte[] content) throws IOException {
     checkState(readerSchema != null, "Reader's schema has to be non-null");
 
     // Get schema from the header
@@ -156,14 +156,30 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
 
     // Read the content
     HoodieHFileReader<IndexedRecord> reader = new HoodieHFileReader<>(content);
-    List<Pair<String, IndexedRecord>> records = reader.readAllRecords(writerSchema, readerSchema);
+    // Sets up the writer schema
+    reader.withSchema(writerSchema);
+    Iterator<IndexedRecord> recordIterator = reader.getRecordIterator(readerSchema);
+    return new ClosableIterator<IndexedRecord>() {
+      @Override
+      public void close() {
+        reader.close();
+      }
 
-    return records.stream().map(Pair::getSecond).collect(Collectors.toList());
+      @Override
+      public boolean hasNext() {
+        return recordIterator.hasNext();
+      }
+
+      @Override
+      public IndexedRecord next() {
+        return recordIterator.next();
+      }
+    };
   }
 
   // TODO abstract this w/in HoodieDataBlock
   @Override
-  protected List<IndexedRecord> lookupRecords(List<String> keys) throws IOException {
+  protected ClosableIterator<IndexedRecord> lookupRecords(List<String> keys) throws IOException {
     HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
 
     // NOTE: It's important to extend Hadoop configuration here to make sure configuration
@@ -180,12 +196,27 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     // HFile read will be efficient if keys are sorted, since on storage, records are sorted by key. This will avoid unnecessary seeks.
     Collections.sort(keys);
 
-    try (HoodieHFileReader<IndexedRecord> reader =
-             new HoodieHFileReader<>(inlineConf, inlinePath, new CacheConfig(inlineConf), inlinePath.getFileSystem(inlineConf))) {
-      // Get writer's schema from the header
-      List<Pair<String, IndexedRecord>> logRecords = reader.readRecords(keys, readerSchema);
-      return logRecords.stream().map(Pair::getSecond).collect(Collectors.toList());
-    }
+    final HoodieHFileReader<IndexedRecord> reader =
+             new HoodieHFileReader<>(inlineConf, inlinePath, new CacheConfig(inlineConf), inlinePath.getFileSystem(inlineConf));
+    // Get writer's schema from the header
+    final ClosableIterator<IndexedRecord> recordIterator = reader.getRecordIterator(keys, readerSchema);
+    return new ClosableIterator<IndexedRecord>() {
+      @Override
+      public boolean hasNext() {
+        return recordIterator.hasNext();
+      }
+
+      @Override
+      public IndexedRecord next() {
+        return recordIterator.next();
+      }
+
+      @Override
+      public void close() {
+        recordIterator.close();
+        reader.close();
+      }
+    };
   }
 
   private byte[] serializeRecord(IndexedRecord record) {
