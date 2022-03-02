@@ -74,7 +74,7 @@ public class TablePathUtils {
   }
 
   private static boolean isInsideErrorTableFolder(String path) {
-    return path != null && path.contains("/" + HoodieTableMetaClient.ERROR_TABLE_FOLDER_NAME + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/");
+    return path != null && path.contains("/" + HoodieTableMetaClient.ERROR_TABLE_FOLDER_NAME);
   }
 
   private static Option<Path> getTablePathFromTableMetadataPath(Path path) {

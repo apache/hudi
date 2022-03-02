@@ -44,8 +44,10 @@ public class SparkErrorTableWriteStatusWriter extends HoodieBackedErrorTableWrit
       JavaRDD<HoodieRecord> errorRecordJavaRDD = writeStatuses.flatMap(writeStatus -> createErrorRecord(
           writeStatus.getFailedRecords(), writeStatus.getErrors(), schema, tableName).iterator());
       SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, errorTableWriteConfig);
-      String instantTime = writeClient.startCommit();
-      writeClient.insertError(errorRecordJavaRDD, instantTime);
+      if (!errorRecordJavaRDD.take(1).isEmpty()) {
+        String instantTime = writeClient.startCommit();
+        writeClient.insertError(errorRecordJavaRDD, instantTime);
+      }
     } catch (Exception e) {
       throw new HoodieException("commit error message Fail.", e);
     }

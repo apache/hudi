@@ -43,11 +43,13 @@ public class FlinkErrorTableWriteStatusWriter extends HoodieBackedErrorTableWrit
   public void commit(List<WriteStatus> writeStatuses, String schema, String tableName) {
 
     try {
-      List<HoodieRecord> errorRecordJavaRDD = writeStatuses.stream().flatMap(writeStatus -> createErrorRecord(
+      List<HoodieRecord> errorRecords = writeStatuses.stream().flatMap(writeStatus -> createErrorRecord(
           writeStatus.getFailedRecords(), writeStatus.getErrors(), schema, tableName).stream()).collect(Collectors.toList());
       HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient(engineContext, errorTableWriteConfig);
-      String instantTime = writeClient.startCommit();
-      writeClient.insertError(errorRecordJavaRDD, instantTime);
+      if (!errorRecords.isEmpty()) {
+        String instantTime = writeClient.startCommit();
+        writeClient.insertError(errorRecords, instantTime);
+      }
     } catch (Exception e) {
       throw new HoodieException("commit error message Fail.", e);
     }

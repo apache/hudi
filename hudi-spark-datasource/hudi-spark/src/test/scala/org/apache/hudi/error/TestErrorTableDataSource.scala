@@ -24,7 +24,7 @@ import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.sql._
 import org.apache.spark.sql.types.{StructField, _}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 class TestErrorTableDataSource extends HoodieClientTestBase {
@@ -88,13 +88,13 @@ class TestErrorTableDataSource extends HoodieClientTestBase {
 
     val hudiRODF1 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .load(basePath + "/" + HoodieTableMetaClient.ERROR_TABLE_FOLDER_NAME  + "/*/*/*/")
-      assertEquals(2, hudiRODF1.count())
-
+      .load(basePath + "/*")
+    assertEquals(2, hudiRODF1.count())
 
     val hudiRODF2 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .load(basePath + "/*")
+      .load(basePath + "/" + HoodieTableMetaClient.ERROR_TABLE_FOLDER_NAME  + "/*/*/*/")
+    assertFalse(hudiRODF2.select("uuid", "ts", "schema", "record", "message", "context").isEmpty)
     assertEquals(2, hudiRODF2.count())
   }
 }
