@@ -89,7 +89,7 @@ createRelation(sqlContext, parameters, null)
 }
 ```
 
-For streaming writing and reading, DefaultSource#createSink and DefaultSource#createSink are called respectively.
+For streaming writing and reading, DefaultSource#createSink and DefaultSource#createSource are called respectively.
 In 0.9.0 version , the bulk_insert row mode was introduced to speed up bulk_insert, which implements the `SupportsWrite` v2 api and uses `HoodieDataSourceInternalTable` for writing, 
 right now only bulk_insert operation is supported.
 
