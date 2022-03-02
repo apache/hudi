@@ -38,16 +38,18 @@ public class ConsistentBucketIdentifier extends BucketIdentifier {
    */
   private final HoodieConsistentHashingMetadata metadata;
   /**
-   * in-memory structure to speed up rang mapping (hashing value -> hashing node)
+   * In-memory structure to speed up ring mapping (hashing value -> hashing node)
    */
-  private TreeMap<Integer, ConsistentHashingNode> ring;
+  private final TreeMap<Integer, ConsistentHashingNode> ring;
   /**
-   * mapping from fileId -> hashing node
+   * Mapping from fileId -> hashing node
    */
-  private Map<String, ConsistentHashingNode> fileIdToBucket;
+  private final Map<String, ConsistentHashingNode> fileIdToBucket;
 
   public ConsistentBucketIdentifier(HoodieConsistentHashingMetadata metadata) {
     this.metadata = metadata;
+    this.fileIdToBucket = new HashMap<>();
+    this.ring = new TreeMap<>();
     initialize();
   }
 
@@ -82,7 +84,7 @@ public class ConsistentBucketIdentifier extends BucketIdentifier {
     for (int i = 0; i < hashKeys.size(); ++i) {
       hashValue = HashID.getXXHash32(hashKeys.get(i), hashValue);
     }
-    return getBucket(hashValue & HoodieConsistentHashingMetadata.MAX_HASH_VALUE);
+    return getBucket(hashValue & HoodieConsistentHashingMetadata.HASH_VALUE_MASK);
   }
 
   protected ConsistentHashingNode getBucket(int hashValue) {
@@ -93,15 +95,13 @@ public class ConsistentBucketIdentifier extends BucketIdentifier {
   /**
    * Initialize necessary data structure to facilitate bucket identifying.
    * Specifically, we construct:
-   * - a in-memory tree (ring) to speed up range mapping searching.
-   * - a hash table (fileIdToBucket) to allow lookup of bucket using fileId.
+   * - An in-memory tree (ring) to speed up range mapping searching.
+   * - A hash table (fileIdToBucket) to allow lookup of bucket using fileId.
    */
   private void initialize() {
-    this.fileIdToBucket = new HashMap<>();
-    this.ring = new TreeMap<>();
     for (ConsistentHashingNode p : metadata.getNodes()) {
       ring.put(p.getValue(), p);
-      // one bucket has only one file group, so append 0 directly
+      // One bucket has only one file group, so append 0 directly
       fileIdToBucket.put(FSUtils.createNewFileId(p.getFileIdPfx(), 0), p);
     }
   }

@@ -29,7 +29,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
@@ -45,17 +44,39 @@ public class TestBucketIdentifier {
       + NESTED_COL_SCHEMA + "}"
       + "]}";
 
+  public static GenericRecord getRecord() {
+    return getRecord(getNestedColRecord("val1", 10L));
+  }
+
+  public static GenericRecord getNestedColRecord(String prop1Value, Long prop2Value) {
+    GenericRecord nestedColRecord = new GenericData.Record(new Schema.Parser().parse(NESTED_COL_SCHEMA));
+    nestedColRecord.put("prop1", prop1Value);
+    nestedColRecord.put("prop2", prop2Value);
+    return nestedColRecord;
+  }
+
+  public static GenericRecord getRecord(GenericRecord nestedColRecord) {
+    GenericRecord record = new GenericData.Record(new Schema.Parser().parse(EXAMPLE_SCHEMA));
+    record.put("timestamp", 4357686L);
+    record.put("_row_key", "key1");
+    record.put("ts_ms", "2020-03-21");
+    record.put("pii_col", "pi");
+    record.put("nested_col", nestedColRecord);
+    return record;
+  }
+
   @Test
   public void testBucketFileId() {
-    for (int i = 0; i < 1000; i++) {
-      String bucketId = BucketIdentifier.bucketIdStr(i);
-      String fileId = BucketIdentifier.newBucketFileIdPrefix(bucketId);
-      assert BucketIdentifier.bucketIdFromFileId(fileId) == i;
+    int[] ids = {0, 4, 8, 16, 32, 64, 128, 256, 512, 1000, 1024, 4096, 10000, 100000};
+    for (int id : ids) {
+      String bucketIdStr = BucketIdentifier.bucketIdStr(id);
+      String fileId = BucketIdentifier.newBucketFileIdPrefix(bucketIdStr);
+      assert BucketIdentifier.bucketIdFromFileId(fileId) == id;
     }
   }
 
   @Test
-  public void testBucketIdWithSimpleRecordKey() throws IOException {
+  public void testBucketIdWithSimpleRecordKey() {
     String recordKeyField = "_row_key";
     String indexKeyField = "_row_key";
     GenericRecord record = getRecord();
@@ -68,7 +89,7 @@ public class TestBucketIdentifier {
 
   @Test
   public void testBucketIdWithComplexRecordKey() {
-    List<String> recordKeyField = Arrays.asList("_row_key","ts_ms");
+    List<String> recordKeyField = Arrays.asList("_row_key", "ts_ms");
     String indexKeyField = "_row_key";
     GenericRecord record = getRecord();
     HoodieRecord hoodieRecord = new HoodieAvroRecord(
@@ -97,26 +118,5 @@ public class TestBucketIdentifier {
     Assertions.assertEquals(2, keys.size());
     Assertions.assertEquals("abc", keys.get(0));
     Assertions.assertEquals("bcd", keys.get(1));
-  }
-
-  public static GenericRecord getRecord() {
-    return getRecord(getNestedColRecord("val1", 10L));
-  }
-
-  public static GenericRecord getNestedColRecord(String prop1Value, Long prop2Value) {
-    GenericRecord nestedColRecord = new GenericData.Record(new Schema.Parser().parse(NESTED_COL_SCHEMA));
-    nestedColRecord.put("prop1", prop1Value);
-    nestedColRecord.put("prop2", prop2Value);
-    return nestedColRecord;
-  }
-
-  public static GenericRecord getRecord(GenericRecord nestedColRecord) {
-    GenericRecord record = new GenericData.Record(new Schema.Parser().parse(EXAMPLE_SCHEMA));
-    record.put("timestamp", 4357686L);
-    record.put("_row_key", "key1");
-    record.put("ts_ms", "2020-03-21");
-    record.put("pii_col", "pi");
-    record.put("nested_col", nestedColRecord);
-    return record;
   }
 }

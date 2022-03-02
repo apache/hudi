@@ -31,7 +31,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class BucketIdentifier implements Serializable {
-  // compatible with the spark bucket name
+  // Compatible with the spark bucket name
   private static final Pattern BUCKET_NAME = Pattern.compile(".*_(\\d+)(?:\\..*)?$");
 
   public static int getBucketId(HoodieRecord record, String indexKeyFields, int numBuckets) {
@@ -39,13 +39,21 @@ public class BucketIdentifier implements Serializable {
   }
 
   public static int getBucketId(HoodieKey hoodieKey, String indexKeyFields, int numBuckets) {
-    return (getHashKeys(hoodieKey.getRecordKey(), indexKeyFields).hashCode() & Integer.MAX_VALUE) % numBuckets;
+    return (getHashKeys(hoodieKey, indexKeyFields).hashCode() & Integer.MAX_VALUE) % numBuckets;
+  }
+
+  public static int getBucketId(String recordKey, String indexKeyFields, int numBuckets) {
+    return (getHashKeys(recordKey, indexKeyFields).hashCode() & Integer.MAX_VALUE) % numBuckets;
+  }
+
+  public static List<String> getHashKeys(HoodieKey hoodieKey, String indexKeyFields) {
+    return getHashKeys(hoodieKey.getRecordKey(), indexKeyFields);
   }
 
   protected static List<String> getHashKeys(String recordKey, String indexKeyFields) {
     List<String> hashKeys;
     if (!recordKey.contains(":")) {
-      hashKeyFields = Collections.singletonList(recordKey);
+      hashKeys = Collections.singletonList(recordKey);
     } else {
       Map<String, String> recordKeyPairs = Arrays.stream(recordKey.split(","))
           .map(p -> p.split(":"))
@@ -57,7 +65,7 @@ public class BucketIdentifier implements Serializable {
     return hashKeys;
   }
 
-  // only for test
+  // Only for test
   public  static int getBucketId(List<String> hashKeyFields, int numBuckets) {
     return hashKeyFields.hashCode() % numBuckets;
   }

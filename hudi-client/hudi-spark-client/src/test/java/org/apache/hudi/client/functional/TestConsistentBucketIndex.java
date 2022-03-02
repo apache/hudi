@@ -192,7 +192,7 @@ public class TestConsistentBucketIndex extends HoodieClientTestHarness {
         }).sum();
     Assertions.assertEquals(writeStatues.stream().map(WriteStatus::getFileId).distinct().count() * 2, numberOfLogFiles);
     // The record number should remain same because of deduplication
-    Assertions.assertEquals(totalRecords, readRecords(dataGen.getPartitionPaths()).size());
+    Assertions.assertEquals(totalRecords, readRecords(dataGen.getPartitionPaths(), populateMetaFields).size());
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
@@ -205,13 +205,13 @@ public class TestConsistentBucketIndex extends HoodieClientTestHarness {
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
     Assertions.assertTrue(writeClient.commitStats(newCommitTime, writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
         Option.empty(), metaClient.getCommitActionType()));
-    Assertions.assertEquals(totalRecords * 2, readRecords(dataGen.getPartitionPaths()).size());
+    Assertions.assertEquals(totalRecords * 2, readRecords(dataGen.getPartitionPaths(), populateMetaFields).size());
   }
 
-  private List<GenericRecord> readRecords(String[] partitions) {
+  private List<GenericRecord> readRecords(String[] partitions, boolean populateMetaFields) {
     return HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf,
         Arrays.stream(partitions).map(p -> Paths.get(basePath, p).toString()).collect(Collectors.toList()),
-        basePath);
+        basePath, new JobConf(hadoopConf), true, populateMetaFields);
   }
 
   private FileStatus[] listStatus(String p, boolean realtime) {

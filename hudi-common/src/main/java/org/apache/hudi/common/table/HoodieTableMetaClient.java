@@ -216,7 +216,7 @@ public class HoodieTableMetaClient implements Serializable {
    * @return Hashing metadata base path
    */
   public String getHashingMetadataPath() {
-    return new Path(metaPath, HASHING_METADATA_FOLER_NAME).toString();
+    return new Path(metaPath.get(), HASHING_METADATA_FOLER_NAME).toString();
   }
 
   /**

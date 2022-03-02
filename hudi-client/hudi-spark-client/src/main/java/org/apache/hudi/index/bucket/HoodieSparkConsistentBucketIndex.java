@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
@@ -70,8 +71,9 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
   /**
    * Do nothing.
    * A failed write may create a hashing metadata for a partition. In this case, we still do nothing when rolling back
-   * the failed write. Because the hashing metadata created by a write must have 00000000000000 timestamp and can be viewed
+   * the failed write. Because the hashing metadata created by a writer must have 00000000000000 timestamp and can be viewed
    * as the initialization of a partition rather than as a part of the failed write.
+   *
    * @param instantTime
    * @return
    */
@@ -82,6 +84,7 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
 
   /**
    * Initialize bucket metadata for each partition
+   *
    * @param table
    * @param partitions partitions that need to be initialized
    */
@@ -110,7 +113,7 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
     if (node.getFileIdPfx() != null && !node.getFileIdPfx().isEmpty()) {
       /**
        * Dynamic Bucket Index doesn't need the instant time of the latest file group.
-       * We add suffix 0 here to the file uuid, following the naming convention.
+       * We add suffix 0 here to the file uuid, following the naming convention, i.e., fileId = [uuid]_[numWrites]
        */
       return new HoodieRecordLocation(null, FSUtils.createNewFileId(node.getFileIdPfx(), 0));
     }
@@ -128,21 +131,22 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
    * @return Consistent hashing metadata
    */
   public HoodieConsistentHashingMetadata loadOrCreateMetadata(HoodieTable table, String partition) {
-    int retry = 3;
-    // TODO maybe use ConsistencyGuard to do the retry thing
-    // retry to allow concurrent creation of metadata (only one attempt can succeed)
-    while (retry-- > 0) {
-      HoodieConsistentHashingMetadata metadata = loadMetadata(table, partition);
-      if (metadata == null) {
-        metadata = new HoodieConsistentHashingMetadata(partition, numBuckets);
-        if (saveMetadata(table, metadata, false)) {
-          return metadata;
-        }
-      } else {
-        return metadata;
-      }
+    HoodieConsistentHashingMetadata metadata = loadMetadata(table, partition);
+    if (metadata != null) {
+      return metadata;
     }
-    throw new HoodieIndexException("Failed to load or create metadata, partition: " + partition);
+
+    // There is no metadata, so try to create a new one and save it.
+    metadata = new HoodieConsistentHashingMetadata(partition, numBuckets);
+    if (saveMetadata(table, metadata, false)) {
+      return metadata;
+    }
+
+    // The creation failed, so try load metadata again. Concurrent creation of metadata should have succeeded.
+    // Note: the consistent problem of cloud storage is handled internal in the HoodieWrapperFileSystem, i.e., ConsistentGuard
+    metadata = loadMetadata(table, partition);
+    ValidationUtils.checkState(metadata != null, "Failed to load or create metadata, partition: " + partition);
+    return metadata;
   }
 
   /**
@@ -160,31 +164,35 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
         return null;
       }
       FileStatus[] metaFiles = table.getMetaClient().getFs().listStatus(metadataPath);
-      HoodieTimeline completedCommits = table.getMetaClient().getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+      final HoodieTimeline completedCommits = table.getMetaClient().getActiveTimeline().getCommitTimeline().filterCompletedInstants();
       Predicate<FileStatus> metaFilePredicate = fileStatus -> {
         String filename = fileStatus.getPath().getName();
-        return filename.contains(HoodieConsistentHashingMetadata.HASHING_METADATA_FILE_SUFFIX)
-            && (completedCommits.containsInstant(HoodieConsistentHashingMetadata.getTimestampFromFile(filename))
-            || HoodieConsistentHashingMetadata.getTimestampFromFile(filename).equals(HoodieTimeline.INIT_INSTANT_TS));
+        if (!filename.contains(HoodieConsistentHashingMetadata.HASHING_METADATA_FILE_SUFFIX)) {
+          return false;
+        }
+        String timestamp = HoodieConsistentHashingMetadata.getTimestampFromFile(filename);
+        return completedCommits.containsInstant(timestamp) || timestamp.equals(HoodieTimeline.INIT_INSTANT_TS);
       };
 
+      // Get a valid hashing metadata with the largest (latest) timestamp
       FileStatus metaFile = Arrays.stream(metaFiles).filter(metaFilePredicate)
           .max(Comparator.comparing(a -> a.getPath().getName())).orElse(null);
 
-      if (metaFile != null) {
-        byte[] content = FileIOUtils.readAsByteArray(table.getMetaClient().getFs().open(metaFile.getPath()));
-        return HoodieConsistentHashingMetadata.fromBytes(content);
+      if (metaFile == null) {
+        return null;
       }
 
-      return null;
+      byte[] content = FileIOUtils.readAsByteArray(table.getMetaClient().getFs().open(metaFile.getPath()));
+      return HoodieConsistentHashingMetadata.fromBytes(content);
     } catch (IOException e) {
-      LOG.warn("Error when loading hashing metadata, partition: " + partition + ", error meg: " + e.getMessage());
-      throw new HoodieIndexException("Error while loading hashing metadata, " + e.getMessage());
+      LOG.warn("Error when loading hashing metadata, partition: " + partition, e);
+      throw new HoodieIndexException("Error while loading hashing metadata", e);
     }
   }
 
   /**
    * Save metadata into storage
+   *
    * @param table
    * @param metadata
    * @param overwrite
@@ -202,15 +210,14 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
       fsOut.close();
       return true;
     } catch (IOException e) {
-      e.printStackTrace();
-      LOG.warn("Failed to update bucket metadata: " + metadata + ", error: " + e.getMessage());
+      LOG.warn("Failed to update bucket metadata: " + metadata, e);
     } finally {
       try {
         if (fsOut != null) {
           fsOut.close();
         }
       } catch (IOException e) {
-        throw new HoodieIOException("Failed to close file: " + fullPath.toString(), e);
+        throw new HoodieIOException("Failed to close file: " + fullPath, e);
       }
     }
     return false;

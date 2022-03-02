@@ -45,15 +45,15 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieBucketIndex.class);
 
-  protected int numBuckets;
-  protected String indexKeyFields;
+  protected final int numBuckets;
+  protected final String indexKeyFields;
 
   public HoodieBucketIndex(HoodieWriteConfig config) {
     super(config);
 
     this.numBuckets = config.getBucketIndexNumBuckets();
     this.indexKeyFields = config.getBucketIndexHashField();
-    LOG.info("use bucket index, numBuckets = " + numBuckets + ", indexFields: " + indexKeyFields);
+    LOG.info("Use bucket index, numBuckets = " + numBuckets + ", indexFields: " + indexKeyFields);
   }
 
   @Override
@@ -69,30 +69,19 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
       HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
       HoodieTable hoodieTable)
       throws HoodieIndexException {
-    // initialize necessary information before tagging. e.g., hashing metadata
+    // Initialize necessary information before tagging. e.g., hashing metadata
     List<String> partitions = records.map(HoodieRecord::getPartitionPath).distinct().collectAsList();
     LOG.info("Initializing hashing metadata for partitions: " + partitions);
     initialize(hoodieTable, partitions);
 
     return records.mapPartitions(iterator ->
         new LazyIterableIterator<HoodieRecord<R>, HoodieRecord<R>>(iterator) {
-
-          @Override
-          protected void start() {
-
-          }
-
           @Override
           protected HoodieRecord<R> computeNext() {
             // TODO maybe batch the operation to improve performance
             HoodieRecord record = inputItr.next();
             HoodieRecordLocation loc = getBucket(record.getKey(), record.getPartitionPath());
             return HoodieIndexUtils.getTaggedRecord(record, Option.ofNullable(loc));
-          }
-
-          @Override
-          protected void end() {
-
           }
         }
     );
@@ -137,6 +126,7 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
 
   /**
    * Initialize necessary fields
+   *
    * @param table
    * @param partitions
    */
@@ -144,6 +134,7 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
 
   /**
    * Get record location given the record key and its partition
+   *
    * @param key
    * @param partitionPath
    * @return

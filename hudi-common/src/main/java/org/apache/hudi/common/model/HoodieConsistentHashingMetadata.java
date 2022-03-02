@@ -18,15 +18,16 @@
 
 package org.apache.hudi.common.model;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.PropertyAccessor;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.PropertyAccessor;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -43,22 +44,39 @@ import java.util.List;
 public class HoodieConsistentHashingMetadata implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieConsistentHashingMetadata.class);
-
-  public static final int MAX_HASH_VALUE = Integer.MAX_VALUE;
+  /**
+   * Upper-bound of the hash value
+   */
+  public static final int HASH_VALUE_MASK = Integer.MAX_VALUE;
   public static final String HASHING_METADATA_FILE_SUFFIX = ".hashing_meta";
+  private static final ObjectMapper MAPPER = new ObjectMapper();
 
-  protected short version;
-  protected String partitionPath;
-  protected String instant;
-  protected int numBuckets;
-  protected int seqNo;
-  protected List<ConsistentHashingNode> nodes;
+  static {
+    MAPPER.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    MAPPER.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
+  }
 
-  public HoodieConsistentHashingMetadata() {
+  private final short version;
+  private final String partitionPath;
+  private final String instant;
+  private final int numBuckets;
+  private final int seqNo;
+  private final List<ConsistentHashingNode> nodes;
+
+  @JsonCreator
+  public HoodieConsistentHashingMetadata(@JsonProperty("version") short version, @JsonProperty("partitionPath") String partitionPath,
+                                         @JsonProperty("instant") String instant, @JsonProperty("numBuckets") int numBuckets,
+                                         @JsonProperty("seqNo") int seqNo, @JsonProperty("nodes") List<ConsistentHashingNode> nodes) {
+    this.version = version;
+    this.partitionPath = partitionPath;
+    this.instant = instant;
+    this.numBuckets = numBuckets;
+    this.seqNo = seqNo;
+    this.nodes = nodes;
   }
 
   public HoodieConsistentHashingMetadata(String partitionPath, int numBuckets) {
-    this((short) 0, partitionPath, HoodieTimeline.INIT_INSTANT_TS, numBuckets);
+    this((short) 0, partitionPath, HoodieTimeline.INIT_INSTANT_TS, numBuckets, 0);
   }
 
   /**
@@ -67,16 +85,17 @@ public class HoodieConsistentHashingMetadata implements Serializable {
    * @param partitionPath
    * @param numBuckets
    */
-  private HoodieConsistentHashingMetadata(short version, String partitionPath, String instant, int numBuckets) {
+  private HoodieConsistentHashingMetadata(short version, String partitionPath, String instant, int numBuckets, int seqNo) {
     this.version = version;
     this.partitionPath = partitionPath;
     this.instant = instant;
     this.numBuckets = numBuckets;
+    this.seqNo = seqNo;
 
     nodes = new ArrayList<>();
-    long step = ((long) MAX_HASH_VALUE + numBuckets - 1) / numBuckets;
+    long step = ((long) HASH_VALUE_MASK + numBuckets - 1) / numBuckets;
     for (int i = 1; i <= numBuckets; ++i) {
-      nodes.add(new ConsistentHashingNode((int) Math.min(step * i, MAX_HASH_VALUE), FSUtils.createNewFileIdPfx()));
+      nodes.add(new ConsistentHashingNode((int) Math.min(step * i, HASH_VALUE_MASK), FSUtils.createNewFileIdPfx()));
     }
   }
 
@@ -104,19 +123,6 @@ public class HoodieConsistentHashingMetadata implements Serializable {
     return nodes;
   }
 
-  public void setInstant(String instant) {
-    this.instant = instant;
-  }
-
-  public void setNodes(List<ConsistentHashingNode> nodes) {
-    this.nodes = nodes;
-    this.numBuckets = nodes.size();
-  }
-
-  public void setSeqNo(int seqNo) {
-    this.seqNo = seqNo;
-  }
-
   public String getFilename() {
     return instant + HASHING_METADATA_FILE_SUFFIX;
   }
@@ -134,27 +140,20 @@ public class HoodieConsistentHashingMetadata implements Serializable {
   }
 
   private String toJsonString() throws IOException {
-    return getObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(this);
+    return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(this);
   }
 
   protected static <T> T fromJsonString(String jsonStr, Class<T> clazz) throws Exception {
     if (jsonStr == null || jsonStr.isEmpty()) {
-      // For empty commit file (no data or somethings bad happen).
+      // For empty commit file (no data or something bad happen).
       return clazz.newInstance();
     }
-    return getObjectMapper().readValue(jsonStr, clazz);
-  }
-
-  protected static ObjectMapper getObjectMapper() {
-    ObjectMapper mapper = new ObjectMapper();
-    mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-    mapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
-    return mapper;
+    return MAPPER.readValue(jsonStr, clazz);
   }
 
   /**
    * Get instant time from the hashing metadata filename
-   * Filename pattern: <instant>.HASHING_METADATA_FILE_SUFFIX
+   * Pattern of the filename: <instant>.HASHING_METADATA_FILE_SUFFIX
    *
    * @param filename
    * @return

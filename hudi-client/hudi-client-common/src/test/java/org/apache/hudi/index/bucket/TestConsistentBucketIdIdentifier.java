@@ -24,44 +24,29 @@ import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.provider.Arguments;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Stream;
 
-import static org.apache.hudi.common.model.HoodieConsistentHashingMetadata.MAX_HASH_VALUE;
+import static org.apache.hudi.common.model.HoodieConsistentHashingMetadata.HASH_VALUE_MASK;
 
 /**
  * Unit test of consistent bucket identifier
  */
 public class TestConsistentBucketIdIdentifier {
 
-  private static Stream<Arguments> splitBucketParams() {
-    Object[][] data = new Object[][] {
-        {MAX_HASH_VALUE, 0xf, (int) (((long) 0xf + MAX_HASH_VALUE) >> 1)},
-        {1, MAX_HASH_VALUE, 0},
-        {0, MAX_HASH_VALUE, -1},
-        {1, MAX_HASH_VALUE - 10, MAX_HASH_VALUE - 4},
-        {9, MAX_HASH_VALUE - 2, 3},
-        {0, MAX_HASH_VALUE - 1, MAX_HASH_VALUE}
-    };
-    return Stream.of(data).map(Arguments::of);
-  }
-
   @Test
   public void testGetBucket() {
-    HoodieConsistentHashingMetadata meta = new HoodieConsistentHashingMetadata();
     List<ConsistentHashingNode> nodes = Arrays.asList(
         new ConsistentHashingNode(100, "0"),
         new ConsistentHashingNode(0x2fffffff, "1"),
         new ConsistentHashingNode(0x4fffffff, "2"));
-    meta.setNodes(nodes);
+    HoodieConsistentHashingMetadata meta = new HoodieConsistentHashingMetadata((short) 0, "", "", 3, 0, nodes);
     ConsistentBucketIdentifier identifier = new ConsistentBucketIdentifier(meta);
 
     Assertions.assertEquals(3, identifier.getNumBuckets());
 
-    // get bucket by hash keys
+    // Get bucket by hash keys
     Assertions.assertEquals(nodes.get(2), identifier.getBucket(Arrays.asList("Hudi")));
     Assertions.assertEquals(nodes.get(1), identifier.getBucket(Arrays.asList("bucket_index")));
     Assertions.assertEquals(nodes.get(1), identifier.getBucket(Arrays.asList("consistent_hashing")));
@@ -73,7 +58,7 @@ public class TestConsistentBucketIdIdentifier {
       Assertions.assertEquals(nodes.get(ref2[i]), identifier.getBucket(Arrays.asList(Integer.toString(i), Integer.toString(i + 1))));
     }
 
-    // get bucket by hash value
+    // Get bucket by hash value
     Assertions.assertEquals(nodes.get(0), identifier.getBucket(0));
     Assertions.assertEquals(nodes.get(0), identifier.getBucket(50));
     Assertions.assertEquals(nodes.get(0), identifier.getBucket(100));
@@ -84,9 +69,9 @@ public class TestConsistentBucketIdIdentifier {
     Assertions.assertEquals(nodes.get(2), identifier.getBucket(0x40000001));
     Assertions.assertEquals(nodes.get(2), identifier.getBucket(0x4fffffff));
     Assertions.assertEquals(nodes.get(0), identifier.getBucket(0x50000000));
-    Assertions.assertEquals(nodes.get(0), identifier.getBucket(MAX_HASH_VALUE));
+    Assertions.assertEquals(nodes.get(0), identifier.getBucket(HASH_VALUE_MASK));
 
-    // get bucket by file id
+    // Get bucket by file id
     Assertions.assertEquals(nodes.get(0), identifier.getBucketByFileId(FSUtils.createNewFileId("0", 0)));
     Assertions.assertEquals(nodes.get(1), identifier.getBucketByFileId(FSUtils.createNewFileId("1", 0)));
     Assertions.assertEquals(nodes.get(2), identifier.getBucketByFileId(FSUtils.createNewFileId("2", 0)));

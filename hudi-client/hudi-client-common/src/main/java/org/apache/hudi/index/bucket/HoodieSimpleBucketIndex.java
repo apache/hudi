@@ -20,7 +20,6 @@ package org.apache.hudi.index.bucket;
 
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndexUtils;
@@ -38,22 +37,22 @@ import java.util.Map;
  */
 public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
 
-  private static final Logger LOG =  LogManager.getLogger(HoodieSimpleBucketIndex.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieSimpleBucketIndex.class);
 
   /**
-   * partitionPath -> bucketId -> fileInfo
+   * Mapping from partitionPath -> bucketId -> fileInfo
    */
-  Map<String, Map<Integer, Pair<String, String>>> partitionPathFileIDList;
+  private Map<String, Map<Integer, HoodieRecordLocation>> partitionPathFileIDList;
 
   public HoodieSimpleBucketIndex(HoodieWriteConfig config) {
     super(config);
   }
 
-  private Map<Integer, Pair<String, String>> loadPartitionBucketIdFileIdMapping(
+  private Map<Integer, HoodieRecordLocation> loadPartitionBucketIdFileIdMapping(
       HoodieTable hoodieTable,
       String partition) {
     // bucketId -> fileIds
-    Map<Integer, Pair<String, String>> fileIDList = new HashMap<>();
+    Map<Integer, HoodieRecordLocation> bucketIdToFileIdMapping = new HashMap<>();
     hoodieTable.getMetaClient().reloadActiveTimeline();
     HoodieIndexUtils
         .getLatestBaseFilesForPartition(partition, hoodieTable)
@@ -61,15 +60,15 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
           String fileId = file.getFileId();
           String commitTime = file.getCommitTime();
           int bucketId = BucketIdentifier.bucketIdFromFileId(fileId);
-          if (!fileIDList.containsKey(bucketId)) {
-            fileIDList.put(bucketId, Pair.of(fileId, commitTime));
+          if (!bucketIdToFileIdMapping.containsKey(bucketId)) {
+            bucketIdToFileIdMapping.put(bucketId, new HoodieRecordLocation(commitTime, fileId));
           } else {
-            // check if bucket data is valid
+            // Check if bucket data is valid
             throw new HoodieIOException("Find multiple files at partition path="
                 + partition + " belongs to the same bucket id = " + bucketId);
           }
         });
-    return fileIDList;
+    return bucketIdToFileIdMapping;
   }
 
   @Override
@@ -86,10 +85,7 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
   @Override
   protected HoodieRecordLocation getBucket(HoodieKey key, String partitionPath) {
     int bucketId = BucketIdentifier.getBucketId(key, config.getBucketIndexHashField(), numBuckets);
-    if (partitionPathFileIDList.get(partitionPath).containsKey(bucketId)) {
-      Pair<String, String> fileInfo = partitionPathFileIDList.get(partitionPath).get(bucketId);
-      return new HoodieRecordLocation(fileInfo.getRight(), fileInfo.getLeft());
-    }
-    return null;
+    Map<Integer, HoodieRecordLocation> bucketIdToFileIdMapping = partitionPathFileIDList.get(partitionPath);
+    return bucketIdToFileIdMapping.getOrDefault(bucketId, null);
   }
 }
