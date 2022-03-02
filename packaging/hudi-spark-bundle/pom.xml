@@ -68,6 +68,7 @@
                 <includes>
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-client-common</include>
+                  <include>org.apache.hudi:hudi-metrics-common</include>
                   <include>org.apache.hudi:hudi-spark-client</include>
                   <include>org.apache.hudi:hudi-spark-common_${scala.binary.version}</include>
                   <include>org.apache.hudi:hudi-spark_${scala.binary.version}</include>
@@ -166,10 +167,10 @@
                   <pattern>org.apache.hadoop.hive.service.</pattern>
                   <shadedPattern>${spark.bundle.hive.shade.prefix}org.apache.hadoop.hive.service.</shadedPattern>
                 </relocation>
-                <relocation>
-                  <pattern>com.codahale.metrics.</pattern>
-                  <shadedPattern>org.apache.hudi.com.codahale.metrics.</shadedPattern>
-                </relocation>
+                <!--                <relocation>-->
+                <!--                  <pattern>com.codahale.metrics.</pattern>-->
+                <!--                  <shadedPattern>org.apache.hudi.com.codahale.metrics.</shadedPattern>-->
+                <!--                </relocation>-->
                 <relocation>
                   <pattern>org.apache.commons.codec.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.commons.codec.</shadedPattern>
@@ -216,6 +217,11 @@
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-common</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-metrics-common</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
