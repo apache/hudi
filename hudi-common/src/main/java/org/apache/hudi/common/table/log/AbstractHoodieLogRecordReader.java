@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -50,8 +51,8 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
@@ -359,17 +360,13 @@ public abstract class AbstractHoodieLogRecordReader {
    * handle it.
    */
   private void processDataBlock(HoodieDataBlock dataBlock, Option<List<String>> keys) throws Exception {
-    // TODO (NA) - Implement getRecordItr() in HoodieAvroDataBlock and use that here
-    List<IndexedRecord> recs = new ArrayList<>();
-    if (!keys.isPresent()) {
-      recs = dataBlock.getRecords();
-    } else {
-      recs = dataBlock.getRecords(keys.get());
-    }
-    totalLogRecords.addAndGet(recs.size());
-    for (IndexedRecord rec : recs) {
-      processNextRecord(createHoodieRecord(rec, this.hoodieTableMetaClient.getTableConfig(), this.payloadClassFQN,
-          this.preCombineField, this.withOperationField, this.simpleKeyGenFields, this.partitionName));
+    try (ClosableIterator<IndexedRecord> recordItr = dataBlock.getRecordItr(keys.orElse(Collections.emptyList()))) {
+      while (recordItr.hasNext()) {
+        IndexedRecord record = recordItr.next();
+        processNextRecord(createHoodieRecord(record, this.hoodieTableMetaClient.getTableConfig(), this.payloadClassFQN,
+            this.preCombineField, this.withOperationField, this.simpleKeyGenFields, this.partitionName));
+        totalLogRecords.incrementAndGet();
+      }
     }
   }
 
