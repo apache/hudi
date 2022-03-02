@@ -23,9 +23,11 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
@@ -106,6 +108,12 @@ public class FlinkOptions extends HoodieConfig {
   // ------------------------------------------------------------------------
   //  Index Options
   // ------------------------------------------------------------------------
+  public static final ConfigOption<String> INDEX_TYPE = ConfigOptions
+      .key("index.type")
+      .stringType()
+      .defaultValue(HoodieIndex.IndexType.FLINK_STATE.name())
+      .withDescription("Index type of Flink write job, default is using state backed index.");
+
   public static final ConfigOption<Boolean> INDEX_BOOTSTRAP_ENABLED = ConfigOptions
       .key("index.bootstrap.enabled")
       .booleanType()
@@ -309,6 +317,20 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Record key field. Value to be used as the `recordKey` component of `HoodieKey`.\n"
           + "Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using "
           + "the dot notation eg: `a.b.c`");
+
+  public static final ConfigOption<String> INDEX_KEY_FIELD = ConfigOptions
+      .key(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key())
+      .stringType()
+      .defaultValue("")
+      .withDescription("Index key field. Value to be used as hashing to find the bucket ID. Should be a subset of or equal to the recordKey fields.\n"
+        + "Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using "
+        + "the dot notation eg: `a.b.c`");
+
+  public static final ConfigOption<Integer> BUCKET_INDEX_NUM_BUCKETS = ConfigOptions
+      .key(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key())
+      .intType()
+      .defaultValue(4) // default 4 buckets per partition
+      .withDescription("Hudi bucket number per partition. Only affected if using Hudi bucket index.");
 
   public static final ConfigOption<String> PARTITION_PATH_FIELD = ConfigOptions
       .key(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())

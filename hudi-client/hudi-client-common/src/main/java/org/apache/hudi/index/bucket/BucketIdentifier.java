@@ -56,6 +56,10 @@ public class BucketIdentifier {
     return hashKeyFields.hashCode() % numBuckets;
   }
 
+  public static String partitionBucketIdStr(String partition, int bucketId) {
+    return String.format("%s_%s", partition, bucketIdStr(bucketId));
+  }
+
   public static int bucketIdFromFileId(String fileId) {
     return Integer.parseInt(fileId.substring(0, 8));
   }
@@ -64,11 +68,19 @@ public class BucketIdentifier {
     return String.format("%08d", n);
   }
 
+  public static String newBucketFileIdPrefix(int bucketId) {
+    return newBucketFileIdPrefix(bucketIdStr(bucketId));
+  }
+
   public static String newBucketFileIdPrefix(String bucketId) {
     return FSUtils.createNewFileIdPfx().replaceFirst(".{8}", bucketId);
   }
 
   public static boolean isBucketFileName(String name) {
     return BUCKET_NAME.matcher(name).matches();
+  }
+
+  public static int mod(int x, int y) {
+    return x % y;
   }
 }

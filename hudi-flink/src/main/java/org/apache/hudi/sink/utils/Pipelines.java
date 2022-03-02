@@ -21,6 +21,7 @@ package org.apache.hudi.sink.utils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.sink.BucketStreamWriteOperator;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.StreamWriteOperator;
 import org.apache.hudi.sink.append.AppendWriteOperator;
@@ -36,6 +37,7 @@ import org.apache.hudi.sink.compact.CompactionCommitSink;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
+import org.apache.hudi.sink.partitioner.BucketIndexPartitioner;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunctions;
 import org.apache.hudi.table.format.FilePathUtils;
 
@@ -185,7 +187,7 @@ public class Pipelines {
       boolean bounded,
       boolean overwrite) {
     final boolean globalIndex = conf.getBoolean(FlinkOptions.INDEX_GLOBAL_ENABLED);
-    if (overwrite) {
+    if (overwrite || OptionsResolver.isBucketIndexType(conf)) {
       return rowDataToHoodieRecord(conf, rowType, dataStream);
     } else if (bounded && !globalIndex && OptionsResolver.isPartitionedTable(conf)) {
       return boundedBootstrap(conf, rowType, defaultParallelism, dataStream);
@@ -270,14 +272,24 @@ public class Pipelines {
    * @return the stream write data stream pipeline
    */
   public static DataStream<Object> hoodieStreamWrite(Configuration conf, int defaultParallelism, DataStream<HoodieRecord> dataStream) {
-    WriteOperatorFactory<HoodieRecord> operatorFactory = StreamWriteOperator.getFactory(conf);
-    return dataStream
+    if (OptionsResolver.isBucketIndexType(conf)) {
+      WriteOperatorFactory<HoodieRecord> operatorFactory = BucketStreamWriteOperator.getFactory(conf);
+      int bucketNum = conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
+      String indexKeyFields = conf.getString(FlinkOptions.INDEX_KEY_FIELD);
+      BucketIndexPartitioner partitioner = new BucketIndexPartitioner(bucketNum, indexKeyFields);
+      return dataStream.partitionCustom(partitioner, HoodieRecord::getKey)
+        .transform("hoodie_bucket_stream_write", TypeInformation.of(Object.class), operatorFactory)
+        .uid("uid_hoodie_bucket_stream_write" + conf.getString(FlinkOptions.TABLE_NAME))
+        .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
+    } else {
+      WriteOperatorFactory<HoodieRecord> operatorFactory = StreamWriteOperator.getFactory(conf);
+      return dataStream
         // Key-by record key, to avoid multiple subtasks write to a bucket at the same time
         .keyBy(HoodieRecord::getRecordKey)
         .transform(
-            "bucket_assigner",
-            TypeInformation.of(HoodieRecord.class),
-            new KeyedProcessOperator<>(new BucketAssignFunction<>(conf)))
+          "bucket_assigner",
+          TypeInformation.of(HoodieRecord.class),
+          new KeyedProcessOperator<>(new BucketAssignFunction<>(conf)))
         .uid("uid_bucket_assigner_" + conf.getString(FlinkOptions.TABLE_NAME))
         .setParallelism(conf.getOptional(FlinkOptions.BUCKET_ASSIGN_TASKS).orElse(defaultParallelism))
         // shuffle by fileId(bucket id)
@@ -285,6 +297,7 @@ public class Pipelines {
         .transform("hoodie_stream_write", TypeInformation.of(Object.class), operatorFactory)
         .uid("uid_hoodie_stream_write" + conf.getString(FlinkOptions.TABLE_NAME))
         .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
+    }
   }
 
   /**
