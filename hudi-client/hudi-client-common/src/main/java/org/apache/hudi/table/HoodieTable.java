@@ -145,6 +145,10 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     return viewManager;
   }
 
+  public HoodieTableMetadata getMetadata() {
+    return metadata;
+  }
+
   /**
    * Upsert a batch of new records into Hoodie table at the supplied instantTime.
    * @param context    HoodieEngineContext
