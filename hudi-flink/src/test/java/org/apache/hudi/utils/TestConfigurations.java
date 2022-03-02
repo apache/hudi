@@ -64,12 +64,12 @@ public class TestConfigurations {
       .map(RowType.RowField::asSummaryString).collect(Collectors.toList());
 
   public static final DataType ROW_DATA_TYPE_WIDER = DataTypes.ROW(
-          DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),// record key
-          DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
-          DataTypes.FIELD("age", DataTypes.INT()),
-          DataTypes.FIELD("salary", DataTypes.DOUBLE()),
-          DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // precombine field
-          DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
+      DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),// record key
+      DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
+      DataTypes.FIELD("age", DataTypes.INT()),
+      DataTypes.FIELD("salary", DataTypes.DOUBLE()),
+      DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // precombine field
+      DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
       .notNull();
 
   public static final RowType ROW_TYPE_WIDER = (RowType) ROW_DATA_TYPE_WIDER.getLogicalType();
@@ -108,6 +108,15 @@ public class TestConfigurations {
         + "  'connector' = '").append(connector).append("'");
     options.forEach((k, v) -> builder.append(",\n")
         .append("  '").append(k).append("' = '").append(v).append("'"));
+    builder.append("\n)");
+    return builder.toString();
+  }
+
+  public static String getCreateHudiCatalogDDL(final String catalogName, final String catalogPath) {
+    StringBuilder builder = new StringBuilder();
+    builder.append("create catalog ").append(catalogName).append(" with (\n");
+    builder.append("  'type' = 'hudi',\n"
+        + "  'catalog.path' = '").append(catalogPath).append("'");
     builder.append("\n)");
     return builder.toString();
   }
@@ -222,6 +231,10 @@ public class TestConfigurations {
     return new Sql(tableName);
   }
 
+  public static Catalog catalog(String catalogName) {
+    return new Catalog(catalogName);
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
@@ -283,6 +296,24 @@ public class TestConfigurations {
       }
       return TestConfigurations.getCreateHoodieTableDDL(this.tableName, this.fields, options,
           this.withPartition, this.pkField, this.partitionField);
+    }
+  }
+
+  public static class Catalog {
+    private final String catalogName;
+    private String catalogPath = ".";
+
+    public Catalog(String catalogName) {
+      this.catalogName = catalogName;
+    }
+
+    public Catalog catalogPath(String catalogPath) {
+      this.catalogPath = catalogPath;
+      return this;
+    }
+
+    public String end() {
+      return TestConfigurations.getCreateHudiCatalogDDL(catalogName, catalogPath);
     }
   }
 }

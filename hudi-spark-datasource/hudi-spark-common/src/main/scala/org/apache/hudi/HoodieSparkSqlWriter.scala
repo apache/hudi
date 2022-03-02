@@ -293,7 +293,8 @@ object HoodieSparkSqlWriter {
                   DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean)
                   .asInstanceOf[Comparable[_]]
                 DataSourceUtils.createHoodieRecord(processedRecord,
-                  orderingVal, keyGenerator.getKey(gr),
+                  orderingVal,
+                  keyGenerator.getKey(gr),
                   hoodieConfig.getString(PAYLOAD_CLASS_NAME))
               } catch {
                 case e : Exception => if (errorTableEnable) {

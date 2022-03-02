@@ -62,6 +62,7 @@ import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -694,23 +695,25 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       while (logFileReader.hasNext()) {
         HoodieLogBlock logBlock = logFileReader.next();
         if (logBlock instanceof HoodieDataBlock) {
-          for (IndexedRecord indexRecord : ((HoodieDataBlock) logBlock).getRecords()) {
-            final GenericRecord record = (GenericRecord) indexRecord;
-            if (enableMetaFields) {
-              // Metadata table records should have meta fields!
-              assertNotNull(record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
-              assertNotNull(record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
-            } else {
-              // Metadata table records should not have meta fields!
-              assertNull(record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
-              assertNull(record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
-            }
+          try (ClosableIterator<IndexedRecord> recordItr = ((HoodieDataBlock) logBlock).getRecordItr()) {
+            recordItr.forEachRemaining(indexRecord -> {
+              final GenericRecord record = (GenericRecord) indexRecord;
+              if (enableMetaFields) {
+                // Metadata table records should have meta fields!
+                assertNotNull(record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+                assertNotNull(record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+              } else {
+                // Metadata table records should not have meta fields!
+                assertNull(record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+                assertNull(record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+              }
 
-            final String key = String.valueOf(record.get(HoodieMetadataPayload.KEY_FIELD_NAME));
-            assertFalse(key.isEmpty());
-            if (enableMetaFields) {
-              assertTrue(key.equals(String.valueOf(record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD))));
-            }
+              final String key = String.valueOf(record.get(HoodieMetadataPayload.KEY_FIELD_NAME));
+              assertFalse(key.isEmpty());
+              if (enableMetaFields) {
+                assertTrue(key.equals(String.valueOf(record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD))));
+              }
+            });
           }
         }
       }

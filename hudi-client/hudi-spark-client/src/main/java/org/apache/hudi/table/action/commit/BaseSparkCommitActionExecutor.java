@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.SparkMemoryUtils;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -55,13 +54,13 @@ import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.storage.StorageLevel;
+import scala.Tuple2;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -77,23 +76,20 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import scala.Tuple2;
-
 import static org.apache.hudi.common.util.ClusteringUtils.getAllFileGroupsInPendingClusteringPlans;
 
 public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayload> extends
     BaseCommitActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, HoodieWriteMetadata> {
 
   private static final Logger LOG = LogManager.getLogger(BaseSparkCommitActionExecutor.class);
-  protected Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
+  protected final Option<BaseKeyGenerator> keyGeneratorOpt;
 
   public BaseSparkCommitActionExecutor(HoodieEngineContext context,
                                        HoodieWriteConfig config,
                                        HoodieTable table,
                                        String instantTime,
                                        WriteOperationType operationType) {
-    super(context, config, table, instantTime, operationType, Option.empty());
-    initKeyGenIfNeeded(config.populateMetaFields());
+    this(context, config, table, instantTime, operationType, Option.empty());
   }
 
   public BaseSparkCommitActionExecutor(HoodieEngineContext context,
@@ -103,16 +99,12 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
                                        WriteOperationType operationType,
                                        Option extraMetadata) {
     super(context, config, table, instantTime, operationType, extraMetadata);
-    initKeyGenIfNeeded(config.populateMetaFields());
-  }
-
-  private void initKeyGenIfNeeded(boolean populateMetaFields) {
-    if (!populateMetaFields) {
-      try {
-        keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps())));
-      } catch (IOException e) {
-        throw new HoodieIOException("Only BaseKeyGenerators are supported when meta columns are disabled ", e);
-      }
+    try {
+      keyGeneratorOpt = config.populateMetaFields()
+          ? Option.empty()
+          : Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(this.config.getProps()));
+    } catch (IOException e) {
+      throw new HoodieIOException("Only BaseKeyGenerators are supported when meta columns are disabled ", e);
     }
   }
 

@@ -64,6 +64,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.utils.TestConfigurations.catalog;
 import static org.apache.hudi.utils.TestConfigurations.sql;
 import static org.apache.hudi.utils.TestData.assertRowsEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -1190,6 +1191,47 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
         + "+I[2, [abc2, def2], [2, 2], {def2=3, abc2=1}, +I[[abc2, def2], +I[2, abc2]]], "
         + "+I[3, [abc3, def3], [3, 3], {def3=3, abc3=1}, +I[[abc3, def3], +I[3, abc3]]]]";
     assertRowsEquals(result, expected);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"insert", "upsert", "bulk_insert"})
+  void testBuiltinFunctionWithCatalog(String operation) {
+    TableEnvironment tableEnv = streamTableEnv;
+
+    String hudiCatalogDDL = catalog("hudi_" + operation)
+        .catalogPath(tempFile.getAbsolutePath())
+        .end();
+
+    tableEnv.executeSql(hudiCatalogDDL);
+    tableEnv.executeSql("use catalog " + ("hudi_" + operation));
+
+    String dbName = "hudi";
+    tableEnv.executeSql("create database " + dbName);
+    tableEnv.executeSql("use " + dbName);
+
+    String hoodieTableDDL = sql("t1")
+        .field("f_int int")
+        .field("f_date DATE")
+        .pkField("f_int")
+        .partitionField("f_int")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath() + "/" + dbName + "/" + operation)
+        .option(FlinkOptions.OPERATION, operation)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    String insertSql = "insert into t1 values (1, TO_DATE('2022-02-02')), (2, DATE '2022-02-02')";
+    execInsertSql(tableEnv, insertSql);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    final String expected = "["
+        + "+I[1, 2022-02-02], "
+        + "+I[2, 2022-02-02]]";
+    assertRowsEquals(result, expected);
+
+    List<Row> partitionResult = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1 where f_int = 1").execute().collect());
+    assertRowsEquals(partitionResult, "[+I[1, 2022-02-02]]");
   }
 
   // -------------------------------------------------------------------------
