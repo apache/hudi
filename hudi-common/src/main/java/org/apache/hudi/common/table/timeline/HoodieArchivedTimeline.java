@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
@@ -54,10 +55,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Spliterator;
+import java.util.Spliterators;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 /**
  * Represents the Archived Timeline for the Hoodie table. Instants for the last 12 hours (configurable) is in the
@@ -248,15 +251,14 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
             HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
             // TODO If we can store additional metadata in datablock, we can skip parsing records
             // (such as startTime, endTime of records in the block)
-            List<IndexedRecord> records = blk.getRecords();
-            // Filter blocks in desired time window
-            instantsInRange.addAll(
-                records.stream()
-                    .filter(r -> commitsFilter.apply((GenericRecord) r))
-                    .map(r -> readCommit((GenericRecord) r, loadInstantDetails))
-                    .filter(c -> filter == null || filter.isInRange(c))
-                    .collect(Collectors.toList())
-            );
+            try (ClosableIterator<IndexedRecord> itr = blk.getRecordItr()) {
+              StreamSupport.stream(Spliterators.spliteratorUnknownSize(itr, Spliterator.IMMUTABLE), true)
+                  // Filter blocks in desired time window
+                  .filter(r -> commitsFilter.apply((GenericRecord) r))
+                  .map(r -> readCommit((GenericRecord) r, loadInstantDetails))
+                  .filter(c -> filter == null || filter.isInRange(c))
+                  .forEach(instantsInRange::add);
+            }
           }
 
           if (filter != null) {

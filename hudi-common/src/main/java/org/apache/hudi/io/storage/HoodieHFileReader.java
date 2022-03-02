@@ -50,6 +50,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
@@ -123,6 +124,13 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     return schema;
   }
 
+  /**
+   * Sets up the writer schema explicitly.
+   */
+  public void withSchema(Schema schema) {
+    this.schema = schema;
+  }
+
   @Override
   public BloomFilter readBloomFilter() {
     Map<byte[], byte[]> fileInfo;
@@ -184,7 +192,14 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     return filteredRecords;
   }
 
-  public List<Pair<String, R>> readAllRecords(Schema writerSchema, Schema readerSchema) throws IOException {
+  /**
+   * Reads all the records with given schema.
+   *
+   * <p>NOTE: This should only be used for testing,
+   * the records are materialized eagerly into a list and returned,
+   * use {@code getRecordIterator} where possible.
+   */
+  private List<Pair<String, R>> readAllRecords(Schema writerSchema, Schema readerSchema) {
     final Option<Schema.Field> keyFieldSchema = Option.ofNullable(readerSchema.getField(KEY_FIELD_NAME));
     List<Pair<String, R>> recordList = new LinkedList<>();
     try {
@@ -203,17 +218,36 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     }
   }
 
-  public List<Pair<String, R>> readAllRecords() throws IOException {
-    Schema schema = new Schema.Parser().parse(new String(reader.loadFileInfo().get(KEY_SCHEMA.getBytes())));
+  /**
+   * Reads all the records with current schema.
+   *
+   * <p>NOTE: This should only be used for testing,
+   * the records are materialized eagerly into a list and returned,
+   * use {@code getRecordIterator} where possible.
+   */
+  public List<Pair<String, R>> readAllRecords() {
+    Schema schema = getSchema();
     return readAllRecords(schema, schema);
   }
 
+  /**
+   * Reads all the records with current schema and filtering keys.
+   *
+   * <p>NOTE: This should only be used for testing,
+   * the records are materialized eagerly into a list and returned,
+   * use {@code getRecordIterator} where possible.
+   */
   public List<Pair<String, R>> readRecords(List<String> keys) throws IOException {
-    reader.loadFileInfo();
-    Schema schema = new Schema.Parser().parse(new String(reader.loadFileInfo().get(KEY_SCHEMA.getBytes())));
-    return readRecords(keys, schema);
+    return readRecords(keys, getSchema());
   }
 
+  /**
+   * Reads all the records with given schema and filtering keys.
+   *
+   * <p>NOTE: This should only be used for testing,
+   * the records are materialized eagerly into a list and returned,
+   * use {@code getRecordIterator} where possible.
+   */
   public List<Pair<String, R>> readRecords(List<String> keys, Schema schema) throws IOException {
     this.schema = schema;
     reader.loadFileInfo();
@@ -225,6 +259,39 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
       }
     }
     return records;
+  }
+
+  public ClosableIterator<R> getRecordIterator(List<String> keys, Schema schema) throws IOException {
+    this.schema = schema;
+    reader.loadFileInfo();
+    Iterator<String> iterator = keys.iterator();
+    return new ClosableIterator<R>() {
+      private R next;
+      @Override
+      public void close() {
+      }
+
+      @Override
+      public boolean hasNext() {
+        try {
+          while (iterator.hasNext()) {
+            Option<R> value = getRecordByKey(iterator.next(), schema);
+            if (value.isPresent()) {
+              next = value.get();
+              return true;
+            }
+          }
+          return false;
+        } catch (IOException e) {
+          throw new HoodieIOException("unable to read next record from hfile ", e);
+        }
+      }
+
+      @Override
+      public R next() {
+        return next;
+      }
+    };
   }
 
   @Override
