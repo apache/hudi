@@ -393,7 +393,7 @@ public class HoodieAvroUtils {
     return newRecord;
   }
 
-  public static GenericRecord rewriteRecord(GenericRecord genericRecord, Schema newSchema, boolean copyOverMetaFields, GenericRecord oldRecord) {
+  public static GenericRecord rewriteRecord(GenericRecord genericRecord, Schema newSchema, boolean copyOverMetaFields, GenericRecord fallbackRecord) {
     GenericRecord newRecord = new GenericData.Record(newSchema);
     boolean isSpecificRecord = genericRecord instanceof SpecificRecordBase;
     for (Schema.Field f : newSchema.getFields()) {
@@ -406,9 +406,9 @@ public class HoodieAvroUtils {
         // if meta field exists in primary generic record, copy over.
         if (genericRecord.getSchema().getField(f.name()) != null) {
           copyOldValueOrSetDefault(genericRecord, newRecord, f);
-        } else if (oldRecord.getSchema().getField(f.name()) != null) {
+        } else if (fallbackRecord.getSchema().getField(f.name()) != null) {
           // if not, try to copy from old record.
-          copyOldValueOrSetDefault(oldRecord, newRecord, f);
+          copyOldValueOrSetDefault(fallbackRecord, newRecord, f);
         }
       }
     }
