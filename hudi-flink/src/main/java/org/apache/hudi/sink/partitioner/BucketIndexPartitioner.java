@@ -22,7 +22,13 @@ import org.apache.flink.api.common.functions.Partitioner;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 
-public class BucketIndexPartitioner implements Partitioner {
+/**
+ * Bucket index input partitioner.
+ * The fields to hash can be a subset of the primary key fields.
+ *
+ * @param <T> The type of obj to hash
+ */
+public class BucketIndexPartitioner<T extends HoodieKey> implements Partitioner<T> {
 
   private final int bucketNum;
   private final String indexKeyFields;
@@ -33,8 +39,8 @@ public class BucketIndexPartitioner implements Partitioner {
   }
 
   @Override
-  public int partition(Object key, int numPartitions) {
-    int curBucket = BucketIdentifier.getBucketId((HoodieKey) key, indexKeyFields, bucketNum);
+  public int partition(HoodieKey key, int numPartitions) {
+    int curBucket = BucketIdentifier.getBucketId(key, indexKeyFields, bucketNum);
     return BucketIdentifier.mod(curBucket, numPartitions);
   }
 }

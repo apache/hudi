@@ -41,6 +41,15 @@ import java.util.List;
 
 import static java.util.stream.Collectors.toList;
 
+/**
+ * A stream write function with bucket hash index.
+ *
+ * <p>The task holds a fresh new local index: {(partition + bucket number) &rarr fileId} mapping, this index
+ * is used for deciding whether the incoming records in an UPDATE or INSERT.
+ * The index is local because different partition paths have separate items in the index.
+ *
+ * @param <I> the input type
+ */
 public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
 
   private static final Logger LOG = LoggerFactory.getLogger(BucketStreamWriteFunction.class);
@@ -51,11 +60,11 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
 
   private int bucketNum;
 
-  protected transient HoodieFlinkTable table;
+  private transient HoodieFlinkTable<?> table;
 
   private String indexKeyFields;
 
-  private HashMap<String, String> bucketToFileIDMap;
+  private final HashMap<String, String> bucketToFileIDMap;
 
   /**
    * Constructs a BucketStreamWriteFunction.
@@ -64,7 +73,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
    */
   public BucketStreamWriteFunction(Configuration config) {
     super(config);
-    this.bucketToFileIDMap = new HashMap<String, String>();
+    this.bucketToFileIDMap = new HashMap<>();
   }
 
   @Override
@@ -127,7 +136,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
         bucketToLoad.add(i);
       }
     }
-    bucketToLoad.stream().forEach(bucket -> LOG.info(String.format("bucketToLoad contains %s", bucket)));
+    bucketToLoad.forEach(bucket -> LOG.info(String.format("bucketToLoad contains %s", bucket)));
 
     LOG.info(String.format("Loading Hoodie Table %s, with path %s", table.getMetaClient().getTableConfig().getTableName(),
         table.getMetaClient().getBasePath()));
@@ -146,7 +155,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
           LOG.info(String.format("Should load this partition bucket %s with fileID %s", partitionBucketId, fileID));
           if (bucketToFileIDMap.containsKey(partitionBucketId)) {
             throw new RuntimeException(String.format("Duplicate fileID %s from partitionBucket %s found "
-              + "during the fileGroupPerPartitionedBucketState initialization.", fileID, partitionBucketId));
+              + "during the BucketStreamWriteFunction index bootstrap.", fileID, partitionBucketId));
           } else {
             LOG.info(String.format("Adding fileID %s to the partition bucket %s.", fileID, partitionBucketId));
             bucketToFileIDMap.put(partitionBucketId, fileID);
