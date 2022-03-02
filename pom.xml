@@ -116,10 +116,11 @@
     <prometheus.version>0.8.0</prometheus.version>
     <http.version>4.4.1</http.version>
     <spark.version>${spark2.version}</spark.version>
-    <sparkbundle.version></sparkbundle.version>
     <flink.version>1.14.3</flink.version>
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.2.1</spark3.version>
+    <sparkbundle.version></sparkbundle.version>
+    <spark3bundle.version>3.2</spark3bundle.version>
     <hudi.spark.module>hudi-spark2</hudi.spark.module>
     <hudi.spark.common.module>hudi-spark2-common</hudi.spark.common.module>
     <avro.version>1.8.2</avro.version>
@@ -1586,7 +1587,7 @@
       <id>spark3</id>
       <properties>
         <spark.version>${spark3.version}</spark.version>
-        <sparkbundle.version>${spark3.version}</sparkbundle.version>
+        <sparkbundle.version>${spark3bundle.version}</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
         <hudi.spark.module>hudi-spark3</hudi.spark.module>
@@ -1615,7 +1616,8 @@
       <properties>
         <spark3.version>3.1.2</spark3.version>
         <spark.version>${spark3.version}</spark.version>
-        <sparkbundle.version>${spark3.version}</sparkbundle.version>
+        <spark3bundle.version>3.1</spark3bundle.version>
+        <sparkbundle.version>${spark3bundle.version}</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
         <hudi.spark.module>hudi-spark3.1.x</hudi.spark.module>
