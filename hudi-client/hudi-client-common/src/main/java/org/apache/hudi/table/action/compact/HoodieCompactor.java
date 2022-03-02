@@ -280,11 +280,8 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         .getLatestFileSlices(partitionPath)
         .filter(slice -> !fgIdsInPendingCompactionAndClustering.contains(slice.getFileGroupId()))
         .map(s -> {
-          // We can think that the latest data is in the latest delta log file, so we sort it from large
-          // to small according to the instance time, which can largely avoid rewriting the data in the
-          // compact process, and then optimize the compact time
           List<HoodieLogFile> logFiles =
-              s.getLogFiles().sorted(HoodieLogFile.getLogFileComparator().reversed()).collect(toList());
+              s.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(toList());
           totalLogFiles.add(logFiles.size());
           totalFileSlices.add(1L);
           // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO
