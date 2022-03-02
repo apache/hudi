@@ -98,9 +98,15 @@ public class HiveSyncTool extends AbstractSyncTool {
           this.roTableName = Option.empty();
           break;
         case MERGE_ON_READ:
-          this.snapshotTableName = cfg.tableName + SUFFIX_SNAPSHOT_TABLE;
-          this.roTableName = cfg.skipROSuffix ? Option.of(cfg.tableName) :
-              Option.of(cfg.tableName + SUFFIX_READ_OPTIMIZED_TABLE);
+          if (cfg.customMorTableName && !StringUtils.isNullOrEmpty(cfg.customRTTableName)
+                  && !StringUtils.isNullOrEmpty(cfg.customROTableName) && !cfg.customRTTableName.equals(cfg.customROTableName)) {
+            this.snapshotTableName = cfg.customRTTableName;
+            this.roTableName = Option.of(cfg.customROTableName);
+          } else {
+            this.snapshotTableName = cfg.tableName + SUFFIX_SNAPSHOT_TABLE;
+            this.roTableName = cfg.skipROSuffix ? Option.of(cfg.tableName) :
+                    Option.of(cfg.tableName + SUFFIX_READ_OPTIMIZED_TABLE);
+          }
           break;
         default:
           LOG.error("Unknown table type " + hoodieHiveClient.getTableType());

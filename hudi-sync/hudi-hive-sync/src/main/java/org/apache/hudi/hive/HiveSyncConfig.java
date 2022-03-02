@@ -129,6 +129,15 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--conditional-sync"}, description = "If true, only sync on conditions like schema change or partition change.")
   public Boolean isConditionalSync = false;
 
+  @Parameter(names = {"--custom-mor-name"}, description = "If true, define custom table name with merge on read table instead of _rt,_ro suffix ")
+  public Boolean customMorTableName = false;
+
+  @Parameter(names = {"--custom-ro-name"}, description = "custom ro table name for merge on read , only valid when enable_custom_table_name is true.")
+  public String customROTableName = "";
+
+  @Parameter(names = {"--custom-rt-name"}, description = "custom snapshot table name for merge on read, only valid when enable_custom_table_name is true.")
+  public String customRTTableName = "";
+
   @Parameter(names = {"--spark-version"}, description = "The spark version", required = false)
   public String sparkVersion;
 
@@ -158,6 +167,9 @@ public class HiveSyncConfig implements Serializable {
     newConfig.sparkSchemaLengthThreshold = cfg.sparkSchemaLengthThreshold;
     newConfig.withOperationField = cfg.withOperationField;
     newConfig.isConditionalSync = cfg.isConditionalSync;
+    newConfig.customMorTableName = cfg.customMorTableName;
+    newConfig.customRTTableName = cfg.customRTTableName;
+    newConfig.customROTableName = cfg.customROTableName;
     newConfig.sparkVersion = cfg.sparkVersion;
     return newConfig;
   }
@@ -193,6 +205,9 @@ public class HiveSyncConfig implements Serializable {
       + ", sparkSchemaLengthThreshold=" + sparkSchemaLengthThreshold
       + ", withOperationField=" + withOperationField
       + ", isConditionalSync=" + isConditionalSync
+      + ", customMorTableName=" + customMorTableName
+      + ", customROTableName=" + customROTableName
+      + ", customRTTableName=" + customRTTableName
       + '}';
   }
 

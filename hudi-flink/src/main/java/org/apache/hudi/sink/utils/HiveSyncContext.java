@@ -86,6 +86,9 @@ public class HiveSyncContext {
     hiveSyncConfig.skipROSuffix = conf.getBoolean(FlinkOptions.HIVE_SYNC_SKIP_RO_SUFFIX);
     hiveSyncConfig.assumeDatePartitioning = conf.getBoolean(FlinkOptions.HIVE_SYNC_ASSUME_DATE_PARTITION);
     hiveSyncConfig.withOperationField = conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED);
+    hiveSyncConfig.customMorTableName = conf.getBoolean(FlinkOptions.HIVE_SYNC_ENABLE_CUSTOM_TABLE_NAME);
+    hiveSyncConfig.customRTTableName = conf.getString(FlinkOptions.HIVE_SYNC_CUSTOM_RT_NAME);
+    hiveSyncConfig.customROTableName = conf.getString(FlinkOptions.HIVE_SYNC_CUSTOM_RO_NAME);
     return hiveSyncConfig;
   }
 }
