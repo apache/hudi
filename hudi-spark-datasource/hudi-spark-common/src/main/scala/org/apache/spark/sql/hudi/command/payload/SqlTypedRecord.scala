@@ -17,22 +17,19 @@
 
 package org.apache.spark.sql.hudi.command.payload
 
-import org.apache.avro.generic.IndexedRecord
 import org.apache.avro.Schema
-
-import org.apache.hudi.AvroConversionUtils
-
-import org.apache.spark.sql.avro.HoodieAvroDeserializer
+import org.apache.avro.generic.IndexedRecord
+import org.apache.hudi.{AvroConversionUtils, SparkAdapterSupport}
 import org.apache.spark.sql.catalyst.InternalRow
 
 /**
  * A sql typed record which will convert the avro field to sql typed value.
  */
-class SqlTypedRecord(val record: IndexedRecord) extends IndexedRecord {
+class SqlTypedRecord(val record: IndexedRecord) extends IndexedRecord with SparkAdapterSupport {
 
   private lazy val sqlType = AvroConversionUtils.convertAvroSchemaToStructType(getSchema)
-  private lazy val avroDeserializer = HoodieAvroDeserializer(record.getSchema, sqlType)
-  private lazy val sqlRow = avroDeserializer.deserializeData(record).asInstanceOf[InternalRow]
+  private lazy val avroDeserializer = sparkAdapter.createAvroDeserializer(record.getSchema, sqlType)
+  private lazy val sqlRow = avroDeserializer.deserialize(record).get.asInstanceOf[InternalRow]
 
   override def put(i: Int, v: Any): Unit = {
     record.put(i, v)

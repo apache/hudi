@@ -85,20 +85,15 @@ class DefaultSource extends RelationProvider
     val allPaths = path.map(p => Seq(p)).getOrElse(Seq()) ++ readPaths
 
     val fs = FSUtils.getFs(allPaths.head, sqlContext.sparkContext.hadoopConfiguration)
-    // Use the HoodieFileIndex only if the 'path' is not globbed.
-    // Or else we use the original way to read hoodie table.
-    val enableFileIndex = optParams.get(ENABLE_HOODIE_FILE_INDEX.key)
-      .map(_.toBoolean).getOrElse(ENABLE_HOODIE_FILE_INDEX.defaultValue)
-    val useHoodieFileIndex = enableFileIndex && path.isDefined && !path.get.contains("*") &&
-      !parameters.contains(DataSourceReadOptions.READ_PATHS.key)
-    val globPaths = if (useHoodieFileIndex) {
-      None
+
+    val globPaths = if (path.exists(_.contains("*")) || readPaths.nonEmpty) {
+      HoodieSparkUtils.checkAndGlobPathIfNecessary(allPaths, fs)
     } else {
-      Some(HoodieSparkUtils.checkAndGlobPathIfNecessary(allPaths, fs))
+      Seq.empty
     }
     // Get the table base path
-    val tablePath = if (globPaths.isDefined) {
-      DataSourceUtils.getTablePath(fs, globPaths.get.toArray)
+    val tablePath = if (globPaths.nonEmpty) {
+      DataSourceUtils.getTablePath(fs, globPaths.toArray)
     } else {
       DataSourceUtils.getTablePath(fs, Array(new Path(path.get)))
     }
@@ -108,6 +103,7 @@ class DefaultSource extends RelationProvider
     val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
     val tableType = metaClient.getTableType
     val queryType = parameters(QUERY_TYPE.key)
+    val userSchema = if (schema == null) Option.empty[StructType] else Some(schema)
 
     log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
     if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
@@ -117,20 +113,19 @@ class DefaultSource extends RelationProvider
         case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
              (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
              (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
-          getBaseFileOnlyView(useHoodieFileIndex, sqlContext, parameters, schema, tablePath,
-            readPaths, metaClient)
+          new BaseFileOnlyViewRelation(sqlContext, metaClient, parameters, userSchema, globPaths)
 
         case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-          new IncrementalRelation(sqlContext, parameters, schema, metaClient)
+          new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
 
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
-          new MergeOnReadSnapshotRelation(sqlContext, parameters, schema, globPaths, metaClient)
+          new MergeOnReadSnapshotRelation(sqlContext, parameters, userSchema, globPaths, metaClient)
 
         case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-          new MergeOnReadIncrementalRelation(sqlContext, parameters, schema, metaClient)
+          new MergeOnReadIncrementalRelation(sqlContext, parameters, userSchema, metaClient)
 
         case (_, _, true) =>
-          new HoodieBootstrapRelation(sqlContext, schema, globPaths, metaClient, parameters)
+          new HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
 
         case (_, _, _) =>
           throw new HoodieException(s"Invalid query type : $queryType for tableType: $tableType," +
@@ -181,65 +176,6 @@ class DefaultSource extends RelationProvider
   }
 
   override def shortName(): String = "hudi_v1"
-
-  private def getBaseFileOnlyView(useHoodieFileIndex: Boolean,
-                                  sqlContext: SQLContext,
-                                  optParams: Map[String, String],
-                                  schema: StructType,
-                                  tablePath: String,
-                                  extraReadPaths: Seq[String],
-                                  metaClient: HoodieTableMetaClient): BaseRelation = {
-    log.info("Loading Base File Only View  with options :" + optParams)
-    val (tableFileFormat, formatClassName) = metaClient.getTableConfig.getBaseFileFormat match {
-      case HoodieFileFormat.PARQUET => (new ParquetFileFormat, "parquet")
-      case HoodieFileFormat.ORC => (new OrcFileFormat, "orc")
-    }
-
-    if (useHoodieFileIndex) {
-      val fileIndex = HoodieFileIndex(sqlContext.sparkSession, metaClient,
-        if (schema == null) Option.empty[StructType] else Some(schema),
-        optParams, FileStatusCache.getOrCreate(sqlContext.sparkSession))
-
-      HadoopFsRelation(
-        fileIndex,
-        fileIndex.partitionSchema,
-        fileIndex.dataSchema,
-        bucketSpec = None,
-        fileFormat = tableFileFormat,
-        optParams)(sqlContext.sparkSession)
-    } else {
-      // this is just effectively RO view only, where `path` can contain a mix of
-      // non-hoodie/hoodie path files. set the path filter up
-      sqlContext.sparkContext.hadoopConfiguration.setClass(
-        "mapreduce.input.pathFilter.class",
-        classOf[HoodieROTablePathFilter],
-        classOf[org.apache.hadoop.fs.PathFilter])
-
-      val specifySchema = if (schema == null) {
-        // Load the schema from the commit meta data.
-        // Here we should specify the schema to the latest commit schema since
-        // the table schema evolution.
-        val tableSchemaResolver = new TableSchemaResolver(metaClient)
-        try {
-          Some(AvroConversionUtils.convertAvroSchemaToStructType(tableSchemaResolver.getTableAvroSchema))
-        } catch {
-          case _: Throwable =>
-            None // If there is no commit in the table, we can not get the schema
-                 // with tableSchemaResolver, return None here.
-        }
-      } else {
-        Some(schema)
-      }
-      // simply return as a regular relation
-      DataSource.apply(
-        sparkSession = sqlContext.sparkSession,
-        paths = extraReadPaths,
-        userSpecifiedSchema = specifySchema,
-        className = formatClassName,
-        options = optParams)
-        .resolveRelation()
-    }
-  }
 
   override def sourceSchema(sqlContext: SQLContext,
                             schema: Option[StructType],

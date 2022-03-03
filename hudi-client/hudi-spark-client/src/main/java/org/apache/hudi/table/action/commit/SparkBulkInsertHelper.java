@@ -41,12 +41,12 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
- * A spark implementation of {@link AbstractBulkInsertHelper}.
+ * A spark implementation of {@link BaseBulkInsertHelper}.
  *
  * @param <T>
  */
 @SuppressWarnings("checkstyle:LineLength")
-public class SparkBulkInsertHelper<T extends HoodieRecordPayload, R> extends AbstractBulkInsertHelper<T, JavaRDD<HoodieRecord<T>>,
+public class SparkBulkInsertHelper<T extends HoodieRecordPayload, R> extends BaseBulkInsertHelper<T, JavaRDD<HoodieRecord<T>>,
     JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, R> {
 
   private SparkBulkInsertHelper() {
@@ -67,7 +67,7 @@ public class SparkBulkInsertHelper<T extends HoodieRecordPayload, R> extends Abs
                                                               final HoodieWriteConfig config,
                                                               final BaseCommitActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, R> executor,
                                                               final boolean performDedupe,
-                                                              final Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner) {
+                                                              final Option<BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>>> userDefinedBulkInsertPartitioner) {
     HoodieWriteMetadata result = new HoodieWriteMetadata();
 
     //transition bulk_insert state to inflight
@@ -88,7 +88,7 @@ public class SparkBulkInsertHelper<T extends HoodieRecordPayload, R> extends Abs
                                          HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                          HoodieWriteConfig config,
                                          boolean performDedupe,
-                                         Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner,
+                                         Option<BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>>> userDefinedBulkInsertPartitioner,
                                          boolean useWriterSchema,
                                          int parallelism,
                                          WriteHandleFactory writeHandleFactory) {

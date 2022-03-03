@@ -45,7 +45,7 @@ import java.io.Serializable;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Create handle with InternalRow for datasource implemention of bulk insert.
+ * Create handle with InternalRow for datasource implementation of bulk insert.
  */
 public class HoodieRowCreateHandle implements Serializable {
 

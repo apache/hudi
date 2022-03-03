@@ -38,12 +38,12 @@ import java.util.stream.Stream;
  * Async clustering client for Spark datasource.
  */
 public class HoodieSparkClusteringClient<T extends HoodieRecordPayload> extends
-    AbstractClusteringClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
+    BaseClusterer<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieSparkClusteringClient.class);
 
   public HoodieSparkClusteringClient(
-      AbstractHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> clusteringClient) {
+      BaseHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> clusteringClient) {
     super(clusteringClient);
   }
 

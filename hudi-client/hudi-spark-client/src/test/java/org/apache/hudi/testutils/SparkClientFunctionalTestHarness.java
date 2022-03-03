@@ -214,12 +214,22 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   }
 
   protected Stream<HoodieBaseFile> insertRecordsToMORTable(HoodieTableMetaClient metaClient, List<HoodieRecord> records,
-                                                 SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {
+                                                           SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {
+    return insertRecordsToMORTable(metaClient, records, client, cfg, commitTime, false);
+  }
+
+  protected Stream<HoodieBaseFile> insertRecordsToMORTable(HoodieTableMetaClient metaClient, List<HoodieRecord> records,
+                                                 SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime,
+                                                           boolean doExplicitCommit) throws IOException {
     HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
 
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
-    List<WriteStatus> statuses = client.insert(writeRecords, commitTime).collect();
+    JavaRDD<WriteStatus> statusesRdd = client.insert(writeRecords, commitTime);
+    List<WriteStatus> statuses = statusesRdd.collect();
     assertNoWriteErrors(statuses);
+    if (doExplicitCommit) {
+      client.commit(commitTime, statusesRdd);
+    }
     assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(reloadedMetaClient.getFs(), new Path(reloadedMetaClient.getBasePath(), status.getStat().getPath())));
 
     HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), reloadedMetaClient);
@@ -243,6 +253,11 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   }
 
   protected void updateRecordsInMORTable(HoodieTableMetaClient metaClient, List<HoodieRecord> records, SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {
+    updateRecordsInMORTable(metaClient, records, client, cfg, commitTime, true);
+  }
+
+  protected void updateRecordsInMORTable(HoodieTableMetaClient metaClient, List<HoodieRecord> records, SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime,
+                                         boolean doExplicitCommit) throws IOException {
     HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
 
     Map<HoodieKey, HoodieRecord> recordsMap = new HashMap<>();
@@ -252,9 +267,13 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
       }
     }
 
-    List<WriteStatus> statuses = client.upsert(jsc().parallelize(records, 1), commitTime).collect();
+    JavaRDD<WriteStatus> statusesRdd = client.upsert(jsc().parallelize(records, 1), commitTime);
+    List<WriteStatus> statuses = statusesRdd.collect();
     // Verify there are no errors
     assertNoWriteErrors(statuses);
+    if (doExplicitCommit) {
+      client.commit(commitTime, statusesRdd);
+    }
     assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(reloadedMetaClient.getFs(), new Path(reloadedMetaClient.getBasePath(), status.getStat().getPath())));
 
     Option<HoodieInstant> deltaCommit = reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();

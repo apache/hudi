@@ -37,6 +37,7 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
@@ -60,6 +61,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -100,7 +102,7 @@ public class HoodieLogFileCommand implements CommandMarker {
       while (reader.hasNext()) {
         HoodieLogBlock n = reader.next();
         String instantTime;
-        int recordCount = 0;
+        AtomicInteger recordCount = new AtomicInteger(0);
         if (n instanceof HoodieCorruptBlock) {
           try {
             instantTime = n.getLogBlockHeader().get(HeaderMetadataType.INSTANT_TIME);
@@ -120,17 +122,19 @@ public class HoodieLogFileCommand implements CommandMarker {
             instantTime = "dummy_instant_time_" + dummyInstantTimeCount;
           }
           if (n instanceof HoodieDataBlock) {
-            recordCount = ((HoodieDataBlock) n).getRecords().size();
+            try (ClosableIterator<IndexedRecord> recordItr = ((HoodieDataBlock) n).getRecordItr()) {
+              recordItr.forEachRemaining(r -> recordCount.incrementAndGet());
+            }
           }
         }
         if (commitCountAndMetadata.containsKey(instantTime)) {
           commitCountAndMetadata.get(instantTime).add(
-              new Tuple3<>(n.getBlockType(), new Tuple2<>(n.getLogBlockHeader(), n.getLogBlockFooter()), recordCount));
+              new Tuple3<>(n.getBlockType(), new Tuple2<>(n.getLogBlockHeader(), n.getLogBlockFooter()), recordCount.get()));
         } else {
           List<Tuple3<HoodieLogBlockType, Tuple2<Map<HeaderMetadataType, String>, Map<HeaderMetadataType, String>>, Integer>> list =
               new ArrayList<>();
           list.add(
-              new Tuple3<>(n.getBlockType(), new Tuple2<>(n.getLogBlockHeader(), n.getLogBlockFooter()), recordCount));
+              new Tuple3<>(n.getBlockType(), new Tuple2<>(n.getLogBlockHeader(), n.getLogBlockFooter()), recordCount.get()));
           commitCountAndMetadata.put(instantTime, list);
         }
       }
@@ -232,11 +236,12 @@ public class HoodieLogFileCommand implements CommandMarker {
           HoodieLogBlock n = reader.next();
           if (n instanceof HoodieDataBlock) {
             HoodieDataBlock blk = (HoodieDataBlock) n;
-            List<IndexedRecord> records = blk.getRecords();
-            for (IndexedRecord record : records) {
-              if (allRecords.size() < limit) {
-                allRecords.add(record);
-              }
+            try (ClosableIterator<IndexedRecord> recordItr = blk.getRecordItr()) {
+              recordItr.forEachRemaining(record -> {
+                if (allRecords.size() < limit) {
+                  allRecords.add(record);
+                }
+              });
             }
           }
         }

@@ -91,9 +91,10 @@ class TestAlterTable extends TestHoodieSqlBase {
         )
 
         // change column's data type
-        spark.sql(s"alter table $newTableName change column id id bigint")
-        assertResult(StructType(Seq(StructField("id", LongType, nullable = true))))(
-        spark.sql(s"select id from $newTableName").schema)
+        checkExceptionContain(s"alter table $newTableName change column id id bigint") (
+          "ALTER TABLE CHANGE COLUMN is not supported for changing column 'id'" +
+            " with type 'IntegerType' to 'id' with type 'LongType'"
+        )
 
         // Insert data to the new table.
         spark.sql(s"insert into $newTableName values(2, 'a2', 12, 1000, 'e0')")

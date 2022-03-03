@@ -74,7 +74,7 @@ public class TimelineServerPerf implements Serializable {
   public TimelineServerPerf(Config cfg) throws IOException {
     this.cfg = cfg;
     useExternalTimelineServer = (cfg.serverHost != null);
-    TimelineService.Config timelineServiceConf = cfg.getTimelinServerConfig();
+    TimelineService.Config timelineServiceConf = cfg.getTimelineServerConfig();
     this.timelineServer = new TimelineService(
         new HoodieLocalEngineContext(FSUtils.prepareHadoopConf(new Configuration())),
         new Configuration(), timelineServiceConf, FileSystem.get(new Configuration()),
@@ -281,7 +281,7 @@ public class TimelineServerPerf implements Serializable {
         description = " Server Host (Set it for externally managed timeline service")
     public String serverHost = null;
 
-    @Parameter(names = {"--view-storage", "-st"}, description = "View Storage Type. Defaut - SPILLABLE_DISK")
+    @Parameter(names = {"--view-storage", "-st"}, description = "View Storage Type. Default - SPILLABLE_DISK")
     public FileSystemViewStorageType viewStorageType = FileSystemViewStorageType.SPILLABLE_DISK;
 
     @Parameter(names = {"--max-view-mem-per-table", "-mv"},
@@ -310,7 +310,7 @@ public class TimelineServerPerf implements Serializable {
     @Parameter(names = {"--help", "-h"})
     public Boolean help = false;
 
-    public TimelineService.Config getTimelinServerConfig() {
+    public TimelineService.Config getTimelineServerConfig() {
       TimelineService.Config c = new TimelineService.Config();
       c.viewStorageType = viewStorageType;
       c.baseStorePathForFileGroups = baseStorePathForFileGroups;

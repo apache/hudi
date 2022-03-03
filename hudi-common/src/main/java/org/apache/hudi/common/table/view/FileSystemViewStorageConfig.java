@@ -240,7 +240,7 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withRemoteTimelineClientTimeoutSecs(Long timelineClientTimeoutSecs) {
+    public Builder withRemoteTimelineClientTimeoutSecs(Integer timelineClientTimeoutSecs) {
       fileSystemViewStorageConfig.setValue(REMOTE_TIMEOUT_SECS, timelineClientTimeoutSecs.toString());
       return this;
     }

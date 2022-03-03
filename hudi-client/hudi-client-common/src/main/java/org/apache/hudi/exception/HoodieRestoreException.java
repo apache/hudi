@@ -23,4 +23,8 @@ public class HoodieRestoreException extends HoodieException {
   public HoodieRestoreException(String msg, Throwable e) {
     super(msg, e);
   }
+
+  public HoodieRestoreException(String msg) {
+    super(msg);
+  }
 }

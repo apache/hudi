@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
 
 import org.apache.spark.api.java.JavaRDD;
 
@@ -35,18 +34,11 @@ import java.util.stream.Collectors;
 /**
  * Allow ingestion commits during clustering job.
  */
-public class SparkAllowUpdateStrategy<T extends HoodieRecordPayload<T>> extends UpdateStrategy<T, JavaRDD<HoodieRecord<T>>> {
+public class SparkAllowUpdateStrategy<T extends HoodieRecordPayload<T>> extends BaseSparkUpdateStrategy<T> {
 
-  public SparkAllowUpdateStrategy(
-      HoodieSparkEngineContext engineContext, HashSet<HoodieFileGroupId> fileGroupsInPendingClustering) {
+  public SparkAllowUpdateStrategy(HoodieSparkEngineContext engineContext,
+                                  HashSet<HoodieFileGroupId> fileGroupsInPendingClustering) {
     super(engineContext, fileGroupsInPendingClustering);
-  }
-
-  private List<HoodieFileGroupId> getGroupIdsWithUpdate(JavaRDD<HoodieRecord<T>> inputRecords) {
-    List<HoodieFileGroupId> fileGroupIdsWithUpdates = inputRecords
-        .filter(record -> record.getCurrentLocation() != null)
-        .map(record -> new HoodieFileGroupId(record.getPartitionPath(), record.getCurrentLocation().getFileId())).distinct().collect();
-    return fileGroupIdsWithUpdates;
   }
 
   @Override

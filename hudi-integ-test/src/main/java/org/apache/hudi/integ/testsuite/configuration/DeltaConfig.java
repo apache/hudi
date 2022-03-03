@@ -95,6 +95,9 @@ public class DeltaConfig implements Serializable {
     private static String SCHEMA_VERSION = "schema_version";
     private static String NUM_ROLLBACKS = "num_rollbacks";
     private static String ENABLE_ROW_WRITING = "enable_row_writing";
+    private static String ENABLE_METADATA_VALIDATE = "enable_metadata_validate";
+    private static String VALIDATE_FULL_DATA = "validate_full_data";
+    private static String DELETE_INPUT_DATA_EXCEPT_LATEST = "delete_input_data_except_latest";
 
     // Spark SQL Create Table
     private static String TABLE_TYPE = "table_type";
@@ -149,6 +152,10 @@ public class DeltaConfig implements Serializable {
       return Integer.valueOf(configsMap.getOrDefault(RECORD_SIZE, 1024).toString());
     }
 
+    public boolean isEnableMetadataValidate() {
+      return Boolean.valueOf(configsMap.getOrDefault(ENABLE_METADATA_VALIDATE, false).toString());
+    }
+
     public int getNumInsertPartitions() {
       return Integer.valueOf(configsMap.getOrDefault(NUM_PARTITIONS_INSERT, 1).toString());
     }
@@ -201,8 +208,16 @@ public class DeltaConfig implements Serializable {
       return Boolean.valueOf(configsMap.getOrDefault(DELETE_INPUT_DATA, false).toString());
     }
 
+    public boolean isDeleteInputDataExceptLatest() {
+      return Boolean.valueOf(configsMap.getOrDefault(DELETE_INPUT_DATA_EXCEPT_LATEST, false).toString());
+    }
+
     public boolean isValidateHive() {
       return Boolean.valueOf(configsMap.getOrDefault(VALIDATE_HIVE, false).toString());
+    }
+
+    public boolean isValidateFullData() {
+      return Boolean.valueOf(configsMap.getOrDefault(VALIDATE_FULL_DATA, false).toString());
     }
 
     public int getIterationCountToExecute() {

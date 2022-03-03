@@ -20,7 +20,12 @@ package org.apache.hudi.common.config;
 
 import java.io.Serializable;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
@@ -30,6 +35,8 @@ import java.util.stream.Collectors;
  * Type-aware extension of {@link java.util.Properties}.
  */
 public class TypedProperties extends Properties implements Serializable {
+
+  private final HashSet<Object> keys = new LinkedHashSet<>();
 
   public TypedProperties() {
     super(null);
@@ -43,15 +50,60 @@ public class TypedProperties extends Properties implements Serializable {
     }
   }
 
-  private void checkKey(String property) {
-    if (!keyExists(property)) {
-      throw new IllegalArgumentException("Property " + property + " not found");
+  @Override
+  public Enumeration propertyNames() {
+    return Collections.enumeration(keys);
+  }
+
+  @Override
+  public synchronized Enumeration<Object> keys() {
+    return Collections.enumeration(keys);
+  }
+
+  @Override
+  public Set<String> stringPropertyNames() {
+    Set<String> set = new LinkedHashSet<>();
+    for (Object key : this.keys) {
+      if (key instanceof String) {
+        set.add((String) key);
+      }
+    }
+    return set;
+  }
+
+  public synchronized void putAll(Properties t) {
+    for (Map.Entry<?, ?> e : t.entrySet()) {
+      if (!containsKey(String.valueOf(e.getKey()))) {
+        keys.add(e.getKey());
+      }
+      super.put(e.getKey(), e.getValue());
     }
   }
 
-  private boolean keyExists(String property) {
-    Set<String> keys = super.stringPropertyNames();
-    return keys.contains(property);
+  @Override
+  public synchronized Object put(Object key, Object value) {
+    keys.remove(key);
+    keys.add(key);
+    return super.put(key, value);
+  }
+
+  public synchronized Object putIfAbsent(Object key, Object value) {
+    if (!containsKey(String.valueOf(key))) {
+      keys.add(key);
+    }
+    return super.putIfAbsent(key, value);
+  }
+
+  @Override
+  public Object remove(Object key) {
+    keys.remove(key);
+    return super.remove(key);
+  }
+
+  private void checkKey(String property) {
+    if (!containsKey(property)) {
+      throw new IllegalArgumentException("Property " + property + " not found");
+    }
   }
 
   public String getString(String property) {
@@ -60,11 +112,11 @@ public class TypedProperties extends Properties implements Serializable {
   }
 
   public String getString(String property, String defaultValue) {
-    return keyExists(property) ? getProperty(property) : defaultValue;
+    return containsKey(property) ? getProperty(property) : defaultValue;
   }
 
   public List<String> getStringList(String property, String delimiter, List<String> defaultVal) {
-    if (!keyExists(property)) {
+    if (!containsKey(property)) {
       return defaultVal;
     }
     return Arrays.stream(getProperty(property).split(delimiter)).map(String::trim).collect(Collectors.toList());
@@ -76,7 +128,7 @@ public class TypedProperties extends Properties implements Serializable {
   }
 
   public int getInteger(String property, int defaultValue) {
-    return keyExists(property) ? Integer.parseInt(getProperty(property)) : defaultValue;
+    return containsKey(property) ? Integer.parseInt(getProperty(property)) : defaultValue;
   }
 
   public long getLong(String property) {
@@ -85,7 +137,7 @@ public class TypedProperties extends Properties implements Serializable {
   }
 
   public long getLong(String property, long defaultValue) {
-    return keyExists(property) ? Long.parseLong(getProperty(property)) : defaultValue;
+    return containsKey(property) ? Long.parseLong(getProperty(property)) : defaultValue;
   }
 
   public boolean getBoolean(String property) {
@@ -94,7 +146,7 @@ public class TypedProperties extends Properties implements Serializable {
   }
 
   public boolean getBoolean(String property, boolean defaultValue) {
-    return keyExists(property) ? Boolean.parseBoolean(getProperty(property)) : defaultValue;
+    return containsKey(property) ? Boolean.parseBoolean(getProperty(property)) : defaultValue;
   }
 
   public double getDouble(String property) {
@@ -103,6 +155,6 @@ public class TypedProperties extends Properties implements Serializable {
   }
 
   public double getDouble(String property, double defaultValue) {
-    return keyExists(property) ? Double.parseDouble(getProperty(property)) : defaultValue;
+    return containsKey(property) ? Double.parseDouble(getProperty(property)) : defaultValue;
   }
 }

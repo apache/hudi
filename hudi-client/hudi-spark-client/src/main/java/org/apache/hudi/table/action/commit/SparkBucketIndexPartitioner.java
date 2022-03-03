@@ -74,7 +74,7 @@ public class SparkBucketIndexPartitioner<T extends HoodieRecordPayload<T>> exten
           " Bucket index partitioner should only be used by BucketIndex other than "
               + table.getIndex().getClass().getSimpleName());
     }
-    this.numBuckets = ((HoodieBucketIndex<T>) table.getIndex()).getNumBuckets();
+    this.numBuckets = ((HoodieBucketIndex) table.getIndex()).getNumBuckets();
     this.indexKeyField = config.getBucketIndexHashField();
     this.totalPartitionPaths = profile.getPartitionPaths().size();
     partitionPaths = new ArrayList<>(profile.getPartitionPaths());
@@ -90,7 +90,7 @@ public class SparkBucketIndexPartitioner<T extends HoodieRecordPayload<T>> exten
   private void assignUpdates(WorkloadProfile profile) {
     updatePartitionPathFileIds = new HashMap<>();
     // each update location gets a partition
-    Set<Entry<String, WorkloadStat>> partitionStatEntries = profile.getPartitionPathStatMap()
+    Set<Entry<String, WorkloadStat>> partitionStatEntries = profile.getInputPartitionPathStatMap()
         .entrySet();
     for (Entry<String, WorkloadStat> partitionStat : partitionStatEntries) {
       if (!updatePartitionPathFileIds.containsKey(partitionStat.getKey())) {

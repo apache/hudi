@@ -30,7 +30,7 @@ package org.apache.hudi.common.model;
  * </ol>
  */
 public enum HoodieTableQueryType {
-  QUERY_TYPE_SNAPSHOT,
-  QUERY_TYPE_INCREMENTAL,
-  QUERY_TYPE_READ_OPTIMIZED
+  SNAPSHOT,
+  INCREMENTAL,
+  READ_OPTIMIZED
 }

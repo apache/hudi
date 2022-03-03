@@ -180,7 +180,14 @@ public class WriteProfile {
     if (smallFilesMap.containsKey(partitionPath)) {
       return smallFilesMap.get(partitionPath);
     }
-    List<SmallFile> smallFiles = smallFilesProfile(partitionPath);
+
+    List<SmallFile> smallFiles = new ArrayList<>();
+    if (config.getParquetSmallFileLimit() <= 0) {
+      this.smallFilesMap.put(partitionPath, smallFiles);
+      return smallFiles;
+    }
+
+    smallFiles = smallFilesProfile(partitionPath);
     this.smallFilesMap.put(partitionPath, smallFiles);
     return smallFiles;
   }

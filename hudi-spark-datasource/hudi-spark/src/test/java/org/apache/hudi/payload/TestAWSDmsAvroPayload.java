@@ -25,7 +25,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -98,7 +97,7 @@ public class TestAWSDmsAvroPayload {
 
     try {
       Option<IndexedRecord> outputPayload = payload.combineAndGetUpdateValue(oldRecord, avroSchema);
-      // expect nothing to be comitted to table
+      // expect nothing to be committed to table
       assertFalse(outputPayload.isPresent());
     } catch (Exception e) {
       fail("Unexpected exception");
@@ -123,7 +122,7 @@ public class TestAWSDmsAvroPayload {
     try {
       OverwriteWithLatestAvroPayload output = payload.preCombine(insertPayload);
       Option<IndexedRecord> outputPayload = output.getInsertValue(avroSchema);
-      // expect nothing to be comitted to table
+      // expect nothing to be committed to table
       assertFalse(outputPayload.isPresent());
     } catch (Exception e) {
       fail("Unexpected exception");

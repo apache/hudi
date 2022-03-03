@@ -17,8 +17,30 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.exception.HoodieException
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.connector.catalog.{Table, TableProvider}
+import org.apache.spark.sql.connector.expressions.Transform
+import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
 import org.apache.spark.sql.sources.DataSourceRegister
+import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
-class Spark3DefaultSource extends DefaultSource with DataSourceRegister {
+class Spark3DefaultSource extends DefaultSource with DataSourceRegister with TableProvider {
+
   override def shortName(): String = "hudi"
+
+  def inferSchema: StructType = new StructType()
+
+  override def inferSchema(options: CaseInsensitiveStringMap): StructType = inferSchema
+
+  override def getTable(schema: StructType,
+                        partitioning: Array[Transform],
+                        properties: java.util.Map[String, String]): Table = {
+    val options = new CaseInsensitiveStringMap(properties)
+    val path = options.get("path")
+    if (path == null) throw new HoodieException("'path' cannot be null, missing 'path' from table properties")
+
+    HoodieInternalV2Table(SparkSession.active, path)
+  }
 }

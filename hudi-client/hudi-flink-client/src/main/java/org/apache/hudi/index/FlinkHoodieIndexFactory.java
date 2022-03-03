@@ -46,11 +46,11 @@ public final class FlinkHoodieIndexFactory {
     // TODO more indexes to be added
     switch (config.getIndexType()) {
       case INMEMORY:
-        return new FlinkInMemoryStateIndex<>(context, config);
+        return new FlinkInMemoryStateIndex(context, config);
       case BLOOM:
-        return new HoodieBloomIndex<>(config, ListBasedHoodieBloomIndexHelper.getInstance());
+        return new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
       case SIMPLE:
-        return new HoodieSimpleIndex<>(config, Option.empty());
+        return new HoodieSimpleIndex(config, Option.empty());
       default:
         throw new HoodieIndexException("Unsupported index type " + config.getIndexType());
     }

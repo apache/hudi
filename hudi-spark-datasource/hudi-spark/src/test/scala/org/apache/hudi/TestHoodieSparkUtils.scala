@@ -18,11 +18,13 @@
 
 package org.apache.hudi
 
+import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.testutils.DataSourceTestUtils
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{StructType, TimestampType}
 import org.apache.spark.sql.{Row, SparkSession}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -185,7 +187,7 @@ class TestHoodieSparkUtils {
     val genRecRDD3 = HoodieSparkUtils.createRdd(df1, "test_struct_name", "test_namespace", true,
       org.apache.hudi.common.util.Option.of(schema2))
     assert(genRecRDD3.collect()(0).getSchema.equals(schema2))
-    genRecRDD3.foreach(entry => assertNull(entry.get("nonNullableInnerStruct2")))
+    genRecRDD3.foreach(entry => assertNull(entry.get("nullableInnerStruct2")))
 
     val innerStruct3 = new StructType().add("innerKey","string",false).add("innerValue", "long", true)
       .add("new_nested_col","string",true)
@@ -226,10 +228,34 @@ class TestHoodieSparkUtils {
       fail("createRdd should fail, because records don't have a column which is not nullable in the passed in schema")
     } catch {
       case e: Exception =>
-        e.getCause.asInstanceOf[NullPointerException]
-        assertTrue(e.getMessage.contains("null of string in field new_nested_col of"))
+        val cause = e.getCause
+        assertTrue(cause.isInstanceOf[SchemaCompatibilityException])
+        assertTrue(e.getMessage.contains("Unable to validate the rewritten record {\"innerKey\": \"innerKey1_2\", \"innerValue\": 2} against schema"))
     }
     spark.stop()
+  }
+
+  @Test
+  def testGetRequiredSchema(): Unit = {
+    val avroSchemaString = "{\"type\":\"record\",\"name\":\"record\"," +
+    "\"fields\":[{\"name\":\"_hoodie_commit_time\",\"type\":[\"null\",\"string\"],\"doc\":\"\",\"default\":null}," +
+    "{\"name\":\"_hoodie_commit_seqno\",\"type\":[\"null\",\"string\"],\"doc\":\"\",\"default\":null}," +
+    "{\"name\":\"_hoodie_record_key\",\"type\":[\"null\",\"string\"],\"doc\":\"\",\"default\":null}," +
+    "{\"name\":\"_hoodie_partition_path\",\"type\":[\"null\",\"string\"],\"doc\":\"\",\"default\":null}," +
+    "{\"name\":\"_hoodie_file_name\",\"type\":[\"null\",\"string\"],\"doc\":\"\",\"default\":null}," +
+    "{\"name\":\"uuid\",\"type\":\"string\"},{\"name\":\"name\",\"type\":[\"null\",\"string\"],\"default\":null}," +
+    "{\"name\":\"age\",\"type\":[\"null\",\"int\"],\"default\":null}," +
+    "{\"name\":\"ts\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}],\"default\":null}," +
+    "{\"name\":\"partition\",\"type\":[\"null\",\"string\"],\"default\":null}]}"
+
+    val tableAvroSchema = new Schema.Parser().parse(avroSchemaString)
+
+    val (requiredAvroSchema, requiredStructSchema) =
+      HoodieSparkUtils.getRequiredSchema(tableAvroSchema, Array("ts"))
+
+    assertEquals("timestamp-millis",
+      requiredAvroSchema.getField("ts").schema().getTypes.get(1).getLogicalType.getName)
+    assertEquals(TimestampType, requiredStructSchema.fields(0).dataType)
   }
 
   def convertRowListToSeq(inputList: java.util.List[Row]): Seq[Row] =

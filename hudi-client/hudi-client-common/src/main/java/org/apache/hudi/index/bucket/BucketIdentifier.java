@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -39,7 +40,7 @@ public class BucketIdentifier {
   public static int getBucketId(HoodieKey hoodieKey, String indexKeyFields, int numBuckets) {
     List<String> hashKeyFields;
     if (!hoodieKey.getRecordKey().contains(":")) {
-      hashKeyFields = Arrays.asList(hoodieKey.getRecordKey());
+      hashKeyFields = Collections.singletonList(hoodieKey.getRecordKey());
     } else {
       Map<String, String> recordKeyPairs = Arrays.stream(hoodieKey.getRecordKey().split(","))
           .map(p -> p.split(":"))
@@ -56,6 +57,10 @@ public class BucketIdentifier {
     return hashKeyFields.hashCode() % numBuckets;
   }
 
+  public static String partitionBucketIdStr(String partition, int bucketId) {
+    return String.format("%s_%s", partition, bucketIdStr(bucketId));
+  }
+
   public static int bucketIdFromFileId(String fileId) {
     return Integer.parseInt(fileId.substring(0, 8));
   }
@@ -64,11 +69,19 @@ public class BucketIdentifier {
     return String.format("%08d", n);
   }
 
+  public static String newBucketFileIdPrefix(int bucketId) {
+    return newBucketFileIdPrefix(bucketIdStr(bucketId));
+  }
+
   public static String newBucketFileIdPrefix(String bucketId) {
     return FSUtils.createNewFileIdPfx().replaceFirst(".{8}", bucketId);
   }
 
   public static boolean isBucketFileName(String name) {
     return BUCKET_NAME.matcher(name).matches();
+  }
+
+  public static int mod(int x, int y) {
+    return x % y;
   }
 }
