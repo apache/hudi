@@ -241,6 +241,10 @@ public class TestDataSourceUtils {
       HoodieWriteConfig hoodieConfig = DataSourceUtils
               .createHoodieConfig(avroSchemaString, config.getBasePath(), "test", params);
       assertEquals(pair.right, hoodieConfig.isAsyncClusteringEnabled());
+
+      TypedProperties prop = new TypedProperties();
+      prop.putAll(params);
+      assertEquals(pair.right, HoodieClusteringConfig.from(prop).isAsyncClusteringEnabled());
     });
   }
 
