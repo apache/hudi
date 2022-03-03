@@ -127,7 +127,7 @@ abstract class BaseProcedure extends Procedure {
         case BinaryType => value.getBytes(Charset.forName("utf-8"))
         case BooleanType => value.toBoolean
         case DoubleType => value.toDouble
-        case _: DecimalType => Decimal(BigDecimal(value))
+        case d: DecimalType => Decimal.apply(BigDecimal(value), d.precision, d.scale)
         case FloatType => value.toFloat
         case ByteType => value.toByte
         case IntegerType => value.toInt
