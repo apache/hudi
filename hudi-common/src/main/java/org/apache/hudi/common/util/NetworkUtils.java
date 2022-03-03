@@ -23,6 +23,10 @@ import org.apache.hudi.exception.HoodieException;
 import java.io.IOException;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.InterfaceAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
+import java.util.Enumeration;
 
 /**
  * A utility class for network.
@@ -30,6 +34,21 @@ import java.net.InetAddress;
 public class NetworkUtils {
 
   public static synchronized String getHostname() {
+    try {
+      Enumeration<NetworkInterface> networkInterfaceEnumeration = NetworkInterface.getNetworkInterfaces();
+      while (networkInterfaceEnumeration.hasMoreElements()) {
+        for (InterfaceAddress interfaceAddress : networkInterfaceEnumeration.nextElement().getInterfaceAddresses()) {
+          InetAddress address = interfaceAddress.getAddress();
+          if (!address.isLinkLocalAddress() && !address.isLoopbackAddress() && !address.isAnyLocalAddress()) {
+            return address.getHostAddress();
+          }
+        }
+      }
+    } catch (SocketException e) {
+      throw new HoodieException("Unable to find server port", e);
+    }
+
+    // fallback
     try (DatagramSocket s = new DatagramSocket()) {
       // see https://stackoverflow.com/questions/9481865/getting-the-ip-address-of-the-current-machine-using-java
       // for details.
