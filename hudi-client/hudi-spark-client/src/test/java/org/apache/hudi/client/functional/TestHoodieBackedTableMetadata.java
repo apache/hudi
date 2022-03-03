@@ -40,6 +40,7 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieHFileReader;
@@ -247,7 +248,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     // Compaction should not be triggered yet. Let's verify no base file
     // and few log files available.
     List<FileSlice> fileSlices = table.getSliceView()
-        .getLatestFileSlices(MetadataPartitionType.FILES.partitionPath()).collect(Collectors.toList());
+        .getLatestFileSlices(MetadataPartitionType.FILES.getPartitionPath()).collect(Collectors.toList());
     if (fileSlices.isEmpty()) {
       throw new IllegalStateException("LogFile slices are not available!");
     }
@@ -292,14 +293,14 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
       while (logFileReader.hasNext()) {
         HoodieLogBlock logBlock = logFileReader.next();
         if (logBlock instanceof HoodieDataBlock) {
-          for (IndexedRecord indexRecord : ((HoodieDataBlock) logBlock).getRecords()) {
-            final GenericRecord record = (GenericRecord) indexRecord;
-            // Metadata table records should not have meta fields!
-            assertNull(record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
-            assertNull(record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
-
-            final String key = String.valueOf(record.get(HoodieMetadataPayload.KEY_FIELD_NAME));
-            assertFalse(key.isEmpty());
+          try (ClosableIterator<IndexedRecord> recordItr = ((HoodieDataBlock) logBlock).getRecordItr()) {
+            recordItr.forEachRemaining(indexRecord -> {
+              final GenericRecord record = (GenericRecord) indexRecord;
+              assertNull(record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+              assertNull(record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+              final String key = String.valueOf(record.get(HoodieMetadataPayload.KEY_FIELD_NAME));
+              assertFalse(key.isEmpty());
+            });
           }
         }
       }
@@ -322,7 +323,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
         .withBasePath(metadataMetaClient.getBasePath())
         .withLogFilePaths(logFilePaths)
         .withLatestInstantTime(latestCommitTimestamp)
-        .withPartition(MetadataPartitionType.FILES.partitionPath())
+        .withPartition(MetadataPartitionType.FILES.getPartitionPath())
         .withReaderSchema(schema)
         .withMaxMemorySizeInBytes(100000L)
         .withBufferSize(4096)
@@ -351,7 +352,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
   private void verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(HoodieTable table) throws IOException {
     table.getHoodieView().sync();
     List<FileSlice> fileSlices = table.getSliceView()
-        .getLatestFileSlices(MetadataPartitionType.FILES.partitionPath()).collect(Collectors.toList());
+        .getLatestFileSlices(MetadataPartitionType.FILES.getPartitionPath()).collect(Collectors.toList());
     if (!fileSlices.get(0).getBaseFile().isPresent()) {
       throw new IllegalStateException("Base file not available!");
     }

@@ -133,7 +133,6 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
         assertEquals(1, stat.getSuccessDeleteFiles().size());
         assertEquals(0, stat.getFailedDeleteFiles().size());
         assertEquals(0, stat.getCommandBlocksCount().size());
-        assertEquals(0, stat.getWrittenLogFileSizeMap().size());
       }
     }
   }
@@ -162,8 +161,6 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
         assertEquals(0, stat.getFailedDeleteFiles().size());
         assertEquals(1, stat.getCommandBlocksCount().size());
         stat.getCommandBlocksCount().forEach((fileStatus, len) -> assertTrue(fileStatus.getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())));
-        assertEquals(1, stat.getWrittenLogFileSizeMap().size());
-        stat.getWrittenLogFileSizeMap().forEach((fileStatus, len) -> assertTrue(fileStatus.getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())));
       }
     }
   }

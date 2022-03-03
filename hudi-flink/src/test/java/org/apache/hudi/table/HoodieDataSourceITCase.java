@@ -31,10 +31,12 @@ import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.execution.JobClient;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.TableResult;
 import org.apache.flink.table.api.TableSchema;
+import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
 import org.apache.flink.table.catalog.ObjectPath;
@@ -62,6 +64,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.utils.TestConfigurations.catalog;
 import static org.apache.hudi.utils.TestConfigurations.sql;
 import static org.apache.hudi.utils.TestData.assertRowsEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -86,8 +89,24 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     execConf.setString("restart-strategy", "fixed-delay");
     execConf.setString("restart-strategy.fixed-delay.attempts", "0");
 
+    Configuration conf = new Configuration();
+    // for batch upsert use cases: current suggestion is to disable these 2 options,
+    // from 1.14, flink runtime execution mode has switched from streaming
+    // to batch for batch execution mode(before that, both streaming and batch use streaming execution mode),
+    // current batch execution mode has these limitations:
+    //
+    // 1. the keyed stream default to always sort the inputs by key;
+    // 2. the batch state-backend requires the inputs sort by state key
+    //
+    // For our hudi batch pipeline upsert case, we rely on the consuming sequence for index records and data records,
+    // the index records must be loaded first before data records for BucketAssignFunction to keep upsert semantics correct,
+    // so we suggest disabling these 2 options to use streaming state-backend for batch execution mode
+    // to keep the strategy before 1.14.
+    conf.setBoolean("execution.sorted-inputs.enabled", false);
+    conf.setBoolean("execution.batch-state-backend.enabled", false);
+    StreamExecutionEnvironment execEnv = StreamExecutionEnvironment.getExecutionEnvironment(conf);
     settings = EnvironmentSettings.newInstance().inBatchMode().build();
-    batchTableEnv = TableEnvironmentImpl.create(settings);
+    batchTableEnv = StreamTableEnvironment.create(execEnv, settings);
     batchTableEnv.getConfig().getConfiguration()
         .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 1);
   }
@@ -861,7 +880,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
         .getContextClassLoader().getResource("debezium_json.data")).toString();
     String sourceDDL = ""
         + "CREATE TABLE debezium_source(\n"
-        + "  id INT NOT NULL,\n"
+        + "  id INT NOT NULL PRIMARY KEY NOT ENFORCED,\n"
         + "  ts BIGINT,\n"
         + "  name STRING,\n"
         + "  description STRING,\n"
@@ -1153,6 +1172,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     String hoodieTableDDL = sql("t1")
         .field("f_int int")
         .field("f_array array<varchar(10)>")
+        .field("int_array array<int>")
         .field("f_map map<varchar(20), int>")
         .field("f_row row(f_nested_array array<varchar(10)>, f_nested_row row(f_row_f0 int, f_row_f1 varchar(10)))")
         .pkField("f_int")
@@ -1167,10 +1187,51 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     List<Row> result = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
     final String expected = "["
-        + "+I[1, [abc1, def1], {abc1=1, def1=3}, +I[[abc1, def1], +I[1, abc1]]], "
-        + "+I[2, [abc2, def2], {def2=3, abc2=1}, +I[[abc2, def2], +I[2, abc2]]], "
-        + "+I[3, [abc3, def3], {def3=3, abc3=1}, +I[[abc3, def3], +I[3, abc3]]]]";
+        + "+I[1, [abc1, def1], [1, 1], {abc1=1, def1=3}, +I[[abc1, def1], +I[1, abc1]]], "
+        + "+I[2, [abc2, def2], [2, 2], {def2=3, abc2=1}, +I[[abc2, def2], +I[2, abc2]]], "
+        + "+I[3, [abc3, def3], [3, 3], {def3=3, abc3=1}, +I[[abc3, def3], +I[3, abc3]]]]";
     assertRowsEquals(result, expected);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"insert", "upsert", "bulk_insert"})
+  void testBuiltinFunctionWithCatalog(String operation) {
+    TableEnvironment tableEnv = streamTableEnv;
+
+    String hudiCatalogDDL = catalog("hudi_" + operation)
+        .catalogPath(tempFile.getAbsolutePath())
+        .end();
+
+    tableEnv.executeSql(hudiCatalogDDL);
+    tableEnv.executeSql("use catalog " + ("hudi_" + operation));
+
+    String dbName = "hudi";
+    tableEnv.executeSql("create database " + dbName);
+    tableEnv.executeSql("use " + dbName);
+
+    String hoodieTableDDL = sql("t1")
+        .field("f_int int")
+        .field("f_date DATE")
+        .pkField("f_int")
+        .partitionField("f_int")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath() + "/" + dbName + "/" + operation)
+        .option(FlinkOptions.OPERATION, operation)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    String insertSql = "insert into t1 values (1, TO_DATE('2022-02-02')), (2, DATE '2022-02-02')";
+    execInsertSql(tableEnv, insertSql);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    final String expected = "["
+        + "+I[1, 2022-02-02], "
+        + "+I[2, 2022-02-02]]";
+    assertRowsEquals(result, expected);
+
+    List<Row> partitionResult = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1 where f_int = 1").execute().collect());
+    assertRowsEquals(partitionResult, "[+I[1, 2022-02-02]]");
   }
 
   // -------------------------------------------------------------------------

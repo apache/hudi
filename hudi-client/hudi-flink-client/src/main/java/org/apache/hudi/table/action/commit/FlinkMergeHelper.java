@@ -45,7 +45,7 @@ import java.util.Iterator;
 
 import scala.collection.immutable.List;
 
-public class FlinkMergeHelper<T extends HoodieRecordPayload> extends AbstractMergeHelper<T, List<HoodieRecord<T>>,
+public class FlinkMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHelper<T, List<HoodieRecord<T>>,
     List<HoodieKey>, List<WriteStatus>> {
 
   private FlinkMergeHelper() {
@@ -91,7 +91,7 @@ public class FlinkMergeHelper<T extends HoodieRecordPayload> extends AbstractMer
 
       ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
       ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
-      wrapper = new BoundedInMemoryExecutor(table.getConfig().getWriteBufferLimitBytes(), new IteratorBasedQueueProducer<>(readerIterator),
+      wrapper = new BoundedInMemoryExecutor<>(table.getConfig().getWriteBufferLimitBytes(), new IteratorBasedQueueProducer<>(readerIterator),
           Option.of(new UpdateHandler(mergeHandle)), record -> {
         if (!externalSchemaTransformation) {
           return record;

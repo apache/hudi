@@ -245,10 +245,10 @@ public class TestStreamReadOperator {
     final List<String> partitionKeys = Collections.singletonList("partition");
 
     // This input format is used to opening the emitted split.
-    TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
+    TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
     final Schema tableAvroSchema;
     try {
-      tableAvroSchema = schemaUtil.getTableAvroSchema();
+      tableAvroSchema = schemaResolver.getTableAvroSchema();
     } catch (Exception e) {
       throw new HoodieException("Get table avro schema error", e);
     }

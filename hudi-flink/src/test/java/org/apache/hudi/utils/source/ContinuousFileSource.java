@@ -18,15 +18,15 @@
 
 package org.apache.hudi.utils.source;
 
+import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.formats.common.TimestampFormat;
 import org.apache.flink.formats.json.JsonRowDataDeserializationSchema;
-import org.apache.flink.runtime.state.CheckpointListener;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
-import org.apache.flink.table.api.TableSchema;
+import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.source.DataStreamScanProvider;
 import org.apache.flink.table.connector.source.DynamicTableSource;
@@ -59,12 +59,12 @@ import static org.apache.hudi.utils.factory.ContinuousFileSourceFactory.CHECKPOI
  */
 public class ContinuousFileSource implements ScanTableSource {
 
-  private final TableSchema tableSchema;
+  private final ResolvedSchema tableSchema;
   private final Path path;
   private final Configuration conf;
 
   public ContinuousFileSource(
-      TableSchema tableSchema,
+      ResolvedSchema tableSchema,
       Path path,
       Configuration conf) {
     this.tableSchema = tableSchema;
@@ -83,7 +83,7 @@ public class ContinuousFileSource implements ScanTableSource {
 
       @Override
       public DataStream<RowData> produceDataStream(StreamExecutionEnvironment execEnv) {
-        final RowType rowType = (RowType) tableSchema.toRowDataType().getLogicalType();
+        final RowType rowType = (RowType) tableSchema.toSourceRowDataType().getLogicalType();
         JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
             rowType,
             InternalTypeInfo.of(rowType),
@@ -178,7 +178,7 @@ public class ContinuousFileSource implements ScanTableSource {
     }
 
     @Override
-    public void notifyCheckpointComplete(long l) throws Exception {
+    public void notifyCheckpointComplete(long l) {
       this.currentCP.incrementAndGet();
     }
   }

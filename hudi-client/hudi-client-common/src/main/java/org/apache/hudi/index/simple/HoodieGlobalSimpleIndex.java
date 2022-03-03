@@ -24,6 +24,7 @@ import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -47,17 +48,15 @@ import static org.apache.hudi.index.HoodieIndexUtils.getLatestBaseFilesForAllPar
 /**
  * A global simple index which reads interested fields(record key and partition path) from base files and
  * joins with incoming records to find the tagged location.
- *
- * @param <T>
  */
-public class HoodieGlobalSimpleIndex<T extends HoodieRecordPayload<T>> extends HoodieSimpleIndex<T> {
+public class HoodieGlobalSimpleIndex extends HoodieSimpleIndex {
   public HoodieGlobalSimpleIndex(HoodieWriteConfig config, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, keyGeneratorOpt);
   }
 
   @Override
-  public HoodieData<HoodieRecord<T>> tagLocation(
-      HoodieData<HoodieRecord<T>> records, HoodieEngineContext context,
+  public <R> HoodieData<HoodieRecord<R>> tagLocation(
+      HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
       HoodieTable hoodieTable) {
     return tagLocationInternal(records, context, hoodieTable);
   }
@@ -71,11 +70,11 @@ public class HoodieGlobalSimpleIndex<T extends HoodieRecordPayload<T>> extends H
    * @return {@link HoodieData} of records with record locations set
    */
   @Override
-  protected HoodieData<HoodieRecord<T>> tagLocationInternal(
-      HoodieData<HoodieRecord<T>> inputRecords, HoodieEngineContext context,
+  protected <R> HoodieData<HoodieRecord<R>> tagLocationInternal(
+      HoodieData<HoodieRecord<R>> inputRecords, HoodieEngineContext context,
       HoodieTable hoodieTable) {
 
-    HoodiePairData<String, HoodieRecord<T>> keyedInputRecords =
+    HoodiePairData<String, HoodieRecord<R>> keyedInputRecords =
         inputRecords.mapToPair(entry -> new ImmutablePair<>(entry.getRecordKey(), entry));
     HoodiePairData<HoodieKey, HoodieRecordLocation> allRecordLocationsInTable =
         fetchAllRecordLocations(context, hoodieTable, config.getGlobalSimpleIndexParallelism());
@@ -114,8 +113,8 @@ public class HoodieGlobalSimpleIndex<T extends HoodieRecordPayload<T>> extends H
    * @param existingRecords existing records with {@link HoodieRecordLocation}s
    * @return {@link HoodieData} of {@link HoodieRecord}s with tagged {@link HoodieRecordLocation}s
    */
-  private HoodieData<HoodieRecord<T>> getTaggedRecords(
-      HoodiePairData<String, HoodieRecord<T>> incomingRecords,
+  private <R> HoodieData<HoodieRecord<R>> getTaggedRecords(
+      HoodiePairData<String, HoodieRecord<R>> incomingRecords,
       HoodiePairData<HoodieKey, HoodieRecordLocation> existingRecords) {
     HoodiePairData<String, Pair<String, HoodieRecordLocation>> existingRecordByRecordKey =
         existingRecords.mapToPair(
@@ -124,29 +123,29 @@ public class HoodieGlobalSimpleIndex<T extends HoodieRecordPayload<T>> extends H
 
     return incomingRecords.leftOuterJoin(existingRecordByRecordKey).values()
         .flatMap(entry -> {
-          HoodieRecord<T> inputRecord = entry.getLeft();
+          HoodieRecord<R> inputRecord = entry.getLeft();
           Option<Pair<String, HoodieRecordLocation>> partitionPathLocationPair = Option.ofNullable(entry.getRight().orElse(null));
-          List<HoodieRecord<T>> taggedRecords;
+          List<HoodieRecord<R>> taggedRecords;
 
           if (partitionPathLocationPair.isPresent()) {
             String partitionPath = partitionPathLocationPair.get().getKey();
             HoodieRecordLocation location = partitionPathLocationPair.get().getRight();
             if (config.getGlobalSimpleIndexUpdatePartitionPath() && !(inputRecord.getPartitionPath().equals(partitionPath))) {
               // Create an empty record to delete the record in the old partition
-              HoodieRecord<T> deleteRecord = new HoodieRecord(new HoodieKey(inputRecord.getRecordKey(), partitionPath), new EmptyHoodieRecordPayload());
+              HoodieRecord<R> deleteRecord = new HoodieAvroRecord(new HoodieKey(inputRecord.getRecordKey(), partitionPath), new EmptyHoodieRecordPayload());
               deleteRecord.setCurrentLocation(location);
               deleteRecord.seal();
               // Tag the incoming record for inserting to the new partition
-              HoodieRecord<T> insertRecord = (HoodieRecord<T>) HoodieIndexUtils.getTaggedRecord(inputRecord, Option.empty());
+              HoodieRecord<R> insertRecord = (HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(inputRecord, Option.empty());
               taggedRecords = Arrays.asList(deleteRecord, insertRecord);
             } else {
               // Ignore the incoming record's partition, regardless of whether it differs from its old partition or not.
               // When it differs, the record will still be updated at its old partition.
-              HoodieRecord<T> newRecord = new HoodieRecord<>(new HoodieKey(inputRecord.getRecordKey(), partitionPath), inputRecord.getData());
-              taggedRecords = Collections.singletonList((HoodieRecord<T>) HoodieIndexUtils.getTaggedRecord(newRecord, Option.ofNullable(location)));
+              HoodieRecord<R> newRecord = new HoodieAvroRecord(new HoodieKey(inputRecord.getRecordKey(), partitionPath), (HoodieRecordPayload) inputRecord.getData());
+              taggedRecords = Collections.singletonList((HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(newRecord, Option.ofNullable(location)));
             }
           } else {
-            taggedRecords = Collections.singletonList((HoodieRecord<T>) HoodieIndexUtils.getTaggedRecord(inputRecord, Option.empty()));
+            taggedRecords = Collections.singletonList((HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(inputRecord, Option.empty()));
           }
           return taggedRecords.iterator();
         });

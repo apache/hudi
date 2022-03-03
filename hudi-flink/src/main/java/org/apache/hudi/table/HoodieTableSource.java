@@ -452,8 +452,8 @@ public class HoodieTableSource implements
   @VisibleForTesting
   public Schema getTableAvroSchema() {
     try {
-      TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient, conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED));
-      return schemaUtil.getTableAvroSchema();
+      TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
+      return schemaResolver.getTableAvroSchema();
     } catch (Throwable e) {
       // table exists but has no written data
       LOG.warn("Get table avro schema error, use schema from the DDL instead", e);

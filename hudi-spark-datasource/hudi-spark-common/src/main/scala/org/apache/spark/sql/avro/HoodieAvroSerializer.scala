@@ -20,9 +20,10 @@ package org.apache.spark.sql.avro
 import org.apache.avro.Schema
 import org.apache.spark.sql.types.DataType
 
-/**
- * As AvroSerializer cannot be access out of the spark.sql.avro package since spark 3.1, we define
- * this class to be accessed by other class.
- */
-case class HoodieAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean)
-  extends AvroSerializer(rootCatalystType, rootAvroType, nullable)
+class HoodieAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean)
+  extends HoodieAvroSerializerTrait {
+
+  val avroSerializer = new AvroSerializer(rootCatalystType, rootAvroType, nullable)
+
+  override def serialize(catalystData: Any): Any = avroSerializer.serialize(catalystData)
+}

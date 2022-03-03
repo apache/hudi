@@ -19,15 +19,11 @@
 package org.apache.hudi.hadoop.utils;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieIOException;
-
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.JobContext;
+import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -146,39 +142,6 @@ public class HoodieHiveUtils {
       result = new ArrayList<>();
     }
     return result;
-  }
-
-  /**
-   * Depending on the configs hoodie.%s.consume.pending.commits and hoodie.%s.consume.commit of job
-   *
-   * (hoodie.<tableName>.consume.pending.commits, hoodie.<tableName>.consume.commit) ->
-   *      (true, validCommit)       -> returns activeTimeline filtered until validCommit
-   *      (true, InValidCommit)     -> Raises HoodieIOException
-   *      (true, notSet)            -> Raises HoodieIOException
-   *      (false, validCommit)      -> returns completedTimeline filtered until validCommit
-   *      (false, InValidCommit)    -> Raises HoodieIOException
-   *      (false or notSet, notSet) -> returns completedTimeline unfiltered
-   *
-   *      validCommit is one which exists in the timeline being checked and vice versa
-   */
-  public static HoodieTimeline getTableTimeline(final String tableName, final JobConf job, final HoodieTableMetaClient metaClient) {
-    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline();
-
-    boolean includePendingCommits = shouldIncludePendingCommits(job, tableName);
-    Option<String> maxCommit = getMaxCommit(job, tableName);
-
-    HoodieTimeline finalizedTimeline = includePendingCommits ? timeline : timeline.filterCompletedInstants();
-
-    return !maxCommit.isPresent() ? finalizedTimeline : filterIfInstantExists(tableName, finalizedTimeline, maxCommit.get());
-
-  }
-
-  private static HoodieTimeline filterIfInstantExists(String tableName, HoodieTimeline timeline, String maxCommit) {
-    if (maxCommit == null || !timeline.containsInstant(maxCommit)) {
-      LOG.info("Timestamp " + maxCommit + " doesn't exist in the commits timeline:" + timeline + " table: " + tableName);
-      throw new HoodieIOException("Valid timestamp is required for " + HOODIE_CONSUME_COMMIT + " in snapshot mode");
-    }
-    return timeline.findInstantsBeforeOrEquals(maxCommit);
   }
 
   public static boolean isIncrementalUseDatabase(Configuration conf) {

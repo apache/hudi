@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.bootstrap;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.bootstrap.BootstrapRecordPayload;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.AvroOrcUtils;
@@ -28,7 +29,6 @@ import org.apache.hudi.common.util.OrcReaderIterator;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.execution.SparkBoundedInMemoryExecutor;
 import org.apache.hudi.io.HoodieBootstrapHandle;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
 import org.apache.hudi.table.HoodieTable;
@@ -67,15 +67,15 @@ class OrcBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
     Reader orcReader = OrcFile.createReader(sourceFilePath, OrcFile.readerOptions(table.getHadoopConf()));
     TypeDescription orcSchema = orcReader.getSchema();
     try (RecordReader reader = orcReader.rows(new Reader.Options(table.getHadoopConf()).schema(orcSchema))) {
-      wrapper = new SparkBoundedInMemoryExecutor<GenericRecord, HoodieRecord, Void>(config,
+      wrapper = new BoundedInMemoryExecutor<GenericRecord, HoodieRecord, Void>(config.getWriteBufferLimitBytes(),
           new OrcReaderIterator(reader, avroSchema, orcSchema), new BootstrapRecordConsumer(bootstrapHandle), inp -> {
         String recKey = keyGenerator.getKey(inp).getRecordKey();
         GenericRecord gr = new GenericData.Record(HoodieAvroUtils.RECORD_KEY_SCHEMA);
         gr.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recKey);
         BootstrapRecordPayload payload = new BootstrapRecordPayload(gr);
-        HoodieRecord rec = new HoodieRecord(new HoodieKey(recKey, partitionPath), payload);
+        HoodieRecord rec = new HoodieAvroRecord(new HoodieKey(recKey, partitionPath), payload);
         return rec;
-      });
+      }, table.getPreExecuteRunnable());
       wrapper.execute();
     } catch (Exception e) {
       throw new HoodieException(e);

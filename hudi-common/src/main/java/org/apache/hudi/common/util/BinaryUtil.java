@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util;
 
 import java.nio.charset.Charset;
+import java.util.zip.CRC32;
 
 public class BinaryUtil {
 
@@ -186,6 +187,15 @@ public class BinaryUtil {
       temp = temp | (((long) paddedBytes[i] & 0xff) << (7 - i) * 8);
     }
     return temp;
+  }
+
+  /**
+   * Generate a checksum for a given set of bytes.
+   */
+  public static long generateChecksum(byte[] data) {
+    CRC32 crc = new CRC32();
+    crc.update(data);
+    return crc.getValue();
   }
 }
 

@@ -23,7 +23,7 @@ import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.Option
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.util.ConfigUtils
 import org.apache.hudi.hive.{HiveStylePartitionValueExtractor, HiveSyncTool, MultiPartKeysValueExtractor, NonPartitionedExtractor, SlashEncodedDayPartitionValueExtractor}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
@@ -75,6 +75,7 @@ object DataSourceReadOptions {
   val ENABLE_HOODIE_FILE_INDEX: ConfigProperty[Boolean] = ConfigProperty
     .key("hoodie.file.index.enable")
     .defaultValue(true)
+    .deprecatedAfter("0.11.0")
     .withDocumentation("Enables use of the spark file index implementation for Hudi, "
       + "that speeds up listing of large tables.")
 
@@ -122,6 +123,10 @@ object DataSourceReadOptions {
     .withDocumentation("Enables data-skipping allowing queries to leverage indexes to reduce the search space by " +
       "skipping over files")
 
+  val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")
+    .defaultValue("false")
+    .withDocumentation("When doing an incremental query whether we should fall back to full table scans if file does not exist.")
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
   val QUERY_TYPE_OPT_KEY = QUERY_TYPE.key()
@@ -423,6 +428,11 @@ object DataSourceWriteOptions {
   val HIVE_URL: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.jdbcurl")
     .defaultValue("jdbc:hive2://localhost:10000")
+    .withDocumentation("Hive jdbc url")
+
+  val METASTORE_URIS: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.hive_sync.metastore.uris")
+    .defaultValue("thrift://localhost:9083")
     .withDocumentation("Hive metastore url")
 
   val hivePartitionFieldsInferFunc = DataSourceOptionsHelper.scalaFunctionToJavaFunction((p: HoodieConfig) => {
@@ -551,17 +561,9 @@ object DataSourceWriteOptions {
     .defaultValue("true")
     .withDocumentation("Controls whether async compaction should be turned on for MOR table writing.")
 
-  val INLINE_CLUSTERING_ENABLE: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.clustering.inline.enable")
-    .defaultValue("false")
-    .sinceVersion("0.9.0")
-    .withDocumentation("Enable inline clustering. Disabled by default.")
+  val INLINE_CLUSTERING_ENABLE = HoodieClusteringConfig.INLINE_CLUSTERING
 
-  val ASYNC_CLUSTERING_ENABLE: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.clustering.async.enable")
-    .defaultValue("false")
-    .sinceVersion("0.9.0")
-    .withDocumentation("Enable asynchronous clustering. Disabled by default.")
+  val ASYNC_CLUSTERING_ENABLE = HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE
 
   val KAFKA_AVRO_VALUE_DESERIALIZER_CLASS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.deltastreamer.source.kafka.value.deserializer.class")
@@ -633,10 +635,10 @@ object DataSourceWriteOptions {
   @Deprecated
   val HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY = HIVE_PARTITION_EXTRACTOR_CLASS.key()
 
-  /** @deprecated Use {@link KEYGENERATOR_CLASS} and its methods instead */
+  /** @deprecated Use {@link KEYGENERATOR_CLASS_NAME} and its methods instead */
   @Deprecated
   val DEFAULT_KEYGENERATOR_CLASS_OPT_VAL = KEYGENERATOR_CLASS_NAME.defaultValue()
-  /** @deprecated Use {@link KEYGENERATOR_CLASS} and its methods instead */
+  /** @deprecated Use {@link KEYGENERATOR_CLASS_NAME} and its methods instead */
   @Deprecated
   val KEYGENERATOR_CLASS_OPT_KEY = HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key()
   /** @deprecated Use {@link ENABLE_ROW_WRITER} and its methods instead */

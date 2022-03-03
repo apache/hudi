@@ -35,15 +35,10 @@ import java.io.IOException;
  * HoodieInputFormat for HUDI datasets which store data in HFile base file format.
  */
 @UseFileSplitsFromInputFormat
-public class HoodieHFileInputFormat extends HoodieFileInputFormatBase {
+public class HoodieHFileInputFormat extends HoodieCopyOnWriteTableInputFormat {
 
   protected HoodieDefaultTimeline filterInstantsTimeline(HoodieDefaultTimeline timeline) {
     return HoodieInputFormatUtils.filterInstantsTimeline(timeline);
-  }
-
-  @Override
-  protected boolean includeLogFilesForSnapShotView() {
-    return false;
   }
 
   @Override

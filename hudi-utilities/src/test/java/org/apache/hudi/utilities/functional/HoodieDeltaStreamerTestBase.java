@@ -61,6 +61,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   static final String PROPS_FILENAME_TEST_PARQUET = "test-parquet-dfs-source.properties";
   static final String PROPS_FILENAME_TEST_ORC = "test-orc-dfs-source.properties";
   static final String PROPS_FILENAME_TEST_JSON_KAFKA = "test-json-kafka-dfs-source.properties";
+  static final String PROPS_FILENAME_TEST_SQL_SOURCE = "test-sql-source-source.properties";
   static final String PROPS_FILENAME_TEST_MULTI_WRITER = "test-multi-writer.properties";
   static final String FIRST_PARQUET_FILE_NAME = "1.parquet";
   static final String FIRST_ORC_FILE_NAME = "1.orc";
@@ -71,6 +72,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   static final int ORC_NUM_RECORDS = 5;
   static final int CSV_NUM_RECORDS = 3;
   static final int JSON_KAFKA_NUM_RECORDS = 5;
+  static final int SQL_SOURCE_NUM_RECORDS = 1000;
   String kafkaCheckpointType = "string";
   // Required fields
   static final String TGT_BASE_PATH_PARAM = "--target-base-path";
@@ -171,7 +173,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     props.setProperty("include", "sql-transformer.properties");
     props.setProperty("hoodie.datasource.write.keygenerator.class", TestHoodieDeltaStreamer.TestGenerator.class.getName());
     props.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
-    props.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
+    props.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
     props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source.avsc");
     props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target.avsc");
 
@@ -279,35 +281,35 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     if (useCustomSchema) {
       Helpers.saveORCToDFS(Helpers.toGenericRecords(
-              dataGenerator.generateInsertsAsPerSchema("000", numRecords, schemaStr),
-              schema), new Path(path), HoodieTestDataGenerator.ORC_TRIP_SCHEMA);
+          dataGenerator.generateInsertsAsPerSchema("000", numRecords, schemaStr),
+          schema), new Path(path), HoodieTestDataGenerator.ORC_TRIP_SCHEMA);
     } else {
       Helpers.saveORCToDFS(Helpers.toGenericRecords(
-              dataGenerator.generateInserts("000", numRecords)), new Path(path));
+          dataGenerator.generateInserts("000", numRecords)), new Path(path));
     }
   }
 
-  static void addCommitToTimeline(HoodieTableMetaClient metaCient) throws IOException {
-    addCommitToTimeline(metaCient, Collections.emptyMap());
+  static void addCommitToTimeline(HoodieTableMetaClient metaClient) throws IOException {
+    addCommitToTimeline(metaClient, Collections.emptyMap());
   }
 
-  static void addCommitToTimeline(HoodieTableMetaClient metaCient, Map<String, String> extraMetadata) throws IOException {
-    addCommitToTimeline(metaCient, WriteOperationType.UPSERT, HoodieTimeline.COMMIT_ACTION, extraMetadata);
+  static void addCommitToTimeline(HoodieTableMetaClient metaClient, Map<String, String> extraMetadata) throws IOException {
+    addCommitToTimeline(metaClient, WriteOperationType.UPSERT, HoodieTimeline.COMMIT_ACTION, extraMetadata);
   }
 
-  static void addReplaceCommitToTimeline(HoodieTableMetaClient metaCient, Map<String, String> extraMetadata) throws IOException {
-    addCommitToTimeline(metaCient, WriteOperationType.CLUSTER, HoodieTimeline.REPLACE_COMMIT_ACTION, extraMetadata);
+  static void addReplaceCommitToTimeline(HoodieTableMetaClient metaClient, Map<String, String> extraMetadata) throws IOException {
+    addCommitToTimeline(metaClient, WriteOperationType.CLUSTER, HoodieTimeline.REPLACE_COMMIT_ACTION, extraMetadata);
   }
 
-  static void addCommitToTimeline(HoodieTableMetaClient metaCient, WriteOperationType writeOperationType, String commitActiontype,
+  static void addCommitToTimeline(HoodieTableMetaClient metaClient, WriteOperationType writeOperationType, String commitActiontype,
                                   Map<String, String> extraMetadata) throws IOException {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     commitMetadata.setOperationType(writeOperationType);
-    extraMetadata.forEach((k,v) -> commitMetadata.getExtraMetadata().put(k, v));
+    extraMetadata.forEach((k, v) -> commitMetadata.getExtraMetadata().put(k, v));
     String commitTime = HoodieActiveTimeline.createNewInstantTime();
-    metaCient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.REQUESTED, commitActiontype, commitTime));
-    metaCient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime));
-    metaCient.getActiveTimeline().saveAsComplete(
+    metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.REQUESTED, commitActiontype, commitTime));
+    metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime));
+    metaClient.getActiveTimeline().saveAsComplete(
         new HoodieInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime),
         Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
   }

@@ -18,49 +18,17 @@
 
 package org.apache.hudi.integ.testsuite.dag.nodes
 
-import org.apache.hudi.client.WriteStatus
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config
-import org.apache.hudi.integ.testsuite.dag.ExecutionContext
-import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions}
-import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.SaveMode
-
-import scala.collection.JavaConverters._
 
 /**
  * Spark datasource based upsert node
  *
  * @param dagNodeConfig DAG node configurations.
  */
-class SparkUpsertNode(dagNodeConfig: Config) extends DagNode[RDD[WriteStatus]] {
+class SparkUpsertNode(dagNodeConfig: Config) extends SparkInsertNode(dagNodeConfig) {
 
-  config = dagNodeConfig
-
-  /**
-   * Execute the {@link DagNode}.
-   *
-   * @param context     The context needed for an execution of a node.
-   * @param curItrCount iteration count for executing the node.
-   * @throws Exception Thrown if the execution failed.
-   */
-  override def execute(context: ExecutionContext, curItrCount: Int): Unit = {
-    if (!config.isDisableGenerate) {
-      println("Generating input data for node {}", this.getName)
-      context.getDeltaGenerator().writeRecords(context.getDeltaGenerator().generateInserts(config)).count()
-    }
-    val inputDF = AvroConversionUtils.createDataFrame(context.getWriterContext.getHoodieTestSuiteWriter.getNextBatch,
-      context.getWriterContext.getHoodieTestSuiteWriter.getSchema,
-      context.getWriterContext.getSparkSession)
-    inputDF.write.format("hudi")
-      .options(DataSourceWriteOptions.translateSqlOptions(context.getWriterContext.getProps.asScala.toMap))
-      .option(DataSourceWriteOptions.TABLE_NAME.key, context.getHoodieTestSuiteWriter.getCfg.targetTableName)
-      .option(DataSourceWriteOptions.TABLE_TYPE.key, context.getHoodieTestSuiteWriter.getCfg.tableType)
-      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX.key, "deltastreamer.checkpoint.key")
-      .option("deltastreamer.checkpoint.key", context.getWriterContext.getHoodieTestSuiteWriter.getLastCheckpoint.orElse(""))
-      .option(HoodieWriteConfig.TBL_NAME.key, context.getHoodieTestSuiteWriter.getCfg.targetTableName)
-      .mode(SaveMode.Append)
-      .save(context.getHoodieTestSuiteWriter.getWriteConfig.getBasePath)
+  override def getOperation(): String = {
+    DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL
   }
 }

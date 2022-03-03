@@ -113,9 +113,9 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
     validate();
     try {
       HoodieTableMetaClient metaClient = table.getMetaClient();
-      Option<HoodieInstant> completetedInstant =
+      Option<HoodieInstant> completedInstant =
           metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
-      ValidationUtils.checkArgument(!completetedInstant.isPresent(),
+      ValidationUtils.checkArgument(!completedInstant.isPresent(),
           "Active Timeline is expected to be empty for bootstrap to be performed. "
               + "If you want to re-bootstrap, please rollback bootstrap first !!");
       Map<BootstrapMode, List<Pair<String, List<HoodieFileStatus>>>> partitionSelections = listAndProcessSourcePartitions();

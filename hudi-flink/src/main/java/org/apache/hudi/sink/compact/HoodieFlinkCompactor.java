@@ -18,7 +18,7 @@
 
 package org.apache.hudi.sink.compact;
 
-import org.apache.hudi.async.HoodieAsyncService;
+import org.apache.hudi.async.HoodieAsyncTableService;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -116,7 +116,7 @@ public class HoodieFlinkCompactor {
   /**
    * Schedules compaction in service.
    */
-  public static class AsyncCompactionService extends HoodieAsyncService {
+  public static class AsyncCompactionService extends HoodieAsyncTableService {
     private static final long serialVersionUID = 1L;
 
     /**
@@ -173,6 +173,7 @@ public class HoodieFlinkCompactor {
       CompactionUtil.inferChangelogMode(conf, metaClient);
 
       this.writeClient = StreamerUtil.createWriteClient(conf);
+      this.writeConfig = writeClient.getConfig();
       this.table = writeClient.getHoodieTable();
     }
 

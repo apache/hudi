@@ -31,13 +31,13 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.BaseSparkCommitActionExecutor;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
-import scala.collection.JavaConverters;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -46,6 +46,8 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import scala.collection.JavaConverters;
 
 /**
  * Spark validator utils to verify and run any precommit validators configured.
@@ -97,7 +99,7 @@ public class SparkValidatorUtils {
   }
 
   /**
-   * Run validators in a separate threadpool for parallelism. Each of validator can submit a distributed spark job if needed.
+   * Run validators in a separate thread pool for parallelism. Each of validator can submit a distributed spark job if needed.
    */
   private static CompletableFuture<Boolean> runValidatorAsync(SparkPreCommitValidator validator, HoodieWriteMetadata writeMetadata,
                                                        Dataset<Row> beforeState, Dataset<Row> afterState, String instantTime) {

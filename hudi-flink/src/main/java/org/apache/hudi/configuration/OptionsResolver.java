@@ -20,6 +20,7 @@ package org.apache.hudi.configuration;
 
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.format.FilePathUtils;
 
 import org.apache.flink.configuration.Configuration;
@@ -99,6 +100,10 @@ public class OptionsResolver {
    */
   public static boolean isPartitionedTable(Configuration conf) {
     return FilePathUtils.extractPartitionKeys(conf).length > 0;
+  }
+
+  public static boolean isBucketIndexType(Configuration conf) {
+    return conf.getString(FlinkOptions.INDEX_TYPE).equals(HoodieIndex.IndexType.BUCKET.name());
   }
 
   /**

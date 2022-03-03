@@ -376,7 +376,7 @@ public class HoodieCatalog extends AbstractCatalog {
   @Override
   public CatalogPartition getPartition(ObjectPath tablePath, CatalogPartitionSpec catalogPartitionSpec)
       throws PartitionNotExistException, CatalogException {
-    return null;
+    throw new PartitionNotExistException(getName(), tablePath, catalogPartitionSpec);
   }
 
   @Override
@@ -409,7 +409,7 @@ public class HoodieCatalog extends AbstractCatalog {
 
   @Override
   public CatalogFunction getFunction(ObjectPath functionPath) throws FunctionNotExistException, CatalogException {
-    return null;
+    throw new FunctionNotExistException(getName(), functionPath);
   }
 
   @Override

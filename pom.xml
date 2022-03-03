@@ -117,9 +117,9 @@
     <http.version>4.4.1</http.version>
     <spark.version>${spark2.version}</spark.version>
     <sparkbundle.version></sparkbundle.version>
-    <flink.version>1.13.1</flink.version>
+    <flink.version>1.14.3</flink.version>
     <spark2.version>2.4.4</spark2.version>
-    <spark3.version>3.2.0</spark3.version>
+    <spark3.version>3.2.1</spark3.version>
     <hudi.spark.module>hudi-spark2</hudi.spark.module>
     <hudi.spark.common.module>hudi-spark2-common</hudi.spark.common.module>
     <avro.version>1.8.2</avro.version>
@@ -164,7 +164,7 @@
     <antlr.version>4.7</antlr.version>
     <aws.sdk.version>1.12.22</aws.sdk.version>
     <proto.version>3.17.3</proto.version>
-    <protoc.version>3.1.0</protoc.version>
+    <protoc.version>3.11.4</protoc.version>
     <dynamodb.lockclient.version>1.1.0</dynamodb.lockclient.version>
     <dynamodb-local.port>8000</dynamodb-local.port>
     <dynamodb-local.endpoint>http://localhost:${dynamodb-local.port}</dynamodb-local.endpoint>
@@ -349,6 +349,7 @@
           <configuration>
             <rerunFailingTestsCount>3</rerunFailingTestsCount>
             <argLine>@{argLine}</argLine>
+            <trimStackTrace>false</trimStackTrace>
             <systemPropertyVariables>
               <log4j.configuration>
                 ${surefire-log4j.file}
@@ -689,7 +690,7 @@
       <dependency>
         <groupId>org.rocksdb</groupId>
         <artifactId>rocksdbjni</artifactId>
-        <version>6.27.3</version>
+        <version>5.17.2</version>
       </dependency>
 
       <!-- Httpcomponents -->
@@ -1119,6 +1120,12 @@
         <artifactId>awaitility</artifactId>
         <version>${awaitility.version}</version>
         <scope>test</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>org.objenesis</groupId>
+            <artifactId>objenesis</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
 
       <dependency>
@@ -1586,7 +1593,9 @@
         <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
         <scalatest.version>3.1.0</scalatest.version>
         <kafka.version>2.4.1</kafka.version>
-        <parquet.version>1.12.1</parquet.version>
+        <parquet.version>1.12.2</parquet.version>
+        <avro.version>1.10.2</avro.version>
+        <orc.version>1.6.12</orc.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>

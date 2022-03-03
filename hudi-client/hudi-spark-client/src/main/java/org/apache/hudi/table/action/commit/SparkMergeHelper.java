@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.execution.SparkBoundedInMemoryExecutor;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
@@ -43,7 +42,7 @@ import org.apache.spark.api.java.JavaRDD;
 import java.io.IOException;
 import java.util.Iterator;
 
-public class SparkMergeHelper<T extends HoodieRecordPayload> extends AbstractMergeHelper<T, JavaRDD<HoodieRecord<T>>,
+public class SparkMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHelper<T, JavaRDD<HoodieRecord<T>>,
     JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   private SparkMergeHelper() {
@@ -90,13 +89,13 @@ public class SparkMergeHelper<T extends HoodieRecordPayload> extends AbstractMer
 
       ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
       ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
-      wrapper = new SparkBoundedInMemoryExecutor(table.getConfig(), readerIterator,
+      wrapper = new BoundedInMemoryExecutor(table.getConfig().getWriteBufferLimitBytes(), readerIterator,
           new UpdateHandler(mergeHandle), record -> {
         if (!externalSchemaTransformation) {
           return record;
         }
         return transformRecordBasedOnNewSchema(gReader, gWriter, encoderCache, decoderCache, (GenericRecord) record);
-      });
+      }, table.getPreExecuteRunnable());
       wrapper.execute();
     } catch (Exception e) {
       throw new HoodieException(e);

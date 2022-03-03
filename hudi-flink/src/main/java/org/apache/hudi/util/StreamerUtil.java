@@ -410,8 +410,10 @@ public class StreamerUtil {
     FileSystemViewStorageConfig rebuilt = FileSystemViewStorageConfig.newBuilder()
         .withStorageType(viewStorageConfig.getStorageType())
         .withRemoteServerHost(viewStorageConfig.getRemoteViewServerHost())
-        .withRemoteServerPort(viewStorageConfig.getRemoteViewServerPort()).build();
-    ViewStorageProperties.createProperties(conf.getString(FlinkOptions.PATH), rebuilt, conf);
+        .withRemoteServerPort(viewStorageConfig.getRemoteViewServerPort())
+        .withRemoteTimelineClientTimeoutSecs(viewStorageConfig.getRemoteTimelineClientTimeoutSecs())
+        .build();
+    ViewStorageProperties.createProperties(conf.getString(FlinkOptions.PATH), rebuilt);
     return writeClient;
   }
 

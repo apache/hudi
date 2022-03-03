@@ -31,15 +31,18 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.common.fs.FileSystemRetryConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
@@ -59,9 +62,9 @@ import org.apache.hudi.table.RandomFileIdPrefixProvider;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
+import org.apache.hudi.table.storage.HoodieStorageLayout;
 
 import org.apache.hadoop.hbase.io.compress.Compression;
-import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.orc.CompressionKind;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
@@ -438,7 +441,20 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.10.0")
       .withDocumentation("File Id Prefix provider class, that implements `org.apache.hudi.fileid.FileIdPrefixProvider`");
 
+  public static final ConfigProperty<Boolean> TABLE_SERVICES_ENABLED = ConfigProperty
+      .key("hoodie.table.services.enabled")
+      .defaultValue(true)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Master control to disable all table services including archive, clean, compact, cluster, etc.");
+
+  public static final ConfigProperty<Boolean> RELEASE_RESOURCE_ENABLE = ConfigProperty
+      .key("hoodie.release.resource.on.completion.enable")
+      .defaultValue(true)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Control to enable release all persist rdds when the spark job finish.");
+
   private ConsistencyGuardConfig consistencyGuardConfig;
+  private FileSystemRetryConfig fileSystemRetryConfig;
 
   // Hoodie Write Client transparently rewrites File System View config when embedded mode is enabled
   // We keep track of original config and rewritten config
@@ -832,6 +848,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     newProps.putAll(props);
     this.engineType = engineType;
     this.consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().fromProperties(newProps).build();
+    this.fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().fromProperties(newProps).build();
     this.clientSpecifiedViewStorageConfig = FileSystemViewStorageConfig.newBuilder().fromProperties(newProps).build();
     this.viewStorageConfig = clientSpecifiedViewStorageConfig;
     this.hoodiePayloadConfig = HoodiePayloadConfig.newBuilder().fromProperties(newProps).build();
@@ -1074,6 +1091,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED);
   }
 
+  public int getCleanerHoursRetained() {
+    return getInt(HoodieCompactionConfig.CLEANER_HOURS_RETAINED);
+  }
+
   public int getMaxCommitsToKeep() {
     return getInt(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP);
   }
@@ -1102,16 +1123,16 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE);
   }
 
+  public boolean allowMultipleCleans() {
+    return getBoolean(HoodieCompactionConfig.ALLOW_MULTIPLE_CLEANS);
+  }
+
   public boolean shouldAutoTuneInsertSplits() {
     return getBoolean(HoodieCompactionConfig.COPY_ON_WRITE_AUTO_SPLIT_INSERTS);
   }
 
   public int getCleanerParallelism() {
     return getInt(HoodieCompactionConfig.CLEANER_PARALLELISM_VALUE);
-  }
-
-  public boolean isAutoClean() {
-    return getBoolean(HoodieCompactionConfig.AUTO_CLEAN);
   }
 
   public boolean getArchiveMergeEnable() {
@@ -1126,6 +1147,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieCompactionConfig.AUTO_ARCHIVE);
   }
 
+  public boolean isAsyncArchive() {
+    return getBoolean(HoodieCompactionConfig.ASYNC_ARCHIVE);
+  }
+
+  public boolean isAutoClean() {
+    return getBoolean(HoodieCompactionConfig.AUTO_CLEAN);
+  }
+
   public boolean isAsyncClean() {
     return getBoolean(HoodieCompactionConfig.ASYNC_CLEAN);
   }
@@ -1136,6 +1165,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean inlineCompactionEnabled() {
     return getBoolean(HoodieCompactionConfig.INLINE_COMPACT);
+  }
+
+  public boolean scheduleInlineCompaction() {
+    return getBoolean(HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT);
   }
 
   public CompactionTriggerStrategy getInlineCompactTriggerStrategy() {
@@ -1176,6 +1209,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean inlineClusteringEnabled() {
     return getBoolean(HoodieClusteringConfig.INLINE_CLUSTERING);
+  }
+
+  public boolean scheduleInlineClustering() {
+    return getBoolean(HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING);
   }
 
   public boolean isAsyncClusteringEnabled() {
@@ -1435,6 +1472,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieIndexConfig.BLOOM_INDEX_BUCKETIZED_CHECKING);
   }
 
+  public boolean isMetadataBloomFilterIndexEnabled() {
+    return isMetadataTableEnabled() && getMetadataConfig().isBloomFilterIndexEnabled();
+  }
+
+  public boolean isMetadataIndexColumnStatsForAllColumnsEnabled() {
+    return isMetadataTableEnabled() && getMetadataConfig().isMetadataColumnStatsIndexForAllColumnsEnabled();
+  }
+
   public int getBloomIndexKeysPerBucket() {
     return getInt(HoodieIndexConfig.BLOOM_INDEX_KEYS_PER_BUCKET);
   }
@@ -1504,6 +1549,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String parquetOutputTimestampType() {
     return getString(HoodieStorageConfig.PARQUET_OUTPUT_TIMESTAMP_TYPE);
+  }
+
+  public Option<HoodieLogBlock.HoodieLogBlockType> getLogDataBlockFormat() {
+    return Option.ofNullable(getString(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT))
+        .map(HoodieLogBlock.HoodieLogBlockType::fromId);
   }
 
   public long getLogFileMaxSize() {
@@ -1672,7 +1722,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public String getMetricReporterMetricsNamePrefix() {
     return getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_PREFIX);
   }
-  
+
   /**
    * memory configs.
    */
@@ -1690,6 +1740,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public ConsistencyGuardConfig getConsistencyGuardConfig() {
     return consistencyGuardConfig;
+  }
+
+  public FileSystemRetryConfig getFileSystemRetryConfig() {
+    return fileSystemRetryConfig;
   }
 
   public void setConsistencyGuardConfig(ConsistencyGuardConfig consistencyGuardConfig) {
@@ -1844,12 +1898,12 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   /**
-   * Are any table services configured to run inline?
+   * Are any table services configured to run inline for both scheduling and execution?
    *
    * @return True if any table services are configured to run inline, false otherwise.
    */
-  public Boolean areAnyTableServicesInline() {
-    return inlineClusteringEnabled() || inlineCompactionEnabled() || isAutoClean();
+  public Boolean areAnyTableServicesExecutedInline() {
+    return inlineClusteringEnabled() || inlineCompactionEnabled() || isAutoClean() || isAutoArchive();
   }
 
   /**
@@ -1858,7 +1912,11 @@ public class HoodieWriteConfig extends HoodieConfig {
    * @return True if any table services are configured to run async, false otherwise.
    */
   public Boolean areAnyTableServicesAsync() {
-    return isAsyncClusteringEnabled() || !inlineCompactionEnabled() || isAsyncClean();
+    return isAsyncClusteringEnabled() || !inlineCompactionEnabled() || isAsyncClean() || isAsyncArchive();
+  }
+
+  public Boolean areAnyTableServicesScheduledInline() {
+    return scheduleInlineCompaction() || scheduleInlineClustering();
   }
 
   public String getPreCommitValidators() {
@@ -1887,6 +1945,14 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getFileIdPrefixProviderClassName() {
     return getString(FILEID_PREFIX_PROVIDER_CLASS);
+  }
+
+  public boolean areTableServicesEnabled() {
+    return getBooleanOrDefault(TABLE_SERVICES_ENABLED);
+  }
+
+  public boolean areReleaseResourceEnabled() {
+    return getBooleanOrDefault(RELEASE_RESOURCE_ENABLE);
   }
 
   /**
@@ -2251,6 +2317,16 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withFileIdPrefixProviderClassName(String fileIdPrefixProviderClassName) {
       writeConfig.setValue(FILEID_PREFIX_PROVIDER_CLASS, fileIdPrefixProviderClassName);
+      return this;
+    }
+
+    public Builder withTableServicesEnabled(boolean enabled) {
+      writeConfig.setValue(TABLE_SERVICES_ENABLED, Boolean.toString(enabled));
+      return this;
+    }
+
+    public Builder withReleaseResourceEnabled(boolean enabled) {
+      writeConfig.setValue(RELEASE_RESOURCE_ENABLE, Boolean.toString(enabled));
       return this;
     }
 

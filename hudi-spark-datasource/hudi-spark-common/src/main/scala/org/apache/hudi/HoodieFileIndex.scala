@@ -18,20 +18,30 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, Path}
+
 import org.apache.hudi.HoodieFileIndex.getConfigProperties
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
+import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
+
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{And, Expression}
+import org.apache.spark.sql.catalyst.expressions.{And, Expression, Literal}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
 import org.apache.spark.sql.hudi.DataSkippingUtils.createColumnStatsIndexFilterExpr
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{StringType, StructType}
 import org.apache.spark.sql.{AnalysisException, Column, SparkSession}
+import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
+import scala.util.control.NonFatal
+
+import java.text.SimpleDateFormat
 
 /**
  * A file index which support partition prune for hoodie snapshot and read-optimized query.
@@ -72,7 +82,7 @@ case class HoodieFileIndex(spark: SparkSession,
   )
     with FileIndex {
 
-  override def rootPaths: Seq[Path] = queryPaths
+  override def rootPaths: Seq[Path] = queryPaths.asScala
 
   def enableDataSkipping(): Boolean = {
     options.getOrElse(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(),
@@ -88,7 +98,7 @@ case class HoodieFileIndex(spark: SparkSession,
    * @return List of FileStatus for base files
    */
   def allFiles: Seq[FileStatus] = {
-    cachedAllInputFileSlices.values.flatten
+    cachedAllInputFileSlices.values.asScala.flatMap(_.asScala)
       .filter(_.getBaseFile.isPresent)
       .map(_.getBaseFile.get().getFileStatus)
       .toSeq
@@ -101,31 +111,33 @@ case class HoodieFileIndex(spark: SparkSession,
    * @param dataFilters      data columns filters
    * @return list of PartitionDirectory containing partition to base files mapping
    */
-  override def listFiles(partitionFilters: Seq[Expression],
-                         dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
+  override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
+
+    val convertedPartitionFilters =
+      HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters)
+
     // Look up candidate files names in the col-stats index, if all of the following conditions are true
     //    - Data-skipping is enabled
     //    - Col-Stats Index is present
     //    - List of predicates (filters) is present
     val candidateFilesNamesOpt: Option[Set[String]] =
-    lookupCandidateFilesInColStatsIndex(dataFilters) match {
-      case Success(opt) => opt
-      case Failure(e) =>
-        if (e.isInstanceOf[AnalysisException]) {
-          logDebug("Failed to relay provided data filters to Z-index lookup", e)
-        } else {
-          logError("Failed to lookup candidate files in Z-index", e)
-        }
-        Option.empty
-    }
+      lookupCandidateFilesInColStatsIndex(dataFilters) match {
+        case Success(opt) => opt
+        case Failure(e) =>
+          if (e.isInstanceOf[AnalysisException]) {
+            logDebug("Failed to relay provided data filters to Z-index lookup", e)
+          } else {
+            logError("Failed to lookup candidate files in Z-index", e)
+          }
+          Option.empty
+      }
 
     logDebug(s"Overlapping candidate files (from Z-index): ${candidateFilesNamesOpt.getOrElse(Set.empty)}")
 
     if (queryAsNonePartitionedTable) {
       // Read as Non-Partitioned table
       // Filter in candidate files based on the col-stats index lookup
-      val candidateFiles =
-      allFiles.filter(fileStatus =>
+      val candidateFiles = allFiles.filter(fileStatus =>
         // NOTE: This predicate is true when {@code Option} is empty
         candidateFilesNamesOpt.forall(_.contains(fileStatus.getPath.getName))
       )
@@ -137,22 +149,21 @@ case class HoodieFileIndex(spark: SparkSession,
       Seq(PartitionDirectory(InternalRow.empty, candidateFiles))
     } else {
       // Prune the partition path by the partition filters
-      val prunedPartitions = prunePartition(cachedAllInputFileSlices.keys.toSeq, partitionFilters)
+      val prunedPartitions = prunePartition(cachedAllInputFileSlices.keySet.asScala.toSeq, convertedPartitionFilters)
       var totalFileSize = 0
       var candidateFileSize = 0
 
       val result = prunedPartitions.map { partition =>
         val baseFileStatuses: Seq[FileStatus] =
-          cachedAllInputFileSlices(partition)
+          cachedAllInputFileSlices.get(partition).asScala
             .map(fs => fs.getBaseFile.orElse(null))
             .filter(_ != null)
             .map(_.getFileStatus)
 
         // Filter in candidate files based on the col-stats index lookup
-        val candidateFiles =
-          baseFileStatuses.filter(fs =>
-            // NOTE: This predicate is true when {@code Option} is empty
-            candidateFilesNamesOpt.forall(_.contains(fs.getPath.getName)))
+        val candidateFiles = baseFileStatuses.filter(fs =>
+          // NOTE: This predicate is true when {@code Option} is empty
+          candidateFilesNamesOpt.forall(_.contains(fs.getPath.getName)))
 
         totalFileSize += baseFileStatuses.size
         candidateFileSize += candidateFiles.size
@@ -194,12 +205,14 @@ case class HoodieFileIndex(spark: SparkSession,
       // scalastyle:on return
     }
 
+    val completedCommits = getActiveTimeline.filterCompletedInstants().getInstants.iterator.asScala.toList.map(_.getTimestamp)
+
     // Collect all index tables present in `.zindex` folder
     val candidateIndexTables =
       fs.listStatus(new Path(indexPath))
         .filter(_.isDirectory)
         .map(_.getPath.getName)
-        .filter(f => completedCommits.contains(f))
+        .filter(completedCommits.contains(_))
         .sortBy(x => x)
 
     if (candidateIndexTables.isEmpty) {
@@ -267,7 +280,7 @@ case class HoodieFileIndex(spark: SparkSession,
   }
 }
 
-object HoodieFileIndex {
+object HoodieFileIndex extends Logging {
 
   def getConfigProperties(spark: SparkSession, options: Map[String, String]) = {
     val sqlConf: SQLConf = spark.sessionState.conf
@@ -280,6 +293,41 @@ object HoodieFileIndex {
         HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS.toString))
     properties.putAll(options.asJava)
     properties
+  }
+
+  def convertFilterForTimestampKeyGenerator(metaClient: HoodieTableMetaClient,
+      partitionFilters: Seq[Expression]): Seq[Expression] = {
+
+    val tableConfig = metaClient.getTableConfig
+    val keyGenerator = tableConfig.getKeyGeneratorClassName
+
+    if (keyGenerator != null && (keyGenerator.equals(classOf[TimestampBasedKeyGenerator].getCanonicalName) ||
+        keyGenerator.equals(classOf[TimestampBasedAvroKeyGenerator].getCanonicalName))) {
+      val inputFormat = tableConfig.getString(KeyGeneratorOptions.Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP)
+      val outputFormat = tableConfig.getString(KeyGeneratorOptions.Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP)
+      if (StringUtils.isNullOrEmpty(inputFormat) || StringUtils.isNullOrEmpty(outputFormat) ||
+          inputFormat.equals(outputFormat)) {
+        partitionFilters
+      } else {
+        try {
+          val inDateFormat = new SimpleDateFormat(inputFormat)
+          val outDateFormat = new SimpleDateFormat(outputFormat)
+          partitionFilters.toArray.map {
+            _.transformDown {
+              case Literal(value, dataType) if dataType.isInstanceOf[StringType] =>
+                val converted = outDateFormat.format(inDateFormat.parse(value.toString))
+                Literal(UTF8String.fromString(converted), StringType)
+            }
+          }
+        } catch {
+          case NonFatal(e) =>
+            logWarning("Fail to convert filters for TimestampBaseAvroKeyGenerator.")
+            partitionFilters
+        }
+      }
+    } else {
+      partitionFilters
+    }
   }
 
   private def getQueryPath(options: Map[String, String]) = {

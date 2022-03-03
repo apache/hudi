@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
@@ -51,7 +52,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.HoodieTimelineArchiveLog;
+import org.apache.hudi.client.HoodieTimelineArchiver;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -84,27 +85,22 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
     init(tableType, true);
   }
 
+  public void init(HoodieTableType tableType, HoodieWriteConfig writeConfig) throws IOException {
+    init(tableType, Option.of(writeConfig), true, false, false, false);
+  }
+
   public void init(HoodieTableType tableType, boolean enableMetadataTable) throws IOException {
     init(tableType, enableMetadataTable, true, false, false);
   }
 
   public void init(HoodieTableType tableType, boolean enableMetadataTable, boolean enableFullScan, boolean enableMetrics, boolean
-                   validateMetadataPayloadStateConsistency) throws IOException {
-    this.tableType = tableType;
-    initPath();
-    initSparkContexts("TestHoodieMetadata");
-    initFileSystem();
-    fs.mkdirs(new Path(basePath));
-    initTimelineService();
-    initMetaClient(tableType);
-    initTestDataGenerator();
-    metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
-    writeConfig = getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, enableMetadataTable, enableMetrics,
-        enableFullScan, true, validateMetadataPayloadStateConsistency).build();
-    initWriteConfigAndMetatableWriter(writeConfig, enableMetadataTable);
+      validateMetadataPayloadStateConsistency) throws IOException {
+    init(tableType, Option.empty(), enableMetadataTable, enableFullScan, enableMetrics,
+        validateMetadataPayloadStateConsistency);
   }
 
-  public void init(HoodieTableType tableType, HoodieWriteConfig writeConfig) throws IOException {
+  public void init(HoodieTableType tableType, Option<HoodieWriteConfig> writeConfig, boolean enableMetadataTable,
+                   boolean enableFullScan, boolean enableMetrics, boolean validateMetadataPayloadStateConsistency) throws IOException {
     this.tableType = tableType;
     initPath();
     initSparkContexts("TestHoodieMetadata");
@@ -114,8 +110,12 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
     initMetaClient(tableType);
     initTestDataGenerator();
     metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
-    this.writeConfig = writeConfig;
-    initWriteConfigAndMetatableWriter(writeConfig, writeConfig.isMetadataTableEnabled());
+    this.writeConfig = writeConfig.isPresent()
+        ? writeConfig.get() : getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true,
+        enableMetadataTable, enableMetrics, enableFullScan, true,
+        validateMetadataPayloadStateConsistency)
+        .build();
+    initWriteConfigAndMetatableWriter(this.writeConfig, enableMetadataTable);
   }
 
   protected void initWriteConfigAndMetatableWriter(HoodieWriteConfig writeConfig, boolean enableMetadataTable) {
@@ -286,8 +286,8 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
 
   protected void archiveDataTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) throws IOException {
     HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
-    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(writeConfig, table);
-    archiveLog.archiveIfRequired(context);
+    HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(writeConfig, table);
+    archiver.archiveIfRequired(context);
   }
 
   protected void validateMetadata(HoodieTestTable testTable) throws IOException {
