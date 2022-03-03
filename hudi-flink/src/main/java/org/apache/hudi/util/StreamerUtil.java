@@ -413,7 +413,7 @@ public class StreamerUtil {
         .withRemoteServerPort(viewStorageConfig.getRemoteViewServerPort())
         .withRemoteTimelineClientTimeoutSecs(viewStorageConfig.getRemoteTimelineClientTimeoutSecs())
         .build();
-    ViewStorageProperties.createProperties(conf.getString(FlinkOptions.PATH), rebuilt);
+    ViewStorageProperties.createProperties(conf.getString(FlinkOptions.PATH), rebuilt, conf);
     return writeClient;
   }
 
