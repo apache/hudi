@@ -23,6 +23,8 @@ import org.apache.hudi.HoodieFileIndex.getConfigProperties
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper
+import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper.{getMaxColumnNameFor, getMinColumnNameFor, getNumNullsColumnNameFor}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
@@ -277,24 +279,28 @@ case class HoodieFileIndex(spark: SparkSession,
       // scalastyle:on return
     }
 
-    // TODO wrap in try block
+    val targetColStatsIndexColumns = Seq(
+      HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME,
+      HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE,
+      HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE,
+      HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT,
+    )
+
+    val requiredMetadataIndexColumns =
+      (targetColStatsIndexColumns :+ HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME).map(colName =>
+        s"${HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS}.${colName}"
+      )
+
     // TODO select only from "column_stats" partition
     val metadataTableDF = spark.read.format("org.apache.hudi").load(metadataTablePath)
     // TODO filter on (column, partition) prefix
     val colStatsDF = metadataTableDF.where(col(HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS).isNotNull)
-      .select(
-        col(s"${HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS}.fileName"),
-        col(s"${HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS}.columnName"),
-        col(s"${HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS}.minValue"),
-        col(s"${HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS}.maxValue"),
-        col(s"${HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS}.nullCount")
-      )
+      .select(requiredMetadataIndexColumns.map(col): _*)
 
     // Persist DF to avoid re-computing column statistics unraveling
-    withPersistence(colStatsDF) { () =>
+    withPersistence(colStatsDF) {
       // TODO replace with columns collected from the filters
-      // TODO replace with columns collected from the filters
-      val indexedColumnNames = colStatsDF.select("columnName")
+      val indexedColumnNames = colStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME)
         .distinct()
         .collect()
         .toSeq
@@ -302,18 +308,17 @@ case class HoodieFileIndex(spark: SparkSession,
 
       val reshapedDF =
         indexedColumnNames.map(colName =>
-          colStatsDF.filter(col("columnName").equalTo(colName))
-            .select("fileName", "minValue", "maxValue", "nullCount")
-            .withColumnRenamed("nullCount", s"${colName}_num_nulls")
-            .withColumnRenamed("minValue", s"${colName}_minValue")
-            .withColumnRenamed("maxValue", s"${colName}_maxValue")
+          colStatsDF.filter(col(HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME).equalTo(colName))
+            .select(targetColStatsIndexColumns.map(col): _*)
+            .withColumnRenamed(HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT, getNumNullsColumnNameFor(colName))
+            .withColumnRenamed(HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE, getMinColumnNameFor(colName))
+            .withColumnRenamed(HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE, getMaxColumnNameFor(colName))
         )
-          .reduceLeft((left: DataFrame, right: DataFrame) =>
-            left.join(right, usingColumn = "fileName")
-          )
+          .reduceLeft((left, right) =>
+            left.join(right, usingColumn = HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME))
 
       // Persist DF to avoid re-computing column statistics unraveling
-      withPersistence(reshapedDF) { () =>
+      withPersistence(reshapedDF) {
         val indexSchema = reshapedDF.schema
         val indexFilter =
           queryFilters.map(createColumnStatsIndexFilterExpr(_, indexSchema))
@@ -339,8 +344,7 @@ case class HoodieFileIndex(spark: SparkSession,
         //       To close that gap, we manually compute the difference b/w all indexed (by col-stats-index)
         //       files and all outstanding base-files, and make sure that all base files not
         //       represented w/in the index are included in the output of this method
-        val notIndexedFileNames =
-          lookupFileNamesMissingFromIndex(allIndexedFileNames)
+        val notIndexedFileNames = lookupFileNamesMissingFromIndex(allIndexedFileNames)
 
         Some(prunedCandidateFileNames ++ notIndexedFileNames)
       }
