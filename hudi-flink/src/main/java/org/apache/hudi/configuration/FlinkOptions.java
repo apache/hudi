@@ -18,7 +18,6 @@
 
 package org.apache.hudi.configuration;
 
-import org.apache.flink.configuration.MemorySize;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.HoodieConfig;
@@ -487,13 +486,7 @@ public class FlinkOptions extends HoodieConfig {
       .key(HoodieRealtimeConfig.COMPACTION_MEMORY_FRACTION_PROP)
       .doubleType()
       .defaultValue(0.1)
-      .withDescription("Fraction of Flink TM memory used for compaction of log files.");
-
-  public static final ConfigOption<MemorySize> COMPACTION_MEMORY_SIZE = ConfigOptions
-          .key("compaction.memory.size")
-          .memoryType()
-          .noDefaultValue()
-          .withDescription("Specify the memory of Flink TM used for compaction of log files.");
+      .withDescription("Compaction memory fraction of Task Manager managed memory size, default 0.1.");
 
   public static final ConfigOption<Boolean> COMPACTION_SCHEDULE_ENABLED = ConfigOptions
       .key("compaction.schedule.enabled")

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.flink.configuration.MemorySize;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -84,7 +83,7 @@ public class TestHoodieTableFactory {
     this.conf = new Configuration();
     this.conf.setString(FlinkOptions.PATH, tempFile.getAbsolutePath());
     this.conf.setString(FlinkOptions.TABLE_NAME, "t1");
-    this.conf.set(FlinkOptions.COMPACTION_MEMORY_SIZE, MemorySize.ofMebiBytes(1024));
+    this.conf.set(FlinkOptions.COMPACTION_MAX_MEMORY, 1024);
     StreamerUtil.initTableIfNotExists(this.conf);
   }
 
