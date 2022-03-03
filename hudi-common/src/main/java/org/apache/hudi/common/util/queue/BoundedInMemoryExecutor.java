@@ -49,9 +49,9 @@ public class BoundedInMemoryExecutor<I, O, E> {
 
   private static final Logger LOG = LogManager.getLogger(BoundedInMemoryExecutor.class);
 
-  // Executor service used for launching read thread.
-  private final ExecutorService producerExecutorService;
   // Executor service used for launching write thread.
+  private final ExecutorService producerExecutorService;
+  // Executor service used for launching read thread.
   private final ExecutorService consumerExecutorService;
   // Used for buffering records which is controlled by HoodieWriteConfig#WRITE_BUFFER_LIMIT_BYTES.
   private final BoundedInMemoryQueue<I, O> queue;
