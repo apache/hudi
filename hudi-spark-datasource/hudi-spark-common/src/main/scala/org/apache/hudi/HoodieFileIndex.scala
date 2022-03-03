@@ -209,7 +209,7 @@ case class HoodieFileIndex(spark: SparkSession,
       HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME,
       HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE,
       HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE,
-      HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT,
+      HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT
     )
 
     val requiredMetadataIndexColumns =
