@@ -367,8 +367,14 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // If the un-synced instants have been archived, then
     // the metadata table will need to be bootstrapped again.
     if (exists) {
-      final HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get())
+      HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get())
           .setBasePath(metadataWriteConfig.getBasePath()).build();
+
+      if (dataWriteConfig.getMetadataConfig().populateMetaFields() != metadataMetaClient.getTableConfig().populateMetaFields()) {
+        LOG.info("Re-initiating metadata table properties since populate meta fields have changed");
+        metadataMetaClient = initializeMetaClient(dataWriteConfig.getMetadataConfig().populateMetaFields());
+      }
+
       final Option<HoodieInstant> latestMetadataInstant =
           metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
 
@@ -504,17 +510,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .getReverseOrderedInstants().findFirst().map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
     LOG.info("Creating a new metadata table in " + metadataWriteConfig.getBasePath() + " at instant " + createInstantTime);
 
-    HoodieTableMetaClient.withPropertyBuilder()
-        .setTableType(HoodieTableType.MERGE_ON_READ)
-        .setTableName(tableName)
-        .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
-        .setPayloadClassName(HoodieMetadataPayload.class.getName())
-        .setBaseFileFormat(HoodieFileFormat.HFILE.toString())
-        .setRecordKeyFields(RECORD_KEY_FIELD_NAME)
-        .setPopulateMetaFields(dataWriteConfig.getMetadataConfig().populateMetaFields())
-        .setKeyGeneratorClassProp(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
-        .initTable(hadoopConf.get(), metadataWriteConfig.getBasePath());
-
+    initializeMetaClient(dataWriteConfig.getMetadataConfig().populateMetaFields());
     initTableMetadata();
     initializeEnabledFileGroups(dataMetaClient, createInstantTime);
 
@@ -528,6 +524,19 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // Hence, we have a special commit just for the bootstrap scenario.
     bootstrapCommit(dirInfoList, createInstantTime);
     return true;
+  }
+
+  private HoodieTableMetaClient initializeMetaClient(boolean populatMetaFields) throws IOException {
+   return HoodieTableMetaClient.withPropertyBuilder()
+        .setTableType(HoodieTableType.MERGE_ON_READ)
+        .setTableName(tableName)
+        .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
+        .setPayloadClassName(HoodieMetadataPayload.class.getName())
+        .setBaseFileFormat(HoodieFileFormat.HFILE.toString())
+        .setRecordKeyFields(RECORD_KEY_FIELD_NAME)
+        .setPopulateMetaFields(populatMetaFields)
+        .setKeyGeneratorClassProp(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
+        .initTable(hadoopConf.get(), metadataWriteConfig.getBasePath());
   }
 
   /**
