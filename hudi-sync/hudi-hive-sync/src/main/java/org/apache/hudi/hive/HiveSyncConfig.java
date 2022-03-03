@@ -175,5 +175,6 @@ public class HiveSyncConfig implements Serializable {
       + ", sparkSchemaLengthThreshold=" + sparkSchemaLengthThreshold
       + ", withOperationField=" + withOperationField
       + '}';
+
   }
 }
