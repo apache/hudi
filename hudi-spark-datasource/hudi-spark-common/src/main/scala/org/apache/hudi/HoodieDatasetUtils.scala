@@ -34,10 +34,10 @@ object HoodieDatasetUtils {
    * @tparam T return value of the target function
    * @return execution outcome of the [[f]] function
    */
-  def withPersistence[T](df: DataFrame, level: StorageLevel = MEMORY_AND_DISK)(f: () => T): T = {
+  def withPersistence[T](df: DataFrame, level: StorageLevel = MEMORY_AND_DISK)(f: => T): T = {
     df.persist(level)
     try {
-      f.apply()
+      f
     } finally {
       df.unpersist()
     }

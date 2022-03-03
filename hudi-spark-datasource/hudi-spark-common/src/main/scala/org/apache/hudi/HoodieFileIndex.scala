@@ -325,14 +325,14 @@ case class HoodieFileIndex(spark: SparkSession,
             .reduce(And)
 
         val allIndexedFileNames =
-          reshapedDF.select("fileName")
+          reshapedDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
             .collect()
             .map(_.getString(0))
             .toSet
 
         val prunedCandidateFileNames =
           reshapedDF.where(new Column(indexFilter))
-            .select("fileName")
+            .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
             .collect()
             .map(_.getString(0))
             .toSet
