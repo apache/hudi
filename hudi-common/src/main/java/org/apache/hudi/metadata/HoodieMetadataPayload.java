@@ -114,6 +114,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private static final String COLUMN_STATS_FIELD_VALUE_COUNT = "valueCount";
   private static final String COLUMN_STATS_FIELD_TOTAL_SIZE = "totalSize";
   private static final String COLUMN_STATS_FIELD_FILE_NAME = "fileName";
+  private static final String COLUMN_STATS_FIELD_COLUMN_NAME = "columnName";
   private static final String COLUMN_STATS_FIELD_TOTAL_UNCOMPRESSED_SIZE = "totalUncompressedSize";
   private static final String COLUMN_STATS_FIELD_IS_DELETED = FIELD_IS_DELETED;
 
@@ -177,6 +178,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         } else {
           columnStatMetadata = HoodieMetadataColumnStats.newBuilder()
               .setFileName((String) columnStatsRecord.get(COLUMN_STATS_FIELD_FILE_NAME))
+              .setColumnName((String) columnStatsRecord.get(COLUMN_STATS_FIELD_COLUMN_NAME))
               .setMinValue((String) columnStatsRecord.get(COLUMN_STATS_FIELD_MIN_VALUE))
               .setMaxValue((String) columnStatsRecord.get(COLUMN_STATS_FIELD_MAX_VALUE))
               .setValueCount((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_VALUE_COUNT))
@@ -508,6 +510,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(),
           HoodieMetadataColumnStats.newBuilder()
               .setFileName(new Path(columnRangeMetadata.getFilePath()).getName())
+              .setColumnName(columnRangeMetadata.getColumnName())
               .setMinValue(columnRangeMetadata.getMinValue() == null ? null :
                   columnRangeMetadata.getMinValue().toString())
               .setMaxValue(columnRangeMetadata.getMaxValue() == null ? null :
