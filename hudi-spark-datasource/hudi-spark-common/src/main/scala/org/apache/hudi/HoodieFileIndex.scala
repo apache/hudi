@@ -18,6 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, Path}
+import org.apache.hudi.HoodieDatasetUtils.withPersistence
 import org.apache.hudi.HoodieFileIndex.getConfigProperties
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -289,61 +290,61 @@ case class HoodieFileIndex(spark: SparkSession,
         col(s"${HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS}.nullCount")
       )
 
-    colStatsDF.persist()
+    // Persist DF to avoid re-computing column statistics unraveling
+    withPersistence(colStatsDF) { () =>
+      // TODO replace with columns collected from the filters
+      // TODO replace with columns collected from the filters
+      val indexedColumnNames = colStatsDF.select("columnName")
+        .distinct()
+        .collect()
+        .toSeq
+        .map(_.getString(0))
 
-    val indexedColumnNames = colStatsDF.select("columnName")
-      .distinct()
-      .collect()
-      .toSeq
-      .map(_.getString(0))
-
-    val reshapedDF =
-      indexedColumnNames.map(colName =>
-        colStatsDF.filter(col("columnName").equalTo(colName))
-          .select("fileName", "minValue", "maxValue", "nullCount")
-          .withColumnRenamed("nullCount", s"${colName}_num_nulls")
-          .withColumnRenamed("minValue", s"${colName}_minValue")
-          .withColumnRenamed("maxValue", s"${colName}_maxValue")
-      )
-        .reduceLeft((left: DataFrame, right: DataFrame) =>
-          left.join(right, usingColumn = "fileName")
+      val reshapedDF =
+        indexedColumnNames.map(colName =>
+          colStatsDF.filter(col("columnName").equalTo(colName))
+            .select("fileName", "minValue", "maxValue", "nullCount")
+            .withColumnRenamed("nullCount", s"${colName}_num_nulls")
+            .withColumnRenamed("minValue", s"${colName}_minValue")
+            .withColumnRenamed("maxValue", s"${colName}_maxValue")
         )
+          .reduceLeft((left: DataFrame, right: DataFrame) =>
+            left.join(right, usingColumn = "fileName")
+          )
 
-    reshapedDF.persist()
+      // Persist DF to avoid re-computing column statistics unraveling
+      withPersistence(reshapedDF) { () =>
+        val indexSchema = reshapedDF.schema
+        val indexFilter =
+          queryFilters.map(createColumnStatsIndexFilterExpr(_, indexSchema))
+            .reduce(And)
 
-    val indexSchema = reshapedDF.schema
-    val indexFilter =
-      queryFilters.map(createColumnStatsIndexFilterExpr(_, indexSchema))
-        .reduce(And)
+        val allIndexedFileNames =
+          reshapedDF.select("fileName")
+            .collect()
+            .map(_.getString(0))
+            .toSet
 
-    val allIndexedFileNames =
-      reshapedDF.select("fileName")
-        .collect()
-        .map(_.getString(0))
-        .toSet
+        val prunedCandidateFileNames =
+          reshapedDF.where(new Column(indexFilter))
+            .select("fileName")
+            .collect()
+            .map(_.getString(0))
+            .toSet
 
-    val prunedCandidateFileNames =
-      reshapedDF.where(new Column(indexFilter))
-        .select("fileName")
-        .collect()
-        .map(_.getString(0))
-        .toSet
+        // NOTE: Col-Stats Index isn't guaranteed to have complete set of statistics for every
+        //       base-file: since it's bound to clustering, which could occur asynchronously
+        //       at arbitrary point in time, and is not likely to be touching all of the base files.
+        //
+        //       To close that gap, we manually compute the difference b/w all indexed (by col-stats-index)
+        //       files and all outstanding base-files, and make sure that all base files not
+        //       represented w/in the index are included in the output of this method
+        val notIndexedFileNames =
+          lookupFileNamesMissingFromIndex(allIndexedFileNames)
 
-    // TODO abstract in a wrapper
-    reshapedDF.unpersist()
-    colStatsDF.unpersist()
-
-    // NOTE: Col-Stats Index isn't guaranteed to have complete set of statistics for every
-    //       base-file: since it's bound to clustering, which could occur asynchronously
-    //       at arbitrary point in time, and is not likely to be touching all of the base files.
-    //
-    //       To close that gap, we manually compute the difference b/w all indexed (by col-stats-index)
-    //       files and all outstanding base-files, and make sure that all base files not
-    //       represented w/in the index are included in the output of this method
-    val notIndexedFileNames =
-      lookupFileNamesMissingFromIndex(allIndexedFileNames)
-
-    Some(prunedCandidateFileNames ++ notIndexedFileNames)
+        Some(prunedCandidateFileNames ++ notIndexedFileNames)
+      }
+    }
   }
 
   override def refresh(): Unit = super.refresh()
