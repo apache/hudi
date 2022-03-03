@@ -18,30 +18,28 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, Path}
-
 import org.apache.hudi.HoodieFileIndex.getConfigProperties
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
-
+import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, Expression, Literal}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
-import org.apache.spark.sql.hudi.DataSkippingUtils.createColumnStatsIndexFilterExpr
+import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructType}
-import org.apache.spark.sql.{AnalysisException, Column, SparkSession}
+import org.apache.spark.sql.{AnalysisException, Column, DataFrame, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
 
-import scala.collection.JavaConverters._
-import scala.util.{Failure, Success, Try}
-import scala.util.control.NonFatal
-
 import java.text.SimpleDateFormat
+import scala.collection.JavaConverters._
+import scala.util.control.NonFatal
+import scala.util.{Failure, Success, Try}
 
 /**
  * A file index which support partition prune for hoodie snapshot and read-optimized query.
@@ -84,7 +82,7 @@ case class HoodieFileIndex(spark: SparkSession,
 
   override def rootPaths: Seq[Path] = queryPaths.asScala
 
-  def enableDataSkipping(): Boolean = {
+  def isDataSkippingEnabled(): Boolean = {
     options.getOrElse(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(),
       spark.sessionState.conf.getConfString(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "false")).toBoolean
   }
@@ -112,7 +110,6 @@ case class HoodieFileIndex(spark: SparkSession,
    * @return list of PartitionDirectory containing partition to base files mapping
    */
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
-
     val convertedPartitionFilters =
       HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters)
 
@@ -121,7 +118,7 @@ case class HoodieFileIndex(spark: SparkSession,
     //    - Col-Stats Index is present
     //    - List of predicates (filters) is present
     val candidateFilesNamesOpt: Option[Set[String]] =
-      lookupCandidateFilesInColStatsIndex(dataFilters) match {
+      lookupCandidateFilesInMetadataTable(dataFilters) match {
         case Success(opt) => opt
         case Failure(e) =>
           if (e.isInstanceOf[AnalysisException]) {
@@ -183,23 +180,12 @@ case class HoodieFileIndex(spark: SparkSession,
     allBaseFileNames -- allIndexedFileNames
   }
 
-  /**
-   * Computes pruned list of candidate base-files' names based on provided list of {@link dataFilters}
-   * conditions, by leveraging custom Column Statistics index (col-stats-index) bearing "min", "max",
-   * "num_nulls" statistics for all clustered columns.
-   *
-   * NOTE: This method has to return complete set of candidate files, since only provided candidates will
-   * ultimately be scanned as part of query execution. Hence, this method has to maintain the
-   * invariant of conservatively including every base-file's name, that is NOT referenced in its index.
-   *
-   * @param queryFilters list of original data filters passed down from querying engine
-   * @return list of pruned (data-skipped) candidate base-files' names
-   */
+
   private def lookupCandidateFilesInColStatsIndex(queryFilters: Seq[Expression]): Try[Option[Set[String]]] = Try {
     val indexPath = metaClient.getColumnStatsIndexPath
     val fs = metaClient.getFs
 
-    if (!enableDataSkipping() || !fs.exists(new Path(indexPath)) || queryFilters.isEmpty) {
+    if (!isDataSkippingEnabled() || !fs.exists(new Path(indexPath)) || queryFilters.isEmpty) {
       // scalastyle:off return
       return Success(Option.empty)
       // scalastyle:on return
@@ -262,10 +248,102 @@ case class HoodieFileIndex(spark: SparkSession,
       //       files and all outstanding base-files, and make sure that all base files not
       //       represented w/in the index are included in the output of this method
       val notIndexedFileNames =
-      lookupFileNamesMissingFromIndex(allIndexedFileNames)
+        lookupFileNamesMissingFromIndex(allIndexedFileNames)
 
       prunedCandidateFileNames ++ notIndexedFileNames
     })
+  }
+
+  /**
+   * Computes pruned list of candidate base-files' names based on provided list of {@link dataFilters}
+   * conditions, by leveraging Metadata Table's Column Statistics index (hereon referred as ColStats for brevity)
+   * bearing "min", "max", "num_nulls" statistics for all columns.
+   *
+   * NOTE: This method has to return complete set of candidate files, since only provided candidates will
+   * ultimately be scanned as part of query execution. Hence, this method has to maintain the
+   * invariant of conservatively including every base-file's name, that is NOT referenced in its index.
+   *
+   * @param queryFilters list of original data filters passed down from querying engine
+   * @return list of pruned (data-skipped) candidate base-files' names
+   */
+  private def lookupCandidateFilesInMetadataTable(queryFilters: Seq[Expression]): Try[Option[Set[String]]] = Try {
+    val fs = metaClient.getFs
+    val metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(basePath)
+
+    if (!isDataSkippingEnabled() || !fs.exists(new Path(metadataTablePath)) || queryFilters.isEmpty) {
+      // scalastyle:off return
+      return Success(Option.empty)
+      // scalastyle:on return
+    }
+
+    // TODO wrap in try block
+    // TODO select only from "column_stats" partition
+    val metadataTableDF = spark.read.format("org.apache.hudi").load(metadataTablePath)
+    // TODO filter on (column, partition) prefix
+    val colStatsDF = metadataTableDF.where(col(HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS).isNotNull)
+      .select(
+        col(s"${HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS}.fileName"),
+        col(s"${HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS}.columnName"),
+        col(s"${HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS}.minValue"),
+        col(s"${HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS}.maxValue"),
+        col(s"${HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS}.nullCount")
+      )
+
+    colStatsDF.persist()
+
+    val indexedColumnNames = colStatsDF.select("columnName")
+      .distinct()
+      .collect()
+      .toSeq
+      .map(_.getString(0))
+
+    val reshapedDF =
+      indexedColumnNames.map(colName =>
+        colStatsDF.filter(col("columnName").equalTo(colName))
+          .select("fileName", "minValue", "maxValue", "nullCount")
+          .withColumnRenamed("nullCount", s"${colName}_num_nulls")
+          .withColumnRenamed("minValue", s"${colName}_minValue")
+          .withColumnRenamed("maxValue", s"${colName}_maxValue")
+      )
+        .reduceLeft((left: DataFrame, right: DataFrame) =>
+          left.join(right, usingColumn = "fileName")
+        )
+
+    reshapedDF.persist()
+
+    val indexSchema = reshapedDF.schema
+    val indexFilter =
+      queryFilters.map(createColumnStatsIndexFilterExpr(_, indexSchema))
+        .reduce(And)
+
+    val allIndexedFileNames =
+      reshapedDF.select("fileName")
+        .collect()
+        .map(_.getString(0))
+        .toSet
+
+    val prunedCandidateFileNames =
+      reshapedDF.where(new Column(indexFilter))
+        .select("fileName")
+        .collect()
+        .map(_.getString(0))
+        .toSet
+
+    // TODO abstract in a wrapper
+    reshapedDF.unpersist()
+    colStatsDF.unpersist()
+
+    // NOTE: Col-Stats Index isn't guaranteed to have complete set of statistics for every
+    //       base-file: since it's bound to clustering, which could occur asynchronously
+    //       at arbitrary point in time, and is not likely to be touching all of the base files.
+    //
+    //       To close that gap, we manually compute the difference b/w all indexed (by col-stats-index)
+    //       files and all outstanding base-files, and make sure that all base files not
+    //       represented w/in the index are included in the output of this method
+    val notIndexedFileNames =
+      lookupFileNamesMissingFromIndex(allIndexedFileNames)
+
+    Some(prunedCandidateFileNames ++ notIndexedFileNames)
   }
 
   override def refresh(): Unit = super.refresh()
