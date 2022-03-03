@@ -23,11 +23,10 @@ import org.apache.hudi.HoodieFileIndex.getConfigProperties
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.StringUtils
-import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper
 import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper.{getMaxColumnNameFor, getMinColumnNameFor, getNumNullsColumnNameFor}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
-import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
+import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata, MetadataPartitionType}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, Expression, Literal}
@@ -36,7 +35,7 @@ import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructType}
-import org.apache.spark.sql.{AnalysisException, Column, DataFrame, SparkSession}
+import org.apache.spark.sql.{AnalysisException, Column, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.text.SimpleDateFormat
@@ -217,8 +216,10 @@ case class HoodieFileIndex(spark: SparkSession,
         s"${HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS}.${colName}"
       )
 
-    // TODO select only from "column_stats" partition
-    val metadataTableDF = spark.read.format("org.apache.hudi").load(metadataTablePath)
+    val colStatsPartitionPath = MetadataPartitionType.COLUMN_STATS.getPartitionPath
+    val metadataTableDF = spark.read.format("org.apache.hudi")
+      .load(s"$metadataTablePath/$colStatsPartitionPath")
+
     // TODO filter on (column, partition) prefix
     val colStatsDF = metadataTableDF.where(col(HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS).isNotNull)
       .select(requiredMetadataIndexColumns.map(col): _*)
