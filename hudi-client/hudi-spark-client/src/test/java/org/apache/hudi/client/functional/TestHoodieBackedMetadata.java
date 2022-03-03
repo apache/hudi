@@ -342,7 +342,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     initWriteConfigAndMetatableWriter(writeConfig, true);
     doWriteOperation(testTable, "0000001", INSERT);
 
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(writeConfig.getBasePath()+"/.hoodie/metadata").setConf(hadoopConf).build();
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(writeConfig.getBasePath() + "/.hoodie/metadata").setConf(hadoopConf).build();
     assertTrue(metaClient.getTableConfig().populateMetaFields());
 
     // update populateMeta fields to false.
@@ -354,7 +354,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
     doWriteOperation(testTable, "0000002", INSERT);
-    metaClient = HoodieTableMetaClient.builder().setBasePath(writeConfig.getBasePath()+"/.hoodie/metadata").setConf(hadoopConf).build();
+    metaClient = HoodieTableMetaClient.builder().setBasePath(writeConfig.getBasePath() + "/.hoodie/metadata").setConf(hadoopConf).build();
     assertFalse(metaClient.getTableConfig().populateMetaFields());
   }
 
