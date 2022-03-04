@@ -75,7 +75,6 @@ import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.mapred.JobConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -93,7 +92,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes;
 import static org.apache.hudi.table.format.FormatUtils.getParquetConf;
 
 /**
@@ -159,7 +157,7 @@ public class HoodieTableSource implements
     this.filters = filters == null ? Collections.emptyList() : filters;
     this.hadoopConf = StreamerUtil.getHadoopConf();
     this.metaClient = StreamerUtil.metaClientForReader(conf, hadoopConf);
-    this.maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(new JobConf(this.hadoopConf));
+    this.maxCompactionMemoryInBytes = StreamerUtil.getMaxCompactionMemoryInBytes(conf);
   }
 
   @Override
