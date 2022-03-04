@@ -534,7 +534,7 @@ public class TestHoodieRealtimeRecordReader {
 
     commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
         schema.toString(), HoodieTimeline.DELTA_COMMIT_ACTION);
-    FileCreateUtils.createCommit(basePath.toString(), instantTime, Option.of(commitMetadata));
+    FileCreateUtils.createDeltaCommit(basePath.toString(), instantTime, commitMetadata);
 
     // create a split with baseFile (parquet file written earlier) and new log file(s)
     HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
@@ -568,6 +568,63 @@ public class TestHoodieRealtimeRecordReader {
     setHiveColumnNameProps(firstSchemaFields, jobConf, true);
     // This time read only the fields which are part of parquet
     recordReader = new HoodieRealtimeRecordReader(split, jobConf, reader);
+    // use reader to read base Parquet File and log file
+    NullWritable key = recordReader.createKey();
+    ArrayWritable value = recordReader.createValue();
+    while (recordReader.next(key, value)) {
+      // keep reading
+    }
+    reader.close();
+  }
+
+  @Test
+  public void testSchemaEvolution() throws Exception {
+    ExternalSpillableMap.DiskMapType diskMapType = ExternalSpillableMap.DiskMapType.BITCASK;
+    boolean isCompressionEnabled = true;
+    // initial commit
+    List<HoodieLogFile> logFiles = new ArrayList<>();
+    Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
+    HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
+    String instantTime = "100";
+    int numberOfRecords = 100;
+    int numberOfLogRecords = numberOfRecords / 2;
+    File partitionDir =
+        InputFormatTestUtil.prepareSimpleParquetTable(basePath, schema, 1, numberOfRecords,
+            instantTime, HoodieTableType.MERGE_ON_READ);
+    HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
+        schema.toString(), HoodieTimeline.COMMIT_ACTION);
+    FileCreateUtils.createCommit(basePath.toString(), instantTime, Option.of(commitMetadata));
+    // Add the paths
+    FileInputFormat.setInputPaths(baseJobConf, partitionDir.getPath());
+    List<Field> firstSchemaFields = schema.getFields();
+
+    // 2nd commit w/ evolved schema
+    Schema evolvedSchema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedCompatibleSchema());
+    List<Field> secondSchemaFields = evolvedSchema.getFields();
+    String newCommitTime = "101";
+    File partitionDir1 =
+        InputFormatTestUtil.prepareSimpleParquetTable(basePath, evolvedSchema, 1, numberOfRecords,
+            instantTime, HoodieTableType.MERGE_ON_READ,"2017","05","01");
+    HoodieCommitMetadata commitMetadata1 = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
+        evolvedSchema.toString(), HoodieTimeline.COMMIT_ACTION);
+    FileCreateUtils.createCommit(basePath.toString(), newCommitTime, Option.of(commitMetadata1));
+    // Add the paths
+    FileInputFormat.setInputPaths(baseJobConf, partitionDir1.getPath());
+
+    // create a split with baseFile from 1st commit.
+    HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
+        new FileSplit(new Path(partitionDir + "/fileid0_1_" + instantTime + ".parquet"), 0, 1, baseJobConf),
+        basePath.toUri().toString(), logFiles, newCommitTime, false, Option.empty());
+
+    // create a RecordReader to be used by HoodieRealtimeRecordReader
+    RecordReader<NullWritable, ArrayWritable> reader = new MapredParquetInputFormat().getRecordReader(
+        new FileSplit(split.getPath(), 0, fs.getLength(split.getPath()), (String[]) null), baseJobConf, null);
+    JobConf jobConf = new JobConf(baseJobConf);
+
+    // Try to read all the fields passed by the new schema
+    setHiveColumnNameProps(secondSchemaFields, jobConf, true);
+    // This time read only the fields which are part of parquet
+    HoodieRealtimeRecordReader recordReader = new HoodieRealtimeRecordReader(split, jobConf, reader);
     // use reader to read base Parquet File and log file
     NullWritable key = recordReader.createKey();
     ArrayWritable value = recordReader.createValue();
