@@ -20,6 +20,48 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.common.table.HoodieTableMetaClient
 
 class TestTimeTravelTable extends TestHoodieSqlBase {
+  test("Test Insert and Update with time travel") {
+    withTempDir { tmp =>
+      val tableName1 = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName1 (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | tblproperties (
+           |  type = 'cow',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+           | location '${tmp.getCanonicalPath}/$tableName1'
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName1 values(1, 'a1', 10, 1000)")
+
+      val metaClient1 = HoodieTableMetaClient.builder()
+        .setBasePath(s"${tmp.getCanonicalPath}/$tableName1")
+        .setConf(spark.sessionState.newHadoopConf())
+        .build()
+
+      val instant1 = metaClient1.getActiveTimeline.getAllCommitsTimeline
+        .lastInstant().get().getTimestamp
+
+      spark.sql(s"insert into $tableName1 values(1, 'a2', 20, 2000)")
+
+      checkAnswer(s"select id, name, price, ts from $tableName1")(
+        Seq(1, "a2", 20.0, 2000)
+      )
+
+      // time travel from instant1
+      checkAnswer(
+        s"select id, name, price, ts from $tableName1 TIMESTAMP AS OF '$instant1'")(
+        Seq(1, "a1", 10.0, 1000)
+      )
+    }
+  }
 
   test("Test Two Table's Union Join with time travel") {
     withTempDir { tmp =>
@@ -168,20 +210,25 @@ class TestTimeTravelTable extends TestHoodieSqlBase {
       spark.sql(
         s"""
            | insert into $tableName2
-           | select id, name, price, ts, '2022-02-14' as dt
+
+           | select id, name, price, ts, '2022-
+
            | from $tableName1 TIMESTAMP AS OF '$instant1'
-        """.stripMargin)
+        """.
+          stripMargin)
       checkAnswer(s"select id, name, price, ts, dt from $tableName2")(
         Seq(1, "a1", 10.0, 1000, "2022-02-14")
       )
 
-      // Insert into static partition
+      // Ins static partition
       spark.sql(
         s"""
            | insert into $tableName2 partition(dt = '2022-02-15')
-           | select 2 as id, 'a2' as name, price, ts from $tableName1 TIMESTAMP AS OF '$instant1'
+           | select 2 as id, 'a2' as name, price, ts from $tableName1
+         TIMESTAMP AS OF '$instant1'
         """.stripMargin)
-      checkAnswer(s"select id, name, price, ts, dt from $tableName2")(
+      checkAnswer(
+        s"select id, name, price, ts, dt from $tableName2")(
         Seq(1, "a1", 10.0, 1000, "2022-02-14"),
         Seq(2, "a2", 10.0, 1000, "2022-02-15")
       )
