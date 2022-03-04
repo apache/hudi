@@ -358,6 +358,9 @@ object HoodieFileIndex extends Logging {
   }
 
   private def getQueryPath(options: Map[String, String]) = {
-    new Path(options.getOrElse("path", "'path' option required"))
+    new Path(options.get("path") match {
+      case Some(p) => p
+      case None => throw new IllegalArgumentException("'path' option required")
+    })
   }
 }
