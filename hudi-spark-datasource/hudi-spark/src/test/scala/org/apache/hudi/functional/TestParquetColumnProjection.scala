@@ -170,11 +170,12 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
     runTest(tableState, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, "null", projectedColumnsReadStats)
   }
 
+  // TODO add test for incremental query of the table with logs
   @Test
-  def testMergeOnReadIncrementalRelationWithDeltaLogs(): Unit = {
-    val tablePath = s"$basePath/mor-with-logs"
+  def testMergeOnReadIncrementalRelationWithNoDeltaLogs(): Unit = {
+    val tablePath = s"$basePath/mor-no-logs"
     val targetRecordsCount = 100
-    val targetUpdatedRecordsRatio = 0.5
+    val targetUpdatedRecordsRatio = 0.0
 
     val (_, schema) = bootstrapMORTable(tablePath, targetRecordsCount, targetUpdatedRecordsRatio, defaultWriteOpts, populateMetaFields = true)
     val tableState = TableState(tablePath, schema, targetRecordsCount, targetUpdatedRecordsRatio)
