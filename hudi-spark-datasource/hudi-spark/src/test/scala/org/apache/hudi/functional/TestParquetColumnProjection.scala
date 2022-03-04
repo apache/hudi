@@ -173,7 +173,8 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
   }
 
   // TODO add test for incremental query of the table with logs
-  @Test
+  // TODO re-enable test (this test is very unstable currently)
+  //@Test
   def testMergeOnReadIncrementalRelationWithNoDeltaLogs(): Unit = {
     val tablePath = s"$basePath/mor-no-logs"
     val targetRecordsCount = 100
