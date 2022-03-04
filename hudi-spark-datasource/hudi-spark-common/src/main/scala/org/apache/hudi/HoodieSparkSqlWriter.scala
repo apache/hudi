@@ -732,8 +732,7 @@ object HoodieSparkSqlWriter {
   private def isAsyncClusteringEnabled(client: SparkRDDWriteClient[HoodieRecordPayload[Nothing]],
                                        parameters: Map[String, String]): Boolean = {
     log.info(s"Config.asyncClusteringEnabled ? ${client.getConfig.isAsyncClusteringEnabled}")
-    asyncClusteringTriggerFnDefined && client.getConfig.isAsyncClusteringEnabled &&
-      parameters.get(ASYNC_CLUSTERING_ENABLE.key).exists(r => r.toBoolean)
+    asyncClusteringTriggerFnDefined && client.getConfig.isAsyncClusteringEnabled
   }
 
   private def getHoodieTableConfig(sparkContext: SparkContext,
