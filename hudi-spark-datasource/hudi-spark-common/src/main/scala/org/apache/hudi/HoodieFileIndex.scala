@@ -199,59 +199,54 @@ case class HoodieFileIndex(spark: SparkSession,
     val metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(basePath)
 
     if (!isDataSkippingEnabled() || !fs.exists(new Path(metadataTablePath)) || queryFilters.isEmpty) {
-      // scalastyle:off return
-      return Success(Option.empty)
-      // scalastyle:on return
-    }
+      Option.empty
+    } else {
+      val targetColStatsIndexColumns = Seq(
+        HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME,
+        HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE,
+        HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE,
+        HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT)
 
-    val targetColStatsIndexColumns = Seq(
-      HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME,
-      HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE,
-      HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE,
-      HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT
-    )
+      val requiredMetadataIndexColumns =
+        (targetColStatsIndexColumns :+ HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME).map(colName =>
+          s"${HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS}.${colName}")
 
-    val requiredMetadataIndexColumns =
-      (targetColStatsIndexColumns :+ HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME).map(colName =>
-        s"${HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS}.${colName}"
-      )
+      // Read Metadata Table's Column Stats Index into Spark's [[DataFrame]]
+      val metadataTableDF = spark.read.format("org.apache.hudi")
+        .load(s"$metadataTablePath/${MetadataPartitionType.COLUMN_STATS.getPartitionPath}")
 
-    val colStatsPartitionPath = MetadataPartitionType.COLUMN_STATS.getPartitionPath
-    val metadataTableDF = spark.read.format("org.apache.hudi")
-      .load(s"$metadataTablePath/$colStatsPartitionPath")
+      // TODO filter on (column, partition) prefix
+      val colStatsDF = metadataTableDF.where(col(HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS).isNotNull)
+        .select(requiredMetadataIndexColumns.map(col): _*)
 
-    // TODO filter on (column, partition) prefix
-    val colStatsDF = metadataTableDF.where(col(HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS).isNotNull)
-      .select(requiredMetadataIndexColumns.map(col): _*)
+      val queryReferencedColumns = collectReferencedColumns(spark, queryFilters, schema)
 
-    val queryReferencedColumns = collectReferencedColumns(spark, queryFilters, schema)
-
-    // Persist DF to avoid re-computing column statistics unraveling
-    withPersistence(colStatsDF) {
-      // Metadata Table bears rows in the following format
-      //
-      //  +---------------------------+------------+------------+------------+-------------+
-      //  |        fileName           | columnName |  minValue  |  maxValue  |  num_nulls  |
-      //  +---------------------------+------------+------------+------------+-------------+
-      //  | one_base_file.parquet     |          A |          1 |         10 |           0 |
-      //  | another_base_file.parquet |          A |        -10 |          0 |           5 |
-      //  +---------------------------+------------+------------+------------+-------------+
-      //
-      // While Data Skipping utils are expecting following (transposed) format, where per-column stats are
-      // essentially transposed (from rows to columns):
-      //
-      //  +---------------------------+------------+------------+-------------+
-      //  |          file             | A_minValue | A_maxValue | A_num_nulls |
-      //  +---------------------------+------------+------------+-------------+
-      //  | one_base_file.parquet     |          1 |         10 |           0 |
-      //  | another_base_file.parquet |        -10 |          0 |           5 |
-      //  +---------------------------+------------+------------+-------------+
-      //
-      // NOTE: Column Stats Index might potentially contain statistics for many columns (if not all), while
-      //       query at hand might only be referencing a handful of those. As such, we collect all the
-      //       column references from the filtering expressions, and only transpose records corresponding to the
-      //       columns referenced in those
-      val transposedColStatsDF =
+      // Persist DF to avoid re-computing column statistics unraveling
+      withPersistence(colStatsDF) {
+        // Metadata Table bears rows in the following format
+        //
+        //  +---------------------------+------------+------------+------------+-------------+
+        //  |        fileName           | columnName |  minValue  |  maxValue  |  num_nulls  |
+        //  +---------------------------+------------+------------+------------+-------------+
+        //  | one_base_file.parquet     |          A |          1 |         10 |           0 |
+        //  | another_base_file.parquet |          A |        -10 |          0 |           5 |
+        //  +---------------------------+------------+------------+------------+-------------+
+        //
+        // While Data Skipping utils are expecting following (transposed) format, where per-column stats are
+        // essentially transposed (from rows to columns):
+        //
+        //  +---------------------------+------------+------------+-------------+
+        //  |          file             | A_minValue | A_maxValue | A_num_nulls |
+        //  +---------------------------+------------+------------+-------------+
+        //  | one_base_file.parquet     |          1 |         10 |           0 |
+        //  | another_base_file.parquet |        -10 |          0 |           5 |
+        //  +---------------------------+------------+------------+-------------+
+        //
+        // NOTE: Column Stats Index might potentially contain statistics for many columns (if not all), while
+        //       query at hand might only be referencing a handful of those. As such, we collect all the
+        //       column references from the filtering expressions, and only transpose records corresponding to the
+        //       columns referenced in those
+        val transposedColStatsDF =
         queryReferencedColumns.map(colName =>
           colStatsDF.filter(col(HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME).equalTo(colName))
             .select(targetColStatsIndexColumns.map(col): _*)
@@ -262,36 +257,37 @@ case class HoodieFileIndex(spark: SparkSession,
           .reduceLeft((left, right) =>
             left.join(right, usingColumn = HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME))
 
-      // Persist DF to avoid re-computing column statistics unraveling
-      withPersistence(transposedColStatsDF) {
-        val indexSchema = transposedColStatsDF.schema
-        val indexFilter =
-          queryFilters.map(createColumnStatsIndexFilterExpr(_, indexSchema))
-            .reduce(And)
+        // Persist DF to avoid re-computing column statistics unraveling
+        withPersistence(transposedColStatsDF) {
+          val indexSchema = transposedColStatsDF.schema
+          val indexFilter =
+            queryFilters.map(createColumnStatsIndexFilterExpr(_, indexSchema))
+              .reduce(And)
 
-        val allIndexedFileNames =
-          transposedColStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
-            .collect()
-            .map(_.getString(0))
-            .toSet
+          val allIndexedFileNames =
+            transposedColStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+              .collect()
+              .map(_.getString(0))
+              .toSet
 
-        val prunedCandidateFileNames =
-          transposedColStatsDF.where(new Column(indexFilter))
-            .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
-            .collect()
-            .map(_.getString(0))
-            .toSet
+          val prunedCandidateFileNames =
+            transposedColStatsDF.where(new Column(indexFilter))
+              .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+              .collect()
+              .map(_.getString(0))
+              .toSet
 
-        // NOTE: Col-Stats Index isn't guaranteed to have complete set of statistics for every
-        //       base-file: since it's bound to clustering, which could occur asynchronously
-        //       at arbitrary point in time, and is not likely to be touching all of the base files.
-        //
-        //       To close that gap, we manually compute the difference b/w all indexed (by col-stats-index)
-        //       files and all outstanding base-files, and make sure that all base files not
-        //       represented w/in the index are included in the output of this method
-        val notIndexedFileNames = lookupFileNamesMissingFromIndex(allIndexedFileNames)
+          // NOTE: Col-Stats Index isn't guaranteed to have complete set of statistics for every
+          //       base-file: since it's bound to clustering, which could occur asynchronously
+          //       at arbitrary point in time, and is not likely to be touching all of the base files.
+          //
+          //       To close that gap, we manually compute the difference b/w all indexed (by col-stats-index)
+          //       files and all outstanding base-files, and make sure that all base files not
+          //       represented w/in the index are included in the output of this method
+          val notIndexedFileNames = lookupFileNamesMissingFromIndex(allIndexedFileNames)
 
-        Some(prunedCandidateFileNames ++ notIndexedFileNames)
+          Some(prunedCandidateFileNames ++ notIndexedFileNames)
+        }
       }
     }
   }
