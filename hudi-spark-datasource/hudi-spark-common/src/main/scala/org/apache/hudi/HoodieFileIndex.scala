@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.HoodieDatasetUtils.withPersistence
-import org.apache.hudi.HoodieFileIndex.getConfigProperties
+import org.apache.hudi.HoodieFileIndex.{collectReferencedColumns, getConfigProperties}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.StringUtils
@@ -224,17 +224,35 @@ case class HoodieFileIndex(spark: SparkSession,
     val colStatsDF = metadataTableDF.where(col(HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS).isNotNull)
       .select(requiredMetadataIndexColumns.map(col): _*)
 
+    val queryReferencedColumns = collectReferencedColumns(spark, queryFilters, schema)
+
     // Persist DF to avoid re-computing column statistics unraveling
     withPersistence(colStatsDF) {
-      // TODO replace with columns collected from the filters
-      val indexedColumnNames = colStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME)
-        .distinct()
-        .collect()
-        .toSeq
-        .map(_.getString(0))
-
-      val reshapedDF =
-        indexedColumnNames.map(colName =>
+      // Metadata Table bears rows in the following format
+      //
+      //  +---------------------------+------------+------------+------------+-------------+
+      //  |        fileName           | columnName |  minValue  |  maxValue  |  num_nulls  |
+      //  +---------------------------+------------+------------+------------+-------------+
+      //  | one_base_file.parquet     |          A |          1 |         10 |           0 |
+      //  | another_base_file.parquet |          A |        -10 |          0 |           5 |
+      //  +---------------------------+------------+------------+------------+-------------+
+      //
+      // While Data Skipping utils are expecting following (transposed) format, where per-column stats are
+      // essentially transposed (from rows to columns):
+      //
+      //  +---------------------------+------------+------------+-------------+
+      //  |          file             | A_minValue | A_maxValue | A_num_nulls |
+      //  +---------------------------+------------+------------+-------------+
+      //  | one_base_file.parquet     |          1 |         10 |           0 |
+      //  | another_base_file.parquet |        -10 |          0 |           5 |
+      //  +---------------------------+------------+------------+-------------+
+      //
+      // NOTE: Column Stats Index might potentially contain statistics for many columns (if not all), while
+      //       query at hand might only be referencing a handful of those. As such, we collect all the
+      //       column references from the filtering expressions, and only transpose records corresponding to the
+      //       columns referenced in those
+      val transposedColStatsDF =
+        queryReferencedColumns.map(colName =>
           colStatsDF.filter(col(HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME).equalTo(colName))
             .select(targetColStatsIndexColumns.map(col): _*)
             .withColumnRenamed(HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT, getNumNullsColumnNameFor(colName))
@@ -245,20 +263,20 @@ case class HoodieFileIndex(spark: SparkSession,
             left.join(right, usingColumn = HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME))
 
       // Persist DF to avoid re-computing column statistics unraveling
-      withPersistence(reshapedDF) {
-        val indexSchema = reshapedDF.schema
+      withPersistence(transposedColStatsDF) {
+        val indexSchema = transposedColStatsDF.schema
         val indexFilter =
           queryFilters.map(createColumnStatsIndexFilterExpr(_, indexSchema))
             .reduce(And)
 
         val allIndexedFileNames =
-          reshapedDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+          transposedColStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
             .collect()
             .map(_.getString(0))
             .toSet
 
         val prunedCandidateFileNames =
-          reshapedDF.where(new Column(indexFilter))
+          transposedColStatsDF.where(new Column(indexFilter))
             .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
             .collect()
             .map(_.getString(0))
@@ -291,6 +309,12 @@ case class HoodieFileIndex(spark: SparkSession,
 }
 
 object HoodieFileIndex extends Logging {
+
+  private def collectReferencedColumns(spark: SparkSession, queryFilters: Seq[Expression], schema: StructType): Seq[String] = {
+    val resolver = spark.sessionState.analyzer.resolver
+    val refs = queryFilters.flatMap(_.references)
+    schema.fieldNames.filter { colName => refs.exists(r => resolver.apply(colName, r.name)) }
+  }
 
   def getConfigProperties(spark: SparkSession, options: Map[String, String]) = {
     val sqlConf: SQLConf = spark.sessionState.conf
