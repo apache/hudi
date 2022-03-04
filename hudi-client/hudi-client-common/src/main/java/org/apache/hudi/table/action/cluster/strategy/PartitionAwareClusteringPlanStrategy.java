@@ -35,6 +35,7 @@ import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -72,8 +73,8 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
     HoodieWriteConfig config = getWriteConfig();
     List<String> partitionPaths = FSUtils.getAllPartitionPaths(getEngineContext(), config.getMetadataConfig(), metaClient.getBasePath());
 
-    // get regex matched partitions if set
-    partitionPaths = getRegexPatternMatchedPartitions(config, partitionPaths);
+    // get matched partitions if set
+    partitionPaths = getMatchedPartitions(config, partitionPaths);
     // filter the partition paths if needed to reduce list status
     partitionPaths = filterPartitionPaths(partitionPaths);
 
@@ -111,6 +112,15 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
         .setVersion(getPlanVersion())
         .setPreserveHoodieMetadata(getWriteConfig().isPreserveHoodieCommitMetadataForClustering())
         .build());
+  }
+
+  public List<String> getMatchedPartitions(HoodieWriteConfig config, List<String> partitionPaths) {
+    String partitionSelected = config.getClusteringPartitionSelected();
+    if (!StringUtils.isNullOrEmpty(partitionSelected)) {
+      return Arrays.asList(partitionSelected.split(","));
+    } else {
+      return getRegexPatternMatchedPartitions(config, partitionPaths);
+    }
   }
 
   public List<String> getRegexPatternMatchedPartitions(HoodieWriteConfig config, List<String> partitionPaths) {

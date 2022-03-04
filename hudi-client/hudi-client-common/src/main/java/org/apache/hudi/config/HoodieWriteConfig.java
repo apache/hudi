@@ -1301,6 +1301,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getLong(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT);
   }
 
+  public String getClusteringPartitionSelected() {
+    return getString(HoodieClusteringConfig.PARTITION_SELECTED);
+  }
+
   public String getClusteringPartitionFilterRegexPattern() {
     return getString(HoodieClusteringConfig.PARTITION_REGEX_PATTERN);
   }
