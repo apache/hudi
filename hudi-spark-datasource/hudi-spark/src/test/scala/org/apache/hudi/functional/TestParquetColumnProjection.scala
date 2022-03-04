@@ -286,7 +286,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
       else HoodieTestDataGenerator.AVRO_SCHEMA
 
     val records = dataGen.generateInserts("001", recordCount)
-    val inputDF: Dataset[Row] = toDataset(records)
+    val inputDF: Dataset[Row] = toDataset(records, HoodieTestDataGenerator.AVRO_SCHEMA)
 
     inputDF.write.format("org.apache.hudi")
       .options(opts)
@@ -317,7 +317,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
       val updatedRecords = dataGen.generateUpdates("002", recordsToUpdate.asJava)
 
       // Step 2: Update M records out of those (t/h update)
-      val inputDF = toDataset(updatedRecords)
+      val inputDF = toDataset(updatedRecords, HoodieTestDataGenerator.AVRO_SCHEMA)
 
       inputDF.write.format("org.apache.hudi")
         .options(opts)

@@ -19,6 +19,7 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -355,12 +356,12 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
         .withRollbackUsingMarkers(rollbackUsingMarkers);
   }
 
-  protected Dataset<Row> toDataset(List<HoodieRecord> records) {
+  protected Dataset<Row> toDataset(List<HoodieRecord> records, Schema schema) {
     List<GenericRecord> avroRecords = records.stream()
         .map(r -> {
           HoodieRecordPayload payload = (HoodieRecordPayload) r.getData();
           try {
-            return (GenericRecord) payload.getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA).get();
+            return (GenericRecord) payload.getInsertValue(schema).get();
           } catch (IOException e) {
             throw new HoodieIOException("Failed to extract Avro payload", e);
           }
