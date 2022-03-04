@@ -131,6 +131,9 @@
     <resources>
       <resource>
         <directory>src/main/resources</directory>
+        <includes>
+          <include>hbase-site.xml</include>
+        </includes>
       </resource>
     </resources>
     <plugins>
