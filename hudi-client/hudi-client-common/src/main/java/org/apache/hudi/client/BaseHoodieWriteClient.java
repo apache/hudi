@@ -1313,15 +1313,6 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     return table;
   }
 
-  protected <R> R withLock(Supplier<R> s) {
-    this.txnManager.beginTransaction();
-    try {
-      return s.get();
-    } finally {
-      this.txnManager.endTransaction();
-    }
-  }
-
   /**
      * Sets write schema from last instant since deletes may not have schema set in the config.
      */
