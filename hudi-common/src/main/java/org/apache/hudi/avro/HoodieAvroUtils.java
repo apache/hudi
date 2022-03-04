@@ -18,17 +18,6 @@
 
 package org.apache.hudi.avro;
 
-import org.apache.hudi.common.config.SerializableSchema;
-import org.apache.hudi.common.model.HoodieOperation;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.SchemaCompatibilityException;
-
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Conversions.DecimalConversion;
 import org.apache.avro.JsonProperties;
