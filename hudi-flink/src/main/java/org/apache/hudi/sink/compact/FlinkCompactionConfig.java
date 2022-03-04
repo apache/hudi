@@ -109,6 +109,10 @@ public class FlinkCompactionConfig extends Configuration {
       description = "Min compaction interval of async compaction service, default 10 minutes")
   public Integer minCompactionIntervalSeconds = 600;
 
+  @Parameter(names = {"--compaction-memory-fraction-prop"},
+          description = "Compaction memory fraction of Task Manager managed memory size, default 0.1")
+  public double compactionMemoryFractionProp = 0.1;
+
   /**
    * Transforms a {@code HoodieFlinkCompaction.config} into {@code Configuration}.
    * The latter is more suitable for the table APIs. It reads all the properties
@@ -129,6 +133,7 @@ public class FlinkCompactionConfig extends Configuration {
     conf.setLong(FlinkOptions.COMPACTION_TARGET_IO, config.compactionTargetIo);
     conf.setInteger(FlinkOptions.COMPACTION_TASKS, config.compactionTasks);
     conf.setBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED, config.cleanAsyncEnable);
+    conf.setDouble(FlinkOptions.COMPACTION_MEMORY_FRACTION_PROP, config.compactionMemoryFractionProp);
     // use synchronous compaction always
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
     conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, config.schedule);
