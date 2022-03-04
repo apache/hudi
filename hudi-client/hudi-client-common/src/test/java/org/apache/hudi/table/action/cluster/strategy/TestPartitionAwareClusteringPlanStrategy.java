@@ -71,7 +71,7 @@ public class TestPartitionAwareClusteringPlanStrategy {
     fakeTimeBasedPartitionsPath.add("20210719");
     fakeTimeBasedPartitionsPath.add("20210721");
 
-    List list = strategyTestRegexPattern.getRegexPatternMatchedPartitions(hoodieWriteConfig, fakeTimeBasedPartitionsPath);
+    List list = strategyTestRegexPattern.getMatchedPartitions(hoodieWriteConfig, fakeTimeBasedPartitionsPath);
     assertEquals(2, list.size());
     assertTrue(list.contains("20210721"));
     assertTrue(list.contains("20210723"));

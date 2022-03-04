@@ -36,6 +36,8 @@ object HoodieProcedures {
     mapBuilder.put(ShowCommitsProcedure.NAME, ShowCommitsProcedure.builder)
     mapBuilder.put(ShowCommitsMetadataProcedure.NAME, ShowCommitsMetadataProcedure.builder)
     mapBuilder.put(RollbackToInstantTimeProcedure.NAME, RollbackToInstantTimeProcedure.builder)
+    mapBuilder.put(RunClusteringProcedure.NAME, RunClusteringProcedure.builder)
+    mapBuilder.put(ShowClusteringProcedure.NAME, ShowClusteringProcedure.builder)
     mapBuilder.build
   }
 }
