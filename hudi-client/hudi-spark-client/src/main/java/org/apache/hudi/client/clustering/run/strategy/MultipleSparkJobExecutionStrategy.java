@@ -289,7 +289,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
     Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
     if (!writeConfig.populateMetaFields()) {
       try {
-        keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(getWriteConfig().getProps())));
+        keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(writeConfig.getProps()));
       } catch (IOException e) {
         throw new HoodieIOException("Only BaseKeyGenerators are supported when meta columns are disabled ", e);
       }
