@@ -22,20 +22,22 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSo
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.testutils.{HadoopMapRedUtils, HoodieTestDataGenerator}
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieStorageConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.parquet.hadoop.util.counters.BenchmarkCounter
 import org.apache.spark.HoodieUnsafeRDDUtils
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{Dataset, Row, SaveMode}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 import org.junit.jupiter.api.{Tag, Test}
 
+import scala.:+
 import scala.collection.JavaConverters._
 
 @Tag("functional")
-class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
+class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with Logging {
 
   val defaultWriteOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
@@ -177,7 +179,12 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
     val targetRecordsCount = 100
     val targetUpdatedRecordsRatio = 0.0
 
-    val (_, schema) = bootstrapMORTable(tablePath, targetRecordsCount, targetUpdatedRecordsRatio, defaultWriteOpts, populateMetaFields = true)
+    val opts: Map[String, String] =
+      // NOTE: Parquet Compression is disabled as it was leading to non-deterministic outcomes when testing
+      //       against Spark 2.x
+      defaultWriteOpts ++ Seq(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME.key -> "")
+
+    val (_, schema) = bootstrapMORTable(tablePath, targetRecordsCount, targetUpdatedRecordsRatio, opts, populateMetaFields = true)
     val tableState = TableState(tablePath, schema, targetRecordsCount, targetUpdatedRecordsRatio)
 
     // Stats for the reads fetching only _projected_ columns (note how amount of bytes read
@@ -185,14 +192,14 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
     val projectedColumnsReadStats: Array[(String, Long)] =
       if (HoodieSparkUtils.isSpark3)
         Array(
-          ("rider", 2560),
-          ("rider,driver", 2660),
-          ("rider,driver,tip_history", 3625))
+          ("rider", 4219),
+          ("rider,driver", 4279),
+          ("rider,driver,tip_history", 5186))
       else if (HoodieSparkUtils.isSpark2)
         Array(
-          ("rider", 2775),
-          ("rider,driver", 2915),
-          ("rider,driver,tip_history", 3930))
+          ("rider", 4430),
+          ("rider,driver", 4530),
+          ("rider,driver,tip_history", 5487))
       else
         fail("Only Spark 3 and Spark 2 are currently supported")
 
@@ -201,14 +208,14 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
     val fullColumnsReadStats: Array[(String, Long)] =
       if (HoodieSparkUtils.isSpark3)
         Array(
-          ("rider", 14667),
-          ("rider,driver", 14667),
-          ("rider,driver,tip_history", 14667))
+          ("rider", 19683),
+          ("rider,driver", 19683),
+          ("rider,driver,tip_history", 19683))
       else if (HoodieSparkUtils.isSpark2)
         Array(
-          ("rider", 15338),
-          ("rider,driver", 15338),
-          ("rider,driver,tip_history", 15338))
+          ("rider", 20852),
+          ("rider,driver", 20852),
+          ("rider,driver,tip_history", 20852))
       else
         fail("Only Spark 3 and Spark 2 are currently supported")
 
@@ -260,7 +267,11 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness {
         else targetRecordCount
 
       assertEquals(expectedRecordCount, rows.length)
-      assertEquals(expectedBytesRead, bytesRead)
+      if (expectedBytesRead != -1) {
+        assertEquals(expectedBytesRead, bytesRead)
+      } else {
+        logWarning(s"Not matching bytes read ($bytesRead)")
+      }
 
       val readColumns = targetColumns ++ relation.mandatoryColumns
       val (_, projectedStructType) = HoodieSparkUtils.getRequiredSchema(tableState.schema, readColumns)
