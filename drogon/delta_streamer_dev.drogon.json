@@ -13,7 +13,7 @@
         "jars": [
             "https://repo1.maven.org/maven2/org/apache/avro/avro/${avro_version}/avro-${avro_version}.jar",
             "https://repo1.maven.org/maven2/org/apache/spark/spark-avro_${scala_version}/${spark_avro_version}/spark-avro_${scala_version}-${spark_avro_version}.jar",
-            "http://artifactory.uber.internal:4587/artifactory/libs-release-local/org/apache/hudi/hudi-utilities-bundle_${scala_version}/${hudi_version}/hudi-utilities-bundle_${scala_version}-${hudi_version}.jar"
+            "hdfs:///user/${user}/hudi-utilities-bundle_${scala_version}-${hudi_version}.jar"
         ],
         "numExecutors": 64,
         "driverMemory": "${driver_memory}",
