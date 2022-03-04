@@ -130,7 +130,7 @@ public class RequestHandler {
           + "], localTimeline=" + localTimeline.getInstants().collect(Collectors.toList()));
     }
 
-    if ((localTimeline.getInstants().count() == 0)
+    if ((!localTimeline.getInstants().findAny().isPresent())
         && HoodieTimeline.INVALID_INSTANT_TS.equals(lastKnownInstantFromClient)) {
       return false;
     }
