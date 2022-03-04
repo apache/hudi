@@ -83,8 +83,6 @@ import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
-import static org.apache.hudi.configuration.FlinkOptions.COMPACTION_MEMORY_FRACTION_PROP;
-import static org.apache.hudi.configuration.FlinkOptions.COMPACTION_MAX_MEMORY;
 
 /**
  * Utilities for Flink stream read and write.
@@ -518,11 +516,11 @@ public class StreamerUtil {
    * Returns the max compaction memory in bytes with given conf.
    */
   public static long getMaxCompactionMemoryInBytes(Configuration conf) {
-    if (conf.contains(COMPACTION_MAX_MEMORY)) {
-      return conf.get(COMPACTION_MAX_MEMORY) * 1024 * 1024;
+    if (conf.contains(FlinkOptions.COMPACTION_MAX_MEMORY)) {
+      return conf.get(FlinkOptions.COMPACTION_MAX_MEMORY) * 1024 * 1024;
     }
     return (long)Math
-        .ceil(conf.getDouble(COMPACTION_MEMORY_FRACTION_PROP)
+        .ceil(conf.getDouble(FlinkOptions.COMPACTION_MEMORY_FRACTION_PROP)
             * TaskExecutorProcessUtils.processSpecFromConfig(
                 TaskExecutorProcessUtils.getConfigurationMapLegacyTaskManagerHeapSizeToConfigOption(
                     conf, TaskManagerOptions.TOTAL_PROCESS_MEMORY))
