@@ -32,6 +32,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, Expression, Literal}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
 import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructType}
@@ -123,15 +124,11 @@ case class HoodieFileIndex(spark: SparkSession,
       lookupCandidateFilesInMetadataTable(dataFilters) match {
         case Success(opt) => opt
         case Failure(e) =>
-          if (e.isInstanceOf[AnalysisException]) {
-            logDebug("Failed to relay provided data filters to Z-index lookup", e)
-          } else {
-            logError("Failed to lookup candidate files in Z-index", e)
-          }
+          logError("Failed to lookup candidate files in Z-index", e)
           Option.empty
       }
 
-    logDebug(s"Overlapping candidate files (from Z-index): ${candidateFilesNamesOpt.getOrElse(Set.empty)}")
+    logDebug(s"Overlapping candidate files from Column Stats Index: ${candidateFilesNamesOpt.getOrElse(Set.empty)}")
 
     if (queryAsNonePartitionedTable) {
       // Read as Non-Partitioned table
@@ -261,7 +258,7 @@ case class HoodieFileIndex(spark: SparkSession,
         withPersistence(transposedColStatsDF) {
           val indexSchema = transposedColStatsDF.schema
           val indexFilter =
-            queryFilters.map(createColumnStatsIndexFilterExpr(_, indexSchema))
+            queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexSchema))
               .reduce(And)
 
           val allIndexedFileNames =

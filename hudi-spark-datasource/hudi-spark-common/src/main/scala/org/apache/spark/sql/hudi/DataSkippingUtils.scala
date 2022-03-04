@@ -42,14 +42,24 @@ object DataSkippingUtils extends Logging {
    * Translates provided {@link filterExpr} into corresponding filter-expression for column-stats index index table
    * to filter out candidate files that would hold records matching the original filter
    *
-   * @param sourceFilterExpr source table's query's filter expression
+   * @param dataTableFilterExpr source table's query's filter expression
    * @param indexSchema index table schema
    * @return filter for column-stats index's table
    */
-  def createColumnStatsIndexFilterExpr(sourceFilterExpr: Expression, indexSchema: StructType): Expression = {
+  def translateIntoColumnStatsIndexFilterExpr(dataTableFilterExpr: Expression, indexSchema: StructType): Expression = {
+    try {
+      createColumnStatsIndexFilterExprInternal(dataTableFilterExpr, indexSchema)
+    } catch {
+      case e: AnalysisException =>
+        logDebug(s"Failed to translated provided data table filter expr into column stats one ($dataTableFilterExpr)", e)
+        throw e
+    }
+  }
+
+  private def createColumnStatsIndexFilterExprInternal(dataTableFilterExpr: Expression, indexSchema: StructType): Expression = {
     // Try to transform original Source Table's filter expression into
     // Column-Stats Index filter expression
-    tryComposeIndexFilterExpr(sourceFilterExpr, indexSchema) match {
+    tryComposeIndexFilterExpr(dataTableFilterExpr, indexSchema) match {
       case Some(e) => e
       // NOTE: In case we can't transform source filter expression, we fallback
       // to {@code TrueLiteral}, to essentially avoid pruning any indexed files from scanning
@@ -201,14 +211,14 @@ object DataSkippingUtils extends Logging {
           )
 
       case or: Or =>
-        val resLeft = createColumnStatsIndexFilterExpr(or.left, indexSchema)
-        val resRight = createColumnStatsIndexFilterExpr(or.right, indexSchema)
+        val resLeft = createColumnStatsIndexFilterExprInternal(or.left, indexSchema)
+        val resRight = createColumnStatsIndexFilterExprInternal(or.right, indexSchema)
 
         Option(Or(resLeft, resRight))
 
       case and: And =>
-        val resLeft = createColumnStatsIndexFilterExpr(and.left, indexSchema)
-        val resRight = createColumnStatsIndexFilterExpr(and.right, indexSchema)
+        val resLeft = createColumnStatsIndexFilterExprInternal(and.left, indexSchema)
+        val resRight = createColumnStatsIndexFilterExprInternal(and.right, indexSchema)
 
         Option(And(resLeft, resRight))
 
@@ -219,10 +229,10 @@ object DataSkippingUtils extends Logging {
       //
 
       case Not(And(left: Expression, right: Expression)) =>
-        Option(createColumnStatsIndexFilterExpr(Or(Not(left), Not(right)), indexSchema))
+        Option(createColumnStatsIndexFilterExprInternal(Or(Not(left), Not(right)), indexSchema))
 
       case Not(Or(left: Expression, right: Expression)) =>
-        Option(createColumnStatsIndexFilterExpr(And(Not(left), Not(right)), indexSchema))
+        Option(createColumnStatsIndexFilterExprInternal(And(Not(left), Not(right)), indexSchema))
 
       case _: Expression => None
     }
