@@ -246,21 +246,26 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
    */
   private JavaRDD<HoodieRecord<T>> readRecordsForGroupBaseFiles(JavaSparkContext jsc,
                                                                 List<ClusteringOperation> clusteringOps) {
-    return jsc.parallelize(clusteringOps, clusteringOps.size()).mapPartitions(clusteringOpsPartition -> {
-      List<Iterator<IndexedRecord>> iteratorsForPartition = new ArrayList<>();
-      clusteringOpsPartition.forEachRemaining(clusteringOp -> {
-        try {
-          Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
-          HoodieFileReader<IndexedRecord> baseFileReader = HoodieFileReaderFactory.getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath()));
-          iteratorsForPartition.add(baseFileReader.getRecordIterator(readerSchema));
-        } catch (IOException e) {
-          throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
-              + " and " + clusteringOp.getDeltaFilePaths(), e);
-        }
-      });
+    HoodieWriteConfig writeConfig = getWriteConfig();
+    return jsc.parallelize(clusteringOps, clusteringOps.size())
+        .mapPartitions(clusteringOpsPartition -> {
+          List<Iterator<IndexedRecord>> iteratorsForPartition = new ArrayList<>();
+          clusteringOpsPartition.forEachRemaining(clusteringOp -> {
+            try {
+              Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(writeConfig.getSchema()));
+              HoodieFileReader<IndexedRecord> baseFileReader = HoodieFileReaderFactory.getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath()));
+              iteratorsForPartition.add(baseFileReader.getRecordIterator(readerSchema));
+            } catch (IOException e) {
+              throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
+                  + " and " + clusteringOp.getDeltaFilePaths(), e);
+            }
+          });
 
-      return new ConcatenatingIterator<>(iteratorsForPartition);
-    }).map(this::transform);
+          return new ConcatenatingIterator<>(iteratorsForPartition);
+        })
+        // NOTE: It's crucial to make sure that we don't capture whole "this" object into the
+        //       closure, as this might lead to issues attempting to serialize its nested fields
+        .map(record -> transform(record, writeConfig));
   }
 
   /**
@@ -279,10 +284,10 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
   /**
    * Transform IndexedRecord into HoodieRecord.
    */
-  private HoodieRecord<T> transform(IndexedRecord indexedRecord) {
+  private static <T> HoodieRecord<T> transform(IndexedRecord indexedRecord, HoodieWriteConfig writeConfig) {
     GenericRecord record = (GenericRecord) indexedRecord;
     Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
-    if (!getWriteConfig().populateMetaFields()) {
+    if (!writeConfig.populateMetaFields()) {
       try {
         keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(getWriteConfig().getProps())));
       } catch (IOException e) {
