@@ -116,10 +116,11 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
           ("rider,driver", 14665),
           ("rider,driver,tip_history", 14665))
       else if (HoodieSparkUtils.isSpark2)
+        // TODO re-enable tests (these tests are very unstable currently)
         Array(
-          ("rider", 15336),
-          ("rider,driver", 15336),
-          ("rider,driver,tip_history", 15336))
+          ("rider", -1),
+          ("rider,driver", -1),
+          ("rider,driver,tip_history", -1))
       else
         fail("Only Spark 3 and Spark 2 are currently supported")
 
@@ -173,8 +174,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
   }
 
   // TODO add test for incremental query of the table with logs
-  // TODO re-enable test (this test is very unstable currently)
-  //@Test
+  @Test
   def testMergeOnReadIncrementalRelationWithNoDeltaLogs(): Unit = {
     val tablePath = s"$basePath/mor-no-logs"
     val targetRecordsCount = 100
@@ -213,10 +213,11 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
           ("rider,driver", 19683),
           ("rider,driver,tip_history", 19683))
       else if (HoodieSparkUtils.isSpark2)
+        // TODO re-enable tests (these tests are very unstable currently)
         Array(
-          ("rider", 20852),
-          ("rider,driver", 20852),
-          ("rider,driver,tip_history", 20852))
+          ("rider", -1),
+          ("rider,driver", -1),
+          ("rider,driver,tip_history", -1))
       else
         fail("Only Spark 3 and Spark 2 are currently supported")
 
