@@ -163,10 +163,6 @@
                   <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.apache.spark.sql.avro.</pattern>
-                  <shadedPattern>${spark.bundle.spark.shade.prefix}org.apache.spark.sql.avro.</shadedPattern>
-                </relocation>
-                <relocation>
                   <pattern>org.apache.hive.jdbc.</pattern>
                   <shadedPattern>${spark.bundle.hive.shade.prefix}org.apache.hive.jdbc.</shadedPattern>
                 </relocation>
@@ -208,7 +204,7 @@
                 </relocation>
                 <relocation>
                   <pattern>com.google.common.</pattern>
-                  <shadedPattern>${spark.bundle.spark.shade.prefix}com.google.common.</shadedPattern>
+                  <shadedPattern>org.apache.hudi.com.google.common.</shadedPattern>
                 </relocation>
                 <!-- TODO: Revisit GH ISSUE #533 & PR#633-->
                 <!-- The classes below in org.apache.hadoop.metrics2 package come from
@@ -366,7 +362,7 @@
     <dependency>
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-avro_${scala.binary.version}</artifactId>
-      <scope>${spark.bundle.avro.scope}</scope>
+      <scope>provided</scope>
     </dependency>
 
     <!-- Parquet -->
@@ -439,13 +435,6 @@
       <properties>
         <spark.bundle.hive.scope>compile</spark.bundle.hive.scope>
         <spark.bundle.hive.shade.prefix>org.apache.hudi.</spark.bundle.hive.shade.prefix>
-      </properties>
-    </profile>
-    <profile>
-      <id>spark-shade-unbundle-avro</id>
-      <properties>
-        <spark.bundle.avro.scope>provided</spark.bundle.avro.scope>
-        <spark.bundle.spark.shade.prefix />
       </properties>
     </profile>
   </profiles>

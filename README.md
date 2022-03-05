@@ -92,13 +92,11 @@ mvn clean package -DskipTests -Dspark3.1.x
 
 ### Build without spark-avro module
 
-The default hudi-jar bundles spark-avro module. To build without spark-avro module, build using `spark-shade-unbundle-avro` profile
+Default Hudi jar does NOT bundle "spark-avro" module (to make sure it's not conflicting w/ your version of Spark), which 
+is also NOT packaged by default in Spark distribution. As such, to run Hudi you'll need to specify corresponding "spark-avro" jar
+via `--packages` option: 
 
 ```
-# Checkout code and build
-git clone https://github.com/apache/hudi.git && cd hudi
-mvn clean package -DskipTests -Pspark-shade-unbundle-avro
-
 # Start command
 spark-2.4.4-bin-hadoop2.7/bin/spark-shell \
   --packages org.apache.spark:spark-avro_2.11:2.4.4 \

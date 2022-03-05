@@ -154,8 +154,6 @@
     <main.basedir>${project.basedir}</main.basedir>
     <spark.bundle.hive.scope>provided</spark.bundle.hive.scope>
     <spark.bundle.hive.shade.prefix/>
-    <spark.bundle.avro.scope>compile</spark.bundle.avro.scope>
-    <spark.bundle.spark.shade.prefix>org.apache.hudi.spark.</spark.bundle.spark.shade.prefix>
     <utilities.bundle.hive.scope>provided</utilities.bundle.hive.scope>
     <utilities.bundle.hive.shade.prefix/>
     <argLine>-Xmx2g</argLine>
