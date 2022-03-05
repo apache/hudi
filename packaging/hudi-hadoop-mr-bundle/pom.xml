@@ -65,6 +65,7 @@
               <artifactSet>
                 <includes>
                   <include>org.apache.hudi:hudi-common</include>
+                  <include>org.apache.hudi:hudi-metrics-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
 
                   <include>org.apache.parquet:parquet-avro</include>
