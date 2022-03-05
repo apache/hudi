@@ -20,8 +20,6 @@ package org.apache.hudi.client.utils;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.IOException;
-
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
@@ -40,6 +38,8 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+
+import java.io.IOException;
 
 /**
  * Helper class to convert between different action related payloads and {@link HoodieArchivedMetaEntry}.
@@ -144,6 +144,16 @@ public class MetadataConversionUtils {
       return Option.empty();
     }
     return Option.of(TimelineMetadataUtils.deserializeRequestedReplaceMetadata(requestedContent.get()));
+  }
+
+  public static Option<HoodieCommitMetadata> getHoodieCommitMetadata(HoodieTimeline timeline, HoodieInstant hoodieInstant) throws IOException {
+    if (hoodieInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+      return Option.of(HoodieReplaceCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant).get(),
+          HoodieReplaceCommitMetadata.class));
+    }
+    return Option.of(HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant).get(),
+        HoodieCommitMetadata.class));
+
   }
 
   public static org.apache.hudi.avro.model.HoodieCommitMetadata convertCommitMetadata(
