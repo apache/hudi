@@ -21,7 +21,6 @@ package org.apache.hudi.client.clustering.run.strategy;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
@@ -30,6 +29,7 @@ import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.ConcatenatingIterator;
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ClusteringOperation;
@@ -245,7 +245,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
    */
   private JavaRDD<HoodieRecord<T>> readRecordsForGroupBaseFiles(JavaSparkContext jsc,
                                                                 List<ClusteringOperation> clusteringOps) {
-    Configuration hadoopConf = getHoodieTable().getHadoopConf();
+    SerializableConfiguration hadoopConf = new SerializableConfiguration(getHoodieTable().getHadoopConf());
     HoodieWriteConfig writeConfig = getWriteConfig();
 
     // NOTE: It's crucial to make sure that we don't capture whole "this" object into the
@@ -256,7 +256,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
           clusteringOpsPartition.forEachRemaining(clusteringOp -> {
             try {
               Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(writeConfig.getSchema()));
-              HoodieFileReader<IndexedRecord> baseFileReader = HoodieFileReaderFactory.getFileReader(hadoopConf, new Path(clusteringOp.getDataFilePath()));
+              HoodieFileReader<IndexedRecord> baseFileReader = HoodieFileReaderFactory.getFileReader(hadoopConf.get(), new Path(clusteringOp.getDataFilePath()));
               iteratorsForPartition.add(baseFileReader.getRecordIterator(readerSchema));
             } catch (IOException e) {
               throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
