@@ -18,11 +18,11 @@
 
 package org.apache.hudi.metrics.prometheus;
 
+import org.apache.hudi.metrics.HoodieMetricRegistry;
 import org.apache.hudi.metrics.MetricsReporter;
 import org.apache.hudi.metrics.config.HoodieMetricsConfig;
 
 import com.codahale.metrics.MetricFilter;
-import com.codahale.metrics.MetricRegistry;
 
 import java.io.Closeable;
 import java.util.Random;
@@ -36,8 +36,8 @@ public class PushGatewayMetricsReporter extends MetricsReporter {
   private final String configuredJobName;
   private final boolean randomSuffix;
 
-  public PushGatewayMetricsReporter(HoodieMetricsConfig config, MetricRegistry registry) {
-
+  public PushGatewayMetricsReporter(HoodieMetricsConfig config, HoodieMetricRegistry registry) {
+    super(config, registry);
     String serverHost = config.getPushGatewayHost();
     int serverPort = config.getPushGatewayPort();
     periodSeconds = config.getPushGatewayReportPeriodSeconds();
@@ -46,7 +46,7 @@ public class PushGatewayMetricsReporter extends MetricsReporter {
     randomSuffix = config.getPushGatewayRandomJobNameSuffix();
 
     pushGatewayReporter = new PushGatewayReporter(
-        registry,
+        registry.getRegistry(),
         MetricFilter.ALL,
         TimeUnit.SECONDS,
         TimeUnit.SECONDS,

@@ -18,9 +18,9 @@
 
 package org.apache.hudi.aws.cloudwatch;
 
+import org.apache.hudi.metrics.HoodieMetricRegistry;
 import org.apache.hudi.metrics.config.HoodieMetricsConfig;
 
-import com.codahale.metrics.MetricRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -39,7 +39,7 @@ public class TestCloudWatchMetricsReporter {
   private HoodieMetricsConfig config;
 
   @Mock
-  private MetricRegistry registry;
+  private HoodieMetricRegistry registry;
 
   @Mock
   private CloudWatchReporter reporter;

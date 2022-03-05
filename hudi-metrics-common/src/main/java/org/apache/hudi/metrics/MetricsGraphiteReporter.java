@@ -21,7 +21,6 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.metrics.config.HoodieMetricsConfig;
 
 import com.codahale.metrics.MetricFilter;
-import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.graphite.Graphite;
 import com.codahale.metrics.graphite.GraphiteReporter;
 import org.apache.log4j.LogManager;
@@ -37,17 +36,14 @@ import java.util.concurrent.TimeUnit;
 public class MetricsGraphiteReporter extends MetricsReporter {
 
   private static final Logger LOG = LogManager.getLogger(MetricsGraphiteReporter.class);
-  private final MetricRegistry registry;
   private final GraphiteReporter graphiteReporter;
-  private final HoodieMetricsConfig config;
+
   private String serverHost;
   private int serverPort;
   private final int periodSeconds;
 
-  public MetricsGraphiteReporter(HoodieMetricsConfig config, MetricRegistry registry) {
-    this.registry = registry;
-    this.config = config;
-
+  public MetricsGraphiteReporter(HoodieMetricsConfig config, HoodieMetricRegistry registry) {
+    super(config, registry);
     // Check the serverHost and serverPort here
     this.serverHost = config.getGraphiteServerHost();
     this.serverPort = config.getGraphiteServerPort();
@@ -86,7 +82,7 @@ public class MetricsGraphiteReporter extends MetricsReporter {
   private GraphiteReporter createGraphiteReport() {
     Graphite graphite = new Graphite(new InetSocketAddress(serverHost, serverPort));
     String reporterPrefix = config.getGraphiteMetricPrefix();
-    return GraphiteReporter.forRegistry(registry).prefixedWith(reporterPrefix).convertRatesTo(TimeUnit.SECONDS)
+    return GraphiteReporter.forRegistry(registry.getRegistry()).prefixedWith(reporterPrefix).convertRatesTo(TimeUnit.SECONDS)
         .convertDurationsTo(TimeUnit.MILLISECONDS).filter(MetricFilter.ALL).build(graphite);
   }
 

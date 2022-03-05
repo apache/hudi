@@ -50,7 +50,7 @@ public class TestMetricsReporterFactory {
   HoodieMetricsConfig config;
 
   @Mock
-  MetricRegistry registry;
+  HoodieMetricRegistry registry;
 
   @Test
   public void metricsReporterFactoryShouldReturnReporter() {
@@ -127,7 +127,7 @@ public class TestMetricsReporterFactory {
 
   public static class DummyMetricsReporter extends CustomizableMetricsReporter {
 
-    public DummyMetricsReporter(Properties props, MetricRegistry registry) {
+    public DummyMetricsReporter(Properties props, HoodieMetricRegistry registry) {
       super(props, registry);
     }
 

@@ -21,7 +21,6 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.config.HoodieMetricsConfig;
 
-import com.codahale.metrics.MetricRegistry;
 import org.apache.log4j.LogManager;
 
 import javax.management.MBeanServer;
@@ -31,7 +30,6 @@ import java.lang.management.ManagementFactory;
 import java.util.Objects;
 import java.util.stream.IntStream;
 
-
 /**
  * Implementation of Jmx reporter, which used to report jmx metric.
  */
@@ -39,12 +37,11 @@ public class JmxMetricsReporter extends MetricsReporter {
 
   private static final org.apache.log4j.Logger LOG = LogManager.getLogger(JmxMetricsReporter.class);
 
-  private final MetricRegistry registry;
   private JmxReporterServer jmxReporterServer;
 
-  public JmxMetricsReporter(HoodieMetricsConfig config, MetricRegistry registry) {
+  public JmxMetricsReporter(HoodieMetricsConfig config, HoodieMetricRegistry registry) {
+    super(config, registry);
     try {
-      this.registry = registry;
       // Check the host and port here
       String host = config.getJmxHost();
       String portsConfig = config.getJmxPort();
@@ -103,7 +100,7 @@ public class JmxMetricsReporter extends MetricsReporter {
 
   private JmxReporterServer createJmxReport(String host, int port) {
     MBeanServer mBeanServer = ManagementFactory.getPlatformMBeanServer();
-    return JmxReporterServer.forRegistry(registry)
+    return JmxReporterServer.forRegistry(registry.getRegistry())
         .host(host)
         .port(port)
         .registerWith(mBeanServer)

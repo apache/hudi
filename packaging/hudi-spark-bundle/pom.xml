@@ -167,10 +167,10 @@
                   <pattern>org.apache.hadoop.hive.service.</pattern>
                   <shadedPattern>${spark.bundle.hive.shade.prefix}org.apache.hadoop.hive.service.</shadedPattern>
                 </relocation>
-                <!--                <relocation>-->
-                <!--                  <pattern>com.codahale.metrics.</pattern>-->
-                <!--                  <shadedPattern>org.apache.hudi.com.codahale.metrics.</shadedPattern>-->
-                <!--                </relocation>-->
+                <relocation>
+                  <pattern>com.codahale.metrics.</pattern>
+                  <shadedPattern>org.apache.hudi.com.codahale.metrics.</shadedPattern>
+                </relocation>
                 <relocation>
                   <pattern>org.apache.commons.codec.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.commons.codec.</shadedPattern>

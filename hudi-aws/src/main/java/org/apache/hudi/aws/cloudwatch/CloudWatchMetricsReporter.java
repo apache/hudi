@@ -18,10 +18,10 @@
 
 package org.apache.hudi.aws.cloudwatch;
 
+import org.apache.hudi.metrics.HoodieMetricRegistry;
 import org.apache.hudi.metrics.MetricsReporter;
 import org.apache.hudi.metrics.config.HoodieMetricsConfig;
 
-import com.codahale.metrics.MetricRegistry;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -36,24 +36,20 @@ public class CloudWatchMetricsReporter extends MetricsReporter {
 
   private static final Logger LOG = LogManager.getLogger(CloudWatchMetricsReporter.class);
 
-  private final MetricRegistry registry;
-  private final HoodieMetricsConfig config;
   private final CloudWatchReporter reporter;
 
-  public CloudWatchMetricsReporter(HoodieMetricsConfig config, MetricRegistry registry) {
-    this.config = config;
-    this.registry = registry;
+  public CloudWatchMetricsReporter(HoodieMetricsConfig config, HoodieMetricRegistry registry) {
+    super(config, registry);
     this.reporter = createCloudWatchReporter();
   }
 
-  CloudWatchMetricsReporter(HoodieMetricsConfig config, MetricRegistry registry, CloudWatchReporter reporter) {
-    this.config = config;
-    this.registry = registry;
+  protected CloudWatchMetricsReporter(HoodieMetricsConfig config, HoodieMetricRegistry registry, CloudWatchReporter reporter) {
+    super(config, registry);
     this.reporter = reporter;
   }
 
   private CloudWatchReporter createCloudWatchReporter() {
-    return CloudWatchReporter.forRegistry(registry)
+    return CloudWatchReporter.forRegistry(registry.getRegistry())
         .prefixedWith(config.getCloudWatchMetricPrefix())
         .namespace(config.getCloudWatchMetricNamespace())
         .maxDatumsPerRequest(config.getCloudWatchMaxDatumsPerRequest())
@@ -81,4 +77,5 @@ public class CloudWatchMetricsReporter extends MetricsReporter {
     LOG.info("Stopping CloudWatch Metrics Reporter.");
     reporter.stop();
   }
+
 }
