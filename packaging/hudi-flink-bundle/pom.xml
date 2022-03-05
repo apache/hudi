@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 
 <!--
   Licensed to the Apache Software Foundation (ASF) under one or more
@@ -75,13 +76,13 @@
                 <includes>
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-client-common</include>
+                  <include>org.apache.hudi:hudi-metrics-common</include>
                   <include>org.apache.hudi:hudi-flink-client</include>
                   <include>org.apache.hudi:hudi-flink_${scala.binary.version}</include>
                   <include>org.apache.hudi:hudi-hive-sync</include>
                   <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
                   <include>org.apache.hudi:hudi-timeline-service</include>
-                  <include>org.apache.hudi:hudi-aws</include>
 
                   <include>com.yammer.metrics:metrics-core</include>
                   <include>com.beust:jcommander</include>
