@@ -23,7 +23,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
@@ -337,11 +336,9 @@ public class StreamWriteOperatorCoordinator
   }
 
   private void startInstant() {
-    final String instant = HoodieActiveTimeline.createNewInstantTime();
     // put the assignment in front of metadata generation,
     // because the instant request from write task is asynchronous.
-    this.instant = instant;
-    this.writeClient.startCommitWithTime(instant, tableState.commitAction);
+    this.instant = this.writeClient.startCommit();
     this.metaClient.getActiveTimeline().transitionRequestedToInflight(tableState.commitAction, this.instant);
     LOG.info("Create instant [{}] for table [{}] with type [{}]", this.instant,
         this.conf.getString(FlinkOptions.TABLE_NAME), conf.getString(FlinkOptions.TABLE_TYPE));
