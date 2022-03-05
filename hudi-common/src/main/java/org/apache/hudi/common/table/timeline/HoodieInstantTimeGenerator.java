@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+
 import java.text.ParseException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -133,5 +134,14 @@ public class HoodieInstantTimeGenerator {
 
   public static void setCommitTimeZone(HoodieTimelineTimeZone commitTimeZone) {
     HoodieInstantTimeGenerator.commitTimeZone = commitTimeZone;
+  }
+
+  public static boolean isValidInstantTime(String instantTime) {
+    try {
+      Long.parseLong(instantTime);
+      return true;
+    } catch (NumberFormatException e) {
+      return false;
+    }
   }
 }

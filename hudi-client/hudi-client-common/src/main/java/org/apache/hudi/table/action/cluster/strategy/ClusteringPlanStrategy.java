@@ -105,6 +105,14 @@ public abstract class ClusteringPlanStrategy<T extends HoodieRecordPayload,I,K,O
   public abstract Option<HoodieClusteringPlan> generateClusteringPlan();
 
   /**
+   * Check if the clustering can proceed. If not, empty plan will be returned to stop the scheduling.
+   * @return
+   */
+  public boolean checkPrecondition() {
+    return true;
+  }
+
+  /**
    * Return file slices eligible for clustering. FileIds in pending clustering/compaction are not eligible for clustering.
    */
   protected Stream<FileSlice> getFileSlicesEligibleForClustering(String partition) {

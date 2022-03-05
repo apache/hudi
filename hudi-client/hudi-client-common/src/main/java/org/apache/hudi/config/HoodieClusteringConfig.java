@@ -53,10 +53,14 @@ public class HoodieClusteringConfig extends HoodieConfig {
       "org.apache.hudi.client.clustering.plan.strategy.SparkSizeBasedClusteringPlanStrategy";
   public static final String FLINK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY =
       "org.apache.hudi.client.clustering.plan.strategy.FlinkSizeBasedClusteringPlanStrategy";
+  public static final String SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY =
+      "org.apache.hudi.client.clustering.plan.strategy.SparkConsistentBucketClusteringPlanStrategy";
   public static final String JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY =
       "org.apache.hudi.client.clustering.plan.strategy.JavaSizeBasedClusteringPlanStrategy";
   public static final String SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY =
       "org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy";
+  public static final String SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY =
+      "org.apache.hudi.client.clustering.run.strategy.SparkConsistentBucketClusteringExecutionStrategy";
   public static final String JAVA_SORT_AND_SIZE_EXECUTION_STRATEGY =
       "org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy";
   public static final String PLAN_PARTITION_FILTER_MODE =

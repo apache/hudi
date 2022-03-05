@@ -108,7 +108,7 @@ public class TestHoodieSimpleBucketIndex extends HoodieClientTestHarness {
     HoodieRecord record3 = new HoodieAvroRecord(
         new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
     RawTripTestPayload rowChange4 = new RawTripTestPayload(recordStr4);
-    HoodieRecord record4 = new HoodieAvroRecord(
+    HoodieAvroRecord record4 = new HoodieAvroRecord(
         new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
     JavaRDD<HoodieRecord<HoodieAvroRecord>> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record4));
 

@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.JsonUtils;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.log4j.LogManager;
@@ -54,6 +55,8 @@ public class HoodieConsistentHashingMetadata implements Serializable {
   private final int numBuckets;
   private final int seqNo;
   private final List<ConsistentHashingNode> nodes;
+  @JsonIgnore
+  protected List<ConsistentHashingNode> childrenNodes = new ArrayList<>();
 
   @JsonCreator
   public HoodieConsistentHashingMetadata(@JsonProperty("version") short version, @JsonProperty("partitionPath") String partitionPath,
@@ -102,6 +105,14 @@ public class HoodieConsistentHashingMetadata implements Serializable {
 
   public List<ConsistentHashingNode> getNodes() {
     return nodes;
+  }
+
+  public List<ConsistentHashingNode> getChildrenNodes() {
+    return childrenNodes;
+  }
+
+  public void setChildrenNodes(List<ConsistentHashingNode> childrenNodes) {
+    this.childrenNodes = childrenNodes;
   }
 
   public String getFilename() {

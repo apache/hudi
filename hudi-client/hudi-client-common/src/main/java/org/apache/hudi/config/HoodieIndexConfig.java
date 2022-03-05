@@ -30,6 +30,9 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import javax.annotation.concurrent.Immutable;
 
 import java.io.File;
@@ -61,6 +64,8 @@ import static org.apache.hudi.index.HoodieIndex.IndexType.SIMPLE;
     description = "Configurations that control indexing behavior, "
         + "which tags incoming records as either inserts or updates to older records.")
 public class HoodieIndexConfig extends HoodieConfig {
+
+  private static final Logger LOG = LogManager.getLogger(HoodieIndexConfig.class);
 
   public static final ConfigProperty<String> INDEX_TYPE = ConfigProperty
       .key("hoodie.index.type")
@@ -263,11 +268,36 @@ public class HoodieIndexConfig extends HoodieConfig {
       .withDocumentation("Only applies if index type is BUCKET. Determine the number of buckets in the hudi table, "
           + "and each partition is divided to N buckets.");
 
+  public static final ConfigProperty<String> BUCKET_INDEX_MAX_NUM_BUCKETS = ConfigProperty
+      .key("hoodie.bucket.index.max.num.buckets")
+      .noDefaultValue()
+      .withDocumentation("Only applies if bucket index engine is dynamic (e.g., CONSISTENT_HASHING). Determine the upper bound of "
+          + "the num of buckets in the hudi table. Resizing are not allowed to split bucket if the number is reached.");
+
+  public static final ConfigProperty<String> BUCKET_INDEX_MIN_NUM_BUCKETS = ConfigProperty
+      .key("hoodie.bucket.index.min.num.buckets")
+      .noDefaultValue()
+      .withDocumentation("Only applies if bucket index engine is dynamic (e.g., CONSISTENT_HASHING). Determine the lower bound of "
+          + "the num of buckets in the hudi table. Resizing are not allowed to merge buckets if the number is reached.");
+
   public static final ConfigProperty<String> BUCKET_INDEX_HASH_FIELD = ConfigProperty
       .key("hoodie.bucket.index.hash.field")
       .noDefaultValue()
       .withDocumentation("Index key. It is used to index the record and find its file group. "
           + "If not set, use record key field as default");
+
+  public static final ConfigProperty<Double> BUCKET_SPLIT_THRESHOLD = ConfigProperty
+      .key("hoodie.bucket.index.split.threshold")
+      .defaultValue(2.0)
+      .withDocumentation("Control if the bucket should be split when using dynamic bucket index (i.e., CONSISTENT HASHING)."
+          + "Specifically, if a file slice size reach `hoodie.xxxx.max.file.size` * threshold, then split will be carried out.");
+
+  public static final ConfigProperty<Double> BUCKET_MERGE_THRESHOLD = ConfigProperty
+      .key("hoodie.bucket.index.merge.threshold")
+      .defaultValue(0.2)
+      .withDocumentation("Control if buckets should be merged when using dynamic bucket index (i.e., CONSISTENT HASHING)."
+          + "Specifically, if a file slice size is smaller than `hoodie.xxxx.max.file.size` * threshold, then it will be considered"
+          + "as a merge condidate.");
 
   /**
    * Deprecated configs. These are now part of {@link HoodieHBaseIndexConfig}.
@@ -600,6 +630,16 @@ public class HoodieIndexConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withBucketMaxNum(int bucketMaxNum) {
+      hoodieIndexConfig.setValue(BUCKET_INDEX_MAX_NUM_BUCKETS, String.valueOf(bucketMaxNum));
+      return this;
+    }
+
+    public Builder withBucketMinNum(int bucketMinNum) {
+      hoodieIndexConfig.setValue(BUCKET_INDEX_MIN_NUM_BUCKETS, String.valueOf(bucketMinNum));
+      return this;
+    }
+
     public Builder withIndexKeyField(String keyField) {
       hoodieIndexConfig.setValue(BUCKET_INDEX_HASH_FIELD, keyField);
       return this;
@@ -649,6 +689,20 @@ public class HoodieIndexConfig extends HoodieConfig {
         // check the bucket num
         if (hoodieIndexConfig.getIntOrDefault(BUCKET_INDEX_NUM_BUCKETS) <= 0) {
           throw new HoodieIndexException("When using bucket index, hoodie.bucket.index.num.buckets cannot be negative.");
+        }
+        int bucketNum = hoodieIndexConfig.getInt(BUCKET_INDEX_NUM_BUCKETS);
+        if (StringUtils.isNullOrEmpty(hoodieIndexConfig.getString(BUCKET_INDEX_MAX_NUM_BUCKETS))) {
+          hoodieIndexConfig.setValue(BUCKET_INDEX_MAX_NUM_BUCKETS, Integer.toString(bucketNum));
+        } else if (hoodieIndexConfig.getInt(BUCKET_INDEX_MAX_NUM_BUCKETS) < bucketNum) {
+          LOG.warn("Maximum bucket number is smaller than bucket number, maximum: " + hoodieIndexConfig.getInt(BUCKET_INDEX_MAX_NUM_BUCKETS) + ", bucketNum: " + bucketNum);
+          hoodieIndexConfig.setValue(BUCKET_INDEX_MAX_NUM_BUCKETS, Integer.toString(bucketNum));
+        }
+
+        if (StringUtils.isNullOrEmpty(hoodieIndexConfig.getString(BUCKET_INDEX_MIN_NUM_BUCKETS))) {
+          hoodieIndexConfig.setValue(BUCKET_INDEX_MIN_NUM_BUCKETS, Integer.toString(bucketNum));
+        } else if (hoodieIndexConfig.getInt(BUCKET_INDEX_MIN_NUM_BUCKETS) > bucketNum) {
+          LOG.warn("Minimum bucket number is larger than the bucket number, minimum: " + hoodieIndexConfig.getInt(BUCKET_INDEX_MIN_NUM_BUCKETS) + ", bucketNum: " + bucketNum);
+          hoodieIndexConfig.setValue(BUCKET_INDEX_MIN_NUM_BUCKETS, Integer.toString(bucketNum));
         }
       }
     }
