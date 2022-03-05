@@ -18,6 +18,8 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.metrics.config.HoodieMetricsConfig;
+
 import java.io.Closeable;
 
 /**
@@ -25,6 +27,14 @@ import java.io.Closeable;
  */
 public abstract class MetricsReporter {
 
+  protected final HoodieMetricsConfig config;
+  protected final HoodieMetricRegistry registry;
+
+  public MetricsReporter(HoodieMetricsConfig config, HoodieMetricRegistry registry) {
+    this.config = config;
+    this.registry = registry;
+  }
+  
   /**
    * Push out metrics at scheduled intervals.
    */

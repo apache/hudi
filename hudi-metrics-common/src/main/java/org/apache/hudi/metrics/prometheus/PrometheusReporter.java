@@ -19,10 +19,10 @@
 package org.apache.hudi.metrics.prometheus;
 
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metrics.HoodieMetricRegistry;
 import org.apache.hudi.metrics.MetricsReporter;
 import org.apache.hudi.metrics.config.HoodieMetricsConfig;
 
-import com.codahale.metrics.MetricRegistry;
 import io.prometheus.client.CollectorRegistry;
 import io.prometheus.client.dropwizard.DropwizardExports;
 import io.prometheus.client.exporter.HTTPServer;
@@ -44,10 +44,11 @@ public class PrometheusReporter extends MetricsReporter {
   private final DropwizardExports metricExports;
   private final CollectorRegistry collectorRegistry;
 
-  public PrometheusReporter(HoodieMetricsConfig config, MetricRegistry registry) {
+  public PrometheusReporter(HoodieMetricsConfig config, HoodieMetricRegistry registry) {
+    super(config, registry);
     int serverPort = config.getPrometheusPort();
     collectorRegistry = new CollectorRegistry();
-    metricExports = new DropwizardExports(registry);
+    metricExports = new DropwizardExports(registry.getRegistry());
     metricExports.register(collectorRegistry);
     try {
       httpServer = new HTTPServer(new InetSocketAddress(serverPort), collectorRegistry);

@@ -18,11 +18,11 @@
 
 package org.apache.hudi.metrics.datadog;
 
+import org.apache.hudi.metrics.HoodieMetricRegistry;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.config.HoodieMetricsConfig;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 
-import com.codahale.metrics.MetricRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,7 +43,7 @@ public class TestDatadogMetricsReporter {
   HoodieMetricsConfig config;
 
   @Mock
-  MetricRegistry registry;
+  HoodieMetricRegistry registry;
 
   @AfterEach
   void shutdownMetrics() {

@@ -21,12 +21,12 @@ package org.apache.hudi.metrics.datadog;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.metrics.HoodieMetricRegistry;
 import org.apache.hudi.metrics.MetricsReporter;
 import org.apache.hudi.metrics.config.HoodieMetricsConfig;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 
 import com.codahale.metrics.MetricFilter;
-import com.codahale.metrics.MetricRegistry;
 
 import java.io.Closeable;
 import java.util.List;
@@ -44,7 +44,8 @@ public class DatadogMetricsReporter extends MetricsReporter {
   private final DatadogReporter reporter;
   private final int reportPeriodSeconds;
 
-  public DatadogMetricsReporter(HoodieMetricsConfig config, MetricRegistry registry) {
+  public DatadogMetricsReporter(HoodieMetricsConfig config, HoodieMetricRegistry registry) {
+    super(config, registry);
     reportPeriodSeconds = config.getDatadogReportPeriodSeconds();
     ApiSite apiSite = config.getDatadogApiSite();
     String apiKey = config.getDatadogApiKey();
@@ -60,7 +61,7 @@ public class DatadogMetricsReporter extends MetricsReporter {
     Option<List<String>> tags = tagList.isEmpty() ? Option.empty() : Option.of(tagList);
 
     reporter = new DatadogReporter(
-        registry,
+        registry.getRegistry(),
         new DatadogHttpClient(apiSite, apiKey, skipValidation, timeoutSeconds),
         prefix,
         host,

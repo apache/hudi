@@ -18,7 +18,9 @@
 
 package org.apache.hudi.metrics.custom;
 
+import org.apache.hudi.metrics.HoodieMetricRegistry;
 import org.apache.hudi.metrics.MetricsReporter;
+import org.apache.hudi.metrics.config.HoodieMetricsConfig;
 
 import com.codahale.metrics.MetricRegistry;
 
@@ -31,9 +33,10 @@ public abstract class CustomizableMetricsReporter extends MetricsReporter {
   private Properties props;
   private MetricRegistry registry;
 
-  public CustomizableMetricsReporter(Properties props, MetricRegistry registry) {
+  public CustomizableMetricsReporter(Properties props, HoodieMetricRegistry registry) {
+    super(HoodieMetricsConfig.newBuilder().fromProperties(props).build(), registry);
     this.props = props;
-    this.registry = registry;
+    this.registry = registry.getRegistry();
   }
 
   public Properties getProps() {

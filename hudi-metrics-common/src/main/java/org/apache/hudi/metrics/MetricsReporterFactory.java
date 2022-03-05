@@ -24,7 +24,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.config.HoodieMetricsConfig;
 import org.apache.hudi.metrics.custom.CustomizableMetricsReporter;
 
-import com.codahale.metrics.MetricRegistry;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -37,12 +36,11 @@ public class MetricsReporterFactory {
 
   private static final Logger LOG = LogManager.getLogger(MetricsReporterFactory.class);
 
-  public static MetricsReporter createReporter(HoodieMetricsConfig config, MetricRegistry registry) {
+  public static MetricsReporter createReporter(HoodieMetricsConfig config, HoodieMetricRegistry registry) {
     String reporterClassName = config.getMetricReporterClassName();
-
     if (!StringUtils.isNullOrEmpty(reporterClassName)) {
       Object instance = ReflectionUtils.loadClass(
-          reporterClassName, new Class<?>[] {Properties.class, MetricRegistry.class}, config.getProps(), registry);
+          reporterClassName, new Class<?>[] {Properties.class, HoodieMetricRegistry.class}, config.getProps(), registry);
       if (!(instance instanceof CustomizableMetricsReporter)) {
         throw new HoodieException(config.getMetricReporterClassName()
             + " is not a subclass of CustomizableMetricsReporter");
@@ -80,11 +78,13 @@ public class MetricsReporterFactory {
         LOG.error("Reporter type[" + type + "] is not supported.");
         break;
     }
+
     Object reporter = ReflectionUtils.loadClass(
-        reporterClassName, new Class<?>[] {HoodieMetricsConfig.class, MetricRegistry.class}, config, registry);
+        reporterClassName, new Class<?>[] {HoodieMetricsConfig.class, HoodieMetricRegistry.class}, config, registry);
     if (!(reporter instanceof MetricsReporter)) {
       throw new HoodieException(reporterClassName
-          + " is not a subclass of MetricsReporter");
+          + " is not a subclass of MetricsReporter or does not provide a constructor"
+          + " that accepts HoodieMetricsConfig and HoodieMetricsRegistry");
     }
     return (MetricsReporter) reporter;
   }

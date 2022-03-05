@@ -17,20 +17,23 @@
  * under the License.
  */
 
-package org.apache.hudi.metrics.userdefined;
+package org.apache.hudi.metrics;
 
-import org.apache.hudi.metrics.HoodieMetricRegistry;
-import org.apache.hudi.metrics.custom.CustomizableMetricsReporter;
+import com.codahale.metrics.MetricRegistry;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
-import java.util.Properties;
+public class HoodieMetricRegistry {
 
-/**
- * @deprecated Extend {@link CustomizableMetricsReporter} instead.
- */
-@Deprecated
-public abstract class AbstractUserDefinedMetricsReporter extends CustomizableMetricsReporter {
+  private static final Logger LOG = LogManager.getLogger(HoodieMetricRegistry.class);
 
-  public AbstractUserDefinedMetricsReporter(Properties props, HoodieMetricRegistry registry) {
-    super(props, registry);
+  private final MetricRegistry registry;
+
+  public HoodieMetricRegistry(MetricRegistry registry) {
+    this.registry = registry;
+  }
+
+  public MetricRegistry getRegistry() {
+    return registry;
   }
 }

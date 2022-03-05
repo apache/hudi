@@ -22,7 +22,6 @@ import org.apache.hudi.metrics.config.HoodieMetricsConfig;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricFilter;
-import com.codahale.metrics.MetricRegistry;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -37,8 +36,9 @@ public class ConsoleMetricsReporter extends MetricsReporter {
   private static final Logger LOG = LogManager.getLogger(ConsoleMetricsReporter.class);
   private final ConsoleReporter consoleReporter;
 
-  public ConsoleMetricsReporter(HoodieMetricsConfig config, MetricRegistry registry) {
-    this.consoleReporter = ConsoleReporter.forRegistry(registry)
+  public ConsoleMetricsReporter(HoodieMetricsConfig config, HoodieMetricRegistry registry) {
+    super(config, registry);
+    this.consoleReporter = ConsoleReporter.forRegistry(registry.getRegistry())
         .convertRatesTo(TimeUnit.SECONDS)
         .convertDurationsTo(TimeUnit.MILLISECONDS)
         .filter(MetricFilter.ALL).build();
