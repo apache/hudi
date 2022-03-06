@@ -36,7 +36,10 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class TransactionUtils {
@@ -71,6 +74,8 @@ public class TransactionUtils {
    * @param thisCommitMetadata
    * @param config
    * @param lastCompletedTxnOwnerInstant
+   * @param unCheckedPendClusteringInstants
+   *
    * @return
    * @throws HoodieWriteConflictException
    */
@@ -80,11 +85,24 @@ public class TransactionUtils {
       final Option<HoodieCommitMetadata> thisCommitMetadata,
       final HoodieWriteConfig config,
       Option<HoodieInstant> lastCompletedTxnOwnerInstant,
-      boolean reloadActiveTimeline) throws HoodieWriteConflictException {
+      boolean reloadActiveTimeline,
+      List<HoodieInstant> unCheckedPendClusteringInstants) throws HoodieWriteConflictException {
     if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+      // deal with unCheckedPendClusteringInstants
+      // some clustering instants maybe finished during current write operation,
+      // we should check the conflict of those clustering operation
+      List<String> completeClusteringOperations = table.getMetaClient()
+          .reloadActiveTimeline()
+          .getCompletedReplaceTimeline()
+          .getInstants()
+          .map(f -> f.getTimestamp()).collect(Collectors.toList());
+      Stream<HoodieInstant> completedClusteringInstantsDuringCurrentWriteOperation = unCheckedPendClusteringInstants
+          .stream().filter(f -> completeClusteringOperations.contains(f.getTimestamp()));
+
       ConflictResolutionStrategy resolutionStrategy = config.getWriteConflictResolutionStrategy();
-      Stream<HoodieInstant> instantStream = resolutionStrategy.getCandidateInstants(reloadActiveTimeline
-          ? table.getMetaClient().reloadActiveTimeline() : table.getActiveTimeline(), currentTxnOwnerInstant.get(), lastCompletedTxnOwnerInstant);
+      Stream<HoodieInstant> instantStream = Stream.concat(resolutionStrategy.getCandidateInstants(reloadActiveTimeline
+          ? table.getMetaClient().reloadActiveTimeline() : table.getActiveTimeline(), currentTxnOwnerInstant.get(), lastCompletedTxnOwnerInstant),
+          completedClusteringInstantsDuringCurrentWriteOperation);
       final ConcurrentOperation thisOperation = new ConcurrentOperation(currentTxnOwnerInstant.get(), thisCommitMetadata.orElse(new HoodieCommitMetadata()));
       instantStream.forEach(instant -> {
         try {
@@ -103,6 +121,16 @@ public class TransactionUtils {
       return thisOperation.getCommitMetadataOption();
     }
     return thisCommitMetadata;
+  }
+
+  public static Option<HoodieCommitMetadata> resolveWriteConflictIfAny(
+      final HoodieTable table,
+      final Option<HoodieInstant> currentTxnOwnerInstant,
+      final Option<HoodieCommitMetadata> thisCommitMetadata,
+      final HoodieWriteConfig config,
+      Option<HoodieInstant> lastCompletedTxnOwnerInstant,
+      boolean reloadActiveTimeline) throws HoodieWriteConflictException {
+    return resolveWriteConflictIfAny(table, currentTxnOwnerInstant, thisCommitMetadata, config, lastCompletedTxnOwnerInstant, reloadActiveTimeline, new ArrayList<>());
   }
 
   /**
@@ -136,5 +164,21 @@ public class TransactionUtils {
     } catch (IOException io) {
       throw new HoodieIOException("Unable to read metadata for instant " + hoodieInstantOption.get(), io);
     }
+  }
+
+  /**
+   * Get pending clustering instant.
+   * Notice:
+   *   we return .request instant here.
+   *
+   * @param metaClient
+   * @return
+   */
+  public static List<HoodieInstant> getUncheckedPendClusteringInstants(HoodieTableMetaClient metaClient) {
+    return metaClient
+        .getActiveTimeline()
+        .filterPendingReplaceTimeline()
+        .getInstants()
+        .map(f -> HoodieTimeline.getReplaceCommitRequestedInstant(f.getTimestamp())).collect(Collectors.toList());
   }
 }
