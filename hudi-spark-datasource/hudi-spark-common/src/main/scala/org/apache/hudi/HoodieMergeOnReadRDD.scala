@@ -19,12 +19,13 @@
 package org.apache.hudi
 
 import org.apache.avro.Schema
-import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder}
+import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedRecord}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieDataSourceHelper._
 import org.apache.hudi.HoodieMergeOnReadRDD.resolveAvroSchemaNullability
 import org.apache.hudi.MergeOnReadSnapshotRelation.getFilePath
+import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.fs.FSUtils
@@ -309,10 +310,15 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
         }
       }
 
-      private def mergeRowWithLog(curRow: InternalRow, curKey: String) = {
+      private def mergeRowWithLog(curRow: InternalRow, curKey: String) : org.apache.hudi.common.util.Option[IndexedRecord] = {
         val historyAvroRecord = serializer.serialize(curRow).asInstanceOf[GenericRecord]
-        logRecords.get(curKey).getData
+        val mergedRec = logRecords.get(curKey).getData
           .combineAndGetUpdateValue(historyAvroRecord, tableAvroSchema, payloadProps)
+        if (mergedRec.isPresent && mergedRec.get().getSchema != tableAvroSchema) {
+          org.apache.hudi.common.util.Option.of(HoodieAvroUtils.rewriteRecord(mergedRec.get().asInstanceOf[GenericRecord], tableAvroSchema).asInstanceOf[IndexedRecord])
+        } else {
+          mergedRec
+        }
       }
     }
 }
