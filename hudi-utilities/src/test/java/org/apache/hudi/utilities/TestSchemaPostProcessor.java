@@ -19,17 +19,17 @@
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.utilities.schema.DeleteSupportSchemaPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor.Config;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SparkAvroPostProcessor;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
+import org.apache.hudi.utilities.transform.FlatteningTransformer;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.SchemaBuilder;
-
-import org.apache.hudi.utilities.transform.FlatteningTransformer;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.Test;
 
@@ -80,6 +80,14 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
     assertEquals(schema.getName(), "hoodie_source");
     assertEquals(schema.getNamespace(), "hoodie.source");
     assertNotNull(schema.getField("day"));
+  }
+
+  @Test
+  public void testDeleteSupport() {
+    DeleteSupportSchemaPostProcessor processor = new DeleteSupportSchemaPostProcessor(properties, null);
+    Schema schema = new Schema.Parser().parse(ORIGINAL_SCHEMA);
+    Schema targetSchema = processor.processSchema(schema);
+    assertNotNull(targetSchema.getField("_hoodie_is_deleted"));
   }
 
   @Test
