@@ -143,7 +143,7 @@ public class TableSchemaResolver {
    * @throws Exception
    */
   public Schema getTableAvroSchema() throws Exception {
-    return getTableAvroSchema(metaClient.getTableConfig().populateMetaFields());
+    return getTableAvroSchema(true);
   }
 
   /**
