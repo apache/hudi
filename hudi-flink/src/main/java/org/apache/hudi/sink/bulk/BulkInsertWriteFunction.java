@@ -21,11 +21,11 @@ package org.apache.hudi.sink.bulk;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.utils.TimeWait;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -80,11 +80,6 @@ public class BulkInsertWriteFunction<I>
   private int taskID;
 
   /**
-   * Meta Client.
-   */
-  private transient HoodieTableMetaClient metaClient;
-
-  /**
    * Write Client.
    */
   private transient HoodieFlinkWriteClient writeClient;
@@ -100,6 +95,11 @@ public class BulkInsertWriteFunction<I>
   private transient OperatorEventGateway eventGateway;
 
   /**
+   * Checkpoint metadata.
+   */
+  private CkpMetadata ckpMetadata;
+
+  /**
    * Constructs a StreamingSinkFunction.
    *
    * @param config The config options
@@ -112,9 +112,9 @@ public class BulkInsertWriteFunction<I>
   @Override
   public void open(Configuration parameters) throws IOException {
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
-    this.metaClient = StreamerUtil.createMetaClient(this.config);
     this.writeClient = StreamerUtil.createWriteClient(this.config, getRuntimeContext());
-    this.initInstant = StreamerUtil.getLastPendingInstant(this.metaClient, false);
+    this.ckpMetadata = CkpMetadata.getInstance(config.getString(FlinkOptions.PATH));
+    this.initInstant = lastPendingInstant();
     sendBootstrapEvent();
     initWriterHelper();
   }
@@ -187,7 +187,7 @@ public class BulkInsertWriteFunction<I>
    * Returns the last pending instant time.
    */
   protected String lastPendingInstant() {
-    return StreamerUtil.getLastPendingInstant(this.metaClient);
+    return this.ckpMetadata.lastPendingInstant();
   }
 
   private String instantToWrite() {
