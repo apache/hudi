@@ -1579,6 +1579,11 @@
           </plugin>
         </plugins>
       </build>
+      <activation>
+        <property>
+          <name>scala-2.12</name>
+        </property>
+      </activation>
     </profile>
 
     <profile>
@@ -1614,9 +1619,9 @@
         <spark.version>${spark3.version}</spark.version>
         <sparkbundle.version>${spark3.bundle.version}</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
-        <scala.binary.version>2.12</scala.binary.version>
+        <scala.binary.version>${spark3.scala.binary.version}</scala.binary.version>
+        <hudi.spark.module>hudi-spark3_${spark3.scala.binary.version}</hudi.spark.module>
         <hudi.spark.common.module>hudi-spark3-common_${spark3.scala.binary.version}</hudi.spark.common.module>
-        <scalatest.version>3.1.0</scalatest.version>
         <kafka.version>2.8.0</kafka.version>
         <parquet.version>1.12.2</parquet.version>
         <avro.version>1.10.2</avro.version>
@@ -1639,12 +1644,17 @@
       <id>spark3.1.x</id>
       <properties>
         <spark3.version>3.1.2</spark3.version>
+        <spark.version>${spark3.version}</spark.version>
+        <spark3.bundle.version>3.1</spark3.bundle.version>
+        <sparkbundle.version>${spark3.bundle.version}</sparkbundle.version>
+        <scala.version>${scala12.version}</scala.version>
+        <scala.binary.version>${spark3.scala.binary.version}</scala.binary.version>
         <hudi.spark.module>hudi-spark3.1.x_${spark3.scala.binary.version}</hudi.spark.module>
+        <hudi.spark.common.module>hudi-spark3-common_${spark3.scala.binary.version}</hudi.spark.common.module>
         <parquet.version>1.10.1</parquet.version>
-        <orc.version>1.6.0</orc.version>
         <avro.version>1.8.2</avro.version>
+        <orc.version>1.6.0</orc.version>
         <fasterxml.spark3.version>2.10.0</fasterxml.spark3.version>
-        <sparkbundle.version>3.1</sparkbundle.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
       </properties>
       <activation>

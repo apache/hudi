@@ -194,13 +194,6 @@
       <version>${fasterxml.version}</version>
     </dependency>
 
-    <dependency>
-      <groupId>org.apache.avro</groupId>
-      <artifactId>avro</artifactId>
-      <version>1.8.2</version>
-      <scope>provided</scope>
-    </dependency>
-
     <!-- Parquet -->
     <dependency>
       <groupId>org.apache.parquet</groupId>
