@@ -52,6 +52,9 @@ public class TestMetricsReporterFactory {
   @Mock
   HoodieMetricRegistry registry;
 
+  @Mock
+  MetricRegistry metricRegistry;
+
   @Test
   public void metricsReporterFactoryShouldReturnReporter() {
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.INMEMORY);
@@ -61,6 +64,7 @@ public class TestMetricsReporterFactory {
 
   @Test
   public void metricsReporterFactoryShouldReturnJMXReporter() {
+    when(registry.getRegistry()).thenReturn(metricRegistry);
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.JMX);
     when(config.getJmxHost()).thenReturn("localhost");
     when(config.getJmxPort()).thenReturn(String.valueOf(NetworkTestUtils.nextFreePort()));
@@ -106,6 +110,7 @@ public class TestMetricsReporterFactory {
 
   @Test
   public void metricsReporterFactoryShouldReturnUserDefinedReporter() {
+    when(registry.getRegistry()).thenReturn(metricRegistry);
     when(config.getMetricReporterClassName()).thenReturn(DummyMetricsReporter.class.getName());
 
     TypedProperties props = new TypedProperties();
@@ -115,7 +120,7 @@ public class TestMetricsReporterFactory {
     MetricsReporter reporter = MetricsReporterFactory.createReporter(config, registry);
     assertTrue(reporter instanceof CustomizableMetricsReporter);
     assertEquals(props, ((DummyMetricsReporter) reporter).getProps());
-    assertEquals(registry, ((DummyMetricsReporter) reporter).getRegistry());
+    assertEquals(((DummyMetricsReporter) reporter).getRegistry(), registry.getRegistry());
   }
 
   @Test
