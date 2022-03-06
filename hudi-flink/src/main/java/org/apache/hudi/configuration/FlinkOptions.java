@@ -482,12 +482,6 @@ public class FlinkOptions extends HoodieConfig {
   //  Compaction Options
   // ------------------------------------------------------------------------
 
-  public static final ConfigOption<Double> COMPACTION_MEMORY_FRACTION_PROP = ConfigOptions
-      .key(HoodieRealtimeConfig.COMPACTION_MEMORY_FRACTION_PROP)
-      .doubleType()
-      .defaultValue(0.1)
-      .withDescription("Compaction memory fraction of Task Manager managed memory size, default 0.1.");
-
   public static final ConfigOption<Boolean> COMPACTION_SCHEDULE_ENABLED = ConfigOptions
       .key("compaction.schedule.enabled")
       .booleanType()
