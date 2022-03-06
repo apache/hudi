@@ -18,8 +18,6 @@
 
 package org.apache.hudi.util;
 
-import org.apache.flink.configuration.TaskManagerOptions;
-import org.apache.flink.runtime.clusterframework.TaskExecutorProcessUtils;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
@@ -516,14 +514,6 @@ public class StreamerUtil {
    * Returns the max compaction memory in bytes with given conf.
    */
   public static long getMaxCompactionMemoryInBytes(Configuration conf) {
-    if (conf.contains(FlinkOptions.COMPACTION_MAX_MEMORY)) {
-      return conf.get(FlinkOptions.COMPACTION_MAX_MEMORY) * 1024 * 1024;
-    }
-    return (long)Math
-        .ceil(conf.getDouble(FlinkOptions.COMPACTION_MEMORY_FRACTION_PROP)
-            * TaskExecutorProcessUtils.processSpecFromConfig(
-                TaskExecutorProcessUtils.getConfigurationMapLegacyTaskManagerHeapSizeToConfigOption(
-                    conf, TaskManagerOptions.TOTAL_PROCESS_MEMORY))
-                .getManagedMemorySize().getBytes());
+    return conf.getInteger(FlinkOptions.COMPACTION_MAX_MEMORY) * 1024 * 1024;
   }
 }

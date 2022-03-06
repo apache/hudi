@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -481,12 +480,6 @@ public class FlinkOptions extends HoodieConfig {
   // ------------------------------------------------------------------------
   //  Compaction Options
   // ------------------------------------------------------------------------
-
-  public static final ConfigOption<Double> COMPACTION_MEMORY_FRACTION_PROP = ConfigOptions
-      .key(HoodieRealtimeConfig.COMPACTION_MEMORY_FRACTION_PROP)
-      .doubleType()
-      .defaultValue(0.1)
-      .withDescription("Compaction memory fraction of Task Manager managed memory size, default 0.1.");
 
   public static final ConfigOption<Boolean> COMPACTION_SCHEDULE_ENABLED = ConfigOptions
       .key("compaction.schedule.enabled")
