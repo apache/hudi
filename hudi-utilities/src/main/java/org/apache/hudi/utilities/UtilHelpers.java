@@ -52,6 +52,7 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessor;
 import org.apache.hudi.utilities.schema.SparkAvroPostProcessor;
 import org.apache.hudi.utilities.sources.Source;
+import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
@@ -119,6 +120,15 @@ public class UtilHelpers {
       }
     } catch (Throwable e) {
       throw new IOException("Could not load source class " + sourceClass, e);
+    }
+  }
+
+  public static JsonKafkaSourcePostProcessor createJsonKafkaSourcePostProcessor(String postProcessorClassName, TypedProperties props) throws IOException {
+    try {
+      return StringUtils.isNullOrEmpty(postProcessorClassName) ? null
+          : (JsonKafkaSourcePostProcessor) ReflectionUtils.loadClass(postProcessorClassName, props);
+    } catch (Throwable e) {
+      throw new IOException("Could not load json kafka source post processor class " + postProcessorClassName, e);
     }
   }
 

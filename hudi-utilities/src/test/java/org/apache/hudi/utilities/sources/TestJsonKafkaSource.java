@@ -62,12 +62,12 @@ import static org.mockito.Mockito.mock;
  */
 public class TestJsonKafkaSource extends SparkClientFunctionalTestHarness {
 
-  private static final String TEST_TOPIC_PREFIX = "hoodie_test_";
+  protected static final String TEST_TOPIC_PREFIX = "hoodie_test_";
   private static final URL SCHEMA_FILE_URL = TestJsonKafkaSource.class.getClassLoader().getResource("delta-streamer-config/source.avsc");
-  private static KafkaTestUtils testUtils;
+  protected static KafkaTestUtils testUtils;
 
-  private final HoodieDeltaStreamerMetrics metrics = mock(HoodieDeltaStreamerMetrics.class);
-  private FilebasedSchemaProvider schemaProvider;
+  protected final HoodieDeltaStreamerMetrics metrics = mock(HoodieDeltaStreamerMetrics.class);
+  protected FilebasedSchemaProvider schemaProvider;
 
   @BeforeAll
   public static void initClass() throws Exception {
@@ -88,7 +88,7 @@ public class TestJsonKafkaSource extends SparkClientFunctionalTestHarness {
     schemaProvider = new FilebasedSchemaProvider(props, jsc());
   }
 
-  private TypedProperties createPropsForJsonSource(String topic, Long maxEventsToReadFromKafkaSource, String resetStrategy) {
+  protected TypedProperties createPropsForJsonSource(String topic, Long maxEventsToReadFromKafkaSource, String resetStrategy) {
     TypedProperties props = new TypedProperties();
     props.setProperty("hoodie.deltastreamer.source.kafka.topic", topic);
     props.setProperty("bootstrap.servers", testUtils.brokerAddress());
