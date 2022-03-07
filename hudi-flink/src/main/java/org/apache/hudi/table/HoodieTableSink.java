@@ -136,5 +136,8 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
     // set up the operation as INSERT_OVERWRITE_TABLE first,
     // if there are explicit partitions, #applyStaticPartition would overwrite the option.
     this.conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE_TABLE.value());
+    // set up clean eager if clean async enabled
+    this.conf.setBoolean(FlinkOptions.CLEAN_ASYNC_EAGER_ENABLED, true);
+
   }
 }

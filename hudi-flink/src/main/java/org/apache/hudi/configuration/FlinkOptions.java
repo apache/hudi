@@ -556,6 +556,13 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(true)
       .withDescription("Whether to cleanup the old commits immediately on new commits, enabled by default");
 
+  public static final ConfigOption<Boolean> CLEAN_ASYNC_EAGER_ENABLED = ConfigOptions
+      .key("clean.async.eager.enabled")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("When asynchronous cleanup is enabled, whether to execute it once when CleanFunction starts. "
+          + "When executing flink sql insert overwrite, it is enabled by default");
+
   public static final ConfigOption<Integer> CLEAN_RETAIN_COMMITS = ConfigOptions
       .key("clean.retain_commits")
       .intType()
