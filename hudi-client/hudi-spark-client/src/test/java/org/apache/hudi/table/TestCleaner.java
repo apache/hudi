@@ -519,7 +519,8 @@ public class TestCleaner extends HoodieClientTestBase {
         HoodieCleaningPolicy.KEEP_LATEST_COMMITS);
 
     // Keep doing some writes and clean inline. Make sure we have expected number of files remaining.
-    makeIncrementalCommitTimes(8).forEach(newCommitTime -> {
+    for (int i = 0; i < 8; i++) {
+      String newCommitTime = makeNewCommitTime();
       try {
         client.startCommitWithTime(newCommitTime);
         List<HoodieRecord> records = recordUpsertGenWrappedFunction.apply(newCommitTime, 100);
@@ -559,7 +560,7 @@ public class TestCleaner extends HoodieClientTestBase {
       } catch (IOException ioe) {
         throw new RuntimeException(ioe);
       }
-    });
+    }
   }
 
   /**
@@ -629,8 +630,12 @@ public class TestCleaner extends HoodieClientTestBase {
     return runCleaner(config, false, 1, false);
   }
 
-  protected List<HoodieCleanStat> runCleaner(HoodieWriteConfig config, int firstCommitSequence) throws IOException {
-    return runCleaner(config, false, firstCommitSequence, false);
+  protected List<HoodieCleanStat> runCleanerWithInstantFormat(HoodieWriteConfig config, boolean needInstantInHudiFormat) throws IOException {
+    return runCleaner(config, false, 1, needInstantInHudiFormat);
+  }
+
+  protected List<HoodieCleanStat> runCleaner(HoodieWriteConfig config, int firstCommitSequence, boolean needInstantInHudiFormat) throws IOException {
+    return runCleaner(config, false, firstCommitSequence, needInstantInHudiFormat);
   }
 
   protected List<HoodieCleanStat> runCleaner(HoodieWriteConfig config, boolean simulateRetryFailure) throws IOException {
@@ -789,7 +794,7 @@ public class TestCleaner extends HoodieClientTestBase {
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    List<HoodieCleanStat> hoodieCleanStatsOne = runCleaner(config);
+    List<HoodieCleanStat> hoodieCleanStatsOne = runCleanerWithInstantFormat(config, true);
     assertEquals(0, hoodieCleanStatsOne.size(), "Must not scan any partitions and clean any files");
     assertTrue(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
     assertTrue(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
@@ -803,7 +808,7 @@ public class TestCleaner extends HoodieClientTestBase {
     testTable.addReplaceCommit("00000000000002", Option.of(replaceMetadata.getKey()), Option.empty(), replaceMetadata.getValue());
 
     // run cleaner
-    List<HoodieCleanStat> hoodieCleanStatsTwo = runCleaner(config);
+    List<HoodieCleanStat> hoodieCleanStatsTwo = runCleanerWithInstantFormat(config, true);
     assertEquals(0, hoodieCleanStatsTwo.size(), "Must not scan any partitions and clean any files");
     assertTrue(testTable.baseFileExists(p0, "00000000000002", file2P0C1));
     assertTrue(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
@@ -817,7 +822,7 @@ public class TestCleaner extends HoodieClientTestBase {
     testTable.addReplaceCommit("00000000000003", Option.of(replaceMetadata.getKey()), Option.empty(), replaceMetadata.getValue());
 
     // run cleaner
-    List<HoodieCleanStat> hoodieCleanStatsThree = runCleaner(config);
+    List<HoodieCleanStat> hoodieCleanStatsThree = runCleanerWithInstantFormat(config, true);
     assertEquals(0, hoodieCleanStatsThree.size(), "Must not scan any partitions and clean any files");
     assertTrue(testTable.baseFileExists(p0, "00000000000002", file2P0C1));
     assertTrue(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
@@ -832,7 +837,7 @@ public class TestCleaner extends HoodieClientTestBase {
     testTable.addReplaceCommit("00000000000004", Option.of(replaceMetadata.getKey()), Option.empty(), replaceMetadata.getValue());
 
     // run cleaner
-    List<HoodieCleanStat> hoodieCleanStatsFour = runCleaner(config, 5);
+    List<HoodieCleanStat> hoodieCleanStatsFour = runCleaner(config, 5, true);
     assertTrue(testTable.baseFileExists(p0, "00000000000004", file4P0C3));
     assertTrue(testTable.baseFileExists(p0, "00000000000002", file2P0C1));
     assertTrue(testTable.baseFileExists(p1, "00000000000003", file3P1C2));
@@ -847,7 +852,7 @@ public class TestCleaner extends HoodieClientTestBase {
     replaceMetadata = generateReplaceCommitMetadata("00000000000006", p0, file3P1C2, file4P1C4);
     testTable.addReplaceCommit("00000000000006", Option.of(replaceMetadata.getKey()), Option.empty(), replaceMetadata.getValue());
 
-    List<HoodieCleanStat> hoodieCleanStatsFive = runCleaner(config, 7);
+    List<HoodieCleanStat> hoodieCleanStatsFive = runCleaner(config, 7, true);
     assertTrue(testTable.baseFileExists(p0, "00000000000004", file4P0C3));
     assertTrue(testTable.baseFileExists(p0, "00000000000002", file2P0C1));
     assertTrue(testTable.baseFileExists(p1, "00000000000003", file3P1C2));

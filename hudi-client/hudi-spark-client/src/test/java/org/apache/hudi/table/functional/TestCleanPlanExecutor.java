@@ -287,7 +287,7 @@ public class TestCleanPlanExecutor extends TestCleaner {
     testTable.doWriteOperation("00000000000001", WriteOperationType.INSERT, Arrays.asList(p0, p1),
                 c1PartitionToFilesNameLengthMap, false, false);
 
-    List<HoodieCleanStat> hoodieCleanStatsOne = runCleaner(config);
+    List<HoodieCleanStat> hoodieCleanStatsOne = runCleanerWithInstantFormat(config, true);
     assertEquals(0, hoodieCleanStatsOne.size(), "Must not clean any files");
     assertTrue(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
     assertTrue(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
@@ -302,7 +302,7 @@ public class TestCleanPlanExecutor extends TestCleaner {
                 c2PartitionToFilesNameLengthMap, false, false);
 
     // enableBootstrapSourceClean would delete the bootstrap base file at the same time
-    List<HoodieCleanStat> hoodieCleanStatsTwo = runCleaner(config, 1);
+    List<HoodieCleanStat> hoodieCleanStatsTwo = runCleaner(config, 1, true);
     HoodieCleanStat cleanStat = getCleanStat(hoodieCleanStatsTwo, p0);
     assertEquals(enableBootstrapSourceClean ? 2 : 1, cleanStat.getSuccessDeleteFiles().size()
                 + (cleanStat.getSuccessDeleteBootstrapBaseFiles() == null ? 0
@@ -347,7 +347,7 @@ public class TestCleanPlanExecutor extends TestCleaner {
     testTable.doWriteOperation("00000000000003", WriteOperationType.UPSERT, Collections.emptyList(),
                 c3PartitionToFilesNameLengthMap, false, false);
 
-    List<HoodieCleanStat> hoodieCleanStatsThree = runCleaner(config, 3);
+    List<HoodieCleanStat> hoodieCleanStatsThree = runCleaner(config, 3, true);
     assertEquals(2,
                 getCleanStat(hoodieCleanStatsThree, p0)
                         .getSuccessDeleteFiles().size(), "Must clean two files");

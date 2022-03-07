@@ -153,14 +153,6 @@ public class HoodieTestTable {
     return HoodieActiveTimeline.formatDate(Date.from(dateTime));
   }
 
-  public static List<String> makeIncrementalCommitTimes(int num) {
-    return makeIncrementalCommitTimes(num, 1);
-  }
-
-  public static List<String> makeIncrementalCommitTimes(int num, int firstOffsetSeconds) {
-    return makeIncrementalCommitTimes(num, firstOffsetSeconds, 0);
-  }
-
   public static List<String> makeIncrementalCommitTimes(int num, int firstOffsetSeconds, int deltaSecs) {
     final Instant now = Instant.now();
     return IntStream.range(0, num)
