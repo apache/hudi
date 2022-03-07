@@ -53,8 +53,8 @@ import java.util.stream.Stream;
  */
 public class HoodieSparkEngineContext extends HoodieEngineContext {
 
-  private final JavaSparkContext javaSparkContext;
-  private SQLContext sqlContext;
+  private final transient JavaSparkContext javaSparkContext;
+  private transient SQLContext sqlContext;
 
   public HoodieSparkEngineContext(JavaSparkContext jsc) {
     super(new SerializableConfiguration(jsc.hadoopConfiguration()), new SparkTaskContextSupplier());
