@@ -69,6 +69,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+/**
+ * Tests covering different clean plan policies/strategies.
+ */
 public class TestCleanPlanExecutor extends TestCleaner {
 
   @Test

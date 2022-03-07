@@ -722,14 +722,17 @@ public class TestCleaner extends HoodieClientTestBase {
     int cleanCount = 20;
 
     int startInstant = 1;
-    for (int i = 0; i < commitCount; i++, startInstant++) {
-      String commitTime = makeNewCommitTime(startInstant, "%09d");
-      HoodieTestTable.of(metaClient).addCommit(commitTime);
-    }
 
     for (int i = 0; i < cleanCount; i++, startInstant++) {
       String commitTime = makeNewCommitTime(startInstant, "%09d");
       createCleanMetadata(commitTime + "", false, true);
+    }
+
+    int instantClean = startInstant;
+
+    for (int i = 0; i < commitCount; i++, startInstant++) {
+      String commitTime = makeNewCommitTime(startInstant, "%09d");
+      HoodieTestTable.of(metaClient).addCommit(commitTime);
     }
 
     List<HoodieCleanStat> cleanStats = runCleaner(config);
@@ -743,7 +746,7 @@ public class TestCleaner extends HoodieClientTestBase {
     assertEquals(--cleanCount, timeline.getTimelineOfActions(
             CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants().countInstants());
     assertTrue(timeline.getTimelineOfActions(
-            CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().containsInstant(makeNewCommitTime(--startInstant, "%09d")));
+            CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().containsInstant(makeNewCommitTime(--instantClean, "%09d")));
 
     cleanStats = runCleaner(config);
     timeline = metaClient.reloadActiveTimeline();
@@ -756,7 +759,7 @@ public class TestCleaner extends HoodieClientTestBase {
     assertEquals(--cleanCount, timeline.getTimelineOfActions(
             CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants().countInstants());
     assertTrue(timeline.getTimelineOfActions(
-            CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().containsInstant(makeNewCommitTime(--startInstant, "%09d")));
+            CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION)).filterInflightsAndRequested().containsInstant(makeNewCommitTime(--instantClean, "%09d")));
   }
   
   @Test
