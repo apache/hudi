@@ -18,10 +18,8 @@ jobs:
         include:
           - scala: "scala-2.11"
             spark: "spark2"
-            skipModules: ""
           - scala: "scala-2.11"
             spark: "spark2,spark-shade-unbundle-avro"
-            skipModules: ""
           - scala: "scala-2.12"
             spark: "spark3.1.x"
           - scala: "scala-2.12"
@@ -42,5 +40,4 @@ jobs:
         env:
           SCALA_PROFILE: ${{ matrix.scala }}
           SPARK_PROFILE: ${{ matrix.spark }}
-          SKIP_MODULES: ${{ matrix.skipModules }}
-        run: mvn install -P "$SCALA_PROFILE,$SPARK_PROFILE" -pl "$SKIP_MODULES" -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+        run: mvn install -P "$SCALA_PROFILE,$SPARK_PROFILE" -DskipTests=true -Dmaven.javadoc.skip=true -B -V
