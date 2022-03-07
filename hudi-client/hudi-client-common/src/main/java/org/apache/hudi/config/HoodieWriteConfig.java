@@ -1072,8 +1072,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean populateMetaFields() {
-    return Boolean.parseBoolean(getStringOrDefault(HoodieTableConfig.POPULATE_META_FIELDS,
-        HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()));
+    return getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
   }
 
   /**

@@ -250,7 +250,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> PRESERVE_COMMIT_METADATA = ConfigProperty
       .key("hoodie.compaction.preserve.commit.metadata")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("0.11.0")
       .withDocumentation("When rewriting data, preserves existing hoodie_commit_time");
 
