@@ -346,6 +346,17 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   public abstract O insert(I records, final String instantTime);
 
   /**
+   * Insert the given Error HoodieRecords into the hudi error table
+   * <p>
+   * This API is intended to be used to write error records.
+   *
+   * @param records Error HoodieRecords to insert
+   * @param instantTime Instant time of the commit
+   * @return Collection of WriteStatus to inspect errors and counts
+   */
+  public abstract O insertError(I records, final String instantTime);
+
+  /**
    * Inserts the given prepared records into the Hoodie table, at the supplied instantTime.
    * <p>
    * This implementation skips the index check, skips de-duping and is able to leverage benefits such as small file

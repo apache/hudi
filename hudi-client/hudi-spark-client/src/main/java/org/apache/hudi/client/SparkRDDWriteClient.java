@@ -48,6 +48,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metrics.DistributedRegistry;
+import org.apache.hudi.error.SparkErrorTableWriteStatusWriter;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -184,6 +185,31 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
+  public JavaRDD<WriteStatus> insertError(JavaRDD<HoodieRecord<T>> records, String instantTime) {
+    HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table =
+        getTableAndInitCtx(WriteOperationType.INSERT, instantTime);
+    table.validateInsertSchema();
+    preWrite(instantTime, WriteOperationType.INSERT, table.getMetaClient());
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> result = table.insert(context,instantTime, records);
+
+    if (result.getIndexLookupDuration().isPresent()) {
+      metrics.updateIndexMetrics(getOperationType().name(), result.getIndexUpdateDuration().get().toMillis());
+    }
+
+    if (result.isCommitted()) {
+      // Perform post commit operations.
+      if (result.getFinalizeDuration().isPresent()) {
+        metrics.updateFinalizeWriteMetrics(result.getFinalizeDuration().get().toMillis(),
+            result.getWriteStats().get().size());
+      }
+
+      postCommit(table, result.getCommitMetadata().get(), instantTime, Option.empty());
+      emitCommitMetrics(instantTime, result.getCommitMetadata().get(), table.getMetaClient().getCommitActionType());
+    }
+    return result.getWriteStatuses();
+  }
+
+  @Override
   public JavaRDD<WriteStatus> insertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, String instantTime) {
     HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table =
         getTableAndInitCtx(WriteOperationType.INSERT_PREPPED, instantTime);
@@ -281,6 +307,11 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
 
       emitCommitMetrics(instantTime, result.getCommitMetadata().get(), hoodieTable.getMetaClient().getCommitActionType());
     }
+
+    if (config.errorTableEnabled()) {
+      SparkErrorTableWriteStatusWriter.create(hadoopConf, config, context).commit(result.getWriteStatuses(), hoodieTable.getConfig().getSchema(),
+          hoodieTable.getConfig().getTableName());
+    }
     return result.getWriteStatuses();
   }
 
@@ -310,6 +341,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     }
     WriteMarkersFactory.get(config.getMarkersType(), table, compactionCommitTime)
         .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+
     if (compactionTimer != null) {
       long durationInMs = metrics.getDurationInMs(compactionTimer.stop());
       try {
@@ -339,6 +371,11 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     if (shouldComplete && compactionMetadata.getCommitMetadata().isPresent()) {
       completeTableService(TableServiceType.COMPACT, compactionMetadata.getCommitMetadata().get(), table, compactionInstantTime);
     }
+
+    if (config.errorTableEnabled()) {
+      SparkErrorTableWriteStatusWriter.create(hadoopConf, config, context).commit(compactionMetadata.getWriteStatuses(),
+          table.getConfig().getSchema(), table.getConfig().getTableName());
+    }
     return compactionMetadata;
   }
 
@@ -359,6 +396,12 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     if (shouldComplete && clusteringMetadata.getCommitMetadata().isPresent()) {
       completeTableService(TableServiceType.CLUSTER, clusteringMetadata.getCommitMetadata().get(), table, clusteringInstant);
     }
+
+    if (config.errorTableEnabled()) {
+      SparkErrorTableWriteStatusWriter.create(hadoopConf, config, context).commit(clusteringMetadata.getWriteStatuses(),
+          table.getConfig().getSchema(), table.getConfig().getTableName());
+    }
+
     return clusteringMetadata;
   }
 
@@ -395,6 +438,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     } finally {
       this.txnManager.endTransaction(Option.of(clusteringInstant));
     }
+
     WriteMarkersFactory.get(config.getMarkersType(), table, clusteringCommitTime)
         .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
     if (clusteringTimer != null) {

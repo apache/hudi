@@ -19,6 +19,8 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.common.config.{ConfigProperty, HoodieConfig}
+import org.apache.hudi.client.WriteStatus
+import org.apache.hudi.common.config.ConfigProperty
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
@@ -576,6 +578,11 @@ object DataSourceWriteOptions {
     .defaultValue("false")
     .withDocumentation("When set to true, will not write the partition columns into hudi. " +
       "By default, false.")
+
+  val ERROR_TABLE_ENABLE_OPT_KEY: ConfigProperty[String]  = ConfigProperty
+    .key("hoodie.write.error.table.enabled")
+    .defaultValue("false")
+    .withDocumentation("Enable the internal Error Table which saves error record");
 
   /** @deprecated Use {@link HIVE_ASSUME_DATE_PARTITION} and its methods instead */
   @Deprecated

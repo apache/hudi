@@ -24,6 +24,7 @@ import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
+import org.apache.hudi.common.config.HoodieErrorTableConfig;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieConfig;
@@ -1946,6 +1947,37 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(ALLOW_OPERATION_METADATA_FIELD);
   }
 
+  /**
+   * Error table configs.
+   */
+  public boolean errorTableEnabled() {
+    return getBoolean(HoodieErrorTableConfig.ERROR_TABLE_ENABLE_PROP);
+  }
+
+  public String getErrorTableBasePath() {
+    return getString(HoodieErrorTableConfig.ERROR_TABLE_BASE_PATH_PROP);
+  }
+
+  public String getErrorTableName() {
+    return getString(HoodieErrorTableConfig.ERROR_TABLE_NAME_PROP);
+  }
+
+  public int getErrorTableInsertParallelism() {
+    return getInt(HoodieErrorTableConfig.ERROR_TABLE_INSERT_PARALLELISM_PROP);
+  }
+
+  public int getErrorTableCleanerCommitsRetained() {
+    return getInt(HoodieErrorTableConfig.CLEANER_COMMITS_RETAINED_PROP);
+  }
+
+  public int getErrorTableMinCommitsToKeep() {
+    return getInt(HoodieErrorTableConfig.MIN_COMMITS_TO_KEEP_PROP);
+  }
+
+  public int getErrorTableMaxCommitsToKeep() {
+    return getInt(HoodieErrorTableConfig.MAX_COMMITS_TO_KEEP_PROP);
+  }
+
   public String getFileIdPrefixProviderClassName() {
     return getString(FILEID_PREFIX_PROVIDER_CLASS);
   }
@@ -1987,6 +2019,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     private boolean isMetricsJmxConfigSet = false;
     private boolean isMetricsGraphiteConfigSet = false;
     private boolean isLayoutConfigSet = false;
+    private boolean isErrorTableConfigSet = false;
 
     public Builder withEngineType(EngineType engineType) {
       this.engineType = engineType;
@@ -2338,6 +2371,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withErrorTableConfig(HoodieErrorTableConfig errorTableConfig) {
+      writeConfig.getProps().putAll(errorTableConfig.getProps());
+      isErrorTableConfigSet = true;
+      return this;
+    }
+
     protected void setDefaults() {
       writeConfig.setDefaultValue(MARKERS_TYPE, getDefaultMarkersType(engineType));
       // Check for mandatory properties
@@ -2374,6 +2413,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       writeConfig.setDefaultOnCondition(!isLayoutConfigSet,
           HoodieLayoutConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultValue(TIMELINE_LAYOUT_VERSION_NUM, String.valueOf(TimelineLayoutVersion.CURR_VERSION));
+      writeConfig.setDefaultOnCondition(!isErrorTableConfigSet,
+          HoodieErrorTableConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
 
       // Async table services can update the metadata table and a lock provider is
       // needed to guard against any concurrent table write operations. If user has

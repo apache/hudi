@@ -148,8 +148,9 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
 
       // Skip all files that are descendants of .hoodie in its path.
       String filePath = path.toString();
-      if (filePath.contains("/" + HoodieTableMetaClient.METAFOLDER_NAME + "/")
-          || filePath.endsWith("/" + HoodieTableMetaClient.METAFOLDER_NAME)) {
+      if ((filePath.contains("/" + HoodieTableMetaClient.METAFOLDER_NAME + "/")
+          || filePath.endsWith("/" + HoodieTableMetaClient.METAFOLDER_NAME))
+          && !filePath.contains("/" + HoodieTableMetaClient.ERROR_TABLE_FOLDER_NAME)) {
         if (LOG.isDebugEnabled()) {
           LOG.debug(String.format("Skipping Hoodie Metadata file  %s \n", filePath));
         }
