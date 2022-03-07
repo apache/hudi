@@ -1057,6 +1057,7 @@ public class HoodieTestTable {
         writeStat.setPartitionPath(partition);
         writeStat.setPath(partition + "/" + fileName);
         writeStat.setTotalWriteBytes(fileIdInfo.getValue());
+        writeStat.setFileSizeInBytes(fileIdInfo.getValue());
         writeStats.add(writeStat);
       }
     }
@@ -1082,6 +1083,7 @@ public class HoodieTestTable {
         writeStat.setPartitionPath(partition);
         writeStat.setPath(partition + "/" + fileName);
         writeStat.setTotalWriteBytes(fileIdInfo.getValue()[1]);
+        writeStat.setFileSizeInBytes(fileIdInfo.getValue()[1]);
         writeStats.add(writeStat);
       }
     }
