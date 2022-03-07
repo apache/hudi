@@ -136,9 +136,9 @@ public class RequestHandler {
     }
 
     String localTimelineHash = localTimeline.getTimelineHash();
-    // refresh if timeline hash mismatches and if local's last known instant < client's last known instant
+    // refresh if timeline hash mismatches and if local's last known instant < client's last known instant (if config is enabled)
     if (!localTimelineHash.equals(timelineHashFromClient)
-        && HoodieTimeline.compareTimestamps(localLastKnownInstant, HoodieTimeline.LESSER_THAN, lastKnownInstantFromClient)) {
+        && (!timelineServiceConfig.refreshTimelineBasedOnLatestCommit || HoodieTimeline.compareTimestamps(localLastKnownInstant, HoodieTimeline.LESSER_THAN, lastKnownInstantFromClient))) {
       return true;
     }
 
