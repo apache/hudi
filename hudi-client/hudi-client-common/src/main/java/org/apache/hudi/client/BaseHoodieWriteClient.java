@@ -957,7 +957,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     return inflightTimelineExcludeClusteringCommit;
   }
 
-  private Option<HoodiePendingRollbackInfo> getPendingRollbackInfo(HoodieTableMetaClient metaClient, String commitToRollback) {
+  protected Option<HoodiePendingRollbackInfo> getPendingRollbackInfo(HoodieTableMetaClient metaClient, String commitToRollback) {
     return getPendingRollbackInfos(metaClient).getOrDefault(commitToRollback, Option.empty());
   }
 
@@ -975,7 +975,8 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
         String action = rollbackPlan.getInstantToRollback().getAction();
         if (!HoodieTimeline.COMPACTION_ACTION.equals(action)) {
           boolean isClustering = HoodieTimeline.REPLACE_COMMIT_ACTION.equals(action)
-              && ClusteringUtils.getClusteringPlan(metaClient, instant).isPresent();
+              && ClusteringUtils.getClusteringPlan(metaClient, new HoodieInstant(true, rollbackPlan.getInstantToRollback().getAction(),
+              rollbackPlan.getInstantToRollback().getCommitTime())).isPresent();
           if (!isClustering) {
             String instantToRollback = rollbackPlan.getInstantToRollback().getCommitTime();
             infoMap.putIfAbsent(instantToRollback, Option.of(new HoodiePendingRollbackInfo(instant, rollbackPlan)));
@@ -1211,7 +1212,8 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   }
 
   protected void rollbackInflightClustering(HoodieInstant inflightInstant, HoodieTable<T, I, K, O> table) {
-    String commitTime = HoodieActiveTimeline.createNewInstantTime();
+    Option<HoodiePendingRollbackInfo> pendingRollbackInstantInfo = getPendingRollbackInfo(table.getMetaClient(), inflightInstant.getTimestamp());
+    String commitTime = pendingRollbackInstantInfo.map(entry -> entry.getRollbackInstant().getTimestamp()).orElse(HoodieActiveTimeline.createNewInstantTime());
     table.scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers());
     table.rollback(context, commitTime, inflightInstant, false, false);
     table.getActiveTimeline().revertReplaceCommitInflightToRequested(inflightInstant);
