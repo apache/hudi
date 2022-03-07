@@ -23,7 +23,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * A thread factory for custom creation of threads
+ * A thread factory for creation of threads
  */
 public class CustomizedThreadFactory implements ThreadFactory {
 
