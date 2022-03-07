@@ -368,7 +368,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
         })
         .collect(Collectors.toList());
     JavaRDD<GenericRecord> jrdd = jsc.parallelize(avroRecords, 2);
-    return AvroConversionUtils.createDataFrame(jrdd.rdd(), HoodieTestDataGenerator.AVRO_SCHEMA.toString(), spark);
+    return AvroConversionUtils.createDataFrame(jrdd.rdd(), schema.toString(), spark);
   }
 
   protected int incrementTimelineServicePortToUse() {
