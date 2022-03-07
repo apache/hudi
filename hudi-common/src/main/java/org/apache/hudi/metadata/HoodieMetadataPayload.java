@@ -52,6 +52,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -239,10 +240,22 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
                                                                                Option<Map<String, Long>> filesAdded,
                                                                                Option<List<String>> filesDeleted) {
     Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>();
-    filesAdded.ifPresent(
-        m -> m.forEach((filename, size) -> fileInfo.put(filename, new HoodieMetadataFileInfo(size, false))));
-    filesDeleted.ifPresent(
-        m -> m.forEach(filename -> fileInfo.put(filename, new HoodieMetadataFileInfo(0L, true))));
+    filesAdded.ifPresent(filesMap ->
+        fileInfo.putAll(
+            filesMap.entrySet().stream().collect(
+                Collectors.toMap(Map.Entry::getKey, (entry) -> {
+                  long fileSize = entry.getValue();
+                  // Assert that the file-size of the file being added is positive, since Hudi
+                  // should not be creating empty files
+                  checkState(fileSize > 0);
+                  return new HoodieMetadataFileInfo(fileSize, false);
+                })))
+    );
+    filesDeleted.ifPresent(filesList ->
+        fileInfo.putAll(
+            filesList.stream().collect(
+                Collectors.toMap(Function.identity(), (ignored) -> new HoodieMetadataFileInfo(0L, true))))
+    );
 
     HoodieKey key = new HoodieKey(partition, MetadataPartitionType.FILES.getPartitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_FILE_LIST, fileInfo);
@@ -288,7 +301,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     switch (type) {
       case METADATA_TYPE_PARTITION_LIST:
       case METADATA_TYPE_FILE_LIST:
-        Map<String, HoodieMetadataFileInfo> combinedFileInfo = combineFilesystemMetadata(previousRecord);
+        Map<String, HoodieMetadataFileInfo> combinedFileInfo = combineFileSystemMetadata(previousRecord);
         return new HoodieMetadataPayload(key, type, combinedFileInfo);
       case METADATA_TYPE_BLOOM_FILTER:
         HoodieMetadataBloomFilter combineBloomFilterMetadata = combineBloomFilterMetadata(previousRecord);
@@ -392,28 +405,53 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return filesystemMetadata.entrySet().stream().filter(e -> e.getValue().getIsDeleted() == isDeleted);
   }
 
-  private Map<String, HoodieMetadataFileInfo> combineFilesystemMetadata(HoodieMetadataPayload previousRecord) {
+  private Map<String, HoodieMetadataFileInfo> combineFileSystemMetadata(HoodieMetadataPayload previousRecord) {
     Map<String, HoodieMetadataFileInfo> combinedFileInfo = new HashMap<>();
+
+    // First, add all files listed in the previous record
     if (previousRecord.filesystemMetadata != null) {
       combinedFileInfo.putAll(previousRecord.filesystemMetadata);
     }
 
+    // Second, merge in the files listed in the new record
     if (filesystemMetadata != null) {
-      filesystemMetadata.forEach((filename, fileInfo) -> {
-        // If the filename wasnt present then we carry it forward
-        if (!combinedFileInfo.containsKey(filename)) {
-          combinedFileInfo.put(filename, fileInfo);
-        } else {
-          if (fileInfo.getIsDeleted()) {
-            // file deletion
-            combinedFileInfo.remove(filename);
-          } else {
-            // file appends.
-            combinedFileInfo.merge(filename, fileInfo, (oldFileInfo, newFileInfo) -> {
-              return new HoodieMetadataFileInfo(oldFileInfo.getSize() + newFileInfo.getSize(), false);
-            });
-          }
-        }
+      validatePayload(type, filesystemMetadata);
+
+      filesystemMetadata.forEach((key, fileInfo) -> {
+        combinedFileInfo.merge(key, fileInfo,
+            // Combine previous record w/ the new one, new records taking precedence over
+            // the old one
+            //
+            // NOTE: That if previous listing contains the file that is being deleted by the tombstone
+            //       record (`IsDeleted` = true) in the new one, we simply delete the file from the resulting
+            //       listing as well as drop the tombstone itself.
+            //       However, if file is not present in the previous record we have to persist tombstone
+            //       record in the listing to make sure we carry forward information that this file
+            //       was deleted. This special case could occur since the merging flow is 2-stage:
+            //          - First we merge records from all of the delta log-files
+            //          - Then we merge records from base-files with the delta ones (coming as a result
+            //          of the previous step)
+            (oldFileInfo, newFileInfo) ->
+                // NOTE: We can’t assume that MT update records will be ordered the same way as actual
+                //       FS operations (since they are not atomic), therefore MT record merging should be a
+                //       _commutative_ & _associative_ operation (ie one that would work even in case records
+                //       will get re-ordered), which is
+                //          - Possible for file-sizes (since file-sizes will ever grow, we can simply
+                //          take max of the old and new records)
+                //          - Not possible for is-deleted flags*
+                //
+                //       *However, we’re assuming that the case of concurrent write and deletion of the same
+                //       file is _impossible_ -- it would only be possible with concurrent upsert and
+                //       rollback operation (affecting the same log-file), which is implausible, b/c either
+                //       of the following have to be true:
+                //          - We’re appending to failed log-file (then the other writer is trying to
+                //          rollback it concurrently, before it’s own write)
+                //          - Rollback (of completed instant) is running concurrently with append (meaning
+                //          that restore is running concurrently with a write, which is also nut supported
+                //          currently)
+                newFileInfo.getIsDeleted()
+                    ? null
+                    : new HoodieMetadataFileInfo(Math.max(newFileInfo.getSize(), oldFileInfo.getSize()), false));
       });
     }
 
@@ -507,6 +545,14 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     }
     sb.append('}');
     return sb.toString();
+  }
+
+  private static void validatePayload(int type, Map<String, HoodieMetadataFileInfo> filesystemMetadata) {
+    if (type == METADATA_TYPE_FILE_LIST) {
+      filesystemMetadata.forEach((fileName, fileInfo) -> {
+        checkState(fileInfo.getIsDeleted() || fileInfo.getSize() > 0, "Existing files should have size > 0");
+      });
+    }
   }
 
   private static <T> T getNestedFieldValue(GenericRecord record, String fieldName) {

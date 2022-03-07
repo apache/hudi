@@ -18,6 +18,14 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.runtime.jobgraph.OperatorID;
+import org.apache.flink.runtime.operators.coordination.MockOperatorCoordinatorContext;
+import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
+import org.apache.flink.runtime.operators.coordination.OperatorEvent;
+import org.apache.flink.util.FileUtils;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -30,15 +38,6 @@ import org.apache.hudi.sink.utils.MockCoordinatorExecutor;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestUtils;
-
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.runtime.jobgraph.OperatorID;
-import org.apache.flink.runtime.operators.coordination.MockOperatorCoordinatorContext;
-import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
-import org.apache.flink.runtime.operators.coordination.OperatorEvent;
-import org.apache.flink.util.FileUtils;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -276,6 +275,9 @@ public class TestStreamWriteOperatorCoordinator {
     writeStat.setPartitionPath(partitionPath);
     writeStat.setFileId("fileId123");
     writeStat.setPath("path123");
+    writeStat.setFileSizeInBytes(123);
+    writeStat.setTotalWriteBytes(123);
+    writeStat.setNumWrites(1);
 
     writeStatus.setStat(writeStat);
 

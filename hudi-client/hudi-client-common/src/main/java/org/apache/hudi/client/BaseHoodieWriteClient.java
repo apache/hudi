@@ -18,6 +18,8 @@
 
 package org.apache.hudi.client;
 
+import com.codahale.metrics.Timer;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.async.AsyncArchiveService;
 import org.apache.hudi.async.AsyncCleanerService;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
@@ -45,6 +47,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
@@ -73,9 +76,8 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.rollback.RollbackUtils;
 import org.apache.hudi.table.action.savepoint.SavepointHelpers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
-
-import com.codahale.metrics.Timer;
-import org.apache.hadoop.conf.Configuration;
+import org.apache.hudi.table.upgrade.SupportsUpgradeDowngrade;
+import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -107,15 +109,16 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(BaseHoodieWriteClient.class);
 
-  protected final transient HoodieMetrics metrics;
   private final transient HoodieIndex<?, ?> index;
+  private final SupportsUpgradeDowngrade upgradeDowngradeHelper;
+  private transient WriteOperationType operationType;
+  private transient HoodieWriteCommitCallback commitCallback;
 
+  protected final transient HoodieMetrics metrics;
   protected transient Timer.Context writeTimer = null;
   protected transient Timer.Context compactionTimer;
   protected transient Timer.Context clusteringTimer;
 
-  private transient WriteOperationType operationType;
-  private transient HoodieWriteCommitCallback commitCallback;
   protected transient AsyncCleanerService asyncCleanerService;
   protected transient AsyncArchiveService asyncArchiveService;
   protected final TransactionManager txnManager;
@@ -125,25 +128,32 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * Create a write client, with new hudi index.
    * @param context HoodieEngineContext
    * @param writeConfig instance of HoodieWriteConfig
+   * @param upgradeDowngradeHelper engine-specific instance of {@link SupportsUpgradeDowngrade}
    */
   @Deprecated
-  public BaseHoodieWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
-    this(context, writeConfig, Option.empty());
+  public BaseHoodieWriteClient(HoodieEngineContext context,
+                               HoodieWriteConfig writeConfig,
+                               SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+    this(context, writeConfig, Option.empty(), upgradeDowngradeHelper);
   }
 
   /**
    * Create a write client, allows to specify all parameters.
+   *
    * @param context         HoodieEngineContext
-   * @param writeConfig instance of HoodieWriteConfig
+   * @param writeConfig     instance of HoodieWriteConfig
    * @param timelineService Timeline Service that runs as part of write client.
    */
   @Deprecated
-  public BaseHoodieWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
-                                   Option<EmbeddedTimelineService> timelineService) {
+  public BaseHoodieWriteClient(HoodieEngineContext context,
+                               HoodieWriteConfig writeConfig,
+                               Option<EmbeddedTimelineService> timelineService,
+                               SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     super(context, writeConfig, timelineService);
     this.metrics = new HoodieMetrics(config);
     this.index = createIndex(writeConfig);
     this.txnManager = new TransactionManager(config, fs);
+    this.upgradeDowngradeHelper = upgradeDowngradeHelper;
   }
 
   protected abstract HoodieIndex<?, ?> createIndex(HoodieWriteConfig writeConfig);
@@ -291,7 +301,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
       throw new HoodieException("Cannot bootstrap the table in multi-writer mode");
     }
-    HoodieTable<T, I, K, O> table = getTableAndInitCtx(WriteOperationType.UPSERT, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS);
+    HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UPSERT, Option.ofNullable(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS));
     rollbackFailedBootstrap();
     table.bootstrap(context, extraMetadata);
   }
@@ -299,7 +309,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   /**
    * Main API to rollback failed bootstrap.
    */
-  public void rollbackFailedBootstrap() {
+  protected void rollbackFailedBootstrap() {
     LOG.info("Rolling back pending bootstrap if present");
     HoodieTable<T, I, K, O> table = createTable(config, hadoopConf, config.isMetadataTableEnabled());
     HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingCompaction();
@@ -628,7 +638,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * @return true if the savepoint was restored to successfully
    */
   public void restoreToSavepoint(String savepointTime) {
-    HoodieTable<T, I, K, O> table = createTable(config, hadoopConf, config.isMetadataTableEnabled());
+    HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty());
     SavepointHelpers.validateSavepointPresence(table, savepointTime);
     restoreToInstant(savepointTime);
     SavepointHelpers.validateSavepointRestore(table, savepointTime);
@@ -636,23 +646,9 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
 
   @Deprecated
   public boolean rollback(final String commitInstantTime) throws HoodieRollbackException {
-    HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
+    HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty());
     Option<HoodiePendingRollbackInfo> pendingRollbackInfo = getPendingRollbackInfo(table.getMetaClient(), commitInstantTime);
     return rollback(commitInstantTime, pendingRollbackInfo, false);
-  }
-
-  /**
-   * @Deprecated
-   * Rollback the inflight record changes with the given commit time. This
-   * will be removed in future in favor of {@link BaseHoodieWriteClient#restoreToInstant(String)}
-   * Adding this api for backwards compatability.
-   * @param commitInstantTime Instant time of the commit
-   * @param skipLocking if this is triggered by another parent transaction, locking can be skipped.
-   * @throws HoodieRollbackException if rollback cannot be performed successfully
-   */
-  @Deprecated
-  public boolean rollback(final String commitInstantTime, boolean skipLocking) throws HoodieRollbackException {
-    return rollback(commitInstantTime, Option.empty(), skipLocking);
   }
 
   /**
@@ -711,7 +707,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     final String restoreInstantTime = HoodieActiveTimeline.createNewInstantTime();
     Timer.Context timerContext = metrics.getRollbackCtx();
     try {
-      HoodieTable<T, I, K, O> table = createTable(config, hadoopConf, config.isMetadataTableEnabled());
+      HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty());
       Option<HoodieRestorePlan> restorePlanOption = table.scheduleRestore(context, restoreInstantTime, instantTime);
       if (restorePlanOption.isPresent()) {
         HoodieRestoreMetadata restoreMetadata = table.restore(context, restoreInstantTime, instantTime);
@@ -988,7 +984,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   /**
    * Rollback all failed writes.
    */
-  public Boolean rollbackFailedWrites() {
+  protected Boolean rollbackFailedWrites() {
     return rollbackFailedWrites(false);
   }
 
@@ -996,7 +992,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * Rollback all failed writes.
    * @param skipLocking if this is triggered by another parent transaction, locking can be skipped.
    */
-  public Boolean rollbackFailedWrites(boolean skipLocking) {
+  protected Boolean rollbackFailedWrites(boolean skipLocking) {
     HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
     List<String> instantsToRollback = getInstantsToRollback(table.getMetaClient(), config.getFailedWritesCleanPolicy(), Option.empty());
     Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(table.getMetaClient());
@@ -1246,17 +1242,79 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   }
 
   /**
-   * Get HoodieTable and init {@link Timer.Context}.
+   * Instantiates engine-specific instance of {@link HoodieTable} as well as performs necessary
+   * bootstrapping operations (for ex, validating whether Metadata Table has to be bootstrapped)
    *
-   * @param operationType write operation type
+   * NOTE: THIS OPERATION IS EXECUTED UNDER LOCK, THEREFORE SHOULD AVOID ANY OPERATIONS
+   *       NOT REQUIRING EXTERNAL SYNCHRONIZATION
+   *
+   * @param metaClient instance of {@link HoodieTableMetaClient}
    * @param instantTime current inflight instant time
-   * @return HoodieTable
+   * @return instantiated {@link HoodieTable}
    */
-  protected abstract HoodieTable<T, I, K, O> getTableAndInitCtx(WriteOperationType operationType, String instantTime);
+  protected abstract HoodieTable<T, I, K, O> doInitTable(HoodieTableMetaClient metaClient, Option<String> instantTime);
 
   /**
-   * Sets write schema from last instant since deletes may not have schema set in the config.
+   * Instantiates and initializes instance of {@link HoodieTable}, performing crucial bootstrapping
+   * operations such as:
+   *
+   * NOTE: This method is engine-agnostic and SHOULD NOT be overloaded, please check on
+   * {@link #doInitTable(HoodieTableMetaClient, Option<String>)} instead
+   *
+   * <ul>
+   *   <li>Checking whether upgrade/downgrade is required</li>
+   *   <li>Bootstrapping Metadata Table (if required)</li>
+   *   <li>Initializing metrics contexts</li>
+   * </ul>
    */
+  protected final HoodieTable<T, I, K, O> initTable(WriteOperationType operationType, Option<String> instantTime) {
+    HoodieTableMetaClient metaClient = createMetaClient(true);
+    // Setup write schemas for deletes
+    if (operationType == WriteOperationType.DELETE) {
+      setWriteSchemaForDeletes(metaClient);
+    }
+
+    HoodieTable<T, I, K, O> table;
+
+    this.txnManager.beginTransaction();
+    try {
+      tryUpgrade(metaClient, instantTime);
+      table = doInitTable(metaClient, instantTime);
+    } finally {
+      this.txnManager.endTransaction();
+    }
+
+    // Validate table properties
+    metaClient.validateTableProperties(config.getProps(), operationType);
+    // Make sure that FS View is in sync
+    table.getHoodieView().sync();
+
+    switch (operationType) {
+      case INSERT:
+      case INSERT_PREPPED:
+      case UPSERT:
+      case UPSERT_PREPPED:
+      case BULK_INSERT:
+      case BULK_INSERT_PREPPED:
+      case INSERT_OVERWRITE:
+      case INSERT_OVERWRITE_TABLE:
+        setWriteTimer(table);
+        break;
+      case CLUSTER:
+        clusteringTimer = metrics.getClusteringCtx();
+        break;
+      case COMPACT:
+        compactionTimer = metrics.getCompactionCtx();
+        break;
+      default:
+    }
+
+    return table;
+  }
+
+  /**
+     * Sets write schema from last instant since deletes may not have schema set in the config.
+     */
   protected void setWriteSchemaForDeletes(HoodieTableMetaClient metaClient) {
     try {
       HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
@@ -1300,5 +1358,34 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     this.index.close();
     this.heartbeatClient.stop();
     this.txnManager.close();
+  }
+
+  private void setWriteTimer(HoodieTable<T, I, K, O> table) {
+    String commitType = table.getMetaClient().getCommitActionType();
+    if (commitType.equals(HoodieTimeline.COMMIT_ACTION)) {
+      writeTimer = metrics.getCommitCtx();
+    } else if (commitType.equals(HoodieTimeline.DELTA_COMMIT_ACTION)) {
+      writeTimer = metrics.getDeltaCommitCtx();
+    }
+  }
+
+  private void tryUpgrade(HoodieTableMetaClient metaClient, Option<String> instantTime) {
+    UpgradeDowngrade upgradeDowngrade =
+        new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper);
+
+    if (upgradeDowngrade.needsUpgradeOrDowngrade(HoodieTableVersion.current())) {
+      // Ensure no inflight commits by setting EAGER policy and explicitly cleaning all failed commits
+      List<String> instantsToRollback = getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.EAGER, instantTime);
+
+      Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(metaClient);
+      instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
+
+      rollbackFailedWrites(pendingRollbacks, true);
+
+      new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper)
+          .run(HoodieTableVersion.current(), instantTime.orElse(null));
+
+      metaClient.reloadActiveTimeline();
+    }
   }
 }

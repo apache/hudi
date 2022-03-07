@@ -20,7 +20,6 @@ package org.apache.hudi.functional;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.avro.model.HoodieFileStatus;
-import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.bootstrap.FullRecordBootstrapDataProvider;
 import org.apache.hudi.client.bootstrap.selector.BootstrapModeSelector;
@@ -245,7 +244,8 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
             .withBootstrapParallelism(3)
             .withBootstrapModeSelector(bootstrapModeSelectorClass).build())
         .build();
-    SparkRDDWriteClient client = new SparkRDDWriteClient(context, config);
+
+    SparkRDDWriteClientOverride client = new SparkRDDWriteClientOverride(context, config);
     client.bootstrap(Option.empty());
     checkBootstrapResults(totalRecords, schema, bootstrapCommitInstantTs, checkNumRawFiles, numInstantsAfterBootstrap,
         numInstantsAfterBootstrap, timestamp, timestamp, deltaCommit, bootstrapInstants, true);
@@ -266,7 +266,7 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
     assertFalse(index.useIndex());
 
     // Run bootstrap again
-    client = new SparkRDDWriteClient(context, config);
+    client = new SparkRDDWriteClientOverride(context, config);
     client.bootstrap(Option.empty());
 
     metaClient.reloadActiveTimeline();

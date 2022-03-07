@@ -285,7 +285,7 @@ public class FileCreateUtils {
 
   public static void createBaseFile(String basePath, String partitionPath, String instantTime, String fileId)
       throws Exception {
-    createBaseFile(basePath, partitionPath, instantTime, fileId, 0);
+    createBaseFile(basePath, partitionPath, instantTime, fileId, 1);
   }
 
   public static void createBaseFile(String basePath, String partitionPath, String instantTime, String fileId, long length)
