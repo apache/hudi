@@ -19,7 +19,9 @@
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.utilities.exception.HoodieSchemaPostProcessException;
 import org.apache.hudi.utilities.schema.DeleteSupportSchemaPostProcessor;
+import org.apache.hudi.utilities.schema.DropColumnSchemaPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor.Config;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -29,6 +31,7 @@ import org.apache.hudi.utilities.transform.FlatteningTransformer;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -114,6 +117,28 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
     assertNull(targetSchema.getField("ums_id_"));
     assertNotNull(targetSchema.getField("_hoodie_is_deleted"));
     assertNotNull(targetSchema.getField("testString"));
+  }
+
+  @Test
+  public void testDeleteColumn() {
+    // remove column ums_id_ from source schema
+    properties.put(DropColumnSchemaPostProcessor.Config.DELETE_COLUMN_POST_PROCESSOR_COLUMN_PROP, "ums_id_");
+    DropColumnSchemaPostProcessor processor = new DropColumnSchemaPostProcessor(properties, null);
+    Schema schema = new Schema.Parser().parse(ORIGINAL_SCHEMA);
+    Schema targetSchema = processor.processSchema(schema);
+
+    assertNull(targetSchema.getField("ums_id_"));
+    assertNotNull(targetSchema.getField("ums_ts_"));
+  }
+
+  @Test
+  public void testDeleteColumnThrows() {
+    // remove all columns from source schema
+    properties.put(DropColumnSchemaPostProcessor.Config.DELETE_COLUMN_POST_PROCESSOR_COLUMN_PROP, "ums_id_,ums_ts_");
+    DropColumnSchemaPostProcessor processor = new DropColumnSchemaPostProcessor(properties, null);
+    Schema schema = new Schema.Parser().parse(ORIGINAL_SCHEMA);
+
+    Assertions.assertThrows(HoodieSchemaPostProcessException.class, () -> processor.processSchema(schema));
   }
 
   @Test
