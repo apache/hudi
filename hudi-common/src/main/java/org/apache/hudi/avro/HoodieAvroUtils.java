@@ -386,17 +386,15 @@ public class HoodieAvroUtils {
     GenericRecord newRecord = new GenericData.Record(newSchema);
     boolean isSpecificRecord = genericRecord instanceof SpecificRecordBase;
     for (Schema.Field f : newSchema.getFields()) {
-      if (!isSpecificRecord) {
-        copyOldValueOrSetDefault(genericRecord, newRecord, f);
-      } else if (!isMetadataField(f.name())) {
+      if (!(isSpecificRecord && isMetadataField(f.name()))) {
         copyOldValueOrSetDefault(genericRecord, newRecord, f);
       }
       if (isMetadataField(f.name()) && copyOverMetaFields) {
         // if meta field exists in primary generic record, copy over.
         if (genericRecord.getSchema().getField(f.name()) != null) {
           copyOldValueOrSetDefault(genericRecord, newRecord, f);
-        } else if (fallbackRecord.getSchema().getField(f.name()) != null) {
-          // if not, try to copy from old record.
+        } else if (fallbackRecord != null && fallbackRecord.getSchema().getField(f.name()) != null) {
+          // if not, try to copy from the fallback record.
           copyOldValueOrSetDefault(fallbackRecord, newRecord, f);
         }
       }
