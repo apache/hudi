@@ -178,10 +178,11 @@ public class ITTestHoodieFlinkCompactor {
     options.put(FlinkOptions.CHANGELOG_ENABLED.key(), enableChangelog + "");
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     tableEnv.executeSql(hoodieTableDDL);
-    tableEnv.executeSql(TestSQL.INSERT_T1).await();
 
-    // wait for the asynchronous commit to finish
-    TimeUnit.SECONDS.sleep(5);
+    // insert dataset
+    tableEnv.executeSql(TestSQL.INSERT_T1).await();
+    // update the dataset
+    tableEnv.executeSql(TestSQL.UPDATE_INSERT_T1).await();
 
     // Make configuration and setAvroSchema.
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -194,8 +195,6 @@ public class ITTestHoodieFlinkCompactor {
 
     HoodieFlinkCompactor.AsyncCompactionService asyncCompactionService = new HoodieFlinkCompactor.AsyncCompactionService(cfg, conf, env);
     asyncCompactionService.start(null);
-
-    tableEnv.executeSql(TestSQL.UPDATE_INSERT_T1).await();
 
     // wait for the asynchronous commit to finish
     TimeUnit.SECONDS.sleep(5);
