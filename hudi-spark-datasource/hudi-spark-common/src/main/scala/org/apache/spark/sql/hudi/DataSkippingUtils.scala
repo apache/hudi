@@ -23,7 +23,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
-import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, EqualNullSafe, EqualTo, Expression, ExtractValue, GetStructField, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith}
+import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, EqualNullSafe, EqualTo, Expression, ExtractValue, GetStructField, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith, SubqueryExpression}
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.unsafe.types.UTF8String
@@ -84,7 +84,7 @@ object DataSkippingUtils extends Logging {
       //       [[Expression#foldable]] returns true for)
       //
       // Translates to "colA_minValue <= B AND B <= colA_maxValue" condition for index lookup
-      case EqualTo(attribute: AttributeReference, value: Expression) if value.foldable =>
+      case EqualTo(attribute: AttributeReference, value: Expression) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => colContainsValuesEqualTo(colName, value))
 
@@ -93,7 +93,7 @@ object DataSkippingUtils extends Logging {
       //       [[Expression#foldable]] returns true for)
       //
       // Translates to "colA_minValue <= B AND B <= colA_maxValue" condition for index lookup
-      case EqualTo(value: Expression, attribute: AttributeReference) if value.foldable =>
+      case EqualTo(value: Expression, attribute: AttributeReference) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => colContainsValuesEqualTo(colName, value))
 
@@ -103,7 +103,7 @@ object DataSkippingUtils extends Logging {
       //
       // Translates to "NOT(colA_minValue = B AND colA_maxValue = B)"
       // NOTE: This is NOT an inversion of `colA = b`
-      case Not(EqualTo(attribute: AttributeReference, value: Expression)) if value.foldable =>
+      case Not(EqualTo(attribute: AttributeReference, value: Expression)) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => Not(colContainsOnlyValuesEqualTo(colName, value)))
 
@@ -113,7 +113,7 @@ object DataSkippingUtils extends Logging {
       //
       // Translates to "NOT(colA_minValue = B AND colA_maxValue = B)"
       // NOTE: This is NOT an inversion of `colA = b`
-      case Not(EqualTo(value: Expression, attribute: AttributeReference)) if value.foldable =>
+      case Not(EqualTo(value: Expression, attribute: AttributeReference)) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => Not(colContainsOnlyValuesEqualTo(colName, value)))
 
@@ -128,7 +128,7 @@ object DataSkippingUtils extends Logging {
       //       [[Expression#foldable]] returns true for)
       //
       // Translates to "colA_minValue < B" for index lookup
-      case LessThan(attribute: AttributeReference, value: Expression) if value.foldable =>
+      case LessThan(attribute: AttributeReference, value: Expression) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => LessThan(minValue(colName), value))
 
@@ -137,7 +137,7 @@ object DataSkippingUtils extends Logging {
       //       [[Expression#foldable]] returns true for)
       //
       // Translates to "B > colA_minValue" for index lookup
-      case GreaterThan(value: Expression, attribute: AttributeReference) if value.foldable =>
+      case GreaterThan(value: Expression, attribute: AttributeReference) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => LessThan(minValue(colName), value))
 
@@ -146,7 +146,7 @@ object DataSkippingUtils extends Logging {
       //       [[Expression#foldable]] returns true for)
       //
       // Translates to "B < colA_maxValue" for index lookup
-      case LessThan(value: Expression, attribute: AttributeReference) if value.foldable =>
+      case LessThan(value: Expression, attribute: AttributeReference) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => GreaterThan(maxValue(colName), value))
 
@@ -155,7 +155,7 @@ object DataSkippingUtils extends Logging {
       //       [[Expression#foldable]] returns true for)
       //
       // Translates to "colA_maxValue > B" for index lookup
-      case GreaterThan(attribute: AttributeReference, value: Expression) if value.foldable =>
+      case GreaterThan(attribute: AttributeReference, value: Expression) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => GreaterThan(maxValue(colName), value))
 
@@ -164,7 +164,7 @@ object DataSkippingUtils extends Logging {
       //       [[Expression#foldable]] returns true for)
       //
       // Translates to "colA_minValue <= B" for index lookup
-      case LessThanOrEqual(attribute: AttributeReference, value: Expression) if value.foldable =>
+      case LessThanOrEqual(attribute: AttributeReference, value: Expression) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => LessThanOrEqual(minValue(colName), value))
 
@@ -173,7 +173,7 @@ object DataSkippingUtils extends Logging {
       //       [[Expression#foldable]] returns true for)
       //
       // Translates to "B >= colA_minValue" for index lookup
-      case GreaterThanOrEqual(value: Expression, attribute: AttributeReference) if value.foldable =>
+      case GreaterThanOrEqual(value: Expression, attribute: AttributeReference) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => LessThanOrEqual(minValue(colName), value))
 
@@ -182,7 +182,7 @@ object DataSkippingUtils extends Logging {
       //       [[Expression#foldable]] returns true for)
       //
       // Translates to "B <= colA_maxValue" for index lookup
-      case LessThanOrEqual(value: Expression, attribute: AttributeReference) if value.foldable =>
+      case LessThanOrEqual(value: Expression, attribute: AttributeReference) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => GreaterThanOrEqual(maxValue(colName), value))
 
@@ -191,7 +191,7 @@ object DataSkippingUtils extends Logging {
       //       [[Expression#foldable]] returns true for)
       //
       // Translates to "colA_maxValue >= B" for index lookup
-      case GreaterThanOrEqual(attribute: AttributeReference, value: Expression) if value.foldable =>
+      case GreaterThanOrEqual(attribute: AttributeReference, value: Expression) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => GreaterThanOrEqual(maxValue(colName), value))
 
@@ -300,6 +300,15 @@ object DataSkippingUtils extends Logging {
       None
     }
   }
+
+  // This check is used to validate that the expression that target column is compared against
+  //    a) Has no references to other attributes (for ex, columns)
+  //    b) Does not contain sub-queries
+  //
+  // This in turn allows us to be certain that Spark will be able to evaluate such expression
+  // against Column Stats Index as well
+  private def isSimpleExpression(expr: Expression): Boolean =
+    expr.references.isEmpty && !SubqueryExpression.hasSubquery(expr)
 
   private def getTargetColNameParts(resolvedTargetCol: Expression): Seq[String] = {
     resolvedTargetCol match {
