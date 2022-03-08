@@ -137,4 +137,18 @@ class Spark2Adapter extends SparkAdapter {
     closePartition()
     partitions.toSeq
   }
+
+  /**
+   * if the logical plan is a TimeTravelRelation LogicalPlan.
+   */
+  override def isRelationTimeTravel(plan: LogicalPlan): Boolean = {
+    false
+  }
+
+  /**
+   * Get the member of the TimeTravelRelation LogicalPlan.
+   */
+  override def getRelationTimeTravel(plan: LogicalPlan): Option[(LogicalPlan, Option[Expression], Option[String])] = {
+    throw new IllegalStateException(s"Should not call getRelationTimeTravel for spark2")
+  }
 }

@@ -86,6 +86,16 @@ trait SparkAdapter extends Serializable {
     Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)]
 
   /**
+   * if the logical plan is a TimeTravelRelation LogicalPlan.
+   */
+  def isRelationTimeTravel(plan: LogicalPlan): Boolean
+
+  /**
+   * Get the member of the TimeTravelRelation LogicalPlan.
+   */
+  def getRelationTimeTravel(plan: LogicalPlan): Option[(LogicalPlan, Option[Expression], Option[String])]
+
+  /**
    * Create a Insert Into LogicalPlan.
    */
   def createInsertInto(table: LogicalPlan, partition: Map[String, Option[String]],
