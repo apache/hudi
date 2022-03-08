@@ -151,4 +151,14 @@ public class HoodieJavaRDD<T> extends HoodieData<T> {
   public List<T> collectAsList() {
     return rddData.collect();
   }
+
+  @Override
+  public boolean hasPartitions() {
+    return !rddData.partitions().isEmpty();
+  }
+
+  @Override
+  public HoodieData<T> repartition(int parallelism) {
+    return HoodieJavaRDD.of(rddData.repartition(parallelism));
+  }
 }

@@ -112,4 +112,8 @@ public abstract class HoodieData<T> implements Serializable {
    * @return collected results in {@link List<T>}.
    */
   public abstract List<T> collectAsList();
+
+  public abstract boolean hasPartitions();
+
+  public abstract HoodieData<T> repartition(int parallelism);
 }

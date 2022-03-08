@@ -166,4 +166,15 @@ public class HoodieList<T> extends HoodieData<T> {
   public List<T> collectAsList() {
     return listData;
   }
+
+  @Override
+  public boolean hasPartitions() {
+    return false;
+  }
+
+  @Override
+  public HoodieData<T> repartition(int parallelism) {
+    // no op
+    return this;
+  }
 }
