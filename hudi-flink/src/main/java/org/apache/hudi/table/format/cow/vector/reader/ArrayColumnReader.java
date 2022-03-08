@@ -18,8 +18,8 @@
 
 package org.apache.hudi.table.format.cow.vector.reader;
 
-import org.apache.hudi.table.format.cow.ParquetDecimalVector;
 import org.apache.hudi.table.format.cow.vector.HeapArrayVector;
+import org.apache.hudi.table.format.cow.vector.ParquetDecimalVector;
 
 import org.apache.flink.formats.parquet.vector.reader.ColumnReader;
 import org.apache.flink.table.data.TimestampData;

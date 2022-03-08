@@ -66,7 +66,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Integration test for Flink Hoodie stream sink.
  */
-public class StreamWriteITCase extends TestLogger {
+public class ITTestDataStreamWrite extends TestLogger {
 
   private static final Map<String, List<String>> EXPECTED = new HashMap<>();
   private static final Map<String, List<String>> EXPECTED_TRANSFORMER = new HashMap<>();
