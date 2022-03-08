@@ -21,6 +21,9 @@ package org.apache.hudi.common.util;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
@@ -124,6 +127,20 @@ public class DateTimeUtils {
       }
     }
     return labelToUnit;
+  }
+
+  /**
+   * Convert UNIX_TIMESTAMP to string in given format.
+   *
+   * @param unixTimestamp UNIX_TIMESTAMP
+   * @param timeFormat string time format
+   */
+  public static String formatUnixTimestamp(long unixTimestamp, String timeFormat) {
+    ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(timeFormat));
+    DateTimeFormatter dtf = DateTimeFormatter.ofPattern(timeFormat);
+    return LocalDateTime
+        .ofInstant(Instant.ofEpochSecond(unixTimestamp), ZoneId.systemDefault())
+        .format(dtf);
   }
 
   /**

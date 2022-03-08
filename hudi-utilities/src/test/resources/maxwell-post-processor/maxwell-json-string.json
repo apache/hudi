@@ -1,0 +1,3 @@
+{"database": "test", "table": "maxwell", "type": "insert", "ts": 1449786310, "xid": 940752, "commit": true, "data": { "id":1, "daemon": "Stanislaw Lem" }}
+{"database": "test", "table": "maxwell", "type": "update", "ts": 1449786341, "xid": 940786, "commit": true, "data": {"id":1, "daemon": "Firebus!  Firebus!"}, "old":  {"daemon": "Stanislaw Lem"}}
+{"database": "test", "table": "maxwell", "type": "delete", "ts": 1449787751, "xid": 940985, "commit": true, "data": {"id":1, "daemon": "Firebus!  Firebus!"}, "old":  {"daemon": "Stanislaw Lem"}}

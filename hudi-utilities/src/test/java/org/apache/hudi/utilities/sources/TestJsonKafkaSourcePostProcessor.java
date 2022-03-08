@@ -120,6 +120,12 @@ public class TestJsonKafkaSourcePostProcessor extends TestJsonKafkaSource {
     assertEquals(0, fetch1.getBatch().get().count());
   }
 
+  @Test
+  public void testMaxwellJsonKafkaSourcePostProcessor() {
+
+
+  }
+
   /**
    * JsonKafkaSourcePostProcessor that return a sub RDD of the incoming data which get the data from incoming data using
    * {org.apache.spark.api.java.JavaRDD#sample(boolean, double, long)} method.
