@@ -50,7 +50,7 @@ case class CompactionHoodiePathCommand(path: String,
         if (client.scheduleCompactionAtInstant(instantTime, HOption.empty[java.util.Map[String, String]])) {
           Seq(Row(instantTime))
         } else {
-          Seq(Row(null))
+          Seq.empty[Row]
         }
       case RUN =>
         // Do compaction
