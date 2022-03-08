@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper.{getMaxColumnNameFor, getMinColumnNameFor, getNumNullsColumnNameFor}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.AnalysisException
@@ -63,40 +64,58 @@ object DataSkippingUtils extends Logging {
     def maxValue(colName: String) = col(getMaxColumnNameFor(colName)).expr
     def numNulls(colName: String) = col(getNumNullsColumnNameFor(colName)).expr
 
-    def colContainsValuesEqualToLiteral(colName: String, value: Literal): Expression =
-    // Only case when column C contains value V is when min(C) <= V <= max(c)
+    def colContainsValuesEqualTo(colName: String, value: Expression): Expression = {
+      // TODO clean up
+      checkState(value.foldable)
+      // Only case when column C contains value V is when min(C) <= V <= max(c)
       And(LessThanOrEqual(minValue(colName), value), GreaterThanOrEqual(maxValue(colName), value))
+    }
 
-    def colContainsOnlyValuesEqualToLiteral(colName: String, value: Literal) =
-    // Only case when column C contains _only_ value V is when min(C) = V AND max(c) = V
+    def colContainsOnlyValuesEqualTo(colName: String, value: Expression): Expression = {
+      // TODO clean up
+      checkState(value.foldable)
+      // Only case when column C contains _only_ value V is when min(C) = V AND max(c) = V
       And(EqualTo(minValue(colName), value), EqualTo(maxValue(colName), value))
+    }
 
     sourceExpr match {
-      // Filter "colA = b"
-      // Translates to "colA_minValue <= b AND colA_maxValue >= b" condition for index lookup
-      case EqualTo(attribute: AttributeReference, value: Literal) =>
+      // Filter "colA = B"
+      // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
+      //       [[Expression#foldable]] returns true for)
+      //
+      // Translates to "colA_minValue <= B AND B <= colA_maxValue" condition for index lookup
+      case EqualTo(attribute: AttributeReference, value: Expression) if value.foldable =>
         getTargetIndexedColName(attribute, indexSchema)
-          .map(colName => colContainsValuesEqualToLiteral(colName, value))
+          .map(colName => colContainsValuesEqualTo(colName, value))
 
-      // Filter "b = colA"
-      // Translates to "colA_minValue <= b AND colA_maxValue >= b" condition for index lookup
-      case EqualTo(value: Literal, attribute: AttributeReference) =>
+      // Filter "B = colA"
+      // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
+      //       [[Expression#foldable]] returns true for)
+      //
+      // Translates to "colA_minValue <= B AND B <= colA_maxValue" condition for index lookup
+      case EqualTo(value: Expression, attribute: AttributeReference) if value.foldable =>
         getTargetIndexedColName(attribute, indexSchema)
-          .map(colName => colContainsValuesEqualToLiteral(colName, value))
+          .map(colName => colContainsValuesEqualTo(colName, value))
 
-      // Filter "colA != b"
-      // Translates to "NOT(colA_minValue = b AND colA_maxValue = b)"
+      // Filter "colA != B"
+      // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
+      //       [[Expression#foldable]] returns true for)
+      //
+      // Translates to "NOT(colA_minValue = B AND colA_maxValue = B)"
       // NOTE: This is NOT an inversion of `colA = b`
-      case Not(EqualTo(attribute: AttributeReference, value: Literal)) =>
+      case Not(EqualTo(attribute: AttributeReference, value: Expression)) if value.foldable =>
         getTargetIndexedColName(attribute, indexSchema)
-          .map(colName => Not(colContainsOnlyValuesEqualToLiteral(colName, value)))
+          .map(colName => Not(colContainsOnlyValuesEqualTo(colName, value)))
 
-      // Filter "b != colA"
-      // Translates to "NOT(colA_minValue = b AND colA_maxValue = b)"
+      // Filter "B != colA"
+      // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
+      //       [[Expression#foldable]] returns true for)
+      //
+      // Translates to "NOT(colA_minValue = B AND colA_maxValue = B)"
       // NOTE: This is NOT an inversion of `colA = b`
-      case Not(EqualTo(value: Literal, attribute: AttributeReference)) =>
+      case Not(EqualTo(value: Expression, attribute: AttributeReference)) if value.foldable =>
         getTargetIndexedColName(attribute, indexSchema)
-          .map(colName => Not(colContainsOnlyValuesEqualToLiteral(colName, value)))
+          .map(colName => Not(colContainsOnlyValuesEqualTo(colName, value)))
 
       // Filter "colA = null"
       // Translates to "colA_num_nulls = null" for index lookup
@@ -104,53 +123,77 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColName(equalNullSafe.left, indexSchema)
           .map(colName => EqualTo(numNulls(colName), equalNullSafe.right))
 
-      // Filter "colA < b"
-      // Translates to "colA_minValue < b" for index lookup
-      case LessThan(attribute: AttributeReference, value: Literal) =>
+      // Filter "colA < B"
+      // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
+      //       [[Expression#foldable]] returns true for)
+      //
+      // Translates to "colA_minValue < B" for index lookup
+      case LessThan(attribute: AttributeReference, value: Expression) if value.foldable =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => LessThan(minValue(colName), value))
 
-      // Filter "b > colA"
-      // Translates to "b > colA_minValue" for index lookup
-      case GreaterThan(value: Literal, attribute: AttributeReference) =>
+      // Filter "B > colA"
+      // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
+      //       [[Expression#foldable]] returns true for)
+      //
+      // Translates to "B > colA_minValue" for index lookup
+      case GreaterThan(value: Expression, attribute: AttributeReference) if value.foldable =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => LessThan(minValue(colName), value))
 
-      // Filter "b < colA"
-      // Translates to "b < colA_maxValue" for index lookup
-      case LessThan(value: Literal, attribute: AttributeReference) =>
+      // Filter "B < colA"
+      // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
+      //       [[Expression#foldable]] returns true for)
+      //
+      // Translates to "B < colA_maxValue" for index lookup
+      case LessThan(value: Expression, attribute: AttributeReference) if value.foldable =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => GreaterThan(maxValue(colName), value))
 
-      // Filter "colA > b"
-      // Translates to "colA_maxValue > b" for index lookup
-      case GreaterThan(attribute: AttributeReference, value: Literal) =>
+      // Filter "colA > B"
+      // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
+      //       [[Expression#foldable]] returns true for)
+      //
+      // Translates to "colA_maxValue > B" for index lookup
+      case GreaterThan(attribute: AttributeReference, value: Expression) if value.foldable =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => GreaterThan(maxValue(colName), value))
 
-      // Filter "colA <= b"
-      // Translates to "colA_minValue <= b" for index lookup
-      case LessThanOrEqual(attribute: AttributeReference, value: Literal) =>
+      // Filter "colA <= B"
+      // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
+      //       [[Expression#foldable]] returns true for)
+      //
+      // Translates to "colA_minValue <= B" for index lookup
+      case LessThanOrEqual(attribute: AttributeReference, value: Expression) if value.foldable =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => LessThanOrEqual(minValue(colName), value))
 
-      // Filter "b >= colA"
-      // Translates to "b >= colA_minValue" for index lookup
-      case GreaterThanOrEqual(value: Literal, attribute: AttributeReference) =>
+      // Filter "B >= colA"
+      // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
+      //       [[Expression#foldable]] returns true for)
+      //
+      // Translates to "B >= colA_minValue" for index lookup
+      case GreaterThanOrEqual(value: Expression, attribute: AttributeReference) if value.foldable =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => LessThanOrEqual(minValue(colName), value))
 
-      // Filter "b <= colA"
-      // Translates to "b <= colA_maxValue" for index lookup
-      case LessThanOrEqual(value: Literal, attribute: AttributeReference) =>
+      // Filter "B <= colA"
+      // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
+      //       [[Expression#foldable]] returns true for)
+      //
+      // Translates to "B <= colA_maxValue" for index lookup
+      case LessThanOrEqual(value: Expression, attribute: AttributeReference) if value.foldable =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => GreaterThanOrEqual(maxValue(colName), value))
 
-      // Filter "colA >= b"
-      // Translates to "colA_maxValue >= b" for index lookup
-      case GreaterThanOrEqual(attribute: AttributeReference, right: Literal) =>
+      // Filter "colA >= B"
+      // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
+      //       [[Expression#foldable]] returns true for)
+      //
+      // Translates to "colA_maxValue >= B" for index lookup
+      case GreaterThanOrEqual(attribute: AttributeReference, value: Expression) if value.foldable =>
         getTargetIndexedColName(attribute, indexSchema)
-          .map(colName => GreaterThanOrEqual(maxValue(colName), right))
+          .map(colName => GreaterThanOrEqual(maxValue(colName), value))
 
       // Filter "colA is null"
       // Translates to "colA_num_nulls > 0" for index lookup
@@ -164,33 +207,42 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => EqualTo(numNulls(colName), Literal(0)))
 
-      // Filter "colA in (a, b, ...)"
-      // Translates to "(colA_minValue <= a AND colA_maxValue >= a) OR (colA_minValue <= b AND colA_maxValue >= b)" for index lookup
-      // NOTE: This is equivalent to "colA = a OR colA = b OR ..."
-      case In(attribute: AttributeReference, list: Seq[Literal]) =>
+      // Filter "colA in (B1, B2, ...)"
+      // NOTE: B1, ... , BN could be an arbitrary _foldable_ expressions (ie expression that is defined as the one
+      //       [[Expression#foldable]] returns true for)
+      //
+      // Translates to "(colA_minValue <= B1 AND colA_maxValue >= B1) OR (colA_minValue <= B2 AND colA_maxValue >= B2) ... "
+      // for index lookup
+      // NOTE: This is equivalent to "colA = B1 OR colA = B2 OR ..."
+      case In(attribute: AttributeReference, list: Seq[Expression]) if list.forall(_.foldable) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName =>
-            list.map { lit => colContainsValuesEqualToLiteral(colName, lit) }.reduce(Or)
+            list.map { lit => colContainsValuesEqualTo(colName, lit) }.reduce(Or)
           )
 
-      // Filter "colA not in (a, b, ...)"
-      // Translates to "NOT((colA_minValue = a AND colA_maxValue = a) OR (colA_minValue = b AND colA_maxValue = b))" for index lookup
-      // NOTE: This is NOT an inversion of `in (a, b, ...)` expr, this is equivalent to "colA != a AND colA != b AND ..."
-      case Not(In(attribute: AttributeReference, list: Seq[Literal])) =>
+      // Filter "colA not in (B1, B2, ...)"
+      // NOTE: B1, ... , BN could be an arbitrary _foldable_ expressions (ie expression that is defined as the one
+      //       [[Expression#foldable]] returns true for)
+      //
+      // Translates to "NOT((colA_minValue = B1 AND colA_maxValue = B1) OR (colA_minValue = B2 AND colA_maxValue = B2))" for index lookup
+      // NOTE: This is NOT an inversion of `in (B1, B2, ...)` expr, this is equivalent to "colA != B1 AND colA != B2 AND ..."
+      case Not(In(attribute: AttributeReference, list: Seq[Expression])) if list.forall(_.foldable) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName =>
             Not(
-              list.map { lit => colContainsOnlyValuesEqualToLiteral(colName, lit) }.reduce(Or)
+              list.map { lit => colContainsOnlyValuesEqualTo(colName, lit) }.reduce(Or)
             )
           )
 
       // Filter "colA like 'xxx%'"
-      // Translates to "colA_minValue <= xxx AND colA_maxValue >= xxx" for index lookup
-      // NOTE: That this operator only matches string prefixes, and this is
-      //       essentially equivalent to "colA = b" expression
+      // Translates to "colA_minValue <= xxx AND xxx <= colA_maxValue" for index lookup
+      //
+      // NOTE: Since a) this operator matches strings by prefix and b) given that this column is going to be ordered
+      //       lexicographically, we essentially need to check that provided literal falls w/in min/max bounds of the
+      //       given column
       case StartsWith(attribute, v @ Literal(_: UTF8String, _)) =>
         getTargetIndexedColName(attribute, indexSchema)
-          .map(colName => colContainsValuesEqualToLiteral(colName, v))
+          .map(colName => colContainsValuesEqualTo(colName, v))
 
       // Filter "colA not like 'xxx%'"
       // Translates to "NOT(colA_minValue like 'xxx%' AND colA_maxValue like 'xxx%')" for index lookup
