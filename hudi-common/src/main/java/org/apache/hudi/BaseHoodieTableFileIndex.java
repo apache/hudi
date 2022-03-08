@@ -49,6 +49,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -164,6 +165,10 @@ public abstract class BaseHoodieTableFileIndex {
     return cachedAllInputFileSlices.entrySet()
         .stream()
         .collect(Collectors.toMap(e -> e.getKey().path, Map.Entry::getValue));
+  }
+
+  public Set<PartitionPath> getAllCachedPartitionPaths() {
+    return cachedAllInputFileSlices.keySet();
   }
 
   protected List<PartitionPath> getAllQueryPartitionPaths() {

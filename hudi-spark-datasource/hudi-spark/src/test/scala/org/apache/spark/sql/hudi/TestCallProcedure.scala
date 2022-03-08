@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieTimeline}
 import org.apache.hudi.common.util.{Option => HOption}
-import org.apache.hudi.{HoodieCommonUtils, HoodieDataSourceHelpers}
+import org.apache.hudi.{HoodieCLIUtils, HoodieDataSourceHelpers}
 
 import scala.collection.JavaConverters.asScalaIteratorConverter
 
@@ -161,7 +161,7 @@ class TestCallProcedure extends TestHoodieSqlBase {
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
-        val client = HoodieCommonUtils.createHoodieClientFromPath(spark, basePath, Map.empty)
+        val client = HoodieCLIUtils.createHoodieClientFromPath(spark, basePath, Map.empty)
         // Generate the first clustering plan
         val firstScheduleInstant = HoodieActiveTimeline.createNewInstantTime
         client.scheduleClusteringAtInstant(firstScheduleInstant, HOption.empty())
@@ -255,7 +255,7 @@ class TestCallProcedure extends TestHoodieSqlBase {
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
-        val client = HoodieCommonUtils.createHoodieClientFromPath(spark, basePath, Map.empty)
+        val client = HoodieCLIUtils.createHoodieClientFromPath(spark, basePath, Map.empty)
         // Generate the first clustering plan
         val firstScheduleInstant = HoodieActiveTimeline.createNewInstantTime
         client.scheduleClusteringAtInstant(firstScheduleInstant, HOption.empty())

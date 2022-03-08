@@ -17,26 +17,22 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
-import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.common.util.{ClusteringUtils, Option => HOption}
 import org.apache.hudi.config.HoodieClusteringConfig
 import org.apache.hudi.exception.HoodieClusteringException
-import org.apache.hudi.metadata.HoodieTableMetadata
-import org.apache.hudi.{HoodieCommonUtils, SparkAdapterSupport}
-import org.apache.spark.api.java.JavaSparkContext
+import org.apache.hudi.{HoodieCLIUtils, HoodieFileIndex, SparkAdapterSupport}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.expressions.{And, Expression, Or}
+import org.apache.spark.sql.execution.datasources.FileStatusCache
+import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.types._
 
-import java.util.Properties
 import java.util.function.Supplier
-import scala.collection.JavaConverters
 import scala.collection.JavaConverters._
 
 class RunClusteringProcedure extends BaseProcedure with ProcedureBuilder with SparkAdapterSupport with Logging {
@@ -74,15 +70,12 @@ class RunClusteringProcedure extends BaseProcedure with ProcedureBuilder with Sp
     var conf: Map[String, String] = Map.empty
     predicate match {
       case Some(p) =>
-        val partitionColumnsSchema = HoodieCommonUtils.getPartitionSchemaFromProperty(metaClient, None)
-        val partitionPredicate = HoodieCommonUtils.resolveFilterExpr(
-          spark, p.asInstanceOf[String], partitionColumnsSchema)
-        val partitionSelected = prunePartition(metaClient, partitionPredicate)
+        val prunedPartitions = prunePartition(metaClient, p.asInstanceOf[String])
         conf = conf ++ Map(
           HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key() -> "SELECTED_PARTITIONS",
-          HoodieClusteringConfig.PARTITION_SELECTED.key() -> partitionSelected
+          HoodieClusteringConfig.PARTITION_SELECTED.key() -> prunedPartitions
         )
-        logInfo(s"Partition predicates: ${p}, partition selected: ${partitionSelected}")
+        logInfo(s"Partition predicates: ${p}, partition selected: ${prunedPartitions}")
       case _ =>
         logInfo("No partition predicates")
     }
@@ -104,7 +97,7 @@ class RunClusteringProcedure extends BaseProcedure with ProcedureBuilder with Sp
       .iterator().asScala.map(_.getLeft.getTimestamp).toSeq.sortBy(f => f)
     logInfo(s"Pending clustering instants: ${pendingClustering.mkString(",")}")
 
-    val client = HoodieCommonUtils.createHoodieClientFromPath(sparkSession, basePath, conf)
+    val client = HoodieCLIUtils.createHoodieClientFromPath(sparkSession, basePath, conf)
     val instantTime = HoodieActiveTimeline.createNewInstantTime
     if (client.scheduleClusteringAtInstant(instantTime, HOption.empty())) {
       pendingClustering ++= Seq(instantTime)
@@ -120,37 +113,45 @@ class RunClusteringProcedure extends BaseProcedure with ProcedureBuilder with Sp
 
   override def build: Procedure = new RunClusteringProcedure()
 
-  def prunePartition(metaClient: HoodieTableMetaClient, partitionPredicate: Expression): String = {
-    val partitionSchema = HoodieCommonUtils.getPartitionSchemaFromProperty(metaClient, None)
+  def prunePartition(metaClient: HoodieTableMetaClient, predicate: String): String = {
+    val options = Map(QUERY_TYPE.key() -> QUERY_TYPE_SNAPSHOT_OPT_VAL, "path" -> metaClient.getBasePath)
+    val hoodieFileIndex = HoodieFileIndex(sparkSession, metaClient, None, options,
+      FileStatusCache.getOrCreate(sparkSession))
 
-    // Get tableName meta data
-    val engineContext = new HoodieSparkEngineContext(new JavaSparkContext(sparkSession.sparkContext))
-    val properties = new Properties()
-    properties.putAll(JavaConverters.mapAsJavaMapConverter(sparkSession.sessionState.conf.getAllConfs).asJava)
-    val metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(properties).build()
-    val tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, metaClient.getBasePath,
-      FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue)
+    // Resolve partition predicates, only conjunctive predicates are supported
+    val partitionPredicate = DataSkippingUtils.resolveFilterExpr(sparkSession, predicate,
+      hoodieFileIndex.partitionSchema)
+    val predicates = splitPredicates(partitionPredicate)
+    checkArgument(predicates._1.isEmpty, "Disjunctive predicate is not supported")
 
-    val sparkParsePartitionUtil = sparkAdapter.createSparkParsePartitionUtil(sparkSession.sessionState.conf)
-    val typedProperties = HoodieCommonUtils.getConfigProperties(sparkSession, Map.empty)
-
-    val partitionColumns = metaClient.getTableConfig.getPartitionFields.orElse(Array[String]())
-
-    // Translate all partition path to {@code org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath}
-    val partitionPaths = tableMetadata.getAllPartitionPaths.asScala.map(partitionPath => {
-      val partitionColumnValues = HoodieCommonUtils.parsePartitionColumnValues(
-        sparkParsePartitionUtil, typedProperties, metaClient.getBasePath,
-        partitionSchema, partitionColumns, partitionPath)
-      new PartitionPath(partitionPath, partitionColumnValues)
-    })
-
-    // Filter partition by predicates
-    val selectedPartitions = HoodieCommonUtils.prunePartition(
-      partitionSchema, partitionPaths, partitionPredicate)
-    selectedPartitions.map(partitionPath => partitionPath.getPath).toSet.mkString(",")
+    // Get all partitions and prune partition by predicates
+    val partitionPaths = hoodieFileIndex.getAllCachedPartitionPaths.asScala.toSeq
+    val prunedPartitions = hoodieFileIndex.prunePartition(partitionPaths, predicates._2)
+    prunedPartitions.map(partitionPath => partitionPath.getPath).toSet.mkString(",")
   }
 
-  def validateOrderColumns(orderColumns: String, metaClient: HoodieTableMetaClient): Unit = {
+  /**
+   * Split predicate to disjunctive predicates and conjunctive predicates
+   *
+   * @param condition Predicate to be split
+   * @return The pair of disjunctive predicates and conjunctive predicates
+   */
+  private def splitPredicates(condition: Expression): (Seq[Expression], Seq[Expression]) = {
+    condition match {
+      case And(left, right) =>
+        val leftPredicates = splitPredicates(left)
+        val rightPredicates = splitPredicates(right)
+        (leftPredicates._1 ++ rightPredicates._1, leftPredicates._2 ++ rightPredicates._2)
+      case Or(left, right) =>
+        val leftPredicates = splitPredicates(left)
+        val rightPredicates = splitPredicates(right)
+        (leftPredicates._1 ++ leftPredicates._2 ++ rightPredicates._1 ++ rightPredicates._2, Seq.empty)
+      case other =>
+        (Seq.empty, other :: Nil)
+    }
+  }
+
+  private def validateOrderColumns(orderColumns: String, metaClient: HoodieTableMetaClient): Unit = {
     if (orderColumns == null) {
       throw new HoodieClusteringException("Order columns is null")
     }
