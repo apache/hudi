@@ -1362,6 +1362,10 @@
         <skipFTs>true</skipFTs>
         <skipITs>false</skipITs>
       </properties>
+      <modules>
+        <module>hudi-spark-datasource/hudi-spark2</module>
+        <module>hudi-spark-datasource/hudi-spark2-common</module>
+      </modules>
       <build>
         <plugins>
           <plugin>
