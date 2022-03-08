@@ -223,9 +223,14 @@ public class InputFormatTestUtil {
 
   public static File prepareSimpleParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
                                                int numberOfRecords, String commitNumber, HoodieTableType tableType) throws Exception {
+    return prepareSimpleParquetTable(basePath, schema, numberOfFiles, numberOfRecords, commitNumber, tableType, "2016","05","01");
+  }
+
+  public static File prepareSimpleParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
+                                               int numberOfRecords, String commitNumber, HoodieTableType tableType, String year, String month, String date) throws Exception {
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), tableType, HoodieFileFormat.PARQUET);
 
-    java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "05", "01"));
+    java.nio.file.Path partitionPath = basePath.resolve(Paths.get(year, month, date));
     setupPartition(basePath, partitionPath);
 
     createSimpleData(schema, partitionPath, numberOfFiles, numberOfRecords, commitNumber);
@@ -246,9 +251,9 @@ public class InputFormatTestUtil {
   }
 
   public static List<File> prepareMultiPartitionedParquetTable(java.nio.file.Path basePath, Schema schema,
-      int numberPartitions, int numberOfRecordsPerPartition, String commitNumber) throws IOException {
+      int numberPartitions, int numberOfRecordsPerPartition, String commitNumber, HoodieTableType tableType) throws IOException {
     List<File> result = new ArrayList<>();
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString());
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), tableType, HoodieFileFormat.PARQUET);
     for (int i = 0; i < numberPartitions; i++) {
       java.nio.file.Path partitionPath = basePath.resolve(Paths.get(2016 + i + "", "05", "01"));
       setupPartition(basePath, partitionPath);

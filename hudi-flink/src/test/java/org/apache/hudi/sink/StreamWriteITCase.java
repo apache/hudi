@@ -51,6 +51,8 @@ import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.TestLogger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -129,10 +131,14 @@ public class StreamWriteITCase extends TestLogger {
     testWriteToHoodie(null, EXPECTED);
   }
 
-  @Test
-  public void testMergeOnReadWriteWithCompaction() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"BUCKET", "FLINK_STATE"})
+  public void testMergeOnReadWriteWithCompaction(String indexType) throws Exception {
     int parallelism = 4;
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setString(FlinkOptions.INDEX_TYPE, indexType);
+    conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
+    conf.setString(FlinkOptions.INDEX_KEY_FIELD, "id");
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
     conf.setString(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
     StreamExecutionEnvironment execEnv = StreamExecutionEnvironment.getExecutionEnvironment();

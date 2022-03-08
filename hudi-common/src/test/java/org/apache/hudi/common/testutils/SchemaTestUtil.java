@@ -194,6 +194,10 @@ public final class SchemaTestUtil {
     return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/simple-test-evolved.avsc"));
   }
 
+  public static Schema getEvolvedCompatibleSchema() throws IOException {
+    return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/simple-test-evolved-compatible.avsc"));
+  }
+
   public static List<IndexedRecord> generateEvolvedTestRecords(int from, int limit)
       throws IOException, URISyntaxException {
     return toRecords(getSimpleSchema(), getEvolvedSchema(), from, limit);

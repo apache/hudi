@@ -61,7 +61,7 @@ The list of all RFCs can be found here.
 | 35 | [Make Flink MOR table writing streaming friendly](https://cwiki.apache.org/confluence/display/HUDI/RFC-35%3A+Make+Flink+MOR+table+writing+streaming+friendly) | `UNDER REVIEW` |
 | 36 | [HUDI Metastore Server](https://cwiki.apache.org/confluence/display/HUDI/%5BWIP%5D+RFC-36%3A+HUDI+Metastore+Server) | `UNDER REVIEW` |
 | 37 | [Hudi Metadata based Bloom Index](rfc-37/rfc-37.md) | `IN PROGRESS` |
-| 38 | [Spark Datasource V2 Integration] | `UNDER REVIEW` |
+| 38 | [Spark Datasource V2 Integration](./rfc-38/rfc-38.md) | `IN PROGRESS` |
 | 39 | [Incremental source for Debezium](./rfc-39/rfc-39.md) | `IN PROGRESS` |
 | 40 | [Hudi Connector for Trino](./rfc-40/rfc-40.md) | `IN PROGRESS` |
 | 41 | [Hudi Snowflake Integration] | `UNDER REVIEW` |
@@ -70,3 +70,4 @@ The list of all RFCs can be found here.
 | 44 | [Hudi Connector for Presto](./rfc-44/rfc-44.md) | `UNDER REVIEW` |
 | 45 | [Asynchronous Metadata Indexing](./rfc-45/rfc-45.md) | `UNDER REVIEW` |
 | 46 | [Optimizing Record Payload Handling](./rfc-46/rfc-46.md) | `UNDER REVIEW` |
+| 47 | [Add Call Produce Command for Spark SQL](./rfc-47/rfc-47.md) | `UNDER REVIEW` |

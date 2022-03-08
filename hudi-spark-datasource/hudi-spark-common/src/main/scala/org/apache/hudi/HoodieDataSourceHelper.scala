@@ -20,18 +20,16 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FileStatus
-
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, PredicateHelper, SpecificInternalRow, SubqueryExpression, UnsafeProjection}
+import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
-import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionedFile}
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ArrayBuffer
 
 object HoodieDataSourceHelper extends PredicateHelper {
 
@@ -77,14 +75,13 @@ object HoodieDataSourceHelper extends PredicateHelper {
    * Wrapper `buildReaderWithPartitionValues` of [[ParquetFileFormat]]
    * to deal with [[ColumnarBatch]] when enable parquet vectorized reader if necessary.
    */
-  def buildHoodieParquetReader(
-      sparkSession: SparkSession,
-      dataSchema: StructType,
-      partitionSchema: StructType,
-      requiredSchema: StructType,
-      filters: Seq[Filter],
-      options: Map[String, String],
-      hadoopConf: Configuration): (PartitionedFile) => Iterator[InternalRow] = {
+  def buildHoodieParquetReader(sparkSession: SparkSession,
+                               dataSchema: StructType,
+                               partitionSchema: StructType,
+                               requiredSchema: StructType,
+                               filters: Seq[Filter],
+                               options: Map[String, String],
+                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
 
     val readParquetFile: PartitionedFile => Iterator[Any] = new ParquetFileFormat().buildReaderWithPartitionValues(
       sparkSession = sparkSession,
@@ -98,11 +95,10 @@ object HoodieDataSourceHelper extends PredicateHelper {
 
     file: PartitionedFile => {
       val iter = readParquetFile(file)
-      val rows = iter.flatMap(_ match {
+      iter.flatMap {
         case r: InternalRow => Seq(r)
         case b: ColumnarBatch => b.rowIterator().asScala
-      })
-      rows
+      }
     }
   }
 

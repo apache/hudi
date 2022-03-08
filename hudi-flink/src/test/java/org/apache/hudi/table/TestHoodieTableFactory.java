@@ -24,6 +24,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
@@ -347,6 +348,16 @@ public class TestHoodieTableFactory {
     final Configuration conf3 = tableSink3.getConf();
     assertThat(conf3.get(FlinkOptions.RECORD_KEY_FIELD), is("f0,f1"));
     assertThat(conf3.get(FlinkOptions.KEYGEN_CLASS_NAME), is(NonpartitionedAvroKeyGenerator.class.getName()));
+
+    // definition of bucket index
+    this.conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    final MockContext sinkContext4 = MockContext.getInstance(this.conf, schema2, "");
+    final HoodieTableSink tableSink4 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sinkContext4);
+    final Configuration conf4 = tableSink4.getConf();
+    assertThat(conf4.get(FlinkOptions.RECORD_KEY_FIELD), is("f0,f1"));
+    assertThat(conf4.get(FlinkOptions.INDEX_KEY_FIELD), is("f0,f1"));
+    assertThat(conf4.get(FlinkOptions.INDEX_TYPE), is(HoodieIndex.IndexType.BUCKET.name()));
+    assertThat(conf4.get(FlinkOptions.KEYGEN_CLASS_NAME), is(NonpartitionedAvroKeyGenerator.class.getName()));
   }
 
   @Test

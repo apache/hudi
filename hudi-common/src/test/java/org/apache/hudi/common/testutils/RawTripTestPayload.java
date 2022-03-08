@@ -80,6 +80,23 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     this.isDeleted = false;
   }
 
+  /**
+   * @deprecated PLEASE READ THIS CAREFULLY
+   *
+   * Converting properly typed schemas into JSON leads to inevitable information loss, since JSON
+   * encodes only representation of the record (with no schema accompanying it), therefore occasionally
+   * losing nuances of the original data-types provided by the schema (for ex, with 1.23 literal it's
+   * impossible to tell whether original type was Double or Decimal).
+   *
+   * Multiplied by the fact that Spark 2 JSON schema inference has substantial gaps in it (see below),
+   * it's **NOT RECOMMENDED** to use this method. Instead please consider using {@link AvroConversionUtils#createDataframe()}
+   * method accepting list of {@link HoodieRecord} (as produced by the {@link HoodieTestDataGenerator}
+   * to create Spark's {@code Dataframe}s directly.
+   *
+   * REFs
+   * https://medium.com/swlh/notes-about-json-schema-handling-in-spark-sql-be1e7f13839d
+   */
+  @Deprecated
   public static List<String> recordsToStrings(List<HoodieRecord> records) {
     return records.stream().map(RawTripTestPayload::recordToString).filter(Option::isPresent).map(Option::get)
         .collect(Collectors.toList());

@@ -99,8 +99,37 @@ public class TestTypedProperties {
     properties.put("key9", "true");
 
     TypedProperties typedProperties = new TypedProperties(properties);
+    assertTypeProperties(typedProperties, 0);
+  }
+
+  @Test
+  void testPutAllProperties() {
+    Properties firstProp = new TypedProperties();
+    firstProp.put("key0", "true");
+    firstProp.put("key1", "false");
+    firstProp.put("key2", "true");
+
+    TypedProperties firstProperties = new TypedProperties(firstProp);
+    assertTypeProperties(firstProperties, 0);
+
+    TypedProperties secondProperties = new TypedProperties();
+    secondProperties.put("key3", "true");
+    secondProperties.put("key4", "false");
+    secondProperties.put("key5", "true");
+    assertTypeProperties(secondProperties, 3);
+
+    TypedProperties thirdProperties = new TypedProperties();
+    thirdProperties.putAll(firstProp);
+    thirdProperties.putAll(secondProperties);
+
+    assertEquals(3, firstProp.stringPropertyNames().size());
+    assertEquals(3, secondProperties.stringPropertyNames().size());
+    assertEquals(6, thirdProperties.stringPropertyNames().size());
+  }
+
+  private void assertTypeProperties(TypedProperties typedProperties, int start) {
     String[] props = typedProperties.stringPropertyNames().toArray(new String[0]);
-    for (int i = 0; i < props.length; i++) {
+    for (int i = start; i < props.length; i++) {
       assertEquals(String.format("key%d", i), props[i]);
     }
   }

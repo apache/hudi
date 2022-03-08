@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
+import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueProducer;
@@ -31,7 +32,6 @@ import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
-import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 
 import org.apache.avro.Schema;
@@ -42,7 +42,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.types.RowKind;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.mapred.JobConf;
+import org.apache.hudi.util.StreamerUtil;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -50,6 +50,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * Utilities for format.
@@ -188,13 +189,15 @@ public class FormatUtils {
     public BoundedMemoryRecords(
         MergeOnReadInputSplit split,
         Schema logSchema,
-        Configuration hadoopConf) {
+        Configuration hadoopConf,
+        org.apache.flink.configuration.Configuration flinkConf) {
       this.executor = new BoundedInMemoryExecutor<>(
-          HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes(new JobConf(hadoopConf)),
+          StreamerUtil.getMaxCompactionMemoryInBytes(flinkConf),
           getParallelProducers(),
           Option.empty(),
-          x -> x,
-          new DefaultSizeEstimator<>());
+          Function.identity(),
+          new DefaultSizeEstimator<>(),
+          Functions.noop());
       // Consumer of this record reader
       this.iterator = this.executor.getQueue().iterator();
       this.scanner = FormatUtils.unMergedLogScanner(split, logSchema, hadoopConf,

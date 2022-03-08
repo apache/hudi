@@ -18,14 +18,14 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieMetadataException;
 
@@ -34,6 +34,8 @@ import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 /**
  * Interface that supports querying various pieces of metadata about a hudi table.
@@ -58,12 +60,19 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   static final String METADATA_TABLE_REL_PATH = HoodieTableMetaClient.METAFOLDER_NAME + Path.SEPARATOR + "metadata";
 
   /**
-   * Return the base path of the Metadata Table.
-   *
-   * @param tableBasePath The base path of the dataset
+   * Return the base-path of the Metadata Table for the given Dataset identified by base-path
    */
-  static String getMetadataTableBasePath(String tableBasePath) {
-    return tableBasePath + Path.SEPARATOR + METADATA_TABLE_REL_PATH;
+  static String getMetadataTableBasePath(String dataTableBasePath) {
+    return dataTableBasePath + Path.SEPARATOR + METADATA_TABLE_REL_PATH;
+  }
+
+  /**
+   * Returns the base path of the Dataset provided the base-path of the Metadata Table of this
+   * Dataset
+   */
+  static String getDataTableBasePathFromMetadataTable(String metadataTableBasePath) {
+    checkArgument(isMetadataTable(metadataTableBasePath));
+    return metadataTableBasePath.substring(0, metadataTableBasePath.lastIndexOf(METADATA_TABLE_REL_PATH) - 1);
   }
 
   /**

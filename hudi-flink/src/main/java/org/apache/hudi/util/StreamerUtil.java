@@ -406,7 +406,9 @@ public class StreamerUtil {
     FileSystemViewStorageConfig rebuilt = FileSystemViewStorageConfig.newBuilder()
         .withStorageType(viewStorageConfig.getStorageType())
         .withRemoteServerHost(viewStorageConfig.getRemoteViewServerHost())
-        .withRemoteServerPort(viewStorageConfig.getRemoteViewServerPort()).build();
+        .withRemoteServerPort(viewStorageConfig.getRemoteViewServerPort())
+        .withRemoteTimelineClientTimeoutSecs(viewStorageConfig.getRemoteTimelineClientTimeoutSecs())
+        .build();
     ViewStorageProperties.createProperties(conf.getString(FlinkOptions.PATH), rebuilt);
     return writeClient;
   }
@@ -486,7 +488,7 @@ public class StreamerUtil {
     if (reloadTimeline) {
       metaClient.reloadActiveTimeline();
     }
-    return metaClient.getCommitsTimeline().filterInflights()
+    return metaClient.getCommitsTimeline().filterPendingExcludingCompaction()
         .lastInstant()
         .map(HoodieInstant::getTimestamp)
         .orElse(null);
@@ -506,5 +508,12 @@ public class StreamerUtil {
    */
   public static boolean haveSuccessfulCommits(HoodieTableMetaClient metaClient) {
     return !metaClient.getCommitsTimeline().filterCompletedInstants().empty();
+  }
+
+  /**
+   * Returns the max compaction memory in bytes with given conf.
+   */
+  public static long getMaxCompactionMemoryInBytes(Configuration conf) {
+    return conf.getInteger(FlinkOptions.COMPACTION_MAX_MEMORY) * 1024 * 1024;
   }
 }

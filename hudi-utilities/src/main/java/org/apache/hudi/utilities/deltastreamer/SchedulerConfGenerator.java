@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.SparkConfigs;
 import org.apache.hudi.async.AsyncCompactService;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
@@ -85,7 +85,7 @@ public class SchedulerConfGenerator {
         && cfg.continuousMode && cfg.tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
       String sparkSchedulingConfFile = generateAndStoreConfig(cfg.deltaSyncSchedulingWeight,
           cfg.compactSchedulingWeight, cfg.deltaSyncSchedulingMinShare, cfg.compactSchedulingMinShare);
-      additionalSparkConfigs.put(DataSourceWriteOptions.SPARK_SCHEDULER_ALLOCATION_FILE_KEY(), sparkSchedulingConfFile);
+      additionalSparkConfigs.put(SparkConfigs.SPARK_SCHEDULER_ALLOCATION_FILE_KEY(), sparkSchedulingConfFile);
     } else {
       LOG.warn("Job Scheduling Configs will not be in effect as spark.scheduler.mode "
           + "is not set to FAIR at instantiation time. Continuing without scheduling configs");

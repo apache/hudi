@@ -1044,7 +1044,7 @@ public class HoodieTestTable {
     return testTableState;
   }
 
-  private static List<HoodieWriteStat> generateHoodieWriteStatForPartition(Map<String, List<Pair<String, Integer>>> partitionToFileIdMap,
+  public static List<HoodieWriteStat> generateHoodieWriteStatForPartition(Map<String, List<Pair<String, Integer>>> partitionToFileIdMap,
                                                                            String commitTime, boolean bootstrap) {
     List<HoodieWriteStat> writeStats = new ArrayList<>();
     for (Map.Entry<String, List<Pair<String, Integer>>> entry : partitionToFileIdMap.entrySet()) {
@@ -1057,6 +1057,7 @@ public class HoodieTestTable {
         writeStat.setPartitionPath(partition);
         writeStat.setPath(partition + "/" + fileName);
         writeStat.setTotalWriteBytes(fileIdInfo.getValue());
+        writeStat.setFileSizeInBytes(fileIdInfo.getValue());
         writeStats.add(writeStat);
       }
     }
@@ -1082,6 +1083,7 @@ public class HoodieTestTable {
         writeStat.setPartitionPath(partition);
         writeStat.setPath(partition + "/" + fileName);
         writeStat.setTotalWriteBytes(fileIdInfo.getValue()[1]);
+        writeStat.setFileSizeInBytes(fileIdInfo.getValue()[1]);
         writeStats.add(writeStat);
       }
     }

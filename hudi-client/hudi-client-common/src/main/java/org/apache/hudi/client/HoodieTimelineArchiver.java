@@ -321,8 +321,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
           // Read the avro blocks
           while (reader.hasNext()) {
             HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
-            List<IndexedRecord> recordsPerFile = blk.getRecords();
-            records.addAll(recordsPerFile);
+            blk.getRecordItr().forEachRemaining(records::add);
             if (records.size() >= this.config.getCommitArchivalBatchSize()) {
               writeToFile(wrapperSchema, records);
             }

@@ -77,8 +77,8 @@ public class CollectionUtils {
    * NOTE: That values associated with overlapping keys from the second map, will override
    *       values from the first one
    */
-  public static <K, V> Map<K, V> combine(Map<K, V> one, Map<K, V> another) {
-    Map<K, V> combined = new HashMap<>(one.size() + another.size());
+  public static <K, V> HashMap<K, V> combine(Map<K, V> one, Map<K, V> another) {
+    HashMap<K, V> combined = new HashMap<>(one.size() + another.size());
     combined.putAll(one);
     combined.putAll(another);
     return combined;

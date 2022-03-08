@@ -199,7 +199,7 @@ public class RollbackUtils {
           partitionRollbackRequests.add(
               ListingBasedRollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath));
 
-          // append rollback blocks for updates
+          // append rollback blocks for updates and inserts as A.2 and B.2
           if (commitMetadata.getPartitionToWriteStats().containsKey(partitionPath)) {
             partitionRollbackRequests
                 .addAll(generateAppendRollbackBlocksAction(partitionPath, instantToRollback, commitMetadata, table));

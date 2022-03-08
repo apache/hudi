@@ -526,6 +526,7 @@ public class TableSchemaResolver {
       Schema tableAvroSchema = getTableAvroSchemaFromDataFile();
       return tableAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null;
     } catch (Exception e) {
+      LOG.info(String.format("Failed to read operation field from avro schema (%s)", e.getMessage()));
       return false;
     }
   }

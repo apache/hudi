@@ -83,7 +83,7 @@ public class TestCleansCommand extends CLIFunctionalTestHarness {
     String fileId1 = UUID.randomUUID().toString();
     String fileId2 = UUID.randomUUID().toString();
     FileSystem fs = FSUtils.getFs(basePath(), hadoopConf());
-    HoodieTestDataGenerator.writePartitionMetadata(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, tablePath);
+    HoodieTestDataGenerator.writePartitionMetadataDeprecated(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, tablePath);
 
     // Create four commits
     for (int i = 100; i < 104; i++) {

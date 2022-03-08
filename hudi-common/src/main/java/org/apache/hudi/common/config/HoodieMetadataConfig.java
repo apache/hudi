@@ -83,20 +83,24 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".keep.min.commits")
       .defaultValue(20)
       .sinceVersion("0.7.0")
-      .withDocumentation("Controls the archival of the metadata table’s timeline.");
+      .withDocumentation("Archiving service moves older entries from metadata table’s timeline "
+          + "into an archived log after each write, to keep the overhead constant, even as the "
+          + "metadata table size grows.  This config controls the minimum number of instants "
+          + "to retain in the active timeline.");
 
   public static final ConfigProperty<Integer> MAX_COMMITS_TO_KEEP = ConfigProperty
       .key(METADATA_PREFIX + ".keep.max.commits")
       .defaultValue(30)
       .sinceVersion("0.7.0")
-      .withDocumentation("Controls the archival of the metadata table’s timeline.");
+      .withDocumentation("Similar to " + MIN_COMMITS_TO_KEEP.key() + ", this config controls "
+          + "the maximum number of instants to retain in the active timeline.");
 
   // Cleaner commits retained
   public static final ConfigProperty<Integer> CLEANER_COMMITS_RETAINED = ConfigProperty
       .key(METADATA_PREFIX + ".cleaner.commits.retained")
       .defaultValue(3)
       .sinceVersion("0.7.0")
-      .withDocumentation("Controls retention/history for metadata table.");
+      .withDocumentation("Number of commits to retain, without cleaning, on metadata table.");
 
   // Regex to filter out matching directories during bootstrap
   public static final ConfigProperty<String> DIR_FILTER_REGEX = ConfigProperty
@@ -122,13 +126,13 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".enable.full.scan.log.files")
       .defaultValue(true)
       .sinceVersion("0.10.0")
-      .withDocumentation("Enable full scanning of log files while reading log records. If disabled, hudi does look up of only interested entries.");
+      .withDocumentation("Enable full scanning of log files while reading log records. If disabled, Hudi does look up of only interested entries.");
 
   public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_BLOOM_FILTER = ConfigProperty
       .key(METADATA_PREFIX + ".index.bloom.filter.enable")
       .defaultValue(false)
       .sinceVersion("0.11.0")
-      .withDocumentation("Enable indexing user data files bloom filters under metadata table. When enabled, "
+      .withDocumentation("Enable indexing bloom filters of user data files under metadata table. When enabled, "
           + "metadata table will have a partition to store the bloom filter index and will be "
           + "used during the index lookups.");
 
@@ -144,8 +148,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".index.column.stats.enable")
       .defaultValue(false)
       .sinceVersion("0.11.0")
-      .withDocumentation("Enable indexing user data files column ranges under metadata table key lookups. When "
-          + "enabled, metadata table will have a partition to store the column ranges and will "
+      .withDocumentation("Enable indexing column ranges of user data files under metadata table key lookups. When "
+          + "enabled, metadata table will have a partition to store the column ranges and will be "
           + "used for pruning files during the index lookups.");
 
   public static final ConfigProperty<Integer> METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT = ConfigProperty
@@ -160,10 +164,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".index.column.stats.all_columns.enable")
       .defaultValue(true)
       .sinceVersion("0.11.0")
-      .withDocumentation("Enable indexing user data files column ranges under metadata table key lookups. When "
-          + "enabled, metadata table will have a partition to store the column ranges and will "
-          + "used for pruning files during the index lookups. Only applies if "
-          + ENABLE_METADATA_INDEX_COLUMN_STATS.key() + " is enabled.A");
+      .withDocumentation("Enable indexing column ranges of user data files for all columns under "
+          + "metadata table key lookups. When enabled, metadata table will have a partition to "
+          + "store the column ranges and will be used for pruning files during the index lookups. "
+          + "Only applies if " + ENABLE_METADATA_INDEX_COLUMN_STATS.key() + " is enabled.");
 
   public static final ConfigProperty<Boolean> POPULATE_META_FIELDS = ConfigProperty
       .key(METADATA_PREFIX + ".populate.meta.fields")
@@ -174,9 +178,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> IGNORE_SPURIOUS_DELETES = ConfigProperty
       .key("_" + METADATA_PREFIX + ".ignore.spurious.deletes")
       .defaultValue(true)
-      .sinceVersion("0.10.10")
-      .withDocumentation("There are cases when extra files are requested to be deleted from metadata table which was never added before. This config"
-          + "determines how to handle such spurious deletes");
+      .sinceVersion("0.10.0")
+      .withDocumentation("There are cases when extra files are requested to be deleted from "
+          + "metadata table which are never added before. This config determines how to handle "
+          + "such spurious deletes");
 
   private HoodieMetadataConfig() {
     super();

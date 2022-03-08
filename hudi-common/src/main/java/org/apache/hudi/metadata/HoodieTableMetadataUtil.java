@@ -40,6 +40,7 @@ import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -147,40 +148,58 @@ public class HoodieTableMetadataUtil {
    */
   public static List<HoodieRecord> convertMetadataToFilesPartitionRecords(HoodieCommitMetadata commitMetadata,
                                                                           String instantTime) {
-    List<HoodieRecord> records = new LinkedList<>();
-    List<String> allPartitions = new LinkedList<>();
-    commitMetadata.getPartitionToWriteStats().forEach((partitionStatName, writeStats) -> {
-      final String partition = partitionStatName.equals(EMPTY_PARTITION_NAME) ? NON_PARTITIONED_NAME : partitionStatName;
-      allPartitions.add(partition);
+    List<HoodieRecord> records = new ArrayList<>(commitMetadata.getPartitionToWriteStats().size());
 
-      Map<String, Long> newFiles = new HashMap<>(writeStats.size());
-      writeStats.forEach(hoodieWriteStat -> {
-        String pathWithPartition = hoodieWriteStat.getPath();
-        if (pathWithPartition == null) {
-          // Empty partition
-          LOG.warn("Unable to find path in write stat to update metadata table " + hoodieWriteStat);
-          return;
-        }
+    // Add record bearing partitions list
+    ArrayList<String> partitionsList = new ArrayList<>(commitMetadata.getPartitionToWriteStats().keySet());
 
-        int offset = partition.equals(NON_PARTITIONED_NAME) ? (pathWithPartition.startsWith("/") ? 1 : 0) : partition.length() + 1;
-        String filename = pathWithPartition.substring(offset);
-        long totalWriteBytes = newFiles.containsKey(filename)
-            ? newFiles.get(filename) + hoodieWriteStat.getTotalWriteBytes()
-            : hoodieWriteStat.getTotalWriteBytes();
-        newFiles.put(filename, totalWriteBytes);
-      });
-      // New files added to a partition
-      HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(
-          partition, Option.of(newFiles), Option.empty());
-      records.add(record);
-    });
+    records.add(HoodieMetadataPayload.createPartitionListRecord(partitionsList));
 
-    // New partitions created
-    HoodieRecord record = HoodieMetadataPayload.createPartitionListRecord(new ArrayList<>(allPartitions));
-    records.add(record);
+    // Update files listing records for each individual partition
+    List<HoodieRecord<HoodieMetadataPayload>> updatedPartitionFilesRecords =
+        commitMetadata.getPartitionToWriteStats().entrySet()
+            .stream()
+            .map(entry -> {
+              String partitionStatName = entry.getKey();
+              List<HoodieWriteStat> writeStats = entry.getValue();
+
+              String partition = partitionStatName.equals(EMPTY_PARTITION_NAME) ? NON_PARTITIONED_NAME : partitionStatName;
+
+              HashMap<String, Long> updatedFilesToSizesMapping =
+                  writeStats.stream().reduce(new HashMap<>(writeStats.size()),
+                      (map, stat) -> {
+                        String pathWithPartition = stat.getPath();
+                        if (pathWithPartition == null) {
+                          // Empty partition
+                          LOG.warn("Unable to find path in write stat to update metadata table " + stat);
+                          return map;
+                        }
+
+                        int offset = partition.equals(NON_PARTITIONED_NAME)
+                            ? (pathWithPartition.startsWith("/") ? 1 : 0)
+                            : partition.length() + 1;
+                        String filename = pathWithPartition.substring(offset);
+
+                        // Since write-stats are coming in no particular order, if the same
+                        // file have previously been appended to w/in the txn, we simply pick max
+                        // of the sizes as reported after every write, since file-sizes are
+                        // monotonically increasing (ie file-size never goes down, unless deleted)
+                        map.merge(filename, stat.getFileSizeInBytes(), Math::max);
+
+                        return map;
+                      },
+                      CollectionUtils::combine);
+
+              return HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.of(updatedFilesToSizesMapping),
+                  Option.empty());
+            })
+            .collect(Collectors.toList());
+
+    records.addAll(updatedPartitionFilesRecords);
 
     LOG.info("Updating at " + instantTime + " from Commit/" + commitMetadata.getOperationType()
         + ". #partitions_updated=" + records.size());
+
     return records;
   }
 

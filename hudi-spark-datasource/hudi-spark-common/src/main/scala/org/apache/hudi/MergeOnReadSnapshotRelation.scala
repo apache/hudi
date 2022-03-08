@@ -18,43 +18,37 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.common.model.HoodieLogFile
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
+import org.apache.hadoop.mapred.JobConf
+import org.apache.hudi.HoodieBaseRelation.{createBaseFileReader, isMetadataTable}
+import org.apache.hudi.common.model.{HoodieLogFile, HoodieRecord}
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
-
-import org.apache.hadoop.fs.Path
-import org.apache.hadoop.mapred.JobConf
-
-import org.apache.spark.internal.Logging
+import org.apache.hudi.metadata.HoodieMetadataPayload
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile}
-import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
-import org.apache.spark.sql.{Row, SQLContext}
-import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
+import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{Row, SQLContext}
 
 import scala.collection.JavaConverters._
 
 case class HoodieMergeOnReadFileSplit(dataFile: Option[PartitionedFile],
-                                      logPaths: Option[List[String]],
+                                      logFiles: Option[List[HoodieLogFile]],
                                       latestCommit: String,
                                       tablePath: String,
                                       maxCompactionMemoryInBytes: Long,
                                       mergeType: String)
 
-case class HoodieMergeOnReadTableState(tableStructSchema: StructType,
-                                       requiredStructSchema: StructType,
-                                       tableAvroSchema: String,
-                                       requiredAvroSchema: String,
-                                       hoodieRealtimeFileSplits: List[HoodieMergeOnReadFileSplit],
-                                       preCombineField: Option[String],
-                                       recordKeyFieldOpt: Option[String])
+case class HoodieMergeOnReadTableState(hoodieRealtimeFileSplits: List[HoodieMergeOnReadFileSplit],
+                                       recordKeyField: String,
+                                       preCombineFieldOpt: Option[String])
 
 class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
                                   optParams: Map[String, String],
@@ -63,7 +57,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
                                   val metaClient: HoodieTableMetaClient)
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) {
 
-  private val conf = sqlContext.sparkContext.hadoopConfiguration
+  private val conf = new Configuration(sqlContext.sparkContext.hadoopConfiguration)
   private val jobConf = new JobConf(conf)
 
   private val mergeType = optParams.getOrElse(
@@ -72,19 +66,21 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
 
   private val maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(jobConf)
 
-  private val preCombineField = {
-    val preCombineFieldFromTableConfig = metaClient.getTableConfig.getPreCombineField
-    if (preCombineFieldFromTableConfig != null) {
-      Some(preCombineFieldFromTableConfig)
-    } else {
-      // get preCombineFiled from the options if this is a old table which have not store
-      // the field to hoodie.properties
-      optParams.get(DataSourceReadOptions.READ_PRE_COMBINE_FIELD.key)
-    }
+  // If meta fields are enabled, always prefer key from the meta field as opposed to user-specified one
+  // NOTE: This is historical behavior which is preserved as is
+  private val recordKeyField = {
+    if (metaClient.getTableConfig.populateMetaFields()) HoodieRecord.RECORD_KEY_METADATA_FIELD
+    else metaClient.getTableConfig.getRecordKeyFieldProp
   }
-  private var recordKeyFieldOpt = Option.empty[String]
-  if (!metaClient.getTableConfig.populateMetaFields()) {
-    recordKeyFieldOpt = Option(metaClient.getTableConfig.getRecordKeyFieldProp)
+
+  private val preCombineFieldOpt = getPrecombineFieldProperty
+
+  private lazy val mandatoryColumns = {
+    if (isMetadataTable(metaClient)) {
+      Seq(HoodieMetadataPayload.KEY_FIELD_NAME, HoodieMetadataPayload.SCHEMA_FIELD_NAME_TYPE)
+    } else {
+      Seq(recordKeyField) ++ preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
+    }
   }
 
   override def needConversion: Boolean = false
@@ -96,45 +92,56 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
     log.debug(s" buildScan requiredColumns = ${requiredColumns.mkString(",")}")
     log.debug(s" buildScan filters = ${filters.mkString(",")}")
 
+    // NOTE: In case list of requested columns doesn't contain the Primary Key one, we
+    //       have to add it explicitly so that
+    //          - Merging could be performed correctly
+    //          - In case 0 columns are to be fetched (for ex, when doing {@code count()} on Spark's [[Dataset]],
+    //          Spark still fetches all the rows to execute the query correctly
+    //
+    //       It's okay to return columns that have not been requested by the caller, as those nevertheless will be
+    //       filtered out upstream
+    val fetchedColumns: Array[String] = appendMandatoryColumns(requiredColumns)
+
     val (requiredAvroSchema, requiredStructSchema) =
-      HoodieSparkUtils.getRequiredSchema(tableAvroSchema, requiredColumns)
+      HoodieSparkUtils.getRequiredSchema(tableAvroSchema, fetchedColumns)
     val fileIndex = buildFileIndex(filters)
-    val hoodieTableState = HoodieMergeOnReadTableState(
-      tableStructSchema,
-      requiredStructSchema,
-      tableAvroSchema.toString,
-      requiredAvroSchema.toString,
-      fileIndex,
-      preCombineField,
-      recordKeyFieldOpt
-    )
-    val fullSchemaParquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
-      sparkSession = sqlContext.sparkSession,
-      dataSchema = tableStructSchema,
-      partitionSchema = StructType(Nil),
-      requiredSchema = tableStructSchema,
+
+    val partitionSchema = StructType(Nil)
+    val tableSchema = HoodieTableSchema(tableStructSchema, tableAvroSchema.toString)
+    val requiredSchema = HoodieTableSchema(requiredStructSchema, requiredAvroSchema.toString)
+
+    val fullSchemaParquetReader = createBaseFileReader(
+      spark = sqlContext.sparkSession,
+      partitionSchema = partitionSchema,
+      tableSchema = tableSchema,
+      requiredSchema = tableSchema,
+      // This file-reader is used to read base file records, subsequently merging them with the records
+      // stored in delta-log files. As such, we have to read _all_ records from the base file, while avoiding
+      // applying any filtering _before_ we complete combining them w/ delta-log records (to make sure that
+      // we combine them correctly)
       filters = Seq.empty,
       options = optParams,
-      hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
+      // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
+      //       to configure Parquet reader appropriately
+      hadoopConf = new Configuration(conf)
     )
-
-    val requiredSchemaParquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
-      sparkSession = sqlContext.sparkSession,
-      dataSchema = tableStructSchema,
-      partitionSchema = StructType(Nil),
-      requiredSchema = tableStructSchema,
+    val requiredSchemaParquetReader = createBaseFileReader(
+      spark = sqlContext.sparkSession,
+      partitionSchema = partitionSchema,
+      tableSchema = tableSchema,
+      requiredSchema = requiredSchema,
       filters = filters,
       options = optParams,
-      hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
+      // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
+      //       to configure Parquet reader appropriately
+      hadoopConf = new Configuration(conf)
     )
 
-    val rdd = new HoodieMergeOnReadRDD(
-      sqlContext.sparkContext,
-      jobConf,
-      fullSchemaParquetReader,
-      requiredSchemaParquetReader,
-      hoodieTableState
-    )
+    val tableState = HoodieMergeOnReadTableState(fileIndex, recordKeyField, preCombineFieldOpt)
+
+    val rdd = new HoodieMergeOnReadRDD(sqlContext.sparkContext, jobConf, fullSchemaParquetReader,
+      requiredSchemaParquetReader, tableState, tableSchema, requiredSchema)
+
     rdd.asInstanceOf[RDD[Row]]
   }
 
@@ -214,8 +221,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
             Option.empty
           }
 
-          val logPaths = fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala
-            .map(logFile => MergeOnReadSnapshotRelation.getFilePath(logFile.getPath)).toList
+          val logPaths = fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList
           val logPathsOptional = if (logPaths.isEmpty) Option.empty else Option(logPaths)
 
           HoodieMergeOnReadFileSplit(partitionedFile, logPathsOptional, queryInstant, metaClient.getBasePath,
@@ -224,6 +230,11 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
         fileSplits
       }
     }
+  }
+
+  private def appendMandatoryColumns(requestedColumns: Array[String]): Array[String] = {
+    val missing = mandatoryColumns.filter(col => !requestedColumns.contains(col))
+    requestedColumns ++ missing
   }
 }
 

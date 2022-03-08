@@ -21,12 +21,18 @@ package org.apache.hudi.hadoop.functional;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.ql.io.IOContextMap;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.minicluster.MiniClusterUtil;
+import org.apache.hudi.common.util.CommitUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat;
 import org.apache.hudi.hadoop.hive.HoodieCombineRealtimeFileSplit;
 import org.apache.hudi.hadoop.hive.HoodieCombineRealtimeHiveSplit;
@@ -58,6 +64,7 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -104,8 +111,10 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     final int numRecords = 1000;
     // Create 3 partitions, each partition holds one parquet file and 1000 records
     List<File> partitionDirs = InputFormatTestUtil
-        .prepareMultiPartitionedParquetTable(tempDir, schema, 3, numRecords, commitTime);
-    InputFormatTestUtil.commit(tempDir, commitTime);
+        .prepareMultiPartitionedParquetTable(tempDir, schema, 3, numRecords, commitTime, HoodieTableType.MERGE_ON_READ);
+    HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
+        schema.toString(), HoodieTimeline.COMMIT_ACTION);
+    FileCreateUtils.createCommit(tempDir.toString(), commitTime, Option.of(commitMetadata));
 
     TableDesc tblDesc = Utilities.defaultTd;
     // Set the input format
@@ -185,7 +194,9 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     final int numRecords = 1000;
     // Create 3 parquet files with 1000 records each
     File partitionDir = InputFormatTestUtil.prepareParquetTable(tempDir, schema, 3, numRecords, commitTime);
-    InputFormatTestUtil.commit(tempDir, commitTime);
+    HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
+        schema.toString(), HoodieTimeline.COMMIT_ACTION);
+    FileCreateUtils.createCommit(tempDir.toString(), commitTime, Option.of(commitMetadata));
 
     TableDesc tblDesc = Utilities.defaultTd;
     // Set the input format
@@ -255,7 +266,9 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     final int numRecords = 1000;
     // Create 3 parquet files with 1000 records each
     File partitionDir = InputFormatTestUtil.prepareParquetTable(tempDir, schema, 3, numRecords, commitTime);
-    InputFormatTestUtil.commit(tempDir, commitTime);
+    HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
+        schema.toString(), HoodieTimeline.COMMIT_ACTION);
+    FileCreateUtils.createCommit(tempDir.toString(), commitTime, Option.of(commitMetadata));
 
     String newCommitTime = "101";
     // to trigger the bug of HUDI-1772, only update fileid2
@@ -323,7 +336,9 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     final int numRecords = 1000;
     // Create 3 parquet files with 1000 records each
     File partitionDir = InputFormatTestUtil.prepareParquetTable(tempDir, schema, 3, numRecords, commitTime);
-    InputFormatTestUtil.commit(tempDir, commitTime);
+    HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
+        schema.toString(), HoodieTimeline.COMMIT_ACTION);
+    FileCreateUtils.createCommit(tempDir.toString(), commitTime, Option.of(commitMetadata));
 
     // insert 1000 update records to log file 0
     String newCommitTime = "101";

@@ -25,6 +25,7 @@ import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
@@ -63,9 +64,20 @@ public class TypedProperties extends Properties implements Serializable {
   public Set<String> stringPropertyNames() {
     Set<String> set = new LinkedHashSet<>();
     for (Object key : this.keys) {
-      set.add((String) key);
+      if (key instanceof String) {
+        set.add((String) key);
+      }
     }
     return set;
+  }
+
+  public synchronized void putAll(Properties t) {
+    for (Map.Entry<?, ?> e : t.entrySet()) {
+      if (!containsKey(String.valueOf(e.getKey()))) {
+        keys.add(e.getKey());
+      }
+      super.put(e.getKey(), e.getValue());
+    }
   }
 
   @Override

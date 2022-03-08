@@ -40,6 +40,9 @@ public abstract class HoodieRecord<T> implements Serializable {
   public static final String PARTITION_PATH_METADATA_FIELD = "_hoodie_partition_path";
   public static final String FILENAME_METADATA_FIELD = "_hoodie_file_name";
   public static final String OPERATION_METADATA_FIELD = "_hoodie_operation";
+  public static final String HOODIE_IS_DELETED = "_hoodie_is_deleted";
+
+  public static int FILENAME_METADATA_FIELD_POS = 4;
 
   public static final List<String> HOODIE_META_COLUMNS =
       CollectionUtils.createImmutableList(COMMIT_TIME_METADATA_FIELD, COMMIT_SEQNO_METADATA_FIELD,

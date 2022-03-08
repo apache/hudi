@@ -67,7 +67,7 @@ public class SparkBulkInsertHelper<T extends HoodieRecordPayload, R> extends Bas
                                                               final HoodieWriteConfig config,
                                                               final BaseCommitActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, R> executor,
                                                               final boolean performDedupe,
-                                                              final Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner) {
+                                                              final Option<BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>>> userDefinedBulkInsertPartitioner) {
     HoodieWriteMetadata result = new HoodieWriteMetadata();
 
     //transition bulk_insert state to inflight
@@ -88,7 +88,7 @@ public class SparkBulkInsertHelper<T extends HoodieRecordPayload, R> extends Bas
                                          HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                          HoodieWriteConfig config,
                                          boolean performDedupe,
-                                         Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner,
+                                         Option<BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>>> userDefinedBulkInsertPartitioner,
                                          boolean useWriterSchema,
                                          int parallelism,
                                          WriteHandleFactory writeHandleFactory) {
