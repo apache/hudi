@@ -51,9 +51,6 @@
     <module>packaging/hudi-utilities-bundle</module>
     <module>packaging/hudi-timeline-server-bundle</module>
     <module>packaging/hudi-trino-bundle</module>
-    <module>docker/hoodie/hadoop</module>
-    <module>hudi-integ-test</module>
-    <module>packaging/hudi-integ-test-bundle</module>
     <module>hudi-examples</module>
     <module>hudi-flink</module>
     <module>hudi-kafka-connect</module>
@@ -1187,6 +1184,9 @@
           <value>true</value>
         </property>
       </activation>
+      <properties>
+        <integration-tests>true</integration-tests>
+      </properties>
       <build>
         <plugins>
           <plugin>
@@ -1357,6 +1357,16 @@
     </profile>
     <profile>
       <id>integration-tests</id>
+      <activation>
+        <property>
+          <name>integration-tests</name>
+        </property>
+      </activation>
+      <modules>
+        <module>docker/hoodie/hadoop</module>
+        <module>hudi-integ-test</module>
+        <module>packaging/hudi-integ-test-bundle</module>
+      </modules>
       <properties>
         <skipUTs>true</skipUTs>
         <skipFTs>true</skipFTs>
@@ -1578,7 +1588,6 @@
       </build>
     </profile>
 
-    <!-- Exists for backwards compatibility; profile doesn't do anything -->
     <profile>
       <id>spark2</id>
       <modules>
