@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -37,6 +36,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.bootstrap.aggregate.BootstrapAggFunction;
+import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.util.FlinkTables;
@@ -83,6 +83,8 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
 
   protected HoodieTable<?, ?, ?, ?> hoodieTable;
 
+  private CkpMetadata ckpMetadata;
+
   protected final Configuration conf;
 
   protected transient org.apache.hadoop.conf.Configuration hadoopConf;
@@ -101,8 +103,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
 
   @Override
   public void snapshotState(StateSnapshotContext context) throws Exception {
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(this.conf);
-    lastInstantTime = StreamerUtil.getLastPendingInstant(metaClient);
+    lastInstantTime = this.ckpMetadata.lastPendingInstant();
     instantState.update(Collections.singletonList(lastInstantTime));
   }
 
@@ -124,6 +125,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
     this.hadoopConf = StreamerUtil.getHadoopConf();
     this.writeConfig = StreamerUtil.getHoodieClientConfig(this.conf, true);
     this.hoodieTable = FlinkTables.createTable(writeConfig, hadoopConf, getRuntimeContext());
+    this.ckpMetadata = CkpMetadata.getInstance(hoodieTable.getMetaClient().getFs(), this.writeConfig.getBasePath());
     this.aggregateManager = getRuntimeContext().getGlobalAggregateManager();
 
     preLoadIndexRecords();
