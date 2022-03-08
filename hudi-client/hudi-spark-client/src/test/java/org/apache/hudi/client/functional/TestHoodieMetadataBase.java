@@ -39,9 +39,6 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
@@ -50,6 +47,9 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataKeyGenerator;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metrics.config.HoodieMetricsConfig;
+import org.apache.hudi.metrics.config.HoodieMetricsGraphiteConfig;
+import org.apache.hudi.metrics.config.HoodieMetricsJmxConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
@@ -408,21 +408,22 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
     builder.withProperties(properties);
 
     if (writeConfig.isMetricsOn()) {
+      HoodieMetricsConfig metricsConfig = writeConfig.getMetricsConfig();
       builder.withMetricsConfig(HoodieMetricsConfig.newBuilder()
-          .withReporterType(writeConfig.getMetricsReporterType().toString())
+              .withReporterType(metricsConfig.getMetricsReporterType().toString())
           .withExecutorMetrics(writeConfig.isExecutorMetricsEnabled())
           .on(true).build());
-      switch (writeConfig.getMetricsReporterType()) {
+      switch (metricsConfig.getMetricsReporterType()) {
         case GRAPHITE:
           builder.withMetricsGraphiteConfig(HoodieMetricsGraphiteConfig.newBuilder()
-              .onGraphitePort(writeConfig.getGraphiteServerPort())
-              .toGraphiteHost(writeConfig.getGraphiteServerHost())
-              .usePrefix(writeConfig.getGraphiteMetricPrefix()).build());
+                  .onGraphitePort(metricsConfig.getGraphiteServerPort())
+                  .toGraphiteHost(metricsConfig.getGraphiteServerHost())
+                  .usePrefix(metricsConfig.getGraphiteMetricPrefix()).build());
           break;
         case JMX:
           builder.withMetricsJmxConfig(HoodieMetricsJmxConfig.newBuilder()
-              .onJmxPort(writeConfig.getJmxPort())
-              .toJmxHost(writeConfig.getJmxHost())
+                  .onJmxPort(metricsConfig.getJmxPort())
+                  .toJmxHost(metricsConfig.getJmxHost())
               .build());
           break;
         case DATADOG:
@@ -433,7 +434,7 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
         case CLOUDWATCH:
           break;
         default:
-          throw new HoodieMetadataException("Unsupported Metrics Reporter type " + writeConfig.getMetricsReporterType());
+          throw new HoodieMetadataException("Unsupported Metrics Reporter type " + metricsConfig.getMetricsReporterType());
       }
     }
     return builder.build();

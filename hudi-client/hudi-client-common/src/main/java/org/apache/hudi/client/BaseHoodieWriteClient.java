@@ -150,7 +150,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
                                Option<EmbeddedTimelineService> timelineService,
                                SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     super(context, writeConfig, timelineService);
-    this.metrics = new HoodieMetrics(config);
+    this.metrics = new HoodieMetrics(config.getMetricsConfig());
     this.index = createIndex(writeConfig);
     this.txnManager = new TransactionManager(config, fs);
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;

@@ -1,0 +1,81 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.hudi.aws.cloudwatch;
+
+import org.apache.hudi.metrics.HoodieMetricRegistry;
+import org.apache.hudi.metrics.MetricsReporter;
+import org.apache.hudi.metrics.config.HoodieMetricsConfig;
+
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
+import java.io.Closeable;
+import java.util.concurrent.TimeUnit;
+
+/**
+ * Hudi Amazon CloudWatch metrics reporter. Responsible for reading Hoodie metrics configurations and hooking up with
+ * {@link org.apache.hudi.metrics.Metrics}. Internally delegates reporting tasks to {@link CloudWatchReporter}.
+ */
+public class CloudWatchMetricsReporter extends MetricsReporter {
+
+  private static final Logger LOG = LogManager.getLogger(CloudWatchMetricsReporter.class);
+
+  private final CloudWatchReporter reporter;
+
+  public CloudWatchMetricsReporter(HoodieMetricsConfig config, HoodieMetricRegistry registry) {
+    super(config, registry);
+    this.reporter = createCloudWatchReporter();
+  }
+
+  protected CloudWatchMetricsReporter(HoodieMetricsConfig config, HoodieMetricRegistry registry, CloudWatchReporter reporter) {
+    super(config, registry);
+    this.reporter = reporter;
+  }
+
+  private CloudWatchReporter createCloudWatchReporter() {
+    return CloudWatchReporter.forRegistry(registry.getRegistry())
+        .prefixedWith(config.getCloudWatchMetricPrefix())
+        .namespace(config.getCloudWatchMetricNamespace())
+        .maxDatumsPerRequest(config.getCloudWatchMaxDatumsPerRequest())
+        .build(config.getProps());
+  }
+
+  @Override
+  public void start() {
+    LOG.info("Starting CloudWatch Metrics Reporter.");
+    reporter.start(config.getCloudWatchReportPeriodSeconds(), TimeUnit.SECONDS);
+  }
+
+  @Override
+  public void report() {
+    reporter.report();
+  }
+
+  @Override
+  public Closeable getReporter() {
+    return reporter;
+  }
+
+  @Override
+  public void stop() {
+    LOG.info("Stopping CloudWatch Metrics Reporter.");
+    reporter.stop();
+  }
+
+}

@@ -68,6 +68,7 @@
                 <includes>
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-client-common</include>
+                  <include>org.apache.hudi:hudi-metrics-common</include>
                   <include>org.apache.hudi:hudi-spark-client</include>
                   <include>org.apache.hudi:hudi-spark-common_${scala.binary.version}</include>
                   <include>org.apache.hudi:hudi-spark_${scala.binary.version}</include>
@@ -77,7 +78,7 @@
                   <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
                   <include>org.apache.hudi:hudi-timeline-service</include>
-                  <include>org.apache.hudi:hudi-aws</include>
+
 
                   <include>com.beust:jcommander</include>
                   <include>io.javalin:javalin</include>
@@ -216,6 +217,11 @@
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-common</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-metrics-common</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>

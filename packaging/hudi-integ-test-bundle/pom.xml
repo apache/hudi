@@ -71,6 +71,7 @@
                   <include>commons-pool:commons-pool</include>
 
                   <include>org.apache.hudi:hudi-common</include>
+                  <include>org.apache.hudi:hudi-metrics-common</include>
                   <include>org.apache.hudi:hudi-client-common</include>
                   <include>org.apache.hudi:hudi-spark-client</include>
                   <include>org.apache.hudi:hudi-spark-common_${scala.binary.version}</include>
