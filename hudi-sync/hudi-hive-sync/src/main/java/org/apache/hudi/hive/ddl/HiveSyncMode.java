@@ -33,7 +33,11 @@ public enum HiveSyncMode {
   /**
    * The JDBC mode use hive jdbc to sync metadata.
    */
-  JDBC
+  JDBC,
+  /**
+   * The Thrift mode use metastore thrift RPC to sync metadata.
+   */
+  THRIFT
   ;
 
   public static HiveSyncMode of(String syncMode) {

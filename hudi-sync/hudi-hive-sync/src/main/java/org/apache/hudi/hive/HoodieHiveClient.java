@@ -23,13 +23,14 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.hive.util.HiveSchemaUtil;
-import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
 import org.apache.hudi.hive.ddl.DDLExecutor;
 import org.apache.hudi.hive.ddl.HMSDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.ddl.JDBCExecutor;
+import org.apache.hudi.hive.ddl.ThriftDDLExecutor;
+import org.apache.hudi.hive.util.HiveSchemaUtil;
+import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -62,6 +63,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   private IMetaStoreClient client;
   private final HiveSyncConfig syncConfig;
 
+  @SuppressWarnings("checkstyle:FallThrough")
   public HoodieHiveClient(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
     super(cfg.basePath, cfg.assumeDatePartitioning, cfg.useFileListingFromMetadata,  cfg.withOperationField, fs);
     this.syncConfig = cfg;
@@ -81,6 +83,8 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
           case JDBC:
             ddlExecutor = new JDBCExecutor(cfg, fs);
             break;
+          case THRIFT:
+            ddlExecutor = new ThriftDDLExecutor(cfg,fs);
           default:
             throw new HoodieHiveSyncException("Invalid sync mode given " + cfg.syncMode);
         }
