@@ -360,51 +360,70 @@ private object ColumnStatsExpressionUtils {
    * Returns only [[AttributeReference]] contained as a sub-expression
    */
   object AllowedTransformationExpression {
-    def unapply(expr: Expression): Option[AttributeReference] =
+    def unapply(expr: Expression): Option[AttributeReference] = {
+      // First step, we check that expression
+      //    - Does NOT contain sub-queries
+      //    - Does contain exactly 1 attribute
       if (SubqueryExpression.hasSubquery(expr) || expr.references.size != 1) {
         None
       } else {
+        // Second step, we validate that holding expression is an actually permitted
+        // transformation
+        // NOTE: That transformation composition is permitted
         expr match {
-          // Date/Time Expressions
-          case DateFormatClass(attrRef: AttributeReference, _, _) => Some(attrRef)
-          case DateAdd(attrRef: AttributeReference, _) => Some(attrRef)
-          case DateSub(attrRef: AttributeReference, _) => Some(attrRef)
-          case DateDiff(attrRef: AttributeReference, _) => Some(attrRef)
-          case DateDiff(_, attrRef: AttributeReference) => Some(attrRef)
-          case FromUnixTime(attrRef: AttributeReference, _, _) => Some(attrRef)
-          case FromUTCTimestamp(attrRef: AttributeReference, _) => Some(attrRef)
-          case ParseToDate(attrRef: AttributeReference, _, _) => Some(attrRef)
-          case ParseToTimestamp(attrRef: AttributeReference, _, _, _) => Some(attrRef)
-          case ToUnixTimestamp(attrRef: AttributeReference, _, _, _) => Some(attrRef)
-          case ToUTCTimestamp(attrRef: AttributeReference, _) => Some(attrRef)
-          // String Expressions
-          case Lower(attrRef: AttributeReference) => Some(attrRef)
-          case Upper(attrRef: AttributeReference) => Some(attrRef)
-          case StringRepeat(attrRef: AttributeReference, _) => Some(attrRef)
-          case StringRPad(attrRef: AttributeReference, _, _) => Some(attrRef)
-          case org.apache.spark.sql.catalyst.expressions.Left(attrRef: AttributeReference, _, _) => Some(attrRef)
-          // Math Expressions
-          // Binary
-          case Add(attrRef: AttributeReference, _, _) => Some(attrRef)
-          case Add(_, attrRef: AttributeReference, _) => Some(attrRef)
-          case Multiply(attrRef: AttributeReference, _, _) => Some(attrRef)
-          case Multiply(_, attrRef: AttributeReference, _) => Some(attrRef)
-          case Divide(attrRef: AttributeReference, _, _) => Some(attrRef)
-          case BitwiseOr(attrRef: AttributeReference, _) => Some(attrRef)
-          case BitwiseOr(_, attrRef: AttributeReference) => Some(attrRef)
-          // Unary
-          case Exp(attrRef: AttributeReference) => Some(attrRef)
-          case Expm1(attrRef: AttributeReference) => Some(attrRef)
-          case Log(attrRef: AttributeReference) => Some(attrRef)
-          case Log10(attrRef: AttributeReference) => Some(attrRef)
-          case Log1p(attrRef: AttributeReference) => Some(attrRef)
-          case Log2(attrRef: AttributeReference) => Some(attrRef)
-          case ShiftLeft(attrRef: AttributeReference, _) => Some(attrRef)
-          case ShiftRight(attrRef: AttributeReference, _) => Some(attrRef)
-
+          case OrderPreservingTransformation(attrRef) => Some(attrRef)
           case _ => None
         }
       }
+    }
+
+    private object OrderPreservingTransformation {
+      def unapply(expr: Expression): Option[AttributeReference] = {
+        expr match {
+          // Date/Time Expressions
+          case DateFormatClass(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
+          case DateAdd(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
+          case DateSub(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
+          case DateDiff(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
+          case DateDiff(_, OrderPreservingTransformation(attrRef)) => Some(attrRef)
+          case FromUnixTime(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
+          case FromUTCTimestamp(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
+          case ParseToDate(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
+          case ParseToTimestamp(OrderPreservingTransformation(attrRef), _, _, _) => Some(attrRef)
+          case ToUnixTimestamp(OrderPreservingTransformation(attrRef), _, _, _) => Some(attrRef)
+          case ToUTCTimestamp(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
+
+          // String Expressions
+          case Lower(OrderPreservingTransformation(attrRef)) => Some(attrRef)
+          case Upper(OrderPreservingTransformation(attrRef)) => Some(attrRef)
+          case org.apache.spark.sql.catalyst.expressions.Left(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
+
+          // Math Expressions
+          // Binary
+          case Add(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
+          case Add(_, OrderPreservingTransformation(attrRef), _) => Some(attrRef)
+          case Multiply(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
+          case Multiply(_, OrderPreservingTransformation(attrRef), _) => Some(attrRef)
+          case Divide(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
+          case BitwiseOr(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
+          case BitwiseOr(_, OrderPreservingTransformation(attrRef)) => Some(attrRef)
+          // Unary
+          case Exp(OrderPreservingTransformation(attrRef)) => Some(attrRef)
+          case Expm1(OrderPreservingTransformation(attrRef)) => Some(attrRef)
+          case Log(OrderPreservingTransformation(attrRef)) => Some(attrRef)
+          case Log10(OrderPreservingTransformation(attrRef)) => Some(attrRef)
+          case Log1p(OrderPreservingTransformation(attrRef)) => Some(attrRef)
+          case Log2(OrderPreservingTransformation(attrRef)) => Some(attrRef)
+          case ShiftLeft(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
+          case ShiftRight(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
+
+          // Identity transformation
+          case attrRef: AttributeReference => Some(attrRef)
+          // No match
+          case _ => None
+        }
+      }
+    }
   }
 
   def swapAttributeRefInExpr(sourceExpr: Expression, from: AttributeReference, to: Expression): Expression = {
