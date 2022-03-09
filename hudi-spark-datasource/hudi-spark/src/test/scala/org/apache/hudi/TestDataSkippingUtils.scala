@@ -20,10 +20,10 @@ package org.apache.hudi
 import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql.catalyst.expressions.{Expression, Not}
-import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.functions.{col, upper}
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{Column, HoodieCatalystExpressionUtils, Row, SparkSession}
+import org.apache.spark.sql.{Column, HoodieCatalystExpressionUtils, Row, SparkSession, functions}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.params.ParameterizedTest
@@ -52,7 +52,7 @@ case class IndexRow(
   C_maxValue: Timestamp = null,
   C_num_nulls: Long = -1
 ) {
-  def toRow = Row(productIterator.toSeq: _*)
+  def toRow: Row = Row(productIterator.toSeq: _*)
 }
 
 class TestDataSkippingUtils extends HoodieClientTestBase {
@@ -144,6 +144,24 @@ object TestDataSkippingUtils {
           IndexRow("file_2", 0, 0, 0, "adf", "azy", 0),
           IndexRow("file_3", 0, 0, 0, "aaa", "aba", 0),
           IndexRow("file_4", 0, 0, 0, "abc123", "abc345", 0) // all strings start w/ "abc"
+        ),
+        Seq("file_1", "file_2", "file_3")),
+      arguments(
+        // Composite expression
+        functions.trim(col("B")).startsWith("abc").expr,
+        Seq(
+          IndexRow("file_1", 0, 0, 0, " aba ", " adf ", 1), // may contain strings starting w/ "abc" (after trim)
+          IndexRow("file_2", 0, 0, 0, " adf ", " azy ", 0),
+          IndexRow("file_3", 0, 0, 0, " aaa ", " aba ", 0)
+        ),
+        Seq("file_1")),
+      arguments(
+        Not(upper(col("B")).startsWith("ABC").expr),
+        Seq(
+          IndexRow("file_1", 0, 0, 0, "aba", "adf", 1), // may contain strings starting w/ "ABC" (after upper)
+          IndexRow("file_2", 0, 0, 0, "adf", "azy", 0),
+          IndexRow("file_3", 0, 0, 0, "aaa", "aba", 0),
+          IndexRow("file_4", 0, 0, 0, "abc123", "abc345", 0) // all strings start w/ "ABC" (after upper)
         ),
         Seq("file_1", "file_2", "file_3"))
     )
@@ -293,7 +311,7 @@ object TestDataSkippingUtils {
         Seq(
           IndexRow("file_1", 1, 2, 0),
           IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", -2, -1, 0),
+          IndexRow("file_3", -2, -1, 0)
         ),
         Seq("file_1", "file_2", "file_3"))
     )
