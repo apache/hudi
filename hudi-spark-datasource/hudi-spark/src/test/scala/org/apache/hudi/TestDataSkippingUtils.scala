@@ -278,6 +278,23 @@ object TestDataSkippingUtils {
           IndexRow("file_4", 0, 0, 0), // only contains 0
           IndexRow("file_5", 1, 1, 0) // only contains 1
         ),
+        Seq("file_1", "file_2", "file_3")),
+      arguments(
+        // Value expression containing expression, which isn't a literal
+        "A = int('0')",
+        Seq(
+          IndexRow("file_1", 1, 2, 0),
+          IndexRow("file_2", -1, 1, 0)
+        ),
+        Seq("file_2")),
+      arguments(
+        // Value expression containing reference to the other attribute (column), fallback
+        "A = D",
+        Seq(
+          IndexRow("file_1", 1, 2, 0),
+          IndexRow("file_2", -1, 1, 0),
+          IndexRow("file_3", -2, -1, 0),
+        ),
         Seq("file_1", "file_2", "file_3"))
     )
   }
