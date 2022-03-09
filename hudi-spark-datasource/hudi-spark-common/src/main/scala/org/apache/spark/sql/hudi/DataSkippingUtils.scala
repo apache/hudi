@@ -24,7 +24,9 @@ import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, EqualNullSafe, EqualTo, Expression, ExtractValue, GetStructField, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith, SubqueryExpression}
+import org.apache.spark.sql.catalyst.trees.TreePattern.ATTRIBUTE_REFERENCE
 import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.hudi.ColumnStatsExpressionUtils.{AttributeExpression, genColMaxValueExpr, genColMinValueExpr, genColNumNullsExpr, genColumnOnlyValuesEqualToExpression, genColumnValuesEqualToExpression, isSimpleExpression, swapAttributeRefInExpr}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -60,52 +62,41 @@ object DataSkippingUtils extends Logging {
   }
 
   private def tryComposeIndexFilterExpr(sourceExpr: Expression, indexSchema: StructType): Option[Expression] = {
-    def minValue(colName: String) = col(getMinColumnNameFor(colName)).expr
-    def maxValue(colName: String) = col(getMaxColumnNameFor(colName)).expr
-    def numNulls(colName: String) = col(getNumNullsColumnNameFor(colName)).expr
-
-    def colContainsValuesEqualTo(colName: String, value: Expression): Expression = {
-      // TODO clean up
-      checkState(value.foldable)
-      // Only case when column C contains value V is when min(C) <= V <= max(c)
-      And(LessThanOrEqual(minValue(colName), value), GreaterThanOrEqual(maxValue(colName), value))
-    }
-
-    def colContainsOnlyValuesEqualTo(colName: String, value: Expression): Expression = {
-      // TODO clean up
-      checkState(value.foldable)
-      // Only case when column C contains _only_ value V is when min(C) = V AND max(c) = V
-      And(EqualTo(minValue(colName), value), EqualTo(maxValue(colName), value))
-    }
-
     sourceExpr match {
-      // Filter "colA = B"
-      // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
-      //       [[Expression#foldable]] returns true for)
+      // Filter "colA = B" and "B = colA"
       //
       // Translates to "colA_minValue <= B AND B <= colA_maxValue" condition for index lookup
-      case EqualTo(attribute: AttributeReference, value: Expression) if isSimpleExpression(value) =>
-        getTargetIndexedColName(attribute, indexSchema)
-          .map(colName => colContainsValuesEqualTo(colName, value))
+      case EqualTo(sourceExpr @ AttributeExpression(attrRef), valueExpr: Expression) if isSimpleExpression(valueExpr) =>
+        getTargetIndexedColName(attrRef, indexSchema)
+          .map { colName =>
+            // NOTE: Since we're supporting (almost) arbitrary expressions of the form `f(colA) = B`, we have to
+            //       appropriately translate such original expression targeted at Data Table, to corresponding
+            //       expression targeted at Column Stats Index Table. For that, we take original expression holding
+            //       [[AttributeReference]] referring to the Data Table, and swap it w/ expression referring to
+            //       corresponding column in the Column Stats Index
+            val targetExprBuilder = swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            genColumnValuesEqualToExpression(colName, valueExpr, targetExprBuilder)
+          }
 
-      // Filter "B = colA"
-      // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
-      //       [[Expression#foldable]] returns true for)
-      //
-      // Translates to "colA_minValue <= B AND B <= colA_maxValue" condition for index lookup
-      case EqualTo(value: Expression, attribute: AttributeReference) if isSimpleExpression(value) =>
-        getTargetIndexedColName(attribute, indexSchema)
-          .map(colName => colContainsValuesEqualTo(colName, value))
+      case EqualTo(valueExpr: Expression, sourceExpr @ AttributeExpression(attrRef)) if isSimpleExpression(valueExpr) =>
+        getTargetIndexedColName(attrRef, indexSchema)
+          .map { colName =>
+            // NOTE: Since we're supporting (almost) arbitrary expressions of the form `f(colA) = B`, we have to
+            //       appropriately translate such original expression targeted at Data Table, to corresponding
+            //       expression targeted at Column Stats Index Table. For that, we take original expression holding
+            //       [[AttributeReference]] referring to the Data Table, and swap it w/ expression referring to
+            //       corresponding column in the Column Stats Index
+            val targetExprBuilder = swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            genColumnValuesEqualToExpression(colName, valueExpr, targetExprBuilder)
+          }
 
       // Filter "colA != B"
-      // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
-      //       [[Expression#foldable]] returns true for)
       //
       // Translates to "NOT(colA_minValue = B AND colA_maxValue = B)"
       // NOTE: This is NOT an inversion of `colA = b`
       case Not(EqualTo(attribute: AttributeReference, value: Expression)) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
-          .map(colName => Not(colContainsOnlyValuesEqualTo(colName, value)))
+          .map(colName => Not(genColumnOnlyValuesEqualToExpression(colName, value)))
 
       // Filter "B != colA"
       // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
@@ -115,13 +106,13 @@ object DataSkippingUtils extends Logging {
       // NOTE: This is NOT an inversion of `colA = b`
       case Not(EqualTo(value: Expression, attribute: AttributeReference)) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
-          .map(colName => Not(colContainsOnlyValuesEqualTo(colName, value)))
+          .map(colName => Not(genColumnOnlyValuesEqualToExpression(colName, value)))
 
       // Filter "colA = null"
       // Translates to "colA_num_nulls = null" for index lookup
-      case equalNullSafe @ EqualNullSafe(_: AttributeReference, _ @ Literal(null, _)) =>
-        getTargetIndexedColName(equalNullSafe.left, indexSchema)
-          .map(colName => EqualTo(numNulls(colName), equalNullSafe.right))
+      case EqualNullSafe(attrRef: AttributeReference, litNull @ Literal(null, _)) =>
+        getTargetIndexedColName(attrRef, indexSchema)
+          .map(colName => EqualTo(genColNumNullsExpr(colName), litNull))
 
       // Filter "colA < B"
       // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
@@ -130,7 +121,7 @@ object DataSkippingUtils extends Logging {
       // Translates to "colA_minValue < B" for index lookup
       case LessThan(attribute: AttributeReference, value: Expression) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
-          .map(colName => LessThan(minValue(colName), value))
+          .map(colName => LessThan(genColMinValueExpr(colName), value))
 
       // Filter "B > colA"
       // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
@@ -139,7 +130,7 @@ object DataSkippingUtils extends Logging {
       // Translates to "B > colA_minValue" for index lookup
       case GreaterThan(value: Expression, attribute: AttributeReference) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
-          .map(colName => LessThan(minValue(colName), value))
+          .map(colName => LessThan(genColMinValueExpr(colName), value))
 
       // Filter "B < colA"
       // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
@@ -148,7 +139,7 @@ object DataSkippingUtils extends Logging {
       // Translates to "B < colA_maxValue" for index lookup
       case LessThan(value: Expression, attribute: AttributeReference) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
-          .map(colName => GreaterThan(maxValue(colName), value))
+          .map(colName => GreaterThan(genColMaxValueExpr(colName), value))
 
       // Filter "colA > B"
       // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
@@ -157,7 +148,7 @@ object DataSkippingUtils extends Logging {
       // Translates to "colA_maxValue > B" for index lookup
       case GreaterThan(attribute: AttributeReference, value: Expression) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
-          .map(colName => GreaterThan(maxValue(colName), value))
+          .map(colName => GreaterThan(genColMaxValueExpr(colName), value))
 
       // Filter "colA <= B"
       // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
@@ -166,7 +157,7 @@ object DataSkippingUtils extends Logging {
       // Translates to "colA_minValue <= B" for index lookup
       case LessThanOrEqual(attribute: AttributeReference, value: Expression) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
-          .map(colName => LessThanOrEqual(minValue(colName), value))
+          .map(colName => LessThanOrEqual(genColMinValueExpr(colName), value))
 
       // Filter "B >= colA"
       // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
@@ -175,7 +166,7 @@ object DataSkippingUtils extends Logging {
       // Translates to "B >= colA_minValue" for index lookup
       case GreaterThanOrEqual(value: Expression, attribute: AttributeReference) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
-          .map(colName => LessThanOrEqual(minValue(colName), value))
+          .map(colName => LessThanOrEqual(genColMinValueExpr(colName), value))
 
       // Filter "B <= colA"
       // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
@@ -184,7 +175,7 @@ object DataSkippingUtils extends Logging {
       // Translates to "B <= colA_maxValue" for index lookup
       case LessThanOrEqual(value: Expression, attribute: AttributeReference) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
-          .map(colName => GreaterThanOrEqual(maxValue(colName), value))
+          .map(colName => GreaterThanOrEqual(genColMaxValueExpr(colName), value))
 
       // Filter "colA >= B"
       // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
@@ -193,19 +184,19 @@ object DataSkippingUtils extends Logging {
       // Translates to "colA_maxValue >= B" for index lookup
       case GreaterThanOrEqual(attribute: AttributeReference, value: Expression) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
-          .map(colName => GreaterThanOrEqual(maxValue(colName), value))
+          .map(colName => GreaterThanOrEqual(genColMaxValueExpr(colName), value))
 
       // Filter "colA is null"
       // Translates to "colA_num_nulls > 0" for index lookup
       case IsNull(attribute: AttributeReference) =>
         getTargetIndexedColName(attribute, indexSchema)
-          .map(colName => GreaterThan(numNulls(colName), Literal(0)))
+          .map(colName => GreaterThan(genColNumNullsExpr(colName), Literal(0)))
 
       // Filter "colA is not null"
       // Translates to "colA_num_nulls = 0" for index lookup
       case IsNotNull(attribute: AttributeReference) =>
         getTargetIndexedColName(attribute, indexSchema)
-          .map(colName => EqualTo(numNulls(colName), Literal(0)))
+          .map(colName => EqualTo(genColNumNullsExpr(colName), Literal(0)))
 
       // Filter "colA in (B1, B2, ...)"
       // NOTE: B1, ... , BN could be an arbitrary _foldable_ expressions (ie expression that is defined as the one
@@ -217,7 +208,7 @@ object DataSkippingUtils extends Logging {
       case In(attribute: AttributeReference, list: Seq[Expression]) if list.forall(_.foldable) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName =>
-            list.map { lit => colContainsValuesEqualTo(colName, lit) }.reduce(Or)
+            list.map { lit => genColumnValuesEqualToExpression(colName, lit) }.reduce(Or)
           )
 
       // Filter "colA not in (B1, B2, ...)"
@@ -230,7 +221,7 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName =>
             Not(
-              list.map { lit => colContainsOnlyValuesEqualTo(colName, lit) }.reduce(Or)
+              list.map { lit => genColumnOnlyValuesEqualToExpression(colName, lit) }.reduce(Or)
             )
           )
 
@@ -240,17 +231,17 @@ object DataSkippingUtils extends Logging {
       // NOTE: Since a) this operator matches strings by prefix and b) given that this column is going to be ordered
       //       lexicographically, we essentially need to check that provided literal falls w/in min/max bounds of the
       //       given column
-      case StartsWith(attribute, v @ Literal(_: UTF8String, _)) =>
+      case StartsWith(attribute: AttributeReference, v @ Literal(_: UTF8String, _)) =>
         getTargetIndexedColName(attribute, indexSchema)
-          .map(colName => colContainsValuesEqualTo(colName, v))
+          .map(colName => genColumnValuesEqualToExpression(colName, v))
 
       // Filter "colA not like 'xxx%'"
       // Translates to "NOT(colA_minValue like 'xxx%' AND colA_maxValue like 'xxx%')" for index lookup
       // NOTE: This is NOT an inversion of "colA like xxx"
-      case Not(StartsWith(attribute, value @ Literal(_: UTF8String, _))) =>
+      case Not(StartsWith(attribute: AttributeReference, value @ Literal(_: UTF8String, _))) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName =>
-            Not(And(StartsWith(minValue(colName), value), StartsWith(maxValue(colName), value)))
+            Not(And(StartsWith(genColMinValueExpr(colName), value), StartsWith(genColMaxValueExpr(colName), value)))
           )
 
       case or: Or =>
@@ -290,7 +281,7 @@ object DataSkippingUtils extends Logging {
       .forall(stat => indexSchema.exists(_.name == stat))
   }
 
-  private def getTargetIndexedColName(resolvedExpr: Expression, indexSchema: StructType): Option[String] = {
+  private def getTargetIndexedColName(resolvedExpr: AttributeReference, indexSchema: StructType): Option[String] = {
     val colName = UnresolvedAttribute(getTargetColNameParts(resolvedExpr)).name
 
     // Verify that the column is indexed
@@ -301,14 +292,6 @@ object DataSkippingUtils extends Logging {
     }
   }
 
-  // This check is used to validate that the expression that target column is compared against
-  //    a) Has no references to other attributes (for ex, columns)
-  //    b) Does not contain sub-queries
-  //
-  // This in turn allows us to be certain that Spark will be able to evaluate such expression
-  // against Column Stats Index as well
-  private def isSimpleExpression(expr: Expression): Boolean =
-    expr.references.isEmpty && !SubqueryExpression.hasSubquery(expr)
 
   private def getTargetColNameParts(resolvedTargetCol: Expression): Seq[String] = {
     resolvedTargetCol match {
@@ -322,3 +305,58 @@ object DataSkippingUtils extends Logging {
     }
   }
 }
+
+private object ColumnStatsExpressionUtils {
+
+  def genColMinValueExpr(colName: String): Expression =
+    col(getMinColumnNameFor(colName)).expr
+  def genColMaxValueExpr(colName: String): Expression =
+    col(getMaxColumnNameFor(colName)).expr
+  def genColNumNullsExpr(colName: String): Expression =
+    col(getNumNullsColumnNameFor(colName)).expr
+
+  // This check is used to validate that the expression that target column is compared against
+  //    a) Has no references to other attributes (for ex, columns)
+  //    b) Does not contain sub-queries
+  //
+  // This in turn allows us to be certain that Spark will be able to evaluate such expression
+  // against Column Stats Index as well
+  def isSimpleExpression(expr: Expression): Boolean =
+    expr.references.isEmpty && !SubqueryExpression.hasSubquery(expr)
+
+  object AttributeExpression {
+    def unapply(expr: Expression): Option[AttributeReference] =
+      if (SubqueryExpression.hasSubquery(expr) || expr.references.size != 1) {
+        None
+      } else {
+        expr.references.head match {
+          case attrRef: AttributeReference => Some(attrRef)
+          case _ => None
+        }
+      }
+  }
+
+  def swapAttributeRefInExpr(sourceExpr: Expression, from: AttributeReference, to: Expression): Expression = {
+    sourceExpr.transformDownWithPruning(_.containsAnyPattern(ATTRIBUTE_REFERENCE)) {
+      case attrRef: AttributeReference if attrRef.sameRef(from) => to
+    }
+  }
+
+  def genColumnValuesEqualToExpression(colName: String, value: Expression, targetExprBuilder: Function[Expression, Expression] = Predef.identity): Expression = {
+    // TODO clean up
+    checkState(isSimpleExpression(value))
+
+    val minValueExpr = targetExprBuilder.apply(genColMinValueExpr(colName))
+    val maxValueExpr = targetExprBuilder.apply(genColMaxValueExpr(colName))
+    // Only case when column C contains value V is when min(C) <= V <= max(c)
+    And(LessThanOrEqual(minValueExpr, value), GreaterThanOrEqual(maxValueExpr, value))
+  }
+
+  def genColumnOnlyValuesEqualToExpression(colName: String, value: Expression): Expression = {
+    // TODO clean up
+    checkState(isSimpleExpression(value))
+    // Only case when column C contains _only_ value V is when min(C) = V AND max(c) = V
+    And(EqualTo(genColMinValueExpr(colName), value), EqualTo(genColMaxValueExpr(colName), value))
+  }
+}
+
