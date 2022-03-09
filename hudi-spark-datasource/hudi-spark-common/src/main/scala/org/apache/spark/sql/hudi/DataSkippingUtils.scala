@@ -64,8 +64,7 @@ object DataSkippingUtils extends Logging {
   private def tryComposeIndexFilterExpr(sourceExpr: Expression, indexSchema: StructType): Option[Expression] = {
     sourceExpr match {
       // Filter "colA = B" and "B = colA"
-      //
-      // Translates to "colA_minValue <= B AND B <= colA_maxValue" condition for index lookup
+      // Translates to "(colA_minValue <= B) AND (B <= colA_maxValue)" condition for index lookup
       case EqualTo(sourceExpr @ AttributeExpression(attrRef), valueExpr: Expression) if isSimpleExpression(valueExpr) =>
         getTargetIndexedColName(attrRef, indexSchema)
           .map { colName =>
@@ -91,19 +90,13 @@ object DataSkippingUtils extends Logging {
           }
 
       // Filter "colA != B"
-      //
       // Translates to "NOT(colA_minValue = B AND colA_maxValue = B)"
-      // NOTE: This is NOT an inversion of `colA = b`
+      // NOTE: This is NOT an inversion of `colA = b`, instead this filter ONLY excludes files for which `colA = B`
+      //       holds true
       case Not(EqualTo(attribute: AttributeReference, value: Expression)) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => Not(genColumnOnlyValuesEqualToExpression(colName, value)))
 
-      // Filter "B != colA"
-      // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
-      //       [[Expression#foldable]] returns true for)
-      //
-      // Translates to "NOT(colA_minValue = B AND colA_maxValue = B)"
-      // NOTE: This is NOT an inversion of `colA = b`
       case Not(EqualTo(value: Expression, attribute: AttributeReference)) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => Not(genColumnOnlyValuesEqualToExpression(colName, value)))
@@ -114,74 +107,42 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColName(attrRef, indexSchema)
           .map(colName => EqualTo(genColNumNullsExpr(colName), litNull))
 
-      // Filter "colA < B"
-      // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
-      //       [[Expression#foldable]] returns true for)
-      //
+      // Filter "colA < B" and "B > colA"
       // Translates to "colA_minValue < B" for index lookup
       case LessThan(attribute: AttributeReference, value: Expression) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => LessThan(genColMinValueExpr(colName), value))
 
-      // Filter "B > colA"
-      // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
-      //       [[Expression#foldable]] returns true for)
-      //
-      // Translates to "B > colA_minValue" for index lookup
       case GreaterThan(value: Expression, attribute: AttributeReference) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => LessThan(genColMinValueExpr(colName), value))
 
-      // Filter "B < colA"
-      // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
-      //       [[Expression#foldable]] returns true for)
-      //
+      // Filter "B < colA" and "colA > B"
       // Translates to "B < colA_maxValue" for index lookup
       case LessThan(value: Expression, attribute: AttributeReference) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => GreaterThan(genColMaxValueExpr(colName), value))
 
-      // Filter "colA > B"
-      // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
-      //       [[Expression#foldable]] returns true for)
-      //
-      // Translates to "colA_maxValue > B" for index lookup
       case GreaterThan(attribute: AttributeReference, value: Expression) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => GreaterThan(genColMaxValueExpr(colName), value))
 
-      // Filter "colA <= B"
-      // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
-      //       [[Expression#foldable]] returns true for)
-      //
+      // Filter "colA <= B" and "B >= colA"
       // Translates to "colA_minValue <= B" for index lookup
       case LessThanOrEqual(attribute: AttributeReference, value: Expression) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => LessThanOrEqual(genColMinValueExpr(colName), value))
 
-      // Filter "B >= colA"
-      // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
-      //       [[Expression#foldable]] returns true for)
-      //
-      // Translates to "B >= colA_minValue" for index lookup
       case GreaterThanOrEqual(value: Expression, attribute: AttributeReference) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => LessThanOrEqual(genColMinValueExpr(colName), value))
 
-      // Filter "B <= colA"
-      // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
-      //       [[Expression#foldable]] returns true for)
-      //
+      // Filter "B <= colA" and "colA >= B"
       // Translates to "B <= colA_maxValue" for index lookup
       case LessThanOrEqual(value: Expression, attribute: AttributeReference) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => GreaterThanOrEqual(genColMaxValueExpr(colName), value))
 
-      // Filter "colA >= B"
-      // NOTE: B could be an arbitrary _foldable_ expression (ie expression that is defined as the one
-      //       [[Expression#foldable]] returns true for)
-      //
-      // Translates to "colA_maxValue >= B" for index lookup
       case GreaterThanOrEqual(attribute: AttributeReference, value: Expression) if isSimpleExpression(value) =>
         getTargetIndexedColName(attribute, indexSchema)
           .map(colName => GreaterThanOrEqual(genColMaxValueExpr(colName), value))
