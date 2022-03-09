@@ -322,6 +322,12 @@ public class DataSourceUtils {
     if (props.containsKey(HiveExternalCatalog.CREATED_SPARK_VERSION())) {
       hiveSyncConfig.sparkVersion = props.getString(HiveExternalCatalog.CREATED_SPARK_VERSION());
     }
+    hiveSyncConfig.customMorTableName =
+            Boolean.valueOf(props.getString(DataSourceWriteOptions.ENABLE_CUSTOM_MOR_TABLENAME().key(), DataSourceWriteOptions.ENABLE_CUSTOM_MOR_TABLENAME().defaultValue()));
+    hiveSyncConfig.customROTableName =
+            props.getString(DataSourceWriteOptions.CUSTOM_RO_TABLENAME().key(), DataSourceWriteOptions.CUSTOM_RO_TABLENAME().defaultValue());
+    hiveSyncConfig.customRTTableName =
+            props.getString(DataSourceWriteOptions.CUSTOM_RT_TABLENAME().key(), DataSourceWriteOptions.CUSTOM_RT_TABLENAME().defaultValue());
     return hiveSyncConfig;
   }
 
