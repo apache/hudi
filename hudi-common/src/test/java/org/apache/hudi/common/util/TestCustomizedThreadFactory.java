@@ -29,7 +29,7 @@ import java.util.concurrent.locks.LockSupport;
 class TestCustomizedThreadFactory {
 
   @Test
-  public void threadPrefixTest() throws ExecutionException, InterruptedException {
+  public void testThreadPrefix() throws ExecutionException, InterruptedException {
     int nThreads = 100;
     String threadNamePrefix = "consumer";
     ExecutorService executorService = Executors.newFixedThreadPool(nThreads, new CustomizedThreadFactory(threadNamePrefix));
@@ -45,7 +45,7 @@ class TestCustomizedThreadFactory {
   }
 
   @Test
-  public void defaultThreadPrefixTest() throws ExecutionException, InterruptedException {
+  public void testDefaultThreadPrefix() throws ExecutionException, InterruptedException {
     int nThreads = 100;
     String defaultThreadNamePrefix = "pool-1";
     ExecutorService executorService = Executors.newFixedThreadPool(nThreads, new CustomizedThreadFactory());
@@ -61,7 +61,7 @@ class TestCustomizedThreadFactory {
   }
 
   @Test
-  public void daemonThreadTest() throws ExecutionException, InterruptedException {
+  public void testDaemonThread() throws ExecutionException, InterruptedException {
     int nThreads = 100;
     String threadNamePrefix = "consumer";
     ExecutorService executorService = Executors.newFixedThreadPool(nThreads, new CustomizedThreadFactory(threadNamePrefix, true));
