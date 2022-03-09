@@ -208,11 +208,6 @@
                     <exclude>META-INF/*.SF</exclude>
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.RSA</exclude>
-                    <exclude>META-INF/maven/com.google.protobuf/**</exclude>
-                    <excldue>META-INF/maven/commons-io/**</excldue>
-                    <exclude>META-INF/maven/org.apache.hbase/**</exclude>
-                    <exclude>META-INF/maven/org.apache.hbase.thirdparty/**</exclude>
-                    <exclude>META-INF/maven/org.apache.htrace/**</exclude>
                     <exclude>META-INF/services/javax.*</exclude>
                     <exclude>**/*.proto</exclude>
                     <exclude>hbase-webapps/**</exclude>
@@ -227,7 +222,7 @@
     </plugins>
     <resources>
       <resource>
-        <directory>src/main/resources</directory>
+        <directory>../../hudi-common/src/main/resour</directory>
       </resource>
       <resource>
         <directory>src/test/resources</directory>
