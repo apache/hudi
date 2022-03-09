@@ -22,26 +22,38 @@ import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql.catalyst.expressions.{Expression, Not}
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.hudi.DataSkippingUtils
-import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType, VarcharType}
-import org.apache.spark.sql.{Column, HoodieCatalystExpressionUtils, SparkSession}
+import org.apache.spark.sql.types._
+import org.apache.spark.sql.{Column, HoodieCatalystExpressionUtils, Row, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
+import java.sql.Timestamp
 import scala.collection.JavaConverters._
 
 // NOTE: Only A, B columns are indexed
 case class IndexRow(
   file: String,
-  A_minValue: Long,
-  A_maxValue: Long,
-  A_num_nulls: Long,
+
+  // Corresponding A column is LongType
+  A_minValue: Long = -1,
+  A_maxValue: Long = -1,
+  A_num_nulls: Long = -1,
+
+  // Corresponding B column is StringType
   B_minValue: String = null,
   B_maxValue: String = null,
-  B_num_nulls: Long = -1
-)
+  B_num_nulls: Long = -1,
+
+  // Corresponding B column is TimestampType
+  C_minValue: Timestamp = null,
+  C_maxValue: Timestamp = null,
+  C_num_nulls: Long = -1
+) {
+  def toRow = Row(productIterator.toSeq: _*)
+}
 
 class TestDataSkippingUtils extends HoodieClientTestBase {
 
@@ -53,17 +65,18 @@ class TestDataSkippingUtils extends HoodieClientTestBase {
     spark = sqlContext.sparkSession
   }
 
-  val indexedCols = Seq("A", "B")
-  val sourceTableSchema =
+  val indexedCols: Seq[String] = Seq("A", "B", "C")
+  val sourceTableSchema: StructType =
     StructType(
       Seq(
         StructField("A", LongType),
         StructField("B", StringType),
-        StructField("C", VarcharType(32))
+        StructField("C", TimestampType),
+        StructField("D", VarcharType(32))
       )
     )
 
-  val indexSchema =
+  val indexSchema: StructType =
     ColumnStatsIndexHelper.composeIndexSchema(
       sourceTableSchema.fields.toSeq
         .filter(f => indexedCols.contains(f.name))
@@ -71,15 +84,17 @@ class TestDataSkippingUtils extends HoodieClientTestBase {
     )
 
   @ParameterizedTest
-  @MethodSource(Array("testBaseLookupFilterExpressionsSource", "testAdvancedLookupFilterExpressionsSource"))
+  @MethodSource(
+    Array(
+        "testBasicLookupFilterExpressionsSource",
+        "testAdvancedLookupFilterExpressionsSource",
+        "testFunctionalFilterExpressionsSource"
+    ))
   def testLookupFilterExpressions(sourceExpr: String, input: Seq[IndexRow], output: Seq[String]): Unit = {
     val resolvedExpr: Expression = HoodieCatalystExpressionUtils.resolveFilterExpr(spark, sourceExpr, sourceTableSchema)
     val lookupFilter = DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(resolvedExpr, indexSchema)
 
-    val spark2 = spark
-    import spark2.implicits._
-
-    val indexDf = spark.createDataset(input)
+    val indexDf = spark.createDataFrame(input.map(_.toRow).asJava, indexSchema)
 
     val rows = indexDf.where(new Column(lookupFilter))
       .select("file")
@@ -134,7 +149,7 @@ object TestDataSkippingUtils {
     )
   }
 
-  def testBaseLookupFilterExpressionsSource(): java.util.stream.Stream[Arguments] = {
+  def testBasicLookupFilterExpressionsSource(): java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
       // TODO cases
       //    A = null
@@ -316,8 +331,8 @@ object TestDataSkippingUtils {
         Seq("file_1", "file_2", "file_3")),
 
       arguments(
-        // Queries contains expression involving non-indexed column C
-        "A = 0 AND B = 'abc' AND C = '...'",
+        // Queries contains expression involving non-indexed column D
+        "A = 0 AND B = 'abc' AND D = '...'",
         Seq(
           IndexRow("file_1", 1, 2, 0),
           IndexRow("file_2", -1, 1, 0),
@@ -327,8 +342,8 @@ object TestDataSkippingUtils {
         Seq("file_4")),
 
       arguments(
-        // Queries contains expression involving non-indexed column C
-        "A = 0 OR B = 'abc' OR C = '...'",
+        // Queries contains expression involving non-indexed column D
+        "A = 0 OR B = 'abc' OR D = '...'",
         Seq(
           IndexRow("file_1", 1, 2, 0),
           IndexRow("file_2", -1, 1, 0),
@@ -336,6 +351,41 @@ object TestDataSkippingUtils {
           IndexRow("file_4", 0, 0, 0, "aaa", "xyz", 0) // might contain B = 'abc'
         ),
         Seq("file_1", "file_2", "file_3", "file_4"))
+    )
+  }
+
+  def testFunctionalFilterExpressionsSource(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      arguments(
+        // Queries contains expression involving non-indexed column C
+        "date_format(C, 'MM/dd/yyyy') = '03/06/2022'",
+        Seq(
+          IndexRow("file_1",
+            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
+            C_num_nulls = 0),
+          IndexRow("file_2",
+            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/07/2022
+            C_num_nulls = 0)
+        ),
+        Seq("file_2")),
+
+      // TODO de-dupe
+      arguments(
+        // Queries contains expression involving non-indexed column C
+        "date_format(C, 'MM/dd/yyyy') = '03/06/2022'",
+        Seq(
+          IndexRow("file_1",
+            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
+            C_num_nulls = 0),
+          IndexRow("file_2",
+            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/07/2022
+            C_num_nulls = 0)
+        ),
+        Seq("file_2"))
     )
   }
 }
