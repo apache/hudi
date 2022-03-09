@@ -368,10 +368,16 @@ public class HoodieMetadataTableValidator implements Serializable {
 
       baseFilesUnderDeletion = pendingCleaningTimeline.getInstants().flatMap(instant -> {
         try {
+          if (instant.isInflight()) {
+            // convert inflight instant to requested and get clean plan
+            instant = new HoodieInstant(HoodieInstant.State.REQUESTED, instant.getAction(), instant.getTimestamp());
+          }
           HoodieCleanerPlan cleanerPlan = CleanerUtils.getCleanerPlan(metaClient, instant);
 
           return cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().flatMap(cleanerFIleInfoList -> {
-            return cleanerFIleInfoList.stream().map(HoodieCleanFileInfo::getFilePath);
+            return cleanerFIleInfoList.stream().map(fileInfo -> {
+              return new Path(fileInfo.getFilePath()).getName();
+            });
           });
 
         } catch (HoodieIOException ex) {
@@ -389,7 +395,10 @@ public class HoodieMetadataTableValidator implements Serializable {
           throw new HoodieIOException("Error reading cleaner metadata for " + instant);
         }
         // only take care of base files here.
-      }).filter(path -> path.contains(HoodieFileFormat.BASE_FILE_EXTENSIONS.toString())).collect(Collectors.toList());
+      }).filter(path -> {
+        String fileExtension = FSUtils.getFileExtension(path);
+        return HoodieFileFormat.BASE_FILE_EXTENSIONS.contains(fileExtension);
+      }).collect(Collectors.toList());
     }
 
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
@@ -590,7 +599,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           if (!fileSlice.getBaseFile().isPresent()) {
             return true;
           } else {
-            return !baseFilesUnderDeletion.contains(fileSlice.getBaseFile().get().getPath());
+            return !baseFilesUnderDeletion.contains(fileSlice.getBaseFile().get().getFileName());
           }
         }).collect(Collectors.toList());
   }
@@ -598,7 +607,7 @@ public class HoodieMetadataTableValidator implements Serializable {
   private List<HoodieBaseFile> filterBaseFileBasedOnUnderDeletionFiles(List<HoodieBaseFile> sortedBaseFileList, List<String> baseFilesUnderDeletion) {
     return sortedBaseFileList.stream()
         .filter(baseFile -> {
-          return !baseFilesUnderDeletion.contains(baseFile.getPath());
+          return !baseFilesUnderDeletion.contains(baseFile.getFileName());
         }).collect(Collectors.toList());
   }
 
