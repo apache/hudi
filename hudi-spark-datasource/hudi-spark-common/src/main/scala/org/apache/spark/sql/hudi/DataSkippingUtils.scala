@@ -17,16 +17,17 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hadoop.hive.ql.exec.vector.expressions.StringRTrim
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper.{getMaxColumnNameFor, getMinColumnNameFor, getNumNullsColumnNameFor}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
-import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, EqualNullSafe, EqualTo, Expression, ExtractValue, GetStructField, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith, SubqueryExpression}
+import org.apache.spark.sql.catalyst.expressions.{Add, Alias, And, Attribute, AttributeReference, BitwiseOr, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, EqualNullSafe, EqualTo, Exp, Expm1, Expression, ExtractValue, FromUTCTimestamp, FromUnixTime, GetStructField, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, Log, Log10, Log1p, Log2, Lower, Multiply, Not, Or, ParseToDate, ParseToTimestamp, ShiftLeft, ShiftRight, StartsWith, StringRPad, StringRepeat, StringTrimRight, SubqueryExpression, ToUTCTimestamp, ToUnixTimestamp, Upper}
 import org.apache.spark.sql.catalyst.trees.TreePattern.ATTRIBUTE_REFERENCE
 import org.apache.spark.sql.functions.col
-import org.apache.spark.sql.hudi.ColumnStatsExpressionUtils.{SingleAttributeExpression, genColMaxValueExpr, genColMinValueExpr, genColNumNullsExpr, genColumnOnlyValuesEqualToExpression, genColumnValuesEqualToExpression, isSimpleExpression, swapAttributeRefInExpr}
+import org.apache.spark.sql.hudi.ColumnStatsExpressionUtils.{AllowedTransformationExpression, genColMaxValueExpr, genColMinValueExpr, genColNumNullsExpr, genColumnOnlyValuesEqualToExpression, genColumnValuesEqualToExpression, isSimpleExpression, swapAttributeRefInExpr}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -62,10 +63,39 @@ object DataSkippingUtils extends Logging {
   }
 
   private def tryComposeIndexFilterExpr(sourceExpr: Expression, indexSchema: StructType): Option[Expression] = {
+    //
+    // For translation of the Filter Expression for the Data Table into Filter Expression for Column Stats Index, we're
+    // assuming that
+    //    - The column A is queried in the Data Table (hereafter referred to as "colA")
+    //    - Filter Expression is a relational expression (ie "=", "<", "<=", ...) of the following form
+    //
+    //      ```transform_expr(colA) = value_expr```
+    //
+    //      Where
+    //        - "transform_expr" is an expression of the _transformation_ which preserve ordering of the "colA"
+    //        - "value_expr" is an "value"-expression (ie one NOT referring to other attributes/columns or containing sub-queries)
+    //
+    // We translate original Filter Expr into the one querying Column Stats Index like following: let's consider
+    // equality Filter Expr referred to above:
+    //
+    //   ```transform_expr(colA) = value_expr```
+    //
+    // This expression will be translated into following Filter Expression for the Column Stats Index:
+    //
+    //   ```(transform_expr(colA_minValue) <= value_expr) AND (value_expr <= transform_expr(colA_maxValue))```
+    //
+    // Which will enable us to match files with the range of values in column A containing the target ```value_expr```
+    //
+    // NOTE: That we can apply ```transform_expr``` transformation precisely b/c it preserves the ordering of the
+    //       values of the source column, ie following holds true:
+    //
+    //       colA_minValue = min(colA)  =>  transform_expr(colA_minValue) = min(transform_expr(colA))
+    //       colA_maxValue = max(colA)  =>  transform_expr(colA_maxValue) = max(transform_expr(colA))
+    //
     sourceExpr match {
       // Filter "expr(colA) = B" and "B = expr(colA)"
       // Translates to "(expr(colA_minValue) <= B) AND (B <= expr(colA_maxValue))" condition for index lookup
-      case EqualTo(sourceExpr @ SingleAttributeExpression(attrRef), valueExpr: Expression) if isSimpleExpression(valueExpr) =>
+      case EqualTo(sourceExpr @ AllowedTransformationExpression(attrRef), valueExpr: Expression) if isSimpleExpression(valueExpr) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             // NOTE: Since we're supporting (almost) arbitrary expressions of the form `f(colA) = B`, we have to
@@ -77,7 +107,7 @@ object DataSkippingUtils extends Logging {
             genColumnValuesEqualToExpression(colName, valueExpr, targetExprBuilder)
           }
 
-      case EqualTo(valueExpr: Expression, sourceExpr @ SingleAttributeExpression(attrRef)) if isSimpleExpression(valueExpr) =>
+      case EqualTo(valueExpr: Expression, sourceExpr @ AllowedTransformationExpression(attrRef)) if isSimpleExpression(valueExpr) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder = swapAttributeRefInExpr(sourceExpr, attrRef, _)
@@ -88,14 +118,14 @@ object DataSkippingUtils extends Logging {
       // Translates to "NOT(expr(colA_minValue) = B AND expr(colA_maxValue) = B)"
       // NOTE: This is NOT an inversion of `colA = b`, instead this filter ONLY excludes files for which `colA = B`
       //       holds true
-      case Not(EqualTo(sourceExpr @ SingleAttributeExpression(attrRef), value: Expression)) if isSimpleExpression(value) =>
+      case Not(EqualTo(sourceExpr @ AllowedTransformationExpression(attrRef), value: Expression)) if isSimpleExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             Not(genColumnOnlyValuesEqualToExpression(colName, value, targetExprBuilder))
           }
 
-      case Not(EqualTo(value: Expression, sourceExpr @ SingleAttributeExpression(attrRef))) if isSimpleExpression(value) =>
+      case Not(EqualTo(value: Expression, sourceExpr @ AllowedTransformationExpression(attrRef))) if isSimpleExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder = swapAttributeRefInExpr(sourceExpr, attrRef, _)
@@ -110,14 +140,14 @@ object DataSkippingUtils extends Logging {
 
       // Filter "expr(colA) < B" and "B > expr(colA)"
       // Translates to "expr(colA_minValue) < B" for index lookup
-      case LessThan(sourceExpr @ SingleAttributeExpression(attrRef), value: Expression) if isSimpleExpression(value) =>
+      case LessThan(sourceExpr @ AllowedTransformationExpression(attrRef), value: Expression) if isSimpleExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             LessThan(targetExprBuilder.apply(genColMinValueExpr(colName)), value)
           }
 
-      case GreaterThan(value: Expression, sourceExpr @ SingleAttributeExpression(attrRef)) if isSimpleExpression(value) =>
+      case GreaterThan(value: Expression, sourceExpr @ AllowedTransformationExpression(attrRef)) if isSimpleExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder = swapAttributeRefInExpr(sourceExpr, attrRef, _)
@@ -126,14 +156,14 @@ object DataSkippingUtils extends Logging {
 
       // Filter "B < expr(colA)" and "expr(colA) > B"
       // Translates to "B < colA_maxValue" for index lookup
-      case LessThan(value: Expression, sourceExpr @ SingleAttributeExpression(attrRef)) if isSimpleExpression(value) =>
+      case LessThan(value: Expression, sourceExpr @ AllowedTransformationExpression(attrRef)) if isSimpleExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             GreaterThan(targetExprBuilder.apply(genColMaxValueExpr(colName)), value)
           }
 
-      case GreaterThan(sourceExpr @ SingleAttributeExpression(attrRef), value: Expression) if isSimpleExpression(value) =>
+      case GreaterThan(sourceExpr @ AllowedTransformationExpression(attrRef), value: Expression) if isSimpleExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder = swapAttributeRefInExpr(sourceExpr, attrRef, _)
@@ -142,14 +172,14 @@ object DataSkippingUtils extends Logging {
 
       // Filter "expr(colA) <= B" and "B >= expr(colA)"
       // Translates to "colA_minValue <= B" for index lookup
-      case LessThanOrEqual(sourceExpr @ SingleAttributeExpression(attrRef), value: Expression) if isSimpleExpression(value) =>
+      case LessThanOrEqual(sourceExpr @ AllowedTransformationExpression(attrRef), value: Expression) if isSimpleExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             LessThanOrEqual(targetExprBuilder.apply(genColMinValueExpr(colName)), value)
           }
 
-      case GreaterThanOrEqual(value: Expression, sourceExpr @ SingleAttributeExpression(attrRef)) if isSimpleExpression(value) =>
+      case GreaterThanOrEqual(value: Expression, sourceExpr @ AllowedTransformationExpression(attrRef)) if isSimpleExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder = swapAttributeRefInExpr(sourceExpr, attrRef, _)
@@ -158,14 +188,14 @@ object DataSkippingUtils extends Logging {
 
       // Filter "B <= expr(colA)" and "expr(colA) >= B"
       // Translates to "B <= colA_maxValue" for index lookup
-      case LessThanOrEqual(value: Expression, sourceExpr @ SingleAttributeExpression(attrRef)) if isSimpleExpression(value) =>
+      case LessThanOrEqual(value: Expression, sourceExpr @ AllowedTransformationExpression(attrRef)) if isSimpleExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             GreaterThanOrEqual(targetExprBuilder.apply(genColMaxValueExpr(colName)), value)
           }
 
-      case GreaterThanOrEqual(sourceExpr @ SingleAttributeExpression(attrRef), value: Expression) if isSimpleExpression(value) =>
+      case GreaterThanOrEqual(sourceExpr @ AllowedTransformationExpression(attrRef), value: Expression) if isSimpleExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder = swapAttributeRefInExpr(sourceExpr, attrRef, _)
@@ -188,7 +218,7 @@ object DataSkippingUtils extends Logging {
       // Translates to "(colA_minValue <= B1 AND colA_maxValue >= B1) OR (colA_minValue <= B2 AND colA_maxValue >= B2) ... "
       // for index lookup
       // NOTE: This is equivalent to "colA = B1 OR colA = B2 OR ..."
-      case In(sourceExpr @ SingleAttributeExpression(attrRef), list: Seq[Expression]) if list.forall(isSimpleExpression) =>
+      case In(sourceExpr @ AllowedTransformationExpression(attrRef), list: Seq[Expression]) if list.forall(isSimpleExpression) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder = swapAttributeRefInExpr(sourceExpr, attrRef, _)
@@ -198,7 +228,7 @@ object DataSkippingUtils extends Logging {
       // Filter "expr(colA) not in (B1, B2, ...)"
       // Translates to "NOT((colA_minValue = B1 AND colA_maxValue = B1) OR (colA_minValue = B2 AND colA_maxValue = B2))" for index lookup
       // NOTE: This is NOT an inversion of `in (B1, B2, ...)` expr, this is equivalent to "colA != B1 AND colA != B2 AND ..."
-      case Not(In(sourceExpr @ SingleAttributeExpression(attrRef), list: Seq[Expression])) if list.forall(_.foldable) =>
+      case Not(In(sourceExpr @ AllowedTransformationExpression(attrRef), list: Seq[Expression])) if list.forall(_.foldable) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder = swapAttributeRefInExpr(sourceExpr, attrRef, _)
@@ -211,7 +241,7 @@ object DataSkippingUtils extends Logging {
       // NOTE: Since a) this operator matches strings by prefix and b) given that this column is going to be ordered
       //       lexicographically, we essentially need to check that provided literal falls w/in min/max bounds of the
       //       given column
-      case StartsWith(sourceExpr @ SingleAttributeExpression(attrRef), v @ Literal(_: UTF8String, _)) =>
+      case StartsWith(sourceExpr @ AllowedTransformationExpression(attrRef), v @ Literal(_: UTF8String, _)) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder = swapAttributeRefInExpr(sourceExpr, attrRef, _)
@@ -221,7 +251,7 @@ object DataSkippingUtils extends Logging {
       // Filter "expr(colA) not like 'xxx%'"
       // Translates to "NOT(expr(colA_minValue) like 'xxx%' AND expr(colA_maxValue) like 'xxx%')" for index lookup
       // NOTE: This is NOT an inversion of "colA like xxx"
-      case Not(StartsWith(sourceExpr @ SingleAttributeExpression(attrRef), value @ Literal(_: UTF8String, _))) =>
+      case Not(StartsWith(sourceExpr @ AllowedTransformationExpression(attrRef), value @ Literal(_: UTF8String, _))) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder = swapAttributeRefInExpr(sourceExpr, attrRef, _)
@@ -320,17 +350,58 @@ private object ColumnStatsExpressionUtils {
    * <ol>
    *   <li>It references *exactly* 1 attribute (column)</li>
    *   <li>It does NOT contain sub-queries</li>
+   *   <li>It contains only whitelisted transformations that preserve ordering of the source column [1]</li>
    * </ol>
+   *
+   * [1] This is required to make sure that we can correspondingly map Column Stats Index values as well. Applying
+   * transformations that do not preserve the ordering might lead to incorrect results being returned by Data
+   * Skipping flow.
    *
    * Returns only [[AttributeReference]] contained as a sub-expression
    */
-  object SingleAttributeExpression {
+  object AllowedTransformationExpression {
     def unapply(expr: Expression): Option[AttributeReference] =
       if (SubqueryExpression.hasSubquery(expr) || expr.references.size != 1) {
         None
       } else {
-        expr.references.head match {
-          case attrRef: AttributeReference => Some(attrRef)
+        expr match {
+          // Date/Time Expressions
+          case DateFormatClass(attrRef: AttributeReference, _, _) => Some(attrRef)
+          case DateAdd(attrRef: AttributeReference, _) => Some(attrRef)
+          case DateSub(attrRef: AttributeReference, _) => Some(attrRef)
+          case DateDiff(attrRef: AttributeReference, _) => Some(attrRef)
+          case DateDiff(_, attrRef: AttributeReference) => Some(attrRef)
+          case FromUnixTime(attrRef: AttributeReference, _, _) => Some(attrRef)
+          case FromUTCTimestamp(attrRef: AttributeReference, _) => Some(attrRef)
+          case ParseToDate(attrRef: AttributeReference, _, _) => Some(attrRef)
+          case ParseToTimestamp(attrRef: AttributeReference, _, _, _) => Some(attrRef)
+          case ToUnixTimestamp(attrRef: AttributeReference, _, _, _) => Some(attrRef)
+          case ToUTCTimestamp(attrRef: AttributeReference, _) => Some(attrRef)
+          // String Expressions
+          case Lower(attrRef: AttributeReference) => Some(attrRef)
+          case Upper(attrRef: AttributeReference) => Some(attrRef)
+          case StringRepeat(attrRef: AttributeReference, _) => Some(attrRef)
+          case StringRPad(attrRef: AttributeReference, _, _) => Some(attrRef)
+          case org.apache.spark.sql.catalyst.expressions.Left(attrRef: AttributeReference, _, _) => Some(attrRef)
+          // Math Expressions
+          // Binary
+          case Add(attrRef: AttributeReference, _, _) => Some(attrRef)
+          case Add(_, attrRef: AttributeReference, _) => Some(attrRef)
+          case Multiply(attrRef: AttributeReference, _, _) => Some(attrRef)
+          case Multiply(_, attrRef: AttributeReference, _) => Some(attrRef)
+          case Divide(attrRef: AttributeReference, _, _) => Some(attrRef)
+          case BitwiseOr(attrRef: AttributeReference, _) => Some(attrRef)
+          case BitwiseOr(_, attrRef: AttributeReference) => Some(attrRef)
+          // Unary
+          case Exp(attrRef: AttributeReference) => Some(attrRef)
+          case Expm1(attrRef: AttributeReference) => Some(attrRef)
+          case Log(attrRef: AttributeReference) => Some(attrRef)
+          case Log10(attrRef: AttributeReference) => Some(attrRef)
+          case Log1p(attrRef: AttributeReference) => Some(attrRef)
+          case Log2(attrRef: AttributeReference) => Some(attrRef)
+          case ShiftLeft(attrRef: AttributeReference, _) => Some(attrRef)
+          case ShiftRight(attrRef: AttributeReference, _) => Some(attrRef)
+
           case _ => None
         }
       }
