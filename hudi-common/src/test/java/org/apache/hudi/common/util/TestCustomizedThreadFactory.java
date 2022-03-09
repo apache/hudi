@@ -26,7 +26,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.locks.LockSupport;
 
-class TestCustomizedThreadFactory {
+public class TestCustomizedThreadFactory {
 
   @Test
   public void testThreadPrefix() throws ExecutionException, InterruptedException {
