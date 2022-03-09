@@ -60,9 +60,9 @@ Next major release : [0.11.0](https://issues.apache.org/jira/projects/HUDI/versi
 
 |Feature|Target Release|Tracking|
 |------------|--------|-----------|
-|JDBC Incremental Source GA   |0.11|[HUDI-1859](https://issues.apache.org/jira/browse/HUDI-1859)|
 |Native support for AWS Glue Metastore   |0.11|[HUDI-2757](https://issues.apache.org/jira/browse/HUDI-2757)|
 |BigQuery and Snowflake external table integration   |0.11|[RFC-34](https://github.com/apache/hudi/pull/4503)|
+|JDBC Incremental Source GA   |0.12|[HUDI-1859](https://issues.apache.org/jira/browse/HUDI-1859)|
 |Mutable, CDC Stream support for Kafka Connect Sink   |0.12|[HUDI-2324](https://issues.apache.org/jira/browse/HUDI-2324)|
 |Airbyte integration   |0.12|RFC coming soon|
 |Apache Pulsar integration for Delta Streamer (blocked on upstream)   |0.12|[HUDI-246](https://issues.apache.org/jira/browse/HUDI-246)|
