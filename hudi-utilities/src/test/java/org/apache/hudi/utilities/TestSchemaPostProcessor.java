@@ -29,8 +29,6 @@ import org.apache.hudi.utilities.transform.FlatteningTransformer;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
-import org.apache.avro.SchemaBuilder;
-import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -39,6 +37,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class TestSchemaPostProcessor extends UtilitiesTestBase {
 
@@ -91,21 +90,36 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
   }
 
   @Test
+  public void testChainedSchemaPostProcessor() {
+    // DeleteSupportSchemaPostProcessor first, DummySchemaPostProcessor second
+    properties.put(Config.SCHEMA_POST_PROCESSOR_PROP,
+        "org.apache.hudi.utilities.schema.DeleteSupportSchemaPostProcessor,org.apache.hudi.utilities.DummySchemaPostProcessor");
+
+    SchemaPostProcessor processor = UtilHelpers.createSchemaPostProcessor(properties.getString(Config.SCHEMA_POST_PROCESSOR_PROP), properties, jsc);
+    Schema schema = new Schema.Parser().parse(ORIGINAL_SCHEMA);
+    Schema targetSchema = processor.processSchema(schema);
+
+    assertNull(targetSchema.getField("ums_id_"));
+    assertNull(targetSchema.getField("_hoodie_is_deleted"));
+    assertNotNull(targetSchema.getField("testString"));
+
+    // DummySchemaPostProcessor first, DeleteSupportSchemaPostProcessor second
+    properties.put(Config.SCHEMA_POST_PROCESSOR_PROP,
+        "org.apache.hudi.utilities.DummySchemaPostProcessor,org.apache.hudi.utilities.schema.DeleteSupportSchemaPostProcessor");
+
+    processor = UtilHelpers.createSchemaPostProcessor(properties.getString(Config.SCHEMA_POST_PROCESSOR_PROP), properties, jsc);
+    schema = new Schema.Parser().parse(ORIGINAL_SCHEMA);
+    targetSchema = processor.processSchema(schema);
+
+    assertNull(targetSchema.getField("ums_id_"));
+    assertNotNull(targetSchema.getField("_hoodie_is_deleted"));
+    assertNotNull(targetSchema.getField("testString"));
+  }
+
+  @Test
   public void testSparkAvroSchema() throws IOException {
     SparkAvroPostProcessor processor = new SparkAvroPostProcessor(properties, null);
     Schema schema = new Schema.Parser().parse(ORIGINAL_SCHEMA);
     assertEquals(processor.processSchema(schema).toString(), RESULT_SCHEMA);
-  }
-
-  public static class DummySchemaPostProcessor extends SchemaPostProcessor {
-
-    public DummySchemaPostProcessor(TypedProperties props, JavaSparkContext jssc) {
-      super(props, jssc);
-    }
-
-    @Override
-    public Schema processSchema(Schema schema) {
-      return SchemaBuilder.record("test").fields().optionalString("testString").endRecord();
-    }
   }
 }
