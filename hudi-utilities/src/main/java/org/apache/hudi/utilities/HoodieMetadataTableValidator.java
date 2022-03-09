@@ -19,7 +19,6 @@
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.async.HoodieAsyncService;
-import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.bloom.BloomFilter;
