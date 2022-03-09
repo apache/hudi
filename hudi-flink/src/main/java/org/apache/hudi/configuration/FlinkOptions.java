@@ -675,6 +675,18 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("INT64 with original type TIMESTAMP_MICROS is converted to hive timestamp type.\n"
           + "Disabled by default for backward compatibility.");
 
+  public static final ConfigOption<String> HIVE_SYNC_TABLE_PROPERTIES = ConfigOptions
+      .key("hive_sync.table_properties")
+      .stringType()
+      .noDefaultValue()
+      .withDescription("Additional properties to store with table, the data format is k1=v1\nk2=v2");
+
+  public static final ConfigOption<String> HIVE_SYNC_TABLE_SERDE_PROPERTIES = ConfigOptions
+      .key("hive_sync.serde_properties")
+      .stringType()
+      .noDefaultValue()
+      .withDescription("Serde properties to hive table, the data format is k1=v1\nk2=v2");
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
