@@ -189,7 +189,7 @@ public class Pipelines {
       boolean overwrite) {
     final boolean globalIndex = conf.getBoolean(FlinkOptions.INDEX_GLOBAL_ENABLED);
     if (overwrite || OptionsResolver.isBucketIndexType(conf)) {
-      return rowDataToHoodieRecord(conf, rowType, dataStream);
+      return rowDataToHoodieRecord(conf, rowType, dataStream, defaultParallelism);
     } else if (bounded && !globalIndex && OptionsResolver.isPartitionedTable(conf)) {
       return boundedBootstrap(conf, rowType, defaultParallelism, dataStream);
     } else {
@@ -203,7 +203,7 @@ public class Pipelines {
       int defaultParallelism,
       DataStream<RowData> dataStream,
       boolean bounded) {
-    DataStream<HoodieRecord> dataStream1 = rowDataToHoodieRecord(conf, rowType, dataStream);
+    DataStream<HoodieRecord> dataStream1 = rowDataToHoodieRecord(conf, rowType, dataStream, defaultParallelism);
 
     if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED) || bounded) {
       dataStream1 = dataStream1
@@ -233,7 +233,7 @@ public class Pipelines {
     dataStream = dataStream
         .keyBy(rowDataKeyGen::getPartitionPath);
 
-    return rowDataToHoodieRecord(conf, rowType, dataStream)
+    return rowDataToHoodieRecord(conf, rowType, dataStream, defaultParallelism)
         .transform(
             "batch_index_bootstrap",
             TypeInformation.of(HoodieRecord.class),
@@ -245,8 +245,9 @@ public class Pipelines {
   /**
    * Transforms the row data to hoodie records.
    */
-  public static DataStream<HoodieRecord> rowDataToHoodieRecord(Configuration conf, RowType rowType, DataStream<RowData> dataStream) {
-    return dataStream.map(RowDataToHoodieFunctions.create(rowType, conf), TypeInformation.of(HoodieRecord.class));
+  public static DataStream<HoodieRecord> rowDataToHoodieRecord(Configuration conf, RowType rowType, DataStream<RowData> dataStream, int defaultParallelism) {
+    return dataStream.map(RowDataToHoodieFunctions.create(rowType, conf), TypeInformation.of(HoodieRecord.class))
+            .setParallelism(conf.getOptional(FlinkOptions.HOODIE_ROECORD_MAP_TASKS).orElse(defaultParallelism));
   }
 
   /**

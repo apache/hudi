@@ -387,6 +387,12 @@ public class FlinkOptions extends HoodieConfig {
       .noDefaultValue()
       .withDescription("Parallelism of tasks that do bucket assign, default is the parallelism of the execution environment");
 
+  public static final ConfigOption<Integer> HOODIE_ROECORD_MAP_TASKS = ConfigOptions
+          .key("hoodie.record_map.tasks")
+          .intType()
+          .noDefaultValue()
+          .withDescription("Parallelism of tasks that convert row data to hoodie record, default is the parallelism of the execution environment");
+
   public static final ConfigOption<Integer> WRITE_TASKS = ConfigOptions
       .key("write.tasks")
       .intType()
