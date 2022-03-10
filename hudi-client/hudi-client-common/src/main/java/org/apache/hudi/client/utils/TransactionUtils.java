@@ -169,7 +169,7 @@ public class TransactionUtils {
   /**
    * Get pending clustering instant.
    * Notice:
-   *   we return .request instant here.
+   *   we return .requested instant here.
    *
    * @param metaClient
    * @return
