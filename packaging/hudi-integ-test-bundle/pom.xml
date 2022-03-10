@@ -62,9 +62,6 @@
                 <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
                   <resource>META-INF/services/org.apache.spark.sql.sources.DataSourceRegister</resource>
                 </transformer>
-                <transformer implementation="org.apache.maven.plugins.shade.resource.DontIncludeResourceTransformer">
-                  <resource>hbase-default.xml</resource>
-                </transformer>
               </transformers>
               <artifactSet>
                 <includes>
