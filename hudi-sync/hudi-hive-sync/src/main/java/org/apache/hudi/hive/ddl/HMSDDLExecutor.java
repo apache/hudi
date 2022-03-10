@@ -23,26 +23,21 @@ import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
-import org.apache.hudi.hive.PartitionValueExtractor;
 import org.apache.hudi.hive.util.HivePartitionUtil;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.common.StatsSetupConst;
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.TableType;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.EnvironmentContext;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hadoop.hive.metastore.api.SerDeInfo;
 import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.api.Table;
-import org.apache.hadoop.hive.ql.metadata.Hive;
-import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -58,24 +53,19 @@ import java.util.stream.Collectors;
 /**
  * DDLExecutor impl based on HMS which use HMS apis directly for all DDL tasks.
  */
-public class HMSDDLExecutor implements DDLExecutor {
+public class HMSDDLExecutor extends QueryBasedDDLExecutor {
   private static final Logger LOG = LogManager.getLogger(HMSDDLExecutor.class);
   private final HiveSyncConfig syncConfig;
-  private final PartitionValueExtractor partitionValueExtractor;
-  private final FileSystem fs;
-  private final IMetaStoreClient client;
+  private IMetaStoreClient client;
 
-  public HMSDDLExecutor(HiveConf conf, HiveSyncConfig syncConfig, FileSystem fs) throws HiveException, MetaException {
-    this.client = Hive.get(conf).getMSC();
+  @Override
+  public void runSQL(String sql) {
+
+  }
+
+  public HMSDDLExecutor(FileSystem fs, HiveSyncConfig syncConfig, IMetaStoreClient iMetaStoreClientOption) {
+    super(syncConfig, fs, iMetaStoreClientOption);
     this.syncConfig = syncConfig;
-    this.fs = fs;
-    try {
-      this.partitionValueExtractor =
-          (PartitionValueExtractor) Class.forName(syncConfig.partitionValueExtractorClass).newInstance();
-    } catch (Exception e) {
-      throw new HoodieHiveSyncException(
-          "Failed to initialize PartitionValueExtractor class " + syncConfig.partitionValueExtractorClass, e);
-    }
   }
 
   @Override
@@ -216,7 +206,7 @@ public class HMSDDLExecutor implements DDLExecutor {
         Path partitionPath = FSUtils.getPartitionPath(syncConfig.basePath, partition);
         String partitionScheme = partitionPath.toUri().getScheme();
         String fullPartitionPath = StorageSchemes.HDFS.getScheme().equals(partitionScheme)
-            ? FSUtils.getDFSFullPartitionPath(fs, partitionPath) : partitionPath.toString();
+            ? FSUtils.getDFSFullPartitionPath(getFs(), partitionPath) : partitionPath.toString();
         List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
         sd.setLocation(fullPartitionPath);
         return new Partition(partitionValues, syncConfig.databaseName, tableName, 0, 0, sd, null);
@@ -266,13 +256,6 @@ public class HMSDDLExecutor implements DDLExecutor {
     } catch (Exception e) {
       LOG.error("Failed to update table comments for " + tableName, e);
       throw new HoodieHiveSyncException("Failed to update table comments for " + tableName, e);
-    }
-  }
-
-  @Override
-  public void close() {
-    if (client != null) {
-      Hive.closeCurrent();
     }
   }
 }
