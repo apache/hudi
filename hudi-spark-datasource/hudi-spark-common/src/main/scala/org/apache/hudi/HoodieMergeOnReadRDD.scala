@@ -36,7 +36,6 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
-import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection
 import org.apache.spark.sql.execution.datasources.PartitionedFile
@@ -54,10 +53,11 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            @transient config: Configuration,
                            fullSchemaFileReader: PartitionedFile => Iterator[InternalRow],
                            requiredSchemaFileReader: PartitionedFile => Iterator[InternalRow],
-                           tableState: HoodieMergeOnReadTableState,
+                           tableState: HoodieTableState,
                            tableSchema: HoodieTableSchema,
-                           requiredSchema: HoodieTableSchema)
-  extends RDD[InternalRow](sc, Nil) {
+                           requiredSchema: HoodieTableSchema,
+                           @transient fileSplits: List[HoodieMergeOnReadFileSplit])
+  extends HoodieUnsafeRDD(sc) {
 
   private val confBroadcast = sc.broadcast(new SerializableWritable(config))
   private val recordKeyField = tableState.recordKeyField
@@ -98,12 +98,8 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     iter
   }
 
-  override protected def getPartitions: Array[Partition] = {
-    tableState
-      .hoodieRealtimeFileSplits
-      .zipWithIndex
-      .map(file => HoodieMergeOnReadPartition(file._2, file._1)).toArray
-  }
+  override protected def getPartitions: Array[Partition] =
+    fileSplits.zipWithIndex.map(file => HoodieMergeOnReadPartition(file._2, file._1)).toArray
 
   private def getConfig: Configuration = {
     val conf = confBroadcast.value.value

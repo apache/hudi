@@ -32,6 +32,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.utils.HiveSyncContext;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.util.CompactionUtil;
@@ -138,6 +139,16 @@ public class StreamWriteOperatorCoordinator
   private transient TableState tableState;
 
   /**
+   * The checkpoint metadata.
+   */
+  private CkpMetadata ckpMetadata;
+
+  /**
+   * Current checkpoint.
+   */
+  private long checkpointId = -1;
+
+  /**
    * Constructs a StreamingSinkOperatorCoordinator.
    *
    * @param conf    The config options
@@ -175,6 +186,8 @@ public class StreamWriteOperatorCoordinator
     if (tableState.syncMetadata) {
       initMetadataSync();
     }
+    this.ckpMetadata = CkpMetadata.getInstance(this.metaClient.getFs(), metaClient.getBasePath());
+    this.ckpMetadata.bootstrap(this.metaClient);
   }
 
   @Override
@@ -192,10 +205,14 @@ public class StreamWriteOperatorCoordinator
       writeClient.close();
     }
     this.eventBuffer = null;
+    if (this.ckpMetadata != null) {
+      this.ckpMetadata.close();
+    }
   }
 
   @Override
   public void checkpointCoordinator(long checkpointId, CompletableFuture<byte[]> result) {
+    this.checkpointId = checkpointId;
     executor.execute(
         () -> {
           try {
@@ -236,6 +253,15 @@ public class StreamWriteOperatorCoordinator
           }
         }, "commits the instant %s", this.instant
     );
+  }
+
+  @Override
+  public void notifyCheckpointAborted(long checkpointId) {
+    if (checkpointId == this.checkpointId) {
+      executor.execute(() -> {
+        this.ckpMetadata.abortInstant(this.instant);
+      }, "abort instant %s", this.instant);
+    }
   }
 
   @Override
@@ -340,6 +366,7 @@ public class StreamWriteOperatorCoordinator
     // because the instant request from write task is asynchronous.
     this.instant = this.writeClient.startCommit();
     this.metaClient.getActiveTimeline().transitionRequestedToInflight(tableState.commitAction, this.instant);
+    this.ckpMetadata.startInstant(this.instant);
     LOG.info("Create instant [{}] for table [{}] with type [{}]", this.instant,
         this.conf.getString(FlinkOptions.TABLE_NAME), conf.getString(FlinkOptions.TABLE_TYPE));
   }
@@ -488,6 +515,7 @@ public class StreamWriteOperatorCoordinator
           tableState.commitAction, partitionToReplacedFileIds);
       if (success) {
         reset();
+        this.ckpMetadata.commitInstant(instant);
         LOG.info("Commit instant [{}] success!", instant);
       } else {
         throw new HoodieException(String.format("Commit instant [%s] failed!", instant));
