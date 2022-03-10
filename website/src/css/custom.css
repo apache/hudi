@@ -170,3 +170,26 @@ footer .container {
   max-width: var(--ifm-col-width);
   flex: 0 0 var(--ifm-col-width);
 }
+
+.blogThumbnail img {
+  height: auto;
+  width: 100%
+}
+
+.blog-list-page article {
+  display: inline-flex;
+  width: 28%;
+  margin: 1.2em;
+}
+
+@media only screen and (max-width: 767px) {
+  .blog-list-page article {
+    display: flex;
+    width: 100%;
+    margin: 1.2em;
+  }
+}
+
+.blog-post-page .blogPostTitle_src-theme-BlogPostItem-styles-module {
+  font-size: 3rem;
+}
