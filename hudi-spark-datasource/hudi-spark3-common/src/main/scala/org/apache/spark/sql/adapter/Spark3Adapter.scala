@@ -21,7 +21,7 @@ import org.apache.avro.Schema
 import org.apache.hudi.Spark3RowSerDe
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.spark3.internal.ReflectUtil
-import org.apache.spark.sql.avro.{HoodieAvroDeserializerTrait, HoodieAvroSerializerTrait, Spark3HoodieAvroDeserializer, HoodieAvroSerializer}
+import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer, HoodieSpark3AvroDeserializer, HoodieSparkAvroSerializer}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.{Expression, Like}
@@ -43,11 +43,11 @@ import org.apache.spark.sql.{Row, SparkSession}
  */
 class Spark3Adapter extends SparkAdapter {
 
-  def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializerTrait =
-    new HoodieAvroSerializer(rootCatalystType, rootAvroType, nullable)
+  def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer =
+    new HoodieSparkAvroSerializer(rootCatalystType, rootAvroType, nullable)
 
-  def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializerTrait =
-    new Spark3HoodieAvroDeserializer(rootAvroType, rootCatalystType)
+  def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer =
+    new HoodieSpark3AvroDeserializer(rootAvroType, rootCatalystType)
 
   override def createSparkRowSerDe(encoder: ExpressionEncoder[Row]): SparkRowSerDe = {
     new Spark3RowSerDe(encoder)

@@ -24,12 +24,6 @@ package org.apache.spark.sql.avro
  *       If you're looking to convert Avro into "deserialized" [[Row]] (comprised of Java native types),
  *       please check [[AvroConversionUtils]]
  */
-trait HoodieAvroDeserializerTrait {
-  final def deserialize(data: Any): Option[Any] =
-    doDeserialize(data) match {
-      case opt: Option[_] => opt    // As of Spark 3.1, this will return data wrapped with Option, so we fetch the data
-      case row => Some(row)         // For other Spark versions, return the data as is
-    }
-
-  protected def doDeserialize(data: Any): Any
+trait HoodieAvroDeserializer {
+  def deserialize(data: Any): Option[Any]
 }
