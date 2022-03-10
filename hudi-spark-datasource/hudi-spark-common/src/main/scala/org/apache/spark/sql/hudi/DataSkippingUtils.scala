@@ -25,7 +25,6 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, EqualNullSafe, EqualTo, Expression, ExtractValue, GetStructField, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith}
-import org.apache.spark.sql.catalyst.plans.logical.LocalRelation
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.functions.col
@@ -290,41 +289,4 @@ object DataSkippingUtils extends Logging {
     }
     results.flatMap(f => f).toSet
   }
-
-  /**
-   * Resolve filter expression from string expr with given table schema, for example:
-   * <pre>
-   *   ts > 1000 and ts <= 1500
-   * </pre>
-   * will be resolved as
-   * <pre>
-   *   And(GreaterThan(ts#590L > 1000), LessThanOrEqual(ts#590L <= 1500))
-   * </pre>
-   *
-   * @param spark       The spark session
-   * @param exprString  String to be resolved
-   * @param tableSchema The table schema
-   * @return Resolved filter expression
-   */
-  def resolveFilterExpr(spark: SparkSession, exprString: String, tableSchema: StructType): Expression = {
-    val expr = spark.sessionState.sqlParser.parseExpression(exprString)
-    resolveFilterExpr(spark, expr, tableSchema)
-  }
-
-  def resolveFilterExpr(spark: SparkSession, expr: Expression, tableSchema: StructType): Expression = {
-    val schemaFields = tableSchema.fields
-    val resolvedExpr = spark.sessionState.analyzer.ResolveReferences(
-      org.apache.spark.sql.catalyst.plans.logical.Filter(expr,
-        LocalRelation(schemaFields.head, schemaFields.drop(1): _*))
-    )
-      .asInstanceOf[org.apache.spark.sql.catalyst.plans.logical.Filter].condition
-
-    checkForUnresolvedRefs(resolvedExpr)
-  }
-
-  private def checkForUnresolvedRefs(resolvedExpr: Expression): Expression =
-    resolvedExpr match {
-      case UnresolvedAttribute(_) => throw new IllegalStateException("unresolved attribute")
-      case _ => resolvedExpr.mapChildren(e => checkForUnresolvedRefs(e))
-    }
 }

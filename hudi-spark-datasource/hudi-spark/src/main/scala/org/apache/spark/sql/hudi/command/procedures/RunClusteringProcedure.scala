@@ -24,18 +24,17 @@ import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.common.util.{ClusteringUtils, Option => HOption}
 import org.apache.hudi.config.HoodieClusteringConfig
 import org.apache.hudi.exception.HoodieClusteringException
-import org.apache.hudi.{HoodieCLIUtils, HoodieFileIndex, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieDataSourceHelper, HoodieFileIndex}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.catalyst.expressions.{And, Expression, Or}
 import org.apache.spark.sql.execution.datasources.FileStatusCache
-import org.apache.spark.sql.hudi.DataSkippingUtils
+import org.apache.spark.sql.hudi.HoodieCatalystExpressionUtils
 import org.apache.spark.sql.types._
 
 import java.util.function.Supplier
 import scala.collection.JavaConverters._
 
-class RunClusteringProcedure extends BaseProcedure with ProcedureBuilder with SparkAdapterSupport with Logging {
+class RunClusteringProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   /**
    * OPTIMIZE table_name|table_path [WHERE predicate]
    * [ORDER BY (col_name1 [, ...] ) ]
@@ -118,37 +117,18 @@ class RunClusteringProcedure extends BaseProcedure with ProcedureBuilder with Sp
     val hoodieFileIndex = HoodieFileIndex(sparkSession, metaClient, None, options,
       FileStatusCache.getOrCreate(sparkSession))
 
-    // Resolve partition predicates, only conjunctive predicates are supported
-    val partitionPredicate = DataSkippingUtils.resolveFilterExpr(sparkSession, predicate,
-      hoodieFileIndex.partitionSchema)
-    val predicates = splitPredicates(partitionPredicate)
-    checkArgument(predicates._1.isEmpty, "Disjunctive predicate is not supported")
+    // Resolve partition predicates
+    val schemaResolver = new TableSchemaResolver(metaClient)
+    val tableSchema = AvroConversionUtils.convertAvroSchemaToStructType(schemaResolver.getTableAvroSchema)
+    val condition = HoodieCatalystExpressionUtils.resolveFilterExpr(sparkSession, predicate, tableSchema)
+    val partitionColumns = metaClient.getTableConfig.getPartitionFields.orElse(Array[String]())
+    val (partitionPredicates, dataPredicates) = HoodieDataSourceHelper.splitPartitionAndDataPredicates(
+      sparkSession, condition, partitionColumns)
+    checkArgument(dataPredicates.isEmpty, "Only partition predicates are allowed")
 
     // Get all partitions and prune partition by predicates
-    val partitionPaths = hoodieFileIndex.getAllCachedPartitionPaths.asScala.toSeq
-    val prunedPartitions = hoodieFileIndex.prunePartition(partitionPaths, predicates._2)
+    val prunedPartitions = hoodieFileIndex.getPartitionPaths(partitionPredicates)
     prunedPartitions.map(partitionPath => partitionPath.getPath).toSet.mkString(",")
-  }
-
-  /**
-   * Split predicate to disjunctive predicates and conjunctive predicates
-   *
-   * @param condition Predicate to be split
-   * @return The pair of disjunctive predicates and conjunctive predicates
-   */
-  private def splitPredicates(condition: Expression): (Seq[Expression], Seq[Expression]) = {
-    condition match {
-      case And(left, right) =>
-        val leftPredicates = splitPredicates(left)
-        val rightPredicates = splitPredicates(right)
-        (leftPredicates._1 ++ rightPredicates._1, leftPredicates._2 ++ rightPredicates._2)
-      case Or(left, right) =>
-        val leftPredicates = splitPredicates(left)
-        val rightPredicates = splitPredicates(right)
-        (leftPredicates._1 ++ leftPredicates._2 ++ rightPredicates._1 ++ rightPredicates._2, Seq.empty)
-      case other =>
-        (Seq.empty, other :: Nil)
-    }
   }
 
   private def validateOrderColumns(orderColumns: String, metaClient: HoodieTableMetaClient): Unit = {

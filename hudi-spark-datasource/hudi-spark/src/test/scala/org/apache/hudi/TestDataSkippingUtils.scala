@@ -21,7 +21,7 @@ import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql.catalyst.expressions.{Expression, Not}
 import org.apache.spark.sql.functions.col
-import org.apache.spark.sql.hudi.DataSkippingUtils
+import org.apache.spark.sql.hudi.{DataSkippingUtils, HoodieCatalystExpressionUtils}
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType, VarcharType}
 import org.apache.spark.sql.{Column, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -73,7 +73,7 @@ class TestDataSkippingUtils extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource(Array("testBaseLookupFilterExpressionsSource", "testAdvancedLookupFilterExpressionsSource"))
   def testLookupFilterExpressions(sourceExpr: String, input: Seq[IndexRow], output: Seq[String]): Unit = {
-    val resolvedExpr: Expression = DataSkippingUtils.resolveFilterExpr(spark, sourceExpr, sourceTableSchema)
+    val resolvedExpr: Expression = HoodieCatalystExpressionUtils.resolveFilterExpr(spark, sourceExpr, sourceTableSchema)
     val lookupFilter = DataSkippingUtils.createColumnStatsIndexFilterExpr(resolvedExpr, indexSchema)
 
     val spark2 = spark
@@ -93,7 +93,7 @@ class TestDataSkippingUtils extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource(Array("testStringsLookupFilterExpressionsSource"))
   def testStringsLookupFilterExpressions(sourceExpr: Expression, input: Seq[IndexRow], output: Seq[String]): Unit = {
-    val resolvedExpr = DataSkippingUtils.resolveFilterExpr(spark, sourceExpr, sourceTableSchema)
+    val resolvedExpr = HoodieCatalystExpressionUtils.resolveFilterExpr(spark, sourceExpr, sourceTableSchema)
     val lookupFilter = DataSkippingUtils.createColumnStatsIndexFilterExpr(resolvedExpr, indexSchema)
 
     val spark2 = spark
