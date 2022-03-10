@@ -552,21 +552,21 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Integer> CLEAN_RETAIN_COMMITS = ConfigOptions
       .key("clean.retain_commits")
       .intType()
-      .defaultValue(10)// default 10 commits
+      .defaultValue(30)// default 30 commits
       .withDescription("Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled).\n"
-          + "This also directly translates into how much you can incrementally pull on this table, default 10");
+          + "This also directly translates into how much you can incrementally pull on this table, default 30");
 
   public static final ConfigOption<Integer> ARCHIVE_MAX_COMMITS = ConfigOptions
       .key("archive.max_commits")
       .intType()
-      .defaultValue(30)// default max 30 commits
-      .withDescription("Max number of commits to keep before archiving older commits into a sequential log, default 30");
+      .defaultValue(50)// default max 50 commits
+      .withDescription("Max number of commits to keep before archiving older commits into a sequential log, default 50");
 
   public static final ConfigOption<Integer> ARCHIVE_MIN_COMMITS = ConfigOptions
       .key("archive.min_commits")
       .intType()
-      .defaultValue(20)// default min 20 commits
-      .withDescription("Min number of commits to keep before archiving older commits into a sequential log, default 20");
+      .defaultValue(40)// default min 40 commits
+      .withDescription("Min number of commits to keep before archiving older commits into a sequential log, default 40");
 
   // ------------------------------------------------------------------------
   //  Hive Sync Options
