@@ -123,6 +123,10 @@ public abstract class HoodieRecord<T> implements Serializable {
     return operation;
   }
 
+  public void setOperation(HoodieOperation operation) {
+    this.operation = operation;
+  }
+
   public T getData() {
     if (data == null) {
       throw new IllegalStateException("Payload already deflated for record.");
