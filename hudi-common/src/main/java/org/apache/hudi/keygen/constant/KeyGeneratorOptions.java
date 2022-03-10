@@ -33,12 +33,12 @@ public class KeyGeneratorOptions extends HoodieConfig {
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = ConfigProperty
       .key("hoodie.datasource.write.partitionpath.urlencode")
-      .defaultValue("false")
+      .defaultValue("true")
       .withDocumentation("Should we url encode the partition path value, before creating the folder structure.");
 
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = ConfigProperty
       .key("hoodie.datasource.write.hive_style_partitioning")
-      .defaultValue("false")
+      .defaultValue("true")
       .withDocumentation("Flag to indicate whether to use Hive style partitioning.\n"
           + "If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.\n"
           + "By default false (the names of partition folders are only partition values)");
