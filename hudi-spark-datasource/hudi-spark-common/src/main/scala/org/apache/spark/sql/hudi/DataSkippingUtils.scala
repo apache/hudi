@@ -17,17 +17,16 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hadoop.hive.ql.exec.vector.expressions.StringRTrim
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper.{getMaxColumnNameFor, getMinColumnNameFor, getNumNullsColumnNameFor}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
-import org.apache.spark.sql.catalyst.expressions.{Add, Alias, And, Attribute, AttributeReference, BitwiseOr, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, EqualNullSafe, EqualTo, Exp, Expm1, Expression, ExtractValue, FromUTCTimestamp, FromUnixTime, GetStructField, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, Log, Log10, Log1p, Log2, Lower, Multiply, Not, Or, ParseToDate, ParseToTimestamp, ShiftLeft, ShiftRight, StartsWith, StringRPad, StringRepeat, StringTrimRight, SubqueryExpression, ToUTCTimestamp, ToUnixTimestamp, Upper}
+import org.apache.spark.sql.catalyst.expressions.{Add, Alias, And, Attribute, AttributeReference, BitwiseOr, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, EqualNullSafe, EqualTo, Exp, Expm1, Expression, ExtractValue, FromUTCTimestamp, FromUnixTime, GetStructField, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, Log, Log10, Log1p, Log2, Lower, Multiply, Not, Or, ParseToDate, ParseToTimestamp, ShiftLeft, ShiftRight, StartsWith, SubqueryExpression, ToUTCTimestamp, ToUnixTimestamp, Upper}
 import org.apache.spark.sql.catalyst.trees.TreePattern.ATTRIBUTE_REFERENCE
 import org.apache.spark.sql.functions.col
-import org.apache.spark.sql.hudi.ColumnStatsExpressionUtils.{AllowedTransformationExpression, genColMaxValueExpr, genColMinValueExpr, genColNumNullsExpr, genColumnOnlyValuesEqualToExpression, genColumnValuesEqualToExpression, isSimpleExpression, swapAttributeRefInExpr}
+import org.apache.spark.sql.hudi.ColumnStatsExpressionUtils._
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.unsafe.types.UTF8String
 

@@ -19,9 +19,10 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
+import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
 import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
-import org.apache.spark.sql.catalyst.plans.logical.{Filter, LocalRelation}
+import org.apache.spark.sql.catalyst.plans.logical.{Filter, LocalRelation, LogicalPlan, Project}
+import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.types.StructType
 
 object HoodieCatalystExpressionUtils {
@@ -41,27 +42,45 @@ object HoodieCatalystExpressionUtils {
    * @param tableSchema The table schema
    * @return Resolved filter expression
    */
-  def resolveFilterExpr(spark: SparkSession, exprString: String, tableSchema: StructType): Expression = {
+  def resolveExpr(spark: SparkSession, exprString: String, tableSchema: StructType): Expression = {
     val expr = spark.sessionState.sqlParser.parseExpression(exprString)
-    resolveFilterExpr(spark, expr, tableSchema)
+    resolveExpr(spark, expr, tableSchema)
   }
 
-  def resolveFilterExpr(spark: SparkSession, expr: Expression, tableSchema: StructType): Expression = {
+  def resolveExpr(spark: SparkSession, expr: Expression, tableSchema: StructType): Expression = {
+    val analyzer = spark.sessionState.analyzer
     val schemaFields = tableSchema.fields
-    val resolvedExpr = spark.sessionState.analyzer.ResolveReferences(
-      Filter(expr,
-        LocalRelation(schemaFields.head, schemaFields.drop(1): _*))
-    )
-      .asInstanceOf[Filter].condition
 
-    checkForUnresolvedRefs(resolvedExpr)
+    val resolvedExpr = {
+      //val plan: LogicalPlan = Filter(expr, LocalRelation(schemaFields.head, schemaFields.drop(1): _*))
+      val plan: LogicalPlan = Project(Seq(new Column(expr).named), LocalRelation(schemaFields.head, schemaFields.drop(1): _*))
+      val rules: Seq[Rule[LogicalPlan]] = {
+        // TODO due to bug in Spark, it can't resolve correctly all functions
+        //      in one go, so we have to duplicate function resolution stage at least 3 times
+        //      to make sure all expression of the depth up to 3 could be appropriately resolved
+        analyzer.ResolveFunctions ::
+          analyzer.ResolveFunctions ::
+          analyzer.ResolveFunctions ::
+          analyzer.ResolveReferences ::
+          Nil
+      }
+
+      rules.foldRight(plan)((rule, plan) => rule.apply(plan))
+        .asInstanceOf[Filter]
+        .condition
+    }
+
+    if (!hasUnresolvedRefs(resolvedExpr)) {
+      resolvedExpr
+    } else {
+      throw new IllegalStateException("unresolved attribute")
+    }
   }
 
-  private def checkForUnresolvedRefs(resolvedExpr: Expression): Expression =
-    resolvedExpr match {
-      case UnresolvedAttribute(_) => throw new IllegalStateException("unresolved attribute")
-      case _ => resolvedExpr.mapChildren(e => checkForUnresolvedRefs(e))
-    }
+  private def hasUnresolvedRefs(resolvedExpr: Expression): Boolean =
+    resolvedExpr.collectFirst {
+      case _: UnresolvedAttribute | _: UnresolvedFunction => true
+    }.isDefined
 
   /**
    * Split the given predicates into two sequence predicates:
