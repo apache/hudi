@@ -1442,14 +1442,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       // parquet source to return empty batch
       TestParquetDFSSourceEmptyBatch.returnEmptyBatch = true;
       deltaStreamer.sync();
+      // since we mimic'ed empty batch, total records should be same as first sync().
       TestHelpers.assertRecordCount(PARQUET_NUM_RECORDS, tableBasePath + "/*/*.parquet", sqlContext);
-
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
-
-      HoodieInstant lastInstant = metaClient.reloadActiveTimeline().getCommitsTimeline().lastInstant().get();
-      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-          .fromBytes(metaClient.getActiveTimeline().getInstantDetails(lastInstant).get(), HoodieCommitMetadata.class);
-      assertFalse(commitMetadata.getExtraMetadata().containsKey(HoodieCommitMetadata.SCHEMA_KEY));
 
       // validate table schema fetches valid schema from last but one commit.
       TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);

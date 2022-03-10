@@ -86,10 +86,8 @@ public class CommitUtils {
     if (extraMetadata.isPresent()) {
       extraMetadata.get().forEach(commitMetadata::addMetadata);
     }
-    // NULL Schema should not be written to commit metadata
-    if (!(schemaToStoreInCommit != null && schemaToStoreInCommit.equals(NULL_SCHEMA_STR))) {
-      commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaToStoreInCommit == null ? "" : schemaToStoreInCommit);
-    }
+    commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, (schemaToStoreInCommit == null || schemaToStoreInCommit.equals(NULL_SCHEMA_STR))
+        ? "" : schemaToStoreInCommit);
     commitMetadata.setOperationType(operationType);
     return commitMetadata;
   }
