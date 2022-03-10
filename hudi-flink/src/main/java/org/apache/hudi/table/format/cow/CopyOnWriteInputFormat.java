@@ -19,6 +19,7 @@
 package org.apache.hudi.table.format.cow;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.table.format.cow.vector.reader.ParquetColumnarRowSplitReader;
 
 import org.apache.flink.api.common.io.FileInputFormat;
 import org.apache.flink.api.common.io.FilePathFilter;

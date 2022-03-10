@@ -835,11 +835,18 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * Provides a new commit time for a write operation (insert/update/delete).
    */
   public String startCommit() {
+    HoodieTableMetaClient metaClient = createMetaClient(true);
+    return startCommit(metaClient.getCommitActionType(), metaClient);
+  }
+
+  /**
+   * Provides a new commit time for a write operation (insert/update/delete/insert_overwrite/insert_overwrite_table) with specified action.
+   */
+  public String startCommit(String actionType, HoodieTableMetaClient metaClient) {
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.COMMIT_ACTION, () -> rollbackFailedWrites());
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
-    HoodieTableMetaClient metaClient = createMetaClient(true);
-    startCommit(instantTime, metaClient.getCommitActionType(), metaClient);
+    startCommit(instantTime, actionType, metaClient);
     return instantTime;
   }
 
