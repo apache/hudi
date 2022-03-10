@@ -216,6 +216,10 @@
                   <pattern>com.fasterxml.jackson.</pattern>
                   <shadedPattern>${flink.bundle.shade.prefix}com.fasterxml.jackson.</shadedPattern>
                 </relocation>
+                <!-- The classes below in org.apache.hadoop.metrics2 package come from
+                hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,
+                instead of shading all classes under org.apache.hadoop.metrics2 including ones
+                from hadoop. -->
                 <relocation>
                   <pattern>org.apache.hadoop.metrics2.MetricHistogram</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.MetricHistogram
@@ -288,11 +292,6 @@
                     <exclude>META-INF/*.SF</exclude>
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.RSA</exclude>
-                    <exclude>META-INF/maven/com.google.protobuf/**</exclude>
-                    <excldue>META-INF/maven/commons-io/**</excldue>
-                    <exclude>META-INF/maven/org.apache.hbase/**</exclude>
-                    <exclude>META-INF/maven/org.apache.hbase.thirdparty/**</exclude>
-                    <exclude>META-INF/maven/org.apache.htrace/**</exclude>
                     <exclude>META-INF/services/javax.*</exclude>
                     <exclude>**/*.proto</exclude>
                     <exclude>hbase-webapps/**</exclude>
@@ -693,33 +692,8 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hbase</groupId>
-      <artifactId>hbase-protocol-shaded</artifactId>
+      <artifactId>hbase-protocol</artifactId>
       <version>${hbase.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hbase.thirdparty</groupId>
-      <artifactId>hbase-shaded-miscellaneous</artifactId>
-      <version>${hbase-thirdparty.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hbase.thirdparty</groupId>
-      <artifactId>hbase-shaded-netty</artifactId>
-      <version>${hbase-thirdparty.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hbase</groupId>
-      <artifactId>hbase-hadoop-compat</artifactId>
-      <version>${hbase.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hbase.thirdparty</groupId>
-      <artifactId>hbase-shaded-protobuf</artifactId>
-      <version>${hbase-thirdparty.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.htrace</groupId>
-      <artifactId>htrace-core</artifactId>
-      <version>${htrace.version}</version>
     </dependency>
   </dependencies>
 

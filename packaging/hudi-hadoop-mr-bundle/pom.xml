@@ -135,6 +135,10 @@
                   <pattern>com.google.common.</pattern>
                   <shadedPattern>org.apache.hudi.com.google.common.</shadedPattern>
                 </relocation>
+                <!-- The classes below in org.apache.hadoop.metrics2 package come from
+                hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,
+                instead of shading all classes under org.apache.hadoop.metrics2 including ones
+                from hadoop. -->
                 <relocation>
                   <pattern>org.apache.hadoop.metrics2.MetricHistogram</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.MetricHistogram
@@ -222,7 +226,7 @@
     </plugins>
     <resources>
       <resource>
-        <directory>../../hudi-common/src/main/resour</directory>
+        <directory>src/main/resources</directory>
       </resource>
       <resource>
         <directory>src/test/resources</directory>
@@ -257,22 +261,6 @@
       <artifactId>avro</artifactId>
       <version>${avro.version}</version>
       <scope>compile</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.hbase</groupId>
-      <artifactId>hbase-hadoop-compat</artifactId>
-      <version>${hbase.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hbase</groupId>
-      <artifactId>hbase-hadoop2-compat</artifactId>
-      <version>${hbase.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hbase.thirdparty</groupId>
-      <artifactId>hbase-shaded-protobuf</artifactId>
-      <version>${hbase-thirdparty.version}</version>
     </dependency>
   </dependencies>
 </project>
