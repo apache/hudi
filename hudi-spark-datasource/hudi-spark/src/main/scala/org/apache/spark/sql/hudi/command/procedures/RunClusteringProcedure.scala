@@ -24,9 +24,10 @@ import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.common.util.{ClusteringUtils, Option => HOption}
 import org.apache.hudi.config.HoodieClusteringConfig
 import org.apache.hudi.exception.HoodieClusteringException
-import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieDataSourceHelper, HoodieFileIndex}
+import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieFileIndex}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
+import org.apache.spark.sql.catalyst.expressions.PredicateHelper
 import org.apache.spark.sql.execution.datasources.FileStatusCache
 import org.apache.spark.sql.hudi.HoodieCatalystExpressionUtils
 import org.apache.spark.sql.types._
@@ -34,7 +35,7 @@ import org.apache.spark.sql.types._
 import java.util.function.Supplier
 import scala.collection.JavaConverters._
 
-class RunClusteringProcedure extends BaseProcedure with ProcedureBuilder with Logging {
+class RunClusteringProcedure extends BaseProcedure with ProcedureBuilder with PredicateHelper with Logging {
   /**
    * OPTIMIZE table_name|table_path [WHERE predicate]
    * [ORDER BY (col_name1 [, ...] ) ]
@@ -122,8 +123,8 @@ class RunClusteringProcedure extends BaseProcedure with ProcedureBuilder with Lo
     val tableSchema = AvroConversionUtils.convertAvroSchemaToStructType(schemaResolver.getTableAvroSchema)
     val condition = HoodieCatalystExpressionUtils.resolveFilterExpr(sparkSession, predicate, tableSchema)
     val partitionColumns = metaClient.getTableConfig.getPartitionFields.orElse(Array[String]())
-    val (partitionPredicates, dataPredicates) = HoodieDataSourceHelper.splitPartitionAndDataPredicates(
-      sparkSession, condition, partitionColumns)
+    val (partitionPredicates, dataPredicates) = HoodieCatalystExpressionUtils.splitPartitionAndDataPredicates(
+      sparkSession, splitConjunctivePredicates(condition).toArray, partitionColumns)
     checkArgument(dataPredicates.isEmpty, "Only partition predicates are allowed")
 
     // Get all partitions and prune partition by predicates

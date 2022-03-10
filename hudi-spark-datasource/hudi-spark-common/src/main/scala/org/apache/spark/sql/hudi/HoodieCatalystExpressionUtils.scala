@@ -21,7 +21,7 @@ package org.apache.spark.sql.hudi
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LocalRelation}
 import org.apache.spark.sql.types.StructType
 
@@ -63,4 +63,27 @@ object HoodieCatalystExpressionUtils {
       case UnresolvedAttribute(_) => throw new IllegalStateException("unresolved attribute")
       case _ => resolvedExpr.mapChildren(e => checkForUnresolvedRefs(e))
     }
+
+  /**
+   * Split the given predicates into two sequence predicates:
+   * - predicates that references partition columns only(and involves no sub-query);
+   * - other predicates.
+   *
+   * @param sparkSession     The spark session
+   * @param predicates       The predicates to be split
+   * @param partitionColumns The partition columns
+   * @return (partitionFilters, dataFilters)
+   */
+  def splitPartitionAndDataPredicates(sparkSession: SparkSession,
+                                      predicates: Array[Expression],
+                                      partitionColumns: Array[String]): (Array[Expression], Array[Expression]) = {
+    // Validates that the provided names both resolve to the same entity
+    val resolvedNameEquals = sparkSession.sessionState.analyzer.resolver
+
+    predicates.partition(expr => {
+      // Checks whether given expression only references partition columns(and involves no sub-query)
+      expr.references.forall(r => partitionColumns.exists(resolvedNameEquals(r.name, _))) &&
+        !SubqueryExpression.hasSubquery(expr)
+    })
+  }
 }
