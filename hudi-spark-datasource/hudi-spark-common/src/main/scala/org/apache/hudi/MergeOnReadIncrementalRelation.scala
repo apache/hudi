@@ -19,7 +19,6 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{GlobPattern, Path}
-import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.createBaseFileReader
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -28,11 +27,11 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.{getCommitMetadata, getWritePartitionPaths, listAffectedFilesForCommits}
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{Row, SQLContext}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{Row, SQLContext}
 
 import scala.collection.JavaConversions._
 
@@ -46,9 +45,6 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
                                      val userSchema: Option[StructType],
                                      val metaClient: HoodieTableMetaClient)
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) {
-
-  private val conf = new Configuration(sqlContext.sparkContext.hadoopConfiguration)
-  private val jobConf = new JobConf(conf)
 
   private val commitTimeline = metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants()
   if (commitTimeline.empty()) {
@@ -77,8 +73,6 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
 
   private val fileIndex = if (commitsToReturn.isEmpty) List() else buildFileIndex()
 
-  private val preCombineFieldOpt = getPrecombineFieldProperty
-
   // Record filters making sure that only records w/in the requested bounds are being fetched as part of the
   // scan collected by this relation
   private lazy val incrementalSpanRecordsFilters: Seq[Filter] = {
@@ -88,18 +82,16 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
     Seq(isNotNullFilter, largerThanFilter, lessThanFilter)
   }
 
-  private lazy val mandatoryColumns = {
+  override lazy val mandatoryColumns: Seq[String] = {
     // NOTE: This columns are required for Incremental flow to be able to handle the rows properly, even in
     //       cases when no columns are requested to be fetched (for ex, when using {@code count()} API)
     Seq(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD) ++
       preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
   }
 
-  override def needConversion: Boolean = false
-
-  override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
+  override def doBuildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[InternalRow] = {
     if (fileIndex.isEmpty) {
-      sqlContext.sparkContext.emptyRDD[Row]
+      sqlContext.sparkContext.emptyRDD[InternalRow]
     } else {
       logDebug(s"buildScan requiredColumns = ${requiredColumns.mkString(",")}")
       logDebug(s"buildScan filters = ${filters.mkString(",")}")
@@ -148,20 +140,20 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
         hadoopConf = new Configuration(conf)
       )
 
-      val hoodieTableState = HoodieMergeOnReadTableState(fileIndex, HoodieRecord.RECORD_KEY_METADATA_FIELD, preCombineFieldOpt)
+      val hoodieTableState = HoodieTableState(HoodieRecord.RECORD_KEY_METADATA_FIELD, preCombineFieldOpt)
 
       // TODO implement incremental span record filtering w/in RDD to make sure returned iterator is appropriately
       //      filtered, since file-reader might not be capable to perform filtering
-      val rdd = new HoodieMergeOnReadRDD(
+      new HoodieMergeOnReadRDD(
         sqlContext.sparkContext,
         jobConf,
         fullSchemaParquetReader,
         requiredSchemaParquetReader,
         hoodieTableState,
         tableSchema,
-        requiredSchema
+        requiredSchema,
+        fileIndex
       )
-      rdd.asInstanceOf[RDD[Row]]
     }
   }
 
@@ -224,10 +216,5 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
       HoodieMergeOnReadFileSplit(partitionedFile, logPath,
         latestCommit, metaClient.getBasePath, maxCompactionMemoryInBytes, mergeType)
     })
-  }
-
-  private def appendMandatoryColumns(requestedColumns: Array[String]): Array[String] = {
-    val missing = mandatoryColumns.filter(col => !requestedColumns.contains(col))
-    requestedColumns ++ missing
   }
 }
