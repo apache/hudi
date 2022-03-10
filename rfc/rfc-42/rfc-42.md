@@ -130,7 +130,9 @@ Only three operations will modify the hashing metadata:
 - Resizing: a new version of hashing metadata will be created when the resizing completes, named using the timestamp of the resizing operation.
 - Clean service: removes outdated metadata files in the same way as removing old file groups.
 
-
+Though storing hashing metadata in the `.hoodie` path is a straightforward solution, it should be put into hudi's metadata table ultimately.
+And the clean service is no loger necessary.
+Old version hashing metadata will also be cleanup automatically since the metadata table itself is a hudi table.
 ### Bucket Resizing (Splitting & Merging)
 
 Considering there is a semantic similarity between bucket resizing and clustering (i.e., re-organizing small data files), this proposal plans to integrate the resizing process as a subtask into the clustering service.
@@ -166,6 +168,8 @@ However, the record's new location can only be determined until the clustering f
 For tables using Bucket Index, the above conflicting condition can be avoided because record locations are calculated by the hash algorithm.
 So even before the clustering finishes, the writer can calculate record locations as long as it knows the latest hash algorithm (in our Consistent Hashing case, it is stored in the clustering plan).
 
+#### Dual write solution
+
 ![bucket resizing](bucket_resizing.png)
 
 The figure above shows a concurrent write process during the bucket resizing process (i.e., splitting).
@@ -179,6 +183,17 @@ The default behaviour of a reader is:
 - Query new files when the resizing process finishes.
 
 As the writer put incoming records in both new and old files, readers will always see the update-to-date data.
+
+#### Virtual log file solution
+
+![bucket resizing using virtual log file](bucket_resizing_virtual_log_file.png)
+
+Instead of writing records to both old and children file groups physically, we could route records to children file groups only and create an 'empty' virtual log file in the old file group.
+The virtual log file contains the necessary information to reference log files in the children file groups (i.e., red lines in the above figure).
+It enables readers to see the latest completed writes by merging children log files with the base file of the old file group.
+
+The virtual file solution avoids extra write workload and minimizes the impact of resizing on the write performance. 
+However, it adds some work on the read path in order to understand the virtual log file.
 
 ### Performance
 
