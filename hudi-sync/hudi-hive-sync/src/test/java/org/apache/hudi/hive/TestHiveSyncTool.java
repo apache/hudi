@@ -25,6 +25,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.hive.util.ConfigUtils;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent;
@@ -33,6 +35,7 @@ import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent.Parti
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hadoop.hive.ql.Driver;
@@ -52,7 +55,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.hive.testutils.HiveTestUtil.ddlExecutor;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.fileSystem;
@@ -522,6 +527,77 @@ public class TestHiveSyncTool {
         "The one partition we wrote should be added to hive");
     assertEquals(commitTime2, hiveClient.getLastCommitTimeSynced(hiveSyncConfig.tableName).get(),
         "The last commit that was synced should be 101");
+  }
+
+  @ParameterizedTest
+  @MethodSource("syncMode")
+  public void testUpdateTableComments(String syncMode) throws Exception {
+    hiveSyncConfig.syncMode = syncMode;
+    String commitTime = "100";
+    HiveTestUtil.createCOWTableWithSchema(commitTime, "/simple-test.avsc");
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    tool.syncHoodieTable();
+    HoodieHiveClient hiveClient =
+            new HoodieHiveClient(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+
+    Map<String, ImmutablePair<String,String>> alterCommentSchema = new HashMap<>();
+    //generate commented schema field
+    Schema schema = SchemaTestUtil.getSchemaFromResource(HiveTestUtil.class, "/simple-test.avsc");
+    Schema commentedSchema = SchemaTestUtil.getSchemaFromResource(HiveTestUtil.class, "/simple-test-doced.avsc");
+    Map<String, String> fieldsNameAndDoc = commentedSchema.getFields().stream().collect(Collectors.toMap(field -> field.name().toLowerCase(Locale.ROOT),
+        field -> StringUtils.isNullOrEmpty(field.doc()) ? "" : field.doc()));
+    for (Field field : schema.getFields()) {
+      String name = field.name().toLowerCase(Locale.ROOT);
+      String comment = fieldsNameAndDoc.get(name);
+      if (fieldsNameAndDoc.containsKey(name) && !comment.equals(field.doc())) {
+        alterCommentSchema.put(name, new ImmutablePair<>(field.schema().getType().name(),comment));
+      }
+    }
+
+    ddlExecutor.updateTableComments(hiveSyncConfig.tableName,alterCommentSchema);
+
+    List<FieldSchema> fieldSchemas = hiveClient.getTableCommentUsingMetastoreClient(hiveSyncConfig.tableName);
+    int commentCnt = 0;
+    for (FieldSchema fieldSchema : fieldSchemas) {
+      if (!StringUtils.isNullOrEmpty(fieldSchema.getComment())) {
+        commentCnt++;
+      }
+    }
+    assertEquals(2, commentCnt, "hive schema field comment numbers should match the avro schema field doc numbers");
+  }
+
+  @ParameterizedTest
+  @MethodSource("syncMode")
+  public void testSyncWithCommentedSchema(String syncMode) throws Exception {
+    hiveSyncConfig.syncMode = syncMode;
+    hiveSyncConfig.syncComment = false;
+    String commitTime = "100";
+    HiveTestUtil.createCOWTableWithSchema(commitTime, "/simple-test-doced.avsc");
+
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    tool.syncHoodieTable();
+    HoodieHiveClient hiveClient =
+            new HoodieHiveClient(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    List<FieldSchema> fieldSchemas = hiveClient.getTableCommentUsingMetastoreClient(hiveSyncConfig.tableName);
+    int commentCnt = 0;
+    for (FieldSchema fieldSchema : fieldSchemas) {
+      if (!StringUtils.isNullOrEmpty(fieldSchema.getComment())) {
+        commentCnt++;
+      }
+    }
+    assertEquals(0, commentCnt, "hive schema field comment numbers should match the avro schema field doc numbers");
+
+    hiveSyncConfig.syncComment = true;
+    tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    tool.syncHoodieTable();
+    fieldSchemas = hiveClient.getTableCommentUsingMetastoreClient(hiveSyncConfig.tableName);
+    commentCnt = 0;
+    for (FieldSchema fieldSchema : fieldSchemas) {
+      if (!StringUtils.isNullOrEmpty(fieldSchema.getComment())) {
+        commentCnt++;
+      }
+    }
+    assertEquals(2, commentCnt, "hive schema field comment numbers should match the avro schema field doc numbers");
   }
 
   @ParameterizedTest

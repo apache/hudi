@@ -316,6 +316,8 @@ public class DataSourceUtils {
     if (props.containsKey(HiveExternalCatalog.CREATED_SPARK_VERSION())) {
       hiveSyncConfig.sparkVersion = props.getString(HiveExternalCatalog.CREATED_SPARK_VERSION());
     }
+    hiveSyncConfig.syncComment = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_SYNC_COMMENT().key(),
+            DataSourceWriteOptions.HIVE_SYNC_COMMENT().defaultValue()));
     return hiveSyncConfig;
   }
 
