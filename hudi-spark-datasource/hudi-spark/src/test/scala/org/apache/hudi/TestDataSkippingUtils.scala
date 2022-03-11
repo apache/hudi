@@ -359,7 +359,7 @@ object TestDataSkippingUtils {
 
       arguments(
         // Queries contains expression involving non-indexed column D
-        "A = 0 AND B = 'abc' AND D = '...'",
+        "A = 0 AND B = 'abc' AND D IS NULL",
         Seq(
           IndexRow("file_1", 1, 2, 0),
           IndexRow("file_2", -1, 1, 0),
@@ -370,7 +370,7 @@ object TestDataSkippingUtils {
 
       arguments(
         // Queries contains expression involving non-indexed column D
-        "A = 0 OR B = 'abc' OR D = '...'",
+        "A = 0 OR B = 'abc' OR D IS NULL",
         Seq(
           IndexRow("file_1", 1, 2, 0),
           IndexRow("file_2", -1, 1, 0),
