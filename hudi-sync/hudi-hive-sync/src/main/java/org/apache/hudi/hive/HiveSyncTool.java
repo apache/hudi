@@ -99,7 +99,7 @@ public class HiveSyncTool extends AbstractSyncTool {
           break;
         case MERGE_ON_READ:
           if (cfg.customMorTableName && !StringUtils.isNullOrEmpty(cfg.customRTTableName)
-                  && !StringUtils.isNullOrEmpty(cfg.customROTableName) && !cfg.customRTTableName.equals(cfg.customROTableName)) {
+                  && !StringUtils.isNullOrEmpty(cfg.customROTableName) && !cfg.customRTTableName.equalsIgnoreCase(cfg.customROTableName)) {
             this.snapshotTableName = cfg.customRTTableName;
             this.roTableName = Option.of(cfg.customROTableName);
           } else {

@@ -679,19 +679,19 @@ public class FlinkOptions extends HoodieConfig {
           .key("hive_sync.enable_custom_table_name")
           .booleanType()
           .defaultValue(false)
-          .withDescription("define custom table name with merge on read table");
+          .withDescription("define custom table name with merge on read table type");
 
   public static final ConfigOption<String> HIVE_SYNC_CUSTOM_RO_NAME = ConfigOptions
           .key("hive_sync.custom_ro_name")
           .stringType()
           .defaultValue("")
-          .withDescription("custom ro table name for merge on read , only valid when enable_custom_table_name is true, should different with custom_rt_name''");
+          .withDescription("custom ro table name for merge on read , only valid when enable_custom_table_name is true, should different from custom_rt_name''");
 
   public static final ConfigOption<String> HIVE_SYNC_CUSTOM_RT_NAME = ConfigOptions
           .key("hive_sync.custom_rt_name")
           .stringType()
           .defaultValue("")
-          .withDescription("custom snapshot table name for merge on read, only valid when enable_custom_table_name is true, should different with custom_ro_name''");
+          .withDescription("custom snapshot table name for merge on read, only valid when enable_custom_table_name is true, should different from custom_ro_name''");
 
   // -------------------------------------------------------------------------
   //  Utilities
