@@ -238,23 +238,25 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
         .build();
     /*
      * Update the records twice with different ordered timestamps
-     * first  step : insert 100 records
-     * second step : update 100 records with timestamp 2
-     *
+     * the first step : insert 100 records
+     * the second step : first update 100 records with timestamp 2
+     * the third step : second update 100 records with timestamp 3
+     * the forth step : do a compact
+     * the final step : check 100 records with timestamp 3
      */
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       String firstCommitTime = "100";
       writeClient.startCommitWithTime(firstCommitTime);
-
+      // first step
       List<HoodieRecord> records = dataGen.generateInserts(firstCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
       writeClient.insert(recordsRDD, firstCommitTime).collect();
       HoodieTable table = HoodieSparkTable.create(config, context);
-      // first update
+      // second step : do first update
       String firstUpdateTime = "101";
       // init ts = 2
-      Integer firstTimeStamp = 2;
-      List<HoodieRecord> updatedRecords = dataGen.generateUpdatesWithTS(firstUpdateTime, records, firstTimeStamp);
+      Integer firstUpdateTimeStamp = 2;
+      List<HoodieRecord> updatedRecords = dataGen.generateUpdatesWithTS(firstUpdateTime, records, firstUpdateTimeStamp);
       JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
       HoodieIndex index = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
       JavaRDD<HoodieRecord> updatedTaggedRecordsRDD = tagLocation(index, updatedRecordsRDD, table);
@@ -265,8 +267,8 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
 
       // second update
       String secondUpdateTime = "102";
-      Integer secondTimeStamp = firstTimeStamp + 1;
-      List<HoodieRecord> updatedTwiceRecords = dataGen.generateUpdatesWithTS(secondUpdateTime, records, secondTimeStamp);
+      Integer secondUpdateTimeStamp = firstUpdateTimeStamp + 1;
+      List<HoodieRecord> updatedTwiceRecords = dataGen.generateUpdatesWithTS(secondUpdateTime, records, secondUpdateTimeStamp);
       JavaRDD<HoodieRecord> updatedTwiceRecordsRDD = jsc.parallelize(updatedTwiceRecords, 1);
       JavaRDD<HoodieRecord> updatedTwiceTaggedRecordsRDD = tagLocation(index, updatedTwiceRecordsRDD, table);
 
@@ -300,9 +302,9 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
           HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf, inputPaths, basePath, new JobConf(hadoopConf), true, false);
       // check table records size = 100
       assertEquals(100, recordsRead.size());
-      // after compaction , check all records timestamp = secondTimeStamp, _hoodie_commit_time = secondUpdateTime
+      // after compaction , check all records timestamp = secondUpdateTimeStamp, _hoodie_commit_time = secondUpdateTime
       for (GenericRecord genericRecord : recordsRead) {
-        assertEquals(String.valueOf(secondTimeStamp), genericRecord.get("timestamp").toString());
+        assertEquals(String.valueOf(secondUpdateTimeStamp), genericRecord.get("timestamp").toString());
         assertEquals(secondUpdateTime, genericRecord.get("_hoodie_commit_time").toString());
       }
     }
@@ -328,6 +330,14 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
             .withPayloadClass(DefaultHoodieRecordPayload.class.getName())
             .withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .build();
+    /*
+     * Update the records twice with different unordered timestamps
+     * the first step : insert 100 records
+     * the second step : first update 100 records with timestamp Integer.MAX_VALUE
+     * the third step : second update 100 records with timestamp 5
+     * the forth step : do a compact
+     * the final step : check 100 records with timestamp Integer.MAX_VALUE
+     */
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       String firstCommitTime = "100";
       writeClient.startCommitWithTime(firstCommitTime);
@@ -340,8 +350,8 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       // first update
       String firstUpdateTime = "101";
       // init ts = Integer.MAX_VALUE
-      Integer firstTimeStamp = Integer.MAX_VALUE;
-      List<HoodieRecord> updatedRecords = dataGen.generateUpdatesWithTS(firstUpdateTime, records, firstTimeStamp);
+      Integer firstUpdateTimeStamp = Integer.MAX_VALUE;
+      List<HoodieRecord> updatedRecords = dataGen.generateUpdatesWithTS(firstUpdateTime, records, firstUpdateTimeStamp);
       JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
       HoodieIndex index = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
       JavaRDD<HoodieRecord> updatedTaggedRecordsRDD = tagLocation(index, updatedRecordsRDD, table);
@@ -353,8 +363,8 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       // second update
       String secondUpdateTime = "102";
       // init secondTimeStamp less than firstTimeStamp
-      Integer secondTimeStamp = 5;
-      List<HoodieRecord> updatedTwiceRecords = dataGen.generateUpdatesWithTS(secondUpdateTime, records, secondTimeStamp);
+      Integer secondUpdateTimeStamp = 5;
+      List<HoodieRecord> updatedTwiceRecords = dataGen.generateUpdatesWithTS(secondUpdateTime, records, secondUpdateTimeStamp);
       JavaRDD<HoodieRecord> updatedTwiceRecordsRDD = jsc.parallelize(updatedTwiceRecords, 1);
       JavaRDD<HoodieRecord> updatedTwiceTaggedRecordsRDD = tagLocation(index, updatedTwiceRecordsRDD, table);
 
@@ -388,9 +398,9 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
           HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf, inputPaths, basePath, new JobConf(hadoopConf), true, false);
       // check table records size = 100
       assertEquals(100, recordsRead.size());
-      // after compaction , check all records timestamp = firstTimeStamp, _hoodie_commit_time = firstUpdateTime
+      // after compaction , check all records timestamp = firstUpdateTime, _hoodie_commit_time = firstUpdateTime
       for (GenericRecord genericRecord : recordsRead) {
-        assertEquals(String.valueOf(firstTimeStamp), genericRecord.get("timestamp").toString());
+        assertEquals(String.valueOf(firstUpdateTimeStamp), genericRecord.get("timestamp").toString());
         assertEquals(firstUpdateTime, genericRecord.get("_hoodie_commit_time").toString());
       }
     }
@@ -415,6 +425,14 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
             .withPayloadClass(DefaultHoodieRecordPayload.class.getName())
             .withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .build();
+      /*
+       * Update the records twice with different same timestamps
+       * the first step : insert 100 records (default timestamp = 0)
+       * the second step : first update 100 records with timestamp 0
+       * the third step : second update 100 records with timestamp 0
+       * the forth step : do a compact
+       * the final step : check 100 records with timestamp=0 and _hoodie_commit_time = final_commit_time
+       */
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       String firstCommitTime = "100";
       writeClient.startCommitWithTime(firstCommitTime);
@@ -426,9 +444,9 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       HoodieTable table = HoodieSparkTable.create(config, context);
       // first update
       String firstUpdateTime = "101";
-      // init ts = 0
-      Integer firstTimeStamp = 0;
-      List<HoodieRecord> updatedRecords = dataGen.generateUpdatesWithTS(firstUpdateTime, records, firstTimeStamp);
+      // init firstUpdateTimeStamp = 0
+      Integer firstUpdateTimeStamp = 0;
+      List<HoodieRecord> updatedRecords = dataGen.generateUpdatesWithTS(firstUpdateTime, records, firstUpdateTimeStamp);
       JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
       HoodieIndex index = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
       JavaRDD<HoodieRecord> updatedTaggedRecordsRDD = tagLocation(index, updatedRecordsRDD, table);
@@ -439,9 +457,9 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
 
       // second update
       String secondUpdateTime = "102";
-      // init ts = 0
-      Integer secondTimeStamp = 0;
-      List<HoodieRecord> updatedTwiceRecords = dataGen.generateUpdatesWithTS(secondUpdateTime, records, secondTimeStamp);
+      // init secondUpdateTimeStamp same with firstUpdateTimeStamp
+      Integer secondUpdateTimeStamp = 0;
+      List<HoodieRecord> updatedTwiceRecords = dataGen.generateUpdatesWithTS(secondUpdateTime, records, secondUpdateTimeStamp);
       JavaRDD<HoodieRecord> updatedTwiceRecordsRDD = jsc.parallelize(updatedTwiceRecords, 1);
       JavaRDD<HoodieRecord> updatedTwiceTaggedRecordsRDD = tagLocation(index, updatedTwiceRecordsRDD, table);
 
@@ -475,9 +493,9 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
           HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf, inputPaths, basePath, new JobConf(hadoopConf), true, false);
       // check table records size = 100
       assertEquals(100, recordsRead.size());
-      // after compaction , check all records timestamp = secondTimeStamp, _hoodie_commit_time = secondUpdateTime
+      // after compaction , check all records timestamp = secondUpdateTimeStamp, _hoodie_commit_time = secondUpdateTime
       for (GenericRecord genericRecord : recordsRead) {
-        assertEquals(String.valueOf(secondTimeStamp), genericRecord.get("timestamp").toString());
+        assertEquals(String.valueOf(secondUpdateTimeStamp), genericRecord.get("timestamp").toString());
         assertEquals(secondUpdateTime, genericRecord.get("_hoodie_commit_time").toString());
       }
     }
