@@ -141,6 +141,9 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--spark-version"}, description = "The spark version", required = false)
   public String sparkVersion;
 
+  @Parameter(names = {"--sync-comment"}, description = "synchronize table comments to hive")
+  public boolean syncComment = false;
+
   // enhance the similar function in child class
   public static HiveSyncConfig copy(HiveSyncConfig cfg) {
     HiveSyncConfig newConfig = new HiveSyncConfig();
@@ -171,6 +174,7 @@ public class HiveSyncConfig implements Serializable {
     newConfig.customRTTableName = cfg.customRTTableName;
     newConfig.customROTableName = cfg.customROTableName;
     newConfig.sparkVersion = cfg.sparkVersion;
+    newConfig.syncComment = cfg.syncComment;
     return newConfig;
   }
 
@@ -208,6 +212,7 @@ public class HiveSyncConfig implements Serializable {
       + ", customMorTableName=" + customMorTableName
       + ", customROTableName=" + customROTableName
       + ", customRTTableName=" + customRTTableName
+      + ", syncComment=" + syncComment
       + '}';
   }
 

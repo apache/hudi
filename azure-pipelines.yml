@@ -179,6 +179,8 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: IT
+        displayName: IT modules
+        timeoutInMinutes: '90'
         steps:
           - task: AzureCLI@2
             displayName: Prepare for IT

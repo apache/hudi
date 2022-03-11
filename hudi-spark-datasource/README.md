@@ -36,3 +36,21 @@ file that supports spark sql on spark 2.x version.
 has no class since hudi only supports spark 2.4.4 version, and it acts as the placeholder when packaging hudi-spark-bundle module. 
 * hudi-spark3-common is the module that contains the code that would be reused between spark3.x versions.
 * hudi-spark-common is the module that contains the code that would be reused between spark2.x and spark3.x versions.
+
+## Description of Time Travel
+* `HoodieSpark3_2ExtendedSqlAstBuilder` have comments in the spark3.2's code fork from `org.apache.spark.sql.catalyst.parser.AstBuilder`, and additional `withTimeTravel` method.
+* `SqlBase.g4` have comments in the code forked from spark3.2's parser, and add SparkSQL Syntax  `TIMESTAMP AS OF` and `VERSION AS OF`.
+
+### Time Travel Support Spark Version:
+
+| version | support |
+| ------  | ------- |
+| 2.4.x   |    No   |
+| 3.0.x   |    No   |
+| 3.1.2   |    No   |
+| 3.2.0   |    Yes  |
+
+### About upgrading Time Travel:
+Spark3.3 support time travel syntax link [SPARK-37219](https://issues.apache.org/jira/browse/SPARK-37219). 
+Once Spark 3.3 released. The files in the following list will be removed:
+* hudi-spark3's `HoodieSpark3_2ExtendedSqlAstBuilder.scala`、`HoodieSpark3_2ExtendedSqlParser.scala`、`TimeTravelRelation.scala`、`SqlBase.g4`、`HoodieSqlBase.g4`

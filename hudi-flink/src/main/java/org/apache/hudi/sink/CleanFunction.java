@@ -19,6 +19,8 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.util.StreamerUtil;
@@ -60,10 +62,14 @@ public class CleanFunction<T> extends AbstractRichFunction
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
     if (conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
-      // do not use the remote filesystem view because the async cleaning service
-      // local timeline is very probably to fall behind with the remote one.
-      this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext(), false);
-      this.executor = NonThrownExecutor.builder(LOG).build();
+      this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
+      this.executor = NonThrownExecutor.builder(LOG).waitForTasksFinish(true).build();
+
+      if (conf.getString(FlinkOptions.OPERATION).equals(WriteOperationType.INSERT_OVERWRITE_TABLE.value())) {
+        String instantTime = HoodieActiveTimeline.createNewInstantTime();
+        LOG.info(String.format("exec sync clean with instant time %s...", instantTime));
+        executor.execute(() -> writeClient.clean(instantTime), "wait for sync cleaning finish");
+      }
     }
   }
 
@@ -101,6 +107,10 @@ public class CleanFunction<T> extends AbstractRichFunction
 
   @Override
   public void close() throws Exception {
+    if (executor != null) {
+      executor.close();
+    }
+
     if (this.writeClient != null) {
       this.writeClient.close();
     }

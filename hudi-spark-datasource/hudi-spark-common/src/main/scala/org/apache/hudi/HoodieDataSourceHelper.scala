@@ -22,7 +22,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FileStatus
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{Expression, PredicateHelper, SpecificInternalRow, SubqueryExpression, UnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.{PredicateHelper, SpecificInternalRow, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.sources.Filter
@@ -33,43 +33,6 @@ import scala.collection.JavaConverters._
 
 object HoodieDataSourceHelper extends PredicateHelper {
 
-  /**
-   * Partition the given condition into two sequence of conjunctive predicates:
-   * - predicates that can be evaluated using metadata only.
-   * - other predicates.
-   */
-  def splitPartitionAndDataPredicates(
-      spark: SparkSession,
-      condition: Expression,
-      partitionColumns: Seq[String]): (Seq[Expression], Seq[Expression]) = {
-    splitConjunctivePredicates(condition).partition(
-      isPredicateMetadataOnly(spark, _, partitionColumns))
-  }
-
-  /**
-   * Check if condition can be evaluated using only metadata. In Delta, this means the condition
-   * only references partition columns and involves no subquery.
-   */
-  def isPredicateMetadataOnly(
-      spark: SparkSession,
-      condition: Expression,
-      partitionColumns: Seq[String]): Boolean = {
-    isPredicatePartitionColumnsOnly(spark, condition, partitionColumns) &&
-        !SubqueryExpression.hasSubquery(condition)
-  }
-
-  /**
-   * Does the predicate only contains partition columns?
-   */
-  def isPredicatePartitionColumnsOnly(
-      spark: SparkSession,
-      condition: Expression,
-      partitionColumns: Seq[String]): Boolean = {
-    val nameEquality = spark.sessionState.analyzer.resolver
-    condition.references.forall { r =>
-      partitionColumns.exists(nameEquality(r.name, _))
-    }
-  }
 
   /**
    * Wrapper `buildReaderWithPartitionValues` of [[ParquetFileFormat]]

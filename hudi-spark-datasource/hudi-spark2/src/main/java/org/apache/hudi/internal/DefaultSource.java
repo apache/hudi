@@ -66,7 +66,7 @@ public class DefaultSource extends BaseDefaultSource implements DataSourceV2,
     String path = options.get("path").get();
     String tblName = options.get(HoodieWriteConfig.TBL_NAME.key()).get();
     boolean populateMetaFields = options.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
-        Boolean.parseBoolean(HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()));
+        HoodieTableConfig.POPULATE_META_FIELDS.defaultValue());
     Map<String, String> properties = options.asMap();
     // Auto set the value of "hoodie.parquet.writelegacyformat.enabled"
     mayBeOverwriteParquetWriteLegacyFormatProp(properties, schema);

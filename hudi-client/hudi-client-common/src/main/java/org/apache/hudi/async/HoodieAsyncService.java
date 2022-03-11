@@ -170,6 +170,7 @@ public abstract class HoodieAsyncService implements Serializable {
       if (null != callback) {
         callback.apply(null != error);
       }
+      this.started = false;
     });
   }
 

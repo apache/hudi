@@ -18,6 +18,8 @@
 
 package org.apache.hudi.hive.ddl;
 
+import org.apache.hudi.common.util.collection.ImmutablePair;
+
 import org.apache.parquet.schema.MessageType;
 
 import java.util.List;
@@ -88,6 +90,14 @@ public interface DDLExecutor {
    * @param partitionsToDrop
    */
   public void dropPartitionsToTable(String tableName, List<String> partitionsToDrop);
+
+  /**
+   * update table comments
+   *
+   * @param tableName
+   * @param newSchema
+   */
+  public void updateTableComments(String tableName, Map<String, ImmutablePair<String,String>> newSchema);
 
   public void close();
 }

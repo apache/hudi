@@ -15,15 +15,24 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.avro
+package org.apache.hudi.functional;
 
-import org.apache.avro.Schema
-import org.apache.spark.sql.types.DataType
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.config.HoodieWriteConfig;
 
-class HoodieAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean)
-  extends HoodieAvroSerializerTrait {
+// Sole purpose of this class is to provide access to otherwise API inaccessible from the tests.
+// While it's certainly not a great pattern, it would require substantial test restructuring to
+// eliminate such access to an internal API, so this is considered acceptable given it's very limited
+// scope (w/in the current package)
+class SparkRDDWriteClientOverride extends org.apache.hudi.client.SparkRDDWriteClient {
 
-  val avroSerializer = new AvroSerializer(rootCatalystType, rootAvroType, nullable)
+  public SparkRDDWriteClientOverride(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
+    super(context, clientConfig);
+  }
 
-  override def serialize(catalystData: Any): Any = avroSerializer.serialize(catalystData)
+  @Override
+  public void rollbackFailedBootstrap() {
+    super.rollbackFailedBootstrap();
+  }
 }
+
