@@ -32,11 +32,10 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, Expression, Literal}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
 import org.apache.spark.sql.functions.col
-import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
+import org.apache.spark.sql.hudi.{DataSkippingUtils, HoodieSqlCommonUtils}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructType}
-import org.apache.spark.sql.{AnalysisException, Column, SparkSession}
+import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.text.SimpleDateFormat
@@ -258,7 +257,7 @@ case class HoodieFileIndex(spark: SparkSession,
         withPersistence(transposedColStatsDF) {
           val indexSchema = transposedColStatsDF.schema
           val indexFilter =
-            queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexSchema))
+            queryFilters.map(DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(_, indexSchema))
               .reduce(And)
 
           val allIndexedFileNames =

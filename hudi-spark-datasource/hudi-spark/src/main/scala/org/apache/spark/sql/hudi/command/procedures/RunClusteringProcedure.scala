@@ -120,7 +120,7 @@ class RunClusteringProcedure extends BaseProcedure with ProcedureBuilder with Pr
     // Resolve partition predicates
     val schemaResolver = new TableSchemaResolver(metaClient)
     val tableSchema = AvroConversionUtils.convertAvroSchemaToStructType(schemaResolver.getTableAvroSchema)
-    val condition = HoodieCatalystExpressionUtils.resolveFilterExpr(sparkSession, predicate, tableSchema)
+    val condition = HoodieCatalystExpressionUtils.resolveExpr(sparkSession, predicate, tableSchema)
     val partitionColumns = metaClient.getTableConfig.getPartitionFields.orElse(Array[String]())
     val (partitionPredicates, dataPredicates) = HoodieCatalystExpressionUtils.splitPartitionAndDataPredicates(
       sparkSession, splitConjunctivePredicates(condition).toArray, partitionColumns)
