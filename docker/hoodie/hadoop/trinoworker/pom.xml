@@ -65,7 +65,7 @@
                             <skip>${docker.build.skip}</skip>
                             <pullNewerImage>false</pullNewerImage>
                             <repository>
-                                apachehudi/hudi-hadoop_${docker.hadoop.version}-trinoworker_${docker.trino.version}
+                                sivabalan/hudi-hadoop_${docker.hadoop.version}-trinoworker_${docker.trino.version}
                             </repository>
                             <force>true</force>
                             <tag>latest</tag>
@@ -83,7 +83,7 @@
                             <skip>${docker.build.skip}</skip>
                             <pullNewerImage>false</pullNewerImage>
                             <repository>
-                                apachehudi/hudi-hadoop_${docker.hadoop.version}-trinoworker_${docker.trino.version}
+                                sivabalan/hudi-hadoop_${docker.hadoop.version}-trinoworker_${docker.trino.version}
                             </repository>
                             <force>true</force>
                             <tag>${project.version}</tag>

@@ -91,16 +91,19 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
   private void createHiveConnection(String jdbcUrl, String hiveUser, String hivePass) {
     if (connection == null) {
       try {
-        Class.forName("org.apache.hive.jdbc.HiveDriver");
+        Class<?> clz = Class.forName("org.apache.hive.jdbc.HiveDriver");
+        LOG.warn("XXX CLZ value " + clz.getCanonicalName());
       } catch (ClassNotFoundException e) {
         LOG.error("Unable to load Hive driver class", e);
         return;
       }
 
       try {
+        LOG.warn("XXX trying to connect to " + jdbcUrl + ", with user " + hiveUser + ", password " + hivePass);
         this.connection = DriverManager.getConnection(jdbcUrl, hiveUser, hivePass);
         LOG.info("Successfully established Hive connection to  " + jdbcUrl);
       } catch (SQLException e) {
+        LOG.error("XXX hive connection failed " + e.getMessage() + ", ::: " + e.getErrorCode() + ", :::: " + e.getSQLState());
         throw new HoodieHiveSyncException("Cannot create hive connection " + getHiveJdbcUrlWithDefaultDBName(jdbcUrl), e);
       }
     }

@@ -58,8 +58,8 @@
               <target>
                 <copy file="${project.basedir}/../../../../packaging/hudi-hadoop-mr-bundle/target/hudi-hadoop-mr-bundle-${project.version}.jar" tofile="target/hoodie-hadoop-mr-bundle.jar" />
                 <copy file="${project.basedir}/../../../../packaging/hudi-hive-sync-bundle/target/hudi-hive-sync-bundle-${project.version}.jar" tofile="target/hoodie-hive-sync-bundle.jar" />
-                <copy file="${project.basedir}/../../../../packaging/hudi-spark-bundle/target/hudi-spark${sparkbundle.version}-bundle_${scala.binary.version}-${project.version}.jar" tofile="target/hoodie-spark-bundle.jar" />
-                <copy file="${project.basedir}/../../../../packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_${scala.binary.version}-${project.version}.jar" tofile="target/hoodie-utilities.jar" />
+                <copy file="${project.basedir}/../../../../packaging/hudi-spark-bundle/target/hudi-spark3.2.1-bundle_${scala.binary.version}-${project.version}.jar" tofile="target/hoodie-spark-bundle.jar" />
+                <copy file="${project.basedir}/../../../../packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-${project.version}.jar" tofile="target/hoodie-utilities.jar" />
               </target>
             </configuration>
             <goals>
@@ -85,7 +85,7 @@
             <configuration>
               <skip>${docker.build.skip}</skip>
               <pullNewerImage>false</pullNewerImage>
-              <repository>apachehudi/hudi-hadoop_${docker.hadoop.version}-hive_${docker.hive.version}</repository>
+              <repository>sivabalan/hudi-hadoop_${docker.hadoop.version}-hive_${docker.hive.version}</repository>
               <force>true</force>
               <tag>latest</tag>
             </configuration>
@@ -101,7 +101,7 @@
             <configuration>
               <skip>${docker.build.skip}</skip>
               <pullNewerImage>false</pullNewerImage>
-              <repository>apachehudi/hudi-hadoop_${docker.hadoop.version}-hive_${docker.hive.version}</repository>
+              <repository>sivabalan/hudi-hadoop_${docker.hadoop.version}-hive_${docker.hive.version}</repository>
               <force>true</force>
               <tag>${project.version}</tag>
             </configuration>

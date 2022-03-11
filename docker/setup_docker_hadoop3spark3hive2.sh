@@ -16,14 +16,24 @@
 # specific language governing permissions and limitations
 # under the License.
 #
-# Trino docker setup is adapted from https://github.com/Lewuathe/docker-trino-cluster
 
-ARG HADOOP_VERSION=3.3.1
-ARG TRINO_VERSION=368
-FROM sivabalan/hudi-hadoop_${HADOOP_VERSION}-trinobase_${TRINO_VERSION}:latest as trino-base
 
-ADD etc /usr/local/trino/etc
-EXPOSE 8091
+SCRIPT_PATH=$(cd `dirname $0`; pwd)
+HUDI_DEMO_ENV=$1
+WS_ROOT=`dirname $SCRIPT_PATH`
+echo "WS_ROOT $WS_ROOT"
+echo "HUDI_DEMO_ENV $HUDI_DEMO_ENV"
+echo "SCRIPT_PATH $SCRIPT_PATH"
 
-WORKDIR /usr/local/trino
-ENTRYPOINT [ "./scripts/trino.sh" ]
+# restart cluster
+HUDI_WS=${WS_ROOT} docker-compose -f ${SCRIPT_PATH}/compose/simple-docker-spark3-hadoop3-hive2.yaml down
+if [ "$HUDI_DEMO_ENV" != "dev" ]; then
+  echo "Pulling docker demo images ..."
+  HUDI_WS=${WS_ROOT} docker-compose -f ${SCRIPT_PATH}/compose/simple-docker-spark3-hadoop3-hive2.yaml pull
+fi
+sleep 5
+HUDI_WS=${WS_ROOT} docker-compose -f ${SCRIPT_PATH}/compose/simple-docker-spark3-hadoop3-hive2.yaml up -d
+sleep 15
+
+docker exec -it adhoc-1 /bin/bash /var/hoodie/ws/docker/demo/setup_demo_container.sh
+docker exec -it adhoc-2 /bin/bash /var/hoodie/ws/docker/demo/setup_demo_container.sh
