@@ -91,13 +91,14 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends BaseWrit
   @Override
   public List<HoodieRecord<T>> deduplicateRecords(
       List<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism) {
+    final boolean hasInsert = records.get(0).getCurrentLocation().getInstantTime().equals("I");
     Map<Object, List<Pair<Object, HoodieRecord<T>>>> keyedRecords = records.stream().map(record -> {
       // If index used is global, then records are expected to differ in their partitionPath
       final Object key = record.getKey().getRecordKey();
       return Pair.of(key, record);
     }).collect(Collectors.groupingBy(Pair::getLeft));
 
-    return keyedRecords.values().stream().map(x -> x.stream().map(Pair::getRight).reduce((rec1, rec2) -> {
+    List<HoodieRecord<T>> recordList = keyedRecords.values().stream().map(x -> x.stream().map(Pair::getRight).reduce((rec1, rec2) -> {
       final T data1 = rec1.getData();
       final T data2 = rec2.getData();
 
@@ -113,5 +114,10 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends BaseWrit
       hoodieRecord.setCurrentLocation(rec1.getCurrentLocation());
       return hoodieRecord;
     }).orElse(null)).filter(Objects::nonNull).collect(Collectors.toList());
+
+    if (hasInsert) {
+      recordList.get(0).getCurrentLocation().setInstantTime("I");
+    }
+    return recordList;
   }
 }
