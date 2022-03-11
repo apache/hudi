@@ -20,10 +20,10 @@ package org.apache.hudi
 import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql.catalyst.expressions.{Expression, Not}
-import org.apache.spark.sql.functions.{col, upper}
+import org.apache.spark.sql.functions.{col, lower}
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{Column, HoodieCatalystExpressionUtils, Row, SparkSession, functions}
+import org.apache.spark.sql.{Column, HoodieCatalystExpressionUtils, Row, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.params.ParameterizedTest
@@ -148,20 +148,12 @@ object TestDataSkippingUtils {
         Seq("file_1", "file_2", "file_3")),
       arguments(
         // Composite expression
-        functions.trim(col("B")).startsWith("abc").expr,
+        Not(lower(col("B")).startsWith("abc").expr),
         Seq(
-          IndexRow("file_1", 0, 0, 0, " aba ", " adf ", 1), // may contain strings starting w/ "abc" (after trim)
-          IndexRow("file_2", 0, 0, 0, " adf ", " azy ", 0),
-          IndexRow("file_3", 0, 0, 0, " aaa ", " aba ", 0)
-        ),
-        Seq("file_1")),
-      arguments(
-        Not(upper(col("B")).startsWith("ABC").expr),
-        Seq(
-          IndexRow("file_1", 0, 0, 0, "aba", "adf", 1), // may contain strings starting w/ "ABC" (after upper)
-          IndexRow("file_2", 0, 0, 0, "adf", "azy", 0),
-          IndexRow("file_3", 0, 0, 0, "aaa", "aba", 0),
-          IndexRow("file_4", 0, 0, 0, "abc123", "abc345", 0) // all strings start w/ "ABC" (after upper)
+          IndexRow("file_1", 0, 0, 0, "ABA", "ADF", 1), // may contain strings starting w/ "ABC" (after upper)
+          IndexRow("file_2", 0, 0, 0, "ADF", "AZY", 0),
+          IndexRow("file_3", 0, 0, 0, "AAA", "ABA", 0),
+          IndexRow("file_4", 0, 0, 0, "ABC123", "ABC345", 0) // all strings start w/ "ABC" (after upper)
         ),
         Seq("file_1", "file_2", "file_3"))
     )
@@ -572,7 +564,22 @@ object TestDataSkippingUtils {
             C_maxValue = new Timestamp(1646625048000L), // 03/06/2022
             C_num_nulls = 0)
         ),
+        Seq("file_1")),
+      arguments(
+        // Should be identical to the one above
+        "date_format(to_timestamp(B, 'yyyy-MM-dd'), 'MM/dd/yyyy') NOT IN ('03/06/2022')",
+        Seq(
+          IndexRow("file_1",
+            B_minValue = "2022-03-07", // 03/07/2022
+            B_maxValue = "2022-03-08", // 03/08/2022
+            B_num_nulls = 0),
+          IndexRow("file_2",
+            B_minValue = "2022-03-06", // 03/06/2022
+            B_maxValue = "2022-03-06", // 03/06/2022
+            B_num_nulls = 0)
+        ),
         Seq("file_1"))
+
     )
   }
 }
