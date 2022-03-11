@@ -19,9 +19,9 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
+import org.apache.spark.sql.catalyst.analysis.{ResolveTimeZone, UnresolvedAttribute, UnresolvedFunction}
 import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
-import org.apache.spark.sql.catalyst.plans.logical.{Filter, LocalRelation, LogicalPlan, Project}
+import org.apache.spark.sql.catalyst.plans.logical.{Filter, LocalRelation, LogicalPlan}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.types.StructType
 
@@ -52,22 +52,43 @@ object HoodieCatalystExpressionUtils {
     val schemaFields = tableSchema.fields
 
     val resolvedExpr = {
-      //val plan: LogicalPlan = Filter(expr, LocalRelation(schemaFields.head, schemaFields.drop(1): _*))
-      val plan: LogicalPlan = Project(Seq(new Column(expr).named), LocalRelation(schemaFields.head, schemaFields.drop(1): _*))
-      val rules: Seq[Rule[LogicalPlan]] = {
-        // TODO due to bug in Spark, it can't resolve correctly all functions
-        //      in one go, so we have to duplicate function resolution stage at least 3 times
-        //      to make sure all expression of the depth up to 3 could be appropriately resolved
+      val plan: LogicalPlan = Filter(expr, LocalRelation(schemaFields.head, schemaFields.drop(1): _*))
+      val rules: Seq[Rule[LogicalPlan]] =
+        ResolveTimeZone ::
         analyzer.ResolveFunctions ::
-          analyzer.ResolveFunctions ::
-          analyzer.ResolveFunctions ::
-          analyzer.ResolveReferences ::
-          Nil
+        analyzer.ResolveReferences ::
+        Nil
+
+      def resetUnresolved(plan: LogicalPlan): LogicalPlan = {
+        @inline def copy(expr: Expression) =
+          expr.makeCopy(expr.productIterator.map(x => x.asInstanceOf[AnyRef]).toArray)
+
+        plan.transformExpressionsUp {
+          case expr if !expr.resolved => copy(expr)
+        }
       }
 
-      rules.foldRight(plan)((rule, plan) => rule.apply(plan))
-        .asInstanceOf[Filter]
-        .condition
+      var effective = true
+      var current: LogicalPlan = plan
+      // NOTE: This is a workaround for Spark bug which makes it impossible
+      //       to resolve functions in a single pass (and collaterally to that it also erroneously marks
+      //       this rule as ineffective, making its subsequent application impossible)
+      //       To work it around we
+      //          - Clone the plan (cloning all of its expressions) this way clearing the internal metadata state
+      //            (blocking subsequent rule application)
+      //          - Apply ResolveFunctions rule multiple times
+      // TODO(SPARK-38512) cleanup after resolved
+      while (effective) {
+        val newPlan = rules.foldRight(current) {
+          case (rule, plan) =>
+            rule.apply(plan)
+        }
+        effective = !current.fastEquals(newPlan)
+        // Make a copy to reset bitset with ineffective rules
+        current = resetUnresolved(newPlan)
+      }
+
+      current.asInstanceOf[Filter].condition
     }
 
     if (!hasUnresolvedRefs(resolvedExpr)) {
