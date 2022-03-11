@@ -44,13 +44,16 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class TestSchemaPostProcessor extends UtilitiesTestBase {
 
-  private TypedProperties properties = new TypedProperties();
+  private final TypedProperties properties = new TypedProperties();
 
-  private static String ORIGINAL_SCHEMA = "{\"name\":\"t3_biz_operation_t_driver\",\"type\":\"record\",\"fields\":[{\"name\":\"ums_id_\",\"type\":[\"null\",\"string\"],\"default\":null},"
-                                              + "{\"name\":\"ums_ts_\",\"type\":[\"null\",\"string\"],\"default\":null}]}";
+  private static final String ORIGINAL_SCHEMA = "{\"type\":\"record\",\"name\":\"tripUberRec\",\"fields\":"
+      + "[{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\","
+      + "\"type\":\"string\"},{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"}]}";
 
-  private static String RESULT_SCHEMA = "{\"type\":\"record\",\"name\":\"hoodie_source\",\"namespace\":\"hoodie.source\",\"fields\":[{\"name\":\"ums_id_\",\"type\":[\"null\",\"string\"],"
-                                              + "\"default\":null},{\"name\":\"ums_ts_\",\"type\":[\"null\",\"string\"],\"default\":null}]}";
+  private static final String RESULT_SCHEMA = "{\"type\":\"record\",\"name\":\"hoodie_source\","
+      + "\"namespace\":\"hoodie.source\",\"fields\":[{\"name\":\"timestamp\",\"type\":\"long\"},"
+      + "{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},{\"name\":\"driver\","
+      + "\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"}]}";
 
   @Test
   public void testPostProcessor() throws IOException {
@@ -102,7 +105,7 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
     Schema schema = new Schema.Parser().parse(ORIGINAL_SCHEMA);
     Schema targetSchema = processor.processSchema(schema);
 
-    assertNull(targetSchema.getField("ums_id_"));
+    assertNull(targetSchema.getField("_row_key"));
     assertNull(targetSchema.getField("_hoodie_is_deleted"));
     assertNotNull(targetSchema.getField("testString"));
 
@@ -114,7 +117,7 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
     schema = new Schema.Parser().parse(ORIGINAL_SCHEMA);
     targetSchema = processor.processSchema(schema);
 
-    assertNull(targetSchema.getField("ums_id_"));
+    assertNull(targetSchema.getField("_row_key"));
     assertNotNull(targetSchema.getField("_hoodie_is_deleted"));
     assertNotNull(targetSchema.getField("testString"));
   }
@@ -122,19 +125,19 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
   @Test
   public void testDeleteColumn() {
     // remove column ums_id_ from source schema
-    properties.put(DropColumnSchemaPostProcessor.Config.DELETE_COLUMN_POST_PROCESSOR_COLUMN_PROP, "ums_id_");
+    properties.put(DropColumnSchemaPostProcessor.Config.DELETE_COLUMN_POST_PROCESSOR_COLUMN_PROP, "rider");
     DropColumnSchemaPostProcessor processor = new DropColumnSchemaPostProcessor(properties, null);
     Schema schema = new Schema.Parser().parse(ORIGINAL_SCHEMA);
     Schema targetSchema = processor.processSchema(schema);
 
-    assertNull(targetSchema.getField("ums_id_"));
-    assertNotNull(targetSchema.getField("ums_ts_"));
+    assertNull(targetSchema.getField("rider"));
+    assertNotNull(targetSchema.getField("_row_key"));
   }
 
   @Test
   public void testDeleteColumnThrows() {
     // remove all columns from source schema
-    properties.put(DropColumnSchemaPostProcessor.Config.DELETE_COLUMN_POST_PROCESSOR_COLUMN_PROP, "ums_id_,ums_ts_");
+    properties.put(DropColumnSchemaPostProcessor.Config.DELETE_COLUMN_POST_PROCESSOR_COLUMN_PROP, "timestamp,_row_key,rider,driver,fare");
     DropColumnSchemaPostProcessor processor = new DropColumnSchemaPostProcessor(properties, null);
     Schema schema = new Schema.Parser().parse(ORIGINAL_SCHEMA);
 
