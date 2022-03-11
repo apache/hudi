@@ -86,7 +86,8 @@ the mechanics of which is as follows:
     1. This will schedule INDEX action and add
        a `<instant_time>.index.requested` to the timeline, which contains the
        indexing plan. Index scheduling will also initialize the filegroup for
-       the partitions for which indexing is planned.
+       the partitions for which indexing is planned. The creation of filegroups
+       will be done within a lock.
     2. From here on, the index building process will continue to build an index
        up to instant time `t`, where `t` is the latest completed instant time on
        the timeline without any
@@ -112,10 +113,10 @@ the mechanics of which is as follows:
    instant `t` is done but before completing indexing commit), it will check for
    all completed commit instants after `t` to ensure each of them added entries
    per its indexing plan, otherwise simply abort after a configurable timeout.
-   Let's call this the **indexing check**. So, the indexer will only write base
-   files but ensure that log entries due to instants after `t` are in the same
-   filegroup i.e. no new filegroup is initialized by writers while indexing is
-   in progress.
+   Let's call this the **indexing check**. So, the indexer will not only write
+   base files but also ensure that log entries due to instants after `t` are in
+   the same filegroup i.e. no new filegroup is initialized by writers while
+   indexing is in progress.
     1. The corner case here would be that the indexing check does not factor in
        the inflight writer just about to commit. But given indexing would take
        some finite amount of time to go from requested to completion (or we can
@@ -206,6 +207,22 @@ updated in the MDT partition. Async compaction on the MDT will eventually merge
 the updates into another base file.
 
 Or, we can introduce a lock for adding events to the metadata timeline.
+
+c) Inflight writer about to commit but index is still being scheduled
+
+Consider the following scenario:
+
+1. Writer is in inflight mode.
+2. Indexer is starting and creating the file-groups. Suppose there are 100
+   file-groups to be created.
+3. Writer just finished and tries to write log blocks - it only sees a subset of
+   file-groups created yet (as the above step 2 above has not completed yet).
+   This will cause writer to incorrectly write updated to lesser number of
+   shards.
+
+In this case, we ensure that scheduling for metadata index always happens within
+a lock. Since the initialization of filegroups happen at the time of scheduling,
+indexer will hold the lock until all the filegroups are created.
 
 **Case 4: Async table services**
 
