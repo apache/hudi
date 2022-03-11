@@ -22,7 +22,9 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -30,7 +32,9 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -44,15 +48,22 @@ import org.apache.hudi.index.bloom.HoodieBloomIndex;
 import org.apache.hudi.index.bloom.SparkHoodieBloomIndexHelper;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapred.JobConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -145,8 +156,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       newCommitTime = "102";
       writeClient.startCommitWithTime(newCommitTime);
       metaClient.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(State.REQUESTED,
-              HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
-
+          HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
       // create one compaction instance before exist inflight instance.
       String compactionTime = "101";
       writeClient.scheduleCompactionAtInstant(compactionTime, Option.empty());
@@ -206,6 +216,273 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       }
     }
   }
+
+  @Test
+  public void testCompactionWithOrderedTs() throws Exception {
+    String partition = "2022";
+    String preCombineField = "timestamp";
+    dataGen = new HoodieTestDataGenerator(new String[] {partition});
+    // create table with payload = DefaultHoodieRecordPayload, PreCombineField = timestamp
+    metaClient = HoodieTestUtils.initWithPayLoad(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ, DefaultHoodieRecordPayload.class, preCombineField, new Properties());
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .withParallelism(2, 2)
+        .forTable("test-trip-table")
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
+        .withPreCombineField(preCombineField)
+        .combineInput(false, true)
+        .withWritePayLoad(DefaultHoodieRecordPayload.class.getName())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withInlineCompaction(true)
+            .withPayloadClass(DefaultHoodieRecordPayload.class.getName())
+            .withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .build();
+    /*
+     * Update the records twice with different ordered timestamps
+     * first  step : insert 100 records
+     * second step : update 100 records with timestamp 2
+     *
+     */
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
+      String firstCommitTime = "100";
+      writeClient.startCommitWithTime(firstCommitTime);
+
+      List<HoodieRecord> records = dataGen.generateInserts(firstCommitTime, 100);
+      JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+      writeClient.insert(recordsRDD, firstCommitTime).collect();
+      HoodieTable table = HoodieSparkTable.create(config, context);
+      // first update
+      String firstUpdateTime = "101";
+      // init ts = 2
+      Integer firstTimeStamp = 2;
+      List<HoodieRecord> updatedRecords = dataGen.generateUpdatesWithTS(firstUpdateTime, records, firstTimeStamp);
+      JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
+      HoodieIndex index = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
+      JavaRDD<HoodieRecord> updatedTaggedRecordsRDD = tagLocation(index, updatedRecordsRDD, table);
+
+      writeClient.startCommitWithTime(firstUpdateTime);
+      writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, firstUpdateTime).collect();
+      metaClient.reloadActiveTimeline();
+
+      // second update
+      String secondUpdateTime = "102";
+      Integer secondTimeStamp = firstTimeStamp + 1;
+      List<HoodieRecord> updatedTwiceRecords = dataGen.generateUpdatesWithTS(secondUpdateTime, records, secondTimeStamp);
+      JavaRDD<HoodieRecord> updatedTwiceRecordsRDD = jsc.parallelize(updatedTwiceRecords, 1);
+      JavaRDD<HoodieRecord> updatedTwiceTaggedRecordsRDD = tagLocation(index, updatedTwiceRecordsRDD, table);
+
+      writeClient.startCommitWithTime(secondUpdateTime);
+      writeClient.upsertPreppedRecords(updatedTwiceTaggedRecordsRDD, secondUpdateTime).collect();
+      metaClient.reloadActiveTimeline();
+
+      // Do a compaction
+      String compactionCommitTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
+      HoodieWriteMetadata writeMetadata = writeClient.compact(compactionCommitTime);
+      HoodieCommitMetadata commitMetadata = (HoodieCommitMetadata) writeMetadata.getCommitMetadata().get();
+      // Verify that  partition paths are present in the commitMetadata result
+      for (String partitionPath : dataGen.getPartitionPaths()) {
+        assertTrue(commitMetadata.getWritePartitionPaths().contains(partitionPath));
+      }
+
+      metaClient.reloadActiveTimeline();
+      // Verify that latest timeline instant is the compact
+      assertEquals(4, metaClient.getActiveTimeline().getWriteTimeline().countInstants());
+      assertEquals(HoodieTimeline.COMMIT_ACTION, metaClient.getActiveTimeline().lastInstant().get().getAction());
+
+
+      table.getHoodieView().sync();
+      FileStatus[] allFiles = HoodieTestTable.of(table.getMetaClient()).listAllBaseFiles(table.getBaseFileExtension());
+      HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient, table.getCompletedCommitsTimeline(), allFiles);
+
+      List<String> inputPaths = tableView.getLatestBaseFiles()
+          .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
+          .collect(Collectors.toList());
+      List<GenericRecord> recordsRead =
+          HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf, inputPaths, basePath, new JobConf(hadoopConf), true, false);
+      // check table records size = 100
+      assertEquals(100, recordsRead.size());
+      // after compaction , check all records timestamp = secondTimeStamp, _hoodie_commit_time = secondUpdateTime
+      for (GenericRecord genericRecord : recordsRead) {
+        assertEquals(String.valueOf(secondTimeStamp), genericRecord.get("timestamp").toString());
+        assertEquals(secondUpdateTime, genericRecord.get("_hoodie_commit_time").toString());
+      }
+    }
+
+  }
+
+  @Test
+  public void testCompactionWithUnOrderedTs() throws Exception {
+    String partition = "2022";
+    String preCombineField = "timestamp";
+    dataGen = new HoodieTestDataGenerator(new String[] {partition});
+    // create table with payload = DefaultHoodieRecordPayload, PreCombineField = timestamp
+    metaClient = HoodieTestUtils.initWithPayLoad(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ, DefaultHoodieRecordPayload.class, preCombineField, new Properties());
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .withParallelism(2, 2)
+        .forTable("test-trip-table")
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
+        .withPreCombineField(preCombineField)
+        .combineInput(false, true)
+        .withWritePayLoad(DefaultHoodieRecordPayload.class.getName())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withInlineCompaction(true)
+            .withPayloadClass(DefaultHoodieRecordPayload.class.getName())
+            .withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .build();
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
+      String firstCommitTime = "100";
+      writeClient.startCommitWithTime(firstCommitTime);
+
+      List<HoodieRecord> records = dataGen.generateInserts(firstCommitTime, 100);
+      JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+      writeClient.insert(recordsRDD, firstCommitTime).collect();
+      // Update the records twice with different ordered timestamps
+      HoodieTable table = HoodieSparkTable.create(config, context);
+      // first update
+      String firstUpdateTime = "101";
+      // init ts = Integer.MAX_VALUE
+      Integer firstTimeStamp = Integer.MAX_VALUE;
+      List<HoodieRecord> updatedRecords = dataGen.generateUpdatesWithTS(firstUpdateTime, records, firstTimeStamp);
+      JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
+      HoodieIndex index = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
+      JavaRDD<HoodieRecord> updatedTaggedRecordsRDD = tagLocation(index, updatedRecordsRDD, table);
+
+      writeClient.startCommitWithTime(firstUpdateTime);
+      writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, firstUpdateTime).collect();
+      metaClient.reloadActiveTimeline();
+
+      // second update
+      String secondUpdateTime = "102";
+      // init secondTimeStamp less than firstTimeStamp
+      Integer secondTimeStamp = 5;
+      List<HoodieRecord> updatedTwiceRecords = dataGen.generateUpdatesWithTS(secondUpdateTime, records, secondTimeStamp);
+      JavaRDD<HoodieRecord> updatedTwiceRecordsRDD = jsc.parallelize(updatedTwiceRecords, 1);
+      JavaRDD<HoodieRecord> updatedTwiceTaggedRecordsRDD = tagLocation(index, updatedTwiceRecordsRDD, table);
+
+      writeClient.startCommitWithTime(secondUpdateTime);
+      writeClient.upsertPreppedRecords(updatedTwiceTaggedRecordsRDD, secondUpdateTime).collect();
+      metaClient.reloadActiveTimeline();
+
+      // Do a compaction
+      String compactionCommitTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
+      HoodieWriteMetadata writeMetadata = writeClient.compact(compactionCommitTime);
+      HoodieCommitMetadata commitMetadata = (HoodieCommitMetadata) writeMetadata.getCommitMetadata().get();
+      // Verify that  partition paths are present in the commitMetadata result
+      for (String partitionPath : dataGen.getPartitionPaths()) {
+        assertTrue(commitMetadata.getWritePartitionPaths().contains(partitionPath));
+      }
+
+      metaClient.reloadActiveTimeline();
+      // Verify that latest timeline instant is the compact
+      assertEquals(4, metaClient.getActiveTimeline().getWriteTimeline().countInstants());
+      assertEquals(HoodieTimeline.COMMIT_ACTION, metaClient.getActiveTimeline().lastInstant().get().getAction());
+
+
+      table.getHoodieView().sync();
+      FileStatus[] allFiles = HoodieTestTable.of(table.getMetaClient()).listAllBaseFiles(table.getBaseFileExtension());
+      HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient, table.getCompletedCommitsTimeline(), allFiles);
+
+      List<String> inputPaths = tableView.getLatestBaseFiles()
+          .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
+          .collect(Collectors.toList());
+      List<GenericRecord> recordsRead =
+          HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf, inputPaths, basePath, new JobConf(hadoopConf), true, false);
+      // check table records size = 100
+      assertEquals(100, recordsRead.size());
+      // after compaction , check all records timestamp = firstTimeStamp, _hoodie_commit_time = firstUpdateTime
+      for (GenericRecord genericRecord : recordsRead) {
+        assertEquals(String.valueOf(firstTimeStamp), genericRecord.get("timestamp").toString());
+        assertEquals(firstUpdateTime, genericRecord.get("_hoodie_commit_time").toString());
+      }
+    }
+  }
+
+  @Test
+  public void testCompactionWithSameTs() throws Exception {
+    String partition = "2022";
+    String preCombineField = "timestamp";
+    dataGen = new HoodieTestDataGenerator(new String[] {partition});
+    // create table with payload = DefaultHoodieRecordPayload, PreCombineField = timestamp
+    metaClient = HoodieTestUtils.initWithPayLoad(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ, DefaultHoodieRecordPayload.class, preCombineField, new Properties());
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .withParallelism(2, 2)
+        .forTable("test-trip-table")
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
+        .withPreCombineField(preCombineField)
+        .combineInput(false, true)
+        .withWritePayLoad(DefaultHoodieRecordPayload.class.getName())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withInlineCompaction(true)
+            .withPayloadClass(DefaultHoodieRecordPayload.class.getName())
+            .withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .build();
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
+      String firstCommitTime = "100";
+      writeClient.startCommitWithTime(firstCommitTime);
+
+      List<HoodieRecord> records = dataGen.generateInserts(firstCommitTime, 100);
+      JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+      writeClient.insert(recordsRDD, firstCommitTime).collect();
+      // Update the records twice with different ordered timestamps
+      HoodieTable table = HoodieSparkTable.create(config, context);
+      // first update
+      String firstUpdateTime = "101";
+      // init ts = 0
+      Integer firstTimeStamp = 0;
+      List<HoodieRecord> updatedRecords = dataGen.generateUpdatesWithTS(firstUpdateTime, records, firstTimeStamp);
+      JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
+      HoodieIndex index = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
+      JavaRDD<HoodieRecord> updatedTaggedRecordsRDD = tagLocation(index, updatedRecordsRDD, table);
+
+      writeClient.startCommitWithTime(firstUpdateTime);
+      writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, firstUpdateTime).collect();
+      metaClient.reloadActiveTimeline();
+
+      // second update
+      String secondUpdateTime = "102";
+      // init ts = 0
+      Integer secondTimeStamp = 0;
+      List<HoodieRecord> updatedTwiceRecords = dataGen.generateUpdatesWithTS(secondUpdateTime, records, secondTimeStamp);
+      JavaRDD<HoodieRecord> updatedTwiceRecordsRDD = jsc.parallelize(updatedTwiceRecords, 1);
+      JavaRDD<HoodieRecord> updatedTwiceTaggedRecordsRDD = tagLocation(index, updatedTwiceRecordsRDD, table);
+
+      writeClient.startCommitWithTime(secondUpdateTime);
+      writeClient.upsertPreppedRecords(updatedTwiceTaggedRecordsRDD, secondUpdateTime).collect();
+      metaClient.reloadActiveTimeline();
+
+      // Do a compaction
+      String compactionCommitTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
+      HoodieWriteMetadata writeMetadata = writeClient.compact(compactionCommitTime);
+      HoodieCommitMetadata commitMetadata = (HoodieCommitMetadata) writeMetadata.getCommitMetadata().get();
+      // Verify that  partition paths are present in the commitMetadata result
+      for (String partitionPath : dataGen.getPartitionPaths()) {
+        assertTrue(commitMetadata.getWritePartitionPaths().contains(partitionPath));
+      }
+
+      metaClient.reloadActiveTimeline();
+      // Verify that latest timeline instant is the compact
+      assertEquals(4, metaClient.getActiveTimeline().getWriteTimeline().countInstants());
+      assertEquals(HoodieTimeline.COMMIT_ACTION, metaClient.getActiveTimeline().lastInstant().get().getAction());
+
+
+      table.getHoodieView().sync();
+      FileStatus[] allFiles = HoodieTestTable.of(table.getMetaClient()).listAllBaseFiles(table.getBaseFileExtension());
+      HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient, table.getCompletedCommitsTimeline(), allFiles);
+
+      List<String> inputPaths = tableView.getLatestBaseFiles()
+          .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
+          .collect(Collectors.toList());
+      List<GenericRecord> recordsRead =
+          HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf, inputPaths, basePath, new JobConf(hadoopConf), true, false);
+      // check table records size = 100
+      assertEquals(100, recordsRead.size());
+      // after compaction , check all records timestamp = secondTimeStamp, _hoodie_commit_time = secondUpdateTime
+      for (GenericRecord genericRecord : recordsRead) {
+        assertEquals(String.valueOf(secondTimeStamp), genericRecord.get("timestamp").toString());
+        assertEquals(secondUpdateTime, genericRecord.get("_hoodie_commit_time").toString());
+      }
+    }
+  }
+
 
   @Override
   protected HoodieTableType getTableType() {

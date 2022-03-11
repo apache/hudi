@@ -21,6 +21,7 @@ package org.apache.hudi.common.testutils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
@@ -114,11 +115,25 @@ public class HoodieTestUtils {
                                            Properties properties)
       throws IOException {
     properties = HoodieTableMetaClient.withPropertyBuilder()
-      .setTableName(RAW_TRIPS_TEST_NAME)
-      .setTableType(tableType)
-      .setPayloadClass(HoodieAvroPayload.class)
-      .fromProperties(properties)
-      .build();
+        .setTableName(RAW_TRIPS_TEST_NAME)
+        .setTableType(tableType)
+        .setPayloadClass(HoodieAvroPayload.class)
+        .fromProperties(properties)
+        .build();
+    return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
+  }
+
+  public static HoodieTableMetaClient initWithPayLoad(Configuration hadoopConf, String basePath, HoodieTableType tableType,
+                                                      Class<? extends HoodieRecordPayload> payloadClass, String preCombineField,
+                                                      Properties properties)
+      throws IOException {
+    properties = HoodieTableMetaClient.withPropertyBuilder()
+        .setTableName(RAW_TRIPS_TEST_NAME)
+        .setPreCombineField(preCombineField)
+        .setTableType(tableType)
+        .setPayloadClass(payloadClass)
+        .fromProperties(properties)
+        .build();
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
   }
 
@@ -126,12 +141,12 @@ public class HoodieTestUtils {
                                            Properties properties, String databaseName)
       throws IOException {
     properties = HoodieTableMetaClient.withPropertyBuilder()
-      .setDatabaseName(databaseName)
-      .setTableName(RAW_TRIPS_TEST_NAME)
-      .setTableType(tableType)
-      .setPayloadClass(HoodieAvroPayload.class)
-      .fromProperties(properties)
-      .build();
+        .setDatabaseName(databaseName)
+        .setTableName(RAW_TRIPS_TEST_NAME)
+        .setTableType(tableType)
+        .setPayloadClass(HoodieAvroPayload.class)
+        .fromProperties(properties)
+        .build();
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
   }
 

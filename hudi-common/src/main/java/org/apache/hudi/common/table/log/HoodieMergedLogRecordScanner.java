@@ -63,6 +63,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   public final HoodieTimer timer = new HoodieTimer();
   // Final map of compacted/merged records
   protected final ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records;
+  // Whether logFilePaths is sorted in reverse order according to instanceTime
+  private final boolean revertLogFile;
   // count of merged records in log
   private long numMergedRecordsInLog;
   private long maxMemorySizeInBytes;
@@ -77,11 +79,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
                                          ExternalSpillableMap.DiskMapType diskMapType,
                                          boolean isBitCaskDiskMapCompressionEnabled,
                                          boolean withOperationField, boolean enableFullScan,
-                                         Option<String> partitionName) {
+                                         Option<String> partitionName, boolean revertLogFile) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
         instantRange, withOperationField,
         enableFullScan, partitionName);
     try {
+      this.revertLogFile = revertLogFile;
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
           new HoodieRecordSizeEstimator(readerSchema), diskMapType, isBitCaskDiskMapCompressionEnabled);
@@ -93,6 +96,13 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     if (autoScan) {
       performScan();
     }
+  }
+
+  /**
+   * Returns the builder for {@code HoodieMergedLogRecordScanner}.
+   */
+  public static HoodieMergedLogRecordScanner.Builder newBuilder() {
+    return new Builder();
   }
 
   protected void performScan() {
@@ -123,23 +133,21 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     return numMergedRecordsInLog;
   }
 
-  /**
-   * Returns the builder for {@code HoodieMergedLogRecordScanner}.
-   */
-  public static HoodieMergedLogRecordScanner.Builder newBuilder() {
-    return new Builder();
-  }
-
   @Override
   protected void processNextRecord(HoodieRecord<? extends HoodieRecordPayload> hoodieRecord) throws IOException {
     String key = hoodieRecord.getRecordKey();
     if (records.containsKey(key)) {
       // Merge and store the merged record. The HoodieRecordPayload implementation is free to decide what should be
       // done when a delete (empty payload) is encountered before or after an insert/update.
-
       HoodieRecord<? extends HoodieRecordPayload> oldRecord = records.get(key);
       HoodieRecordPayload oldValue = oldRecord.getData();
-      HoodieRecordPayload combinedValue = hoodieRecord.getData().preCombine(oldValue);
+      HoodieRecordPayload combinedValue;
+      // If revertLogFile = true, incoming data (hoodieRecord) is the old record.
+      if (!revertLogFile) {
+        combinedValue = hoodieRecord.getData().preCombine(oldValue, null);
+      } else {
+        combinedValue = oldValue.preCombine(hoodieRecord.getData(), null);
+      }
       // If combinedValue is oldValue, no need rePut oldRecord
       if (combinedValue != oldValue) {
         HoodieOperation operation = hoodieRecord.getOperation();
@@ -191,6 +199,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     private boolean autoScan = true;
     // operation field default false
     private boolean withOperationField = false;
+    private boolean revertLogFile = false;
 
     @Override
     public Builder withFileSystem(FileSystem fs) {
@@ -271,6 +280,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       return this;
     }
 
+    public Builder withRevertLogFile(boolean revertLogFile) {
+      this.revertLogFile = revertLogFile;
+      return this;
+    }
+
     public Builder withOperationField(boolean withOperationField) {
       this.withOperationField = withOperationField;
       return this;
@@ -288,7 +302,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
           latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
           bufferSize, spillableMapBasePath, instantRange, autoScan,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, true,
-          Option.ofNullable(partitionName));
+          Option.ofNullable(partitionName), revertLogFile);
     }
   }
 }

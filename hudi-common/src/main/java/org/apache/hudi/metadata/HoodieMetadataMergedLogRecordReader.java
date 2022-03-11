@@ -65,7 +65,7 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
                                               Option<InstantRange> instantRange, boolean enableFullScan) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, maxMemorySizeInBytes, false, false, bufferSize,
         spillableMapBasePath, instantRange, false, diskMapType, isBitCaskDiskMapCompressionEnabled, false,
-        enableFullScan, Option.of(partitionName));
+        enableFullScan, Option.of(partitionName),false);
     this.mergeKeyFilter = mergeKeyFilter;
     if (enableFullScan) {
       performScan();
