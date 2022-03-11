@@ -580,18 +580,18 @@ object DataSourceWriteOptions {
   val ENABLE_CUSTOM_MOR_TABLENAME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.enable.custom.mor.tablename")
     .defaultValue("false")
-    .withDocumentation("When set to true, define custom table name with merge on read table " +
+    .withDocumentation("When set to true, define custom table name with merge on read table type" +
       "By default, false.")
 
   val CUSTOM_RO_TABLENAME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.custom.ro.tablename")
     .defaultValue("")
-    .withDocumentation("custom ro table name for merge on read , only valid when enable_custom_table_name is true, should different with custom_rt_name ")
+    .withDocumentation("custom ro table name for merge on read , only valid when enable_custom_table_name is true, should different from custom_rt_name ")
 
   val CUSTOM_RT_TABLENAME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.custom.rt.tablename")
     .defaultValue("")
-    .withDocumentation("custom snapshot table name for merge on read, only valid when enable_custom_table_name is true, should different with custom_ro_name ")
+    .withDocumentation("custom snapshot table name for merge on read, only valid when enable_custom_table_name is true, should different from custom_ro_name ")
 
   /** @deprecated Use {@link HIVE_ASSUME_DATE_PARTITION} and its methods instead */
   @Deprecated
