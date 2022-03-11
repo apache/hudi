@@ -21,9 +21,9 @@ import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql.catalyst.expressions.{Expression, Not}
 import org.apache.spark.sql.functions.col
-import org.apache.spark.sql.hudi.{DataSkippingUtils, HoodieCatalystExpressionUtils}
+import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType, VarcharType}
-import org.apache.spark.sql.{Column, SparkSession}
+import org.apache.spark.sql.{Column, HoodieCatalystExpressionUtils, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.params.ParameterizedTest

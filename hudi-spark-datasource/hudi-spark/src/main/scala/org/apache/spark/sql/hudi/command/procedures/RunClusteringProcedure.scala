@@ -26,10 +26,9 @@ import org.apache.hudi.config.HoodieClusteringConfig
 import org.apache.hudi.exception.HoodieClusteringException
 import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieFileIndex}
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.Row
+import org.apache.spark.sql.{HoodieCatalystExpressionUtils, Row}
 import org.apache.spark.sql.catalyst.expressions.PredicateHelper
 import org.apache.spark.sql.execution.datasources.FileStatusCache
-import org.apache.spark.sql.hudi.HoodieCatalystExpressionUtils
 import org.apache.spark.sql.types._
 
 import java.util.function.Supplier

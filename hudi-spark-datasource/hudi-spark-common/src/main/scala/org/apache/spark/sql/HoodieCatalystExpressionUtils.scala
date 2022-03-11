@@ -17,9 +17,8 @@
  * under the License.
  */
 
-package org.apache.spark.sql.hudi
+package org.apache.spark.sql
 
-import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LocalRelation}
