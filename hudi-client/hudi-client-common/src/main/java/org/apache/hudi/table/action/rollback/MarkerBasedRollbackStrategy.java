@@ -113,12 +113,12 @@ public class MarkerBasedRollbackStrategy<T extends HoodieRecordPayload, I, K, O>
     // NOTE: Since we're rolling back incomplete Delta Commit, it only could have appended its
     //       block to the latest log-file
     // TODO(HUDI-1517) use provided marker-file's path instead
-    Option<HoodieLogFile> logFileOption = FSUtils.getLatestLogFile(table.getMetaClient().getFs(), partitionPath, fileId,
+    Option<HoodieLogFile> latestLogFileOption = FSUtils.getLatestLogFile(table.getMetaClient().getFs(), partitionPath, fileId,
             HoodieFileFormat.HOODIE_LOG.getFileExtension(), baseCommitTime);
 
     Map<String, Long> logFilesWithBlocsToRollback = new HashMap<>();
-    if (logFileOption.isPresent()) {
-      HoodieLogFile latestLogFile = logFileOption.get();
+    if (latestLogFileOption.isPresent()) {
+      HoodieLogFile latestLogFile = latestLogFileOption.get();
       // NOTE: Marker's don't carry information about the cumulative size of the blocks that have been appended,
       //       therefore we simply stub this value.
       logFilesWithBlocsToRollback = Collections.singletonMap(latestLogFile.getFileStatus().getPath().toString(), -1L);
