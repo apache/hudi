@@ -1136,8 +1136,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieCompactionConfig.CLEANER_PARALLELISM_VALUE);
   }
 
-  public int getInlineCleaningMaxCommits() {
-    return getInt(HoodieCompactionConfig.INLINE_CLEAN_NUM_COMMITS);
+  public int getCleaningMaxCommits() {
+    return getInt(HoodieCompactionConfig.CLEAN_MAX_COMMITS);
   }
 
   public CleaningTriggerStrategy getCleaningTriggerStrategy() {

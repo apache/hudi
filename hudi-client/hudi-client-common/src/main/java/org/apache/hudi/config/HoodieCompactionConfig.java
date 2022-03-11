@@ -131,13 +131,13 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + "Valid options: " + Arrays.stream(CompactionTriggerStrategy.values()).map(Enum::name).collect(Collectors.joining(",")));
 
   public static final ConfigProperty<String> CLEAN_TRIGGER_STRATEGY = ConfigProperty
-          .key("hoodie.clean.inline.trigger.strategy")
+          .key("hoodie.clean.trigger.strategy")
           .defaultValue(CleaningTriggerStrategy.NUM_COMMITS.name())
           .withDocumentation("Controls how cleaning is scheduled. Valid options: "
                   + Arrays.stream(CleaningTriggerStrategy.values()).map(Enum::name).collect(Collectors.joining(",")));
 
-  public static final ConfigProperty<String> INLINE_CLEAN_NUM_COMMITS = ConfigProperty
-          .key("hoodie.clean.inline.min.commits")
+  public static final ConfigProperty<String> CLEAN_MAX_COMMITS = ConfigProperty
+          .key("hoodie.clean.max.commits")
           .defaultValue("1")
           .withDocumentation("Number of commits after the last clean operation, before scheduling of a new clean is attempted.");
 
@@ -595,13 +595,13 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withInlineCleaningTriggerStrategy(String cleaningTriggerStrategy) {
+    public Builder withCleaningTriggerStrategy(String cleaningTriggerStrategy) {
       compactionConfig.setValue(CLEAN_TRIGGER_STRATEGY, cleaningTriggerStrategy);
       return this;
     }
 
-    public Builder withMinCommitsBeforeInlineCleaning(int commitsBeforeInlineCleaning) {
-      compactionConfig.setValue(INLINE_CLEAN_NUM_COMMITS, String.valueOf(commitsBeforeInlineCleaning));
+    public Builder withMaxCommitsBeforeCleaning(int maxCommitsBeforeCleaning) {
+      compactionConfig.setValue(CLEAN_MAX_COMMITS, String.valueOf(maxCommitsBeforeCleaning));
       return this;
     }
 

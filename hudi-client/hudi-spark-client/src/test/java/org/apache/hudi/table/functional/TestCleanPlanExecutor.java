@@ -83,7 +83,7 @@ public class TestCleanPlanExecutor extends TestCleaner {
                         .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
                         .withCleanBootstrapBaseFileEnabled(true)
                         .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(2)
-                        .withInlineCleaningTriggerStrategy("invalid_strategy").build())
+                        .withCleaningTriggerStrategy("invalid_strategy").build())
                 .build();
     Exception e = assertThrows(IllegalArgumentException.class, () -> {
       runCleaner(config, true);
@@ -114,7 +114,7 @@ public class TestCleanPlanExecutor extends TestCleaner {
                         .withCleanBootstrapBaseFileEnabled(enableBootstrapSourceClean)
                         .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
                         .retainCommits(2)
-                        .withMinCommitsBeforeInlineCleaning(2).build())
+                        .withMaxCommitsBeforeCleaning(2).build())
                 .build();
 
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
