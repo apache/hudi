@@ -24,9 +24,9 @@ import org.apache.hudi.HoodieBaseRelation.createBaseFileReader
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.{HoodieCatalystExpressionUtils, SQLContext}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
+import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
@@ -70,7 +70,8 @@ class BaseFileOnlyViewRelation(sqlContext: SQLContext,
       HoodieSparkUtils.getRequiredSchema(tableAvroSchema, fetchedColumns)
 
     val filterExpressions = convertToExpressions(filters)
-    val (partitionFilters, dataFilters) = filterExpressions.partition(isPartitionPredicate)
+    val (partitionFilters, dataFilters) = HoodieCatalystExpressionUtils.splitPartitionAndDataPredicates(
+      sparkSession, filterExpressions, partitionColumns)
 
     val filePartitions = getPartitions(partitionFilters, dataFilters)
 
@@ -137,17 +138,4 @@ class BaseFileOnlyViewRelation(sqlContext: SQLContext,
 
     catalystExpressions.filter(_.isDefined).map(_.get).toArray
   }
-
-  /**
-   * Checks whether given expression only references only references partition columns
-   * (and involves no sub-query)
-   */
-  private def isPartitionPredicate(condition: Expression): Boolean = {
-    // Validates that the provided names both resolve to the same entity
-    val resolvedNameEquals = sparkSession.sessionState.analyzer.resolver
-
-    condition.references.forall { r => partitionColumns.exists(resolvedNameEquals(r.name, _)) } &&
-      !SubqueryExpression.hasSubquery(condition)
-  }
-
 }
