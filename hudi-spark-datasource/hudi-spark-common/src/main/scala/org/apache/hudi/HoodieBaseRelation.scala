@@ -24,7 +24,7 @@ import org.apache.hadoop.fs.{FileStatus, Path, PathFilter}
 import org.apache.hadoop.hbase.io.hfile.CacheConfig
 import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.{getPartitionPath, isMetadataTable}
-import org.apache.hudi.HoodieCommonUtils.toScalaOption
+import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.common.config.SerializableConfiguration
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
