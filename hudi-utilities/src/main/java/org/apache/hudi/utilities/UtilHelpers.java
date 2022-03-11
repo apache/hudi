@@ -43,6 +43,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
+import org.apache.hudi.utilities.exception.HoodieSourcePostProcessException;
 import org.apache.hudi.utilities.exception.HoodieSchemaPostProcessException;
 import org.apache.hudi.utilities.schema.ChainedSchemaPostProcessor;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
@@ -53,6 +54,7 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessor;
 import org.apache.hudi.utilities.schema.SparkAvroPostProcessor;
 import org.apache.hudi.utilities.sources.Source;
+import org.apache.hudi.utilities.sources.processor.ChainedJsonKafkaSourcePostProcessor;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
@@ -125,12 +127,19 @@ public class UtilHelpers {
     }
   }
 
-  public static JsonKafkaSourcePostProcessor createJsonKafkaSourcePostProcessor(String postProcessorClassName, TypedProperties props) throws IOException {
+  public static JsonKafkaSourcePostProcessor createJsonKafkaSourcePostProcessor(String postProcessorClassNames, TypedProperties props) throws IOException {
+    if (StringUtils.isNullOrEmpty(postProcessorClassNames)) {
+      return null;
+    }
+
     try {
-      return StringUtils.isNullOrEmpty(postProcessorClassName) ? null
-          : (JsonKafkaSourcePostProcessor) ReflectionUtils.loadClass(postProcessorClassName, props);
+      List<JsonKafkaSourcePostProcessor> processors = new ArrayList<>();
+      for (String className : (postProcessorClassNames.split(","))) {
+        processors.add((JsonKafkaSourcePostProcessor) ReflectionUtils.loadClass(className, props));
+      }
+      return new ChainedJsonKafkaSourcePostProcessor(processors, props);
     } catch (Throwable e) {
-      throw new IOException("Could not load json kafka source post processor class " + postProcessorClassName, e);
+      throw new HoodieSourcePostProcessException("Could not load postProcessorClassNames class(es) " + postProcessorClassNames, e);
     }
   }
 
