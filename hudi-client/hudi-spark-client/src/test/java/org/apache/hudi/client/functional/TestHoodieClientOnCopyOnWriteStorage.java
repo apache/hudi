@@ -1483,11 +1483,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         .setClusteringPlan(clusteringPlan).setOperationType(WriteOperationType.CLUSTER.name()).build();
 
     FileCreateUtils.createRequestedReplaceCommit(metaClient.getBasePath(), pendingClusteringInstant.getTimestamp(), Option.of(requestedReplaceMetadata));
-    SparkRDDWriteClient client1 = new SparkRDDWriteClient(context, config);
 
     // trigger clustering again. no new rollback instants should be generated.
     try {
-      client1.cluster(pendingClusteringInstant.getTimestamp(), false);
+      client.cluster(pendingClusteringInstant.getTimestamp(), false);
       // new replace commit metadata generated is fake one. so, clustering will fail. but the intention of test is ot check for duplicate rollback instants.
     } catch (Exception e) {
       //ignore.
