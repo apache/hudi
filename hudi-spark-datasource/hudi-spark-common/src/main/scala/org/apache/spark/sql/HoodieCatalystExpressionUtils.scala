@@ -27,7 +27,9 @@ import org.apache.spark.sql.types.StructType
 object HoodieCatalystExpressionUtils {
 
   /**
-   * Resolve filter expression from string expr with given table schema, for example:
+   * Parses and resolves expression against the attributes of the given table schema.
+   *
+   * For example:
    * <pre>
    *   ts > 1000 and ts <= 1500
    * </pre>
@@ -36,9 +38,11 @@ object HoodieCatalystExpressionUtils {
    *   And(GreaterThan(ts#590L > 1000), LessThanOrEqual(ts#590L <= 1500))
    * </pre>
    *
-   * @param spark       The spark session
-   * @param exprString  String to be resolved
-   * @param tableSchema The table schema
+   * Where <pre>ts</pre> is a column of the provided [[tableSchema]]
+   *
+   * @param spark       spark session
+   * @param exprString  string representation of the expression to parse and resolve
+   * @param tableSchema table schema encompassing attributes to resolve against
    * @return Resolved filter expression
    */
   def resolveExpr(spark: SparkSession, exprString: String, tableSchema: StructType): Expression = {
@@ -46,6 +50,25 @@ object HoodieCatalystExpressionUtils {
     resolveExpr(spark, expr, tableSchema)
   }
 
+  /**
+   * Resolves provided expression (unless already resolved) against the attributes of the given table schema.
+   *
+   * For example:
+   * <pre>
+   *   ts > 1000 and ts <= 1500
+   * </pre>
+   * will be resolved as
+   * <pre>
+   *   And(GreaterThan(ts#590L > 1000), LessThanOrEqual(ts#590L <= 1500))
+   * </pre>
+   *
+   * Where <pre>ts</pre> is a column of the provided [[tableSchema]]
+   *
+   * @param spark       spark session
+   * @param expr        Catalyst expression to be resolved (if not yet)
+   * @param tableSchema table schema encompassing attributes to resolve against
+   * @return Resolved filter expression
+   */
   def resolveExpr(spark: SparkSession, expr: Expression, tableSchema: StructType): Expression = {
     val analyzer = spark.sessionState.analyzer
     val schemaFields = tableSchema.fields
