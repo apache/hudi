@@ -74,7 +74,7 @@ public class TransactionUtils {
    * @param thisCommitMetadata
    * @param config
    * @param lastCompletedTxnOwnerInstant
-   * @param unCheckedPendingClusteringInstants
+   * @param pendingClusteringInstants
    *
    * @return
    * @throws HoodieWriteConflictException
@@ -86,9 +86,9 @@ public class TransactionUtils {
       final HoodieWriteConfig config,
       Option<HoodieInstant> lastCompletedTxnOwnerInstant,
       boolean reloadActiveTimeline,
-      List<HoodieInstant> unCheckedPendingClusteringInstants) throws HoodieWriteConflictException {
+      List<HoodieInstant> pendingClusteringInstants) throws HoodieWriteConflictException {
     if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
-      // deal with unCheckedPendingClusteringInstants
+      // deal with pendingClusteringInstants
       // some clustering instants maybe finished during current write operation,
       // we should check the conflict of those clustering operation
       List<String> completeClusteringOperations = table.getMetaClient()
@@ -96,7 +96,7 @@ public class TransactionUtils {
           .getCompletedReplaceTimeline()
           .getInstants()
           .map(f -> f.getTimestamp()).collect(Collectors.toList());
-      Stream<HoodieInstant> completedClusteringInstantsDuringCurrentWriteOperation = unCheckedPendingClusteringInstants
+      Stream<HoodieInstant> completedClusteringInstantsDuringCurrentWriteOperation = pendingClusteringInstants
           .stream().filter(f -> completeClusteringOperations.contains(f.getTimestamp()));
 
       ConflictResolutionStrategy resolutionStrategy = config.getWriteConflictResolutionStrategy();
@@ -174,7 +174,7 @@ public class TransactionUtils {
    * @param metaClient
    * @return
    */
-  public static List<HoodieInstant> getUncheckedPendingClusteringInstants(HoodieTableMetaClient metaClient) {
+  public static List<HoodieInstant> getPendingReplaceRequestedInstants(HoodieTableMetaClient metaClient) {
     return metaClient
         .getActiveTimeline()
         .filterPendingReplaceTimeline()

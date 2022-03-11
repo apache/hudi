@@ -474,7 +474,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     // Important to create this after the lock to ensure the latest commits show up in the timeline without need for reload
     HoodieTable table = createTable(config, hadoopConf);
     TransactionUtils.resolveWriteConflictIfAny(table, this.txnManager.getCurrentTransactionOwner(),
-        Option.of(metadata), config, txnManager.getLastCompletedTransactionOwner(), false, this.unCheckedPendingClusteringInstants);
+        Option.of(metadata), config, txnManager.getLastCompletedTransactionOwner(), false, this.pendingReplaceRequestedInstants);
   }
 
   @Override

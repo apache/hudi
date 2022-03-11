@@ -125,7 +125,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   protected transient AsyncArchiveService asyncArchiveService;
   protected final TransactionManager txnManager;
   protected Option<Pair<HoodieInstant, Map<String, String>>> lastCompletedTxnAndMetadata = Option.empty();
-  protected List<HoodieInstant> unCheckedPendingClusteringInstants = new ArrayList<>();
+  protected List<HoodieInstant> pendingReplaceRequestedInstants = new ArrayList<>();
 
   /**
    * Create a write client, with new hudi index.
@@ -442,7 +442,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       HoodieTableMetaClient metaClient) {
     setOperationType(writeOperationType);
     this.lastCompletedTxnAndMetadata = TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient);
-    this.unCheckedPendingClusteringInstants = TransactionUtils.getUncheckedPendingClusteringInstants(metaClient);
+    this.pendingReplaceRequestedInstants = TransactionUtils.getPendingReplaceRequestedInstants(metaClient);
     if (null == this.asyncCleanerService) {
       this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this);
     } else {
