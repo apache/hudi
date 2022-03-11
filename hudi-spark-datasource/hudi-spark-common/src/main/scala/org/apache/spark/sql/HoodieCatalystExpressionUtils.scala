@@ -19,10 +19,9 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.catalyst.analysis.{ResolveTimeZone, UnresolvedAttribute, UnresolvedFunction}
+import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
 import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LocalRelation, LogicalPlan}
-import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.types.StructType
 
 object HoodieCatalystExpressionUtils {
@@ -53,42 +52,7 @@ object HoodieCatalystExpressionUtils {
 
     val resolvedExpr = {
       val plan: LogicalPlan = Filter(expr, LocalRelation(schemaFields.head, schemaFields.drop(1): _*))
-      val rules: Seq[Rule[LogicalPlan]] =
-        ResolveTimeZone ::
-        analyzer.ResolveFunctions ::
-        analyzer.ResolveReferences ::
-        Nil
-
-      def resetUnresolved(plan: LogicalPlan): LogicalPlan = {
-        @inline def copy(expr: Expression) =
-          expr.makeCopy(expr.productIterator.map(x => x.asInstanceOf[AnyRef]).toArray)
-
-        plan.transformExpressionsUp {
-          case expr if !expr.resolved => copy(expr)
-        }
-      }
-
-      var effective = true
-      var current: LogicalPlan = plan
-      // NOTE: This is a workaround for Spark bug which makes it impossible
-      //       to resolve functions in a single pass (and collaterally to that it also erroneously marks
-      //       this rule as ineffective, making its subsequent application impossible)
-      //       To work it around we
-      //          - Clone the plan (cloning all of its expressions) this way clearing the internal metadata state
-      //            (blocking subsequent rule application)
-      //          - Apply ResolveFunctions rule multiple times
-      // TODO(SPARK-38512) cleanup after resolved
-      while (effective) {
-        val newPlan = rules.foldRight(current) {
-          case (rule, plan) =>
-            rule.apply(plan)
-        }
-        effective = !current.fastEquals(newPlan)
-        // Make a copy to reset bitset with ineffective rules
-        current = resetUnresolved(newPlan)
-      }
-
-      current.asInstanceOf[Filter].condition
+      analyzer.execute(plan).asInstanceOf[Filter].condition
     }
 
     if (!hasUnresolvedRefs(resolvedExpr)) {
