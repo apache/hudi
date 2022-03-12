@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.HoodieCommonUtils
+import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieTimeline}
@@ -42,7 +42,7 @@ case class CompactionHoodiePathCommand(path: String,
 
     assert(metaClient.getTableType == HoodieTableType.MERGE_ON_READ,
       s"Must compaction on a Merge On Read table.")
-    val client = HoodieCommonUtils.createHoodieClientFromPath(sparkSession, path, Map.empty)
+    val client = HoodieCLIUtils.createHoodieClientFromPath(sparkSession, path, Map.empty)
 
     operation match {
       case SCHEDULE =>

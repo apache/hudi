@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.format.cow;
+package org.apache.hudi.table.format.cow.vector.reader;
 
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.data.vector.writable.WritableIntVector;

@@ -28,6 +28,7 @@ import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -89,6 +90,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -478,7 +480,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
                                                               String instantTime,
                                                               HoodieInstant instantToRollback,
                                                               boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers);
-  
+
   /**
    * Rollback the (inflight/committed) record changes with the given commit time.
    * <pre>
@@ -519,14 +521,19 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
                                                     String restoreInstantTime,
                                                     String instantToRestore);
 
+  public void rollbackInflightCompaction(HoodieInstant inflightInstant) {
+    rollbackInflightCompaction(inflightInstant, s -> Option.empty());
+  }
+
   /**
    * Rollback failed compactions. Inflight rollbacks for compactions revert the .inflight file
    * to the .requested file.
    *
    * @param inflightInstant Inflight Compaction Instant
    */
-  public void rollbackInflightCompaction(HoodieInstant inflightInstant) {
-    String commitTime = HoodieActiveTimeline.createNewInstantTime();
+  public void rollbackInflightCompaction(HoodieInstant inflightInstant, Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
+    final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.getTimestamp()).map(entry
+        -> entry.getRollbackInstant().getTimestamp()).orElse(HoodieActiveTimeline.createNewInstantTime());
     scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers());
     rollback(context, commitTime, inflightInstant, false, false);
     getActiveTimeline().revertCompactionInflightToRequested(inflightInstant);

@@ -83,7 +83,6 @@ public class TestHoodieTableFactory {
     this.conf = new Configuration();
     this.conf.setString(FlinkOptions.PATH, tempFile.getAbsolutePath());
     this.conf.setString(FlinkOptions.TABLE_NAME, "t1");
-    this.conf.set(FlinkOptions.COMPACTION_MAX_MEMORY, 1024);
     StreamerUtil.initTableIfNotExists(this.conf);
   }
 

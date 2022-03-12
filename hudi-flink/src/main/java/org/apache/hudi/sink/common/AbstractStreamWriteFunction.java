@@ -26,6 +26,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.utils.TimeWait;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -115,6 +116,11 @@ public abstract class AbstractStreamWriteFunction<I>
   protected List<WriteStatus> writeStatuses;
 
   /**
+   * The checkpoint metadata.
+   */
+  private transient CkpMetadata ckpMetadata;
+
+  /**
    * Constructs a StreamWriteFunctionBase.
    *
    * @param config The config options
@@ -135,6 +141,7 @@ public abstract class AbstractStreamWriteFunction<I>
             TypeInformation.of(WriteMetadataEvent.class)
         ));
 
+    this.ckpMetadata = CkpMetadata.getInstance(this.metaClient.getFs(), this.metaClient.getBasePath());
     this.currentInstant = lastPendingInstant();
     if (context.isRestored()) {
       restoreWriteMetadata();
@@ -217,7 +224,7 @@ public abstract class AbstractStreamWriteFunction<I>
    * Returns the last pending instant time.
    */
   protected String lastPendingInstant() {
-    return StreamerUtil.getLastPendingInstant(this.metaClient);
+    return this.ckpMetadata.lastPendingInstant();
   }
 
   /**
@@ -238,7 +245,7 @@ public abstract class AbstractStreamWriteFunction<I>
       // wait condition:
       // 1. there is no inflight instant
       // 2. the inflight instant does not change and the checkpoint has buffering data
-      if (instant == null || (instant.equals(this.currentInstant) && hasData)) {
+      if (instant == null || (instant.equals(this.currentInstant) && hasData && !this.ckpMetadata.isAborted(instant))) {
         // sleep for a while
         timeWait.waitFor();
         // refresh the inflight instant

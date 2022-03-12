@@ -15,19 +15,19 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.avro
+grammar HoodieSqlBase;
 
-import org.apache.avro.Schema
-import org.apache.spark.sql.types.DataType
+import SqlBase;
 
-/**
- * This is Spark 2 implementation for the [[HoodieAvroDeserializerTrait]] leveraging [[PatchedAvroDeserializer]],
- * which is just copied over version of [[AvroDeserializer]] from Spark 2.4.4 w/ SPARK-30267 being back-ported to it
- */
-class Spark2HoodieAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType)
-  extends HoodieAvroDeserializerTrait {
+singleStatement
+    : statement EOF
+    ;
 
-  private val avroDeserializer = new PatchedAvroDeserializer(rootAvroType, rootCatalystType)
-
-  def doDeserialize(data: Any): Any = avroDeserializer.deserialize(data)
-}
+statement
+    : query                                                            #queryStatement
+    | ctes? dmlStatementNoWith                                         #dmlStatement
+    | createTableHeader ('(' colTypeList ')')? tableProvider?
+        createTableClauses
+        (AS? query)?                                                   #createTable
+    | .*?                                                              #passThrough
+    ;

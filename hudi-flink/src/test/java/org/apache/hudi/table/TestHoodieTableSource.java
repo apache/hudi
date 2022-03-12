@@ -64,7 +64,6 @@ public class TestHoodieTableSource {
   void beforeEach() throws Exception {
     final String path = tempFile.getAbsolutePath();
     conf = TestConfigurations.getDefaultConf(path);
-    conf.set(FlinkOptions.COMPACTION_MAX_MEMORY, 1024);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
   }
 
@@ -123,7 +122,6 @@ public class TestHoodieTableSource {
     final String path = tempFile.getAbsolutePath();
     conf = TestConfigurations.getDefaultConf(path);
     conf.setBoolean(FlinkOptions.READ_AS_STREAMING, true);
-    conf.set(FlinkOptions.COMPACTION_MAX_MEMORY, 1024);
 
     HoodieTableSource tableSource = new HoodieTableSource(
         TestConfigurations.TABLE_SCHEMA,

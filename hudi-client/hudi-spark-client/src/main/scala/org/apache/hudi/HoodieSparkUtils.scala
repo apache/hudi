@@ -177,14 +177,24 @@ object HoodieSparkUtils extends SparkAdapterSupport {
    * Convert Filters to Catalyst Expressions and joined by And. If convert success return an
    * Non-Empty Option[Expression],or else return None.
    */
-  def convertToCatalystExpressions(filters: Array[Filter],
-                                   tableSchema: StructType): Option[Expression] = {
-    val expressions = filters.map(convertToCatalystExpression(_, tableSchema))
+  def convertToCatalystExpressions(filters: Seq[Filter],
+                                   tableSchema: StructType): Seq[Option[Expression]] = {
+    filters.map(convertToCatalystExpression(_, tableSchema))
+  }
+
+
+  /**
+   * Convert Filters to Catalyst Expressions and joined by And. If convert success return an
+   * Non-Empty Option[Expression],or else return None.
+   */
+  def convertToCatalystExpression(filters: Array[Filter],
+                                  tableSchema: StructType): Option[Expression] = {
+    val expressions = convertToCatalystExpressions(filters, tableSchema)
     if (expressions.forall(p => p.isDefined)) {
       if (expressions.isEmpty) {
         None
       } else if (expressions.length == 1) {
-        expressions(0)
+        expressions.head
       } else {
         Some(expressions.map(_.get).reduce(org.apache.spark.sql.catalyst.expressions.And))
       }

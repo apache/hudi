@@ -56,6 +56,8 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
+import org.apache.hudi.common.testutils.ClusteringTestUtils;
+import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -1438,9 +1440,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     testInsertAndClustering(clusteringConfig, populateMetaFields, true, true, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
   }
 
-  @ParameterizedTest
-  @MethodSource("populateMetaFieldsParams")
-  public void testPendingClusteringRollback(boolean populateMetaFields) throws Exception {
+  @Test
+  public void testPendingClusteringRollback() throws Exception {
+    boolean populateMetaFields = true;
     // setup clustering config.
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
         .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withInlineClustering(true).build();
@@ -1467,6 +1469,33 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     metaClient.reloadActiveTimeline();
     // verify there are no pending clustering instants
     assertEquals(0, ClusteringUtils.getAllPendingClusteringPlans(metaClient).count());
+
+    // delete rollback.completed instant to mimic failed rollback of clustering. and then trigger rollback of clustering again. same rollback instant should be used.
+    HoodieInstant rollbackInstant = metaClient.getActiveTimeline().getRollbackTimeline().lastInstant().get();
+    FileCreateUtils.deleteRollbackCommit(metaClient.getBasePath(), rollbackInstant.getTimestamp());
+    metaClient.reloadActiveTimeline();
+
+    // create replace commit requested meta file so that rollback will not throw FileNotFoundException
+    // create file slice with instantTime 001 and build clustering plan including this created 001 file slice.
+    HoodieClusteringPlan clusteringPlan = ClusteringTestUtils.createClusteringPlan(metaClient, pendingClusteringInstant.getTimestamp(), "1");
+    // create requested replace commit
+    HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
+        .setClusteringPlan(clusteringPlan).setOperationType(WriteOperationType.CLUSTER.name()).build();
+
+    FileCreateUtils.createRequestedReplaceCommit(metaClient.getBasePath(), pendingClusteringInstant.getTimestamp(), Option.of(requestedReplaceMetadata));
+
+    // trigger clustering again. no new rollback instants should be generated.
+    try {
+      client.cluster(pendingClusteringInstant.getTimestamp(), false);
+      // new replace commit metadata generated is fake one. so, clustering will fail. but the intention of test is ot check for duplicate rollback instants.
+    } catch (Exception e) {
+      //ignore.
+    }
+
+    metaClient.reloadActiveTimeline();
+    // verify that there is no new rollback instant generated
+    HoodieInstant newRollbackInstant = metaClient.getActiveTimeline().getRollbackTimeline().lastInstant().get();
+    assertEquals(rollbackInstant.getTimestamp(), newRollbackInstant.getTimestamp());
   }
 
   @ParameterizedTest
