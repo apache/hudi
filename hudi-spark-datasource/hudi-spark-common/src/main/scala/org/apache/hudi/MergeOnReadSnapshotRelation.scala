@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
+import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -136,7 +137,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
   private def listFileSlices(partitionPaths: Seq[Path]): Seq[FileSlice] = {
     // NOTE: It's critical for us to re-use [[InMemoryFileIndex]] to make sure we're leveraging
     //       [[FileStatusCache]] and avoid listing the whole table again
-    val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(sparkSession, partitionPaths)
+    val inMemoryFileIndex = HoodieInMemoryFileIndex.create(sparkSession, partitionPaths)
     val fsView = new HoodieTableFileSystemView(metaClient, timeline, inMemoryFileIndex.allFiles.toArray)
 
     val queryTimestamp = this.queryTimestamp.get

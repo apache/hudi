@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.hudi.io.storage.HoodieHFileReader
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
+import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.SchemaConverters
@@ -195,12 +196,12 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   // TODO scala-doc
   protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSplit]
 
-  protected def listLatestBaseFiles(globPaths: Seq[Path], partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Map[Path, Seq[FileStatus]] = {
-    if (globPaths.isEmpty) {
+  protected def listLatestBaseFiles(globbedPaths: Seq[Path], partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Map[Path, Seq[FileStatus]] = {
+    if (globbedPaths.isEmpty) {
       val partitionDirs = fileIndex.listFiles(partitionFilters, dataFilters)
       partitionDirs.map(pd => (getPartitionPath(pd.files.head), pd.files)).toMap
     } else {
-      val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(sparkSession, globPaths)
+      val inMemoryFileIndex = HoodieInMemoryFileIndex.create(sparkSession, globbedPaths)
       val partitionDirs = inMemoryFileIndex.listFiles(partitionFilters, dataFilters)
 
       val fsView = new HoodieTableFileSystemView(metaClient, timeline, partitionDirs.flatMap(_.files).toArray)
