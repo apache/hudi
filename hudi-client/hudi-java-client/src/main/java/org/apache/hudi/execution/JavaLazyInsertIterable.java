@@ -74,6 +74,7 @@ public class JavaLazyInsertIterable<T extends HoodieRecordPayload> extends Hoodi
     } finally {
       if (null != bufferedIteratorExecutor) {
         bufferedIteratorExecutor.shutdownNow();
+        bufferedIteratorExecutor.awaitTermination();
       }
     }
   }

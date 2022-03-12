@@ -66,6 +66,7 @@ public class FlinkLazyInsertIterable<T extends HoodieRecordPayload> extends Hood
     } finally {
       if (null != bufferedIteratorExecutor) {
         bufferedIteratorExecutor.shutdownNow();
+        bufferedIteratorExecutor.awaitTermination();
       }
     }
   }

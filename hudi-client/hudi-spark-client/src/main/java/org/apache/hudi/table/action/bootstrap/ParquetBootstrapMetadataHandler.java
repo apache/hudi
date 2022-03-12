@@ -68,9 +68,9 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
   void executeBootstrap(HoodieBootstrapHandle<?, ?, ?, ?> bootstrapHandle,
                         Path sourceFilePath, KeyGeneratorInterface keyGenerator, String partitionPath, Schema avroSchema) throws Exception {
     BoundedInMemoryExecutor<GenericRecord, HoodieRecord, Void> wrapper = null;
+    ParquetReader<IndexedRecord> reader =
+        AvroParquetReader.<IndexedRecord>builder(sourceFilePath).withConf(table.getHadoopConf()).build();
     try {
-      ParquetReader<IndexedRecord> reader =
-          AvroParquetReader.<IndexedRecord>builder(sourceFilePath).withConf(table.getHadoopConf()).build();
       wrapper = new BoundedInMemoryExecutor<GenericRecord, HoodieRecord, Void>(config.getWriteBufferLimitBytes(),
           new ParquetReaderIterator(reader), new BootstrapRecordConsumer(bootstrapHandle), inp -> {
         String recKey = keyGenerator.getKey(inp).getRecordKey();
@@ -84,10 +84,12 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
     } catch (Exception e) {
       throw new HoodieException(e);
     } finally {
-      bootstrapHandle.close();
+      reader.close();
       if (null != wrapper) {
         wrapper.shutdownNow();
+        wrapper.awaitTermination();
       }
+      bootstrapHandle.close();
     }
   }
 }

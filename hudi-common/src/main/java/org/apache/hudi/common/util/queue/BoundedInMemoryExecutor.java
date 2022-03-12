@@ -37,6 +37,7 @@ import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -48,7 +49,7 @@ import java.util.stream.Collectors;
 public class BoundedInMemoryExecutor<I, O, E> {
 
   private static final Logger LOG = LogManager.getLogger(BoundedInMemoryExecutor.class);
-
+  private static final long TERMINATE_WAITING_TIME_SECS = 60L;
   // Executor service used for launching write thread.
   private final ExecutorService producerExecutorService;
   // Executor service used for launching read thread.
@@ -168,6 +169,35 @@ public class BoundedInMemoryExecutor<I, O, E> {
   public void shutdownNow() {
     producerExecutorService.shutdownNow();
     consumerExecutorService.shutdownNow();
+    // close queue to force producer stop
+    queue.close();
+  }
+
+  public boolean awaitTermination() {
+    boolean interruptedBefore = Thread.currentThread().isInterrupted();
+    boolean producerTerminated = false;
+    boolean consumerTerminated = false;
+    try {
+      producerTerminated = producerExecutorService.awaitTermination(TERMINATE_WAITING_TIME_SECS, TimeUnit.SECONDS);
+      consumerTerminated = consumerExecutorService.awaitTermination(TERMINATE_WAITING_TIME_SECS, TimeUnit.SECONDS);
+      return producerTerminated && consumerTerminated;
+    } catch (InterruptedException ie) {
+      if (!interruptedBefore) {
+        Thread.currentThread().interrupt();
+        return false;
+      }
+      // if current thread has been interrupted before awaitTermination was called.
+      // We still give executorService a chance to wait termination as
+      // what is wanted to be interrupted may not be the waiting process.
+      try {
+        producerTerminated = producerExecutorService.awaitTermination(TERMINATE_WAITING_TIME_SECS, TimeUnit.SECONDS);
+        consumerTerminated = consumerExecutorService.awaitTermination(TERMINATE_WAITING_TIME_SECS, TimeUnit.SECONDS);
+      } catch (InterruptedException expected) {
+        // awaiting process is interrupted again.
+      }
+      Thread.currentThread().interrupt();
+    }
+    return producerTerminated && consumerTerminated;
   }
 
   public BoundedInMemoryQueue<I, O> getQueue() {
