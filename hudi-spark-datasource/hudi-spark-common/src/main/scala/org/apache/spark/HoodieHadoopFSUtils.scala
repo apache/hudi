@@ -69,6 +69,7 @@ object HoodieHadoopFSUtils extends Logging {
       ignoreMissingFiles, ignoreLocality, parallelismThreshold, parallelismMax)
   }
 
+  // scalastyle:off parameter.number
   private def parallelListLeafFilesInternal(sc: SparkContext,
                                             paths: Seq[Path],
                                             hadoopConf: Configuration,
@@ -81,6 +82,7 @@ object HoodieHadoopFSUtils extends Logging {
 
     // Short-circuits parallel listing when serial listing is likely to be faster.
     if (paths.size <= parallelismThreshold) {
+      // scalastyle:off return
       return paths.map { path =>
         val leafFiles = listLeafFiles(
           path,
@@ -94,6 +96,7 @@ object HoodieHadoopFSUtils extends Logging {
           parallelismMax = parallelismMax)
         (path, leafFiles)
       }
+      // scalastyle:on return
     }
 
     logInfo(s"Listing leaf files and directories in parallel under ${paths.length} paths." +
@@ -183,9 +186,9 @@ object HoodieHadoopFSUtils extends Logging {
       (new Path(path), statuses)
     }
   }
+  // scalastyle:on parameter.number
 
-  // scalastyle:off argcount
-
+  // scalastyle:off parameter.number
   /**
    * Lists a single filesystem path recursively. If a `SparkContext` object is specified, this
    * function may launch Spark jobs to parallelize listing based on `parallelismThreshold`.
@@ -334,7 +337,7 @@ object HoodieHadoopFSUtils extends Logging {
 
     resolvedLeafStatuses
   }
-  // scalastyle:on argcount
+  // scalastyle:on parameter.number
 
   /** A serializable variant of HDFS's BlockLocation. This is required by Hadoop 2.7. */
   private case class SerializableBlockLocation(names: Array[String],
