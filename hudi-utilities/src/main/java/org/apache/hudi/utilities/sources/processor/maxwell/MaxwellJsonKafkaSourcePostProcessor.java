@@ -79,23 +79,23 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
    * Configs to be passed for this processor.
    */
   public static class Config {
-    private static final ConfigProperty<String> DATABASE_NAME_REGEX_PROP = ConfigProperty
+    public static final ConfigProperty<String> DATABASE_NAME_REGEX_PROP = ConfigProperty
         .key("hoodie.deltastreamer.source.json.kafka.post.processor.maxwell.database.regex")
         .noDefaultValue()
         .withDocumentation("Database name regex.");
 
-    private static final ConfigProperty<String> TABLE_NAME_REGEX_PROP = ConfigProperty
+    public static final ConfigProperty<String> TABLE_NAME_REGEX_PROP = ConfigProperty
         .key("hoodie.deltastreamer.source.json.kafka.post.processor.maxwell.table.regex")
         .noDefaultValue()
         .withDocumentation("Table name regex.");
 
-    private static final ConfigProperty<String> PRECOMBINE_FIELD_TYPE_PROP = ConfigProperty
+    public static final ConfigProperty<String> PRECOMBINE_FIELD_TYPE_PROP = ConfigProperty
         .key("hoodie.deltastreamer.source.json.kafka.post.processor.maxwell.precombine.field.type")
         .defaultValue("DATA_STRING")
         .withDocumentation("Data type of the preCombine field. could be NON_TIMESTAMP, DATE_STRING,"
             + "UNIX_TIMESTAMP or EPOCHMILLISECONDS. DATA_STRING by default ");
 
-    private static final ConfigProperty<String> PRECOMBINE_FIELD_FORMAT_PROP = ConfigProperty
+    public static final ConfigProperty<String> PRECOMBINE_FIELD_FORMAT_PROP = ConfigProperty
         .key("hoodie.deltastreamer.source.json.kafka.post.processor.maxwell.precombine.field.format")
         .defaultValue("yyyy-MM-dd HH:mm:ss")
         .withDocumentation("When the preCombine filed is in DATE_STRING format, use should tell hoodie"
@@ -106,8 +106,8 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
   public JavaRDD<String> process(JavaRDD<String> maxwellJsonRecords) {
     return maxwellJsonRecords.map(record -> {
       JsonNode inputJson = MAPPER.readTree(record);
-      String database = inputJson.get(DATABASE).toString();
-      String table = inputJson.get(TABLE).toString();
+      String database = inputJson.get(DATABASE).textValue();
+      String table = inputJson.get(TABLE).textValue();
 
       // filter out target databases and tables
       if (isTargetTable(database, table)) {
@@ -115,7 +115,7 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
         LOG.info(String.format("Maxwell source processor starts process table : %s.%s", database, table));
 
         ObjectNode result = (ObjectNode) inputJson.get(DATA);
-        String type = inputJson.get(OPERATION_TYPE).toString();
+        String type = inputJson.get(OPERATION_TYPE).textValue();
 
         // insert or update
         if (INSERT.equals(type) || UPDATE.equals(type)) {
@@ -130,7 +130,7 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
 
           PreCombineFieldType preCombineFieldType =
               valueOf(this.props.getString(Config.PRECOMBINE_FIELD_TYPE_PROP.key(),
-                  Config.PRECOMBINE_FIELD_TYPE_PROP.defaultValue()).toLowerCase(Locale.ROOT));
+                  Config.PRECOMBINE_FIELD_TYPE_PROP.defaultValue()).toUpperCase(Locale.ROOT));
 
           // maxwell won't update the `update_time`(delete time) field of the record which is tagged as delete. so if we
           // want to delete this record correctly, we should update its `update_time` to a time closer to where the
