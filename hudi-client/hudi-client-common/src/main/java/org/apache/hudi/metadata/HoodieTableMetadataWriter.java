@@ -24,7 +24,9 @@ import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.List;
 
@@ -34,6 +36,8 @@ import java.util.List;
 public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
 
   void index(HoodieEngineContext engineContext, List<HoodieIndexPartitionInfo> indexPartitionInfos);
+
+  void initializeFileGroups(HoodieTableMetaClient dataMetaClient, MetadataPartitionType metadataPartition, String instantTime, int fileGroupCount) throws IOException;
 
   /**
    * Update the metadata table due to a COMMIT operation.

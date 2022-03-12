@@ -69,6 +69,7 @@ import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
@@ -926,14 +927,14 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     return scheduleTableService(instantTime, extraMetadata, TableServiceType.COMPACT).isPresent();
   }
 
-  public Option<String> scheduleIndexing(List<String> partitions) {
+  public Option<String> scheduleIndexing(List<MetadataPartitionType> partitionTypes) {
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
-    return scheduleIndexingAtInstant(partitions, instantTime) ? Option.of(instantTime) : Option.empty();
+    return scheduleIndexingAtInstant(partitionTypes, instantTime) ? Option.of(instantTime) : Option.empty();
   }
 
-  private boolean scheduleIndexingAtInstant(List<String> partitionsToIndex, String instantTime) throws HoodieIOException {
+  private boolean scheduleIndexingAtInstant(List<MetadataPartitionType> partitionTypes, String instantTime) throws HoodieIOException {
     Option<HoodieIndexPlan> indexPlan = createTable(config, hadoopConf, config.isMetadataTableEnabled())
-        .scheduleIndex(context, instantTime, partitionsToIndex);
+        .scheduleIndex(context, instantTime, partitionTypes);
     return indexPlan.isPresent();
   }
 

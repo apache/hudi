@@ -51,6 +51,7 @@ import org.apache.hudi.io.HoodieSortedMergeHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.clean.CleanActionExecutor;
@@ -342,7 +343,7 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
   }
 
   @Override
-  public Option<HoodieIndexPlan> scheduleIndex(HoodieEngineContext context, String indexInstantTime, List<String> partitionsToIndex) {
+  public Option<HoodieIndexPlan> scheduleIndex(HoodieEngineContext context, String indexInstantTime, List<MetadataPartitionType> partitionsToIndex) {
     throw new HoodieNotSupportedException("Indexing is not supported for a Flink table yet.");
   }
 

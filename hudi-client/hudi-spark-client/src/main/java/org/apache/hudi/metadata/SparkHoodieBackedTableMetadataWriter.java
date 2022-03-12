@@ -122,11 +122,11 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void scheduleIndex(List<String> partitions) {
+  protected void scheduleIndex(List<MetadataPartitionType> partitionTypes) {
     ValidationUtils.checkState(metadataMetaClient != null, "Metadata table is not fully initialized yet.");
     ValidationUtils.checkState(enabled, "Metadata table cannot be indexed as it is not enabled.");
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, metadataWriteConfig, true)) {
-      writeClient.scheduleIndexing(partitions);
+      writeClient.scheduleIndexing(partitionTypes);
     }
   }
 

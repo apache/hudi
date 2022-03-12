@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIndexException;
+import org.apache.hudi.metadata.MetadataPartitionType;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -165,7 +166,9 @@ public class HoodieIndexer {
 
   private Option<String> doSchedule(SparkRDDWriteClient<HoodieRecordPayload> client) {
     List<String> partitionsToIndex = Arrays.asList(cfg.indexTypes.split(","));
-    Option<String> indexingInstant = client.scheduleIndexing(partitionsToIndex);
+    List<MetadataPartitionType> partitionTypes = partitionsToIndex.stream()
+        .map(MetadataPartitionType::valueOf).collect(Collectors.toList());
+    Option<String> indexingInstant = client.scheduleIndexing(partitionTypes);
     if (!indexingInstant.isPresent()) {
       LOG.error("Scheduling of index action did not return any instant.");
     }

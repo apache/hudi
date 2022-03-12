@@ -100,7 +100,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void scheduleIndex(List<String> partitions) {
+  protected void scheduleIndex(List<MetadataPartitionType> partitionsTypes) {
     throw new UnsupportedOperationException("Metadata indexing not supported for Flink table yet.");
   }
 

@@ -57,6 +57,7 @@ import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieSortedMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.SparkBootstrapCommitActionExecutor;
@@ -351,7 +352,7 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
   }
 
   @Override
-  public Option<HoodieIndexPlan> scheduleIndex(HoodieEngineContext context, String indexInstantTime, List<String> partitionsToIndex) {
+  public Option<HoodieIndexPlan> scheduleIndex(HoodieEngineContext context, String indexInstantTime, List<MetadataPartitionType> partitionsToIndex) {
     return new ScheduleIndexActionExecutor<>(context, config, this, indexInstantTime, partitionsToIndex).execute();
   }
 

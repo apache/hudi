@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.index;
 
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieIndexPlan;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -30,6 +31,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
@@ -47,11 +49,17 @@ public class ScheduleIndexActionExecutor<T extends HoodieRecordPayload, I, K, O>
   private static final Integer INDEX_PLAN_VERSION_1 = 1;
   private static final Integer LATEST_INDEX_PLAN_VERSION = INDEX_PLAN_VERSION_1;
 
-  private final List<String> partitionsToIndex;
+  private final List<MetadataPartitionType> partitionsToIndex;
+  private final TransactionManager txnManager;
 
-  public ScheduleIndexActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime, List<String> partitionsToIndex) {
+  public ScheduleIndexActionExecutor(HoodieEngineContext context,
+                                     HoodieWriteConfig config,
+                                     HoodieTable<T, I, K, O> table,
+                                     String instantTime,
+                                     List<MetadataPartitionType> partitionsToIndex) {
     super(context, config, table, instantTime);
     this.partitionsToIndex = partitionsToIndex;
+    this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
   }
 
   @Override
@@ -66,7 +74,7 @@ public class ScheduleIndexActionExecutor<T extends HoodieRecordPayload, I, K, O>
       final HoodieInstant indexInstant = HoodieTimeline.getIndexRequestedInstant(instantTime);
       // for each partitionToIndex add that time to the plan
       List<HoodieIndexPartitionInfo> indexPartitionInfos = partitionsToIndex.stream()
-          .map(p -> new HoodieIndexPartitionInfo(LATEST_INDEX_PLAN_VERSION, p, indexUptoInstant.get().getTimestamp()))
+          .map(p -> new HoodieIndexPartitionInfo(LATEST_INDEX_PLAN_VERSION, p.getPartitionPath(), indexUptoInstant.get().getTimestamp()))
           .collect(Collectors.toList());
       HoodieIndexPlan indexPlan = new HoodieIndexPlan(LATEST_INDEX_PLAN_VERSION, indexPartitionInfos);
       try {
@@ -76,6 +84,24 @@ public class ScheduleIndexActionExecutor<T extends HoodieRecordPayload, I, K, O>
         throw new HoodieIOException(e.getMessage(), e);
       }
       table.getMetaClient().reloadActiveTimeline();
+
+      // start initializing filegroups
+      // 1. get metadata writer
+      HoodieTableMetadataWriter metadataWriter = table.getMetadataWriter(instantTime)
+          .orElseThrow(() -> new HoodieIndexException(String.format("Could not get metadata writer to run index action for instant: %s", instantTime)));
+      // 2. take a lock --> begin tx (data table)
+      try {
+        this.txnManager.beginTransaction(Option.of(indexInstant), Option.empty());
+        // 3. initialize filegroups as per plan for the enabled partition types
+        for (MetadataPartitionType partitionType : partitionsToIndex) {
+          metadataWriter.initializeFileGroups(table.getMetaClient(), partitionType, indexInstant.getTimestamp(), 1);
+        }
+      } catch (IOException e) {
+        LOG.error("Could not initialize file groups");
+        throw new HoodieIOException(e.getMessage(), e);
+      } finally {
+        this.txnManager.endTransaction(Option.of(indexInstant));
+      }
       return Option.of(indexPlan);
     }
     return Option.empty();

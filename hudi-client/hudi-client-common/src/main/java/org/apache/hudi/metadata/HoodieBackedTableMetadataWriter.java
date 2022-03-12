@@ -342,7 +342,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
                                                                     Option<T> actionMetadata,
                                                                     Option<String> inflightInstantTimestamp);
 
-  protected abstract void scheduleIndex(List<String> partitions);
+  protected abstract void scheduleIndex(List<MetadataPartitionType> partitionTypes);
 
   public void initTableMetadata() {
     try {
@@ -403,7 +403,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       if (metadataWriteConfig.isMetadataAsyncIndex()) {
         // with async metadata indexing enabled, there can be inflight writers
         // TODO: schedule indexing only for enabled partition types
-        scheduleIndex(MetadataPartitionType.allPaths());
+        MetadataRecordsGenerationParams indexParams = getRecordsGenerationParams();
+        scheduleIndex(indexParams.getEnabledPartitionTypes());
         return;
       }
       // Initialize for the first time by listing partitions and files directly from the file system
@@ -626,7 +627,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * File groups will be named as :
    *    record-index-bucket-0000, .... -> ..., record-index-bucket-0009
    */
-  private void initializeFileGroups(HoodieTableMetaClient dataMetaClient, MetadataPartitionType metadataPartition, String instantTime,
+  public void initializeFileGroups(HoodieTableMetaClient dataMetaClient, MetadataPartitionType metadataPartition, String instantTime,
                                     int fileGroupCount) throws IOException {
 
     final HashMap<HeaderMetadataType, String> blockHeader = new HashMap<>();
@@ -755,6 +756,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             .setKeyGeneratorClassProp(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
             .initTable(hadoopConf.get(), metadataWriteConfig.getBasePath());
         initTableMetadata();
+        // this part now moves to scheduling
         initializeFileGroups(dataMetaClient, MetadataPartitionType.valueOf(relativePartitionPath.toUpperCase(Locale.ROOT)), indexUptoInstantTime, 1);
       } catch (IOException e) {
         throw new HoodieIndexException(String.format("Unable to initialize file groups for metadata partition: %s, indexUptoInstant: %s",
