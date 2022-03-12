@@ -25,7 +25,6 @@ import org.apache.spark.metrics.source.HiveCatalogMetrics
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.util.HadoopFSUtils
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -34,11 +33,8 @@ class HoodieInMemoryFileIndex(sparkSession: SparkSession,
                               rootPathsSpecified: Seq[Path],
                               parameters: Map[String, String],
                               userSpecifiedSchema: Option[StructType],
-                              fileStatusCache: FileStatusCache = NoopCache,
-                              userSpecifiedPartitionSpec: Option[PartitionSpec] = None,
-                              override val metadataOpsTimeNs: Option[Long] = None)
-  extends InMemoryFileIndex(sparkSession, rootPathsSpecified, parameters, userSpecifiedSchema, fileStatusCache,
-    userSpecifiedPartitionSpec, metadataOpsTimeNs) {
+                              fileStatusCache: FileStatusCache = NoopCache)
+  extends InMemoryFileIndex(sparkSession, rootPathsSpecified, parameters, userSpecifiedSchema, fileStatusCache) {
 
   /**
    * List leaf files of given paths. This method will submit a Spark job to do parallel
@@ -85,7 +81,8 @@ class HoodieInMemoryFileIndex(sparkSession: SparkSession,
       hadoopConf = hadoopConf,
       filter = new PathFilterWrapper(filter),
       ignoreMissingFiles = sparkSession.sessionState.conf.ignoreMissingFiles,
-      ignoreLocality = sparkSession.sessionState.conf.ignoreDataLocality,
+      // NOTE: We're disabling fetching Block Info to speed up file listing
+      ignoreLocality = true,
       parallelismThreshold = sparkSession.sessionState.conf.parallelPartitionDiscoveryThreshold,
       parallelismMax = sparkSession.sessionState.conf.parallelPartitionDiscoveryParallelism)
   }
@@ -100,6 +97,6 @@ object HoodieInMemoryFileIndex {
 
 private class PathFilterWrapper(val filter: PathFilter) extends PathFilter with Serializable {
   override def accept(path: Path): Boolean = {
-    (filter == null || filter.accept(path)) && !HadoopFSUtils.shouldFilterOutPathName(path.getName)
+    (filter == null || filter.accept(path)) && !HoodieHadoopFSUtils.shouldFilterOutPathName(path.getName)
   }
 }
