@@ -68,7 +68,7 @@ case class CompactionHoodiePathCommand(path: String,
              if (scheduleSeq.isEmpty) {
                Seq.empty
              } else {
-               scheduleSeq..take(1).get(0).getString(0)).filter(_ != null)
+               Seq(scheduleSeq.take(1).get(0).getString(0)).filter(_ != null)
              }
            }
         } else {
