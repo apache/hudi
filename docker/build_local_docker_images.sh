@@ -28,5 +28,5 @@ while true; do
     esac
 done
 pushd ${WS_ROOT}
-mvn clean pre-integration-test -DskipTests -Ddocker.compose.skip=true -Ddocker.build.skip=false -Dspark3 -Dscala-2.12
+mvn clean pre-integration-test -DskipTests -Ddocker.compose.skip=true -Ddocker.build.skip=false
 popd
