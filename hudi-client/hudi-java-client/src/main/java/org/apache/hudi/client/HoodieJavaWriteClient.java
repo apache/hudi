@@ -153,7 +153,7 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
   @Override
   public List<WriteStatus> bulkInsert(List<HoodieRecord<T>> records,
                                       String instantTime,
-                                      Option<BulkInsertPartitioner<?>> userDefinedBulkInsertPartitioner) {
+                                      Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     throw new HoodieNotSupportedException("BulkInsert is not supported in HoodieJavaClient");
   }
 
@@ -167,7 +167,7 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
   @Override
   public List<WriteStatus> bulkInsertPreppedRecords(List<HoodieRecord<T>> preppedRecords,
                                                     String instantTime,
-                                                    Option<BulkInsertPartitioner<?>> bulkInsertPartitioner) {
+                                                    Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         initTable(WriteOperationType.BULK_INSERT_PREPPED, Option.ofNullable(instantTime));
     table.validateInsertSchema();

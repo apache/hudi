@@ -131,10 +131,15 @@ public class HoodieJavaRDD<T> extends HoodieData<T> {
   }
 
   @Override
+  public HoodieData<T> distinct(int parallelism) {
+    return HoodieJavaRDD.of(rddData.distinct(parallelism));
+  }
+
+  @Override
   public <O> HoodieData<T> distinctWithKey(SerializableFunction<T, O> keyGetter, int parallelism) {
-    return HoodieJavaRDD.of(rddData.keyBy(keyGetter::apply)
-        .reduceByKey((key1, key2) -> key1, parallelism)
-        .values());
+    return mapToPair(i -> Pair.of(keyGetter.apply(i), i))
+        .reduceByKey((value1, value2) -> value1, parallelism)
+        .values();
   }
 
   @Override
@@ -150,11 +155,6 @@ public class HoodieJavaRDD<T> extends HoodieData<T> {
   @Override
   public List<T> collectAsList() {
     return rddData.collect();
-  }
-
-  @Override
-  public boolean hasPartitions() {
-    return !rddData.partitions().isEmpty();
   }
 
   @Override

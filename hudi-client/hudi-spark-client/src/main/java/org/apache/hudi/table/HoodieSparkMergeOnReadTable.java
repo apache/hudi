@@ -96,7 +96,7 @@ public class HoodieSparkMergeOnReadTable<T extends HoodieRecordPayload> extends 
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> bulkInsert(HoodieEngineContext context, String instantTime, HoodieData<HoodieRecord<T>> records,
-      Option<BulkInsertPartitioner<?>> userDefinedBulkInsertPartitioner) {
+      Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     return new SparkBulkInsertDeltaCommitActionExecutor<>((HoodieSparkEngineContext) context, config,
         this, instantTime, records, userDefinedBulkInsertPartitioner).execute();
   }
@@ -120,7 +120,7 @@ public class HoodieSparkMergeOnReadTable<T extends HoodieRecordPayload> extends 
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> bulkInsertPrepped(HoodieEngineContext context, String instantTime,
-      HoodieData<HoodieRecord<T>> preppedRecords,  Option<BulkInsertPartitioner<?>> userDefinedBulkInsertPartitioner) {
+      HoodieData<HoodieRecord<T>> preppedRecords,  Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     return new SparkBulkInsertPreppedDeltaCommitActionExecutor((HoodieSparkEngineContext) context, config,
         this, instantTime, preppedRecords, userDefinedBulkInsertPartitioner).execute();
   }

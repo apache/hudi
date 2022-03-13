@@ -398,7 +398,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * @return Collection of WriteStatus to inspect errors and counts
    */
   public abstract O bulkInsert(I records, final String instantTime,
-                               Option<BulkInsertPartitioner<?>> userDefinedBulkInsertPartitioner);
+                               Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner);
 
 
   /**
@@ -418,7 +418,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * @return Collection of WriteStatus to inspect errors and counts
    */
   public abstract O bulkInsertPreppedRecords(I preppedRecords, final String instantTime,
-                                             Option<BulkInsertPartitioner<?>> bulkInsertPartitioner);
+                                             Option<BulkInsertPartitioner> bulkInsertPartitioner);
 
   /**
    * Deletes a list of {@link HoodieKey}s from the Hoodie table, at the supplied instantTime {@link HoodieKey}s will be

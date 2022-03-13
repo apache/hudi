@@ -32,7 +32,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -115,12 +114,11 @@ public class HoodieMapPair<K, V> extends HoodiePairData<K, V> {
 
   @Override
   public HoodiePairData<K, V> reduceByKey(SerializableBiFunction<V, V, V> func, int parallelism) {
-    Map<K, List<V>> reducedMap = mapPairData.entrySet().stream()
-        .collect(Collectors.toMap(Map.Entry::getKey, e ->
-            Collections.singletonList(e.getValue().stream().reduce(func::apply).orElse(null))))
-        .entrySet().stream().filter(e -> Objects.nonNull(e.getValue().get(0)))
-        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-    return HoodieMapPair.of(reducedMap);
+    return HoodieMapPair.of(mapPairData.entrySet().stream()
+        .collect(Collectors.toMap(Map.Entry::getKey, e -> {
+          Option<V> reducedValue = Option.fromJavaOptional(e.getValue().stream().reduce(func::apply));
+          return reducedValue.isPresent() ? Collections.singletonList(reducedValue.get()) : Collections.emptyList();
+        })));
   }
 
   @Override

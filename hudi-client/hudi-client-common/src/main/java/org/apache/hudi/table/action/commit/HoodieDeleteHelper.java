@@ -64,7 +64,7 @@ public class HoodieDeleteHelper<T extends HoodieRecordPayload, R> extends
     if (isIndexingGlobal) {
       return keys.distinctWithKey(HoodieKey::getRecordKey, parallelism);
     } else {
-      return keys.distinct();
+      return keys.distinct(parallelism);
     }
   }
 
@@ -81,7 +81,7 @@ public class HoodieDeleteHelper<T extends HoodieRecordPayload, R> extends
       if (config.shouldCombineBeforeDelete()) {
         // De-dupe/merge if needed
         dedupedKeys = deduplicateKeys(keys, table, parallelism);
-      } else if (keys.hasPartitions()) {
+      } else if (!keys.isEmpty()) {
         dedupedKeys = keys.repartition(parallelism);
       }
 

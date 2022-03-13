@@ -228,12 +228,12 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  public List<WriteStatus> bulkInsert(List<HoodieRecord<T>> records, String instantTime, Option<BulkInsertPartitioner<?>> userDefinedBulkInsertPartitioner) {
+  public List<WriteStatus> bulkInsert(List<HoodieRecord<T>> records, String instantTime, Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     throw new HoodieNotSupportedException("BulkInsert operation is not supported yet");
   }
 
   @Override
-  public List<WriteStatus> bulkInsertPreppedRecords(List<HoodieRecord<T>> preppedRecords, String instantTime, Option<BulkInsertPartitioner<?>> bulkInsertPartitioner) {
+  public List<WriteStatus> bulkInsertPreppedRecords(List<HoodieRecord<T>> preppedRecords, String instantTime, Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     throw new HoodieNotSupportedException("BulkInsertPrepped operation is not supported yet");
   }
 

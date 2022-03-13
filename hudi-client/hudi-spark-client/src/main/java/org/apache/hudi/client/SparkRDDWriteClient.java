@@ -44,6 +44,7 @@ import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -232,25 +233,23 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  public JavaRDD<WriteStatus> bulkInsert(JavaRDD<HoodieRecord<T>> records, String instantTime, Option<BulkInsertPartitioner<?>> userDefinedBulkInsertPartitioner) {
+  public JavaRDD<WriteStatus> bulkInsert(JavaRDD<HoodieRecord<T>> records, String instantTime, Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
         initTable(WriteOperationType.BULK_INSERT, Option.ofNullable(instantTime));
     table.validateInsertSchema();
     preWrite(instantTime, WriteOperationType.BULK_INSERT, table.getMetaClient());
-    Option<BulkInsertPartitioner<?>> partitionerOption = Option.ofNullable(userDefinedBulkInsertPartitioner.orElse(null));
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.bulkInsert(context,instantTime, HoodieJavaRDD.of(records), partitionerOption);
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.bulkInsert(context,instantTime, HoodieJavaRDD.of(records), userDefinedBulkInsertPartitioner);
     HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
     return postWrite(resultRDD, instantTime, table);
   }
 
   @Override
-  public JavaRDD<WriteStatus> bulkInsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, String instantTime, Option<BulkInsertPartitioner<?>> bulkInsertPartitioner) {
+  public JavaRDD<WriteStatus> bulkInsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, String instantTime, Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
         initTable(WriteOperationType.BULK_INSERT_PREPPED, Option.ofNullable(instantTime));
     table.validateInsertSchema();
     preWrite(instantTime, WriteOperationType.BULK_INSERT_PREPPED, table.getMetaClient());
-    Option<BulkInsertPartitioner<?>> partitionerOption = Option.ofNullable(bulkInsertPartitioner.orElse(null));
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.bulkInsertPrepped(context,instantTime, HoodieJavaRDD.of(preppedRecords), partitionerOption);
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.bulkInsertPrepped(context,instantTime, HoodieJavaRDD.of(preppedRecords), bulkInsertPartitioner);
     HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
     return postWrite(resultRDD, instantTime, table);
   }
@@ -419,13 +418,13 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     LOG.info("Clustering successfully on commit " + clusteringCommitTime);
   }
 
-  private void updateTableMetadata(HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table, HoodieCommitMetadata commitMetadata,
+  private void updateTableMetadata(HoodieTable table, HoodieCommitMetadata commitMetadata,
                                    HoodieInstant hoodieInstant) {
     boolean isTableServiceAction = table.isTableServiceAction(hoodieInstant.getAction());
     // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
     // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
     table.getMetadataWriter(hoodieInstant.getTimestamp())
-        .ifPresent(writer -> writer.update(commitMetadata, hoodieInstant.getTimestamp(), isTableServiceAction));
+        .ifPresent(writer -> ((HoodieTableMetadataWriter) writer).update(commitMetadata, hoodieInstant.getTimestamp(), isTableServiceAction));
   }
 
   @Override

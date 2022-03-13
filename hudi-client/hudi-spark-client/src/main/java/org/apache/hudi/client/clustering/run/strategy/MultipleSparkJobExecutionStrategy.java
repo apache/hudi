@@ -95,7 +95,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
   public HoodieWriteMetadata<HoodieData<WriteStatus>> performClustering(final HoodieClusteringPlan clusteringPlan, final Schema schema, final String instantTime) {
     JavaSparkContext engineContext = HoodieSparkEngineContext.getSparkContext(getEngineContext());
     // execute clustering for each group async and collect WriteStatus
-    Stream<HoodieData<WriteStatus>> writeStatusRDDStream = FutureUtils.allOf(
+    Stream<HoodieData<WriteStatus>> writeStatusesStream = FutureUtils.allOf(
         clusteringPlan.getInputGroups().stream()
         .map(inputGroup -> runClusteringForGroupAsync(inputGroup,
             clusteringPlan.getStrategy().getStrategyParams(),
@@ -104,7 +104,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
             .collect(Collectors.toList()))
         .join()
         .stream();
-    JavaRDD<WriteStatus>[] writeStatuses = convertStreamToArray(writeStatusRDDStream.map(HoodieJavaRDD::getJavaRDD));
+    JavaRDD<WriteStatus>[] writeStatuses = convertStreamToArray(writeStatusesStream.map(HoodieJavaRDD::getJavaRDD));
     JavaRDD<WriteStatus> writeStatusRDD = engineContext.union(writeStatuses);
 
     HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = new HoodieWriteMetadata<>();

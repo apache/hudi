@@ -61,7 +61,7 @@ public class HoodieJavaMergeOnReadTable<T extends HoodieRecordPayload> extends H
   public HoodieWriteMetadata<List<WriteStatus>> bulkInsertPrepped(HoodieEngineContext context,
                                                                   String instantTime,
                                                                   List<HoodieRecord<T>> preppedRecords,
-                                                                  Option<BulkInsertPartitioner<?>> bulkInsertPartitioner) {
+                                                                  Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     return new JavaBulkInsertPreppedCommitActionExecutor((HoodieJavaEngineContext) context, config,
         this, instantTime, preppedRecords, bulkInsertPartitioner).execute();
   }

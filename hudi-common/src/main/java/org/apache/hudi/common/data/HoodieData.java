@@ -97,6 +97,8 @@ public abstract class HoodieData<T> implements Serializable {
    */
   public abstract HoodieData<T> distinct();
 
+  public abstract HoodieData<T> distinct(int parallelism);
+
   public abstract <O> HoodieData<T> distinctWithKey(SerializableFunction<T, O> keyGetter, int parallelism);
 
   public abstract HoodieData<T> filter(SerializableFunction<T, Boolean> filterFunc);
@@ -112,8 +114,6 @@ public abstract class HoodieData<T> implements Serializable {
    * @return collected results in {@link List<T>}.
    */
   public abstract List<T> collectAsList();
-
-  public abstract boolean hasPartitions();
 
   public abstract HoodieData<T> repartition(int parallelism);
 }
