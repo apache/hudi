@@ -15,11 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi
+package org.apache.spark.sql.hudi.procedure
 
 import com.google.common.collect.ImmutableList
 import org.apache.spark.sql.catalyst.expressions.Literal
 import org.apache.spark.sql.catalyst.plans.logical.{CallCommand, NamedArgument, PositionalArgument}
+import org.apache.spark.sql.hudi.TestHoodieSqlBase
 import org.apache.spark.sql.types.{DataType, DataTypes}
 
 import java.math.BigDecimal

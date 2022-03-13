@@ -15,7 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi
+package org.apache.spark.sql.hudi.procedure
+
+import org.apache.spark.sql.hudi.TestHoodieSqlBase
 
 class TestCallProcedure extends TestHoodieSqlBase {
 
