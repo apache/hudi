@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.rollback;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -33,6 +32,8 @@ import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.MarkerBasedRollbackUtils;
 import org.apache.hudi.table.marker.WriteMarkers;
+
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -114,8 +115,8 @@ public class MarkerBasedRollbackStrategy<T extends HoodieRecordPayload, I, K, O>
     //       block to the latest log-file
     // TODO(HUDI-1517) use provided marker-file's path instead
     Option<HoodieLogFile> latestLogFileOption = FSUtils.getLatestLogFile(table.getMetaClient().getFs(), partitionPath, fileId,
-            HoodieFileFormat.HOODIE_LOG.getFileExtension(), baseCommitTime);
-
+        HoodieFileFormat.HOODIE_LOG.getFileExtension(), baseCommitTime);
+    
     Map<String, Long> logFilesWithBlocsToRollback = new HashMap<>();
     if (latestLogFileOption.isPresent()) {
       HoodieLogFile latestLogFile = latestLogFileOption.get();

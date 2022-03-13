@@ -82,7 +82,6 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
 
   @Test
   public void testMarkerBasedRollbackAppend() throws Exception {
-
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
     String f0 = testTable.addRequestedCommit("000")
         .getFileIdsWithBaseFilesInPartitions("partA").get("partA");
