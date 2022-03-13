@@ -67,7 +67,7 @@ public class SparkSingleFileSortExecutionStrategy<T extends HoodieRecordPayload<
       throw new HoodieClusteringException("Expect only one file group for strategy: " + getClass().getName());
     }
     LOG.info("Starting clustering for a group, parallelism:" + numOutputGroups + " commit:" + instantTime);
-    Properties props = getWriteConfig().getProps();
+    Properties props = new TypedProperties(getWriteConfig().getProps());
     props.put(HoodieWriteConfig.BULKINSERT_PARALLELISM_VALUE.key(), String.valueOf(numOutputGroups));
     // We are calling another action executor - disable auto commit. Strategy is only expected to write data in new files.
     props.put(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), Boolean.FALSE.toString());
