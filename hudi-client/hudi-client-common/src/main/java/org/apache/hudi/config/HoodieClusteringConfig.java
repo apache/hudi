@@ -31,6 +31,7 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 
 import javax.annotation.Nonnull;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -93,6 +94,12 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .noDefaultValue()
       .sinceVersion("0.11.0")
       .withDocumentation("Filter clustering partitions that matched regex pattern");
+
+  public static final ConfigProperty<String> PARTITION_SELECTED = ConfigProperty
+      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "partition.selected")
+      .noDefaultValue()
+      .sinceVersion("0.11.0")
+      .withDocumentation("Partitions to run clustering");
 
   public static final ConfigProperty<String> PLAN_STRATEGY_CLASS_NAME = ConfigProperty
       .key("hoodie.clustering.plan.strategy.class")
@@ -470,6 +477,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
     public Builder withClusteringPartitionRegexPattern(String pattern) {
       clusteringConfig.setValue(PARTITION_REGEX_PATTERN, pattern);
+      return this;
+    }
+
+    public Builder withClusteringPartitionSelected(String partitionSelected) {
+      clusteringConfig.setValue(PARTITION_SELECTED, partitionSelected);
       return this;
     }
 

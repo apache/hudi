@@ -44,6 +44,7 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsDatadogConfig;
@@ -337,6 +338,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue("true")
       .withDocumentation("Timeline archiving removes older instants from the timeline, after each write operation, to minimize metadata overhead. "
           + "Controls whether or not, the write should be failed as well, if such archiving fails.");
+
+  public static final ConfigProperty<Boolean> REFRESH_TIMELINE_SERVER_BASED_ON_LATEST_COMMIT = ConfigProperty
+      .key("hoodie.refresh.timeline.server.based.on.latest.commit")
+      .defaultValue(false)
+      .withDocumentation("Refresh timeline in timeline server based on latest commit apart from timeline hash difference. By default (false), ");
 
   public static final ConfigProperty<Long> INITIAL_CONSISTENCY_CHECK_INTERVAL_MS = ConfigProperty
       .key("hoodie.consistency.check.initial_interval_ms")
@@ -1038,6 +1044,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(FAIL_ON_TIMELINE_ARCHIVING_ENABLE);
   }
 
+  public boolean isRefreshTimelineServerBasedOnLatestCommit() {
+    return getBoolean(REFRESH_TIMELINE_SERVER_BASED_ON_LATEST_COMMIT);
+  }
+
   public int getMaxConsistencyChecks() {
     return getInt(MAX_CONSISTENCY_CHECKS);
   }
@@ -1051,7 +1061,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public BulkInsertSortMode getBulkInsertSortMode() {
-    String sortMode = getString(BULK_INSERT_SORT_MODE);
+    String sortMode = getStringOrDefault(BULK_INSERT_SORT_MODE);
     return BulkInsertSortMode.valueOf(sortMode.toUpperCase());
   }
 
@@ -1072,8 +1082,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean populateMetaFields() {
-    return Boolean.parseBoolean(getStringOrDefault(HoodieTableConfig.POPULATE_META_FIELDS,
-        HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()));
+    return getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
   }
 
   /**
@@ -1301,6 +1310,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getLong(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT);
   }
 
+  public String getClusteringPartitionSelected() {
+    return getString(HoodieClusteringConfig.PARTITION_SELECTED);
+  }
+
   public String getClusteringPartitionFilterRegexPattern() {
     return getString(HoodieClusteringConfig.PARTITION_REGEX_PATTERN);
   }
@@ -1480,6 +1493,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return isMetadataTableEnabled() && getMetadataConfig().isMetadataColumnStatsIndexForAllColumnsEnabled();
   }
 
+  public int getColumnStatsIndexParallelism() {
+    return metadataConfig.getColumnStatsIndexParallelism();
+  }
+
   public int getBloomIndexKeysPerBucket() {
     return getInt(HoodieIndexConfig.BLOOM_INDEX_KEYS_PER_BUCKET);
   }
@@ -1536,7 +1553,8 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public CompressionCodecName getParquetCompressionCodec() {
-    return CompressionCodecName.fromConf(getString(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME));
+    String codecName = getString(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME);
+    return CompressionCodecName.fromConf(StringUtils.isNullOrEmpty(codecName) ? null : codecName);
   }
 
   public boolean parquetDictionaryEnabled() {

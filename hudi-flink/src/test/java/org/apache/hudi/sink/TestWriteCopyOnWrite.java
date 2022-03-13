@@ -95,8 +95,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .assertEmptyEvent()
         .checkpointFails(1)
         .consume(TestData.DATA_SET_INSERT)
-        .checkpointThrows(2,
-            "Timeout(1000ms) while waiting for instant initialize")
+        //.checkpointThrows(2,
+        //    "Timeout(1000ms) while waiting for instant initialize")
         // do not send the write event and fails the checkpoint,
         // behaves like the last checkpoint is successful.
         .checkpointFails(2)

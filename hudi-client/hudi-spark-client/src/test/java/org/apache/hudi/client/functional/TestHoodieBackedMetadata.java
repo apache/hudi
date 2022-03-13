@@ -329,6 +329,36 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   }
 
   @Test
+  public void testUpdationOfPopulateMetaFieldsForMetadataTable() throws Exception {
+    tableType = COPY_ON_WRITE;
+    init(tableType, false);
+
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withPopulateMetaFields(true)
+            .build())
+        .build();
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+    doWriteOperation(testTable, "0000001", INSERT);
+
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(writeConfig.getBasePath() + "/.hoodie/metadata").setConf(hadoopConf).build();
+    assertTrue(metaClient.getTableConfig().populateMetaFields());
+
+    // update populateMeta fields to false.
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withPopulateMetaFields(false)
+            .build())
+        .build();
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+    doWriteOperation(testTable, "0000002", INSERT);
+    metaClient = HoodieTableMetaClient.builder().setBasePath(writeConfig.getBasePath() + "/.hoodie/metadata").setConf(hadoopConf).build();
+    assertFalse(metaClient.getTableConfig().populateMetaFields());
+  }
+
+  @Test
   public void testMetadataInsertUpsertCleanNonPartitioned() throws Exception {
     HoodieTableType tableType = COPY_ON_WRITE;
     init(tableType);

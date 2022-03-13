@@ -19,21 +19,27 @@
 package org.apache.hudi.hive;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.hive.util.HiveSchemaUtil;
-import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
+import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.hive.ddl.DDLExecutor;
 import org.apache.hudi.hive.ddl.HMSDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.ddl.JDBCExecutor;
+import org.apache.hudi.hive.util.HiveSchemaUtil;
+import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
+import org.apache.hudi.sync.common.HoodieSyncException;
+
+import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
+import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hadoop.hive.metastore.api.Table;
@@ -46,7 +52,9 @@ import org.apache.thrift.TException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.hadoop.utils.HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP;
 
@@ -341,6 +349,45 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       } catch (Exception e) {
         throw new HoodieHiveSyncException("Failed to get update last commit time synced to " + lastCommitSynced, e);
       }
+    }
+  }
+
+  public Schema getAvroSchemaWithoutMetadataFields() {
+    try {
+      return new TableSchemaResolver(metaClient).getTableAvroSchemaWithoutMetadataFields();
+    } catch (Exception e) {
+      throw new HoodieSyncException("Failed to read avro schema", e);
+    }
+  }
+
+  public List<FieldSchema> getTableCommentUsingMetastoreClient(String tableName) {
+    try {
+      return client.getSchema(syncConfig.databaseName, tableName);
+    } catch (Exception e) {
+      throw new HoodieHiveSyncException("Failed to get table comments for : " + tableName, e);
+    }
+  }
+
+  public void updateTableComments(String tableName, List<FieldSchema> oldSchema, List<Schema.Field> newSchema) {
+    Map<String,String> newComments = newSchema.stream().collect(Collectors.toMap(field -> field.name().toLowerCase(Locale.ROOT), field -> StringUtils.isNullOrEmpty(field.doc()) ? "" : field.doc()));
+    updateTableComments(tableName,oldSchema,newComments);
+  }
+
+  public void updateTableComments(String tableName, List<FieldSchema> oldSchema, Map<String,String> newComments) {
+    Map<String,String> oldComments = oldSchema.stream().collect(Collectors.toMap(fieldSchema -> fieldSchema.getName().toLowerCase(Locale.ROOT),
+        fieldSchema -> StringUtils.isNullOrEmpty(fieldSchema.getComment()) ? "" : fieldSchema.getComment()));
+    Map<String,String> types = oldSchema.stream().collect(Collectors.toMap(FieldSchema::getName, FieldSchema::getType));
+    Map<String, ImmutablePair<String,String>> alterComments = new HashMap<>();
+    oldComments.forEach((name,comment) -> {
+      String newComment = newComments.getOrDefault(name,"");
+      if (!newComment.equals(comment)) {
+        alterComments.put(name,new ImmutablePair<>(types.get(name),newComment));
+      }
+    });
+    if (alterComments.size() > 0) {
+      ddlExecutor.updateTableComments(tableName, alterComments);
+    } else {
+      LOG.info(String.format("No comment difference of %s ",tableName));
     }
   }
 }

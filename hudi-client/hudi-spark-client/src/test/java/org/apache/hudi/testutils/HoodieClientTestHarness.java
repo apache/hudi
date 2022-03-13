@@ -102,6 +102,7 @@ import scala.Tuple2;
 import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertLinesMatch;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -617,21 +618,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     Collections.sort(fsFileNames);
     Collections.sort(metadataFilenames);
 
-    if ((fsFileNames.size() != metadataFilenames.size()) || (!fsFileNames.equals(metadataFilenames))) {
-      LOG.info("*** File system listing = " + Arrays.toString(fsFileNames.toArray()));
-      LOG.info("*** Metadata listing = " + Arrays.toString(metadataFilenames.toArray()));
-
-      for (String fileName : fsFileNames) {
-        if (!metadataFilenames.contains(fileName)) {
-          LOG.error(partition + "FsFilename " + fileName + " not found in Meta data");
-        }
-      }
-      for (String fileName : metadataFilenames) {
-        if (!fsFileNames.contains(fileName)) {
-          LOG.error(partition + "Metadata file " + fileName + " not found in original FS");
-        }
-      }
-    }
+    assertLinesMatch(fsFileNames, metadataFilenames);
     assertEquals(fsStatuses.length, partitionToFilesMap.get(partitionPath.toString()).length);
 
     // Block sizes should be valid

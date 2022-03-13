@@ -147,14 +147,24 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   }
 
   /**
+   * Get all the cached partition paths pruned by the filter.
+   *
+   * @param predicates The filter condition
+   * @return The pruned partition paths
+   */
+  def getPartitionPaths(predicates: Seq[Expression]): Seq[PartitionPath] = {
+    prunePartition(cachedAllInputFileSlices.keySet().asScala.toSeq, predicates)
+  }
+
+  /**
    * Prune the partition by the filter.This implementation is fork from
    * org.apache.spark.sql.execution.datasources.PartitioningAwareFileIndex#prunePartitions.
    *
    * @param partitionPaths All the partition paths.
    * @param predicates     The filter condition.
-   * @return The Pruned partition paths.
+   * @return The pruned partition paths.
    */
-  def prunePartition(partitionPaths: Seq[PartitionPath], predicates: Seq[Expression]): Seq[PartitionPath] = {
+  protected def prunePartition(partitionPaths: Seq[PartitionPath], predicates: Seq[Expression]): Seq[PartitionPath] = {
     val partitionColumnNames = partitionSchema.fields.map(_.name).toSet
     val partitionPruningPredicates = predicates.filter {
       _.references.map(_.name).toSet.subsetOf(partitionColumnNames)

@@ -18,18 +18,10 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
-import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
@@ -37,12 +29,19 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.io.storage.HoodieHFileReader;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -52,6 +51,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -113,7 +113,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private static final String COLUMN_STATS_FIELD_NULL_COUNT = "nullCount";
   private static final String COLUMN_STATS_FIELD_VALUE_COUNT = "valueCount";
   private static final String COLUMN_STATS_FIELD_TOTAL_SIZE = "totalSize";
-  private static final String COLUMN_STATS_FIELD_RESOURCE_NAME = "fileName";
+  private static final String COLUMN_STATS_FIELD_FILE_NAME = "fileName";
   private static final String COLUMN_STATS_FIELD_TOTAL_UNCOMPRESSED_SIZE = "totalUncompressedSize";
   private static final String COLUMN_STATS_FIELD_IS_DELETED = FIELD_IS_DELETED;
 
@@ -133,7 +133,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       // This can be simplified using SpecificData.deepcopy once this bug is fixed
       // https://issues.apache.org/jira/browse/AVRO-1811
       //
-      // NOTE: {@code HoodieMetadataRecord} has to always carry both "key" nad "type" fields
+      // NOTE: {@code HoodieMetadataRecord} has to always carry both "key" and "type" fields
       //       for it to be handled appropriately, therefore these fields have to be reflected
       //       in any (read-)projected schema
       key = record.get(KEY_FIELD_NAME).toString();
@@ -176,7 +176,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
               String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_COLUMN_STATS, METADATA_TYPE_COLUMN_STATS));
         } else {
           columnStatMetadata = HoodieMetadataColumnStats.newBuilder()
-              .setFileName((String) columnStatsRecord.get(COLUMN_STATS_FIELD_RESOURCE_NAME))
+              .setFileName((String) columnStatsRecord.get(COLUMN_STATS_FIELD_FILE_NAME))
               .setMinValue((String) columnStatsRecord.get(COLUMN_STATS_FIELD_MIN_VALUE))
               .setMaxValue((String) columnStatsRecord.get(COLUMN_STATS_FIELD_MAX_VALUE))
               .setValueCount((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_VALUE_COUNT))
@@ -239,10 +239,22 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
                                                                                Option<Map<String, Long>> filesAdded,
                                                                                Option<List<String>> filesDeleted) {
     Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>();
-    filesAdded.ifPresent(
-        m -> m.forEach((filename, size) -> fileInfo.put(filename, new HoodieMetadataFileInfo(size, false))));
-    filesDeleted.ifPresent(
-        m -> m.forEach(filename -> fileInfo.put(filename, new HoodieMetadataFileInfo(0L, true))));
+    filesAdded.ifPresent(filesMap ->
+        fileInfo.putAll(
+            filesMap.entrySet().stream().collect(
+                Collectors.toMap(Map.Entry::getKey, (entry) -> {
+                  long fileSize = entry.getValue();
+                  // Assert that the file-size of the file being added is positive, since Hudi
+                  // should not be creating empty files
+                  checkState(fileSize > 0);
+                  return new HoodieMetadataFileInfo(fileSize, false);
+                })))
+    );
+    filesDeleted.ifPresent(filesList ->
+        fileInfo.putAll(
+            filesList.stream().collect(
+                Collectors.toMap(Function.identity(), (ignored) -> new HoodieMetadataFileInfo(0L, true))))
+    );
 
     HoodieKey key = new HoodieKey(partition, MetadataPartitionType.FILES.getPartitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_FILE_LIST, fileInfo);
@@ -262,33 +274,31 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static HoodieRecord<HoodieMetadataPayload> createBloomFilterMetadataRecord(final String partitionName,
                                                                                     final String baseFileName,
                                                                                     final String timestamp,
+                                                                                    final String bloomFilterType,
                                                                                     final ByteBuffer bloomFilter,
                                                                                     final boolean isDeleted) {
-    ValidationUtils.checkArgument(!baseFileName.contains(Path.SEPARATOR)
+    checkArgument(!baseFileName.contains(Path.SEPARATOR)
             && FSUtils.isBaseFile(new Path(baseFileName)),
         "Invalid base file '" + baseFileName + "' for MetaIndexBloomFilter!");
     final String bloomFilterIndexKey = new PartitionIndexID(partitionName).asBase64EncodedString()
         .concat(new FileIndexID(baseFileName).asBase64EncodedString());
     HoodieKey key = new HoodieKey(bloomFilterIndexKey, MetadataPartitionType.BLOOM_FILTERS.getPartitionPath());
 
-    // TODO: HUDI-3203 Get the bloom filter type from the file
     HoodieMetadataBloomFilter metadataBloomFilter =
-        new HoodieMetadataBloomFilter(BloomFilterTypeCode.DYNAMIC_V0.name(),
-            timestamp, bloomFilter, isDeleted);
-    HoodieMetadataPayload metadataPayload = new HoodieMetadataPayload(key.getRecordKey(),
-        metadataBloomFilter);
+        new HoodieMetadataBloomFilter(bloomFilterType, timestamp, bloomFilter, isDeleted);
+    HoodieMetadataPayload metadataPayload = new HoodieMetadataPayload(key.getRecordKey(), metadataBloomFilter);
     return new HoodieAvroRecord<>(key, metadataPayload);
   }
 
   @Override
   public HoodieMetadataPayload preCombine(HoodieMetadataPayload previousRecord) {
-    ValidationUtils.checkArgument(previousRecord.type == type,
+    checkArgument(previousRecord.type == type,
         "Cannot combine " + previousRecord.type + " with " + type);
 
     switch (type) {
       case METADATA_TYPE_PARTITION_LIST:
       case METADATA_TYPE_FILE_LIST:
-        Map<String, HoodieMetadataFileInfo> combinedFileInfo = combineFilesystemMetadata(previousRecord);
+        Map<String, HoodieMetadataFileInfo> combinedFileInfo = combineFileSystemMetadata(previousRecord);
         return new HoodieMetadataPayload(key, type, combinedFileInfo);
       case METADATA_TYPE_BLOOM_FILTER:
         HoodieMetadataBloomFilter combineBloomFilterMetadata = combineBloomFilterMetadata(previousRecord);
@@ -301,11 +311,16 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   }
 
   private HoodieMetadataBloomFilter combineBloomFilterMetadata(HoodieMetadataPayload previousRecord) {
+    // Bloom filters are always additive. No need to merge with previous bloom filter
     return this.bloomFilterMetadata;
   }
 
   private HoodieMetadataColumnStats combineColumnStatsMetadata(HoodieMetadataPayload previousRecord) {
-    return this.columnStatMetadata;
+    checkArgument(previousRecord.getColumnStatMetadata().isPresent());
+    checkArgument(getColumnStatMetadata().isPresent());
+    checkArgument(previousRecord.getColumnStatMetadata().get()
+        .getFileName().equals(this.columnStatMetadata.getFileName()));
+    return HoodieTableMetadataUtil.mergeColumnStats(previousRecord.getColumnStatMetadata().get(), this.columnStatMetadata);
   }
 
   @Override
@@ -340,7 +355,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * Returns the list of filenames added as part of this record.
    */
   public List<String> getFilenames() {
-    return filterFileInfoEntries(false).map(e -> e.getKey()).sorted().collect(Collectors.toList());
+    return filterFileInfoEntries(false).map(Map.Entry::getKey).sorted().collect(Collectors.toList());
   }
 
   /**
@@ -392,28 +407,53 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return filesystemMetadata.entrySet().stream().filter(e -> e.getValue().getIsDeleted() == isDeleted);
   }
 
-  private Map<String, HoodieMetadataFileInfo> combineFilesystemMetadata(HoodieMetadataPayload previousRecord) {
+  private Map<String, HoodieMetadataFileInfo> combineFileSystemMetadata(HoodieMetadataPayload previousRecord) {
     Map<String, HoodieMetadataFileInfo> combinedFileInfo = new HashMap<>();
+
+    // First, add all files listed in the previous record
     if (previousRecord.filesystemMetadata != null) {
       combinedFileInfo.putAll(previousRecord.filesystemMetadata);
     }
 
+    // Second, merge in the files listed in the new record
     if (filesystemMetadata != null) {
-      filesystemMetadata.forEach((filename, fileInfo) -> {
-        // If the filename wasnt present then we carry it forward
-        if (!combinedFileInfo.containsKey(filename)) {
-          combinedFileInfo.put(filename, fileInfo);
-        } else {
-          if (fileInfo.getIsDeleted()) {
-            // file deletion
-            combinedFileInfo.remove(filename);
-          } else {
-            // file appends.
-            combinedFileInfo.merge(filename, fileInfo, (oldFileInfo, newFileInfo) -> {
-              return new HoodieMetadataFileInfo(oldFileInfo.getSize() + newFileInfo.getSize(), false);
-            });
-          }
-        }
+      validatePayload(type, filesystemMetadata);
+
+      filesystemMetadata.forEach((key, fileInfo) -> {
+        combinedFileInfo.merge(key, fileInfo,
+            // Combine previous record w/ the new one, new records taking precedence over
+            // the old one
+            //
+            // NOTE: That if previous listing contains the file that is being deleted by the tombstone
+            //       record (`IsDeleted` = true) in the new one, we simply delete the file from the resulting
+            //       listing as well as drop the tombstone itself.
+            //       However, if file is not present in the previous record we have to persist tombstone
+            //       record in the listing to make sure we carry forward information that this file
+            //       was deleted. This special case could occur since the merging flow is 2-stage:
+            //          - First we merge records from all of the delta log-files
+            //          - Then we merge records from base-files with the delta ones (coming as a result
+            //          of the previous step)
+            (oldFileInfo, newFileInfo) ->
+                // NOTE: We can’t assume that MT update records will be ordered the same way as actual
+                //       FS operations (since they are not atomic), therefore MT record merging should be a
+                //       _commutative_ & _associative_ operation (ie one that would work even in case records
+                //       will get re-ordered), which is
+                //          - Possible for file-sizes (since file-sizes will ever grow, we can simply
+                //          take max of the old and new records)
+                //          - Not possible for is-deleted flags*
+                //
+                //       *However, we’re assuming that the case of concurrent write and deletion of the same
+                //       file is _impossible_ -- it would only be possible with concurrent upsert and
+                //       rollback operation (affecting the same log-file), which is implausible, b/c either
+                //       of the following have to be true:
+                //          - We’re appending to failed log-file (then the other writer is trying to
+                //          rollback it concurrently, before it’s own write)
+                //          - Rollback (of completed instant) is running concurrently with append (meaning
+                //          that restore is running concurrently with a write, which is also nut supported
+                //          currently)
+                newFileInfo.getIsDeleted()
+                    ? null
+                    : new HoodieMetadataFileInfo(Math.max(newFileInfo.getSize(), oldFileInfo.getSize()), false));
       });
     }
 
@@ -480,8 +520,6 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
               .build());
       return new HoodieAvroRecord<>(key, payload);
     });
-
-
   }
 
   @Override
@@ -494,9 +532,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     if (type == METADATA_TYPE_BLOOM_FILTER) {
       checkState(getBloomFilterMetadata().isPresent());
       sb.append("BloomFilter: {");
-      sb.append("bloom size: " + getBloomFilterMetadata().get().getBloomFilter().array().length).append(", ");
-      sb.append("timestamp: " + getBloomFilterMetadata().get().getTimestamp()).append(", ");
-      sb.append("deleted: " + getBloomFilterMetadata().get().getIsDeleted());
+      sb.append("bloom size: ").append(getBloomFilterMetadata().get().getBloomFilter().array().length).append(", ");
+      sb.append("timestamp: ").append(getBloomFilterMetadata().get().getTimestamp()).append(", ");
+      sb.append("deleted: ").append(getBloomFilterMetadata().get().getIsDeleted());
       sb.append("}");
     }
     if (type == METADATA_TYPE_COLUMN_STATS) {
@@ -507,6 +545,14 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     }
     sb.append('}');
     return sb.toString();
+  }
+
+  private static void validatePayload(int type, Map<String, HoodieMetadataFileInfo> filesystemMetadata) {
+    if (type == METADATA_TYPE_FILE_LIST) {
+      filesystemMetadata.forEach((fileName, fileInfo) -> {
+        checkState(fileInfo.getIsDeleted() || fileInfo.getSize() > 0, "Existing files should have size > 0");
+      });
+    }
   }
 
   private static <T> T getNestedFieldValue(GenericRecord record, String fieldName) {

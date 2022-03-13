@@ -18,8 +18,6 @@
 
 package org.apache.hudi;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -37,6 +35,9 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -333,13 +334,17 @@ public abstract class BaseHoodieTableFileIndex {
     return fileSlice.getBaseFile().map(BaseFile::getFileLen).orElse(0L) + logFileSize;
   }
 
-  protected static final class PartitionPath {
+  public static final class PartitionPath {
     final String path;
     final Object[] values;
 
     public PartitionPath(String path, Object[] values) {
       this.path = path;
       this.values = values;
+    }
+
+    public String getPath() {
+      return path;
     }
 
     Path fullPartitionPath(String basePath) {

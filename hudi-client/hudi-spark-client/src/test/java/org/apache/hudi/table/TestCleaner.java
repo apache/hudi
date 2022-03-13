@@ -1077,6 +1077,8 @@ public class TestCleaner extends HoodieClientTestBase {
       writeStat.setPartitionPath(partition);
       writeStat.setPath(partition + "/" + getBaseFilename(instantTime, newFileId));
       writeStat.setFileId(newFileId);
+      writeStat.setTotalWriteBytes(1);
+      writeStat.setFileSizeInBytes(1);
       replaceMetadata.addWriteStat(partition, writeStat);
     }
     return Pair.of(requestedReplaceMetadata, replaceMetadata);
@@ -1756,6 +1758,8 @@ public class TestCleaner extends HoodieClientTestBase {
       writeStat.setPartitionPath(partitionPath);
       writeStat.setPath(partitionPath + "/" + getBaseFilename(instantTime, f));
       writeStat.setFileId(f);
+      writeStat.setTotalWriteBytes(1);
+      writeStat.setFileSizeInBytes(1);
       metadata.addWriteStat(partitionPath, writeStat);
     }));
     return metadata;

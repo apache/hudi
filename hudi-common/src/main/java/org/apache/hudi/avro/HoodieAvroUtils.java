@@ -176,7 +176,7 @@ public class HoodieAvroUtils {
   /**
    * Adds the Hoodie metadata fields to the given schema.
    *
-   * @param schema The schema
+   * @param schema             The schema
    * @param withOperationField Whether to include the '_hoodie_operation' field
    */
   public static Schema addMetadataFields(Schema schema, boolean withOperationField) {
@@ -276,7 +276,7 @@ public class HoodieAvroUtils {
     List<Schema.Field> toBeAddedFields = new ArrayList<>();
     Schema recordSchema = Schema.createRecord("HoodieRecordKey", "", "", false);
 
-    for (Schema.Field schemaField: fileSchema.getFields()) {
+    for (Schema.Field schemaField : fileSchema.getFields()) {
       if (fields.contains(schemaField.name())) {
         toBeAddedFields.add(new Schema.Field(schemaField.name(), schemaField.schema(), schemaField.doc(), schemaField.defaultVal()));
       }
@@ -303,7 +303,7 @@ public class HoodieAvroUtils {
    * engines have varying constraints regarding treating the case-sensitivity of fields, its best to let caller
    * determine that.
    *
-   * @param schema Passed in schema
+   * @param schema        Passed in schema
    * @param newFieldNames Null Field names to be added
    */
   public static Schema appendNullSchemaFields(Schema schema, List<String> newFieldNames) {
@@ -382,10 +382,34 @@ public class HoodieAvroUtils {
     return newRecord;
   }
 
+  public static GenericRecord rewriteRecord(GenericRecord genericRecord, Schema newSchema, boolean copyOverMetaFields, GenericRecord fallbackRecord) {
+    GenericRecord newRecord = new GenericData.Record(newSchema);
+    boolean isSpecificRecord = genericRecord instanceof SpecificRecordBase;
+    for (Schema.Field f : newSchema.getFields()) {
+      if (!(isSpecificRecord && isMetadataField(f.name()))) {
+        copyOldValueOrSetDefault(genericRecord, newRecord, f);
+      }
+      if (isMetadataField(f.name()) && copyOverMetaFields) {
+        // if meta field exists in primary generic record, copy over.
+        if (genericRecord.getSchema().getField(f.name()) != null) {
+          copyOldValueOrSetDefault(genericRecord, newRecord, f);
+        } else if (fallbackRecord != null && fallbackRecord.getSchema().getField(f.name()) != null) {
+          // if not, try to copy from the fallback record.
+          copyOldValueOrSetDefault(fallbackRecord, newRecord, f);
+        }
+      }
+    }
+    if (!GenericData.get().validate(newSchema, newRecord)) {
+      throw new SchemaCompatibilityException(
+          "Unable to validate the rewritten record " + genericRecord + " against schema " + newSchema);
+    }
+    return newRecord;
+  }
+
   /**
    * Converts list of {@link GenericRecord} provided into the {@link GenericRecord} adhering to the
    * provided {@code newSchema}.
-   *
+   * <p>
    * To better understand conversion rules please check {@link #rewriteRecord(GenericRecord, Schema)}
    */
   public static List<GenericRecord> rewriteRecords(List<GenericRecord> records, Schema newSchema) {
@@ -491,9 +515,8 @@ public class HoodieAvroUtils {
    * Returns the string value of the given record {@code rec} and field {@code fieldName}.
    * The field and value both could be missing.
    *
-   * @param rec The record
+   * @param rec       The record
    * @param fieldName The field name
-   *
    * @return the string form of the field
    * or empty if the schema does not contain the field name or the value is null
    */
@@ -507,7 +530,7 @@ public class HoodieAvroUtils {
    * This method converts values for fields with certain Avro/Parquet data types that require special handling.
    *
    * @param fieldSchema avro field schema
-   * @param fieldValue avro field value
+   * @param fieldValue  avro field value
    * @return field value either converted (for certain data types) or as it is.
    */
   public static Object convertValueForSpecificDataTypes(Schema fieldSchema, Object fieldValue, boolean consistentLogicalTimestampEnabled) {
@@ -527,15 +550,15 @@ public class HoodieAvroUtils {
 
   /**
    * This method converts values for fields with certain Avro Logical data types that require special handling.
-   *
+   * <p>
    * Logical Date Type is converted to actual Date value instead of Epoch Integer which is how it is
    * represented/stored in parquet.
-   *
+   * <p>
    * Decimal Data Type is converted to actual decimal value instead of bytes/fixed which is how it is
    * represented/stored in parquet.
    *
    * @param fieldSchema avro field schema
-   * @param fieldValue avro field value
+   * @param fieldValue  avro field value
    * @return field value either converted (for certain data types) or as it is.
    */
   private static Object convertValueForAvroLogicalTypes(Schema fieldSchema, Object fieldValue, boolean consistentLogicalTimestampEnabled) {
@@ -569,6 +592,7 @@ public class HoodieAvroUtils {
   /**
    * Sanitizes Name according to Avro rule for names.
    * Removes characters other than the ones mentioned in https://avro.apache.org/docs/current/spec.html#names .
+   *
    * @param name input name
    * @return sanitized name
    */

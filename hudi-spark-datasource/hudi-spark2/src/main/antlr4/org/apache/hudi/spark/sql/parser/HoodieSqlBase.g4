@@ -87,6 +87,7 @@ assignmentList
 assignment
     : key=qualifiedName EQ value=expression
     ;
+
 qualifiedNameList
     : qualifiedName (',' qualifiedName)*
     ;

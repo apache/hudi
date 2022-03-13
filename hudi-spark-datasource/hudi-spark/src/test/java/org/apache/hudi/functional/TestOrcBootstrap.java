@@ -20,7 +20,6 @@ package org.apache.hudi.functional;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.avro.model.HoodieFileStatus;
-import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.bootstrap.FullRecordBootstrapDataProvider;
 import org.apache.hudi.client.bootstrap.selector.BootstrapModeSelector;
@@ -245,10 +244,11 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
             .withBootstrapParallelism(3)
             .withBootstrapModeSelector(bootstrapModeSelectorClass).build())
         .build();
-    SparkRDDWriteClient client = new SparkRDDWriteClient(context, config);
+
+    SparkRDDWriteClientOverride client = new SparkRDDWriteClientOverride(context, config);
     client.bootstrap(Option.empty());
     checkBootstrapResults(totalRecords, schema, bootstrapCommitInstantTs, checkNumRawFiles, numInstantsAfterBootstrap,
-        numInstantsAfterBootstrap, timestamp, timestamp, deltaCommit, bootstrapInstants);
+        numInstantsAfterBootstrap, timestamp, timestamp, deltaCommit, bootstrapInstants, true);
 
     // Rollback Bootstrap
     if (deltaCommit) {
@@ -266,7 +266,7 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
     assertFalse(index.useIndex());
 
     // Run bootstrap again
-    client = new SparkRDDWriteClient(context, config);
+    client = new SparkRDDWriteClientOverride(context, config);
     client.bootstrap(Option.empty());
 
     metaClient.reloadActiveTimeline();
@@ -278,7 +278,7 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
     }
 
     checkBootstrapResults(totalRecords, schema, bootstrapCommitInstantTs, checkNumRawFiles, numInstantsAfterBootstrap,
-        numInstantsAfterBootstrap, timestamp, timestamp, deltaCommit, bootstrapInstants);
+        numInstantsAfterBootstrap, timestamp, timestamp, deltaCommit, bootstrapInstants, true);
 
     // Upsert case
     long updateTimestamp = Instant.now().toEpochMilli();
@@ -290,7 +290,7 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
     String newInstantTs = client.startCommit();
     client.upsert(updateBatch, newInstantTs);
     checkBootstrapResults(totalRecords, schema, newInstantTs, false, numInstantsAfterBootstrap + 1,
-        updateTimestamp, deltaCommit ? timestamp : updateTimestamp, deltaCommit);
+        updateTimestamp, deltaCommit ? timestamp : updateTimestamp, deltaCommit, true);
 
     if (deltaCommit) {
       Option<String> compactionInstant = client.scheduleCompaction(Option.empty());
@@ -298,7 +298,7 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
       client.compact(compactionInstant.get());
       checkBootstrapResults(totalRecords, schema, compactionInstant.get(), checkNumRawFiles,
           numInstantsAfterBootstrap + 2, 2, updateTimestamp, updateTimestamp, !deltaCommit,
-          Arrays.asList(compactionInstant.get()));
+          Arrays.asList(compactionInstant.get()), !config.isPreserveHoodieCommitMetadataForCompaction());
     }
   }
 
@@ -328,14 +328,14 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
   }
 
   private void checkBootstrapResults(int totalRecords, Schema schema, String maxInstant, boolean checkNumRawFiles,
-                                     int expNumInstants, long expTimestamp, long expROTimestamp, boolean isDeltaCommit) throws Exception {
+                                     int expNumInstants, long expTimestamp, long expROTimestamp, boolean isDeltaCommit, boolean validateRecordsForCommitTime) throws Exception {
     checkBootstrapResults(totalRecords, schema, maxInstant, checkNumRawFiles, expNumInstants, expNumInstants,
-        expTimestamp, expROTimestamp, isDeltaCommit, Arrays.asList(maxInstant));
+        expTimestamp, expROTimestamp, isDeltaCommit, Arrays.asList(maxInstant), validateRecordsForCommitTime);
   }
 
   private void checkBootstrapResults(int totalRecords, Schema schema, String instant, boolean checkNumRawFiles,
                                      int expNumInstants, int numVersions, long expTimestamp, long expROTimestamp, boolean isDeltaCommit,
-                                     List<String> instantsWithValidRecords) throws Exception {
+                                     List<String> instantsWithValidRecords, boolean validateCommitRecords) throws Exception {
     metaClient.reloadActiveTimeline();
     assertEquals(expNumInstants, metaClient.getCommitsTimeline().filterCompletedInstants().countInstants());
     assertEquals(instant, metaClient.getActiveTimeline()
@@ -355,8 +355,10 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
     if (!isDeltaCommit) {
       String predicate = String.join(", ",
           instantsWithValidRecords.stream().map(p -> "\"" + p + "\"").collect(Collectors.toList()));
-      assertEquals(totalRecords, sqlContext.sql("select * from bootstrapped where _hoodie_commit_time IN "
-          + "(" + predicate + ")").count());
+      if (validateCommitRecords) {
+        assertEquals(totalRecords, sqlContext.sql("select * from bootstrapped where _hoodie_commit_time IN "
+            + "(" + predicate + ")").count());
+      }
       Dataset<Row> missingOriginal = sqlContext.sql("select a._row_key from original a where a._row_key not "
           + "in (select _hoodie_record_key from bootstrapped)");
       assertEquals(0, missingOriginal.count());

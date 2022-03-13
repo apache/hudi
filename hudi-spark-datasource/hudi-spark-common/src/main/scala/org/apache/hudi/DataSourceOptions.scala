@@ -555,6 +555,11 @@ object DataSourceWriteOptions {
     .withDocumentation("Whether sync hive metastore bucket specification when using bucket index." +
       "The specification is 'CLUSTERED BY (trace_id) SORTED BY (trace_id ASC) INTO 65536 BUCKETS'")
 
+  val HIVE_SYNC_COMMENT: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.hive_sync.sync_comment")
+    .defaultValue("false")
+    .withDocumentation("Whether to sync the table column comments while syncing the table.")
+
   // Async Compaction - Enabled by default for MOR
   val ASYNC_COMPACT_ENABLE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.compaction.async.enable")

@@ -19,13 +19,11 @@ package org.apache.hudi
 
 import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper
 import org.apache.hudi.testutils.HoodieClientTestBase
-import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{Expression, Not}
-import org.apache.spark.sql.catalyst.plans.logical.{Filter, LocalRelation}
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType, VarcharType}
-import org.apache.spark.sql.{Column, SparkSession}
+import org.apache.spark.sql.{Column, HoodieCatalystExpressionUtils, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.params.ParameterizedTest
@@ -75,8 +73,7 @@ class TestDataSkippingUtils extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource(Array("testBaseLookupFilterExpressionsSource", "testAdvancedLookupFilterExpressionsSource"))
   def testLookupFilterExpressions(sourceExpr: String, input: Seq[IndexRow], output: Seq[String]): Unit = {
-    val resolvedExpr: Expression = resolveFilterExpr(sourceExpr, sourceTableSchema)
-
+    val resolvedExpr: Expression = HoodieCatalystExpressionUtils.resolveFilterExpr(spark, sourceExpr, sourceTableSchema)
     val lookupFilter = DataSkippingUtils.createColumnStatsIndexFilterExpr(resolvedExpr, indexSchema)
 
     val spark2 = spark
@@ -96,7 +93,7 @@ class TestDataSkippingUtils extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource(Array("testStringsLookupFilterExpressionsSource"))
   def testStringsLookupFilterExpressions(sourceExpr: Expression, input: Seq[IndexRow], output: Seq[String]): Unit = {
-    val resolvedExpr = resolveFilterExpr(sourceExpr, sourceTableSchema)
+    val resolvedExpr = HoodieCatalystExpressionUtils.resolveFilterExpr(spark, sourceExpr, sourceTableSchema)
     val lookupFilter = DataSkippingUtils.createColumnStatsIndexFilterExpr(resolvedExpr, indexSchema)
 
     val spark2 = spark
@@ -112,27 +109,6 @@ class TestDataSkippingUtils extends HoodieClientTestBase {
 
     assertEquals(output, rows)
   }
-
-  private def resolveFilterExpr(exprString: String, tableSchema: StructType): Expression = {
-    val expr = spark.sessionState.sqlParser.parseExpression(exprString)
-    resolveFilterExpr(expr, tableSchema)
-  }
-
-  private def resolveFilterExpr(expr: Expression, tableSchema: StructType): Expression = {
-    val schemaFields = tableSchema.fields
-    val resolvedExpr = spark.sessionState.analyzer.ResolveReferences(
-      Filter(expr, LocalRelation(schemaFields.head, schemaFields.drop(1): _*))
-    )
-      .asInstanceOf[Filter].condition
-
-    checkForUnresolvedRefs(resolvedExpr)
-  }
-
-  def checkForUnresolvedRefs(resolvedExpr: Expression): Expression =
-    resolvedExpr match {
-      case UnresolvedAttribute(_) => throw new IllegalStateException("unresolved attribute")
-      case _ => resolvedExpr.mapChildren(e => checkForUnresolvedRefs(e))
-    }
 }
 
 object TestDataSkippingUtils {
