@@ -188,6 +188,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("Comma-separated list of columns for which column stats index will be built.");
 
+  public static final ConfigProperty<String> BLOOM_FILTER_INDEX_FOR_COLUMNS = ConfigProperty
+      .key(METADATA_PREFIX + ".index.bloom.filter.for.columns")
+      .defaultValue("")
+      .sinceVersion("0.11.0")
+      .withDocumentation("Comma-separated list of columns for which bloom filter index will be built.");
+
   public static final ConfigProperty<Boolean> POPULATE_META_FIELDS = ConfigProperty
       .key(METADATA_PREFIX + ".populate.meta.fields")
       .defaultValue(false)
@@ -236,6 +242,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public String getColumnsEnabledForColumnStatsIndex() {
     return getString(COLUMN_STATS_INDEX_FOR_COLUMNS);
+  }
+
+  public String getColumnsEnabledForBloomFilterIndex() {
+    return getString(BLOOM_FILTER_INDEX_FOR_COLUMNS);
   }
 
   public int getBloomFilterIndexFileGroupCount() {
@@ -324,6 +334,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withColumnStatsIndexForColumns(String columns) {
       metadataConfig.setValue(COLUMN_STATS_INDEX_FOR_COLUMNS, columns);
+      return this;
+    }
+
+    public Builder withBloomFilterIndexForColumns(String columns) {
+      metadataConfig.setValue(BLOOM_FILTER_INDEX_FOR_COLUMNS, columns);
       return this;
     }
 

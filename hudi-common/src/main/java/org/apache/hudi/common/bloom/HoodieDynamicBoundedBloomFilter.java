@@ -23,12 +23,15 @@ import org.apache.hudi.exception.HoodieIndexException;
 
 import org.apache.hadoop.util.bloom.Key;
 
+import javax.annotation.Nonnull;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 /**
  * Hoodie's dynamic bloom bounded bloom filter. This is based largely on Hadoop's DynamicBloomFilter, but with a bound
@@ -79,6 +82,13 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
   @Override
   public void add(String key) {
     internalDynamicBloomFilter.add(new Key(key.getBytes(StandardCharsets.UTF_8)));
+  }
+
+  @Override
+  public void add(@Nonnull List<String> keys) {
+    for (String key: keys) {
+      add(key);
+    }
   }
 
   @Override

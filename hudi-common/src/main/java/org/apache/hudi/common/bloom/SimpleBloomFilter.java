@@ -23,6 +23,8 @@ import org.apache.hudi.exception.HoodieIndexException;
 
 import org.apache.hadoop.util.bloom.Key;
 
+import javax.annotation.Nonnull;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInput;
@@ -33,6 +35,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 /**
  * A Simple Bloom filter implementation built on top of {@link org.apache.hadoop.util.bloom.BloomFilter}.
@@ -78,15 +81,22 @@ public class SimpleBloomFilter implements BloomFilter {
   @Override
   public void add(String key) {
     if (key == null) {
-      throw new NullPointerException("Key cannot by null");
+      throw new NullPointerException("Key cannot be null");
     }
     filter.add(new Key(key.getBytes(StandardCharsets.UTF_8)));
   }
 
   @Override
+  public void add(@Nonnull List<String> keys) {
+    for (String key: keys) {
+      add(key);
+    }
+  }
+
+  @Override
   public boolean mightContain(String key) {
     if (key == null) {
-      throw new NullPointerException("Key cannot by null");
+      throw new NullPointerException("Key cannot be null");
     }
     return filter.membershipTest(new Key(key.getBytes(StandardCharsets.UTF_8)));
   }

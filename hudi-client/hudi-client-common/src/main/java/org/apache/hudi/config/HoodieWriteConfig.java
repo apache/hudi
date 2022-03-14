@@ -1515,6 +1515,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getMetadataConfig().getColumnsEnabledForColumnStatsIndex();
   }
 
+  public String getColumnsEnabledForBloomFilterIndex() {
+    return getMetadataConfig().getColumnsEnabledForBloomFilterIndex();
+  }
+
   public int getColumnStatsIndexParallelism() {
     return metadataConfig.getColumnStatsIndexParallelism();
   }

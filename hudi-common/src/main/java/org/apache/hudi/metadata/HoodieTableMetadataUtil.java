@@ -266,6 +266,7 @@ public class HoodieTableMetadataUtil {
             LOG.error("Failed to read bloom filter for " + writeFilePath);
             return Collections.emptyListIterator();
           }
+          fileBloomFilter.add(recordsGenerationParams.getBloomSecondaryKeys());
           ByteBuffer bloomByteBuffer = ByteBuffer.wrap(fileBloomFilter.serializeToString().getBytes());
           HoodieRecord record = HoodieMetadataPayload.createBloomFilterMetadataRecord(
               partition, fileName, instantTime, recordsGenerationParams.getBloomFilterType(), bloomByteBuffer, false);
@@ -710,6 +711,7 @@ public class HoodieTableMetadataUtil {
             LOG.error("Failed to read bloom filter for " + appendedFilePath);
             return Stream.empty();
           }
+          fileBloomFilter.add(recordsGenerationParams.getBloomSecondaryKeys());
           ByteBuffer bloomByteBuffer = ByteBuffer.wrap(fileBloomFilter.serializeToString().getBytes());
           HoodieRecord record = HoodieMetadataPayload.createBloomFilterMetadataRecord(
               partition, appendedFile, instantTime, recordsGenerationParams.getBloomFilterType(), bloomByteBuffer, false);
