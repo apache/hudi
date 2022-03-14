@@ -99,19 +99,23 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
   }
 
   override protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
-    val latestCommit = includedCommits.last.getTimestamp
-    val commitsMetadata = includedCommits.map(getCommitMetadata(_, timeline)).asJava
+    if (includedCommits.isEmpty) {
+      List()
+    } else {
+      val latestCommit = includedCommits.last.getTimestamp
+      val commitsMetadata = includedCommits.map(getCommitMetadata(_, timeline)).asJava
 
-    val modifiedFiles = listAffectedFilesForCommits(conf, new Path(metaClient.getBasePath), commitsMetadata)
-    val fsView = new HoodieTableFileSystemView(metaClient, timeline, modifiedFiles)
+      val modifiedFiles = listAffectedFilesForCommits(conf, new Path(metaClient.getBasePath), commitsMetadata)
+      val fsView = new HoodieTableFileSystemView(metaClient, timeline, modifiedFiles)
 
-    val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
+      val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
 
-    val fileSlices = modifiedPartitions.asScala.flatMap { relativePartitionPath =>
-      fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, latestCommit).iterator().asScala
-    }.toSeq
+      val fileSlices = modifiedPartitions.asScala.flatMap { relativePartitionPath =>
+        fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, latestCommit).iterator().asScala
+      }.toSeq
 
-    buildSplits(filterFileSlices(fileSlices, globPattern))
+      buildSplits(filterFileSlices(fileSlices, globPattern))
+    }
   }
 
   private def filterFileSlices(fileSlices: Seq[FileSlice], pathGlobPattern: String): Seq[FileSlice] = {
