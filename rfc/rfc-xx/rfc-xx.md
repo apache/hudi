@@ -113,7 +113,7 @@ comes at a later point of time.
 Merged block itself is larger than the default block size of 256MB. 
 Single LogCompaction operation can create multiple log blocks.
 
-![](huge_log_block_written_to_multiple_blocks.jpeg)
+![](huge_data_after_logcompaction_written_to_multiple_blocks.jpeg)
 
 #### Scenario 4:
 
