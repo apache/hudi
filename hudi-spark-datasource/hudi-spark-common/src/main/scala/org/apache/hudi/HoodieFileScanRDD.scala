@@ -36,7 +36,7 @@ class HoodieFileScanRDD(@transient private val sparkSession: SparkSession,
 
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
     val iterator = new Iterator[InternalRow] with AutoCloseable {
-      private[this] val files = split.asInstanceOf[HoodieBaseFileSplit].filePartition.files.toIterator
+      private[this] val files = split.asInstanceOf[FilePartition].files.toIterator
       private[this] var currentFile: PartitionedFile = _
       private[this] var currentIterator: Iterator[InternalRow] = _
 
