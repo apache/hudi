@@ -183,7 +183,10 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
     // Here we rely on a type erasure, to workaround inherited API restriction and pass [[RDD[InternalRow]]] back as [[RDD[Row]]]
     // Please check [[needConversion]] scala-doc for more details
-    composeRDD(fileSplits, partitionSchema, tableSchema, requiredSchema, filters).asInstanceOf[RDD[Row]]
+    if (fileSplits.nonEmpty)
+      composeRDD(fileSplits, partitionSchema, tableSchema, requiredSchema, filters).asInstanceOf[RDD[Row]]
+    else
+      sparkSession.sparkContext.emptyRDD
   }
 
   /**
