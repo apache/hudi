@@ -111,7 +111,7 @@ abstract class BaseProcedure extends Procedure {
     }
   }
 
-  protected def getBasePath(tableName: Option[Any], tablePath: Option[Any]): String = {
+  protected def getBasePath(tableName: Option[Any], tablePath: Option[Any] = Option.empty): String = {
     tableName.map(
       t => HoodieCatalogTable(sparkSession, new TableIdentifier(t.asInstanceOf[String])).tableLocation)
       .getOrElse(

@@ -75,7 +75,5 @@ dag_content:
   last_validate:
     config:
       execute_itr_count: 20
-      validate_clean: true
-      validate_archival: true
     type: ValidateAsyncOperations
     deps: second_validate
