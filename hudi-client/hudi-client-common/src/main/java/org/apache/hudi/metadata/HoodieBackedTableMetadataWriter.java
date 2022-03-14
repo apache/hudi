@@ -667,6 +667,14 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }
   }
 
+  public void dropIndex(List<MetadataPartitionType> indexesToDrop) throws IOException {
+    // TODO: update table config and do it in a transaction
+    for (MetadataPartitionType partitionType : indexesToDrop) {
+      LOG.warn("Deleting Metadata Table partitions: " + partitionType.getPartitionPath());
+      dataMetaClient.getFs().delete(new Path(metadataWriteConfig.getBasePath(), partitionType.getPartitionPath()), true);
+    }
+  }
+
   private MetadataRecordsGenerationParams getRecordsGenerationParams() {
     return new MetadataRecordsGenerationParams(
         dataMetaClient, enabledPartitionTypes, dataWriteConfig.getBloomFilterType(),
