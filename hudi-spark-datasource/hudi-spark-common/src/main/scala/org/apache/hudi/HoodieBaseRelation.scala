@@ -131,7 +131,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   }
 
   protected def timeline: HoodieTimeline =
-    // NOTE: We're including compaction here since it's not considering a "commit" operation
+  // NOTE: We're including compaction here since it's not considering a "commit" operation
     metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants
 
   protected def latestInstant: Option[HoodieInstant] =
@@ -146,8 +146,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   /**
    * This method controls whether relation will be producing
    * <ul>
-   *   <li>[[Row]], when it's being equal to true</li>
-   *   <li>[[InternalRow]], when it's being equal to false</li>
+   * <li>[[Row]], when it's being equal to true</li>
+   * <li>[[InternalRow]], when it's being equal to false</li>
    * </ul>
    *
    * Returning [[InternalRow]] directly enables us to save on needless ser/de loop from [[InternalRow]] (being
@@ -186,14 +186,30 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     composeRDD(fileSplits, partitionSchema, tableSchema, requiredSchema, filters).asInstanceOf[RDD[Row]]
   }
 
-  // TODO scala-doc
+  /**
+   * Composes RDD provided file splits to read from, table and partition schemas, data filters to be applied
+   *
+   * @param fileSplits      file splits to be handled by the RDD
+   * @param partitionSchema target table's partition schema
+   * @param tableSchema     target table's schema
+   * @param requiredSchema  projected schema required by the reader
+   * @param filters         data filters to be applied
+   * @return instance of RDD (implementing [[HoodieUnsafeRDD]])
+   */
   protected def composeRDD(fileSplits: Seq[FileSplit],
                            partitionSchema: StructType,
                            tableSchema: HoodieTableSchema,
                            requiredSchema: HoodieTableSchema,
                            filters: Array[Filter]): HoodieUnsafeRDD
 
-  // TODO scala-doc
+  /**
+   * Provided with partition and date filters collects target file splits to read records from, while
+   * performing pruning if necessary
+   *
+   * @param partitionFilters partition filters to be applied
+   * @param dataFilters data filters to be applied
+   * @return list of [[FileSplit]] to fetch records from
+   */
   protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSplit]
 
   protected def listLatestBaseFiles(globbedPaths: Seq[Path], partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Map[Path, Seq[FileStatus]] = {
