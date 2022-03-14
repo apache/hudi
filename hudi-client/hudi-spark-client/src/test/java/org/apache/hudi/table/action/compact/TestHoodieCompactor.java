@@ -237,22 +237,22 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
             .withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .build();
     /*
-     * Update the records twice with different ordered timestamps
+     * Update the records twice with ordered timestamps
      * the first step : insert 100 records
      * the second step : first update 100 records with timestamp 2
      * the third step : second update 100 records with timestamp 3
      * the forth step : do a compact
-     * the final step : check 100 records with timestamp 3
+     * the final step : check final 100 records with timestamp 3
      */
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       String firstCommitTime = "100";
       writeClient.startCommitWithTime(firstCommitTime);
-      // first step
+      // the first step
       List<HoodieRecord> records = dataGen.generateInserts(firstCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
       writeClient.insert(recordsRDD, firstCommitTime).collect();
       HoodieTable table = HoodieSparkTable.create(config, context);
-      // second step : do first update
+      // the second step
       String firstUpdateTime = "101";
       // init ts = 2
       Integer firstUpdateTimeStamp = 2;
@@ -265,7 +265,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, firstUpdateTime).collect();
       metaClient.reloadActiveTimeline();
 
-      // second update
+      // the third step
       String secondUpdateTime = "102";
       Integer secondUpdateTimeStamp = firstUpdateTimeStamp + 1;
       List<HoodieRecord> updatedTwiceRecords = dataGen.generateUpdatesWithTS(secondUpdateTime, records, secondUpdateTimeStamp);
@@ -276,7 +276,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       writeClient.upsertPreppedRecords(updatedTwiceTaggedRecordsRDD, secondUpdateTime).collect();
       metaClient.reloadActiveTimeline();
 
-      // Do a compaction
+      // the forth step
       String compactionCommitTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
       HoodieWriteMetadata writeMetadata = writeClient.compact(compactionCommitTime);
       HoodieCommitMetadata commitMetadata = (HoodieCommitMetadata) writeMetadata.getCommitMetadata().get();
@@ -331,23 +331,24 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
             .withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .build();
     /*
-     * Update the records twice with different unordered timestamps
+     * Update the records twice with unordered timestamps
      * the first step : insert 100 records
      * the second step : first update 100 records with timestamp Integer.MAX_VALUE
      * the third step : second update 100 records with timestamp 5
      * the forth step : do a compact
-     * the final step : check 100 records with timestamp Integer.MAX_VALUE
+     * the final step : check final 100 records with timestamp Integer.MAX_VALUE
      */
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       String firstCommitTime = "100";
       writeClient.startCommitWithTime(firstCommitTime);
 
+      // the first step
       List<HoodieRecord> records = dataGen.generateInserts(firstCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
       writeClient.insert(recordsRDD, firstCommitTime).collect();
       // Update the records twice with different ordered timestamps
       HoodieTable table = HoodieSparkTable.create(config, context);
-      // first update
+      // the second step
       String firstUpdateTime = "101";
       // init ts = Integer.MAX_VALUE
       Integer firstUpdateTimeStamp = Integer.MAX_VALUE;
@@ -360,7 +361,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, firstUpdateTime).collect();
       metaClient.reloadActiveTimeline();
 
-      // second update
+      // the third step
       String secondUpdateTime = "102";
       // init secondTimeStamp less than firstTimeStamp
       Integer secondUpdateTimeStamp = 5;
@@ -372,7 +373,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       writeClient.upsertPreppedRecords(updatedTwiceTaggedRecordsRDD, secondUpdateTime).collect();
       metaClient.reloadActiveTimeline();
 
-      // Do a compaction
+      // the forth step
       String compactionCommitTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
       HoodieWriteMetadata writeMetadata = writeClient.compact(compactionCommitTime);
       HoodieCommitMetadata commitMetadata = (HoodieCommitMetadata) writeMetadata.getCommitMetadata().get();
@@ -425,24 +426,24 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
             .withPayloadClass(DefaultHoodieRecordPayload.class.getName())
             .withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .build();
-      /*
-       * Update the records twice with different same timestamps
-       * the first step : insert 100 records (default timestamp = 0)
-       * the second step : first update 100 records with timestamp 0
-       * the third step : second update 100 records with timestamp 0
-       * the forth step : do a compact
-       * the final step : check 100 records with timestamp=0 and _hoodie_commit_time = final_commit_time
-       */
+    /*
+     * Update the records twice with same timestamps
+     * the first step : insert 100 records (default timestamp = 0)
+     * the second step : first update 100 records with timestamp 0
+     * the third step : second update 100 records with timestamp 0
+     * the forth step : do a compact
+     * the final step : check final 100 records with timestamp = 0 and _hoodie_commit_time = final_commit_time
+     */
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       String firstCommitTime = "100";
       writeClient.startCommitWithTime(firstCommitTime);
-
+      // the first step
       List<HoodieRecord> records = dataGen.generateInserts(firstCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
       writeClient.insert(recordsRDD, firstCommitTime).collect();
       // Update the records twice with different ordered timestamps
       HoodieTable table = HoodieSparkTable.create(config, context);
-      // first update
+      // the second step
       String firstUpdateTime = "101";
       // init firstUpdateTimeStamp = 0
       Integer firstUpdateTimeStamp = 0;
@@ -455,7 +456,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, firstUpdateTime).collect();
       metaClient.reloadActiveTimeline();
 
-      // second update
+      // the third step
       String secondUpdateTime = "102";
       // init secondUpdateTimeStamp same with firstUpdateTimeStamp
       Integer secondUpdateTimeStamp = 0;
@@ -467,7 +468,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       writeClient.upsertPreppedRecords(updatedTwiceTaggedRecordsRDD, secondUpdateTime).collect();
       metaClient.reloadActiveTimeline();
 
-      // Do a compaction
+      // the forth step
       String compactionCommitTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
       HoodieWriteMetadata writeMetadata = writeClient.compact(compactionCommitTime);
       HoodieCommitMetadata commitMetadata = (HoodieCommitMetadata) writeMetadata.getCommitMetadata().get();
@@ -500,7 +501,6 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       }
     }
   }
-
 
   @Override
   protected HoodieTableType getTableType() {
