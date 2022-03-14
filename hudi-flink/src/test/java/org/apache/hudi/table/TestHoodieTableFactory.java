@@ -253,17 +253,18 @@ public class TestHoodieTableFactory {
     final MockContext sourceContext1 = MockContext.getInstance(this.conf, schema1, "f2");
     final HoodieTableSource tableSource1 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext1);
     final Configuration conf1 = tableSource1.getConf();
-    assertThat(conf1.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), is(20));
-    assertThat(conf1.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS), is(30));
+    assertThat(conf1.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), is(FlinkOptions.ARCHIVE_MIN_COMMITS.defaultValue()));
+    assertThat(conf1.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS), is(FlinkOptions.ARCHIVE_MAX_COMMITS.defaultValue()));
 
     // set up new retains commits that is greater than min archive commits
-    this.conf.setString(FlinkOptions.CLEAN_RETAIN_COMMITS.key(), "25");
+    final int retainCommits = FlinkOptions.ARCHIVE_MIN_COMMITS.defaultValue() + 5;
+    this.conf.setInteger(FlinkOptions.CLEAN_RETAIN_COMMITS.key(), retainCommits);
 
     final MockContext sourceContext2 = MockContext.getInstance(this.conf, schema1, "f2");
     final HoodieTableSource tableSource2 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext2);
     final Configuration conf2 = tableSource2.getConf();
-    assertThat(conf2.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), is(35));
-    assertThat(conf2.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS), is(45));
+    assertThat(conf2.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), is(retainCommits + 10));
+    assertThat(conf2.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS), is(retainCommits + 20));
   }
 
   @Test
@@ -401,17 +402,18 @@ public class TestHoodieTableFactory {
     final MockContext sinkContext1 = MockContext.getInstance(this.conf, schema1, "f2");
     final HoodieTableSink tableSink1 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sinkContext1);
     final Configuration conf1 = tableSink1.getConf();
-    assertThat(conf1.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), is(20));
-    assertThat(conf1.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS), is(30));
+    assertThat(conf1.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), is(FlinkOptions.ARCHIVE_MIN_COMMITS.defaultValue()));
+    assertThat(conf1.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS), is(FlinkOptions.ARCHIVE_MAX_COMMITS.defaultValue()));
 
     // set up new retains commits that is greater than min archive commits
-    this.conf.setString(FlinkOptions.CLEAN_RETAIN_COMMITS.key(), "25");
+    final int retainCommits = FlinkOptions.ARCHIVE_MIN_COMMITS.defaultValue() + 5;
+    this.conf.setInteger(FlinkOptions.CLEAN_RETAIN_COMMITS.key(), retainCommits);
 
     final MockContext sinkContext2 = MockContext.getInstance(this.conf, schema1, "f2");
     final HoodieTableSink tableSink2 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sinkContext2);
     final Configuration conf2 = tableSink2.getConf();
-    assertThat(conf2.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), is(35));
-    assertThat(conf2.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS), is(45));
+    assertThat(conf2.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), is(retainCommits + 10));
+    assertThat(conf2.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS), is(retainCommits + 20));
   }
 
   @Test
