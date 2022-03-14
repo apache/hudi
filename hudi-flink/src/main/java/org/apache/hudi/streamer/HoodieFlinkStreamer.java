@@ -61,8 +61,9 @@ public class HoodieFlinkStreamer {
     // There can only be one checkpoint at one time.
     env.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
 
+    env.setStateBackend(cfg.stateBackend);
     if (cfg.flinkCheckPointPath != null) {
-      env.setStateBackend(new FsStateBackend(cfg.flinkCheckPointPath));
+      env.getCheckpointConfig().setCheckpointStorage(cfg.flinkCheckPointPath);
     }
 
     TypedProperties kafkaProps = DFSPropertiesConfiguration.getGlobalProps();
