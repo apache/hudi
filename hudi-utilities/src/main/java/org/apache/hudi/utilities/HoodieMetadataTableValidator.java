@@ -61,7 +61,6 @@ import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
@@ -70,11 +69,11 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * A validator with spark-submit to compare information, such as partitions, file listing, index, etc.,
@@ -181,8 +180,8 @@ public class HoodieMetadataTableValidator implements Serializable {
         + "Can use --min-validate-interval-seconds to control validation frequency", required = false)
     public boolean continuous = false;
 
-    @Parameter(names = {"--skip-under-deletion-data-files"}, description = "Skip to compare the data files which are under deletion by cleaner", required = false)
-    public boolean skipUnderDeletionDataFiles = false;
+    @Parameter(names = {"--skip-data-files-for-cleaning"}, description = "Skip to compare the data files which are under deletion by cleaner", required = false)
+    public boolean skipDataFilesForCleaning = false;
 
     @Parameter(names = {"--validate-latest-file-slices"}, description = "Validate latest file slices for all partitions.", required = false)
     public boolean validateLatestFileSlices = false;
@@ -241,7 +240,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           + "   --validate-all-column-stats " + validateAllColumnStats + ", \n"
           + "   --validate-bloom-filters " + validateBloomFilters + ", \n"
           + "   --continuous " + continuous + ", \n"
-          + "   --skip-under-deletion-data-files " + skipUnderDeletionDataFiles + ", \n"
+          + "   --skip-data-files-for-cleaning " + skipDataFilesForCleaning + ", \n"
           + "   --ignore-failed " + ignoreFailed + ", \n"
           + "   --min-validate-interval-seconds " + minValidateIntervalSeconds + ", \n"
           + "   --parallelism " + parallelism + ", \n"
@@ -264,7 +263,7 @@ public class HoodieMetadataTableValidator implements Serializable {
       Config config = (Config) o;
       return basePath.equals(config.basePath)
           && Objects.equals(continuous, config.continuous)
-          && Objects.equals(skipUnderDeletionDataFiles, config.skipUnderDeletionDataFiles)
+          && Objects.equals(skipDataFilesForCleaning, config.skipDataFilesForCleaning)
           && Objects.equals(validateLatestFileSlices, config.validateLatestFileSlices)
           && Objects.equals(validateLatestBaseFiles, config.validateLatestBaseFiles)
           && Objects.equals(validateAllFileGroups, config.validateAllFileGroups)
@@ -282,7 +281,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     @Override
     public int hashCode() {
-      return Objects.hash(basePath, continuous, skipUnderDeletionDataFiles, validateLatestFileSlices, validateLatestBaseFiles,
+      return Objects.hash(basePath, continuous, skipDataFilesForCleaning, validateLatestFileSlices, validateLatestBaseFiles,
           validateAllFileGroups, validateAllColumnStats, validateBloomFilters, minValidateIntervalSeconds,
           parallelism, ignoreFailed, sparkMaster, sparkMemory, assumeDatePartitioning, propsFilePath, configs, help);
     }
@@ -358,37 +357,22 @@ public class HoodieMetadataTableValidator implements Serializable {
     boolean finalResult = true;
     metaClient.reloadActiveTimeline();
     String basePath = metaClient.getBasePath();
-    List<String> baseFilesUnderDeletion = Collections.emptyList();
+    Set<String> baseFilesForCleaning = Collections.emptySet();
 
-    if (cfg.skipUnderDeletionDataFiles) {
-      HoodieTimeline pendingCleaningTimeline = metaClient.getActiveTimeline()
-          .getCleanerTimeline()
-          .filter(instant -> instant.getState() != HoodieInstant.State.COMPLETED);
+    if (cfg.skipDataFilesForCleaning) {
+      HoodieTimeline inflightCleaningTimeline = metaClient.getActiveTimeline().getCleanerTimeline().filterInflights();
 
-      baseFilesUnderDeletion = pendingCleaningTimeline.getInstants().flatMap(instant -> {
+      baseFilesForCleaning = inflightCleaningTimeline.getInstants().flatMap(instant -> {
         try {
-          if (instant.isInflight()) {
-            // convert inflight instant to requested and get clean plan
-            instant = new HoodieInstant(HoodieInstant.State.REQUESTED, instant.getAction(), instant.getTimestamp());
-          }
+          // convert inflight instant to requested and get clean plan
+          instant = new HoodieInstant(HoodieInstant.State.REQUESTED, instant.getAction(), instant.getTimestamp());
           HoodieCleanerPlan cleanerPlan = CleanerUtils.getCleanerPlan(metaClient, instant);
 
-          return cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().flatMap(cleanerFIleInfoList -> {
-            return cleanerFIleInfoList.stream().map(fileInfo -> {
+          return cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().flatMap(cleanerFileInfoList -> {
+            return cleanerFileInfoList.stream().map(fileInfo -> {
               return new Path(fileInfo.getFilePath()).getName();
             });
           });
-
-        } catch (HoodieIOException ex) {
-
-          if (ex.getIOException() instanceof FileNotFoundException) {
-            // cleaner instant could be deleted by archive and FileNotFoundException could be threw during getInstantDetails function
-            // So that we need to catch the FileNotFoundException here and continue
-            LOG.warn(ex.getMessage());
-            return Stream.empty();
-          } else {
-            throw ex;
-          }
 
         } catch (IOException e) {
           throw new HoodieIOException("Error reading cleaner metadata for " + instant);
@@ -397,7 +381,7 @@ public class HoodieMetadataTableValidator implements Serializable {
       }).filter(path -> {
         String fileExtension = FSUtils.getFileExtension(path);
         return HoodieFileFormat.BASE_FILE_EXTENSIONS.contains(fileExtension);
-      }).collect(Collectors.toList());
+      }).collect(Collectors.toSet());
     }
 
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
@@ -407,10 +391,10 @@ public class HoodieMetadataTableValidator implements Serializable {
     HoodieMetadataValidationContext fsBasedContext =
         new HoodieMetadataValidationContext(engineContext, cfg, metaClient, false);
 
-    List<String> finalBaseFilesUnderDeletion = baseFilesUnderDeletion;
+    Set<String> finalBaseFilesForCleaning = baseFilesForCleaning;
     List<Boolean> result = engineContext.parallelize(allPartitions, allPartitions.size()).map(partitionPath -> {
       try {
-        validateFilesInPartition(metadataTableBasedContext, fsBasedContext, partitionPath, finalBaseFilesUnderDeletion);
+        validateFilesInPartition(metadataTableBasedContext, fsBasedContext, partitionPath, finalBaseFilesForCleaning);
         LOG.info("Metadata table validation succeeded for " + partitionPath);
         return true;
       } catch (HoodieValidationException e) {
@@ -466,30 +450,30 @@ public class HoodieMetadataTableValidator implements Serializable {
    * @param metadataTableBasedContext Validation context containing information based on metadata table
    * @param fsBasedContext            Validation context containing information based on the file system
    * @param partitionPath             Partition path String
-   * @param baseFilesUnderDeletion    Base files under un-complete cleaner action
+   * @param baseDataFilesForCleaning    Base files for un-complete cleaner action
    */
   private void validateFilesInPartition(
       HoodieMetadataValidationContext metadataTableBasedContext,
       HoodieMetadataValidationContext fsBasedContext, String partitionPath,
-      List<String> baseFilesUnderDeletion) {
+      Set<String> baseDataFilesForCleaning) {
     if (cfg.validateLatestFileSlices) {
-      validateLatestFileSlices(metadataTableBasedContext, fsBasedContext, partitionPath, baseFilesUnderDeletion);
+      validateLatestFileSlices(metadataTableBasedContext, fsBasedContext, partitionPath, baseDataFilesForCleaning);
     }
 
     if (cfg.validateLatestBaseFiles) {
-      validateLatestBaseFiles(metadataTableBasedContext, fsBasedContext, partitionPath, baseFilesUnderDeletion);
+      validateLatestBaseFiles(metadataTableBasedContext, fsBasedContext, partitionPath, baseDataFilesForCleaning);
     }
 
     if (cfg.validateAllFileGroups) {
-      validateAllFileGroups(metadataTableBasedContext, fsBasedContext, partitionPath, baseFilesUnderDeletion);
+      validateAllFileGroups(metadataTableBasedContext, fsBasedContext, partitionPath, baseDataFilesForCleaning);
     }
 
     if (cfg.validateAllColumnStats) {
-      validateAllColumnStats(metadataTableBasedContext, fsBasedContext, partitionPath, baseFilesUnderDeletion);
+      validateAllColumnStats(metadataTableBasedContext, fsBasedContext, partitionPath, baseDataFilesForCleaning);
     }
 
     if (cfg.validateBloomFilters) {
-      validateBloomFilters(metadataTableBasedContext, fsBasedContext, partitionPath, baseFilesUnderDeletion);
+      validateBloomFilters(metadataTableBasedContext, fsBasedContext, partitionPath, baseDataFilesForCleaning);
     }
   }
 
@@ -497,12 +481,12 @@ public class HoodieMetadataTableValidator implements Serializable {
       HoodieMetadataValidationContext metadataTableBasedContext,
       HoodieMetadataValidationContext fsBasedContext,
       String partitionPath,
-      List<String> baseFilesUnderDeletion) {
+      Set<String> baseDataFilesForCleaning) {
 
     List<FileSlice> allFileSlicesFromMeta;
     List<FileSlice> allFileSlicesFromFS;
 
-    if (!baseFilesUnderDeletion.isEmpty()) {
+    if (!baseDataFilesForCleaning.isEmpty()) {
       List<FileSlice> fileSlicesFromMeta = metadataTableBasedContext
           .getSortedAllFileGroupList(partitionPath).stream()
           .flatMap(HoodieFileGroup::getAllFileSlices).sorted(new FileSliceComparator())
@@ -512,8 +496,8 @@ public class HoodieMetadataTableValidator implements Serializable {
           .flatMap(HoodieFileGroup::getAllFileSlices).sorted(new FileSliceComparator())
           .collect(Collectors.toList());
 
-      allFileSlicesFromMeta = filterFileSliceBasedOnUnderDeletionFiles(fileSlicesFromMeta, baseFilesUnderDeletion);
-      allFileSlicesFromFS = filterFileSliceBasedOnUnderDeletionFiles(fileSlicesFromFS, baseFilesUnderDeletion);
+      allFileSlicesFromMeta = filterFileSliceBasedOnInflightCleaning(fileSlicesFromMeta, baseDataFilesForCleaning);
+      allFileSlicesFromFS = filterFileSliceBasedOnInflightCleaning(fileSlicesFromFS, baseDataFilesForCleaning);
     } else {
       allFileSlicesFromMeta = metadataTableBasedContext
           .getSortedAllFileGroupList(partitionPath).stream()
@@ -539,14 +523,14 @@ public class HoodieMetadataTableValidator implements Serializable {
       HoodieMetadataValidationContext metadataTableBasedContext,
       HoodieMetadataValidationContext fsBasedContext,
       String partitionPath,
-      List<String> baseFilesUnderDeletion) {
+      Set<String> baseDataFilesForCleaning) {
 
     List<HoodieBaseFile> latestFilesFromMetadata;
     List<HoodieBaseFile> latestFilesFromFS;
 
-    if (!baseFilesUnderDeletion.isEmpty()) {
-      latestFilesFromMetadata = filterBaseFileBasedOnUnderDeletionFiles(metadataTableBasedContext.getSortedLatestBaseFileList(partitionPath), baseFilesUnderDeletion);
-      latestFilesFromFS = filterBaseFileBasedOnUnderDeletionFiles(fsBasedContext.getSortedLatestBaseFileList(partitionPath), baseFilesUnderDeletion);
+    if (!baseDataFilesForCleaning.isEmpty()) {
+      latestFilesFromMetadata = filterBaseFileBasedOnInflightCleaning(metadataTableBasedContext.getSortedLatestBaseFileList(partitionPath), baseDataFilesForCleaning);
+      latestFilesFromFS = filterBaseFileBasedOnInflightCleaning(fsBasedContext.getSortedLatestBaseFileList(partitionPath), baseDataFilesForCleaning);
     } else {
       latestFilesFromMetadata = metadataTableBasedContext.getSortedLatestBaseFileList(partitionPath);
       latestFilesFromFS = fsBasedContext.getSortedLatestBaseFileList(partitionPath);
@@ -573,13 +557,13 @@ public class HoodieMetadataTableValidator implements Serializable {
       HoodieMetadataValidationContext metadataTableBasedContext,
       HoodieMetadataValidationContext fsBasedContext,
       String partitionPath,
-      List<String> baseFilesUnderDeletion) {
+      Set<String> baseDataFilesForCleaning) {
     List<FileSlice> latestFileSlicesFromMetadataTable;
     List<FileSlice> latestFileSlicesFromFS;
 
-    if (!baseFilesUnderDeletion.isEmpty()) {
-      latestFileSlicesFromMetadataTable = filterFileSliceBasedOnUnderDeletionFiles(metadataTableBasedContext.getSortedLatestFileSliceList(partitionPath), baseFilesUnderDeletion);
-      latestFileSlicesFromFS = filterFileSliceBasedOnUnderDeletionFiles(fsBasedContext.getSortedLatestFileSliceList(partitionPath), baseFilesUnderDeletion);
+    if (!baseDataFilesForCleaning.isEmpty()) {
+      latestFileSlicesFromMetadataTable = filterFileSliceBasedOnInflightCleaning(metadataTableBasedContext.getSortedLatestFileSliceList(partitionPath), baseDataFilesForCleaning);
+      latestFileSlicesFromFS = filterFileSliceBasedOnInflightCleaning(fsBasedContext.getSortedLatestFileSliceList(partitionPath), baseDataFilesForCleaning);
     } else {
       latestFileSlicesFromMetadataTable = metadataTableBasedContext.getSortedLatestFileSliceList(partitionPath);
       latestFileSlicesFromFS = fsBasedContext.getSortedLatestFileSliceList(partitionPath);
@@ -592,21 +576,21 @@ public class HoodieMetadataTableValidator implements Serializable {
     LOG.info("Validation of getLatestFileSlices succeeded for partition " + partitionPath);
   }
 
-  private List<FileSlice> filterFileSliceBasedOnUnderDeletionFiles(List<FileSlice> sortedLatestFileSliceList, List<String> baseFilesUnderDeletion) {
+  private List<FileSlice> filterFileSliceBasedOnInflightCleaning(List<FileSlice> sortedLatestFileSliceList, Set<String> baseDataFilesForCleaning) {
     return sortedLatestFileSliceList.stream()
         .filter(fileSlice -> {
           if (!fileSlice.getBaseFile().isPresent()) {
             return true;
           } else {
-            return !baseFilesUnderDeletion.contains(fileSlice.getBaseFile().get().getFileName());
+            return !baseDataFilesForCleaning.contains(fileSlice.getBaseFile().get().getFileName());
           }
         }).collect(Collectors.toList());
   }
 
-  private List<HoodieBaseFile> filterBaseFileBasedOnUnderDeletionFiles(List<HoodieBaseFile> sortedBaseFileList, List<String> baseFilesUnderDeletion) {
+  private List<HoodieBaseFile> filterBaseFileBasedOnInflightCleaning(List<HoodieBaseFile> sortedBaseFileList, Set<String> baseDataFilesForCleaning) {
     return sortedBaseFileList.stream()
         .filter(baseFile -> {
-          return !baseFilesUnderDeletion.contains(baseFile.getFileName());
+          return !baseDataFilesForCleaning.contains(baseFile.getFileName());
         }).collect(Collectors.toList());
   }
 
@@ -614,9 +598,9 @@ public class HoodieMetadataTableValidator implements Serializable {
       HoodieMetadataValidationContext metadataTableBasedContext,
       HoodieMetadataValidationContext fsBasedContext,
       String partitionPath,
-      List<String> baseFilesUnderDeletion) {
+      Set<String> baseDataFilesForCleaning) {
 
-    List<String> latestBaseFilenameList = getLatestBaseFileNames(fsBasedContext, partitionPath, baseFilesUnderDeletion);
+    List<String> latestBaseFilenameList = getLatestBaseFileNames(fsBasedContext, partitionPath, baseDataFilesForCleaning);
     List<HoodieColumnRangeMetadata<String>> metadataBasedColStats = metadataTableBasedContext
         .getSortedColumnStatsList(partitionPath, latestBaseFilenameList);
     List<HoodieColumnRangeMetadata<String>> fsBasedColStats = fsBasedContext
@@ -631,9 +615,9 @@ public class HoodieMetadataTableValidator implements Serializable {
       HoodieMetadataValidationContext metadataTableBasedContext,
       HoodieMetadataValidationContext fsBasedContext,
       String partitionPath,
-      List<String> baseFilesUnderDeletion) {
+      Set<String> baseDataFilesForCleaning) {
 
-    List<String> latestBaseFilenameList = getLatestBaseFileNames(fsBasedContext, partitionPath, baseFilesUnderDeletion);
+    List<String> latestBaseFilenameList = getLatestBaseFileNames(fsBasedContext, partitionPath, baseDataFilesForCleaning);
     List<BloomFilterData> metadataBasedBloomFilters = metadataTableBasedContext
         .getSortedBloomFilterList(partitionPath, latestBaseFilenameList);
     List<BloomFilterData> fsBasedBloomFilters = fsBasedContext
@@ -644,11 +628,11 @@ public class HoodieMetadataTableValidator implements Serializable {
     LOG.info("Validation of bloom filters succeeded for partition " + partitionPath);
   }
 
-  private List<String> getLatestBaseFileNames(HoodieMetadataValidationContext fsBasedContext, String partitionPath, List<String> baseFilesUnderDeletion) {
+  private List<String> getLatestBaseFileNames(HoodieMetadataValidationContext fsBasedContext, String partitionPath, Set<String> baseDataFilesForCleaning) {
     List<String> latestBaseFilenameList;
-    if (!baseFilesUnderDeletion.isEmpty()) {
+    if (!baseDataFilesForCleaning.isEmpty()) {
       List<HoodieBaseFile> sortedLatestBaseFileList = fsBasedContext.getSortedLatestBaseFileList(partitionPath);
-      latestBaseFilenameList = filterBaseFileBasedOnUnderDeletionFiles(sortedLatestBaseFileList, baseFilesUnderDeletion)
+      latestBaseFilenameList = filterBaseFileBasedOnInflightCleaning(sortedLatestBaseFileList, baseDataFilesForCleaning)
           .stream().map(BaseFile::getFileName).collect(Collectors.toList());
     } else {
       latestBaseFilenameList = fsBasedContext.getSortedLatestBaseFileList(partitionPath)
