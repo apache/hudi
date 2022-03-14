@@ -25,17 +25,11 @@ dag_content:
       num_records_insert: 10000
     type: SparkInsertNode
     deps: none
-  first_hive_sync:
-    config:
-      queue_name: "adhoc"
-      engine: "mr"
-    type: HiveSyncNode
-    deps: first_insert
   first_validate:
     config:
       validate_hive: false
     type: ValidateDatasetNode
-    deps: first_hive_sync
+    deps: first_insert
   first_upsert:
     config:
       record_size: 200
@@ -52,18 +46,12 @@ dag_content:
       num_records_delete: 8000
     type: SparkDeleteNode
     deps: first_upsert
-  second_hive_sync:
-    config:
-      queue_name: "adhoc"
-      engine: "mr"
-    type: HiveSyncNode
-    deps: first_delete
   second_validate:
     config:
       validate_hive: false
       delete_input_data: true
     type: ValidateDatasetNode
-    deps: second_hive_sync
+    deps: first_delete
   last_validate:
     config:
       execute_itr_count: 30
