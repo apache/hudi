@@ -43,6 +43,14 @@ import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Schedules INDEX action.
+ * <li>
+ *   1. Fetch last completed instant on data timeline.
+ *   2. Write the index plan to the <instant>.index.requested.
+ *   3. Initialize filegroups for the enabled partition types within a transaction.
+ * </li>
+ */
 public class ScheduleIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieIndexPlan>> {
 
   private static final Logger LOG = LogManager.getLogger(ScheduleIndexActionExecutor.class);

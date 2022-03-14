@@ -71,6 +71,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.accumulateColumnRanges;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.aggregateColumnStats;
@@ -343,16 +344,17 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       updateWriteStatus(stat, result);
     }
 
-    if (config.isMetadataIndexColumnStatsForAllColumnsEnabled()) {
+    if (config.isMetadataColumnStatsIndexEnabled()) {
+      List<String> columnsToIndex = Stream.of(config.getColumnsEnabledForColumnStatsIndex().split(",")).map(String::trim).collect(Collectors.toList());
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap = stat.getRecordsStats().isPresent()
           ? stat.getRecordsStats().get().getStats() : new HashMap<>();
       final String filePath = stat.getPath();
       // initialize map of column name to map of stats name to stats value
       Map<String, Map<String, Object>> columnToStats = new HashMap<>();
-      writeSchemaWithMetaFields.getFields().forEach(field -> columnToStats.putIfAbsent(field.name(), new HashMap<>()));
+      columnsToIndex.forEach(column -> columnToStats.putIfAbsent(column, new HashMap<>()));
       // collect stats for columns at once per record and keep iterating through every record to eventually find col stats for all fields.
-      recordList.forEach(record -> aggregateColumnStats(record, writeSchemaWithMetaFields, columnToStats, config.isConsistentLogicalTimestampEnabled()));
-      writeSchemaWithMetaFields.getFields().forEach(field -> accumulateColumnRanges(field, filePath, columnRangeMap, columnToStats));
+      recordList.forEach(record -> aggregateColumnStats(record, columnsToIndex, columnToStats, config.isConsistentLogicalTimestampEnabled()));
+      columnsToIndex.forEach(column -> accumulateColumnRanges(column, filePath, columnRangeMap, columnToStats));
       stat.setRecordsStats(new HoodieDeltaWriteStat.RecordsStats<>(columnRangeMap));
     }
 

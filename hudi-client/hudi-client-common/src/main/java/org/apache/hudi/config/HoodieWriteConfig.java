@@ -1507,8 +1507,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     return isMetadataTableEnabled() && getMetadataConfig().isBloomFilterIndexEnabled();
   }
 
-  public boolean isMetadataIndexColumnStatsForAllColumnsEnabled() {
-    return isMetadataTableEnabled() && getMetadataConfig().isMetadataColumnStatsIndexForAllColumnsEnabled();
+  public boolean isMetadataColumnStatsIndexEnabled() {
+    return isMetadataTableEnabled() && getMetadataConfig().isColumnStatsIndexEnabled();
+  }
+
+  public String getColumnsEnabledForColumnStatsIndex() {
+    return getMetadataConfig().getColumnsEnabledForColumnStatsIndex();
   }
 
   public int getColumnStatsIndexParallelism() {

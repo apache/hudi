@@ -120,7 +120,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
     // Step 2: Load all involved files as <Partition, filename> pairs
     List<Pair<String, BloomIndexFileInfo>> fileInfoList;
     if (config.getBloomIndexPruneByRanges()) {
-      fileInfoList = (config.getMetadataConfig().isColumnStatsIndexEnabled()
+      fileInfoList = (config.isMetadataColumnStatsIndexEnabled()
           ? loadColumnRangesFromMetaIndex(affectedPartitionPathList, context, hoodieTable)
           : loadColumnRangesFromFiles(affectedPartitionPathList, context, hoodieTable));
     } else {

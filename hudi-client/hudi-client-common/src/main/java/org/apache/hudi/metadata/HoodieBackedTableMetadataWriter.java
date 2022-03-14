@@ -90,6 +90,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
@@ -670,8 +671,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     return new MetadataRecordsGenerationParams(
         dataMetaClient, enabledPartitionTypes, dataWriteConfig.getBloomFilterType(),
         dataWriteConfig.getBloomIndexParallelism(),
-        dataWriteConfig.isMetadataIndexColumnStatsForAllColumnsEnabled(),
-        dataWriteConfig.getColumnStatsIndexParallelism());
+        dataWriteConfig.isMetadataColumnStatsIndexEnabled(),
+        dataWriteConfig.getColumnStatsIndexParallelism(),
+        Stream.of(dataWriteConfig.getColumnsEnabledForColumnStatsIndex().split(",")).map(String::trim).collect(Collectors.toList()));
   }
 
   /**
