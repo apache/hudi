@@ -130,8 +130,7 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
   }
 }
 
-trait HoodieIncrementalRelationTrait {
-  this: HoodieBaseRelation =>
+trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
 
   // Validate this Incremental implementation is properly configured
   validate()
@@ -156,7 +155,7 @@ trait HoodieIncrementalRelationTrait {
   }
 
   protected def validate(): Unit = {
-    if (timeline.empty()) {
+    if (super.timeline.empty()) {
       throw new HoodieException("No instants to incrementally pull")
     }
 
