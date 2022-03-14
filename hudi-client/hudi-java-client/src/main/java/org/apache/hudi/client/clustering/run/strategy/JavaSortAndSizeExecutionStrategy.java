@@ -21,7 +21,6 @@ package org.apache.hudi.client.clustering.run.strategy;
 
 import org.apache.avro.Schema;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -36,7 +35,6 @@ import org.apache.log4j.Logger;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
 /**
  * Clustering Strategy based on following.
@@ -59,12 +57,14 @@ public class JavaSortAndSizeExecutionStrategy<T extends HoodieRecordPayload<T>>
       final String instantTime, final Map<String, String> strategyParams, final Schema schema,
       final List<HoodieFileGroupId> fileGroupIdList, final boolean preserveHoodieMetadata) {
     LOG.info("Starting clustering for a group, parallelism:" + numOutputGroups + " commit:" + instantTime);
-    Properties props = new TypedProperties(getWriteConfig().getProps());
-    props.put(HoodieWriteConfig.BULKINSERT_PARALLELISM_VALUE.key(), String.valueOf(numOutputGroups));
+
     // We are calling another action executor - disable auto commit. Strategy is only expected to write data in new files.
-    props.put(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), Boolean.FALSE.toString());
-    props.put(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key(), String.valueOf(getWriteConfig().getClusteringTargetFileMaxBytes()));
-    HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder().withProps(props).build();
+    getWriteConfig().setValue(HoodieWriteConfig.AUTO_COMMIT_ENABLE, Boolean.FALSE.toString());
+
+    HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder()
+            .withBulkInsertParallelism(numOutputGroups)
+            .withProps(getWriteConfig().getProps()).build();
+    newConfig.setValue(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE, String.valueOf(getWriteConfig().getClusteringTargetFileMaxBytes()));
     return (List<WriteStatus>) JavaBulkInsertHelper.newInstance().bulkInsert(inputRecords, instantTime, getHoodieTable(), newConfig,
         false, getPartitioner(strategyParams, schema), true, numOutputGroups, new CreateHandleFactory(preserveHoodieMetadata));
   }
