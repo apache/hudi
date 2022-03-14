@@ -107,9 +107,8 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
 
     val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
 
-    val fileSlices = modifiedPartitions.asScala.flatMap { partitionPath =>
-      val relativePath = getRelativePartitionPath(new Path(basePath), new Path(partitionPath))
-      fsView.getLatestMergedFileSlicesBeforeOrOn(relativePath, latestCommit).iterator().asScala
+    val fileSlices = modifiedPartitions.asScala.flatMap { relativePartitionPath =>
+      fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, latestCommit).iterator().asScala
     }.toSeq
 
     buildSplits(filterFileSlices(fileSlices, globPattern))
