@@ -206,6 +206,7 @@
                       <include>com.esotericsoftware:kryo-shaded</include>
                       <include>com.esotericsoftware:minlog</include>
                       <include>log4j:log4j</include>
+                      <include>org.objenesis:objenesis</include>
                   </includes>
                 </artifactSet>
             </configuration>
