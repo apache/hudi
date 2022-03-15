@@ -37,8 +37,7 @@ import org.apache.spark.sql.{HoodieCatalystExpressionUtils, Row, SparkSession}
 import java.util.Locale
 
 /**
- * An interface to adapter the difference between spark2 and spark3
- * in some spark related class.
+ * Interface adapting discrepancies and incompatibilities between different Spark versions
  */
 trait SparkAdapter extends Serializable {
 

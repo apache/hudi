@@ -39,7 +39,7 @@ import org.apache.spark.sql.types.DataType
 import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieSpark3CatalystExpressionUtils, Row, SparkSession}
 
 /**
- * The adapter for spark3.
+ * Implementation of [[SparkAdapter]] for Spark 3.1.x and 3.0.x branches
  */
 class Spark3Adapter extends SparkAdapter {
 
