@@ -233,7 +233,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
       lastHeartbeatForWriter.setLastHeartbeatTime(lastHeartbeatForWriterTime);
       lastHeartbeatForWriter.setInstantTime(instantTime);
     }
-    if (currentTime - lastHeartbeatForWriter.getLastHeartbeatTime() > this.maxAllowableHeartbeatIntervalInMs) {
+    if (currentTime - lastHeartbeatForWriter.getLastHeartbeatTime() > this.maxAllowableHeartbeatIntervalInMs && lastHeartbeatForWriter.getLastHeartbeatTime() > 0L) {
       LOG.warn("Heartbeat expired, currentTime = " + currentTime + ", last heartbeat = " + lastHeartbeatForWriter
           + ", heartbeat interval = " + this.heartbeatIntervalInMs);
       return true;
