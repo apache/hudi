@@ -107,6 +107,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       val fileSlices = fileIndex.listFileSlices(convertedPartitionFilters)
       buildSplits(fileSlices.values.flatten.toSeq)
     } else {
+      // TODO refactor to avoid iterating over listed files multiple times
       val partitions = listLatestBaseFiles(globPaths, convertedPartitionFilters, dataFilters)
       val partitionPaths = partitions.keys.toSeq
       if (partitionPaths.isEmpty || latestInstant.isEmpty) {
