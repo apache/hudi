@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql
 
+import org.apache.spark.HoodieSparkTypeUtils.isCastPreservingOrdering
 import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUTCTimestamp, FromUnixTime, Log, Log10, Log1p, Log2, Lower, Multiply, ParseToDate, ParseToTimestamp, ShiftLeft, ShiftRight, ToUTCTimestamp, ToUnixTimestamp, Upper}
 
 object HoodieSpark2CatalystExpressionUtils extends HoodieCatalystExpressionUtils {
@@ -75,7 +76,7 @@ object HoodieSpark2CatalystExpressionUtils extends HoodieCatalystExpressionUtils
         case ShiftRight(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
 
         // Other
-        case cast@Cast(OrderPreservingTransformation(attrRef), _, _)
+        case cast @ Cast(OrderPreservingTransformation(attrRef), _, _)
           if isCastPreservingOrdering(cast.child.dataType, cast.dataType) => Some(attrRef)
 
         // Identity transformation
