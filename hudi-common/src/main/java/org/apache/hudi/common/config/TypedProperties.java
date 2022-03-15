@@ -20,6 +20,7 @@ package org.apache.hudi.common.config;
 
 import java.io.Serializable;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
@@ -36,8 +37,8 @@ public class TypedProperties extends Properties implements Serializable {
 
   public TypedProperties(Properties defaults) {
     if (Objects.nonNull(defaults)) {
-      for (String key : defaults.stringPropertyNames()) {
-        put(key, defaults.getProperty(key));
+      for (Object key : Collections.list(defaults.propertyNames())) {
+        put(String.valueOf(key), String.valueOf(defaults.get(key)));
       }
     }
   }

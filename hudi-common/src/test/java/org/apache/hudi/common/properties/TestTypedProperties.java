@@ -83,5 +83,21 @@ public class TestTypedProperties {
     assertTrue(typedProperties.getBoolean("key1"));
     assertTrue(typedProperties.getBoolean("key1", false));
     assertFalse(typedProperties.getBoolean("key2", false));
+    // test getBoolean with non-string value for key2
+    properties.put("key2", true);
+    typedProperties = new TypedProperties(properties);
+    assertTrue(typedProperties.getBoolean("key1", false));
+    assertTrue(typedProperties.getBoolean("key2", false));
+  }
+
+  @Test
+  public void testTypedPropertiesWithNonStringValue() {
+    Properties properties = new Properties();
+    properties.put("key1", "1");
+    properties.put("key2", 2);
+
+    TypedProperties props = new TypedProperties(properties);
+    assertEquals(1, props.getInteger("key1"));
+    assertEquals(2, props.getInteger("key2"));
   }
 }
