@@ -26,14 +26,11 @@ import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, EqualNullSafe, EqualTo, Expression, ExtractValue, GetStructField, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith, SubqueryExpression}
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.hudi.ColumnStatsExpressionUtils._
-import org.apache.spark.sql.hudi.DataSkippingUtils.exprUtils
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{AnalysisException, HoodieCatalystExpressionUtils}
 import org.apache.spark.unsafe.types.UTF8String
 
-object DataSkippingUtils extends Logging with SparkAdapterSupport {
-
-  val exprUtils: HoodieCatalystExpressionUtils = sparkAdapter.createCatalystExpressionUtils()
+object DataSkippingUtils extends Logging {
 
   /**
    * Translates provided {@link filterExpr} into corresponding filter-expression for column-stats index index table
@@ -108,14 +105,14 @@ object DataSkippingUtils extends Logging with SparkAdapterSupport {
             //       expression targeted at Column Stats Index Table. For that, we take original expression holding
             //       [[AttributeReference]] referring to the Data Table, and swap it w/ expression referring to
             //       corresponding column in the Column Stats Index
-            val targetExprBuilder: Expression => Expression = exprUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             genColumnValuesEqualToExpression(colName, valueExpr, targetExprBuilder)
           }
 
       case EqualTo(valueExpr: Expression, sourceExpr @ AllowedTransformationExpression(attrRef)) if isValueExpression(valueExpr) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = exprUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             genColumnValuesEqualToExpression(colName, valueExpr, targetExprBuilder)
           }
 
@@ -126,14 +123,14 @@ object DataSkippingUtils extends Logging with SparkAdapterSupport {
       case Not(EqualTo(sourceExpr @ AllowedTransformationExpression(attrRef), value: Expression)) if isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = exprUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             Not(genColumnOnlyValuesEqualToExpression(colName, value, targetExprBuilder))
           }
 
       case Not(EqualTo(value: Expression, sourceExpr @ AllowedTransformationExpression(attrRef))) if isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = exprUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             Not(genColumnOnlyValuesEqualToExpression(colName, value, targetExprBuilder))
           }
 
@@ -148,14 +145,14 @@ object DataSkippingUtils extends Logging with SparkAdapterSupport {
       case LessThan(sourceExpr @ AllowedTransformationExpression(attrRef), value: Expression) if isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = exprUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             LessThan(targetExprBuilder.apply(genColMinValueExpr(colName)), value)
           }
 
       case GreaterThan(value: Expression, sourceExpr @ AllowedTransformationExpression(attrRef)) if isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = exprUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             LessThan(targetExprBuilder.apply(genColMinValueExpr(colName)), value)
           }
 
@@ -164,14 +161,14 @@ object DataSkippingUtils extends Logging with SparkAdapterSupport {
       case LessThan(value: Expression, sourceExpr @ AllowedTransformationExpression(attrRef)) if isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = exprUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             GreaterThan(targetExprBuilder.apply(genColMaxValueExpr(colName)), value)
           }
 
       case GreaterThan(sourceExpr @ AllowedTransformationExpression(attrRef), value: Expression) if isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = exprUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             GreaterThan(targetExprBuilder.apply(genColMaxValueExpr(colName)), value)
           }
 
@@ -180,14 +177,14 @@ object DataSkippingUtils extends Logging with SparkAdapterSupport {
       case LessThanOrEqual(sourceExpr @ AllowedTransformationExpression(attrRef), value: Expression) if isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = exprUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             LessThanOrEqual(targetExprBuilder.apply(genColMinValueExpr(colName)), value)
           }
 
       case GreaterThanOrEqual(value: Expression, sourceExpr @ AllowedTransformationExpression(attrRef)) if isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = exprUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             LessThanOrEqual(targetExprBuilder.apply(genColMinValueExpr(colName)), value)
           }
 
@@ -196,14 +193,14 @@ object DataSkippingUtils extends Logging with SparkAdapterSupport {
       case LessThanOrEqual(value: Expression, sourceExpr @ AllowedTransformationExpression(attrRef)) if isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = exprUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             GreaterThanOrEqual(targetExprBuilder.apply(genColMaxValueExpr(colName)), value)
           }
 
       case GreaterThanOrEqual(sourceExpr @ AllowedTransformationExpression(attrRef), value: Expression) if isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = exprUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             GreaterThanOrEqual(targetExprBuilder.apply(genColMaxValueExpr(colName)), value)
           }
 
@@ -226,7 +223,7 @@ object DataSkippingUtils extends Logging with SparkAdapterSupport {
       case In(sourceExpr @ AllowedTransformationExpression(attrRef), list: Seq[Expression]) if list.forall(isValueExpression) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = exprUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             list.map(lit => genColumnValuesEqualToExpression(colName, lit, targetExprBuilder)).reduce(Or)
           }
 
@@ -236,7 +233,7 @@ object DataSkippingUtils extends Logging with SparkAdapterSupport {
       case Not(In(sourceExpr @ AllowedTransformationExpression(attrRef), list: Seq[Expression])) if list.forall(_.foldable) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = exprUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             Not(list.map(lit => genColumnOnlyValuesEqualToExpression(colName, lit, targetExprBuilder)).reduce(Or))
           }
 
@@ -249,7 +246,7 @@ object DataSkippingUtils extends Logging with SparkAdapterSupport {
       case StartsWith(sourceExpr @ AllowedTransformationExpression(attrRef), v @ Literal(_: UTF8String, _)) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = exprUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             genColumnValuesEqualToExpression(colName, v, targetExprBuilder)
           }
 
@@ -259,7 +256,7 @@ object DataSkippingUtils extends Logging with SparkAdapterSupport {
       case Not(StartsWith(sourceExpr @ AllowedTransformationExpression(attrRef), value @ Literal(_: UTF8String, _))) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = exprUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             val minValueExpr = targetExprBuilder.apply(genColMinValueExpr(colName))
             val maxValueExpr = targetExprBuilder.apply(genColMaxValueExpr(colName))
             Not(And(StartsWith(minValueExpr, value), StartsWith(maxValueExpr, value)))
@@ -359,6 +356,13 @@ private object ColumnStatsExpressionUtils {
     And(EqualTo(minValueExpr, value), EqualTo(maxValueExpr, value))
   }
 
+  def swapAttributeRefInExpr(sourceExpr: Expression, from: AttributeReference, to: Expression): Expression = {
+    checkState(sourceExpr.references.size == 1)
+    sourceExpr.transformDown {
+      case attrRef: AttributeReference if attrRef.sameRef(from) => to
+    }
+  }
+
   /**
    * This check is used to validate that the expression that target column is compared against
    * <pre>
@@ -387,7 +391,8 @@ private object ColumnStatsExpressionUtils {
    *
    * Returns only [[AttributeReference]] contained as a sub-expression
    */
-  object AllowedTransformationExpression {
+  object AllowedTransformationExpression extends SparkAdapterSupport {
+    val exprUtils: HoodieCatalystExpressionUtils = sparkAdapter.createCatalystExpressionUtils()
 
     def unapply(expr: Expression): Option[AttributeReference] = {
       // First step, we check that expression
@@ -399,7 +404,7 @@ private object ColumnStatsExpressionUtils {
         // Second step, we validate that holding expression is an actually permitted
         // transformation
         // NOTE: That transformation composition is permitted
-        exprUtils.tryExtractFromOrderPreservingTransformation(expr)
+        exprUtils.tryMatchAttributeOrderingPreservingTransformation(expr)
       }
     }
   }

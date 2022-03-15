@@ -29,12 +29,6 @@ object HoodieSpark2CatalystExpressionUtils extends HoodieCatalystExpressionUtils
     }
   }
 
-  override def swapAttributeRefInExpr(sourceExpr: Expression, from: AttributeReference, to: Expression): Expression = {
-    sourceExpr.transformDown {
-      case attrRef: AttributeReference if attrRef.sameRef(from) => to
-    }
-  }
-
   private object OrderPreservingTransformation {
     def unapply(expr: Expression): Option[AttributeReference] = {
       expr match {
