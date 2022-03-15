@@ -80,22 +80,21 @@ public class ColumnStatsIndexHelper {
 
   private static final String SPARK_JOB_DESCRIPTION = "spark.job.description";
 
-  private static final String Z_INDEX_FILE_COLUMN_NAME = "file";
-
-  private static final String Z_INDEX_MIN_VALUE_STAT_NAME = "minValue";
-  private static final String Z_INDEX_MAX_VALUE_STAT_NAME = "maxValue";
-  private static final String Z_INDEX_NUM_NULLS_STAT_NAME = "num_nulls";
+  private static final String COLUMN_STATS_INDEX_FILE_COLUMN_NAME = "file";
+  private static final String COLUMN_STATS_INDEX_MIN_VALUE_STAT_NAME = "minValue";
+  private static final String COLUMN_STATS_INDEX_MAX_VALUE_STAT_NAME = "maxValue";
+  private static final String COLUMN_STATS_INDEX_NUM_NULLS_STAT_NAME = "num_nulls";
 
   public static String getMinColumnNameFor(String colName) {
-    return composeZIndexColName(colName, Z_INDEX_MIN_VALUE_STAT_NAME);
+    return composeZIndexColName(colName, COLUMN_STATS_INDEX_MIN_VALUE_STAT_NAME);
   }
 
   public static String getMaxColumnNameFor(String colName) {
-    return composeZIndexColName(colName, Z_INDEX_MAX_VALUE_STAT_NAME);
+    return composeZIndexColName(colName, COLUMN_STATS_INDEX_MAX_VALUE_STAT_NAME);
   }
 
   public static String getNumNullsColumnNameFor(String colName) {
-    return composeZIndexColName(colName, Z_INDEX_NUM_NULLS_STAT_NAME);
+    return composeZIndexColName(colName, COLUMN_STATS_INDEX_NUM_NULLS_STAT_NAME);
   }
 
   /**
@@ -407,11 +406,11 @@ public class ColumnStatsIndexHelper {
   @Nonnull
   public static StructType composeIndexSchema(@Nonnull List<StructField> zorderedColumnsSchemas) {
     List<StructField> schema = new ArrayList<>();
-    schema.add(new StructField(Z_INDEX_FILE_COLUMN_NAME, StringType$.MODULE$, true, Metadata.empty()));
+    schema.add(new StructField(COLUMN_STATS_INDEX_FILE_COLUMN_NAME, StringType$.MODULE$, true, Metadata.empty()));
     zorderedColumnsSchemas.forEach(colSchema -> {
-      schema.add(composeColumnStatStructType(colSchema.name(), Z_INDEX_MIN_VALUE_STAT_NAME, colSchema.dataType()));
-      schema.add(composeColumnStatStructType(colSchema.name(), Z_INDEX_MAX_VALUE_STAT_NAME, colSchema.dataType()));
-      schema.add(composeColumnStatStructType(colSchema.name(), Z_INDEX_NUM_NULLS_STAT_NAME, LongType$.MODULE$));
+      schema.add(composeColumnStatStructType(colSchema.name(), COLUMN_STATS_INDEX_MIN_VALUE_STAT_NAME, colSchema.dataType()));
+      schema.add(composeColumnStatStructType(colSchema.name(), COLUMN_STATS_INDEX_MAX_VALUE_STAT_NAME, colSchema.dataType()));
+      schema.add(composeColumnStatStructType(colSchema.name(), COLUMN_STATS_INDEX_NUM_NULLS_STAT_NAME, LongType$.MODULE$));
     });
     return StructType$.MODULE$.apply(schema);
   }

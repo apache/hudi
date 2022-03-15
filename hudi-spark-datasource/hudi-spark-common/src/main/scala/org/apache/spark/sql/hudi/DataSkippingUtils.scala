@@ -17,24 +17,15 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper.{getMaxColumnNameFor, getMinColumnNameFor, getNumNullsColumnNameFor}
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, EqualNullSafe, EqualTo, Expression, ExtractValue, GetStructField, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith}
-import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.functions.col
-import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.{StringType, StructType}
-import org.apache.spark.sql.vectorized.ColumnarBatch
-import org.apache.spark.sql.{AnalysisException, SparkSession}
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.unsafe.types.UTF8String
-
-import scala.collection.JavaConverters._
 
 object DataSkippingUtils extends Logging {
 
@@ -42,14 +33,24 @@ object DataSkippingUtils extends Logging {
    * Translates provided {@link filterExpr} into corresponding filter-expression for column-stats index index table
    * to filter out candidate files that would hold records matching the original filter
    *
-   * @param sourceFilterExpr source table's query's filter expression
+   * @param dataTableFilterExpr source table's query's filter expression
    * @param indexSchema index table schema
    * @return filter for column-stats index's table
    */
-  def createColumnStatsIndexFilterExpr(sourceFilterExpr: Expression, indexSchema: StructType): Expression = {
+  def translateIntoColumnStatsIndexFilterExpr(dataTableFilterExpr: Expression, indexSchema: StructType): Expression = {
+    try {
+      createColumnStatsIndexFilterExprInternal(dataTableFilterExpr, indexSchema)
+    } catch {
+      case e: AnalysisException =>
+        logDebug(s"Failed to translated provided data table filter expr into column stats one ($dataTableFilterExpr)", e)
+        throw e
+    }
+  }
+
+  private def createColumnStatsIndexFilterExprInternal(dataTableFilterExpr: Expression, indexSchema: StructType): Expression = {
     // Try to transform original Source Table's filter expression into
     // Column-Stats Index filter expression
-    tryComposeIndexFilterExpr(sourceFilterExpr, indexSchema) match {
+    tryComposeIndexFilterExpr(dataTableFilterExpr, indexSchema) match {
       case Some(e) => e
       // NOTE: In case we can't transform source filter expression, we fallback
       // to {@code TrueLiteral}, to essentially avoid pruning any indexed files from scanning
@@ -201,14 +202,14 @@ object DataSkippingUtils extends Logging {
           )
 
       case or: Or =>
-        val resLeft = createColumnStatsIndexFilterExpr(or.left, indexSchema)
-        val resRight = createColumnStatsIndexFilterExpr(or.right, indexSchema)
+        val resLeft = createColumnStatsIndexFilterExprInternal(or.left, indexSchema)
+        val resRight = createColumnStatsIndexFilterExprInternal(or.right, indexSchema)
 
         Option(Or(resLeft, resRight))
 
       case and: And =>
-        val resLeft = createColumnStatsIndexFilterExpr(and.left, indexSchema)
-        val resRight = createColumnStatsIndexFilterExpr(and.right, indexSchema)
+        val resLeft = createColumnStatsIndexFilterExprInternal(and.left, indexSchema)
+        val resRight = createColumnStatsIndexFilterExprInternal(and.right, indexSchema)
 
         Option(And(resLeft, resRight))
 
@@ -219,10 +220,10 @@ object DataSkippingUtils extends Logging {
       //
 
       case Not(And(left: Expression, right: Expression)) =>
-        Option(createColumnStatsIndexFilterExpr(Or(Not(left), Not(right)), indexSchema))
+        Option(createColumnStatsIndexFilterExprInternal(Or(Not(left), Not(right)), indexSchema))
 
       case Not(Or(left: Expression, right: Expression)) =>
-        Option(createColumnStatsIndexFilterExpr(And(Not(left), Not(right)), indexSchema))
+        Option(createColumnStatsIndexFilterExprInternal(And(Not(left), Not(right)), indexSchema))
 
       case _: Expression => None
     }
@@ -258,35 +259,5 @@ object DataSkippingUtils extends Logging {
       case other =>
         throw new AnalysisException(s"convert reference to name failed,  Found unsupported expression ${other}")
     }
-  }
-
-  def getIndexFiles(conf: Configuration, indexPath: String): Seq[FileStatus] = {
-    val basePath = new Path(indexPath)
-    basePath.getFileSystem(conf)
-      .listStatus(basePath).filter(f => f.getPath.getName.endsWith(".parquet"))
-  }
-
-  /**
-    * read parquet files concurrently by local.
-    * this method is mush faster than spark
-    */
-  def readParquetFile(spark: SparkSession, indexFiles: Seq[FileStatus], filters: Seq[Filter] = Nil, schemaOpts: Option[StructType] = None): Set[String] = {
-    val hadoopConf = spark.sparkContext.hadoopConfiguration
-    val partitionedFiles = indexFiles.map(f => PartitionedFile(InternalRow.empty, f.getPath.toString, 0, f.getLen))
-
-    val requiredSchema = new StructType().add("file", StringType, true)
-    val schema = schemaOpts.getOrElse(requiredSchema)
-    val parquetReader = new ParquetFileFormat().buildReaderWithPartitionValues(spark
-      , schema , StructType(Nil), requiredSchema, filters, Map.empty, hadoopConf)
-    val results = new Array[Iterator[String]](partitionedFiles.size)
-    partitionedFiles.zipWithIndex.par.foreach { case (pf, index) =>
-      val fileIterator = parquetReader(pf).asInstanceOf[Iterator[Any]]
-      val rows = fileIterator.flatMap(_ match {
-        case r: InternalRow => Seq(r)
-        case b: ColumnarBatch => b.rowIterator().asScala
-      }).map(r => r.getString(0))
-      results(index) = rows
-    }
-    results.flatMap(f => f).toSet
   }
 }

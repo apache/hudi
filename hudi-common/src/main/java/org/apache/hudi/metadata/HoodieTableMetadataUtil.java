@@ -927,16 +927,13 @@ public class HoodieTableMetadataUtil {
     final String fileName = filePathWithPartition.substring(offset);
 
     if (filePathWithPartition.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
-      List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = new ArrayList<>();
       final Path fullFilePath = new Path(datasetMetaClient.getBasePath(), filePathWithPartition);
+      List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList;
       if (!isDeleted) {
-        try {
-          columnRangeMetadataList = new ParquetUtils().readRangeFromParquetMetadata(
-              datasetMetaClient.getHadoopConf(), fullFilePath, columnsToIndex);
-        } catch (Exception e) {
-          LOG.error("Failed to read column stats for " + fullFilePath, e);
-        }
+        columnRangeMetadataList = new ParquetUtils().readRangeFromParquetMetadata(
+            datasetMetaClient.getHadoopConf(), fullFilePath, columnsToIndex);
       } else {
+        // TODO we should delete records instead of stubbing them
         columnRangeMetadataList =
             columnsToIndex.stream().map(entry -> new HoodieColumnRangeMetadata<Comparable>(fileName,
                     entry, null, null, 0, 0, 0, 0))
