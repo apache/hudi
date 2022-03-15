@@ -283,8 +283,8 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
           new HoodieVirtualKeyInfo(
               tableConfig.getRecordKeyFieldProp(),
               tableConfig.getPartitionFieldProp(),
-              schema.getIndexNamed(tableConfig.getRecordKeyFieldProp()),
-              schema.getIndexNamed(tableConfig.getPartitionFieldProp())));
+              schema.getField(tableConfig.getRecordKeyFieldProp()).pos(),
+              schema.getField(tableConfig.getPartitionFieldProp()).pos()));
     } catch (Exception exception) {
       throw new HoodieException("Fetching table schema failed with exception ", exception);
     }
