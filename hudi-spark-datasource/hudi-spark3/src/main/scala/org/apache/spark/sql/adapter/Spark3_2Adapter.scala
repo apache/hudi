@@ -26,7 +26,7 @@ import org.apache.spark.sql.parser.HoodieSpark3_2ExtendedSqlParser
 /**
  * Implementation of [[SparkAdapter]] for Spark 3.2.x branch
  */
-class Spark3_2Adapter extends Spark3Adapter {
+class Spark3_2Adapter extends BaseSpark3Adapter {
 
   override def createCatalystExpressionUtils(): HoodieCatalystExpressionUtils = HoodieSpark3_2CatalystExpressionUtils
 

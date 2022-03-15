@@ -36,14 +36,12 @@ import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.DataType
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieSpark3CatalystExpressionUtils, Row, SparkSession}
+import org.apache.spark.sql.{Row, SparkSession}
 
 /**
- * Implementation of [[SparkAdapter]] for Spark 3.1.x and 3.0.x branches
+ * Base implementation of [[SparkAdapter]] for Spark 3.x branch
  */
-class Spark3Adapter extends SparkAdapter {
-
-  override def createCatalystExpressionUtils(): HoodieCatalystExpressionUtils = HoodieSpark3CatalystExpressionUtils
+abstract class BaseSpark3Adapter extends SparkAdapter {
 
   override def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer =
     new HoodieSparkAvroSerializer(rootCatalystType, rootAvroType, nullable)

@@ -16,25 +16,16 @@
  * limitations under the License.
  */
 
-package org.apache.hudi
+package org.apache.spark.sql.adapter
 
 import org.apache.spark.sql.hudi.SparkAdapter
+import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieSpark3_1CatalystExpressionUtils}
 
 /**
- * Use the SparkAdapterSupport trait to get the SparkAdapter when we
- * need to adapt the difference between spark2 and spark3.
+ * Implementation of [[SparkAdapter]] for Spark 3.1.x
  */
-trait SparkAdapterSupport {
+class Spark3_1Adapter extends BaseSpark3Adapter {
 
-  lazy val sparkAdapter: SparkAdapter = {
-    val adapterClass = if (HoodieSparkUtils.isSpark3_2) {
-      "org.apache.spark.sql.adapter.Spark3_2Adapter"
-    } else if (HoodieSparkUtils.isSpark3_0 || HoodieSparkUtils.isSpark3_1) {
-      "org.apache.spark.sql.adapter.Spark3_1Adapter"
-    } else {
-      "org.apache.spark.sql.adapter.Spark2Adapter"
-    }
-    getClass.getClassLoader.loadClass(adapterClass)
-      .newInstance().asInstanceOf[SparkAdapter]
-  }
+  override def createCatalystExpressionUtils(): HoodieCatalystExpressionUtils = HoodieSpark3_1CatalystExpressionUtils
+
 }
