@@ -107,14 +107,18 @@ trait HoodieCatalystExpressionUtils {
   }
 
   /**
-   * TODO scala-doc
+   * Matches an expression iff
+   *
+   * <ol>
+   *   <li>It references exactly one [[AttributeReference]]</li>
+   *   <li>It contains only whitelisted transformations that preserve ordering of the source column [1]</li>
+   * </ol>
+   *
+   * [1] Preserving ordering is defined as following: transformation T is defined as ordering preserving in case
+   *     values of the source column A values being ordered as a1, a2, a3 ..., will map into column B = T(A) which
+   *     will keep the same ordering b1, b2, b3, ... with b1 = T(a1), b2 = T(a2), ...
    */
-  def tryExtractFromOrderPreservingTransformation(expr: Expression): Option[AttributeReference]
-
-  /**
-   * TODO scala-doc
-   */
-  def swapAttributeRefInExpr(sourceExpr: Expression, from: AttributeReference, to: Expression): Expression
+  def tryMatchAttributeOrderingPreservingTransformation(expr: Expression): Option[AttributeReference]
 
   private def hasUnresolvedRefs(resolvedExpr: Expression): Boolean =
     resolvedExpr.collectFirst {

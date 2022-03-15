@@ -22,7 +22,7 @@ import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, Bitwi
 
 object HoodieSpark2CatalystExpressionUtils extends HoodieCatalystExpressionUtils {
 
-  override def tryExtractFromOrderPreservingTransformation(expr: Expression): Option[AttributeReference] = {
+  override def tryMatchAttributeOrderingPreservingTransformation(expr: Expression): Option[AttributeReference] = {
     expr match {
       case OrderPreservingTransformation(attrRef) => Some(attrRef)
       case _ => None

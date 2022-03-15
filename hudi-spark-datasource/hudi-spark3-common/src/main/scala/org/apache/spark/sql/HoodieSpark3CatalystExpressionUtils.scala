@@ -23,7 +23,7 @@ import org.apache.spark.sql.catalyst.trees.TreePattern.ATTRIBUTE_REFERENCE
 
 object HoodieSpark3CatalystExpressionUtils extends HoodieCatalystExpressionUtils {
 
-  override def tryExtractFromOrderPreservingTransformation(expr: Expression): Option[AttributeReference] = {
+  override def tryMatchAttributeOrderingPreservingTransformation(expr: Expression): Option[AttributeReference] = {
     expr match {
       case OrderPreservingTransformation(attrRef) => Some(attrRef)
       case _ => None
