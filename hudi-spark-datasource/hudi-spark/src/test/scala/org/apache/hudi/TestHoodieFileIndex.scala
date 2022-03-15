@@ -18,43 +18,43 @@
 package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
-
+import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.HoodieJavaWriteClient
 import org.apache.hudi.client.common.HoodieJavaEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.engine.EngineType
-import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.{HoodieRecord, HoodieTableQueryType, HoodieTableType}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieStorageConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.TimestampType
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
-import org.apache.hudi.testutils.HoodieClientTestBase
-
+import org.apache.hudi.metadata.{HoodieTableMetadata, MetadataPartitionType}
+import org.apache.hudi.testutils.{HoodieClientTestBase, SparkClientFunctionalTestHarness}
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, GreaterThanOrEqual, LessThan, Literal}
-import org.apache.spark.sql.execution.datasources.PartitionDirectory
+import org.apache.spark.sql.execution.datasources.{NoopCache, PartitionDirectory}
 import org.apache.spark.sql.functions.{lit, struct}
-import org.apache.spark.sql.types.StringType
+import org.apache.spark.sql.types.{IntegerType, StringType}
 import org.apache.spark.sql.{DataFrameWriter, Row, SaveMode, SparkSession}
-
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource, ValueSource}
 
 import java.util.Properties
-
-
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
+import scala.util.Random
 
 class TestHoodieFileIndex extends HoodieClientTestBase {
 
@@ -331,6 +331,57 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       queryOpts ++ Map(HoodieMetadataConfig.ENABLE.key -> useMetaFileList.toString))
     // test if table is partitioned on nested columns, getAllQueryPartitionPaths does not break
     assert(fileIndex.getAllQueryPartitionPaths.get(0).path.equals("c"))
+  }
+
+  @Test
+  def testDataSkippingWhileFileListing(): Unit = {
+    val r = new Random(0xDEED)
+    val tuples = for (i <- 1 to 1000) yield (i, 1000 - i, r.nextString(5), r.nextInt(4))
+
+    val _spark = spark
+    import _spark.implicits._
+    val inputDF = tuples.toDF("id", "inv_id", "str", "rand")
+
+    val opts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      RECORDKEY_FIELD.key -> "id",
+      PRECOMBINE_FIELD.key -> "id",
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS.key -> "true",
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+    )
+
+    inputDF.repartition(4)
+      .write
+      .format("hudi")
+      .options(opts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key, 100 * 1024)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+
+    val props = Map[String, String](
+      "path" -> basePath,
+      QUERY_TYPE.key -> QUERY_TYPE_SNAPSHOT_OPT_VAL,
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true"
+    )
+
+    val fileIndex = HoodieFileIndex(spark, metaClient, Option.empty, props, NoopCache)
+
+    val allFilesPartitions = fileIndex.listFiles(Seq(), Seq())
+    assertEquals(10, allFilesPartitions.head.files.length)
+
+    // We're selecting a single file that contains "id" == 1 row, which there should be
+    // strictly 1. Given that 1 is minimal possible value, Data Skipping should be able to
+    // truncate search space to just a single file
+    val dataFilter = EqualTo(AttributeReference("id", IntegerType, nullable = false)(), Literal(1))
+    val filteredPartitions = fileIndex.listFiles(Seq(), Seq(dataFilter))
+    assertEquals(1, filteredPartitions.head.files.length)
   }
 
   private def attribute(partition: String): AttributeReference = {

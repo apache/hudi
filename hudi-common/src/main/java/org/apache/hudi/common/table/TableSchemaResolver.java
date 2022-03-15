@@ -58,6 +58,8 @@ import java.io.IOException;
 
 /**
  * Helper class to read schema from data files and log files and to convert it between different formats.
+ *
+ * TODO(HUDI-3626) cleanup
  */
 public class TableSchemaResolver {
 
@@ -143,7 +145,7 @@ public class TableSchemaResolver {
    * @throws Exception
    */
   public Schema getTableAvroSchema() throws Exception {
-    return getTableAvroSchema(true);
+    return getTableAvroSchema(metaClient.getTableConfig().populateMetaFields());
   }
 
   /**
@@ -197,7 +199,10 @@ public class TableSchemaResolver {
    *
    * @return  Avro user data schema
    * @throws Exception
+   *
+   * @deprecated use {@link #getTableAvroSchema(boolean)} instead
    */
+  @Deprecated
   public Schema getTableAvroSchemaWithoutMetadataFields() throws Exception {
     return getTableAvroSchema(false);
   }
@@ -208,7 +213,9 @@ public class TableSchemaResolver {
    * @param instant will get the instant data schema
    * @return  Avro user data schema
    * @throws Exception
+   * @deprecated use {@link #getTableSchemaFromCommitMetadata} instead
    */
+  @Deprecated
   public Schema getTableAvroSchemaWithoutMetadataFields(HoodieInstant instant) throws Exception {
     Option<Schema> schemaFromCommitMetadata = getTableSchemaFromCommitMetadata(instant, false);
     if (schemaFromCommitMetadata.isPresent()) {
