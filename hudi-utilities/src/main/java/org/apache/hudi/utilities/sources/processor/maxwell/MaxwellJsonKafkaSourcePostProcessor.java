@@ -125,41 +125,7 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
 
           // delete
         } else if (DELETE.equals(type)) {
-          // tag this record as delete.
-          result.put(HoodieRecord.HOODIE_IS_DELETED, true);
-
-          PreCombineFieldType preCombineFieldType =
-              valueOf(this.props.getString(Config.PRECOMBINE_FIELD_TYPE_PROP.key(),
-                  Config.PRECOMBINE_FIELD_TYPE_PROP.defaultValue()).toUpperCase(Locale.ROOT));
-
-          // maxwell won't update the `update_time`(delete time) field of the record which is tagged as delete. so if we
-          // want to delete this record correctly, we should update its `update_time` to a time closer to where the
-          // delete operation actually occurred. here we use `ts` from maxwell json string as this 'delete' time.
-
-          // we can update the `update_time`(delete time) only when it is in timestamp format.
-          if (!preCombineFieldType.equals(NON_TIMESTAMP)) {
-            String preCombineField = this.props.getString(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(),
-                HoodieWriteConfig.PRECOMBINE_FIELD_NAME.defaultValue());
-
-            // ts from maxwell
-            long ts = inputJson.get(TS).longValue();
-
-            // convert the `update_time`(delete time) to the proper format.
-            if (preCombineFieldType.equals(DATE_STRING)) {
-              // DATE_STRING format
-              String timeFormat = this.props.getString(Config.PRECOMBINE_FIELD_FORMAT_PROP.key(), Config.PRECOMBINE_FIELD_FORMAT_PROP.defaultValue());
-              result.put(preCombineField, DateTimeUtils.formatUnixTimestamp(ts, timeFormat));
-            } else if (preCombineFieldType.equals(EPOCHMILLISECONDS)) {
-              // EPOCHMILLISECONDS format
-              result.put(preCombineField, ts * 1000L);
-            } else if (preCombineFieldType.equals(UNIX_TIMESTAMP)) {
-              // UNIX_TIMESTAMP format
-              result.put(preCombineField, ts);
-            } else {
-              throw new HoodieSourcePostProcessException("Unsupported preCombine time format " + preCombineFieldType);
-            }
-          }
-          return result.toString();
+          return processDelete(inputJson, result);
         } else {
           // there might be some ddl data, ignore it
           return null;
@@ -169,6 +135,44 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
         return null;
       }
     }).filter(Objects::nonNull);
+  }
+
+  private String processDelete(JsonNode inputJson, ObjectNode result) {
+    // tag this record as delete.
+    result.put(HoodieRecord.HOODIE_IS_DELETED, true);
+
+    PreCombineFieldType preCombineFieldType =
+        valueOf(this.props.getString(Config.PRECOMBINE_FIELD_TYPE_PROP.key(),
+            Config.PRECOMBINE_FIELD_TYPE_PROP.defaultValue()).toUpperCase(Locale.ROOT));
+
+    // maxwell won't update the `update_time`(delete time) field of the record which is tagged as delete. so if we
+    // want to delete this record correctly, we should update its `update_time` to a time closer to where the
+    // delete operation actually occurred. here we use `ts` from maxwell json string as this 'delete' time.
+
+    // we can update the `update_time`(delete time) only when it is in timestamp format.
+    if (!preCombineFieldType.equals(NON_TIMESTAMP)) {
+      String preCombineField = this.props.getString(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(),
+          HoodieWriteConfig.PRECOMBINE_FIELD_NAME.defaultValue());
+
+      // ts from maxwell
+      long ts = inputJson.get(TS).longValue();
+
+      // convert the `update_time`(delete time) to the proper format.
+      if (preCombineFieldType.equals(DATE_STRING)) {
+        // DATE_STRING format
+        String timeFormat = this.props.getString(Config.PRECOMBINE_FIELD_FORMAT_PROP.key(), Config.PRECOMBINE_FIELD_FORMAT_PROP.defaultValue());
+        result.put(preCombineField, DateTimeUtils.formatUnixTimestamp(ts, timeFormat));
+      } else if (preCombineFieldType.equals(EPOCHMILLISECONDS)) {
+        // EPOCHMILLISECONDS format
+        result.put(preCombineField, ts * 1000L);
+      } else if (preCombineFieldType.equals(UNIX_TIMESTAMP)) {
+        // UNIX_TIMESTAMP format
+        result.put(preCombineField, ts);
+      } else {
+        throw new HoodieSourcePostProcessException("Unsupported preCombine time format " + preCombineFieldType);
+      }
+    }
+    return result.toString();
   }
 
   /**
