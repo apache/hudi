@@ -216,18 +216,17 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSplit]
 
   protected def listLatestBaseFiles(globbedPaths: Seq[Path], partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Map[Path, Seq[FileStatus]] = {
-    if (globbedPaths.isEmpty) {
-      val partitionDirs = fileIndex.listFiles(partitionFilters, dataFilters)
-      partitionDirs.map(pd => (getPartitionPath(pd.files.head), pd.files)).toMap
+    val partitionDirs = if (globbedPaths.isEmpty) {
+      fileIndex.listFiles(partitionFilters, dataFilters)
     } else {
       val inMemoryFileIndex = HoodieInMemoryFileIndex.create(sparkSession, globbedPaths)
-      val partitionDirs = inMemoryFileIndex.listFiles(partitionFilters, dataFilters)
-
-      val fsView = new HoodieTableFileSystemView(metaClient, timeline, partitionDirs.flatMap(_.files).toArray)
-      val latestBaseFiles = fsView.getLatestBaseFiles.iterator().asScala.toList.map(_.getFileStatus)
-
-      latestBaseFiles.groupBy(getPartitionPath)
+      inMemoryFileIndex.listFiles(partitionFilters, dataFilters)
     }
+
+    val fsView = new HoodieTableFileSystemView(metaClient, timeline, partitionDirs.flatMap(_.files).toArray)
+    val latestBaseFiles = fsView.getLatestBaseFiles.iterator().asScala.toList.map(_.getFileStatus)
+
+    latestBaseFiles.groupBy(getPartitionPath)
   }
 
   protected def convertToExpressions(filters: Array[Filter]): Array[Expression] = {
