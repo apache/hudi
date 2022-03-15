@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -278,10 +279,13 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
 
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
     try {
-      MessageType parquetSchema = tableSchemaResolver.getTableParquetSchema();
-      return Option.of(new HoodieVirtualKeyInfo(tableConfig.getRecordKeyFieldProp(),
-          tableConfig.getPartitionFieldProp(), parquetSchema.getFieldIndex(tableConfig.getRecordKeyFieldProp()),
-          parquetSchema.getFieldIndex(tableConfig.getPartitionFieldProp())));
+      Schema schema = tableSchemaResolver.getTableAvroSchema();
+      return Option.of(
+          new HoodieVirtualKeyInfo(
+              tableConfig.getRecordKeyFieldProp(),
+              tableConfig.getPartitionFieldProp(),
+              schema.getIndexNamed(tableConfig.getRecordKeyFieldProp()),
+              schema.getIndexNamed(tableConfig.getPartitionFieldProp())));
     } catch (Exception exception) {
       throw new HoodieException("Fetching table schema failed with exception ", exception);
     }
