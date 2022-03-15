@@ -40,7 +40,7 @@ public enum HoodieOperation {
   /**
    * Delete operation.
    */
-  DELETE("D", (byte) 4);
+  DELETE("D", (byte) 3);
 
   private final String name;
   private final byte value;
