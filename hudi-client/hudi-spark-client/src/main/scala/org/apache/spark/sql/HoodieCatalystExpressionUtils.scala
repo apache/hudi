@@ -1,41 +1,22 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- */
-
 package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
-import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, SubqueryExpression}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LocalRelation, LogicalPlan}
 import org.apache.spark.sql.types.StructType
 
-object HoodieCatalystExpressionUtils {
+trait HoodieCatalystExpressionUtils {
 
   /**
    * Parses and resolves expression against the attributes of the given table schema.
    *
    * For example:
    * <pre>
-   *   ts > 1000 and ts <= 1500
+   * ts > 1000 and ts <= 1500
    * </pre>
    * will be resolved as
    * <pre>
-   *   And(GreaterThan(ts#590L > 1000), LessThanOrEqual(ts#590L <= 1500))
+   * And(GreaterThan(ts#590L > 1000), LessThanOrEqual(ts#590L <= 1500))
    * </pre>
    *
    * Where <pre>ts</pre> is a column of the provided [[tableSchema]]
@@ -55,11 +36,11 @@ object HoodieCatalystExpressionUtils {
    *
    * For example:
    * <pre>
-   *   ts > 1000 and ts <= 1500
+   * ts > 1000 and ts <= 1500
    * </pre>
    * will be resolved as
    * <pre>
-   *   And(GreaterThan(ts#590L > 1000), LessThanOrEqual(ts#590L <= 1500))
+   * And(GreaterThan(ts#590L > 1000), LessThanOrEqual(ts#590L <= 1500))
    * </pre>
    *
    * Where <pre>ts</pre> is a column of the provided [[tableSchema]]
@@ -85,11 +66,6 @@ object HoodieCatalystExpressionUtils {
     }
   }
 
-  private def hasUnresolvedRefs(resolvedExpr: Expression): Boolean =
-    resolvedExpr.collectFirst {
-      case _: UnresolvedAttribute | _: UnresolvedFunction => true
-    }.isDefined
-
   /**
    * Split the given predicates into two sequence predicates:
    * - predicates that references partition columns only(and involves no sub-query);
@@ -112,4 +88,19 @@ object HoodieCatalystExpressionUtils {
         !SubqueryExpression.hasSubquery(expr)
     })
   }
+
+  /**
+   * TODO scala-doc
+   */
+  def tryExtractFromOrderPreservingTransformation(expr: Expression): Option[AttributeReference]
+
+  /**
+   * TODO scala-doc
+   */
+  def swapAttributeRefInExpr(sourceExpr: Expression, from: AttributeReference, to: Expression): Expression
+
+  private def hasUnresolvedRefs(resolvedExpr: Expression): Boolean =
+    resolvedExpr.collectFirst {
+      case _: UnresolvedAttribute | _: UnresolvedFunction => true
+    }.isDefined
 }

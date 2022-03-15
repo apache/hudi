@@ -32,7 +32,7 @@ import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.execution.datasources.{FilePartition, LogicalRelation, PartitionedFile, SparkParsePartitionUtil}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.DataType
-import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.{HoodieCatalystExpressionUtils, Row, SparkSession}
 
 import java.util.Locale
 
@@ -41,6 +41,12 @@ import java.util.Locale
  * in some spark related class.
  */
 trait SparkAdapter extends Serializable {
+
+  /**
+   * Creates instance of [[HoodieCatalystExpressionUtils]] providing for common utils operating
+   * on Catalyst Expressions
+   */
+  def createCatalystExpressionUtils(): HoodieCatalystExpressionUtils
 
   /**
    * Creates instance of [[HoodieAvroSerializer]] providing for ability to serialize
