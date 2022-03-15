@@ -206,6 +206,14 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("Table checksum is used to guard against partial writes in HDFS. It is added as the last entry in hoodie.properties and then used to validate while reading table config.");
 
+  public static final ConfigProperty<Boolean> ALLOW_TEMP_COMMIT = ConfigProperty
+      .key("hoodie.allow.temp.commit")
+      .defaultValue(true)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Allow to create a temp commit first if there are contents to write, "
+          + "will rename it after write is finished, this can avoid read empty or partial commit in the downstreams, "
+          + "please be careful if enable this in object storage such as S3, as this will introduce new rename operations");
+
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
   public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName) {
@@ -576,6 +584,13 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public String getUrlEncodePartitioning() {
     return getString(URL_ENCODE_PARTITIONING);
+  }
+
+  /**
+   * @returns true is allow temp commit. else returns false.
+   */
+  public boolean allowTempCommit() {
+    return Boolean.parseBoolean(getStringOrDefault(ALLOW_TEMP_COMMIT));
   }
 
   /**

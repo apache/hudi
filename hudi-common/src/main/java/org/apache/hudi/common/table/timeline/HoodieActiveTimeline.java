@@ -664,9 +664,21 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    */
   private void createImmutableFileInPath(Path fullPath, Option<byte[]> content) {
     FSDataOutputStream fsout = null;
+    Path tmpPath = null;
     try {
-      fsout = metaClient.getFs().create(fullPath, false);
-      if (content.isPresent()) {
+      if (!content.isPresent()) {
+        fsout = metaClient.getFs().create(fullPath, false);
+      }
+
+      if (content.isPresent() && metaClient.getTableConfig().allowTempCommit()) {
+        Path parent = fullPath.getParent();
+        tmpPath = new Path(parent, fullPath.getName() + ".tmp");
+        fsout = metaClient.getFs().create(tmpPath, false);
+        fsout.write(content.get());
+      }
+
+      if (content.isPresent() && !metaClient.getTableConfig().allowTempCommit()) {
+        fsout = metaClient.getFs().create(fullPath, false);
         fsout.write(content.get());
       }
     } catch (IOException e) {
@@ -675,6 +687,9 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       try {
         if (null != fsout) {
           fsout.close();
+        }
+        if (null != tmpPath) {
+          metaClient.getFs().rename(tmpPath, fullPath);
         }
       } catch (IOException e) {
         throw new HoodieIOException("Failed to close file " + fullPath, e);
