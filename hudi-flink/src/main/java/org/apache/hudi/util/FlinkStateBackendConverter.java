@@ -35,7 +35,7 @@ public class FlinkStateBackendConverter implements IStringConverter<StateBackend
       case "hashmap" : return new HashMapStateBackend();
       case "rocksdb" : return new EmbeddedRocksDBStateBackend();
       default:
-        throw new HoodieException("Can not convert flink state backend.");
+        throw new HoodieException(String.format("Unknown flink state backend %s.", value));
     }
   }
 }

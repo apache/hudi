@@ -56,8 +56,8 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--flink-checkpoint-path"}, description = "Flink checkpoint path.")
   public String flinkCheckPointPath;
 
-  @Parameter(names = {"--flink-state-backend-type"}, description = "Flink state backend type : HashMapStateBackend "
-          + "(default).", converter = FlinkStateBackendConverter.class)
+  @Parameter(names = {"--flink-state-backend-type"}, description = "Flink state backend type, support only hashmap and rocksdb by now,"
+          + " default hashmap.", converter = FlinkStateBackendConverter.class)
   public StateBackend stateBackend = new HashMapStateBackend();
 
   @Parameter(names = {"--instant-retry-times"}, description = "Times to retry when latest instant has not completed.")
