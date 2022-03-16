@@ -212,11 +212,11 @@
     </dependency>
 
     <!-- Spark (Packages) -->
-    <dependency>
-      <groupId>org.apache.spark</groupId>
-      <artifactId>spark-avro_${scala.binary.version}</artifactId>
-      <scope>provided</scope>
-    </dependency>
+<!--    <dependency>-->
+<!--      <groupId>org.apache.spark</groupId>-->
+<!--      <artifactId>spark-avro_${scala.binary.version}</artifactId>-->
+<!--      <scope>provided</scope>-->
+<!--    </dependency>-->
 
     <!-- Hoodie - Test -->
     <dependency>
