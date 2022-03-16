@@ -46,6 +46,7 @@ import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.FileStatusWithBootstrapBaseFile;
 import org.apache.hudi.hadoop.HoodieHFileInputFormat;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
@@ -68,6 +69,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
+import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 
 public class HoodieInputFormatUtils {
 
@@ -324,14 +326,24 @@ public class HoodieInputFormatUtils {
    * Extract HoodieTableMetaClient from a partition path (not base path)
    */
   public static HoodieTableMetaClient getTableMetaClientForBasePathUnchecked(Configuration conf, Path partitionPath) throws IOException {
+    Path baseDir = partitionPath;
     FileSystem fs = partitionPath.getFileSystem(conf);
-    int levels = HoodieHiveUtils.DEFAULT_LEVELS_TO_BASEPATH;
     if (HoodiePartitionMetadata.hasPartitionMetadata(fs, partitionPath)) {
       HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(fs, partitionPath);
       metadata.readFromFS();
-      levels = metadata.getPartitionDepth();
+      int levels = metadata.getPartitionDepth();
+      baseDir = HoodieHiveUtils.getNthParent(partitionPath, levels);
+    } else {
+      for (int i = 0; i < partitionPath.depth(); i++) {
+        if (fs.exists(new Path(baseDir, METAFOLDER_NAME))) {
+          break;
+        } else if (i == partitionPath.depth() - 1) {
+          throw new TableNotFoundException(partitionPath.toString());
+        } else {
+          baseDir = baseDir.getParent();
+        }
+      }
     }
-    Path baseDir = HoodieHiveUtils.getNthParent(partitionPath, levels);
     LOG.info("Reading hoodie metadata from path " + baseDir.toString());
     return HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(baseDir.toString()).build();
   }
