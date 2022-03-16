@@ -65,12 +65,14 @@ public class TestHoodieHeartbeatClient extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testIsHeartbeatExpired() throws IOException {
+  public void testIsHeartbeatExpired() throws IOException, InterruptedException {
     HoodieHeartbeatClient hoodieHeartbeatClient =
         new HoodieHeartbeatClient(metaClient.getFs(), metaClient.getBasePath(), heartBeatInterval, numTolerableMisses);
     hoodieHeartbeatClient.start(instantTime1);
     hoodieHeartbeatClient.stop(instantTime1);
     assertFalse(hoodieHeartbeatClient.isHeartbeatExpired(instantTime1));
+    Thread.sleep(3000L);
+    assertTrue(hoodieHeartbeatClient.isHeartbeatExpired(instantTime1));
     assertFalse(hoodieHeartbeatClient.isHeartbeatExpired(instantTime2));
   }
 
