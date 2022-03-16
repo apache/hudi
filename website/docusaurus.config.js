@@ -432,8 +432,8 @@ module.exports = {
         blog: {
           editUrl:
             'https://github.com/apache/hudi/edit/asf-site/website/blog/',
-          blogTitle: 'Blog - Apache Hudi: Blogs',
-          blogSidebarCount: 15,
+          blogTitle: 'Blogs List Page',
+          blogSidebarCount: 0,
           blogSidebarTitle: 'Recent posts',
           /**
            * URL route for the blog section of your site.
@@ -441,7 +441,7 @@ module.exports = {
            */
           routeBasePath: 'blog',
           include: ['*.md', '*.mdx'],
-          postsPerPage: 15,
+          postsPerPage: 12,
           /**
            * Theme components used by the blog pages.
            */
