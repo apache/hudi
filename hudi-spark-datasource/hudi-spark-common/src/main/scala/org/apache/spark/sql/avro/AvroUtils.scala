@@ -29,7 +29,7 @@ import scala.collection.JavaConverters.asScalaBufferConverter
  * NOTE: This code is borrowed, so that we can better control compatibility w/in Spark minor
  *       branches (3.2.x, 3.1.x, etc)
  */
-private[sql] class AvroUtils {
+private[sql] object AvroUtils {
 
   /**
    * Wraps an Avro Schema object so that field lookups are faster.
