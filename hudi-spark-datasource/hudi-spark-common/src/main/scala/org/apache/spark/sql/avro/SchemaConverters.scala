@@ -35,7 +35,7 @@ import scala.collection.JavaConverters._
  *       branches (3.2.x, 3.1.x, etc)
  */
 @DeveloperApi
-object SchemaConverters {
+private[sql] object SchemaConverters {
   private lazy val nullSchema = Schema.create(Schema.Type.NULL)
 
   /**
