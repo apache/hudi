@@ -132,14 +132,14 @@ public class InternalSchema implements Serializable {
   /**
    * set the version ID for this schema.
    */
-  public void setMax_column_id(int maxColumnId) {
+  public void setMaxColumnId(int maxColumnId) {
     this.maxColumnId = maxColumnId;
   }
 
   /**
    * Returns the max column id for this schema.
    */
-  public int getMax_column_id() {
+  public int getMaxColumnId() {
     return this.maxColumnId;
   }
 

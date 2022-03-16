@@ -79,13 +79,13 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
   }
 
   private void cleanResidualFiles() {
-    List<String> validateCommits = getValidInstants();
+    List<String> validInstants = getValidInstants();
     try {
       FileSystem fs = baseSchemaPath.getFileSystem(conf);
       if (fs.exists(baseSchemaPath)) {
         List<String> candidateSchemaFiles = Arrays.stream(fs.listStatus(baseSchemaPath)).filter(f -> f.isFile())
             .map(file -> file.getPath().getName()).collect(Collectors.toList());
-        List<String> residualSchemaFiles = candidateSchemaFiles.stream().filter(f -> !validateCommits.contains(f.split("\\.")[0])).collect(Collectors.toList());
+        List<String> residualSchemaFiles = candidateSchemaFiles.stream().filter(f -> !validInstants.contains(f.split("\\.")[0])).collect(Collectors.toList());
         // clean residual files
         residualSchemaFiles.forEach(f -> {
           try {
@@ -106,9 +106,9 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
       if (fs.exists(baseSchemaPath)) {
         List<String> candidateSchemaFiles = Arrays.stream(fs.listStatus(baseSchemaPath)).filter(f -> f.isFile())
             .map(file -> file.getPath().getName()).collect(Collectors.toList());
-        List<String> validateSchemaFiles = candidateSchemaFiles.stream().filter(f -> validateCommits.contains(f.split("\\.")[0])).collect(Collectors.toList());
-        for (int i = 0; i < validateSchemaFiles.size(); i++) {
-          fs.delete(new Path(validateSchemaFiles.get(i)));
+        List<String> validSchemaFiles = candidateSchemaFiles.stream().filter(f -> validateCommits.contains(f.split("\\.")[0])).collect(Collectors.toList());
+        for (int i = 0; i < validSchemaFiles.size(); i++) {
+          fs.delete(new Path(validSchemaFiles.get(i)));
         }
       }
     } catch (IOException e) {

@@ -33,10 +33,11 @@ import java.util.List;
 public class InternalSchemaMerger {
   private final InternalSchema fileSchema;
   private final InternalSchema querySchema;
-  // now there exist some bugs when we use spark update/merge api,
-  // those operation will change col nullability from optional to required which is wrong.
+  // Now there exist some bugs when we use spark update/merge api,
+  // https://issues.apache.org/jira/browse/HUDI-3646
+  // These operations will change col nullability from optional to required which is wrong.
   // Before that bug is fixed, we need to do adapt.
-  // if mergeRequiredFiledForce is true, we will ignore the col's required attribute.
+  // If mergeRequiredFiledForce is true, we will ignore the col's required attribute.
   private final boolean ignoreRequiredAttribute;
   // Whether to use column Type from file schema to read files when we find some column type has changed.
   private boolean useColumnTypeFromFileSchema = true;
