@@ -364,7 +364,7 @@ public class StreamWriteOperatorCoordinator
   private void startInstant() {
     // put the assignment in front of metadata generation,
     // because the instant request from write task is asynchronous.
-    this.instant = this.writeClient.startCommit();
+    this.instant = this.writeClient.startCommit(tableState.commitAction, this.metaClient);
     this.metaClient.getActiveTimeline().transitionRequestedToInflight(tableState.commitAction, this.instant);
     this.ckpMetadata.startInstant(this.instant);
     LOG.info("Create instant [{}] for table [{}] with type [{}]", this.instant,

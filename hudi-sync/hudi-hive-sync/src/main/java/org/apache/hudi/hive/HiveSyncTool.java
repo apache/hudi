@@ -19,9 +19,11 @@
 package org.apache.hudi.hive;
 
 import com.beust.jcommander.JCommander;
+import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -37,6 +39,7 @@ import org.apache.hudi.hive.util.Parquet2SparkSchemaUtils;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent.PartitionEventType;
 import org.apache.hudi.sync.common.AbstractSyncTool;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.GroupType;
@@ -259,6 +262,19 @@ public class HiveSyncTool extends AbstractSyncTool {
         schemaChanged = true;
       } else {
         LOG.info("No Schema difference for " + tableName);
+      }
+    }
+
+    if (cfg.syncComment) {
+      Schema avroSchemaWithoutMetadataFields = hoodieHiveClient.getAvroSchemaWithoutMetadataFields();
+      Map<String, String> newComments = avroSchemaWithoutMetadataFields.getFields()
+              .stream().collect(Collectors.toMap(Schema.Field::name, field -> StringUtils.isNullOrEmpty(field.doc()) ? "" : field.doc()));
+      boolean allEmpty = newComments.values().stream().allMatch(StringUtils::isNullOrEmpty);
+      if (!allEmpty) {
+        List<FieldSchema> hiveSchema = hoodieHiveClient.getTableCommentUsingMetastoreClient(tableName);
+        hoodieHiveClient.updateTableComments(tableName, hiveSchema, avroSchemaWithoutMetadataFields.getFields());
+      } else {
+        LOG.info(String.format("No comment %s need to add", tableName));
       }
     }
     return schemaChanged;

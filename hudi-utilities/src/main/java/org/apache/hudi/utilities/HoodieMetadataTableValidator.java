@@ -709,7 +709,7 @@ public class HoodieMetadataTableValidator implements Serializable {
             .map(entry -> BloomFilterData.builder()
                 .setPartitionPath(entry.getKey().getKey())
                 .setFilename(entry.getKey().getValue())
-                .setBloomFilter(entry.getValue())
+                .setBloomFilter(ByteBuffer.wrap(entry.getValue().serializeToString().getBytes()))
                 .build())
             .sorted()
             .collect(Collectors.toList());

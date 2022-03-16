@@ -835,11 +835,18 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * Provides a new commit time for a write operation (insert/update/delete).
    */
   public String startCommit() {
+    HoodieTableMetaClient metaClient = createMetaClient(true);
+    return startCommit(metaClient.getCommitActionType(), metaClient);
+  }
+
+  /**
+   * Provides a new commit time for a write operation (insert/update/delete/insert_overwrite/insert_overwrite_table) with specified action.
+   */
+  public String startCommit(String actionType, HoodieTableMetaClient metaClient) {
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.COMMIT_ACTION, () -> rollbackFailedWrites());
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
-    HoodieTableMetaClient metaClient = createMetaClient(true);
-    startCommit(instantTime, metaClient.getCommitActionType(), metaClient);
+    startCommit(instantTime, actionType, metaClient);
     return instantTime;
   }
 
@@ -950,8 +957,16 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     return inflightTimelineExcludeClusteringCommit;
   }
 
-  private Option<HoodiePendingRollbackInfo> getPendingRollbackInfo(HoodieTableMetaClient metaClient, String commitToRollback) {
-    return getPendingRollbackInfos(metaClient).getOrDefault(commitToRollback, Option.empty());
+  protected Option<HoodiePendingRollbackInfo> getPendingRollbackInfo(HoodieTableMetaClient metaClient, String commitToRollback) {
+    return getPendingRollbackInfo(metaClient, commitToRollback, true);
+  }
+
+  protected Option<HoodiePendingRollbackInfo> getPendingRollbackInfo(HoodieTableMetaClient metaClient, String commitToRollback, boolean ignoreCompactionAndClusteringInstants) {
+    return getPendingRollbackInfos(metaClient, ignoreCompactionAndClusteringInstants).getOrDefault(commitToRollback, Option.empty());
+  }
+
+  protected Map<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInfos(HoodieTableMetaClient metaClient) {
+    return getPendingRollbackInfos(metaClient, true);
   }
 
   /**
@@ -959,20 +974,25 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * @param metaClient instance of {@link HoodieTableMetaClient} to use.
    * @return map of pending commits to be rolled-back instants to Rollback Instant and Rollback plan Pair.
    */
-  protected Map<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInfos(HoodieTableMetaClient metaClient) {
+  protected Map<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInfos(HoodieTableMetaClient metaClient, boolean ignoreCompactionAndClusteringInstants) {
     List<HoodieInstant> instants = metaClient.getActiveTimeline().filterPendingRollbackTimeline().getInstants().collect(Collectors.toList());
     Map<String, Option<HoodiePendingRollbackInfo>> infoMap = new HashMap<>();
     for (HoodieInstant instant : instants) {
       try {
         HoodieRollbackPlan rollbackPlan = RollbackUtils.getRollbackPlan(metaClient, instant);
         String action = rollbackPlan.getInstantToRollback().getAction();
-        if (!HoodieTimeline.COMPACTION_ACTION.equals(action)) {
-          boolean isClustering = HoodieTimeline.REPLACE_COMMIT_ACTION.equals(action)
-              && ClusteringUtils.getClusteringPlan(metaClient, instant).isPresent();
-          if (!isClustering) {
-            String instantToRollback = rollbackPlan.getInstantToRollback().getCommitTime();
-            infoMap.putIfAbsent(instantToRollback, Option.of(new HoodiePendingRollbackInfo(instant, rollbackPlan)));
+        if (ignoreCompactionAndClusteringInstants) {
+          if (!HoodieTimeline.COMPACTION_ACTION.equals(action)) {
+            boolean isClustering = HoodieTimeline.REPLACE_COMMIT_ACTION.equals(action)
+                && ClusteringUtils.getClusteringPlan(metaClient, new HoodieInstant(true, rollbackPlan.getInstantToRollback().getAction(),
+                rollbackPlan.getInstantToRollback().getCommitTime())).isPresent();
+            if (!isClustering) {
+              String instantToRollback = rollbackPlan.getInstantToRollback().getCommitTime();
+              infoMap.putIfAbsent(instantToRollback, Option.of(new HoodiePendingRollbackInfo(instant, rollbackPlan)));
+            }
           }
+        } else {
+          infoMap.putIfAbsent(rollbackPlan.getInstantToRollback().getCommitTime(), Option.of(new HoodiePendingRollbackInfo(instant, rollbackPlan)));
         }
       } catch (IOException e) {
         LOG.warn("Fetching rollback plan failed for " + infoMap + ", skip the plan", e);
@@ -1204,7 +1224,8 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   }
 
   protected void rollbackInflightClustering(HoodieInstant inflightInstant, HoodieTable<T, I, K, O> table) {
-    String commitTime = HoodieActiveTimeline.createNewInstantTime();
+    Option<HoodiePendingRollbackInfo> pendingRollbackInstantInfo = getPendingRollbackInfo(table.getMetaClient(), inflightInstant.getTimestamp(), false);
+    String commitTime = pendingRollbackInstantInfo.map(entry -> entry.getRollbackInstant().getTimestamp()).orElse(HoodieActiveTimeline.createNewInstantTime());
     table.scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers());
     table.rollback(context, commitTime, inflightInstant, false, false);
     table.getActiveTimeline().revertReplaceCommitInflightToRequested(inflightInstant);

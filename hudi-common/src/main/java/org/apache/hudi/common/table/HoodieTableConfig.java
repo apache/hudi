@@ -18,19 +18,13 @@
 
 package org.apache.hudi.common.table;
 
-import org.apache.avro.Schema;
-
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.bootstrap.index.NoOpBootstrapIndex;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.OrderedProperties;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -47,12 +41,17 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config;
 
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.Arrays;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -220,10 +219,7 @@ public class HoodieTableConfig extends HoodieConfig {
         setValue(PAYLOAD_CLASS_NAME, payloadClassName);
         // FIXME(vc): wonder if this can be removed. Need to look into history.
         try (FSDataOutputStream outputStream = fs.create(propertyPath)) {
-          if (!isValidChecksum()) {
-            setValue(TABLE_CHECKSUM, String.valueOf(generateChecksum(props)));
-          }
-          props.store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
+          storeProperties(props, outputStream);
         }
       }
     } catch (IOException e) {
@@ -231,6 +227,34 @@ public class HoodieTableConfig extends HoodieConfig {
     }
     ValidationUtils.checkArgument(contains(TYPE) && contains(NAME),
         "hoodie.properties file seems invalid. Please check for left over `.updated` files if any, manually copy it to hoodie.properties and retry");
+  }
+
+  private static Properties getOrderedPropertiesWithTableChecksum(Properties props) {
+    Properties orderedProps = new OrderedProperties(props);
+    orderedProps.put(TABLE_CHECKSUM.key(), String.valueOf(generateChecksum(props)));
+    return orderedProps;
+  }
+
+  /**
+   * Write the properties to the given output stream and return the table checksum.
+   *
+   * @param props        - properties to be written
+   * @param outputStream - output stream to which properties will be written
+   * @return return the table checksum
+   * @throws IOException
+   */
+  private static String storeProperties(Properties props, FSDataOutputStream outputStream) throws IOException {
+    String checksum;
+    if (props.containsKey(TABLE_CHECKSUM.key()) && validateChecksum(props)) {
+      checksum = props.getProperty(TABLE_CHECKSUM.key());
+      props.store(outputStream, "Updated at " + Instant.now());
+    } else {
+      Properties propsWithChecksum = getOrderedPropertiesWithTableChecksum(props);
+      propsWithChecksum.store(outputStream, "Properties saved on " + Instant.now());
+      checksum = propsWithChecksum.getProperty(TABLE_CHECKSUM.key());
+      props.setProperty(TABLE_CHECKSUM.key(), checksum);
+    }
+    return checksum;
   }
 
   private boolean isValidChecksum() {
@@ -316,13 +340,7 @@ public class HoodieTableConfig extends HoodieConfig {
         Properties props = new TypedProperties();
         props.load(in);
         modifyFn.accept(props, modifyProps);
-        if (props.containsKey(TABLE_CHECKSUM.key()) && validateChecksum(props)) {
-          checksum = props.getProperty(TABLE_CHECKSUM.key());
-        } else {
-          checksum = String.valueOf(generateChecksum(props));
-          props.setProperty(TABLE_CHECKSUM.key(), checksum);
-        }
-        props.store(out, "Updated at " + System.currentTimeMillis());
+        checksum = storeProperties(props, out);
       }
       // 4. verify and remove backup.
       try (FSDataInputStream in = fs.open(cfgPath)) {
@@ -385,12 +403,7 @@ public class HoodieTableConfig extends HoodieConfig {
       if (hoodieConfig.contains(TIMELINE_TIMEZONE)) {
         HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getString(TIMELINE_TIMEZONE)));
       }
-      if (hoodieConfig.contains(TABLE_CHECKSUM)) {
-        hoodieConfig.setValue(TABLE_CHECKSUM, hoodieConfig.getString(TABLE_CHECKSUM));
-      } else {
-        hoodieConfig.setValue(TABLE_CHECKSUM, String.valueOf(generateChecksum(hoodieConfig.getProps())));
-      }
-      hoodieConfig.getProps().store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
+      storeProperties(hoodieConfig.getProps(), outputStream);
     }
   }
 

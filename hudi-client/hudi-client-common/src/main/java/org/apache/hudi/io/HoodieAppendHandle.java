@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -70,6 +71,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.accumulateColumnRanges;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.aggregateColumnStats;
 
 /**
  * IO Operation to append data onto an existing file.
@@ -320,7 +324,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     statuses.add(this.writeStatus);
   }
 
-  private void processAppendResult(AppendResult result) {
+  private void processAppendResult(AppendResult result, List<IndexedRecord> recordList) {
     HoodieDeltaWriteStat stat = (HoodieDeltaWriteStat) this.writeStatus.getStat();
 
     if (stat.getPath() == null) {
@@ -337,6 +341,19 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       initNewStatus();
       stat = (HoodieDeltaWriteStat) this.writeStatus.getStat();
       updateWriteStatus(stat, result);
+    }
+
+    if (config.isMetadataIndexColumnStatsForAllColumnsEnabled()) {
+      Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap = stat.getRecordsStats().isPresent()
+          ? stat.getRecordsStats().get().getStats() : new HashMap<>();
+      final String filePath = stat.getPath();
+      // initialize map of column name to map of stats name to stats value
+      Map<String, Map<String, Object>> columnToStats = new HashMap<>();
+      writeSchemaWithMetaFields.getFields().forEach(field -> columnToStats.putIfAbsent(field.name(), new HashMap<>()));
+      // collect stats for columns at once per record and keep iterating through every record to eventually find col stats for all fields.
+      recordList.forEach(record -> aggregateColumnStats(record, writeSchemaWithMetaFields, columnToStats, config.isConsistentLogicalTimestampEnabled()));
+      writeSchemaWithMetaFields.getFields().forEach(field -> accumulateColumnRanges(field, filePath, columnRangeMap, columnToStats));
+      stat.setRecordsStats(new HoodieDeltaWriteStat.RecordsStats<>(columnRangeMap));
     }
 
     resetWriteCounts();
@@ -376,7 +393,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
 
       if (blocks.size() > 0) {
         AppendResult appendResult = writer.appendBlocks(blocks);
-        processAppendResult(appendResult);
+        processAppendResult(appendResult, recordList);
         recordList.clear();
         keysToDelete.clear();
       }
@@ -419,7 +436,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
         // update final size, once for all log files
         // TODO we can actually deduce file size purely from AppendResult (based on offset and size
         //      of the appended block)
-        for (WriteStatus status: statuses) {
+        for (WriteStatus status : statuses) {
           long logFileSize = FSUtils.getFileSize(fs, new Path(config.getBasePath(), status.getStat().getPath()));
           status.getStat().setFileSizeInBytes(logFileSize);
         }

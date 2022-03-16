@@ -910,6 +910,10 @@ public class DeltaSync implements Serializable {
    * @return Requested clustering instant.
    */
   public Option<String> getClusteringInstantOpt() {
-    return writeClient.scheduleClustering(Option.empty());
+    if (writeClient != null) {
+      return writeClient.scheduleClustering(Option.empty());
+    } else {
+      return Option.empty();
+    }
   }
 }

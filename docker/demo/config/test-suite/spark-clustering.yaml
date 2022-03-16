@@ -59,15 +59,9 @@ dag_content:
       num_records_delete: 16000
     type: SparkDeleteNode
     deps: second_upsert
-  second_hive_sync:
-    config:
-      queue_name: "adhoc"
-      engine: "mr"
-    type: HiveSyncNode
-    deps: first_delete
   second_validate:
     config:
       validate_hive: false
       delete_input_data: false
     type: ValidateDatasetNode
-    deps: second_hive_sync
+    deps: first_delete

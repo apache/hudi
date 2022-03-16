@@ -22,10 +22,11 @@ import org.apache.hudi.common.config.TypedProperties;
 
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestTypedProperties {
   @Test
@@ -79,58 +80,30 @@ public class TestTypedProperties {
     properties.put("key1", "true");
 
     TypedProperties typedProperties = new TypedProperties(properties);
-    assertEquals(true, typedProperties.getBoolean("key1"));
-    assertEquals(true, typedProperties.getBoolean("key1", false));
-    assertEquals(false, typedProperties.getBoolean("key2", false));
+    assertTrue(typedProperties.getBoolean("key1"));
+    assertTrue(typedProperties.getBoolean("key1", false));
+    assertFalse(typedProperties.getBoolean("key2", false));
+    // test getBoolean with non-string value for key2
+    properties.put("key2", true);
+    typedProperties = new TypedProperties(properties);
+    assertTrue(typedProperties.getBoolean("key1", false));
+    assertTrue(typedProperties.getBoolean("key2", false));
+    // put non-string value in TypedProperties
+    typedProperties.put("key3", true);
+    assertTrue(typedProperties.getBoolean("key3", false));
   }
 
   @Test
-  public void testPropertiesOrder() throws IOException {
-    Properties properties = new TypedProperties();
-    properties.put("key0", "true");
-    properties.put("key1", "false");
-    properties.put("key2", "true");
-    properties.put("key3", "false");
-    properties.put("key4", "true");
-    properties.put("key5", "true");
-    properties.put("key6", "false");
-    properties.put("key7", "true");
-    properties.put("key8", "false");
-    properties.put("key9", "true");
+  public void testTypedPropertiesWithNonStringValue() {
+    Properties properties = new Properties();
+    properties.put("key1", "1");
+    properties.put("key2", 2);
 
-    TypedProperties typedProperties = new TypedProperties(properties);
-    assertTypeProperties(typedProperties, 0);
-  }
-
-  @Test
-  void testPutAllProperties() {
-    Properties firstProp = new TypedProperties();
-    firstProp.put("key0", "true");
-    firstProp.put("key1", "false");
-    firstProp.put("key2", "true");
-
-    TypedProperties firstProperties = new TypedProperties(firstProp);
-    assertTypeProperties(firstProperties, 0);
-
-    TypedProperties secondProperties = new TypedProperties();
-    secondProperties.put("key3", "true");
-    secondProperties.put("key4", "false");
-    secondProperties.put("key5", "true");
-    assertTypeProperties(secondProperties, 3);
-
-    TypedProperties thirdProperties = new TypedProperties();
-    thirdProperties.putAll(firstProp);
-    thirdProperties.putAll(secondProperties);
-
-    assertEquals(3, firstProp.stringPropertyNames().size());
-    assertEquals(3, secondProperties.stringPropertyNames().size());
-    assertEquals(6, thirdProperties.stringPropertyNames().size());
-  }
-
-  private void assertTypeProperties(TypedProperties typedProperties, int start) {
-    String[] props = typedProperties.stringPropertyNames().toArray(new String[0]);
-    for (int i = start; i < props.length; i++) {
-      assertEquals(String.format("key%d", i), props[i]);
-    }
+    TypedProperties props = new TypedProperties(properties);
+    assertEquals(1, props.getInteger("key1"));
+    assertEquals(2, props.getInteger("key2"));
+    // put non-string value in TypedProperties
+    props.put("key2", 3);
+    assertEquals(3, props.getInteger("key2"));
   }
 }

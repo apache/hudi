@@ -21,6 +21,7 @@ package org.apache.hudi.metadata;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
+import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -31,7 +32,6 @@ import org.apache.hudi.exception.HoodieMetadataException;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 
@@ -56,14 +56,11 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   String NON_PARTITIONED_NAME = ".";
   String EMPTY_PARTITION_NAME = "";
 
-  // Base path of the Metadata Table relative to the dataset (.hoodie/metadata)
-  static final String METADATA_TABLE_REL_PATH = HoodieTableMetaClient.METAFOLDER_NAME + Path.SEPARATOR + "metadata";
-
   /**
    * Return the base-path of the Metadata Table for the given Dataset identified by base-path
    */
   static String getMetadataTableBasePath(String dataTableBasePath) {
-    return dataTableBasePath + Path.SEPARATOR + METADATA_TABLE_REL_PATH;
+    return dataTableBasePath + Path.SEPARATOR + HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH;
   }
 
   /**
@@ -72,7 +69,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    */
   static String getDataTableBasePathFromMetadataTable(String metadataTableBasePath) {
     checkArgument(isMetadataTable(metadataTableBasePath));
-    return metadataTableBasePath.substring(0, metadataTableBasePath.lastIndexOf(METADATA_TABLE_REL_PATH) - 1);
+    return metadataTableBasePath.substring(0, metadataTableBasePath.lastIndexOf(HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH) - 1);
   }
 
   /**
@@ -84,7 +81,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
     if (basePath.endsWith(Path.SEPARATOR)) {
       basePath = basePath.substring(0, basePath.length() - 1);
     }
-    return basePath.endsWith(METADATA_TABLE_REL_PATH);
+    return basePath.endsWith(HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH);
   }
 
   static HoodieTableMetadata create(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String datasetBasePath,
@@ -122,20 +119,20 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    *
    * @param partitionName - Partition name
    * @param fileName      - File name for which bloom filter needs to be retrieved
-   * @return BloomFilter byte buffer if available, otherwise empty
+   * @return BloomFilter if available, otherwise empty
    * @throws HoodieMetadataException
    */
-  Option<ByteBuffer> getBloomFilter(final String partitionName, final String fileName)
+  Option<BloomFilter> getBloomFilter(final String partitionName, final String fileName)
       throws HoodieMetadataException;
 
   /**
    * Get bloom filters for files from the metadata table index.
    *
    * @param partitionNameFileNameList - List of partition and file name pair for which bloom filters need to be retrieved
-   * @return Map of partition file name pair to its bloom filter byte buffer
+   * @return Map of partition file name pair to its bloom filter
    * @throws HoodieMetadataException
    */
-  Map<Pair<String, String>, ByteBuffer> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList)
+  Map<Pair<String, String>, BloomFilter> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList)
       throws HoodieMetadataException;
 
   /**

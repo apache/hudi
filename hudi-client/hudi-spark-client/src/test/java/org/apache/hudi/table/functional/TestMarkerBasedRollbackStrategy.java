@@ -81,6 +81,20 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
   }
 
   @Test
+  public void testMarkerBasedRollbackAppend() throws Exception {
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    String f0 = testTable.addRequestedCommit("000")
+        .getFileIdsWithBaseFilesInPartitions("partA").get("partA");
+    testTable.forCommit("001")
+        .withMarkerFile("partA", f0, IOType.APPEND);
+
+    HoodieTable hoodieTable = HoodieSparkTable.create(getConfig(), context, metaClient);
+    List<HoodieRollbackRequest> rollbackRequests = new MarkerBasedRollbackStrategy(hoodieTable, context, getConfig(),
+        "002").getRollbackRequests(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001"));
+    assertEquals(1, rollbackRequests.size());
+  }
+
+  @Test
   public void testCopyOnWriteRollbackWithTestTable() throws Exception {
     // given: wrote some base files and corresponding markers
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);

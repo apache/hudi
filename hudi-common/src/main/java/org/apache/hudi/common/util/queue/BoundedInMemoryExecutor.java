@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util.queue;
 
+import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
@@ -48,8 +49,10 @@ public class BoundedInMemoryExecutor<I, O, E> {
 
   private static final Logger LOG = LogManager.getLogger(BoundedInMemoryExecutor.class);
 
-  // Executor service used for launching writer thread.
-  private final ExecutorService executorService;
+  // Executor service used for launching write thread.
+  private final ExecutorService producerExecutorService;
+  // Executor service used for launching read thread.
+  private final ExecutorService consumerExecutorService;
   // Used for buffering records which is controlled by HoodieWriteConfig#WRITE_BUFFER_LIMIT_BYTES.
   private final BoundedInMemoryQueue<I, O> queue;
   // Producers
@@ -60,28 +63,30 @@ public class BoundedInMemoryExecutor<I, O, E> {
   private final Runnable preExecuteRunnable;
 
   public BoundedInMemoryExecutor(final long bufferLimitInBytes, final Iterator<I> inputItr,
-      BoundedInMemoryQueueConsumer<O, E> consumer, Function<I, O> transformFunction, Runnable preExecuteRunnable) {
+                                 BoundedInMemoryQueueConsumer<O, E> consumer, Function<I, O> transformFunction, Runnable preExecuteRunnable) {
     this(bufferLimitInBytes, new IteratorBasedQueueProducer<>(inputItr), Option.of(consumer), transformFunction, preExecuteRunnable);
   }
 
   public BoundedInMemoryExecutor(final long bufferLimitInBytes, BoundedInMemoryQueueProducer<I> producer,
-      Option<BoundedInMemoryQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction) {
+                                 Option<BoundedInMemoryQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction) {
     this(bufferLimitInBytes, producer, consumer, transformFunction, Functions.noop());
   }
 
   public BoundedInMemoryExecutor(final long bufferLimitInBytes, BoundedInMemoryQueueProducer<I> producer,
-      Option<BoundedInMemoryQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction, Runnable preExecuteRunnable) {
+                                 Option<BoundedInMemoryQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction, Runnable preExecuteRunnable) {
     this(bufferLimitInBytes, Collections.singletonList(producer), consumer, transformFunction, new DefaultSizeEstimator<>(), preExecuteRunnable);
   }
 
   public BoundedInMemoryExecutor(final long bufferLimitInBytes, List<BoundedInMemoryQueueProducer<I>> producers,
-      Option<BoundedInMemoryQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction,
-      final SizeEstimator<O> sizeEstimator, Runnable preExecuteRunnable) {
+                                 Option<BoundedInMemoryQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction,
+                                 final SizeEstimator<O> sizeEstimator, Runnable preExecuteRunnable) {
     this.producers = producers;
     this.consumer = consumer;
     this.preExecuteRunnable = preExecuteRunnable;
-    // Ensure single thread for each producer thread and one for consumer
-    this.executorService = Executors.newFixedThreadPool(producers.size() + 1);
+    // Ensure fixed thread for each producer thread
+    this.producerExecutorService = Executors.newFixedThreadPool(producers.size(), new CustomizedThreadFactory("producer"));
+    // Ensure single thread for consumer
+    this.consumerExecutorService = Executors.newSingleThreadExecutor(new CustomizedThreadFactory("consumer"));
     this.queue = new BoundedInMemoryQueue<>(bufferLimitInBytes, transformFunction, sizeEstimator);
   }
 
@@ -92,7 +97,7 @@ public class BoundedInMemoryExecutor<I, O, E> {
     // Latch to control when and which producer thread will close the queue
     final CountDownLatch latch = new CountDownLatch(producers.size());
     final ExecutorCompletionService<Boolean> completionService =
-        new ExecutorCompletionService<Boolean>(executorService);
+        new ExecutorCompletionService<Boolean>(producerExecutorService);
     producers.stream().map(producer -> {
       return completionService.submit(() -> {
         try {
@@ -122,7 +127,7 @@ public class BoundedInMemoryExecutor<I, O, E> {
    */
   private Future<E> startConsumer() {
     return consumer.map(consumer -> {
-      return executorService.submit(() -> {
+      return consumerExecutorService.submit(() -> {
         LOG.info("starting consumer thread");
         preExecuteRunnable.run();
         try {
@@ -143,7 +148,7 @@ public class BoundedInMemoryExecutor<I, O, E> {
    */
   public E execute() {
     try {
-      ExecutorCompletionService<Boolean> producerService = startProducers();
+      startProducers();
       Future<E> future = startConsumer();
       // Wait for consumer to be done
       return future.get();
@@ -161,7 +166,8 @@ public class BoundedInMemoryExecutor<I, O, E> {
   }
 
   public void shutdownNow() {
-    executorService.shutdownNow();
+    producerExecutorService.shutdownNow();
+    consumerExecutorService.shutdownNow();
   }
 
   public BoundedInMemoryQueue<I, O> getQueue() {
