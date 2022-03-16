@@ -908,7 +908,8 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public HoodieTableType getTableType() {
-    return HoodieTableType.valueOf(getString(HoodieTableConfig.TYPE).toUpperCase());
+    return HoodieTableType.valueOf(getStringOrDefault(
+        HoodieTableConfig.TYPE, HoodieTableConfig.TYPE.defaultValue().name()).toUpperCase());
   }
 
   public String getPreCombineField() {

@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.marker.MarkerType;
@@ -34,12 +35,12 @@ import org.apache.hudi.index.HoodieIndex;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -121,14 +122,16 @@ public class TestHoodieWriteConfig {
             EngineType.JAVA, MarkerType.DIRECT));
   }
 
-  @Test
-  public void testAutoConcurrencyConfigAdjustmentWithTableServices() {
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testAutoConcurrencyConfigAdjustmentWithTableServices(HoodieTableType tableType) {
     final String inProcessLockProviderClassName = InProcessLockProvider.class.getCanonicalName();
     // With metadata table enabled by default, any async table service enabled should
     // use InProcess lock provider as default when no other lock provider is set.
     // 1. Async clustering
     verifyConcurrencyControlRelatedConfigs(createWriteConfig(new HashMap<String, String>() {
           {
+            put(HoodieTableConfig.TYPE.key(), tableType.name());
             put(ASYNC_CLUSTERING_ENABLE.key(), "true");
             put(INLINE_COMPACT.key(), "true");
             put(AUTO_CLEAN.key(), "true");
@@ -140,6 +143,7 @@ public class TestHoodieWriteConfig {
     // 2. Async clean
     verifyConcurrencyControlRelatedConfigs(createWriteConfig(new HashMap<String, String>() {
           {
+            put(HoodieTableConfig.TYPE.key(), tableType.name());
             put(ASYNC_CLUSTERING_ENABLE.key(), "false");
             put(INLINE_COMPACT.key(), "true");
             put(AUTO_CLEAN.key(), "true");
@@ -148,35 +152,31 @@ public class TestHoodieWriteConfig {
         }), true, true, WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL,
         HoodieFailedWritesCleaningPolicy.LAZY, inProcessLockProviderClassName);
 
-    // 3. MOR with async compaction configured
+    // 3. Async compaction configured
     verifyConcurrencyControlRelatedConfigs(createWriteConfig(new HashMap<String, String>() {
           {
-            put(HoodieTableConfig.TYPE.key(), "MERGE_ON_READ");
+            put(HoodieTableConfig.TYPE.key(), tableType.name());
             put(ASYNC_CLUSTERING_ENABLE.key(), "false");
             put(INLINE_COMPACT.key(), "false");
             put(AUTO_CLEAN.key(), "true");
             put(ASYNC_CLEAN.key(), "false");
           }
-        }), true, true, WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL,
-        HoodieFailedWritesCleaningPolicy.LAZY, inProcessLockProviderClassName);
+        }), true,
+        tableType == HoodieTableType.MERGE_ON_READ,
+        tableType == HoodieTableType.MERGE_ON_READ
+            ? WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL
+            : WriteConcurrencyMode.valueOf(WRITE_CONCURRENCY_MODE.defaultValue()),
+        tableType == HoodieTableType.MERGE_ON_READ
+            ? HoodieFailedWritesCleaningPolicy.LAZY
+            : HoodieFailedWritesCleaningPolicy.valueOf(FAILED_WRITES_CLEANER_POLICY.defaultValue()),
+        tableType == HoodieTableType.MERGE_ON_READ
+            ? inProcessLockProviderClassName
+            : HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
 
-    // 4. COW with async compaction configured
+    // 4. All inline services
     verifyConcurrencyControlRelatedConfigs(createWriteConfig(new HashMap<String, String>() {
           {
-            put(HoodieTableConfig.TYPE.key(), "COPY_ON_WRITE");
-            put(ASYNC_CLUSTERING_ENABLE.key(), "false");
-            put(INLINE_COMPACT.key(), "false");
-            put(AUTO_CLEAN.key(), "true");
-            put(ASYNC_CLEAN.key(), "false");
-          }
-        }), true, false,
-        WriteConcurrencyMode.valueOf(WRITE_CONCURRENCY_MODE.defaultValue()),
-        HoodieFailedWritesCleaningPolicy.valueOf(FAILED_WRITES_CLEANER_POLICY.defaultValue()),
-        HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
-
-    // 5. All inline services
-    verifyConcurrencyControlRelatedConfigs(createWriteConfig(new HashMap<String, String>() {
-          {
+            put(HoodieTableConfig.TYPE.key(), tableType.name());
             put(ASYNC_CLUSTERING_ENABLE.key(), "false");
             put(INLINE_COMPACT.key(), "true");
             put(AUTO_CLEAN.key(), "true");
@@ -188,66 +188,101 @@ public class TestHoodieWriteConfig {
         HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
   }
 
-  @Test
-  public void testAutoConcurrencyConfigAdjustmentWithUserConfigs() {
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testAutoConcurrencyConfigAdjustmentWithUserConfigs(HoodieTableType tableType) {
     // 1. User override for the lock provider should always take the precedence
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(HoodieTableConfig.TYPE.key(), tableType.name());
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath("/tmp")
         .withLockConfig(HoodieLockConfig.newBuilder()
             .withLockProvider(FileSystemBasedLockProviderTestClass.class)
             .build())
-        .build();
-    assertEquals(FileSystemBasedLockProviderTestClass.class.getName(), writeConfig.getLockProviderClass());
-
-    // 2. User can set the lock provider via properties
-    TypedProperties properties = new TypedProperties();
-    properties.setProperty(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), ZookeeperBasedLockProvider.class.getName());
-    writeConfig = HoodieWriteConfig.newBuilder()
-        .withPath("/tmp")
         .withProperties(properties)
         .build();
-    assertEquals(ZookeeperBasedLockProvider.class.getName(), writeConfig.getLockProviderClass());
+    verifyConcurrencyControlRelatedConfigs(writeConfig,
+        true, tableType == HoodieTableType.MERGE_ON_READ,
+        WriteConcurrencyMode.valueOf(WRITE_CONCURRENCY_MODE.defaultValue()),
+        HoodieFailedWritesCleaningPolicy.valueOf(FAILED_WRITES_CLEANER_POLICY.defaultValue()),
+        FileSystemBasedLockProviderTestClass.class.getName());
+
+    // 2. User can set the lock provider via properties
+    verifyConcurrencyControlRelatedConfigs(createWriteConfig(new HashMap<String, String>() {
+          {
+            put(HoodieTableConfig.TYPE.key(), tableType.name());
+            put(ASYNC_CLUSTERING_ENABLE.key(), "false");
+            put(INLINE_COMPACT.key(), "true");
+            put(AUTO_CLEAN.key(), "true");
+            put(ASYNC_CLEAN.key(), "true");
+            put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
+                ZookeeperBasedLockProvider.class.getName());
+          }
+        }), true, true,
+        WriteConcurrencyMode.valueOf(WRITE_CONCURRENCY_MODE.defaultValue()),
+        HoodieFailedWritesCleaningPolicy.valueOf(FAILED_WRITES_CLEANER_POLICY.defaultValue()),
+        ZookeeperBasedLockProvider.class.getName());
 
     // 3. Default config should have default lock provider
-    writeConfig = createWriteConfig(Collections.emptyMap());
-    if (!writeConfig.areAnyTableServicesAsync()) {
-      assertEquals(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue(), writeConfig.getLockProviderClass());
+    writeConfig = createWriteConfig(new HashMap<String, String>() {
+      {
+        put(HoodieTableConfig.TYPE.key(), tableType.name());
+      }
+    });
+    if (writeConfig.areAnyTableServicesAsync()) {
+      verifyConcurrencyControlRelatedConfigs(writeConfig,
+          true, true,
+          WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL,
+          HoodieFailedWritesCleaningPolicy.LAZY,
+          InProcessLockProvider.class.getName());
     } else {
-      assertEquals(InProcessLockProvider.class.getName(), writeConfig.getLockProviderClass());
+      verifyConcurrencyControlRelatedConfigs(writeConfig,
+          true, false,
+          WriteConcurrencyMode.valueOf(WRITE_CONCURRENCY_MODE.defaultValue()),
+          HoodieFailedWritesCleaningPolicy.valueOf(FAILED_WRITES_CLEANER_POLICY.defaultValue()),
+          HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
     }
   }
 
-  @Test
-  public void testAutoConcurrencyConfigAdjustmentWithNoTableService() {
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testAutoConcurrencyConfigAdjustmentWithNoTableService(HoodieTableType tableType) {
     // 1. No table service, concurrency control configs should not be overwritten
     verifyConcurrencyControlRelatedConfigs(createWriteConfig(new HashMap<String, String>() {
           {
+            put(HoodieTableConfig.TYPE.key(), tableType.name());
             put(TABLE_SERVICES_ENABLED.key(), "false");
           }
-        }), false, true,
+        }), false, tableType == HoodieTableType.MERGE_ON_READ,
         WriteConcurrencyMode.fromValue(WRITE_CONCURRENCY_MODE.defaultValue()),
         HoodieFailedWritesCleaningPolicy.valueOf(FAILED_WRITES_CLEANER_POLICY.defaultValue()),
         HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
 
-    // 2. No table service, with optimistic concurrency control, configs should be updated accordingly
+    // 2. No table service, with optimistic concurrency control,
+    // failed write clean policy should be updated accordingly
     verifyConcurrencyControlRelatedConfigs(createWriteConfig(new HashMap<String, String>() {
           {
+            put(HoodieTableConfig.TYPE.key(), tableType.name());
             put(TABLE_SERVICES_ENABLED.key(), "false");
             put(WRITE_CONCURRENCY_MODE.key(),
                 WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
             put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
                 FileSystemBasedLockProviderTestClass.class.getName());
           }
-        }), false, true, WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL,
-        HoodieFailedWritesCleaningPolicy.LAZY, FileSystemBasedLockProviderTestClass.class.getName());
+        }), false, tableType == HoodieTableType.MERGE_ON_READ,
+        WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL,
+        HoodieFailedWritesCleaningPolicy.LAZY,
+        FileSystemBasedLockProviderTestClass.class.getName());
   }
 
-  @Test
-  public void testAutoConcurrencyConfigAdjustmentWithMetadataTableDisabled() {
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testAutoConcurrencyConfigAdjustmentWithMetadataTableDisabled(HoodieTableType tableType) {
     // 1. Metadata table disabled, with async table services, concurrency control configs
     // should not be changed
     verifyConcurrencyControlRelatedConfigs(createWriteConfig(new HashMap<String, String>() {
           {
+            put(HoodieTableConfig.TYPE.key(), tableType.name());
             put(HoodieMetadataConfig.ENABLE.key(), "false");
             put(ASYNC_CLUSTERING_ENABLE.key(), "true");
             put(INLINE_COMPACT.key(), "true");
@@ -259,8 +294,8 @@ public class TestHoodieWriteConfig {
         HoodieFailedWritesCleaningPolicy.valueOf(FAILED_WRITES_CLEANER_POLICY.defaultValue()),
         HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
 
-    // 2. Metadata table disabled, with optimistic concurrency control, configs should be
-    // updated accordingly
+    // 2. Metadata table disabled, with optimistic concurrency control,
+    // failed write clean policy should be updated accordingly
     verifyConcurrencyControlRelatedConfigs(createWriteConfig(new HashMap<String, String>() {
           {
             put(ASYNC_CLUSTERING_ENABLE.key(), "true");
