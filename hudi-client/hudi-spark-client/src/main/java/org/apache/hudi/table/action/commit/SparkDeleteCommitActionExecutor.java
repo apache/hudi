@@ -20,29 +20,28 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
-
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.spark.api.java.JavaRDD;
 
 public class SparkDeleteCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends BaseSparkCommitActionExecutor<T> {
 
-  private final JavaRDD<HoodieKey> keys;
+  private final HoodieData<HoodieKey> keys;
 
   public SparkDeleteCommitActionExecutor(HoodieSparkEngineContext context,
                                          HoodieWriteConfig config, HoodieTable table,
-                                         String instantTime, JavaRDD<HoodieKey> keys) {
+                                         String instantTime, HoodieData<HoodieKey> keys) {
     super(context, config, table, instantTime, WriteOperationType.DELETE);
     this.keys = keys;
   }
 
   @Override
-  public HoodieWriteMetadata<JavaRDD<WriteStatus>> execute() {
-    return SparkDeleteHelper.newInstance().execute(instantTime, keys, context, config, table, this);
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
+    return HoodieDeleteHelper.newInstance().execute(instantTime, keys, context, config, table, this);
   }
 }

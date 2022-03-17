@@ -19,6 +19,7 @@
 package org.apache.hudi.client.validator;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -28,9 +29,9 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
@@ -41,7 +42,7 @@ import java.util.stream.Collectors;
 /**
  * Validator can be configured pre-commit. 
  */
-public abstract class SparkPreCommitValidator<T extends HoodieRecordPayload, I, K, O extends JavaRDD<WriteStatus>> {
+public abstract class SparkPreCommitValidator<T extends HoodieRecordPayload, I, K, O extends HoodieData<WriteStatus>> {
   private static final Logger LOG = LogManager.getLogger(SparkPreCommitValidator.class);
 
   private HoodieSparkTable<T> table;
@@ -59,7 +60,7 @@ public abstract class SparkPreCommitValidator<T extends HoodieRecordPayload, I, 
     if (writeResult.getWriteStats().isPresent()) {
       partitionsModified = writeResult.getWriteStats().get().stream().map(HoodieWriteStat::getPartitionPath).collect(Collectors.toSet());
     } else {
-      partitionsModified = new HashSet<>(writeResult.getWriteStatuses().map(WriteStatus::getPartitionPath).collect());
+      partitionsModified = new HashSet<>(writeResult.getWriteStatuses().map(WriteStatus::getPartitionPath).collectAsList());
     }
     return partitionsModified;
   }

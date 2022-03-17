@@ -19,60 +19,52 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.spark.api.java.JavaRDD;
+public class HoodieWriteHelper<T extends HoodieRecordPayload, R> extends BaseWriteHelper<T, HoodieData<HoodieRecord<T>>,
+    HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> {
 
-import scala.Tuple2;
-
-/**
- * A spark implementation of {@link BaseWriteHelper}.
- *
- * @param <T>
- */
-public class SparkWriteHelper<T extends HoodieRecordPayload,R> extends BaseWriteHelper<T, JavaRDD<HoodieRecord<T>>,
-    JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, R> {
-  private SparkWriteHelper() {
+  private HoodieWriteHelper() {
   }
 
   private static class WriteHelperHolder {
-    private static final SparkWriteHelper SPARK_WRITE_HELPER = new SparkWriteHelper();
+    private static final HoodieWriteHelper HOODIE_WRITE_HELPER = new HoodieWriteHelper<>();
   }
 
-  public static SparkWriteHelper newInstance() {
-    return WriteHelperHolder.SPARK_WRITE_HELPER;
-  }
-
-  @Override
-  protected JavaRDD<HoodieRecord<T>> tag(JavaRDD<HoodieRecord<T>> dedupedRecords, HoodieEngineContext context,
-                                         HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table) {
-    return HoodieJavaRDD.getJavaRDD(
-        table.getIndex().tagLocation(HoodieJavaRDD.of(dedupedRecords), context, table));
+  public static HoodieWriteHelper newInstance() {
+    return WriteHelperHolder.HOODIE_WRITE_HELPER;
   }
 
   @Override
-  public JavaRDD<HoodieRecord<T>> deduplicateRecords(
-      JavaRDD<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism) {
+  protected HoodieData<HoodieRecord<T>> tag(HoodieData<HoodieRecord<T>> dedupedRecords, HoodieEngineContext context,
+                                            HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table) {
+    return table.getIndex().tagLocation(dedupedRecords, context, table);
+  }
+
+  @Override
+  public HoodieData<HoodieRecord<T>> deduplicateRecords(
+      HoodieData<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism) {
     boolean isIndexingGlobal = index.isGlobal();
     return records.mapToPair(record -> {
       HoodieKey hoodieKey = record.getKey();
       // If index used is global, then records are expected to differ in their partitionPath
       Object key = isIndexingGlobal ? hoodieKey.getRecordKey() : hoodieKey;
-      return new Tuple2<>(key, record);
+      return Pair.of(key, record);
     }).reduceByKey((rec1, rec2) -> {
       @SuppressWarnings("unchecked")
       T reducedData = (T) rec2.getData().preCombine(rec1.getData());
       HoodieKey reducedKey = rec1.getData().equals(reducedData) ? rec1.getKey() : rec2.getKey();
 
-      return new HoodieAvroRecord<T>(reducedKey, reducedData);
-    }, parallelism).map(Tuple2::_2);
+      return new HoodieAvroRecord<>(reducedKey, reducedData);
+    }, parallelism).map(Pair::getRight);
   }
 
 }
