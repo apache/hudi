@@ -257,6 +257,13 @@ public class HoodieTestTable {
     return this;
   }
 
+  public HoodieTestTable addPendingReplace(String instantTime, Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
+    createRequestedReplaceCommit(basePath, instantTime, requestedReplaceMetadata);
+    createInflightReplaceCommit(basePath, instantTime, inflightReplaceMetadata);
+    currentInstantTime = instantTime;
+    return this;
+  }
+
   public HoodieTestTable addRequestedReplace(String instantTime, Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata) throws Exception {
     createRequestedReplaceCommit(basePath, instantTime, requestedReplaceMetadata);
     currentInstantTime = instantTime;

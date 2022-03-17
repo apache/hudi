@@ -36,8 +36,8 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -74,7 +74,7 @@ public class TransactionUtils {
    * @param thisCommitMetadata
    * @param config
    * @param lastCompletedTxnOwnerInstant
-   * @param pendingClusteringInstants
+   * @param pendingInstants
    *
    * @return
    * @throws HoodieWriteConflictException
@@ -86,23 +86,15 @@ public class TransactionUtils {
       final HoodieWriteConfig config,
       Option<HoodieInstant> lastCompletedTxnOwnerInstant,
       boolean reloadActiveTimeline,
-      List<HoodieInstant> pendingClusteringInstants) throws HoodieWriteConflictException {
+      Set<String> pendingInstants) throws HoodieWriteConflictException {
     if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
-      // deal with pendingClusteringInstants
-      // some clustering instants maybe finished during current write operation,
-      // we should check the conflict of those clustering operation
-      List<String> completeClusteringOperations = table.getMetaClient()
-          .reloadActiveTimeline()
-          .getCompletedReplaceTimeline()
-          .getInstants()
-          .map(f -> f.getTimestamp()).collect(Collectors.toList());
-      Stream<HoodieInstant> completedClusteringInstantsDuringCurrentWriteOperation = pendingClusteringInstants
-          .stream().filter(f -> completeClusteringOperations.contains(f.getTimestamp()));
+      // deal with pendingInstants
+      Stream<HoodieInstant> completedInstantsDuringCurrentWriteOperation = getCompletedInstantsDuringCurrentWriteOperation(table.getMetaClient(), pendingInstants);
 
       ConflictResolutionStrategy resolutionStrategy = config.getWriteConflictResolutionStrategy();
       Stream<HoodieInstant> instantStream = Stream.concat(resolutionStrategy.getCandidateInstants(reloadActiveTimeline
           ? table.getMetaClient().reloadActiveTimeline() : table.getActiveTimeline(), currentTxnOwnerInstant.get(), lastCompletedTxnOwnerInstant),
-          completedClusteringInstantsDuringCurrentWriteOperation);
+              completedInstantsDuringCurrentWriteOperation);
       final ConcurrentOperation thisOperation = new ConcurrentOperation(currentTxnOwnerInstant.get(), thisCommitMetadata.orElse(new HoodieCommitMetadata()));
       instantStream.forEach(instant -> {
         try {
@@ -130,7 +122,7 @@ public class TransactionUtils {
       final HoodieWriteConfig config,
       Option<HoodieInstant> lastCompletedTxnOwnerInstant,
       boolean reloadActiveTimeline) throws HoodieWriteConflictException {
-    return resolveWriteConflictIfAny(table, currentTxnOwnerInstant, thisCommitMetadata, config, lastCompletedTxnOwnerInstant, reloadActiveTimeline, new ArrayList<>());
+    return resolveWriteConflictIfAny(table, currentTxnOwnerInstant, thisCommitMetadata, config, lastCompletedTxnOwnerInstant, reloadActiveTimeline, new HashSet<>());
   }
 
   /**
@@ -167,18 +159,25 @@ public class TransactionUtils {
   }
 
   /**
-   * Get pending clustering instant.
-   * Notice:
-   *   we return .requested instant here.
+   * Get pending instant.
    *
    * @param metaClient
    * @return
    */
-  public static List<HoodieInstant> getPendingReplaceRequestedInstants(HoodieTableMetaClient metaClient) {
+  public static Set<String> getPendingRequestedInstants(HoodieTableMetaClient metaClient) {
+    // collect pending deltaCommit/commit/compaction/clustering
     return metaClient
-        .getActiveTimeline()
-        .filterPendingReplaceTimeline()
-        .getInstants()
-        .map(f -> HoodieTimeline.getReplaceCommitRequestedInstant(f.getTimestamp())).collect(Collectors.toList());
+            .getActiveTimeline()
+            .filterInflights().getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
+  }
+
+  public static Stream<HoodieInstant> getCompletedInstantsDuringCurrentWriteOperation(HoodieTableMetaClient metaClient, Set<String> pendingInstants) {
+    // deal with pendingInstants
+    // some pending instants maybe finished during current write operation,
+    // we should check the conflict of those pending operation
+    return metaClient.reloadActiveTimeline()
+            .filterCompletedInstants()
+            .getInstants()
+            .filter(f -> pendingInstants.contains(f.getTimestamp()));
   }
 }
