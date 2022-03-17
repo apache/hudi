@@ -90,19 +90,14 @@ mvn clean package -DskipTests -Dspark3
 mvn clean package -DskipTests -Dspark3.1.x
 ```
 
-### Build without spark-avro module
+### What about "spark-avro" module?
 
-Default Hudi jar does NOT bundle "spark-avro" module (to make sure it's not conflicting w/ your version of Spark), which 
-is also NOT packaged by default in Spark distribution. As such, to run Hudi you'll need to specify corresponding "spark-avro" jar
-via `--packages` option: 
+Previously, Hudi bundles were packaging (and shading) "spark-avro" module internally. However, due to multiple occasion 
+of it being broken b/w patch versions (most recent was, b/w 3.2.0 and 3.2.1) of Spark after substantial deliberation 
+we took a decision to let go such dependency and instead simply clone the structures we're relying on to better control 
+compatibility w/in Spark minor version branches (3.1.x, 3.2.x, etc).
 
-```
-# Start command
-spark-2.4.4-bin-hadoop2.7/bin/spark-shell \
-  --packages org.apache.spark:spark-avro_2.11:2.4.4 \
-  --jars `ls packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.11-*.*.*-SNAPSHOT.jar` \
-  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
-```
+As such there's also no need to specify "spark-avro" in `--packages`.
 
 ## Running Tests
 

@@ -15,7 +15,6 @@
 # limitations under the License.
 
 spark-submit \
---packages org.apache.spark:spark-avro_2.11:2.4.0 \
 --conf spark.task.cpus=1 \
 --conf spark.executor.cores=1 \
 --conf spark.task.maxFailures=100 \
