@@ -389,9 +389,6 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
       finalizeWrite(table, clusteringCommitTime, writeStats);
       // Update table's metadata (table)
       updateTableMetadata(table, metadata, clusteringInstant);
-      // Update tables' metadata indexes
-      // NOTE: This overlaps w/ metadata table (above) and will be reconciled in the future
-      table.updateMetadataIndexes(context, writeStats, clusteringCommitTime);
 
       LOG.info("Committing Clustering " + clusteringCommitTime + ". Finished with result " + metadata);
 
