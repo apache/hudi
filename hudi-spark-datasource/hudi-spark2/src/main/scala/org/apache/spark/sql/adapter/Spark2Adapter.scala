@@ -38,7 +38,7 @@ import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieSpark2Catalyst
 import scala.collection.mutable.ArrayBuffer
 
 /**
- * The adapter for spark2.
+ * Implementation of [[SparkAdapter]] for Spark 2.4.x
  */
 class Spark2Adapter extends SparkAdapter {
 
