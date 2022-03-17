@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
@@ -43,6 +44,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -52,6 +54,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
@@ -76,6 +79,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
 
 /**
@@ -395,6 +399,18 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     // made after the first savepoint present.
     Option<HoodieInstant> firstSavepoint = table.getCompletedSavepointTimeline().firstInstant();
     if (!commitTimeline.empty() && commitTimeline.countInstants() > maxInstantsToKeep) {
+      // For Merge-On-Read table, inline or async compaction is enabled
+      // We need to make sure that there are enough delta commits in the active timeline
+      // to trigger compaction scheduling, when the trigger strategy of compaction is
+      // NUM_COMMITS or NUM_AND_TIME.
+      Option<HoodieInstant> oldestInstantToRetainForCompaction =
+          (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ
+              && (config.getInlineCompactTriggerStrategy() == CompactionTriggerStrategy.NUM_COMMITS
+              || config.getInlineCompactTriggerStrategy() == CompactionTriggerStrategy.NUM_AND_TIME))
+              ? CompactionUtils.getOldestInstantToRetainForCompaction(
+              table.getActiveTimeline(), config.getInlineCompactDeltaCommitMax())
+              : Option.empty();
+
       // Actually do the commits
       Stream<HoodieInstant> instantToArchiveStream = commitTimeline.getInstants()
           .filter(s -> {
@@ -405,14 +421,21 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
             return oldestPendingCompactionAndReplaceInstant
                 .map(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), GREATER_THAN, s.getTimestamp()))
                 .orElse(true);
-          });
-      // We need this to ensure that when multiple writers are performing conflict resolution, eligible instants don't
-      // get archived, i.e, instants after the oldestInflight are retained on the timeline
-      if (config.getFailedWritesCleanPolicy() == HoodieFailedWritesCleaningPolicy.LAZY) {
-        instantToArchiveStream = instantToArchiveStream.filter(s -> oldestInflightCommitInstant.map(instant ->
-            HoodieTimeline.compareTimestamps(instant.getTimestamp(), GREATER_THAN, s.getTimestamp()))
-            .orElse(true));
-      }
+          }).filter(s -> {
+            // We need this to ensure that when multiple writers are performing conflict resolution, eligible instants don't
+            // get archived, i.e, instants after the oldestInflight are retained on the timeline
+            if (config.getFailedWritesCleanPolicy() == HoodieFailedWritesCleaningPolicy.LAZY) {
+              return oldestInflightCommitInstant.map(instant ->
+                      HoodieTimeline.compareTimestamps(instant.getTimestamp(), GREATER_THAN, s.getTimestamp()))
+                  .orElse(true);
+            }
+            return true;
+          }).filter(s ->
+              oldestInstantToRetainForCompaction.map(instantToRetain ->
+                      HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN, instantToRetain.getTimestamp()))
+                  .orElse(true)
+          );
+
       return instantToArchiveStream.limit(commitTimeline.countInstants() - minInstantsToKeep);
     } else {
       return Stream.empty();
