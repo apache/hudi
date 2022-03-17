@@ -47,8 +47,8 @@ class HoodieFileScanRDD(@transient private val sparkSession: SparkSession,
       /** Advances to the next file. Returns true if a new non-empty iterator is available. */
       private def nextIterator(): Boolean = {
         if (files.hasNext) {
-          logInfo(s"Reading File $currentFile")
           currentFile = files.next()
+          logInfo(s"Reading File $currentFile")
           currentIterator = readFunction(currentFile)
 
           try {
