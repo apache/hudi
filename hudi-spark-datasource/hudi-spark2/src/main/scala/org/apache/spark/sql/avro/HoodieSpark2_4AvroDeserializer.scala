@@ -20,14 +20,10 @@ package org.apache.spark.sql.avro
 import org.apache.avro.Schema
 import org.apache.spark.sql.types.DataType
 
-/**
- * This is Spark 2 implementation for the [[HoodieAvroDeserializer]] leveraging [[PatchedAvroDeserializer]],
- * which is just copied over version of [[AvroDeserializer]] from Spark 2.4.4 w/ SPARK-30267 being back-ported to it
- */
-class HoodieSpark2AvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType)
+class HoodieSpark2_4AvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType)
   extends HoodieAvroDeserializer {
 
-  private val avroDeserializer = new PatchedAvroDeserializer(rootAvroType, rootCatalystType)
+  private val avroDeserializer = new AvroDeserializer(rootAvroType, rootCatalystType)
 
   // As of Spark 3.1, this will return data wrapped with Option, so we make sure these interfaces
   // are aligned across Spark versions
