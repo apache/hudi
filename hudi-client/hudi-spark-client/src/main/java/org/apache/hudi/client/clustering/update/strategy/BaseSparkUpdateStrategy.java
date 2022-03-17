@@ -19,12 +19,11 @@
 package org.apache.hudi.client.clustering.update.strategy;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
-
-import org.apache.spark.api.java.JavaRDD;
 
 import java.util.List;
 import java.util.Set;
@@ -33,7 +32,7 @@ import java.util.Set;
  * Spark base update strategy, write records to the file groups which are in clustering
  * need to check. Spark relate implementations should extend this base class.
  */
-public abstract class BaseSparkUpdateStrategy<T extends HoodieRecordPayload<T>> extends UpdateStrategy<T, JavaRDD<HoodieRecord<T>>> {
+public abstract class BaseSparkUpdateStrategy<T extends HoodieRecordPayload<T>> extends UpdateStrategy<T, HoodieData<HoodieRecord<T>>> {
 
   public BaseSparkUpdateStrategy(HoodieSparkEngineContext engineContext,
                                  Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
@@ -45,9 +44,9 @@ public abstract class BaseSparkUpdateStrategy<T extends HoodieRecordPayload<T>> 
    * @param inputRecords the records to write, tagged with target file id
    * @return the records matched file group ids
    */
-  protected List<HoodieFileGroupId> getGroupIdsWithUpdate(JavaRDD<HoodieRecord<T>> inputRecords) {
+  protected List<HoodieFileGroupId> getGroupIdsWithUpdate(HoodieData<HoodieRecord<T>> inputRecords) {
     return inputRecords
             .filter(record -> record.getCurrentLocation() != null)
-            .map(record -> new HoodieFileGroupId(record.getPartitionPath(), record.getCurrentLocation().getFileId())).distinct().collect();
+            .map(record -> new HoodieFileGroupId(record.getPartitionPath(), record.getCurrentLocation().getFileId())).distinct().collectAsList();
   }
 }
