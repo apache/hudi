@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
@@ -40,15 +41,19 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.model.WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL;
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE;
 
 /**
  * Schedules INDEX action.
  * <li>
- *   1. Fetch last completed instant on data timeline.
- *   2. Write the index plan to the <instant>.index.requested.
- *   3. Initialize filegroups for the enabled partition types within a transaction.
+ * 1. Fetch last completed instant on data timeline.
+ * 2. Write the index plan to the <instant>.index.requested.
+ * 3. Initialize filegroups for the enabled partition types within a transaction.
  * </li>
  */
 public class ScheduleIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieIndexPlan>> {
@@ -73,11 +78,20 @@ public class ScheduleIndexActionExecutor<T extends HoodieRecordPayload, I, K, O>
   @Override
   public Option<HoodieIndexPlan> execute() {
     // validate partitionsToIndex
-    if (!MetadataPartitionType.allPaths().containsAll(partitionsToIndex)) {
+    if (!EnumSet.allOf(MetadataPartitionType.class).containsAll(partitionsToIndex)) {
       throw new HoodieIndexException("Not all partitions are valid: " + partitionsToIndex);
     }
+    // ensure lock provider configured
+    if (!config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl() || StringUtils.isNullOrEmpty(config.getLockProviderClass())) {
+      throw new HoodieIndexException(String.format("Need to set %s as %s and configure lock provider class",
+          WRITE_CONCURRENCY_MODE.key(), OPTIMISTIC_CONCURRENCY_CONTROL.name()));
+    }
+    // make sure that it is idempotent, check with previously pending index operations.
+    String[] indexesInflight = table.getMetaClient().getTableConfig().getInflightMetadataIndexes().split(",");
+    String[] indexesCompleted = table.getMetaClient().getTableConfig().getCompletedMetadataIndexes().split(",");
+
     // get last completed instant
-    Option<HoodieInstant> indexUptoInstant = table.getActiveTimeline().filterCompletedInstants().lastInstant();
+    Option<HoodieInstant> indexUptoInstant = table.getActiveTimeline().getContiguousCompletedWriteTimeline().lastInstant();
     if (indexUptoInstant.isPresent()) {
       final HoodieInstant indexInstant = HoodieTimeline.getIndexRequestedInstant(instantTime);
       // for each partitionToIndex add that time to the plan
@@ -96,13 +110,13 @@ public class ScheduleIndexActionExecutor<T extends HoodieRecordPayload, I, K, O>
       // start initializing filegroups
       // 1. get metadata writer
       HoodieTableMetadataWriter metadataWriter = table.getMetadataWriter(instantTime)
-          .orElseThrow(() -> new HoodieIndexException(String.format("Could not get metadata writer to run index action for instant: %s", instantTime)));
+          .orElseThrow(() -> new HoodieIndexException(String.format("Could not get metadata writer to initialize filegroups for indexing for instant: %s", instantTime)));
       // 2. take a lock --> begin tx (data table)
       try {
         this.txnManager.beginTransaction(Option.of(indexInstant), Option.empty());
         // 3. initialize filegroups as per plan for the enabled partition types
         for (MetadataPartitionType partitionType : partitionsToIndex) {
-          metadataWriter.initializeFileGroups(table.getMetaClient(), partitionType, indexInstant.getTimestamp(), 1);
+          metadataWriter.initializeFileGroups(table.getMetaClient(), partitionType, indexInstant.getTimestamp(), partitionType.getFileGroupCount());
         }
       } catch (IOException e) {
         LOG.error("Could not initialize file groups");

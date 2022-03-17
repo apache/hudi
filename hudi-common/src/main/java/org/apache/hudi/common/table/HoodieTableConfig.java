@@ -208,6 +208,18 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("Table checksum is used to guard against partial writes in HDFS. It is added as the last entry in hoodie.properties and then used to validate while reading table config.");
 
+  public static final ConfigProperty<String> TABLE_METADATA_INDEX_INFLIGHT = ConfigProperty
+      .key("hoodie.table.metadata.index.inflight")
+      .noDefaultValue()
+      .sinceVersion("0.11.0")
+      .withDocumentation("Comma-separated list of metadata partitions whose indexing is in progress.");
+
+  public static final ConfigProperty<String> TABLE_METADATA_INDEX_COMPLETED = ConfigProperty
+      .key("hoodie.table.metadata.index.completed")
+      .noDefaultValue()
+      .sinceVersion("0.11.0")
+      .withDocumentation("Comma-separated list of metadata partitions whose indexing is complete.");
+
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
   public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName) {
@@ -583,6 +595,14 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   private Long getTableChecksum() {
     return getLong(TABLE_CHECKSUM);
+  }
+
+  public String getInflightMetadataIndexes() {
+    return getStringOrDefault(TABLE_METADATA_INDEX_INFLIGHT, "");
+  }
+
+  public String getCompletedMetadataIndexes() {
+    return getStringOrDefault(TABLE_METADATA_INDEX_COMPLETED, "");
   }
 
   public Map<String, String> propsMap() {

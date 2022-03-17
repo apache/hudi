@@ -124,6 +124,22 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
+   * Check if the given metadata partition exists.
+   *
+   * @param basePath base path of the dataset
+   * @param context  instance of {@link HoodieEngineContext}.
+   */
+  public static boolean metadataPartitionExists(String basePath, HoodieEngineContext context, MetadataPartitionType partitionType) {
+    final String metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
+    FileSystem fs = FSUtils.getFs(metadataTablePath, context.getHadoopConf().get());
+    try {
+      return fs.exists(new Path(metadataTablePath, partitionType.getPartitionPath()));
+    } catch (Exception e) {
+      throw new HoodieIOException(String.format("Failed to check metadata partition %s exists.", partitionType.getPartitionPath()));
+    }
+  }
+
+  /**
    * Convert commit action to metadata records for the enabled partition types.
    *
    * @param commitMetadata          - Commit action metadata

@@ -35,8 +35,23 @@ import java.util.List;
  */
 public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
 
+  /**
+   * Execute the index action for the given partitions.
+   *
+   * @param engineContext
+   * @param indexPartitionInfos - partitions to index
+   */
   void index(HoodieEngineContext engineContext, List<HoodieIndexPartitionInfo> indexPartitionInfos);
 
+  /**
+   * Initialize file groups while scheduling index action.
+   *
+   * @param dataMetaClient    - meta client for the data table
+   * @param metadataPartition - metadata partition for which file groups needs to be initialized
+   * @param instantTime       - instant time of the index action
+   * @param fileGroupCount    - number of file groups to be initialized
+   * @throws IOException
+   */
   void initializeFileGroups(HoodieTableMetaClient dataMetaClient, MetadataPartitionType metadataPartition, String instantTime, int fileGroupCount) throws IOException;
 
   void dropIndex(List<MetadataPartitionType> indexesToDrop) throws IOException;

@@ -27,6 +27,7 @@ import org.apache.hudi.exception.HoodieException;
 import java.io.Serializable;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
@@ -109,8 +110,27 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public HoodieDefaultTimeline getWriteTimeline() {
-    Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, REPLACE_COMMIT_ACTION, INDEX_ACTION);
+    Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
     return new HoodieDefaultTimeline(instants.stream().filter(s -> validActions.contains(s.getAction())), details);
+  }
+
+  @Override
+  public HoodieDefaultTimeline getContiguousCompletedWriteTimeline() {
+    List<HoodieInstant> contiguousCompletedInstants = new ArrayList<>();
+    String prevTime = "";
+    for (HoodieInstant instant : instants) {
+      if (prevTime.equals(instant.getTimestamp())) {
+        continue;
+      }
+      if (!instant.isCompleted()) {
+        break;
+      }
+      contiguousCompletedInstants.add(instant);
+      prevTime = instant.getTimestamp();
+    }
+
+    Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
+    return new HoodieDefaultTimeline(contiguousCompletedInstants.stream().filter(s -> validActions.contains(s.getAction())), details);
   }
 
   @Override

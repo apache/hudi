@@ -194,6 +194,13 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("Comma-separated list of columns for which bloom filter index will be built.");
 
+  public static final ConfigProperty<Integer> METADATA_INDEX_CHECK_TIMEOUT_SECONDS = ConfigProperty
+      .key(METADATA_PREFIX + ".index.check.timeout.seconds")
+      .defaultValue(300)
+      .sinceVersion("0.11.0")
+      .withDocumentation("After the async indexer has finished indexing upto the base instant, it will reconcile with commits that happened after the base instant. "
+          + "This check could take finite amount of time depending on number of commits, so it needs to be bounded by a timeout which can configured with this key.");
+
   public static final ConfigProperty<Boolean> POPULATE_META_FIELDS = ConfigProperty
       .key(METADATA_PREFIX + ".populate.meta.fields")
       .defaultValue(false)
@@ -258,6 +265,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public int getColumnStatsIndexParallelism() {
     return getIntOrDefault(COLUMN_STATS_INDEX_PARALLELISM);
+  }
+
+  public int getIndexingCheckTimeout() {
+    return getIntOrDefault(METADATA_INDEX_CHECK_TIMEOUT_SECONDS);
   }
 
   public boolean enableMetrics() {
@@ -339,6 +350,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withBloomFilterIndexForColumns(String columns) {
       metadataConfig.setValue(BLOOM_FILTER_INDEX_FOR_COLUMNS, columns);
+      return this;
+    }
+
+    public Builder withIndexingCheckTimeout(int timeoutInSeconds) {
+      metadataConfig.setValue(METADATA_INDEX_CHECK_TIMEOUT_SECONDS, String.valueOf(timeoutInSeconds));
       return this;
     }
 

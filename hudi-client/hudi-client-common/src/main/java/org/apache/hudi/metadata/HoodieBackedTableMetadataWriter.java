@@ -750,40 +750,41 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
   @Override
   public void index(HoodieEngineContext engineContext, List<HoodieIndexPartitionInfo> indexPartitionInfos) {
+    if (indexPartitionInfos.isEmpty()) {
+      LOG.warn("No partition to index in the plan");
+      return;
+    }
+    String indexUptoInstantTime = indexPartitionInfos.get(0).getIndexUptoInstant();
     indexPartitionInfos.forEach(indexPartitionInfo -> {
-      String indexUptoInstantTime = indexPartitionInfo.getIndexUptoInstant();
       String relativePartitionPath = indexPartitionInfo.getMetadataPartitionPath();
       LOG.info(String.format("Creating a new metadata index for partition '%s' under path %s upto instant %s",
           relativePartitionPath, metadataWriteConfig.getBasePath(), indexUptoInstantTime));
       try {
-        HoodieTableMetaClient.withPropertyBuilder()
-            .setTableType(HoodieTableType.MERGE_ON_READ)
-            .setTableName(tableName)
-            .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
-            .setPayloadClassName(HoodieMetadataPayload.class.getName())
-            .setBaseFileFormat(HoodieFileFormat.HFILE.toString())
-            .setRecordKeyFields(RECORD_KEY_FIELD_NAME)
-            .setPopulateMetaFields(dataWriteConfig.getMetadataConfig().populateMetaFields())
-            .setKeyGeneratorClassProp(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
-            .initTable(hadoopConf.get(), metadataWriteConfig.getBasePath());
-        initTableMetadata();
-        // this part now moves to scheduling
-        initializeFileGroups(dataMetaClient, MetadataPartitionType.valueOf(relativePartitionPath.toUpperCase(Locale.ROOT)), indexUptoInstantTime, 1);
+        // filegroup should have already been initialized while scheduling index for this partition
+        if (!dataMetaClient.getFs().exists(new Path(metadataWriteConfig.getBasePath(), relativePartitionPath))) {
+          throw new HoodieIndexException(String.format("File group not initialized for metadata partition: %s, indexUptoInstant: %s. Looks like index scheduling failed!",
+              relativePartitionPath, indexUptoInstantTime));
+        }
       } catch (IOException e) {
-        throw new HoodieIndexException(String.format("Unable to initialize file groups for metadata partition: %s, indexUptoInstant: %s",
+        throw new HoodieIndexException(String.format("Unable to check whether file group is initialized for metadata partition: %s, indexUptoInstant: %s",
             relativePartitionPath, indexUptoInstantTime));
       }
 
-      // List all partitions in the basePath of the containing dataset
-      LOG.info("Initializing metadata table by using file listings in " + dataWriteConfig.getBasePath());
-      engineContext.setJobStatus(this.getClass().getSimpleName(), "MetadataIndex: initializing metadata table by listing files and partitions");
-      List<DirectoryInfo> dirInfoList = listAllPartitions(dataMetaClient);
-
-      // During bootstrap, the list of files to be committed can be huge. So creating a HoodieCommitMetadata out of these
-      // large number of files and calling the existing update(HoodieCommitMetadata) function does not scale well.
-      // Hence, we have a special commit just for the bootstrap scenario.
-      initialCommit(indexUptoInstantTime);
+      // return early and populate enabledPartitionTypses correctly (check in initialCommit)
+      MetadataPartitionType partitionType = MetadataPartitionType.valueOf(relativePartitionPath);
+      if (!enabledPartitionTypes.contains(partitionType)) {
+        throw new HoodieIndexException(String.format("Indexing for metadata partition: %s is not enabled", partitionType));
+      }
     });
+    // before initial commit update table config
+    dataMetaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_INDEX_INFLIGHT.key(), indexPartitionInfos.stream()
+        .map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.joining(",")));
+    HoodieTableConfig.update(dataMetaClient.getFs(), new Path(dataMetaClient.getMetaPath()), dataMetaClient.getTableConfig().getProps());
+    initialCommit(indexUptoInstantTime);
+    dataMetaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_INDEX_INFLIGHT.key(), "");
+    dataMetaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_INDEX_COMPLETED.key(), indexPartitionInfos.stream()
+        .map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.joining(",")));
+    HoodieTableConfig.update(dataMetaClient.getFs(), new Path(dataMetaClient.getMetaPath()), dataMetaClient.getTableConfig().getProps());
   }
 
   /**
