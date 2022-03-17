@@ -43,7 +43,7 @@ import org.apache.spark.unsafe.types.UTF8String
  *
  * NOTE: This code is borrowed from Spark 3.2.1
  * NOTE: This code is borrowed, so that we can better control compatibility w/in Spark minor
- *       branches (3.2.x, 3.1.x, etc)
+ * branches (3.2.x, 3.1.x, etc)
  */
 private[sql] class AvroDeserializer(rootAvroType: Schema,
                                     rootCatalystType: DataType,
@@ -107,11 +107,10 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
    * Creates a writer to write avro values to Catalyst values at the given ordinal with the given
    * updater.
    */
-  private def newWriter(
-                         avroType: Schema,
-                         catalystType: DataType,
-                         avroPath: Seq[String],
-                         catalystPath: Seq[String]): (CatalystDataUpdater, Int, Any) => Unit = {
+  private def newWriter(avroType: Schema,
+                        catalystType: DataType,
+                        avroPath: Seq[String],
+                        catalystPath: Seq[String]): (CatalystDataUpdater, Int, Any) => Unit = {
     val errorPrefix = s"Cannot convert Avro ${toFieldStr(avroPath)} to " +
       s"SQL ${toFieldStr(catalystPath)} because "
     val incompatibleMsg = errorPrefix +
@@ -334,12 +333,11 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
     }
   }
 
-  private def getRecordWriter(
-                               avroType: Schema,
-                               catalystType: StructType,
-                               avroPath: Seq[String],
-                               catalystPath: Seq[String],
-                               applyFilters: Int => Boolean): (CatalystDataUpdater, GenericRecord) => Boolean = {
+  private def getRecordWriter(avroType: Schema,
+                              catalystType: StructType,
+                              avroPath: Seq[String],
+                              catalystPath: Seq[String],
+                              applyFilters: Int => Boolean): (CatalystDataUpdater, GenericRecord) => Boolean = {
     val validFieldIndexes = ArrayBuffer.empty[Int]
     val fieldWriters = ArrayBuffer.empty[(CatalystDataUpdater, Any) => Unit]
 

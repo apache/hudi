@@ -43,7 +43,7 @@ import org.apache.spark.sql.types._
  *
  * NOTE: This code is borrowed from Spark 3.2.1
  * NOTE: This code is borrowed, so that we can better control compatibility w/in Spark minor
- *       branches (3.2.x, 3.1.x, etc)
+ * branches (3.2.x, 3.1.x, etc)
  */
 private[sql] class AvroSerializer(rootCatalystType: DataType,
                                   rootAvroType: Schema,
@@ -99,11 +99,10 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
 
   private lazy val decimalConversions = new DecimalConversion()
 
-  private def newConverter(
-                            catalystType: DataType,
-                            avroType: Schema,
-                            catalystPath: Seq[String],
-                            avroPath: Seq[String]): Converter = {
+  private def newConverter(catalystType: DataType,
+                           avroType: Schema,
+                           catalystPath: Seq[String],
+                           avroPath: Seq[String]): Converter = {
     val errorPrefix = s"Cannot convert SQL ${toFieldStr(catalystPath)} " +
       s"to Avro ${toFieldStr(avroPath)} because "
     (catalystType, avroType.getType) match {
@@ -235,11 +234,10 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
     }
   }
 
-  private def newStructConverter(
-                                  catalystStruct: StructType,
-                                  avroStruct: Schema,
-                                  catalystPath: Seq[String],
-                                  avroPath: Seq[String]): InternalRow => Record = {
+  private def newStructConverter(catalystStruct: StructType,
+                                 avroStruct: Schema,
+                                 catalystPath: Seq[String],
+                                 avroPath: Seq[String]): InternalRow => Record = {
 
     val avroPathStr = toFieldStr(avroPath)
     if (avroStruct.getType != RECORD) {

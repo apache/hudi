@@ -1,49 +1,29 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.apache.spark.sql.avro
 
 import org.apache.avro.Schema
 import org.apache.spark.sql.internal.SQLConf
 
 import java.util.Locale
-import scala.collection.JavaConverters.asScalaBufferConverter
 
 /**
  * NOTE: This code is borrowed from Spark 3.2.1
  * NOTE: This code is borrowed, so that we can better control compatibility w/in Spark minor
- *       branches (3.2.x, 3.1.x, etc)
+ * branches (3.2.x, 3.1.x, etc)
  */
-private[sql] object AvroUtils {
+private[avro] object AvroUtils {
 
   /**
    * Wraps an Avro Schema object so that field lookups are faster.
    *
-   * @param avroSchema The schema in which to search for fields. Must be of type RECORD.
-   * @param avroPath The seq of parent field names leading to `avroSchema`.
+   * @param avroSchema           The schema in which to search for fields. Must be of type RECORD.
+   * @param avroPath             The seq of parent field names leading to `avroSchema`.
    * @param positionalFieldMatch If true, perform field matching in a positional fashion
    *                             (structural comparison between schemas, ignoring names);
    *                             otherwise, perform field matching using field names.
    */
-  class AvroSchemaHelper(
-                          avroSchema: Schema,
-                          avroPath: Seq[String],
-                          positionalFieldMatch: Boolean) {
+  class AvroSchemaHelper(avroSchema: Schema,
+                         avroPath: Seq[String],
+                         positionalFieldMatch: Boolean) {
     if (avroSchema.getType != Schema.Type.RECORD) {
       throw new IncompatibleSchemaException(
         s"Attempting to treat ${avroSchema.getName} as a RECORD, but it was: ${avroSchema.getType}")
