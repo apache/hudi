@@ -3,6 +3,7 @@ title: "Hudi Z-Order and Hilbert Space Filling Curves"
 excerpt: "Explore the benefits of new Apache Hudi Z-Order and Hilbert Curves"
 author: Alexey Kudinkin and Tao Meng
 category: blog
+image: /assets/images/zordercurve.png
 ---
 
 As of Hudi v0.10.0, we are excited to introduce support for an advanced Data Layout Optimization technique known in the database realm as [Z-order](https://en.wikipedia.org/wiki/Z-order_curve) and [Hilbert](https://en.wikipedia.org/wiki/Hilbert_curve) space filling curves.

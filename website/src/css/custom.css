@@ -171,15 +171,22 @@ footer .container {
   flex: 0 0 var(--ifm-col-width);
 }
 
+.blogThumbnail {
+  height: 180px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
 .blogThumbnail img {
   height: auto;
-  width: 100%
+  width: 100%;
 }
 
 .blog-list-page article {
   display: inline-flex;
   width: 28%;
   margin: 1.2em;
+  vertical-align: bottom;
 }
 
 @media only screen and (max-width: 767px) {
@@ -192,4 +199,9 @@ footer .container {
 
 .blog-post-page .blogPostTitle_src-theme-BlogPostItem-styles-module {
   font-size: 3rem;
+}
+
+.blogPostTitle_src-theme-BlogPostItem-styles-module{
+  height: 60px;
+  overflow: hidden;
 }
