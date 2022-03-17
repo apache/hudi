@@ -18,7 +18,10 @@
 
 package org.apache.spark.sql.adapter
 
+import org.apache.avro.Schema
+import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer, HoodieSpark3_1AvroDeserializer, HoodieSpark3_1AvroSerializer, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.hudi.SparkAdapter
+import org.apache.spark.sql.types.DataType
 import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieSpark3_1CatalystExpressionUtils}
 
 /**
@@ -27,5 +30,11 @@ import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieSpark3_1Cataly
 class Spark3_1Adapter extends BaseSpark3Adapter {
 
   override def createCatalystExpressionUtils(): HoodieCatalystExpressionUtils = HoodieSpark3_1CatalystExpressionUtils
+
+  override def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer =
+    new HoodieSpark3_1AvroSerializer(rootCatalystType, rootAvroType, nullable)
+
+  override def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer =
+    new HoodieSpark3_1AvroDeserializer(rootAvroType, rootCatalystType)
 
 }
