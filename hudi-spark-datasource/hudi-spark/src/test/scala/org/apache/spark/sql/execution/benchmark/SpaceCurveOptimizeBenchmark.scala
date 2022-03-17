@@ -27,20 +27,20 @@ import org.apache.spark.sql.hudi.TestHoodieSqlBase
 import org.apache.spark.sql.types.{IntegerType, StructField}
 import org.junit.jupiter.api.{Disabled, Tag, Test}
 
-import scala.util.Random
 import scala.collection.JavaConversions._
+import scala.util.Random
 
 @Tag("functional")
-object SpaceCurveOptimizeBenchMark extends TestHoodieSqlBase {
+object SpaceCurveOptimizeBenchmark extends TestHoodieSqlBase {
 
   def evalSkippingPercent(tableName: String, co1: String, co2: String, value1: Int, value2: Int): Unit= {
     val sourceTableDF = spark.sql(s"select * from ${tableName}")
 
     val orderedColsTypes = Seq(StructField(co1, IntegerType), StructField(co2, IntegerType))
-    val colStatsIndexTable = ColumnStatsIndexHelper
-      .buildColumnStatsTableFor(spark, sourceTableDF.inputFiles.toSeq, orderedColsTypes)
-      .collect()
-      .map(f => (f.getInt(1), f.getInt(2), f.getInt(4), f.getInt(5)))
+    val colStatsIndexTable =
+      ColumnStatsIndexHelper.buildColumnStatsTableFor(spark, sourceTableDF.inputFiles.toSeq, orderedColsTypes)
+        .collect()
+        .map(f => (f.getInt(1), f.getInt(2), f.getInt(4), f.getInt(5)))
 
     var hits = 0
     for (fileStatRow <- colStatsIndexTable) {
