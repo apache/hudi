@@ -27,10 +27,11 @@ import org.apache.avro.LogicalTypes.{TimestampMicros, TimestampMillis}
 import org.apache.avro.Schema.Type._
 import org.apache.avro.generic._
 import org.apache.avro.util.Utf8
+import org.apache.spark.sql.avro.AvroDeserializer.{createDateRebaseFuncInRead, createTimestampRebaseFuncInRead}
 import org.apache.spark.sql.avro.AvroUtils.{toFieldDescription, toFieldStr}
 import org.apache.spark.sql.catalyst.{InternalRow, NoopFilters, StructFilters}
 import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeArrayData}
-import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, DateTimeUtils, GenericArrayData}
+import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, DateTimeUtils, GenericArrayData, RebaseDateTime}
 import org.apache.spark.sql.catalyst.util.DateTimeConstants.MILLIS_PER_DAY
 import org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec
 import org.apache.spark.sql.execution.datasources.DataSourceUtils
@@ -64,11 +65,9 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
 
   private lazy val decimalConversions = new DecimalConversion()
 
-  private val dateRebaseFunc = DataSourceUtils.createDateRebaseFuncInRead(
-    datetimeRebaseSpec.mode, "Avro")
+  private val dateRebaseFunc = createDateRebaseFuncInRead(datetimeRebaseSpec.mode, "Avro")
 
-  private val timestampRebaseFunc = DataSourceUtils.createTimestampRebaseFuncInRead(
-    datetimeRebaseSpec, "Avro")
+  private val timestampRebaseFunc = createTimestampRebaseFuncInRead(datetimeRebaseSpec, "Avro")
 
   private val converter: Any => Option[Any] = try {
     rootCatalystType match {
@@ -464,5 +463,39 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
     override def setFloat(ordinal: Int, value: Float): Unit = array.setFloat(ordinal, value)
 
     override def setDecimal(ordinal: Int, value: Decimal): Unit = array.update(ordinal, value)
+  }
+}
+
+object AvroDeserializer {
+
+  // NOTE: Following methods have been renamed in Spark 3.2.1 [1] making [[AvroDeserializer]] implementation
+  //       (which relies on it) be only compatible with the exact same version of [[DataSourceUtils]].
+  //       To make sure this implementation is compatible w/ all Spark versions w/in Spark 3.2.x branch,
+  //       we're preemptively cloned those methods to make sure Hudi is compatible w/ Spark 3.2.0 as well as
+  //       w/ Spark >= 3.2.1
+  //
+  // [1] https://github.com/apache/spark/pull/34978
+
+  def createDateRebaseFuncInRead(rebaseMode: LegacyBehaviorPolicy.Value,
+                                 format: String): Int => Int = rebaseMode match {
+    case LegacyBehaviorPolicy.EXCEPTION => days: Int =>
+      if (days < RebaseDateTime.lastSwitchJulianDay) {
+        throw DataSourceUtils.newRebaseExceptionInRead(format)
+      }
+      days
+    case LegacyBehaviorPolicy.LEGACY => RebaseDateTime.rebaseJulianToGregorianDays
+    case LegacyBehaviorPolicy.CORRECTED => identity[Int]
+  }
+
+  def createTimestampRebaseFuncInRead(rebaseSpec: RebaseSpec,
+                                      format: String): Long => Long = rebaseSpec.mode match {
+    case LegacyBehaviorPolicy.EXCEPTION => micros: Long =>
+      if (micros < RebaseDateTime.lastSwitchJulianTs) {
+        throw DataSourceUtils.newRebaseExceptionInRead(format)
+      }
+      micros
+    case LegacyBehaviorPolicy.LEGACY =>
+      RebaseDateTime.rebaseJulianToGregorianMicros(rebaseSpec.timeZone, _)
+    case LegacyBehaviorPolicy.CORRECTED => identity[Long]
   }
 }
