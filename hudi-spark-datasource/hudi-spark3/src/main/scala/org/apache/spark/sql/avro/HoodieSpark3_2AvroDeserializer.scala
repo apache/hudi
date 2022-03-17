@@ -24,15 +24,7 @@ import org.apache.spark.sql.types.DataType
 class HoodieSpark3_2AvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType)
   extends HoodieAvroDeserializer {
 
-  // SPARK-34404: As of Spark3.2, there is no AvroDeserializer's constructor with Schema and DataType arguments.
-  // So use the reflection to get AvroDeserializer instance.
-  private val avroDeserializer = if (HoodieSparkUtils.isSpark3_2) {
-    val constructor = classOf[AvroDeserializer].getConstructor(classOf[Schema], classOf[DataType], classOf[String])
-    constructor.newInstance(rootAvroType, rootCatalystType, "EXCEPTION")
-  } else {
-    val constructor = classOf[AvroDeserializer].getConstructor(classOf[Schema], classOf[DataType])
-    constructor.newInstance(rootAvroType, rootCatalystType)
-  }
+  private val avroDeserializer = AvroDeserializer(rootAvroType, rootCatalystType, "EXCEPTION")
 
   def deserialize(data: Any): Option[Any] = avroDeserializer.deserialize(data)
 }

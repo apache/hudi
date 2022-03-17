@@ -20,6 +20,7 @@ package org.apache.spark.sql.adapter
 import org.apache.hudi.Spark3RowSerDe
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.spark3.internal.ReflectUtil
+import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.{Expression, Like}
@@ -43,6 +44,8 @@ abstract class BaseSpark3Adapter extends SparkAdapter {
   override def createSparkRowSerDe(encoder: ExpressionEncoder[Row]): SparkRowSerDe = {
     new Spark3RowSerDe(encoder)
   }
+
+  override def getAvroSchemaConverters(): HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
 
   override def toTableIdentifier(aliasId: AliasIdentifier): TableIdentifier = {
     aliasId match {
