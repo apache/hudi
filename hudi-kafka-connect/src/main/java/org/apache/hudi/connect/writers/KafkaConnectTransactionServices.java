@@ -163,7 +163,7 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
           Arrays.asList(connectConfigs.getMetaSyncClasses().split(",")));
       FileSystem fs = FSUtils.getFs(tableBasePath, new Configuration());
       for (String impl : syncClientToolClasses) {
-        SyncUtilHelpers.createAndSyncHoodieMeta(impl.trim(), connectConfigs.getProps(), hadoopConf, fs, tableBasePath, HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.defaultValue());
+        SyncUtilHelpers.runHoodieMetaSync(impl.trim(), connectConfigs.getProps(), hadoopConf, fs, tableBasePath, HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.defaultValue());
       }
     }
   }

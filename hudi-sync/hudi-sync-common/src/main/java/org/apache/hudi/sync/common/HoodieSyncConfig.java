@@ -28,7 +28,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import com.beust.jcommander.Parameter;
 
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
 
@@ -37,15 +37,13 @@ import java.util.function.Function;
  */
 public class HoodieSyncConfig extends HoodieConfig {
 
-  public static final String META_SYNC_BASE_PATH = "meta.sync.base.path";
-
-  @Parameter(names = {"--database"}, description = "name of the target database in Hive", required = true)
+  @Parameter(names = {"--database"}, description = "name of the target database in meta store", required = true)
   public String databaseName;
 
-  @Parameter(names = {"--table"}, description = "name of the target table in Hive", required = true)
+  @Parameter(names = {"--table"}, description = "name of the target table in meta store", required = true)
   public String tableName;
 
-  @Parameter(names = {"--base-path"}, description = "Basepath of hoodie table to sync", required = true)
+  @Parameter(names = {"--base-path"}, description = "Base path of the hoodie table to sync", required = true)
   public String basePath;
 
   @Parameter(names = {"--base-file-format"}, description = "Format of the base files (PARQUET (or) HFILE)")
@@ -71,8 +69,13 @@ public class HoodieSyncConfig extends HoodieConfig {
   @Parameter(names = {"--conditional-sync"}, description = "If true, only sync on conditions like schema change or partition change.")
   public Boolean isConditionalSync;
 
-  @Parameter(names = {"--spark-version"}, description = "The spark version", required = false)
+  @Parameter(names = {"--spark-version"}, description = "The spark version")
   public String sparkVersion;
+
+  public static final ConfigProperty<String> META_SYNC_BASE_PATH = ConfigProperty
+      .key("hoodie.datasource.meta.sync.base.path")
+      .defaultValue("")
+      .withDocumentation("Base path of the hoodie table to sync");
 
   public static final ConfigProperty<String> META_SYNC_ENABLED = ConfigProperty
       .key("hoodie.datasource.meta.sync.enable")
@@ -166,11 +169,11 @@ public class HoodieSyncConfig extends HoodieConfig {
     super(props);
     setDefaults();
 
-    this.basePath = props.getString(META_SYNC_BASE_PATH, "");
+    this.basePath = getStringOrDefault(META_SYNC_BASE_PATH);
     this.databaseName = getStringOrDefault(META_SYNC_DATABASE_NAME);
     this.tableName = getStringOrDefault(META_SYNC_TABLE_NAME);
     this.baseFileFormat = getStringOrDefault(META_SYNC_BASE_FILE_FORMAT);
-    this.partitionFields = props.getStringList(META_SYNC_PARTITION_FIELDS.key(), ",", new ArrayList<>());
+    this.partitionFields = props.getStringList(META_SYNC_PARTITION_FIELDS.key(), ",", Collections.emptyList());
     this.partitionValueExtractorClass = getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS);
     this.assumeDatePartitioning = getBooleanOrDefault(META_SYNC_ASSUME_DATE_PARTITION);
     this.decodePartition = getBooleanOrDefault(KeyGeneratorOptions.URL_ENCODE_PARTITIONING);

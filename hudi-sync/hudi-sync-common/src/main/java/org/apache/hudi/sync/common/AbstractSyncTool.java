@@ -41,7 +41,7 @@ public abstract class AbstractSyncTool {
 
   @Deprecated
   public AbstractSyncTool(Properties props, FileSystem fileSystem) {
-    this(new TypedProperties(props), new Configuration(), fileSystem);
+    this(new TypedProperties(props), fileSystem.getConf(), fileSystem);
   }
 
   public abstract void syncHoodieTable();

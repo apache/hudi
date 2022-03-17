@@ -120,7 +120,7 @@ public class TestHiveIncrementalPuller {
     TypedProperties targetHiveSyncProps = new TypedProperties(hiveSyncProps);
     targetHiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key(), "tgtdb");
     targetHiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_TABLE_NAME.key(), "test2");
-    targetHiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_BASE_PATH, basePath);
+    targetHiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_BASE_PATH.key(), basePath);
     targetHiveSyncProps.setProperty(HiveSyncConfig.HIVE_SYNC_MODE.key(), "jdbc");
 
     return targetHiveSyncProps;

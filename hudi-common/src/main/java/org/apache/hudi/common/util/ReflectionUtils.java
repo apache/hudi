@@ -93,6 +93,24 @@ public class ReflectionUtils {
   }
 
   /**
+   * Check if the clazz has the target constructor or not.
+   *
+   * When catch {@link HoodieException} from {@link #loadClass}, it's inconvenient to say if the exception was thrown
+   * due to the instantiation's own logic or missing constructor.
+   *
+   * TODO: ReflectionUtils should throw a specific exception to indicate Reflection problem.
+   */
+  public static boolean hasConstructor(String clazz, Class<?>[] constructorArgTypes) {
+    try {
+      getClass(clazz).getConstructor(constructorArgTypes);
+      return true;
+    } catch (NoSuchMethodException e) {
+      LOG.warn("Unable to instantiate class " + clazz, e);
+      return false;
+    }
+  }
+
+  /**
    * Creates an instance of the given class. Constructor arg types are inferred.
    */
   public static Object loadClass(String clazz, Object... constructorArgs) {

@@ -129,7 +129,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
           + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to org.apache.hudi input format");
 
   /**
-   * @deprecated Use {@link HIVE_SYNC_MODE} instead of this config from 0.9.0
+   * @deprecated Use {@link #HIVE_SYNC_MODE} instead of this config from 0.9.0
    */
   @Deprecated
   public static final ConfigProperty<String> HIVE_USE_JDBC = ConfigProperty
@@ -240,39 +240,8 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     this.syncAsSparkDataSourceTable = getBooleanOrDefault(HIVE_SYNC_AS_DATA_SOURCE_TABLE);
     this.sparkSchemaLengthThreshold = getIntOrDefault(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD);
     this.createManagedTable = getBooleanOrDefault(HIVE_CREATE_MANAGED_TABLE);
-    this.bucketSpec = props.getString(HIVE_SYNC_BUCKET_SYNC_SPEC.key(), null);
+    this.bucketSpec = getStringOrDefault(HIVE_SYNC_BUCKET_SYNC_SPEC);
     this.syncComment = getBooleanOrDefault(HIVE_SYNC_COMMENT);
-  }
-
-  // enhance the similar function in child class
-  public static HiveSyncConfig copy(HiveSyncConfig cfg) {
-    HiveSyncConfig newConfig = new HiveSyncConfig();
-    newConfig.basePath = cfg.basePath;
-    newConfig.assumeDatePartitioning = cfg.assumeDatePartitioning;
-    newConfig.databaseName = cfg.databaseName;
-    newConfig.hivePass = cfg.hivePass;
-    newConfig.hiveUser = cfg.hiveUser;
-    newConfig.partitionFields = cfg.partitionFields;
-    newConfig.partitionValueExtractorClass = cfg.partitionValueExtractorClass;
-    newConfig.jdbcUrl = cfg.jdbcUrl;
-    newConfig.metastoreUris = cfg.metastoreUris;
-    newConfig.tableName = cfg.tableName;
-    newConfig.bucketSpec = cfg.bucketSpec;
-    newConfig.usePreApacheInputFormat = cfg.usePreApacheInputFormat;
-    newConfig.useFileListingFromMetadata = cfg.useFileListingFromMetadata;
-    newConfig.supportTimestamp = cfg.supportTimestamp;
-    newConfig.decodePartition = cfg.decodePartition;
-    newConfig.tableProperties = cfg.tableProperties;
-    newConfig.serdeProperties = cfg.serdeProperties;
-    newConfig.createManagedTable = cfg.createManagedTable;
-    newConfig.batchSyncNum = cfg.batchSyncNum;
-    newConfig.syncAsSparkDataSourceTable = cfg.syncAsSparkDataSourceTable;
-    newConfig.sparkSchemaLengthThreshold = cfg.sparkSchemaLengthThreshold;
-    newConfig.withOperationField = cfg.withOperationField;
-    newConfig.isConditionalSync = cfg.isConditionalSync;
-    newConfig.sparkVersion = cfg.sparkVersion;
-    newConfig.syncComment = cfg.syncComment;
-    return newConfig;
   }
 
   @Override

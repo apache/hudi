@@ -51,7 +51,7 @@ public class HiveQueryNode extends DagNode<Boolean> {
     TypedProperties properties = new TypedProperties();
     properties.putAll(executionContext.getHoodieTestSuiteWriter().getDeltaStreamerWrapper()
         .getDeltaSyncService().getDeltaSync().getProps());
-    properties.put(HoodieSyncConfig.META_SYNC_BASE_PATH, executionContext.getHoodieTestSuiteWriter().getDeltaStreamerWrapper()
+    properties.put(HoodieSyncConfig.META_SYNC_BASE_PATH.key(), executionContext.getHoodieTestSuiteWriter().getDeltaStreamerWrapper()
         .getDeltaSyncService().getDeltaSync().getCfg().targetBasePath);
     properties.put(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.key(), executionContext.getHoodieTestSuiteWriter().getDeltaStreamerWrapper()
         .getDeltaSyncService().getDeltaSync().getCfg().baseFileFormat);

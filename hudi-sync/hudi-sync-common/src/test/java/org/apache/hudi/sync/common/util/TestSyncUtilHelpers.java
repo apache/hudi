@@ -18,16 +18,17 @@
 package org.apache.hudi.sync.common.util;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sync.common.AbstractSyncTool;
-
-import java.io.IOException;
-import java.util.Properties;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -36,37 +37,39 @@ public class TestSyncUtilHelpers {
   private static final String BASE_PATH = "/tmp/test";
   private static final String BASE_FORMAT = "PARQUET";
 
-  private static Configuration configuration;
-  private static FileSystem fileSystem;
+  private Configuration hadoopConf;
+  private FileSystem fileSystem;
 
   @BeforeEach
-  public static void setUp() throws IOException {
-    configuration = new Configuration();
-    fileSystem = FileSystem.get(configuration);
+  public void setUp() throws IOException {
+    fileSystem = FSUtils.getFs(BASE_PATH, new Configuration());
+    hadoopConf = fileSystem.getConf();
   }
 
   @Test
   public void testCreateValidSyncClass() {
-    AbstractSyncTool validMetaSyncClass = SyncUtilHelpers.createMetaSyncClass(
+    AbstractSyncTool metaSyncTool = SyncUtilHelpers.instantiateMetaSyncTool(
         ValidMetaSyncClass.class.getName(),
         new TypedProperties(),
-        configuration,
+        hadoopConf,
         fileSystem,
         BASE_PATH,
         BASE_FORMAT
     );
-    assertTrue(validMetaSyncClass instanceof ValidMetaSyncClass);
+    assertTrue(metaSyncTool instanceof ValidMetaSyncClass);
   }
 
+  /**
+   * Ensure it still works for the deprecated constructor of {@link AbstractSyncTool}
+   * as we implemented the fallback.
+   */
   @Test
   public void testCreateDeprecatedSyncClass() {
-    // Ensure it still works for the deprecated constructor of {@link AbstractSyncTool}
-    // as we implemented the fallback.
     Properties properties = new Properties();
-    AbstractSyncTool deprecatedMetaSyncClass = SyncUtilHelpers.createMetaSyncClass(
+    AbstractSyncTool deprecatedMetaSyncClass = SyncUtilHelpers.instantiateMetaSyncTool(
         DeprecatedMetaSyncClass.class.getName(),
         new TypedProperties(properties),
-        configuration,
+        hadoopConf,
         fileSystem,
         BASE_PATH,
         BASE_FORMAT
@@ -77,10 +80,10 @@ public class TestSyncUtilHelpers {
   @Test
   public void testCreateInvalidSyncClass() {
     Exception exception = assertThrows(HoodieException.class, () -> {
-      SyncUtilHelpers.createMetaSyncClass(
+      SyncUtilHelpers.instantiateMetaSyncTool(
           InvalidSyncClass.class.getName(),
           new TypedProperties(),
-          configuration,
+          hadoopConf,
           fileSystem,
           BASE_PATH,
           BASE_FORMAT
@@ -92,7 +95,7 @@ public class TestSyncUtilHelpers {
 
   }
 
-  private static class ValidMetaSyncClass extends AbstractSyncTool {
+  public static class ValidMetaSyncClass extends AbstractSyncTool {
     public ValidMetaSyncClass(TypedProperties props, Configuration conf, FileSystem fs) {
       super(props, conf, fs);
     }
@@ -103,7 +106,7 @@ public class TestSyncUtilHelpers {
     }
   }
 
-  private static class DeprecatedMetaSyncClass extends AbstractSyncTool {
+  public static class DeprecatedMetaSyncClass extends AbstractSyncTool {
     public DeprecatedMetaSyncClass(Properties props, FileSystem fileSystem) {
       super(props, fileSystem);
     }
@@ -114,7 +117,7 @@ public class TestSyncUtilHelpers {
     }
   }
 
-  private static class InvalidSyncClass {
+  public static class InvalidSyncClass {
     public InvalidSyncClass(Properties props) {
     }
   }
