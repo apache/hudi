@@ -5,6 +5,8 @@ import org.apache.spark.sql.internal.SQLConf
 
 import java.util.Locale
 
+import scala.collection.JavaConverters._
+
 /**
  * NOTE: This code is borrowed from Spark 3.2.1
  * NOTE: This code is borrowed, so that we can better control compatibility w/in Spark minor

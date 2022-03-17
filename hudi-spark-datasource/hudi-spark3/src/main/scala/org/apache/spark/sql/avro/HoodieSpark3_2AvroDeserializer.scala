@@ -24,7 +24,7 @@ import org.apache.spark.sql.types.DataType
 class HoodieSpark3_2AvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType)
   extends HoodieAvroDeserializer {
 
-  private val avroDeserializer = AvroDeserializer(rootAvroType, rootCatalystType, "EXCEPTION")
+  private val avroDeserializer = new AvroDeserializer(rootAvroType, rootCatalystType, "EXCEPTION")
 
   def deserialize(data: Any): Option[Any] = avroDeserializer.deserialize(data)
 }
