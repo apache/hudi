@@ -3,6 +3,7 @@ title: "Schema evolution with DeltaStreamer using KafkaSource"
 excerpt: "Evolve schema used in Kafkasource of DeltaStreamer to keep data up to date with business"
 author: sbernauer
 category: blog
+image: /assets/images/blog/hudi_schemaevolution.png
 ---
 
 The schema used for data exchange between services can change rapidly with new business requirements.
