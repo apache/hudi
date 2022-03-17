@@ -238,7 +238,7 @@ public class CompactionUtils {
   }
 
   /**
-   * Gets the oldest instant to keep for MOR compaction.
+   * Gets the oldest instant to retain for MOR compaction.
    * If there is no completed compaction,
    * num delta commits >= "hoodie.compact.inline.max.delta.commits"
    * If there is a completed compaction,
@@ -249,7 +249,7 @@ public class CompactionUtils {
    *                        i.e., "hoodie.compact.inline.max.delta.commits".
    * @return the oldest instant to keep for MOR compaction.
    */
-  public static Option<HoodieInstant> getOldestInstantToKeepForCompaction(
+  public static Option<HoodieInstant> getOldestInstantToRetainForCompaction(
       HoodieActiveTimeline activeTimeline, int maxDeltaCommits) {
     Option<Pair<HoodieTimeline, HoodieInstant>> deltaCommitsInfoOption =
         CompactionUtils.getDeltaCommitsSinceLatestCompaction(activeTimeline);

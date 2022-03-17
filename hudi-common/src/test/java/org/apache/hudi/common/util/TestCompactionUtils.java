@@ -285,7 +285,7 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
   @ValueSource(booleans = {true, false})
   public void testGetOldestInstantToKeepForCompaction(boolean hasCompletedCompaction) {
     HoodieActiveTimeline timeline = prepareTimeline(hasCompletedCompaction);
-    Option<HoodieInstant> actual = CompactionUtils.getOldestInstantToKeepForCompaction(timeline, 20);
+    Option<HoodieInstant> actual = CompactionUtils.getOldestInstantToRetainForCompaction(timeline, 20);
 
     if (hasCompletedCompaction) {
       assertEquals(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "06"), actual.get());
@@ -293,17 +293,17 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
       assertEquals(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "01"), actual.get());
     }
 
-    actual = CompactionUtils.getOldestInstantToKeepForCompaction(timeline, 3);
+    actual = CompactionUtils.getOldestInstantToRetainForCompaction(timeline, 3);
     assertEquals(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "07"), actual.get());
 
-    actual = CompactionUtils.getOldestInstantToKeepForCompaction(timeline, 2);
+    actual = CompactionUtils.getOldestInstantToRetainForCompaction(timeline, 2);
     assertEquals(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "08"), actual.get());
   }
 
   @Test
   public void testGetOldestInstantToKeepForCompactionWithEmptyDeltaCommits() {
     HoodieActiveTimeline timeline = new MockHoodieActiveTimeline();
-    assertEquals(Option.empty(), CompactionUtils.getOldestInstantToKeepForCompaction(timeline, 20));
+    assertEquals(Option.empty(), CompactionUtils.getOldestInstantToRetainForCompaction(timeline, 20));
   }
 
   private HoodieActiveTimeline prepareTimeline(boolean hasCompletedCompaction) {

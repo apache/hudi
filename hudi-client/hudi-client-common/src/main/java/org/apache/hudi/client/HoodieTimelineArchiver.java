@@ -403,11 +403,11 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       // We need to make sure that there are enough delta commits in the active timeline
       // to trigger compaction scheduling, when the trigger strategy of compaction is
       // NUM_COMMITS or NUM_AND_TIME.
-      Option<HoodieInstant> oldestInstantToKeepForCompaction =
+      Option<HoodieInstant> oldestInstantToRetainForCompaction =
           (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ
               && (config.getInlineCompactTriggerStrategy() == CompactionTriggerStrategy.NUM_COMMITS
               || config.getInlineCompactTriggerStrategy() == CompactionTriggerStrategy.NUM_AND_TIME))
-              ? CompactionUtils.getOldestInstantToKeepForCompaction(
+              ? CompactionUtils.getOldestInstantToRetainForCompaction(
               table.getActiveTimeline(), config.getInlineCompactDeltaCommitMax())
               : Option.empty();
 
@@ -431,8 +431,8 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
             }
             return true;
           }).filter(s ->
-              oldestInstantToKeepForCompaction.map(instantToKeep ->
-                      HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN, instantToKeep.getTimestamp()))
+              oldestInstantToRetainForCompaction.map(instantToRetain ->
+                      HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN, instantToRetain.getTimestamp()))
                   .orElse(true)
           );
 
