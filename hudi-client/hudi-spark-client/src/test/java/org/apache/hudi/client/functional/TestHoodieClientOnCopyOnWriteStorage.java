@@ -85,12 +85,14 @@ import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -779,6 +781,20 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     writeBatch(client, newCommitTime, prevCommitTime, Option.of(commitTimesBetweenPrevAndNew), initCommitTime,
         secondInsertRecords, recordGenFunction, SparkRDDWriteClient::insert, true, secondInsertRecords,
         firstInsertRecords + secondInsertRecords, 2, false, config.populateMetaFields());
+  }
+
+  @Test
+  public void testBulkInsertWithCustomPartitioner() {
+    HoodieWriteConfig config = getConfigBuilder().withRollbackUsingMarkers(true).build();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      final String commitTime1 = "001";
+      client.startCommitWithTime(commitTime1);
+      List<HoodieRecord> inserts1 = dataGen.generateInserts(commitTime1, 100);
+      JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 10);
+      BulkInsertPartitioner<JavaRDD<HoodieRecord>> partitioner = new RDDCustomColumnsSortPartitioner(new String[]{"rider"}, HoodieTestDataGenerator.AVRO_SCHEMA, false);
+      List<WriteStatus> statuses = client.bulkInsert(insertRecordsRDD1, commitTime1, Option.of(partitioner)).collect();
+      assertNoWriteErrors(statuses);
+    }
   }
 
   /**
