@@ -28,7 +28,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.HoodieMetastoreConfig;
+import org.apache.hudi.common.config.HoodieMetaServerConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
@@ -496,7 +496,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   private FileSystemViewStorageConfig viewStorageConfig;
   private HoodiePayloadConfig hoodiePayloadConfig;
   private HoodieMetadataConfig metadataConfig;
-  private HoodieMetastoreConfig metastoreConfig;
+  private HoodieMetaServerConfig metastoreConfig;
   private HoodieCommonConfig commonConfig;
   private EngineType engineType;
 
@@ -888,7 +888,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     this.viewStorageConfig = clientSpecifiedViewStorageConfig;
     this.hoodiePayloadConfig = HoodiePayloadConfig.newBuilder().fromProperties(newProps).build();
     this.metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(props).build();
-    this.metastoreConfig = HoodieMetastoreConfig.newBuilder().fromProperties(props).build();
+    this.metastoreConfig = HoodieMetaServerConfig.newBuilder().fromProperties(props).build();
     this.commonConfig = HoodieCommonConfig.newBuilder().fromProperties(props).build();
   }
 
@@ -2124,7 +2124,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    * Metastore configs.
    */
   public boolean isMetastoreEnabled() {
-    return metastoreConfig.enableMetastore();
+    return metastoreConfig.enableMetaServer();
   }
 
   public static class Builder {

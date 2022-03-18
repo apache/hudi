@@ -62,6 +62,7 @@
     <module>packaging/hudi-flink-bundle</module>
     <module>packaging/hudi-kafka-connect-bundle</module>
     <module>hudi-tests-common</module>
+    <module>hudi-metaserver</module>
   </modules>
 
   <licenses>
@@ -273,7 +274,7 @@
           </sourceDirectories>
           <!-- NOTE: This property is only available in Maven >= 3.3.1 -->
           <propertyExpansion>basedir=${maven.multiModuleProjectDirectory}</propertyExpansion>
-          <excludes>**\/generated-sources\/</excludes>
+          <excludes>**\/generated-sources\/,org/apache/hudi/metaserver/thrift/*</excludes>
         </configuration>
         <executions>
           <execution>
