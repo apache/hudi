@@ -406,6 +406,13 @@ private object HoodieMergeOnReadRDD {
     recordBuilder.build()
   }
 
+  /**
+   * Projects provided instance of [[IndexedRecord]] into provided schema, assuming that the
+   * the schema of the original row is strictly a superset of the given one
+   *
+   * This is a "safe" counterpart of [[projectAvroUnsafe]]: it does build mapping of the record's
+   * schema into projected one itself (instead of expecting such mapping from the caller)
+   */
   def projectAvro(record: IndexedRecord,
                   projectedSchema: Schema,
                   recordBuilder: GenericRecordBuilder): GenericRecord = {
