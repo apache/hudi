@@ -113,14 +113,14 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
 
   private def readBaseFile(split: HoodieMergeOnReadFileSplit): (Iterator[InternalRow], HoodieTableSchema) = {
     // NOTE: This is an optimization making sure that even for MOR tables we fetch absolute minimum
-    //       of the stored data possible, while still meeting the query's requirements.
+    //       of the stored data possible, while still properly executing corresponding relation's semantic
+    //       and meet the query's requirements.
     //
     //       Here we assume that iff queried table
-    //          a) Does NOT rely on virtual-keys (ie, it's relying on Hudi metadata fields)
-    //          b) It does use one of the standard (and whitelisted) Record Payload classes
+    //          a) It does use one of the standard (and whitelisted) Record Payload classes
     //       then we can avoid reading and parsing the records w/ _full_ schema, and instead only
-    //       rely on projected one, nevertheless being able to perform merging correctly (
-    if (tableState.usesVirtualKeys || !whitelistedPayloadClasses.contains(tableState.recordPayloadClassName))
+    //       rely on projected one, nevertheless being able to perform merging correctly
+    if (!whitelistedPayloadClasses.contains(tableState.recordPayloadClassName))
       (fullSchemaFileReader(split.dataFile.get), tableSchema)
     else
       (requiredSchemaFileReader(split.dataFile.get), requiredSchema)
