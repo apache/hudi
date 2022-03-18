@@ -233,6 +233,9 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     table.getActiveTimeline().transitionReplaceRequestedToInflight(instant, Option.empty());
     table.getMetaClient().reloadActiveTimeline();
 
+    // Disable auto commit. Strategy is only expected to write data in new files.
+    config.setValue(HoodieWriteConfig.AUTO_COMMIT_ENABLE, Boolean.FALSE.toString());
+
     final Schema schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
     HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = (
         (ClusteringExecutionStrategy<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>>)

@@ -58,9 +58,6 @@ public class JavaSortAndSizeExecutionStrategy<T extends HoodieRecordPayload<T>>
       final List<HoodieFileGroupId> fileGroupIdList, final boolean preserveHoodieMetadata) {
     LOG.info("Starting clustering for a group, parallelism:" + numOutputGroups + " commit:" + instantTime);
 
-    // We are calling another action executor - disable auto commit. Strategy is only expected to write data in new files.
-    getWriteConfig().setValue(HoodieWriteConfig.AUTO_COMMIT_ENABLE, Boolean.FALSE.toString());
-
     HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder()
             .withBulkInsertParallelism(numOutputGroups)
             .withProps(getWriteConfig().getProps()).build();
