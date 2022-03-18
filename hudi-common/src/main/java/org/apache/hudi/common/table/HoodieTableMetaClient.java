@@ -112,6 +112,7 @@ public class HoodieTableMetaClient implements Serializable {
     this.consistencyGuardConfig = consistencyGuardConfig;
     this.fileSystemRetryConfig = fileSystemRetryConfig;
     this.hadoopConf = new SerializableConfiguration(conf);
+    this.hadoopConf.get().set("fs.hoodie-hdfs.impl.disable.cache", "true");
     Path basePathDir = new Path(basePath);
     this.basePath = basePathDir.toString();
     this.metaPath = new Path(basePath, METAFOLDER_NAME).toString();
