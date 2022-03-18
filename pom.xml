@@ -1637,6 +1637,36 @@
     </profile>
 
     <profile>
+      <id>spark3.2.0</id>
+      <properties>
+        <spark3.version>3.2.0</spark3.version>
+        <spark.version>${spark3.version}</spark.version>
+        <sparkbundle.version>${spark3.version}</sparkbundle.version>
+        <scala.version>${scala12.version}</scala.version>
+        <scala.binary.version>2.12</scala.binary.version>
+        <hudi.spark.module>hudi-spark3</hudi.spark.module>
+        <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
+        <scalatest.version>3.1.0</scalatest.version>
+        <kafka.version>2.4.1</kafka.version>
+        <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
+        <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
+        <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
+        <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
+        <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
+        <skipITs>true</skipITs>
+      </properties>
+      <modules>
+        <module>hudi-spark-datasource/hudi-spark3</module>
+        <module>hudi-spark-datasource/hudi-spark3-common</module>
+      </modules>
+      <activation>
+        <property>
+          <name>spark3.2.0</name>
+        </property>
+      </activation>
+    </profile>
+
+    <profile>
       <id>spark3.1.x</id>
       <properties>
         <spark3.version>3.1.2</spark3.version>

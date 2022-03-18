@@ -7,19 +7,20 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.  
  */
 
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -28,15 +29,11 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-
-import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -48,69 +45,64 @@ import java.util.HashMap;
  * @param <T>
  */
 @SuppressWarnings("checkstyle:LineLength")
-public class SparkDeleteHelper<T extends HoodieRecordPayload,R> extends
-    BaseDeleteHelper<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, R> {
-  private SparkDeleteHelper() {
+public class HoodieDeleteHelper<T extends HoodieRecordPayload, R> extends
+    BaseDeleteHelper<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> {
+  private HoodieDeleteHelper() {
   }
 
   private static class DeleteHelperHolder {
-    private static final SparkDeleteHelper SPARK_DELETE_HELPER = new SparkDeleteHelper();
+    private static final HoodieDeleteHelper HOODIE_DELETE_HELPER = new HoodieDeleteHelper<>();
   }
 
-  public static SparkDeleteHelper newInstance() {
-    return DeleteHelperHolder.SPARK_DELETE_HELPER;
+  public static HoodieDeleteHelper newInstance() {
+    return DeleteHelperHolder.HOODIE_DELETE_HELPER;
   }
 
   @Override
-  public JavaRDD<HoodieKey> deduplicateKeys(JavaRDD<HoodieKey> keys, HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table, int parallelism) {
+  public HoodieData<HoodieKey> deduplicateKeys(HoodieData<HoodieKey> keys, HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table, int parallelism) {
     boolean isIndexingGlobal = table.getIndex().isGlobal();
     if (isIndexingGlobal) {
-      return keys.keyBy(HoodieKey::getRecordKey)
-          .reduceByKey((key1, key2) -> key1, parallelism)
-          .values();
+      return keys.distinctWithKey(HoodieKey::getRecordKey, parallelism);
     } else {
       return keys.distinct(parallelism);
     }
   }
 
   @Override
-  public HoodieWriteMetadata<JavaRDD<WriteStatus>> execute(String instantTime,
-                                                           JavaRDD<HoodieKey> keys,
-                                                           HoodieEngineContext context,
-                                                           HoodieWriteConfig config,
-                                                           HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
-                                                           BaseCommitActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, R> deleteExecutor) {
-    JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
-
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(String instantTime,
+                                                              HoodieData<HoodieKey> keys,
+                                                              HoodieEngineContext context,
+                                                              HoodieWriteConfig config,
+                                                              HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table,
+                                                              BaseCommitActionExecutor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> deleteExecutor) {
     try {
-      HoodieWriteMetadata result = null;
-      JavaRDD<HoodieKey> dedupedKeys = keys;
+      HoodieData<HoodieKey> dedupedKeys = keys;
       final int parallelism = config.getDeleteShuffleParallelism();
       if (config.shouldCombineBeforeDelete()) {
         // De-dupe/merge if needed
         dedupedKeys = deduplicateKeys(keys, table, parallelism);
-      } else if (!keys.partitions().isEmpty()) {
+      } else if (!keys.isEmpty()) {
         dedupedKeys = keys.repartition(parallelism);
       }
 
-      JavaRDD<HoodieRecord<T>> dedupedRecords =
+      HoodieData<HoodieRecord<T>> dedupedRecords =
           dedupedKeys.map(key -> new HoodieAvroRecord(key, new EmptyHoodieRecordPayload()));
       Instant beginTag = Instant.now();
       // perform index loop up to get existing location of records
-      JavaRDD<HoodieRecord<T>> taggedRecords = HoodieJavaRDD.getJavaRDD(
-          table.getIndex().tagLocation(HoodieJavaRDD.of(dedupedRecords), context, table));
+      HoodieData<HoodieRecord<T>> taggedRecords = table.getIndex().tagLocation(dedupedRecords, context, table);
       Duration tagLocationDuration = Duration.between(beginTag, Instant.now());
 
       // filter out non existent keys/records
-      JavaRDD<HoodieRecord<T>> taggedValidRecords = taggedRecords.filter(HoodieRecord::isCurrentLocationKnown);
+      HoodieData<HoodieRecord<T>> taggedValidRecords = taggedRecords.filter(HoodieRecord::isCurrentLocationKnown);
+      HoodieWriteMetadata<HoodieData<WriteStatus>> result;
       if (!taggedValidRecords.isEmpty()) {
         result = deleteExecutor.execute(taggedValidRecords);
         result.setIndexLookupDuration(tagLocationDuration);
       } else {
         // if entire set of keys are non existent
         deleteExecutor.saveWorkloadProfileMetadataToInflight(new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())), instantTime);
-        result = new HoodieWriteMetadata();
-        result.setWriteStatuses(jsc.emptyRDD());
+        result = new HoodieWriteMetadata<>();
+        result.setWriteStatuses(context.emptyHoodieData());
         deleteExecutor.commitOnAutoCommit(result);
       }
       return result;

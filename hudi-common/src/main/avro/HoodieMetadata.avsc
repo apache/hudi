@@ -110,6 +110,14 @@
                             ]
                         },
                         {
+                            "doc": "Column name for which this column statistics applies",
+                            "name": "columnName",
+                            "type": [
+                                "null",
+                                "string"
+                            ]
+                        },
+                        {
                             "doc": "Minimum value in the range. Based on user data table schema, we can convert this to appropriate type",
                             "name": "minValue",
                             "type": [

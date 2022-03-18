@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
+import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -128,27 +129,25 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
     return new HoodieCompactionPlan();
   }
 
-  private Pair<Integer, String> getLatestDeltaCommitInfo() {
-    Option<HoodieInstant> lastCompaction = table.getActiveTimeline().getCommitTimeline()
-        .filterCompletedInstants().lastInstant();
-    HoodieTimeline deltaCommits = table.getActiveTimeline().getDeltaCommitTimeline();
-
-    String latestInstantTs;
-    final int deltaCommitsSinceLastCompaction;
-    if (lastCompaction.isPresent()) {
-      latestInstantTs = lastCompaction.get().getTimestamp();
-      deltaCommitsSinceLastCompaction = deltaCommits.findInstantsAfter(latestInstantTs, Integer.MAX_VALUE).countInstants();
-    } else {
-      latestInstantTs = deltaCommits.firstInstant().get().getTimestamp();
-      deltaCommitsSinceLastCompaction = deltaCommits.findInstantsAfterOrEquals(latestInstantTs, Integer.MAX_VALUE).countInstants();
+  private Option<Pair<Integer, String>> getLatestDeltaCommitInfo() {
+    Option<Pair<HoodieTimeline, HoodieInstant>> deltaCommitsInfo =
+        CompactionUtils.getDeltaCommitsSinceLatestCompaction(table.getActiveTimeline());
+    if (deltaCommitsInfo.isPresent()) {
+      return Option.of(Pair.of(
+          deltaCommitsInfo.get().getLeft().countInstants(),
+          deltaCommitsInfo.get().getRight().getTimestamp()));
     }
-    return Pair.of(deltaCommitsSinceLastCompaction, latestInstantTs);
+    return Option.empty();
   }
 
   private boolean needCompact(CompactionTriggerStrategy compactionTriggerStrategy) {
     boolean compactable;
     // get deltaCommitsSinceLastCompaction and lastCompactionTs
-    Pair<Integer, String> latestDeltaCommitInfo = getLatestDeltaCommitInfo();
+    Option<Pair<Integer, String>> latestDeltaCommitInfoOption = getLatestDeltaCommitInfo();
+    if (!latestDeltaCommitInfoOption.isPresent()) {
+      return false;
+    }
+    Pair<Integer, String> latestDeltaCommitInfo = latestDeltaCommitInfoOption.get();
     int inlineCompactDeltaCommitMax = config.getInlineCompactDeltaCommitMax();
     int inlineCompactDeltaSecondsMax = config.getInlineCompactDeltaSecondsMax();
     switch (compactionTriggerStrategy) {

@@ -20,6 +20,7 @@ package org.apache.hudi.common.config;
 
 import java.io.Serializable;
 import java.util.Arrays;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
@@ -36,10 +37,21 @@ public class TypedProperties extends Properties implements Serializable {
 
   public TypedProperties(Properties defaults) {
     if (Objects.nonNull(defaults)) {
-      for (String key : defaults.stringPropertyNames()) {
-        put(key, defaults.getProperty(key));
+      for (Enumeration<?> e = defaults.propertyNames(); e.hasMoreElements(); ) {
+        Object k = e.nextElement();
+        Object v = defaults.get(k);
+        if (v != null) {
+          put(k, v);
+        }
       }
     }
+  }
+
+  @Override
+  public String getProperty(String key) {
+    Object oval = super.get(key);
+    String sval = (oval != null) ? String.valueOf(oval) : null;
+    return ((sval == null) && (defaults != null)) ? defaults.getProperty(key) : sval;
   }
 
   private void checkKey(String property) {

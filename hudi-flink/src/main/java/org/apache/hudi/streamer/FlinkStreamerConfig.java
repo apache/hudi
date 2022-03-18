@@ -18,6 +18,8 @@
 
 package org.apache.hudi.streamer;
 
+import org.apache.flink.runtime.state.StateBackend;
+import org.apache.flink.runtime.state.hashmap.HashMapStateBackend;
 import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -25,6 +27,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.util.FlinkStateBackendConverter;
 import org.apache.hudi.util.StreamerUtil;
 
 import com.beust.jcommander.Parameter;
@@ -52,6 +55,10 @@ public class FlinkStreamerConfig extends Configuration {
 
   @Parameter(names = {"--flink-checkpoint-path"}, description = "Flink checkpoint path.")
   public String flinkCheckPointPath;
+
+  @Parameter(names = {"--flink-state-backend-type"}, description = "Flink state backend type, support only hashmap and rocksdb by now,"
+          + " default hashmap.", converter = FlinkStateBackendConverter.class)
+  public StateBackend stateBackend = new HashMapStateBackend();
 
   @Parameter(names = {"--instant-retry-times"}, description = "Times to retry when latest instant has not completed.")
   public String instantRetryTimes = "10";

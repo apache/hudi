@@ -180,7 +180,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    * @return HoodieWriteMetadata
    */
   public abstract HoodieWriteMetadata<O> bulkInsert(HoodieEngineContext context, String instantTime,
-      I records, Option<BulkInsertPartitioner<I>> bulkInsertPartitioner);
+      I records, Option<BulkInsertPartitioner> bulkInsertPartitioner);
 
   /**
    * Deletes a list of {@link HoodieKey}s from the Hoodie table, at the supplied instantTime {@link HoodieKey}s will be
@@ -237,7 +237,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    * @return HoodieWriteMetadata
    */
   public abstract HoodieWriteMetadata<O> bulkInsertPrepped(HoodieEngineContext context, String instantTime,
-      I preppedRecords,  Option<BulkInsertPartitioner<I>> bulkInsertPartitioner);
+      I preppedRecords,  Option<BulkInsertPartitioner> bulkInsertPartitioner);
 
   /**
    * Replaces all the existing records and inserts the specified new records into Hoodie table at the supplied instantTime,

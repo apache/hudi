@@ -19,20 +19,18 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
-import scala.Tuple2;
 
 import java.time.Duration;
 import java.util.HashMap;
@@ -51,16 +49,15 @@ public class SparkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayl
   }
 
   @Override
-  public HoodieWriteMetadata<JavaRDD<WriteStatus>> execute() {
-    JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
     HoodieTimer timer = new HoodieTimer().startTimer();
-    Map<String, List<String>> partitionToReplaceFileIds = jsc.parallelize(partitions, partitions.size()).distinct()
-        .mapToPair(partitionPath -> new Tuple2<>(partitionPath, getAllExistingFileIds(partitionPath))).collectAsMap();
-    HoodieWriteMetadata result = new HoodieWriteMetadata();
+    context.setJobStatus(this.getClass().getSimpleName(), "Gather all file ids from all deleting partitions.");
+    Map<String, List<String>> partitionToReplaceFileIds = HoodieJavaPairRDD.getJavaPairRDD(context.parallelize(partitions).distinct()
+        .mapToPair(partitionPath -> Pair.of(partitionPath, getAllExistingFileIds(partitionPath)))).collectAsMap();
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = new HoodieWriteMetadata<>();
     result.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
     result.setIndexUpdateDuration(Duration.ofMillis(timer.endTimer()));
-
-    result.setWriteStatuses(jsc.emptyRDD());
+    result.setWriteStatuses(context.emptyHoodieData());
     this.saveWorkloadProfileMetadataToInflight(new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())), instantTime);
     this.commitOnAutoCommit(result);
     return result;

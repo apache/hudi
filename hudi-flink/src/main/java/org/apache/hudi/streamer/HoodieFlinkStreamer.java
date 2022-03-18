@@ -32,7 +32,6 @@ import com.beust.jcommander.JCommander;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.formats.common.TimestampFormat;
 import org.apache.flink.formats.json.JsonRowDataDeserializationSchema;
-import org.apache.flink.runtime.state.filesystem.FsStateBackend;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
@@ -61,8 +60,9 @@ public class HoodieFlinkStreamer {
     // There can only be one checkpoint at one time.
     env.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
 
+    env.setStateBackend(cfg.stateBackend);
     if (cfg.flinkCheckPointPath != null) {
-      env.setStateBackend(new FsStateBackend(cfg.flinkCheckPointPath));
+      env.getCheckpointConfig().setCheckpointStorage(cfg.flinkCheckPointPath);
     }
 
     TypedProperties kafkaProps = DFSPropertiesConfiguration.getGlobalProps();
