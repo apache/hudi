@@ -106,31 +106,77 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
       else
         fail("Only Spark 3 and Spark 2 are currently supported")
 
-    // Stats for the reads fetching _all_ columns (note, how amount of bytes read
-    // is invariant of the # of columns)
-    val fullColumnsReadStats: Array[(String, Long)] =
-      if (HoodieSparkUtils.isSpark3)
-        Array(
-          ("rider", 14166),
-          ("rider,driver", 14166),
-          ("rider,driver,tip_history", 14166))
-      else if (HoodieSparkUtils.isSpark2)
-        // TODO re-enable tests (these tests are very unstable currently)
-        Array(
-          ("rider", -1),
-          ("rider,driver", -1),
-          ("rider,driver,tip_history", -1))
-      else
-        fail("Only Spark 3 and Spark 2 are currently supported")
-
     // Test MOR / Snapshot / Skip-merge
     runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL, projectedColumnsReadStats)
 
     // Test MOR / Snapshot / Payload-combine
-    runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL, fullColumnsReadStats)
+    runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL, projectedColumnsReadStats)
 
     // Test MOR / Read Optimized
     runTest(tableState, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, "null", projectedColumnsReadStats)
+  }
+
+  @Test
+  def testMergeOnReadSnapshotRelationWithDeltaLogsFallback(): Unit = {
+    val tablePath = s"$basePath/mor-with-logs"
+    val targetRecordsCount = 100
+    val targetUpdatedRecordsRatio = 0.5
+
+    val (_, schema) = bootstrapMORTable(tablePath, targetRecordsCount, targetUpdatedRecordsRatio, defaultWriteOpts, populateMetaFields = true)
+    val tableState = TableState(tablePath, schema, targetRecordsCount, targetUpdatedRecordsRatio)
+
+    // Stats for the reads fetching only _projected_ columns (note how amount of bytes read
+    // increases along w/ the # of columns)
+    val projectedColumnsReadStats: Array[(String, Long)] =
+    if (HoodieSparkUtils.isSpark3)
+      Array(
+        ("rider", 2452),
+        ("rider,driver", 2552),
+        ("rider,driver,tip_history", 3517))
+    else if (HoodieSparkUtils.isSpark2)
+      Array(
+        ("rider", 2595),
+        ("rider,driver", 2735),
+        ("rider,driver,tip_history", 3750))
+    else
+      fail("Only Spark 3 and Spark 2 are currently supported")
+
+    // Stats for the reads fetching _all_ columns (note, how amount of bytes read
+    // is invariant of the # of columns)
+    val fullColumnsReadStats: Array[(String, Long)] =
+    if (HoodieSparkUtils.isSpark3)
+      Array(
+        ("rider", 14166),
+        ("rider,driver", 14166),
+        ("rider,driver,tip_history", 14166))
+    else if (HoodieSparkUtils.isSpark2)
+    // TODO re-enable tests (these tests are very unstable currently)
+      Array(
+        ("rider", -1),
+        ("rider,driver", -1),
+        ("rider,driver,tip_history", -1))
+    else
+      fail("Only Spark 3 and Spark 2 are currently supported")
+
+    // NOTE: This test validates MOR Snapshot Relation falling back to read "whole" row from MOR table (as
+    //       opposed to only required columns) in following cases
+    //          - Virtual Keys are used: to determine PK for the row, we potentially will have to
+    //          read the whole row
+    //          - Non-standard Record Payload is used: such Payload might rely on the fields that are not
+    //          being queried by the Spark, and we currently have no way figuring out what these fields are, therefore
+    //          we fallback to read whole row
+
+    // Test MOR / Snapshot / Skip-merge
+    runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL, projectedColumnsReadStats)
+
+    // Test MOR / Read Optimized
+    runTest(tableState, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, "null", projectedColumnsReadStats)
+
+    // Test MOR / Snapshot / Payload-combine / Using Virtual Keys
+    runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL, fullColumnsReadStats)
+
+    // Test MOR / Snapshot / Payload-combine / Using non-standard Record Payload
+    runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL, fullColumnsReadStats)
   }
 
   @Test
@@ -162,29 +208,11 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
       else
         fail("Only Spark 3 and Spark 2 are currently supported")
 
-    // Stats for the reads fetching _all_ columns (currently for MOR to be able to merge
-    // records properly full row has to be fetched; note, how amount of bytes read
-    // is invariant of the # of columns)
-    val fullColumnsReadStats: Array[(String, Long)] =
-    if (HoodieSparkUtils.isSpark3)
-      Array(
-        ("rider", 14166),
-        ("rider,driver", 14166),
-        ("rider,driver,tip_history", 14166))
-    else if (HoodieSparkUtils.isSpark2)
-      // TODO re-enable tests (these tests are very unstable currently)
-      Array(
-        ("rider", -1),
-        ("rider,driver", -1),
-        ("rider,driver,tip_history", -1))
-    else
-      fail("Only Spark 3 and Spark 2 are currently supported")
-
     // Test MOR / Snapshot / Skip-merge
     runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL, projectedColumnsReadStats)
 
     // Test MOR / Snapshot / Payload-combine
-    runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL, fullColumnsReadStats)
+    runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL, projectedColumnsReadStats)
 
     // Test MOR / Read Optimized
     runTest(tableState, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, "null", projectedColumnsReadStats)
@@ -221,23 +249,6 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
       else
         fail("Only Spark 3 and Spark 2 are currently supported")
 
-    // Stats for the reads fetching _all_ columns (note, how amount of bytes read
-    // is invariant of the # of columns)
-    val fullColumnsReadStats: Array[(String, Long)] =
-      if (HoodieSparkUtils.isSpark3)
-        Array(
-          ("rider", 19684),
-          ("rider,driver", 19684),
-          ("rider,driver,tip_history", 19684))
-      else if (HoodieSparkUtils.isSpark2)
-        // TODO re-enable tests (these tests are very unstable currently)
-        Array(
-          ("rider", -1),
-          ("rider,driver", -1),
-          ("rider,driver,tip_history", -1))
-      else
-        fail("Only Spark 3 and Spark 2 are currently supported")
-
     val incrementalOpts: Map[String, String] = Map(
       DataSourceReadOptions.BEGIN_INSTANTTIME.key -> "001"
     )
@@ -248,9 +259,8 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
 
     // Test MOR / Incremental / Payload-combine
     runTest(tableState, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL, DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL,
-      fullColumnsReadStats, incrementalOpts)
+      projectedColumnsReadStats, incrementalOpts)
   }
-
 
   // Test routine
   private def runTest(tableState: TableState,
