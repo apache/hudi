@@ -32,6 +32,8 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.hudi.io.storage.HoodieHFileReader
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
@@ -82,11 +84,20 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected lazy val basePath: String = metaClient.getBasePath
 
-  // If meta fields are enabled, always prefer key from the meta field as opposed to user-specified one
-  // NOTE: This is historical behavior which is preserved as is
+  // NOTE: Record key-field is assumed singular here due to the either of
+  //          - In case Hudi's metadata is enabled: record key will be pre-materialized (stored) as part
+  //          of the record's payload (as part of the Hudi's metadata)
+  //          - In case Hudi's metadata is disabled (virtual keys): in that case record has to bear _single field_
+  //          identified as its (unique) primary key w/in its payload (this is a limitation of [[SimpleKeyGenerator]],
+  //          which is the only [[KeyGenerator]] permitted for virtual-keys payloads)
   protected lazy val recordKeyField: String =
-  if (tableConfig.populateMetaFields()) HoodieRecord.RECORD_KEY_METADATA_FIELD
-  else tableConfig.getRecordKeyFieldProp
+    if (tableConfig.populateMetaFields()) {
+      HoodieRecord.RECORD_KEY_METADATA_FIELD
+    } else {
+      val keyFields = tableConfig.getRecordKeyFields.get()
+      checkState(keyFields.length == 1)
+      keyFields.head
+    }
 
   protected lazy val preCombineFieldOpt: Option[String] =
     Option(tableConfig.getPreCombineField)

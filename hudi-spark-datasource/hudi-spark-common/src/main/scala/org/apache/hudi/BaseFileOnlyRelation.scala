@@ -57,7 +57,7 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
     if (isMetadataTable(metaClient)) {
       Seq(HoodieMetadataPayload.KEY_FIELD_NAME, HoodieMetadataPayload.SCHEMA_FIELD_NAME_TYPE)
     } else {
-      recordKeyFields
+      Seq(recordKeyField)
     }
   }
 

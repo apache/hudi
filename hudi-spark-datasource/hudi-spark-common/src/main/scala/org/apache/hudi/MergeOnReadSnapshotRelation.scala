@@ -55,7 +55,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
     if (isMetadataTable(metaClient)) {
       Seq(HoodieMetadataPayload.KEY_FIELD_NAME, HoodieMetadataPayload.SCHEMA_FIELD_NAME_TYPE)
     } else {
-      recordKeyFields ++ preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
+      Seq(recordKeyField) ++ preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
     }
   }
 
