@@ -20,9 +20,10 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.HoodieBaseRelation.createBaseFileReader
+import org.apache.hudi.HoodieBaseRelation.{createBaseFileReader, isMetadataTable}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, SQLContext}
+import org.apache.hudi.metadata.HoodieMetadataPayload
+import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources._
@@ -51,6 +52,14 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) with SparkAdapterSupport {
 
   override type FileSplit = HoodieBaseFileSplit
+
+  override lazy val mandatoryColumns: Seq[String] = {
+    if (isMetadataTable(metaClient)) {
+      Seq(HoodieMetadataPayload.KEY_FIELD_NAME, HoodieMetadataPayload.SCHEMA_FIELD_NAME_TYPE)
+    } else {
+      recordKeyFields
+    }
+  }
 
   protected override def composeRDD(fileSplits: Seq[HoodieBaseFileSplit],
                                     partitionSchema: StructType,

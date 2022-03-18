@@ -130,16 +130,14 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       FileStatusCache.getOrCreate(sparkSession))
 
   /**
+   * Columns that relation has to read from the storage to properly execute on its semantic: for ex,
+   * for Merge-on-Read tables key fields as well and pre-combine field comprise mandatory set of columns,
+   * meaning that regardless of whether this columns are being requested by the query they will be fetched
+   * regardless so that relation is able to combine records properly (if necessary)
+   *
    * @VisibleInTests
    */
-  lazy val mandatoryColumns: Seq[String] = {
-    if (isMetadataTable(metaClient)) {
-      Seq(HoodieMetadataPayload.KEY_FIELD_NAME, HoodieMetadataPayload.SCHEMA_FIELD_NAME_TYPE)
-    } else {
-      // TODO this is MOR table requirement, not necessary for COW
-      Seq(recordKeyField) ++ preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
-    }
-  }
+  val mandatoryColumns: Seq[String]
 
   protected def timeline: HoodieTimeline =
   // NOTE: We're including compaction here since it's not considering a "commit" operation

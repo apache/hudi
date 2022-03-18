@@ -20,7 +20,7 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.HoodieBaseRelation.createBaseFileReader
+import org.apache.hudi.HoodieBaseRelation.{createBaseFileReader, isMetadataTable}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.MergeOnReadSnapshotRelation.getFilePath
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
+import org.apache.hudi.metadata.HoodieMetadataPayload
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
@@ -49,6 +50,14 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) {
 
   override type FileSplit = HoodieMergeOnReadFileSplit
+
+  override lazy val mandatoryColumns: Seq[String] = {
+    if (isMetadataTable(metaClient)) {
+      Seq(HoodieMetadataPayload.KEY_FIELD_NAME, HoodieMetadataPayload.SCHEMA_FIELD_NAME_TYPE)
+    } else {
+      recordKeyFields ++ preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
+    }
+  }
 
   protected val mergeType: String = optParams.getOrElse(DataSourceReadOptions.REALTIME_MERGE.key,
     DataSourceReadOptions.REALTIME_MERGE.defaultValue)
