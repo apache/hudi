@@ -30,6 +30,25 @@ import static org.hamcrest.MatcherAssert.assertThat;
  * Test cases for {@link ParquetSchemaConverter}.
  */
 public class TestParquetSchemaConverter {
+
+  @Test
+  void testTimestampConvert(){
+    DataType dataType = DataTypes.ROW(
+            DataTypes.FIELD("ts",DataTypes.TIMESTAMP(3)),
+            DataTypes.FIELD("ts6",DataTypes.TIMESTAMP(6)),
+            DataTypes.FIELD("ts9",DataTypes.TIMESTAMP(9))
+    );
+    org.apache.parquet.schema.MessageType messageType =
+            ParquetSchemaConverter.convertToParquetMessageType("converted", (RowType) dataType.getLogicalType());
+    final String expected = "message converted {\n" +
+            "  optional int64 ts (TIMESTAMP_MILLIS);\n" +
+            "  optional int96 ts6;\n" +
+            "  optional int96 ts9;\n" +
+            "}\n";
+    assertThat(messageType.toString(), is(expected));
+    System.out.println(messageType.toString());
+  }
+
   @Test
   void testConvertComplexTypes() {
     DataType dataType = DataTypes.ROW(
