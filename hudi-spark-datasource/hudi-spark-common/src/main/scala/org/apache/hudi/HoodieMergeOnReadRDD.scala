@@ -23,7 +23,7 @@ import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedReco
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.HoodieMergeOnReadRDD.{collectFieldOrdinals, getPartitionPath, projectAvro, projectAvroUnsafe, projectRowUnsafe, resolveAvroSchemaNullability}
+import org.apache.hudi.HoodieMergeOnReadRDD.{AvroDeserializerSupport, collectFieldOrdinals, getPartitionPath, projectAvro, projectAvroUnsafe, projectRowUnsafe, resolveAvroSchemaNullability}
 import org.apache.hudi.MergeOnReadSnapshotRelation.getFilePath
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
@@ -136,14 +136,24 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     }
   }
 
-  trait DeltaLogSupport extends Closeable {
-    protected val split: HoodieMergeOnReadFileSplit
-    protected val config: Configuration
+  /**
+   * Provided w/ instance of [[HoodieMergeOnReadFileSplit]], iterates over all of the records stored in
+   * Delta Log files (represented as [[InternalRow]]s)
+   */
+  private class LogFileIterator(split: HoodieMergeOnReadFileSplit,
+                                config: Configuration)
+    extends Iterator[InternalRow] with Closeable with AvroDeserializerSupport {
 
-    protected val logFileReaderAvroSchema: Schema
-    protected val requiredAvroSchema: Schema
+    protected override val requiredAvroSchema: Schema = new Schema.Parser().parse(requiredSchema.avroSchemaStr)
+    protected override val requiredStructTypeSchema: StructType = requiredSchema.structTypeSchema
 
-    protected val recordBuilder: GenericRecordBuilder
+    protected val logFileReaderAvroSchema: Schema = new Schema.Parser().parse(tableSchema.avroSchemaStr)
+
+    protected val recordBuilder: GenericRecordBuilder = new GenericRecordBuilder(requiredAvroSchema)
+    protected var recordToLoad: InternalRow = _
+
+    // TODO validate whether we need to do UnsafeProjection
+    protected val unsafeProjection: UnsafeProjection = UnsafeProjection.create(requiredStructTypeSchema)
 
     // NOTE: This maps _required_ schema fields onto the _full_ table schema, collecting their "ordinals"
     //       w/in the record payload. This is required, to project records read from the Delta Log file
@@ -172,48 +182,6 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     protected def removeLogRecord(key: String): Option[HoodieRecord[_ <: HoodieRecordPayload[_]]] =
       logRecords.remove(key)
 
-    override def close(): Unit =
-      if (logScanner != null) {
-        try {
-          logScanner.close()
-        } finally {
-          logScanner = null
-        }
-      }
-  }
-
-  trait AvroDeserializerSupport extends SparkAdapterSupport {
-    protected val requiredAvroSchema: Schema
-    protected val requiredStructTypeSchema: StructType
-
-    private val deserializer: HoodieAvroDeserializer =
-      sparkAdapter.createAvroDeserializer(requiredAvroSchema, requiredStructTypeSchema)
-
-    protected def deserialize(avroRecord: GenericRecord): InternalRow = {
-      assert(avroRecord.getSchema.getFields.size() == requiredStructTypeSchema.fields.length)
-      deserializer.deserialize(avroRecord).get.asInstanceOf[InternalRow]
-    }
-  }
-
-  /**
-   * Provided w/ instance of [[HoodieMergeOnReadFileSplit]], iterates over all of the records stored in
-   * Delta Log files (represented as [[InternalRow]]s)
-   */
-  private class LogFileIterator(override val split: HoodieMergeOnReadFileSplit,
-                                override val config: Configuration)
-    extends Iterator[InternalRow] with DeltaLogSupport with AvroDeserializerSupport {
-
-    protected override val logFileReaderAvroSchema: Schema = new Schema.Parser().parse(tableSchema.avroSchemaStr)
-
-    protected override val requiredAvroSchema: Schema = new Schema.Parser().parse(requiredSchema.avroSchemaStr)
-    protected override val requiredStructTypeSchema: StructType = requiredSchema.structTypeSchema
-
-    protected val recordBuilder: GenericRecordBuilder = new GenericRecordBuilder(requiredAvroSchema)
-    protected var recordToLoad: InternalRow = _
-
-    // TODO validate whether we need to do UnsafeProjection
-    protected val unsafeProjection: UnsafeProjection = UnsafeProjection.create(requiredStructTypeSchema)
-
     override def hasNext: Boolean =
       logRecordsIterator.hasNext && {
         val avroRecordOpt = logRecordsIterator.next()
@@ -227,6 +195,15 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       }
 
     override final def next(): InternalRow = recordToLoad
+
+    override def close(): Unit =
+      if (logScanner != null) {
+        try {
+          logScanner.close()
+        } finally {
+          logScanner = null
+        }
+      }
   }
 
   /**
@@ -443,6 +420,19 @@ private object HoodieMergeOnReadRDD {
   private def resolveAvroSchemaNullability(schema: Schema) = {
     AvroConversionUtils.resolveAvroTypeNullability(schema) match {
       case (nullable, _) => nullable
+    }
+  }
+
+  trait AvroDeserializerSupport extends SparkAdapterSupport {
+    protected val requiredAvroSchema: Schema
+    protected val requiredStructTypeSchema: StructType
+
+    private val deserializer: HoodieAvroDeserializer =
+      sparkAdapter.createAvroDeserializer(requiredAvroSchema, requiredStructTypeSchema)
+
+    protected def deserialize(avroRecord: GenericRecord): InternalRow = {
+      assert(avroRecord.getSchema.getFields.size() == requiredStructTypeSchema.fields.length)
+      deserializer.deserialize(avroRecord).get.asInstanceOf[InternalRow]
     }
   }
 }
