@@ -427,7 +427,7 @@ private object HoodieMergeOnReadRDD {
     protected val requiredAvroSchema: Schema
     protected val requiredStructTypeSchema: StructType
 
-    private val deserializer: HoodieAvroDeserializer =
+    private lazy val deserializer: HoodieAvroDeserializer =
       sparkAdapter.createAvroDeserializer(requiredAvroSchema, requiredStructTypeSchema)
 
     protected def deserialize(avroRecord: GenericRecord): InternalRow = {
