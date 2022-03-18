@@ -267,10 +267,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     //       As such, no particular schema could be assumed, and therefore we rely on the caller
     //       to correspondingly set the scheme of the expected output of base-file reader
     private val baseFileReaderAvroSchema = new Schema.Parser().parse(baseFileReaderSchema.avroSchemaStr)
-    private val requiredAvroSchema = new Schema.Parser().parse(requiredSchema.avroSchemaStr)
-
-    private val requiredFieldOrdinals: List[Int] =
-      requiredAvroSchema.getFields.asScala.map(f => baseFileReaderAvroSchema.getField(f.name()).pos()).toList
+    private val requiredSchemaFieldOrdinals: List[Int] = collectFieldOrdinals(requiredAvroSchema, baseFileReaderAvroSchema)
 
     private val serializer = sparkAdapter.createAvroSerializer(baseFileReaderSchema.structTypeSchema,
       baseFileReaderAvroSchema, resolveAvroSchemaNullability(baseFileReaderAvroSchema))
@@ -281,31 +278,39 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       if (baseFileIterator.hasNext) {
         val curRowRecord = baseFileIterator.next()
         val curKey = curRowRecord.getString(recordKeyOrdinal)
-        val updatedRecordOpt = logRecords.remove(curKey)
-        if (updatedRecordOpt.nonEmpty) {
-          val mergedAvroRecord = merge(curRowRecord, updatedRecordOpt.get)
-          if (mergedAvroRecord.isEmpty) {
+        val updatedRecordOpt = removeLogRecord(curKey)
+        if (updatedRecordOpt.isEmpty) {
+          // No merge needed, load current row with required projected schema
+          recordToLoad = unsafeProjection(projectRowUnsafe(curRowRecord, requiredSchema.structTypeSchema, requiredSchemaFieldOrdinals))
+          true
+        } else {
+          val mergedAvroRecordOpt = merge(serialize(curRowRecord), updatedRecordOpt.get)
+          if (mergedAvroRecordOpt.isEmpty) {
             // Record has been deleted, skipping
             this.hasNext
           } else {
-            // Load merged record as InternalRow with required schema
-            val projectedAvroRecord = projectAvro(mergedAvroRecord.get, requiredAvroSchema, requiredFieldOrdinals, recordBuilder)
+            // NOTE: In occurrence of a merge we can't know the schema of the record being returned, b/c
+            //       record from the Delta Log will bear (full) Table schema, while record from the Base file
+            //       might already be read in projected one (as an optimization).
+            //       As such we can't use more performant [[projectAvroUnsafe]], and instead have to fallback
+            //       to [[projectAvro]]
+            val projectedAvroRecord = projectAvro(mergedAvroRecordOpt.get, requiredAvroSchema, recordBuilder)
             recordToLoad = unsafeProjection(deserialize(projectedAvroRecord))
             true
           }
-        } else {
-          // No merge needed, load current row with required projected schema
-          recordToLoad = unsafeProjection(projectRow(curRowRecord, requiredSchema.structTypeSchema, requiredFieldOrdinals))
-          true
         }
       } else {
         super[LogFileIterator].hasNext
       }
     }
 
-    private def merge(curRow: InternalRow, newRecord: HoodieRecord[_ <: HoodieRecordPayload[_]]): Option[IndexedRecord] = {
-      val curAvroRecord = serializer.serialize(curRow).asInstanceOf[GenericRecord]
-      toScalaOption(newRecord.getData.combineAndGetUpdateValue(curAvroRecord, baseFileReaderAvroSchema, payloadProps))
+    private def serialize(curRowRecord: InternalRow): GenericRecord =
+      serializer.serialize(curRowRecord).asInstanceOf[GenericRecord]
+
+    private def merge(curAvroRecord: GenericRecord, newRecord: HoodieRecord[_ <: HoodieRecordPayload[_]]): Option[IndexedRecord] = {
+      // NOTE: We have to pass in Avro Schema used to read from Delta Log file since we invoke combining API
+      //       on the record from the Delta Log
+      toScalaOption(newRecord.getData.combineAndGetUpdateValue(curAvroRecord, logFileReaderAvroSchema, payloadProps))
     }
   }
 }
