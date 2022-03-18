@@ -93,13 +93,19 @@ public class HoodieTestSuiteJob {
    */
   private transient HiveConf hiveConf;
 
+  private boolean stopJsc = true;
   private BuiltinKeyGenerator keyGenerator;
   private transient HoodieTableMetaClient metaClient;
 
   public HoodieTestSuiteJob(HoodieTestSuiteConfig cfg, JavaSparkContext jsc) throws IOException {
+    this(cfg, jsc, true);
+  }
+
+  public HoodieTestSuiteJob(HoodieTestSuiteConfig cfg, JavaSparkContext jsc, boolean stopJsc) throws IOException {
     log.warn("Running spark job w/ app id " + jsc.sc().applicationId());
     this.cfg = cfg;
     this.jsc = jsc;
+    this.stopJsc = stopJsc;
     cfg.propsFilePath = FSUtils.addSchemeIfLocalPath(cfg.propsFilePath).toString();
     this.sparkSession = SparkSession.builder().config(jsc.getConf()).enableHiveSupport().getOrCreate();
     this.fs = FSUtils.getFs(cfg.inputBasePath, jsc.hadoopConfiguration());
@@ -108,11 +114,15 @@ public class HoodieTestSuiteJob {
     this.hiveConf = getDefaultHiveConf(jsc.hadoopConfiguration());
     this.keyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
 
-    metaClient = HoodieTableMetaClient.withPropertyBuilder()
-        .setTableType(cfg.tableType)
-        .setTableName(cfg.targetTableName)
-        .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
-        .initTable(jsc.hadoopConfiguration(), cfg.targetBasePath);
+    if (!fs.exists(new Path(cfg.targetBasePath))) {
+      metaClient = HoodieTableMetaClient.withPropertyBuilder()
+          .setTableType(cfg.tableType)
+          .setTableName(cfg.targetTableName)
+          .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
+          .initTable(jsc.hadoopConfiguration(), cfg.targetBasePath);
+    } else {
+      metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(cfg.targetBasePath).build();
+    }
 
     if (cfg.cleanInput) {
       Path inputPath = new Path(cfg.inputBasePath);
@@ -167,7 +177,7 @@ public class HoodieTestSuiteJob {
 
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("workload-generator-" + cfg.outputTypeName
         + "-" + cfg.inputFormatName, cfg.sparkMaster);
-    new HoodieTestSuiteJob(cfg, jssc).runTestSuite();
+    new HoodieTestSuiteJob(cfg, jssc, true).runTestSuite();
   }
 
   public WorkflowDag createWorkflowDag() throws IOException {
@@ -211,12 +221,14 @@ public class HoodieTestSuiteJob {
     }
   }
 
-  private void stopQuietly() {
-    try {
-      sparkSession.stop();
-      jsc.stop();
-    } catch (Exception e) {
-      log.error("Unable to stop spark session", e);
+  protected void stopQuietly() {
+    if (stopJsc) {
+      try {
+        sparkSession.stop();
+        jsc.stop();
+      } catch (Exception e) {
+        log.error("Unable to stop spark session", e);
+      }
     }
   }
 
@@ -295,5 +307,8 @@ public class HoodieTestSuiteJob {
 
     @Parameter(names = {"--start-hive-metastore"}, description = "Start Hive Metastore to use for optimistic lock ")
     public Boolean startHiveMetastore = false;
+
+    @Parameter(names = {"--use-hudi-data-to-generate-updates"}, description = "Use data from hudi to generate updates for new batches ")
+    public Boolean useHudiToGenerateUpdates = false;
   }
 }
