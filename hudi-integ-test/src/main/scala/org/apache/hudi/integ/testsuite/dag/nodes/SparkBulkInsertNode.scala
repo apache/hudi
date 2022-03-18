@@ -46,7 +46,7 @@ class SparkBulkInsertNode(dagNodeConfig: Config) extends DagNode[RDD[WriteStatus
    */
   override def execute(context: ExecutionContext, curItrCount: Int): Unit = {
     if (!config.isDisableGenerate) {
-      context.getDeltaGenerator().writeRecords(context.getDeltaGenerator().generateInserts(config)).count()
+      context.getDeltaGenerator().writeRecords(context.getDeltaGenerator().generateInserts(config)).getValue().count()
     }
     val inputDF = AvroConversionUtils.createDataFrame(context.getWriterContext.getHoodieTestSuiteWriter.getNextBatch,
       context.getWriterContext.getHoodieTestSuiteWriter.getSchema,

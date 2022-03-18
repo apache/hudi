@@ -42,7 +42,7 @@ class SparkSqlMergeNode(dagNodeConfig: Config) extends BaseSparkSqlNode(dagNodeC
    */
   override def prepareData(context: ExecutionContext): RDD[GenericRecord] = {
     if (!config.isDisableGenerate) {
-      context.getDeltaGenerator().writeRecords(context.getDeltaGenerator().generateUpdates(config)).count()
+      context.getDeltaGenerator().writeRecords(context.getDeltaGenerator().generateUpdates(config)).getValue().count()
     }
     context.getWriterContext.getHoodieTestSuiteWriter.getNextBatch
   }
