@@ -246,7 +246,8 @@ public class Pipelines {
    * Transforms the row data to hoodie records.
    */
   public static DataStream<HoodieRecord> rowDataToHoodieRecord(Configuration conf, RowType rowType, DataStream<RowData> dataStream) {
-    return dataStream.map(RowDataToHoodieFunctions.create(rowType, conf), TypeInformation.of(HoodieRecord.class));
+    return dataStream.map(RowDataToHoodieFunctions.create(rowType, conf), TypeInformation.of(HoodieRecord.class))
+            .setParallelism(dataStream.getParallelism()).name("row_data_to_hoodie_record");
   }
 
   /**
