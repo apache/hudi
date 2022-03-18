@@ -39,14 +39,10 @@ import org.apache.hadoop.fs.PositionedReadable;
 import org.apache.hadoop.fs.Seekable;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.KeyValue;
-import org.apache.hadoop.hbase.fs.HFileSystem;
-import org.apache.hadoop.hbase.io.FSDataInputStreamWrapper;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileInfo;
 import org.apache.hadoop.hbase.io.hfile.HFileScanner;
-import org.apache.hadoop.hbase.io.hfile.ReaderContext;
-import org.apache.hadoop.hbase.io.hfile.ReaderContextBuilder;
 import org.apache.hadoop.hbase.nio.ByteBuff;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.log4j.LogManager;
@@ -65,7 +61,15 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileReader<R> {
+  public static final String KEY_FIELD_NAME = "key";
+  public static final String KEY_SCHEMA = "schema";
+  public static final String KEY_BLOOM_FILTER_META_BLOCK = "bloomFilter";
+  public static final String KEY_BLOOM_FILTER_TYPE_CODE = "bloomFilterTypeCode";
+  public static final String KEY_MIN_RECORD = "minRecordKey";
+  public static final String KEY_MAX_RECORD = "maxRecordKey";
+
   private static final Logger LOG = LogManager.getLogger(HoodieHFileReader.class);
+
   private Path path;
   private Configuration conf;
   private HFile.Reader reader;
@@ -75,51 +79,27 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   // key retrieval.
   private HFileScanner keyScanner;
 
-  public static final String KEY_FIELD_NAME = "key";
-  public static final String KEY_SCHEMA = "schema";
-  public static final String KEY_BLOOM_FILTER_META_BLOCK = "bloomFilter";
-  public static final String KEY_BLOOM_FILTER_TYPE_CODE = "bloomFilterTypeCode";
-  public static final String KEY_MIN_RECORD = "minRecordKey";
-  public static final String KEY_MAX_RECORD = "maxRecordKey";
-
   public HoodieHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig) throws IOException {
     this.conf = configuration;
     this.path = path;
-    this.reader = HFile.createReader(FSUtils.getFs(path.toString(), configuration), path, cacheConfig, true, conf);
+    this.reader = HoodieHFileUtils.createHFileReader(FSUtils.getFs(path.toString(), configuration), path, cacheConfig, conf);
   }
 
   public HoodieHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig, FileSystem fs) throws IOException {
     this.conf = configuration;
     this.path = path;
     this.fsDataInputStream = fs.open(path);
-    this.reader = HFile.createReader(fs, path, cacheConfig, true, configuration);
+    this.reader = HoodieHFileUtils.createHFileReader(fs, path, cacheConfig, configuration);
   }
 
-  public HoodieHFileReader(byte[] content) throws IOException {
-    Configuration conf = new Configuration();
-    Path path = new Path("hoodie");
-    SeekableByteArrayInputStream bis = new SeekableByteArrayInputStream(content);
-    FSDataInputStream fsdis = new FSDataInputStream(bis);
-    FSDataInputStreamWrapper stream = new FSDataInputStreamWrapper(fsdis);
-    FileSystem fs = FSUtils.getFs("hoodie", conf);
-    HFileSystem hfs = (fs instanceof HFileSystem) ? (HFileSystem) fs : new HFileSystem(fs);
-    ReaderContext context = new ReaderContextBuilder()
-        .withFilePath(path)
-        .withInputStreamWrapper(stream)
-        .withFileSize(content.length)
-        .withFileSystem(hfs)
-        .withPrimaryReplicaReader(true)
-        .withReaderType(ReaderContext.ReaderType.STREAM)
-        .build();
-    HFileInfo fileInfo = new HFileInfo(context, conf);
-    this.reader = HFile.createReader(context, fileInfo, new CacheConfig(conf), conf);
-    fileInfo.initMetaAndIndex(reader);
+  public HoodieHFileReader(FileSystem fs, Path path, byte[] content) throws IOException {
+    this.reader = HoodieHFileUtils.createHFileReader(fs, path, content);
   }
 
   @Override
   public String[] readMinMaxRecordKeys() {
     HFileInfo fileInfo = reader.getHFileInfo();
-    return new String[] { new String(fileInfo.get(KEY_MIN_RECORD.getBytes())),
+    return new String[] {new String(fileInfo.get(KEY_MIN_RECORD.getBytes())),
         new String(fileInfo.get(KEY_MAX_RECORD.getBytes()))};
   }
 

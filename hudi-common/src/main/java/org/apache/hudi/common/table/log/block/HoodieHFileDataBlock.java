@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.util.ClosableIterator;
@@ -65,6 +66,9 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   private static final int DEFAULT_BLOCK_SIZE = 1024 * 1024;
 
   private final Option<Compression.Algorithm> compressionAlgorithm;
+  // This path is used for constructing HFile reader context, which should not be
+  // interpreted as the actual file path for the HFile data blocks
+  private final Path pathForReader;
 
   public HoodieHFileDataBlock(FSDataInputStream inputStream,
                               Option<byte[]> content,
@@ -73,16 +77,20 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
                               Option<Schema> readerSchema,
                               Map<HeaderMetadataType, String> header,
                               Map<HeaderMetadataType, String> footer,
-                              boolean enablePointLookups) {
+                              boolean enablePointLookups,
+                              Path pathForReader) {
     super(content, inputStream, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, HoodieHFileReader.KEY_FIELD_NAME, enablePointLookups);
     this.compressionAlgorithm = Option.empty();
+    this.pathForReader = pathForReader;
   }
 
   public HoodieHFileDataBlock(List<IndexedRecord> records,
                               Map<HeaderMetadataType, String> header,
-                              Compression.Algorithm compressionAlgorithm) {
+                              Compression.Algorithm compressionAlgorithm,
+                              Path pathForReader) {
     super(records, header, new HashMap<>(), HoodieHFileReader.KEY_FIELD_NAME);
     this.compressionAlgorithm = Option.of(compressionAlgorithm);
+    this.pathForReader = pathForReader;
   }
 
   @Override
@@ -156,7 +164,8 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
     // Read the content
-    HoodieHFileReader<IndexedRecord> reader = new HoodieHFileReader<>(content);
+    HoodieHFileReader<IndexedRecord> reader = new HoodieHFileReader<>(
+        FSUtils.getFs(pathForReader.toString(), new Configuration()), pathForReader, content);
     // Sets up the writer schema
     reader.withSchema(writerSchema);
     Iterator<IndexedRecord> recordIterator = reader.getRecordIterator(readerSchema);

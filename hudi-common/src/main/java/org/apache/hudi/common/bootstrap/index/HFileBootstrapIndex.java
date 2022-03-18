@@ -33,6 +33,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.HoodieHFileUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -179,7 +180,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
   private static HFile.Reader createReader(String hFilePath, Configuration conf, FileSystem fileSystem) {
     try {
       LOG.info("Opening HFile for reading :" + hFilePath);
-      return HFile.createReader(fileSystem, new HFilePathForReader(hFilePath), new CacheConfig(conf), true, conf);
+      return HoodieHFileUtils.createHFileReader(fileSystem, new HFilePathForReader(hFilePath), new CacheConfig(conf), conf);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }

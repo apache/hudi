@@ -60,7 +60,7 @@ public class TestInLineFileSystemHFileInLining {
 
   private static final String LOCAL_FORMATTER = "%010d";
   private static final String VALUE_PREFIX = "value";
-  private static final int MIN_BLOCK_SIZE = 1024;
+  private static final int MIN_BLOCK_BYTES = 1024;
   private final Configuration inMemoryConf;
   private final Configuration inlineConf;
   private final int maxRows = 100 + RANDOM.nextInt(1000);
@@ -91,7 +91,7 @@ public class TestInLineFileSystemHFileInLining {
     CacheConfig cacheConf = new CacheConfig(inMemoryConf);
     FSDataOutputStream fout = createFSOutput(outerInMemFSPath, inMemoryConf);
     HFileContext meta = new HFileContextBuilder()
-        .withBlockSize(MIN_BLOCK_SIZE).withCellComparator(COMPARATOR)
+        .withBlockSize(MIN_BLOCK_BYTES).withCellComparator(COMPARATOR)
         .build();
     HFile.Writer writer = HFile.getWriterFactory(inMemoryConf, cacheConf)
         .withOutputStream(fout)
@@ -129,8 +129,8 @@ public class TestInLineFileSystemHFileInLining {
       // read the key and see if it matches
       Cell cell = scanner.getCell();
       byte[] key = Arrays.copyOfRange(cell.getRowArray(), cell.getRowOffset(), cell.getRowOffset() + cell.getRowLength());
-      assertArrayEquals(Arrays.copyOfRange(keyValue.getRowArray(), keyValue.getRowOffset(), keyValue.getRowOffset() + keyValue.getRowLength()), key,
-          "seeked key does not match");
+      byte[] expectedKey = Arrays.copyOfRange(keyValue.getRowArray(), keyValue.getRowOffset(), keyValue.getRowOffset() + keyValue.getRowLength());
+      assertArrayEquals(expectedKey, key, "seeked key does not match");
       scanner.seekTo(keyValue);
       ByteBuffer val1 = scanner.getValue();
       scanner.seekTo(keyValue);
