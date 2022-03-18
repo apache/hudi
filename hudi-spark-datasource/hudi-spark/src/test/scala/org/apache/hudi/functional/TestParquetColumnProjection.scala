@@ -67,9 +67,9 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     val projectedColumnsReadStats: Array[(String, Long)] =
       if (HoodieSparkUtils.isSpark3)
         Array(
-          ("rider", 2452),
-          ("rider,driver", 2552),
-          ("rider,driver,tip_history", 3517))
+          ("rider", 2363),
+          ("rider,driver", 2463),
+          ("rider,driver,tip_history", 3428))
       else if (HoodieSparkUtils.isSpark2)
         Array(
           ("rider", 2474),
@@ -118,9 +118,9 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     val projectedColumnsReadStatsReadOptimized: Array[(String, Long)] =
       if (HoodieSparkUtils.isSpark3)
         Array(
-          ("rider", 2452),
-          ("rider,driver", 2552),
-          ("rider,driver,tip_history", 3517))
+          ("rider", 2363),
+          ("rider,driver", 2463),
+          ("rider,driver,tip_history", 3428))
       else if (HoodieSparkUtils.isSpark2)
         Array(
           ("rider", 2474),
@@ -173,9 +173,9 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     val projectedColumnsReadStatsReadOptimized: Array[(String, Long)] =
       if (HoodieSparkUtils.isSpark3)
         Array(
-          ("rider", 2452),
-          ("rider,driver", 2552),
-          ("rider,driver,tip_history", 3517))
+          ("rider", 2363),
+          ("rider,driver", 2463),
+          ("rider,driver,tip_history", 3428))
       else if (HoodieSparkUtils.isSpark2)
         Array(
           ("rider", 2474),
@@ -227,9 +227,9 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     val fullColumnsReadStats: Array[(String, Long)] =
     if (HoodieSparkUtils.isSpark3)
       Array(
-        ("rider", 14166),
-        ("rider,driver", 14166),
-        ("rider,driver,tip_history", 14166))
+        ("rider", 14167),
+        ("rider,driver", 14167),
+        ("rider,driver,tip_history", 14167))
     else if (HoodieSparkUtils.isSpark2)
     // TODO re-enable tests (these tests are very unstable currently)
       Array(
