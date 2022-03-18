@@ -46,7 +46,6 @@ public class TestParquetSchemaConverter {
             "  optional int96 ts9;\n" +
             "}\n";
     assertThat(messageType.toString(), is(expected));
-    System.out.println(messageType.toString());
   }
 
   @Test
