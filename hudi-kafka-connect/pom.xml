@@ -142,7 +142,7 @@
         <!-- NOTE: This is temp (SchemaProvide dep) until PR3162 lands -->
         <dependency>
             <groupId>org.apache.hudi</groupId>
-            <artifactId>hudi-flink_${scala.binary.version}</artifactId>
+            <artifactId>hudi-flink</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
