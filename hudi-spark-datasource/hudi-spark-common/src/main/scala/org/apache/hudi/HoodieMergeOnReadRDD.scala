@@ -56,7 +56,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            tableState: HoodieTableState,
                            tableSchema: HoodieTableSchema,
                            requiredSchema: HoodieTableSchema,
-                           @transient fileSplits: List[HoodieMergeOnReadFileSplit])
+                           @transient fileSplits: Seq[HoodieMergeOnReadFileSplit])
   extends HoodieUnsafeRDD(sc) {
 
   private val confBroadcast = sc.broadcast(new SerializableWritable(config))

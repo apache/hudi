@@ -24,12 +24,14 @@ import org.apache.spark.sql.execution.QueryExecutionException
 import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionedFile, SchemaColumnConvertNotSupportedException}
 import org.apache.spark.{Partition, TaskContext}
 
+case class HoodieBaseFileSplit(filePartition: FilePartition) extends HoodieFileSplit
+
 /**
  * TODO eval if we actually need it
  */
 class HoodieFileScanRDD(@transient private val sparkSession: SparkSession,
                         readFunction: PartitionedFile => Iterator[InternalRow],
-                        @transient fileSplits: Seq[FilePartition])
+                        @transient fileSplits: Seq[HoodieBaseFileSplit])
   extends HoodieUnsafeRDD(sparkSession.sparkContext) {
 
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
@@ -77,5 +79,5 @@ class HoodieFileScanRDD(@transient private val sparkSession: SparkSession,
     iterator.asInstanceOf[Iterator[InternalRow]]
   }
 
-  override protected def getPartitions: Array[Partition] = fileSplits.toArray
+  override protected def getPartitions: Array[Partition] = fileSplits.map(_.filePartition).toArray
 }

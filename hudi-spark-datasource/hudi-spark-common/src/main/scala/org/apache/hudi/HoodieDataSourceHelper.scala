@@ -66,20 +66,6 @@ object HoodieDataSourceHelper extends PredicateHelper {
   }
 
   /**
-   * Extract the required schema from [[InternalRow]]
-   */
-  def extractRequiredSchema(
-      iter: Iterator[InternalRow],
-      requiredSchema: StructType,
-      requiredFieldPos: Seq[Int]): Iterator[InternalRow] = {
-    val unsafeProjection = UnsafeProjection.create(requiredSchema)
-    val rows = iter.map { row =>
-      unsafeProjection(createInternalRowWithSchema(row, requiredSchema, requiredFieldPos))
-    }
-    rows
-  }
-
-  /**
    * Convert [[InternalRow]] to [[SpecificInternalRow]].
    */
   def createInternalRowWithSchema(

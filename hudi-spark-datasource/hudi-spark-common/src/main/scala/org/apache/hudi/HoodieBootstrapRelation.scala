@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieBaseFile
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.exception.HoodieException
+import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
@@ -157,7 +158,7 @@ class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
     logInfo("Building file index..")
     val fileStatuses  = if (globPaths.nonEmpty) {
       // Load files from the global paths if it has defined to be compatible with the original mode
-      val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(_sqlContext.sparkSession, globPaths)
+      val inMemoryFileIndex = HoodieInMemoryFileIndex.create(_sqlContext.sparkSession, globPaths)
       inMemoryFileIndex.allFiles()
     } else { // Load files by the HoodieFileIndex.
         HoodieFileIndex(sqlContext.sparkSession, metaClient, Some(schema), optParams,

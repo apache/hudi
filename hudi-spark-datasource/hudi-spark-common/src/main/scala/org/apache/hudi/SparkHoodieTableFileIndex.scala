@@ -38,7 +38,6 @@ import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.JavaConverters._
-import scala.language.implicitConversions
 
 /**
  * Implementation of the [[BaseHoodieTableFileIndex]] for Spark
@@ -135,12 +134,14 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    * Fetch list of latest base files w/ corresponding log files, after performing
    * partition pruning
    *
+   * TODO unify w/ HoodieFileIndex#listFiles
+   *
    * @param partitionFilters partition column filters
    * @return mapping from string partition paths to its base/log files
    */
   def listFileSlices(partitionFilters: Seq[Expression]): Map[String, Seq[FileSlice]] = {
     // Prune the partition path by the partition filters
-    val prunedPartitions = prunePartition(cachedAllInputFileSlices.asScala.keys.toSeq, partitionFilters)
+    val prunedPartitions = prunePartition(cachedAllInputFileSlices.keySet().asScala.toSeq, partitionFilters)
     prunedPartitions.map(partition => {
       (partition.path, cachedAllInputFileSlices.get(partition).asScala)
     }).toMap
