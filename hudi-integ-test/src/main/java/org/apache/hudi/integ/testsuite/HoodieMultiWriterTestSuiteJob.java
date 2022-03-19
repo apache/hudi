@@ -26,15 +26,15 @@ import com.beust.jcommander.Parameter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.SparkSession;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -129,10 +129,9 @@ public class HoodieMultiWriterTestSuiteJob {
       jobIndex++;
     }
 
-    List<Future> futures = new ArrayList<>();
-    CountDownLatch countDownLatch = new CountDownLatch(inputPaths.length);
+    AtomicBoolean jobFailed = new AtomicBoolean(false);
     AtomicInteger counter = new AtomicInteger(0);
-
+    List<CompletableFuture<Boolean>> completableFutureList = new ArrayList<>();
     testSuiteConfigList.forEach(hoodieTestSuiteConfig -> {
       try {
         // start each job at 20 seconds interval so that metaClient instantiation does not overstep
@@ -141,30 +140,52 @@ public class HoodieMultiWriterTestSuiteJob {
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
-      futures.add(executor.submit(() -> {
+      completableFutureList.add(CompletableFuture.supplyAsync(() -> {
+        boolean toReturn = true;
         try {
           new HoodieTestSuiteJob(hoodieTestSuiteConfig, jssc, false).runTestSuite();
-          countDownLatch.countDown();
-          LOG.info("Completed job");
-        } catch (IOException e) {
-          LOG.error("********* Exception thrown " + e.getMessage() + ", cause : " + e.getCause());
-          throw new HoodieException("Exception thrown during TestSuiteJob ", e);
+          LOG.info("Job completed successfully");
+        } catch (Exception e) {
+          if (!jobFailed.getAndSet(true)) {
+            LOG.error("Exception thrown " + e.getMessage() + ", cause : " + e.getCause());
+            throw new RuntimeException("HoodieTestSuiteJob Failed " + e.getCause() + ", and msg " + e.getMessage(), e);
+          } else {
+            LOG.info("Already a job failed. so, not throwing any exception ");
+          }
         }
-      }));
+        return toReturn;
+      }, executor));
       counter.getAndIncrement();
     });
 
-    LOG.info("Going to await for 10 mins for count down latch to complete");
-    countDownLatch.await(10, TimeUnit.MINUTES);
-    stopQuietly(jssc);
+    LOG.info("Going to await until all jobs complete");
+    try {
+      CompletableFuture completableFuture = allOfTerminateOnFailure(completableFutureList);
+      completableFuture.get();
+    } finally {
+      executor.shutdownNow();
+      if (jssc != null) {
+        LOG.info("Completed and shutting down spark context ");
+        LOG.info("Shutting down spark session and JavaSparkContext");
+        SparkSession.builder().config(jssc.getConf()).enableHiveSupport().getOrCreate().stop();
+        jssc.close();
+      }
+    }
   }
 
-  private static void stopQuietly(JavaSparkContext jsc) {
-    try {
-      jsc.stop();
-    } catch (Exception e) {
-      throw new HoodieException("Unable to stop spark session", e);
+  public static CompletableFuture allOfTerminateOnFailure(List<CompletableFuture<Boolean>> futures) {
+    CompletableFuture<?> failure = new CompletableFuture();
+    AtomicBoolean jobFailed = new AtomicBoolean(false);
+    for (CompletableFuture<?> f : futures) {
+      f.exceptionally(ex -> {
+        if (!jobFailed.getAndSet(true)) {
+          System.out.println("One of the job failed. Cancelling all other futures. " + ex.getCause() + ", " + ex.getMessage());
+          futures.forEach(future -> future.cancel(true));
+        }
+        return null;
+      });
     }
+    return CompletableFuture.anyOf(failure, CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])));
   }
 
   static void deepCopyConfigs(HoodieMultiWriterTestSuiteConfig globalConfig, HoodieMultiWriterTestSuiteConfig tableConfig) {
