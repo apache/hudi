@@ -118,11 +118,6 @@ object HoodieSparkUtils extends SparkAdapterSupport {
     })
   }
 
-  def createInMemoryFileIndex(sparkSession: SparkSession, globbedPaths: Seq[Path]): InMemoryFileIndex = {
-    val fileStatusCache = FileStatusCache.getOrCreate(sparkSession)
-    new InMemoryFileIndex(sparkSession, globbedPaths, Map(), Option.empty, fileStatusCache)
-  }
-
   /**
    * @deprecated please use other overload [[createRdd]]
    */
