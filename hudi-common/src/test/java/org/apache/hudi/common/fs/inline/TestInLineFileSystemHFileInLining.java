@@ -113,8 +113,6 @@ public class TestInLineFileSystemHFileInLining {
     FSDataInputStream fin = inlineFileSystem.open(inlinePath);
 
     HFile.Reader reader = HFile.createReader(inlineFileSystem, inlinePath, cacheConf, true, inlineConf);
-    // Load up the index.
-    reader.getHFileInfo();
     // Get a scanner that caches and that does not use pread.
     HFileScanner scanner = reader.getScanner(true, false);
     // Align scanner at start of the file.
@@ -195,14 +193,18 @@ public class TestInLineFileSystemHFileInLining {
     int i = start;
     for (; i < (start + n); i++) {
       Cell cell = scanner.getCell();
-      byte[] key = Arrays.copyOfRange(cell.getRowArray(), cell.getRowOffset(), cell.getRowOffset() + cell.getRowLength());
-      byte[] val = Arrays.copyOfRange(cell.getValueArray(), cell.getValueOffset(), cell.getValueOffset() + cell.getValueLength());
+      byte[] key = Arrays.copyOfRange(
+          cell.getRowArray(), cell.getRowOffset(), cell.getRowOffset() + cell.getRowLength());
+      byte[] val = Arrays.copyOfRange(
+          cell.getValueArray(), cell.getValueOffset(), cell.getValueOffset() + cell.getValueLength());
       String keyStr = String.format(LOCAL_FORMATTER, i);
       String valStr = VALUE_PREFIX + keyStr;
       KeyValue kv = new KeyValue(Bytes.toBytes(keyStr), Bytes.toBytes("family"),
           Bytes.toBytes("qual"), Bytes.toBytes(valStr));
       byte[] keyBytes = new KeyValue.KeyOnlyKeyValue(key, 0, key.length).getKey();
-      assertArrayEquals(Arrays.copyOfRange(kv.getRowArray(), kv.getRowOffset(), kv.getRowOffset() + kv.getRowLength()), keyBytes,
+      byte[] expectedKeyBytes = Arrays.copyOfRange(
+          kv.getRowArray(), kv.getRowOffset(), kv.getRowOffset() + kv.getRowLength());
+      assertArrayEquals(expectedKeyBytes, keyBytes,
           "bytes for keys do not match " + keyStr + " " + Bytes.toString(key));
       assertArrayEquals(Bytes.toBytes(valStr), val,
           "bytes for vals do not match " + valStr + " " + Bytes.toString(val));
