@@ -386,6 +386,11 @@ public class HoodieTableMetadataUtil {
     List<String> columnsToIndex = getColumnsToIndex(recordsGenerationParams,
         dataTableMetaClient.getTableConfig(), tryFetchSchemaFromCommit(dataTableMetaClient));
 
+    if (columnsToIndex.isEmpty()) {
+      // In case there are no columns to index, bail
+      return engineContext.emptyHoodieData();
+    }
+
     int parallelism = Math.max(Math.min(deleteFileList.size(), recordsGenerationParams.getColumnStatsIndexParallelism()), 1);
     return engineContext.parallelize(deleteFileList, parallelism)
         .flatMap(deleteFileInfoPair -> {
@@ -709,6 +714,11 @@ public class HoodieTableMetadataUtil {
     final List<String> columnsToIndex = getColumnsToIndex(recordsGenerationParams,
         dataTableMetaClient.getTableConfig(), tryFetchSchemaFromCommit(dataTableMetaClient));
 
+    if (columnsToIndex.isEmpty()) {
+      // In case there are no columns to index, bail
+      return engineContext.emptyHoodieData();
+    }
+
     final List<Pair<String, List<String>>> partitionToDeletedFilesList = partitionToDeletedFiles.entrySet()
         .stream().map(e -> Pair.of(e.getKey(), e.getValue())).collect(Collectors.toList());
     int parallelism = Math.max(Math.min(partitionToDeletedFilesList.size(), recordsGenerationParams.getColumnStatsIndexParallelism()), 1);
@@ -864,6 +874,11 @@ public class HoodieTableMetadataUtil {
       List<String> columnsToIndex = getColumnsToIndex(recordsGenerationParams,
           dataTableMetaClient.getTableConfig(), writerSchema);
 
+      if (columnsToIndex.isEmpty()) {
+        // In case there are no columns to index, bail
+        return engineContext.emptyHoodieData();
+      }
+
       int parallelism = Math.max(Math.min(allWriteStats.size(), recordsGenerationParams.getColumnStatsIndexParallelism()), 1);
       return engineContext.parallelize(allWriteStats, parallelism)
           .flatMap(writeStat ->
@@ -884,7 +899,9 @@ public class HoodieTableMetadataUtil {
       return Arrays.asList(tableConfig.getRecordKeyFields().get());
     }
 
-    return writerSchema.map(schema -> schema.getFields().stream().map(Schema.Field::name).collect(Collectors.toList()))
+    return writerSchema.map(schema ->
+            schema.getFields().stream().map(Schema.Field::name).collect(Collectors.toList())
+        )
         .orElse(Collections.emptyList());
   }
 
