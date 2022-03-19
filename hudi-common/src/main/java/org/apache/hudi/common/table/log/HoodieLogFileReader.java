@@ -79,7 +79,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private long reverseLogFilePosition;
   private long lastReverseLogFilePosition;
   private boolean reverseReader;
-  private final boolean enableRecordLookups;
+  private boolean enableRecordLookups;
   private boolean closed = false;
   private transient Thread shutdownThread = null;
 

@@ -239,7 +239,6 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
    */
   public List<Pair<String, R>> readRecords(List<String> keys, Schema schema) throws IOException {
     this.schema = schema;
-    reader.getHFileInfo();
     List<Pair<String, R>> records = new ArrayList<>();
     for (String key: keys) {
       Option<R> value = getRecordByKey(key, schema);
@@ -252,7 +251,6 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
 
   public ClosableIterator<R> getRecordIterator(List<String> keys, Schema schema) throws IOException {
     this.schema = schema;
-    reader.getHFileInfo();
     Iterator<String> iterator = keys.iterator();
     return new ClosableIterator<R>() {
       private R next;

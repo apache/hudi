@@ -55,6 +55,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
@@ -201,6 +203,31 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       assertEquals(key, record.get("_row_key").toString());
       assertEquals(Integer.toString(index), record.get("time").toString());
       assertEquals(index, record.get("number"));
+      index++;
+    }
+  }
+
+  @Test
+  public void testReaderGetRecordIterator() throws Exception {
+    writeFileWithSimpleSchema();
+    HoodieHFileReader<GenericRecord> hfileReader =
+        (HoodieHFileReader<GenericRecord>) createReader(new Configuration());
+    List<String> keys =
+        IntStream.concat(IntStream.range(40, NUM_RECORDS * 2), IntStream.range(10, 20))
+            .mapToObj(i -> "key" + String.format("%02d", i)).collect(Collectors.toList());
+    Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
+    Iterator<GenericRecord> iterator = hfileReader.getRecordIterator(keys, avroSchema);
+
+    List<Integer> expectedIds =
+        IntStream.concat(IntStream.range(40, NUM_RECORDS), IntStream.range(10, 20))
+            .boxed().collect(Collectors.toList());
+    int index = 0;
+    while (iterator.hasNext()) {
+      GenericRecord record = iterator.next();
+      String key = "key" + String.format("%02d", expectedIds.get(index));
+      assertEquals(key, record.get("_row_key").toString());
+      assertEquals(Integer.toString(expectedIds.get(index)), record.get("time").toString());
+      assertEquals(expectedIds.get(index), record.get("number"));
       index++;
     }
   }

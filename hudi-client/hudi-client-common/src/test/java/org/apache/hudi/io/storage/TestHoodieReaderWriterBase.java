@@ -216,7 +216,7 @@ public abstract class TestHoodieReaderWriterBase {
   }
 
   private void validateFilterRowKeys(HoodieFileReader<GenericRecord> hoodieReader) {
-    Set<String> candidateRowKeys = IntStream.range(40, 100)
+    Set<String> candidateRowKeys = IntStream.range(40, NUM_RECORDS * 2)
         .mapToObj(i -> "key" + String.format("%02d", i)).collect(Collectors.toSet());
     List<String> expectedKeys = IntStream.range(40, NUM_RECORDS)
         .mapToObj(i -> "key" + String.format("%02d", i)).sorted().collect(Collectors.toList());
