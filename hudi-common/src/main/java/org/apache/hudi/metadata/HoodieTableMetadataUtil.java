@@ -88,6 +88,7 @@ import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.NULL_
 import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.TOTAL_SIZE;
 import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.TOTAL_UNCOMPRESSED_SIZE;
 import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.VALUE_COUNT;
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 
@@ -867,7 +868,10 @@ public class HoodieTableMetadataUtil {
     try {
       Option<Schema> writerSchema =
           Option.ofNullable(commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY))
-              .map(writerSchemaStr -> new Schema.Parser().parse(writerSchemaStr));
+              .flatMap(writerSchemaStr ->
+                  isNullOrEmpty(writerSchemaStr)
+                    ? Option.empty()
+                    : Option.of(new Schema.Parser().parse(writerSchemaStr)));
 
       HoodieTableMetaClient dataTableMetaClient = recordsGenerationParams.getDataMetaClient();
 
@@ -1039,7 +1043,7 @@ public class HoodieTableMetadataUtil {
       columnStats.put(TOTAL_SIZE, Long.parseLong(columnStats.getOrDefault(TOTAL_SIZE, 0).toString()) + fieldSize);
       columnStats.put(TOTAL_UNCOMPRESSED_SIZE, Long.parseLong(columnStats.getOrDefault(TOTAL_UNCOMPRESSED_SIZE, 0).toString()) + fieldSize);
 
-      if (!StringUtils.isNullOrEmpty(fieldVal)) {
+      if (!isNullOrEmpty(fieldVal)) {
         // set the min value of the field
         if (!columnStats.containsKey(MIN)) {
           columnStats.put(MIN, fieldVal);
