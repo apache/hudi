@@ -32,7 +32,6 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ClosableIterator;
-import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -161,7 +160,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       HoodieAvroDataBlockVersion logBlockVersion = new HoodieAvroDataBlockVersion(version);
 
       Schema finalReadSchema = readerSchema;
-      if (!internalSchema.isDummySchema() && !TableSchemaResolver.isSchemaCompatible(readerSchema, writerSchema)) {
+      if (!internalSchema.isEmptySchema()) {
         finalReadSchema = writerSchema;
       }
 
@@ -228,7 +227,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   }
 
   public static HoodieAvroDataBlock getBlock(byte[] content, Schema readerSchema) throws IOException {
-    return getBlock(content, readerSchema, InternalSchema.getDummyInternalSchema());
+    return getBlock(content, readerSchema, InternalSchema.getEmptyInternalSchema());
   }
 
   /**
@@ -250,7 +249,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       readerSchema = writerSchema;
     }
 
-    if (!internalSchema.isDummySchema() && !TableSchemaResolver.isSchemaCompatible(readerSchema, writerSchema)) {
+    if (!internalSchema.isEmptySchema()) {
       readerSchema = writerSchema;
     }
 

@@ -198,7 +198,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     protected String basePath;
     protected List<String> logFilePaths;
     protected Schema readerSchema;
-    private InternalSchema internalSchema = InternalSchema.getDummyInternalSchema();
+    private InternalSchema internalSchema = InternalSchema.getEmptyInternalSchema();
     protected String latestInstantTime;
     protected boolean readBlocksLazily;
     protected boolean reverseReader;
@@ -296,7 +296,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     }
 
     public Builder withInternalSchema(InternalSchema internalSchema) {
-      this.internalSchema = internalSchema == null ? InternalSchema.getDummyInternalSchema() : internalSchema;
+      this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
       return this;
     }
 

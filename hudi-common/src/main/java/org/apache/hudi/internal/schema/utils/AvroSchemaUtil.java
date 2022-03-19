@@ -66,7 +66,7 @@ public class AvroSchemaUtil {
    * a) Create a new empty GenericRecord with the new schema.
    * b) For GenericRecord, copy over the data from the old schema to the new schema or set default values for all fields of this transformed schema
    *
-   * @param oldRecord oldRecord to be rewrite
+   * @param oldRecord oldRecord to be rewritten
    * @param newSchema newSchema used to rewrite oldRecord
    * @return newRecord for new Schema
    */
@@ -354,7 +354,7 @@ public class AvroSchemaUtil {
     }
     // try to find all added columns
     if (diffFromOldSchema.size() != 0) {
-      throw new UnsupportedOperationException("cannot evolution schema implicitly, find delete/rename operation");
+      throw new UnsupportedOperationException("Cannot evolve schema implicitly, find delete/rename operation");
     }
 
     List<String> diffFromEvolutionSchema = colNamesFromEvolved.stream().filter(f -> !colNamesFromOldSchema.contains(f)).collect(Collectors.toList());

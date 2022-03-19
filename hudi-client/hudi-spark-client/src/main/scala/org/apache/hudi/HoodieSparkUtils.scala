@@ -308,8 +308,8 @@ object HoodieSparkUtils extends SparkAdapterSupport {
     AttributeReference(columnName, field.get.dataType, field.get.nullable)()
   }
 
-  def getRequiredSchema(tableAvroSchema: Schema, requiredColumns: Array[String], internalSchema: InternalSchema = InternalSchema.getDummyInternalSchema): (Schema, StructType, InternalSchema) = {
-    if (internalSchema.isDummySchema) {
+  def getRequiredSchema(tableAvroSchema: Schema, requiredColumns: Array[String], internalSchema: InternalSchema = InternalSchema.getEmptyInternalSchema): (Schema, StructType, InternalSchema) = {
+    if (internalSchema.isEmptySchema) {
       // First get the required avro-schema, then convert the avro-schema to spark schema.
       val name2Fields = tableAvroSchema.getFields.asScala.map(f => f.name() -> f).toMap
       // Here have to create a new Schema.Field object
@@ -321,7 +321,7 @@ object HoodieSparkUtils extends SparkAdapterSupport {
       val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
       (requiredAvroSchema, requiredStructSchema, internalSchema)
     } else {
-      // support nested project
+      // now we support nested project
       val prunedInternalSchema = InternalSchemaUtils.pruneInternalSchema(internalSchema, requiredColumns.toList.asJava)
       val requiredAvroSchema = AvroInternalSchemaConverter.convert(prunedInternalSchema, tableAvroSchema.getName)
       val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)

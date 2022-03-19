@@ -19,7 +19,7 @@ package org.apache.spark.sql.execution.datasources.parquet;
 
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
-import org.apache.hudi.client.utils.SparkSchemaUtils;
+import org.apache.hudi.client.utils.SparkInternalSchemaConverter;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.spark.memory.MemoryMode;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -114,7 +114,7 @@ public class Spark312HoodieVectorizedParquetRecordReader extends VectorizedParqu
     ColumnarBatch currentColumnBatch = super.resultBatch();
     boolean changed = false;
     for (Map.Entry<Integer, Pair<DataType, DataType>> entry : typeChangeInfos.entrySet()) {
-      boolean rewrite = SparkSchemaUtils
+      boolean rewrite = SparkInternalSchemaConverter
           .convertColumnVectorType((WritableColumnVector) currentColumnBatch.column(entry.getKey()),
               idToColumnVectors.get(entry.getKey()), currentColumnBatch.numRows());
       if (rewrite) {

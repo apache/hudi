@@ -2102,11 +2102,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withInternalSchema(String internalSchemaStr) {
-      writeConfig.setValue(INTERNAL_SCHEMA_STRING, internalSchemaStr);
-      return this;
-    }
-
     public Builder withSchemaEvolutionEnable(boolean enable) {
       writeConfig.setValue(SCHEMA_EVOLUTION_ENABLE, String.valueOf(enable));
       return this;

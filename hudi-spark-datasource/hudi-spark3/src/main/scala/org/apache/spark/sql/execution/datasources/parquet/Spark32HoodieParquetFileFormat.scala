@@ -23,9 +23,9 @@ import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.FileSplit
 import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
 import org.apache.hadoop.mapreduce.{JobID, TaskAttemptID, TaskID, TaskType}
-import org.apache.hudi.client.utils.SparkSchemaUtils
+import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.util.TableInternalSchemaUtils
+import org.apache.hudi.common.util.InternalSchemaCache
 import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
@@ -56,7 +56,7 @@ class Spark32HoodieParquetFileFormat extends ParquetFileFormat {
                                                filters: Seq[Filter],
                                                options: Map[String, String],
                                                hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
-    if (hadoopConf.get(SparkSchemaUtils.HOODIE_QUERY_SCHEMA, "").isEmpty) {
+    if (hadoopConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, "").isEmpty) {
       // fallback to origin parquet File read
       super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema, filters, options, hadoopConf)
     } else {
@@ -88,11 +88,11 @@ class Spark32HoodieParquetFileFormat extends ParquetFileFormat {
         sparkSession.sessionState.conf.isParquetINT96AsTimestamp)
       // for dataSource v1, we have no method to do project for spark physical plan.
       // it's safe to do cols project here.
-      val internalSchemaString = hadoopConf.get(SparkSchemaUtils.HOODIE_QUERY_SCHEMA)
+      val internalSchemaString = hadoopConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
       val querySchemaOption = SerDeHelper.fromJson(internalSchemaString)
       if (querySchemaOption.isPresent) {
-        val prunedSchema = SparkSchemaUtils.convertAndPruneStructTypeToInternalSchema(requiredSchema, querySchemaOption.get())
-        hadoopConf.set(SparkSchemaUtils.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(prunedSchema))
+        val prunedSchema = SparkInternalSchemaConverter.convertAndPruneStructTypeToInternalSchema(requiredSchema, querySchemaOption.get())
+        hadoopConf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(prunedSchema))
       }
       val broadcastedHadoopConf =
         sparkSession.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
@@ -128,14 +128,14 @@ class Spark32HoodieParquetFileFormat extends ParquetFileFormat {
         val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
         val sharedConf = broadcastedHadoopConf.value.value
         // do deal with internalSchema
-        val internalSchemaString = sharedConf.get(SparkSchemaUtils.HOODIE_QUERY_SCHEMA)
+        val internalSchemaString = sharedConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
         // querySchema must be a pruned schema.
         val querySchemaOption = SerDeHelper.fromJson(internalSchemaString)
         val internalSchemaChangeEnabled = if (internalSchemaString.isEmpty || !querySchemaOption.isPresent) false else true
-        val tablePath = sharedConf.get(SparkSchemaUtils.HOODIE_TABLE_PATH)
+        val tablePath = sharedConf.get(SparkInternalSchemaConverter.HOODIE_TABLE_PATH)
         val commitTime = FSUtils.getCommitTime(filePath.getName).toLong;
         val fileSchema = if (internalSchemaChangeEnabled) {
-          TableInternalSchemaUtils.searchSchemaAndCache(commitTime, tablePath, sharedConf)
+          InternalSchemaCache.searchSchemaAndCache(commitTime, tablePath, sharedConf)
         } else {
           // this should not happened, searchSchemaAndCache will deal with correctly.
           null
@@ -192,8 +192,8 @@ class Spark32HoodieParquetFileFormat extends ParquetFileFormat {
         var typeChangeInfos: java.util.Map[Integer, Pair[DataType, DataType]] = new java.util.HashMap()
         if (internalSchemaChangeEnabled) {
           val mergedInternalSchema = InternalSchemaUtils.mergeSchema(fileSchema, querySchemaOption.get())
-          val mergedSchema = SparkSchemaUtils.constructSparkSchemaFromInternalSchema(mergedInternalSchema)
-          typeChangeInfos = SparkSchemaUtils.collectTypeChangedCols(querySchemaOption.get(), mergedInternalSchema)
+          val mergedSchema = SparkInternalSchemaConverter.constructSparkSchemaFromInternalSchema(mergedInternalSchema)
+          typeChangeInfos = SparkInternalSchemaConverter.collectTypeChangedCols(querySchemaOption.get(), mergedInternalSchema)
           hadoopAttempConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, mergedSchema.json)
         }
         val hadoopAttemptContext =

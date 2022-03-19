@@ -20,7 +20,7 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FileStatus
-import org.apache.hudi.client.utils.SparkSchemaUtils
+import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.spark.sql.SparkSession
@@ -82,8 +82,8 @@ object HoodieDataSourceHelper extends PredicateHelper with SparkAdapterSupport {
   }
 
   def getConfigurationForInternalSchema(conf: Configuration, internalSchema: InternalSchema, tablePath: String): Configuration = {
-    conf.set(SparkSchemaUtils.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
-    conf.set(SparkSchemaUtils.HOODIE_TABLE_PATH, tablePath)
+    conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
+    conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, tablePath)
     conf
   }
 

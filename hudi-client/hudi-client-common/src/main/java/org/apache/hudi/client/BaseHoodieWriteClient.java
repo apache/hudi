@@ -261,7 +261,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     // Finalize write
     finalizeWrite(table, instantTime, stats);
     // do save internal schema to support Implicitly add columns in write process
-    if (!metadata.getExtraMetadata().containsKey(SerDeHelper.LATESTSCHEMA)
+    if (!metadata.getExtraMetadata().containsKey(SerDeHelper.LATEST_SCHEMA)
         && metadata.getExtraMetadata().containsKey(SCHEMA_KEY) && table.getConfig().getSchemaEvolutionEnable()) {
       TableSchemaResolver schemaUtil = new TableSchemaResolver(table.getMetaClient());
       String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElse("");
@@ -272,12 +272,12 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
         Schema avroSchema = HoodieAvroUtils.createHoodieWriteSchema(new Schema.Parser().parse(config.getSchema()));
         InternalSchema evolutionSchema = AvroSchemaUtil.evolutionSchemaFromNewAvroSchema(avroSchema, internalSchema);
         if (evolutionSchema.equals(internalSchema)) {
-          metadata.addMetadata(SerDeHelper.LATESTSCHEMA, SerDeHelper.toJson(evolutionSchema));
+          metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(evolutionSchema));
           schemasManager.persistHistorySchemaStr(instantTime, historySchemaStr);
         } else {
           evolutionSchema.setSchemaId(Long.parseLong(instantTime));
           String newSchemaStr = SerDeHelper.toJson(evolutionSchema);
-          metadata.addMetadata(SerDeHelper.LATESTSCHEMA, newSchemaStr);
+          metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, newSchemaStr);
           schemasManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(evolutionSchema, historySchemaStr));
         }
         // update SCHEMA_KEY
@@ -1671,7 +1671,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       throw new HoodieCommitException("Failed to commit " + instantTime + " unable to save inflight metadata ", io);
     }
     Map<String, String> extraMeta = new HashMap<>();
-    extraMeta.put(SerDeHelper.LATESTSCHEMA, SerDeHelper.toJson(newSchema.setSchemaId(Long.getLong(instantTime))));
+    extraMeta.put(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(newSchema.setSchemaId(Long.getLong(instantTime))));
     // try to save history schemas
     FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(metaClient);
     schemasManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(newSchema, historySchemaStr));

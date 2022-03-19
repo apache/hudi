@@ -43,7 +43,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private HoodieLogFileReader currentReader;
   private final FileSystem fs;
   private final Schema readerSchema;
-  private InternalSchema internalSchema = InternalSchema.getDummyInternalSchema();
+  private InternalSchema internalSchema = InternalSchema.getEmptyInternalSchema();
   private final boolean readBlocksLazily;
   private final boolean reverseLogReader;
   private final String recordKeyField;
@@ -55,7 +55,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   HoodieLogFormatReader(FileSystem fs, List<HoodieLogFile> logFiles, Schema readerSchema, boolean readBlocksLazily,
                         boolean reverseLogReader, int bufferSize, boolean enableInlineReading,
                         String recordKeyField) throws IOException {
-    this(fs, logFiles, readerSchema, readBlocksLazily, reverseLogReader, bufferSize, enableInlineReading, recordKeyField, InternalSchema.getDummyInternalSchema());
+    this(fs, logFiles, readerSchema, readBlocksLazily, reverseLogReader, bufferSize, enableInlineReading, recordKeyField, InternalSchema.getEmptyInternalSchema());
   }
 
   HoodieLogFormatReader(FileSystem fs, List<HoodieLogFile> logFiles, Schema readerSchema, boolean readBlocksLazily,
@@ -70,7 +70,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     this.prevReadersInOpenState = new ArrayList<>();
     this.recordKeyField = recordKeyField;
     this.enableInlineReading = enableInlineReading;
-    this.internalSchema = internalSchema == null ? InternalSchema.getDummyInternalSchema() : internalSchema;
+    this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
     if (logFiles.size() > 0) {
       HoodieLogFile nextLogFile = logFiles.remove(0);
       this.currentReader = new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, readBlocksLazily, false,

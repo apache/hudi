@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.client.utils.SparkSchemaUtils
+import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
 import org.apache.hudi.{DataSourceOptionsHelper, DataSourceUtils}
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
@@ -87,7 +87,7 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
       val names = addColumn.fieldNames()
       val parentName = AlterTableCommand.getParentName(names)
       // add col change
-      val colType = SparkSchemaUtils.buildTypeFromStructType(addColumn.dataType(), true, new AtomicInteger(0))
+      val colType = SparkInternalSchemaConverter.buildTypeFromStructType(addColumn.dataType(), true, new AtomicInteger(0))
       addChange.addColumns(parentName, names.last, colType, addColumn.comment())
       // add position change
       addColumn.position() match {
@@ -145,7 +145,7 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     changes.foreach { change =>
       change match {
         case updateType: TableChange.UpdateColumnType =>
-          val newType = SparkSchemaUtils.buildTypeFromStructType(updateType.newDataType(), true, new AtomicInteger(0))
+          val newType = SparkInternalSchemaConverter.buildTypeFromStructType(updateType.newDataType(), true, new AtomicInteger(0))
           updateChange.updateColumnType(updateType.fieldNames().mkString("."), newType)
         case updateComment: TableChange.UpdateColumnComment =>
           updateChange.updateColumnComment(updateComment.fieldNames().mkString("."), updateComment.newComment())
@@ -268,7 +268,7 @@ object AlterTableCommand extends Logging {
     metadata.setOperationType(WriteOperationType.ALTER_SCHEMA)
     timeLine.transitionRequestedToInflight(requested, Option.of(metadata.toJsonString.getBytes(StandardCharsets.UTF_8)))
     val extraMeta = new util.HashMap[String, String]()
-    extraMeta.put(SerDeHelper.LATESTSCHEMA, SerDeHelper.toJson(internalSchema.setSchemaId(instantTime.toLong)))
+    extraMeta.put(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(internalSchema.setSchemaId(instantTime.toLong)))
     val schemaManager = new FileBasedInternalSchemaStorageManager(metaClient)
     schemaManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(internalSchema, historySchemaStr))
     client.commit(instantTime, jsc.emptyRDD, Option.of(extraMeta))
@@ -285,7 +285,7 @@ object AlterTableCommand extends Logging {
     }
     // try to sync to hive
     // drop partition field before call alter table
-    val fullSparkSchema = SparkSchemaUtils.constructSparkSchemaFromInternalSchema(internalSchema)
+    val fullSparkSchema = SparkInternalSchemaConverter.constructSparkSchemaFromInternalSchema(internalSchema)
     val dataSparkSchema = new StructType(fullSparkSchema.fields.filter(p => !table.partitionColumnNames.exists(f => sparkSession.sessionState.conf.resolver(f, p.name))))
     alterTableDataSchema(sparkSession, table.identifier.database.getOrElse("default"), table.identifier.table, dataSparkSchema)
     if (existRoTable) alterTableDataSchema(sparkSession, table.identifier.database.getOrElse("default"), table.identifier.table + "_ro", dataSparkSchema)

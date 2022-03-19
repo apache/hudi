@@ -30,7 +30,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.TableInternalSchemaUtils;
+import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
@@ -74,7 +74,7 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
           CompactionUtils.getCompactionPlan(table.getMetaClient(), instantTime);
 
       // try to load internalSchema to support schema Evolution
-      Pair<Option<String>, Option<String>> schemaPair = TableInternalSchemaUtils
+      Pair<Option<String>, Option<String>> schemaPair = InternalSchemaCache
           .getInternalSchemaAndAvroSchemaForClusteringAndCompaction(table.getMetaClient(), instantTime);
       if (schemaPair.getLeft().isPresent() && schemaPair.getRight().isPresent()) {
         config.setInternalSchemaString(schemaPair.getLeft().get());
@@ -93,7 +93,7 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
       }
       metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, config.getSchema());
       if (schemaPair.getLeft().isPresent()) {
-        metadata.addMetadata(SerDeHelper.LATESTSCHEMA, schemaPair.getLeft().get());
+        metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, schemaPair.getLeft().get());
       }
       compactionMetadata.setWriteStatuses(statuses);
       compactionMetadata.setCommitted(false);

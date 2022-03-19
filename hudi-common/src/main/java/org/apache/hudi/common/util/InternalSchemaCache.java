@@ -36,7 +36,7 @@ import java.util.List;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-public class TableInternalSchemaUtils {
+public class InternalSchemaCache {
   // use segment lock to reduce competition.
   // the lock size should be powers of 2 for better hash.
   private static Object[] lockList = new Object[16];
@@ -67,6 +67,15 @@ public class TableInternalSchemaUtils {
     return searchSchemaAndCache(versionID, metaClient);
   }
 
+  /**
+   * search internalSchema based on versionID.
+   * first step: try to get internalSchema from hoodie commit files, we no need to add lock.
+   * if we cannot get internalSchema by first step, then we try to get internalSchema from cache.
+   *
+   * @param versionID schema version_id need to search
+   * @param metaClient current hoodie metaClient
+   * @return internalSchema
+   */
   public static InternalSchema searchSchemaAndCache(long versionID, HoodieTableMetaClient metaClient) {
     Option<InternalSchema> candidateSchema = searchSchema(versionID, metaClient);
     if (candidateSchema.isPresent()) {
@@ -109,13 +118,20 @@ public class TableInternalSchemaUtils {
       }
       byte[] data = timeline.getInstantDetails(instants.get(0)).get();
       HoodieCommitMetadata metadata = HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
-      String latestInternalSchemaStr = metadata.getMetadata(SerDeHelper.LATESTSCHEMA);
+      String latestInternalSchemaStr = metadata.getMetadata(SerDeHelper.LATEST_SCHEMA);
       return SerDeHelper.fromJson(latestInternalSchemaStr);
     } catch (Exception e) {
       throw new HoodieException("Failed to read schema from commit metadata", e);
     }
   }
 
+  /**
+   * Get internalSchema and avroSchema for compaction/cluster operation.
+   *
+   * @param metaClient current hoodie metaClient
+   * @param compactionAndClusteringInstant first instant before current compaction/cluster instant
+   * @return (internalSchemaStrOpt, avroSchemaStrOpt) a pair of InternalSchema/avroSchema
+   */
   public static Pair<Option<String>, Option<String>> getInternalSchemaAndAvroSchemaForClusteringAndCompaction(HoodieTableMetaClient metaClient, String compactionAndClusteringInstant) {
     // try to load internalSchema to support Schema Evolution
     HoodieTimeline timelineBeforeCurrentCompaction = metaClient.getActiveTimeline().filterCompletedInstants().findInstantsBefore(compactionAndClusteringInstant);
@@ -125,13 +141,14 @@ public class TableInternalSchemaUtils {
         // try to find internalSchema
         byte[] data = timelineBeforeCurrentCompaction.getInstantDetails(lastInstantBeforeCurrentCompaction.get()).get();
         HoodieCommitMetadata metadata = HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
-        String internalSchemaStr = metadata.getMetadata(SerDeHelper.LATESTSCHEMA);
+        String internalSchemaStr = metadata.getMetadata(SerDeHelper.LATEST_SCHEMA);
         if (internalSchemaStr != null) {
           String existingSchemaStr = metadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
           return Pair.of(Option.of(internalSchemaStr), Option.of(existingSchemaStr));
         }
       } catch (Exception e) {
-        // swallow this exception
+        // swallow this exception. If we has not done some DDL, load internalSchema will failed,
+        // schema evolution should not affect the main process of current compaction.
       }
     }
     return Pair.of(Option.empty(), Option.empty());

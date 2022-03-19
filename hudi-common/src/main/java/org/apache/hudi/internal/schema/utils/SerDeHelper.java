@@ -47,7 +47,7 @@ public class SerDeHelper {
 
   }
 
-  public static final String LATESTSCHEMA = "latestSchema";
+  public static final String LATEST_SCHEMA = "latestSchema";
   public static final String SCHEMAS = "schemas";
   private static final String MAX_COLUMN_ID = "max_column_id";
   private static final String VERSION_ID = "version-id";
@@ -104,7 +104,7 @@ public class SerDeHelper {
    * @return a string
    */
   public static String toJson(InternalSchema internalSchema) {
-    if (internalSchema == null || internalSchema.isDummySchema()) {
+    if (internalSchema == null || internalSchema.isEmptySchema()) {
       return "";
     }
     try {
@@ -355,7 +355,7 @@ public class SerDeHelper {
         return headMap.get(headMap.lastKey());
       }
     }
-    return InternalSchema.getDummyInternalSchema();
+    return InternalSchema.getEmptyInternalSchema();
   }
 
   /**

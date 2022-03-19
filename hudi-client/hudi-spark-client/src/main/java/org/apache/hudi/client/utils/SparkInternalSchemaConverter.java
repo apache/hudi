@@ -70,13 +70,13 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
-public class SparkSchemaUtils {
-  private SparkSchemaUtils() {
+public class SparkInternalSchemaConverter {
+  private SparkInternalSchemaConverter() {
 
   }
 
-  public static final String HOODIE_QUERY_SCHEMA = "hadoop.hoodie.querySchema";
-  public static final String HOODIE_TABLE_PATH = "hadoop.hoodie.tablePath";
+  public static final String HOODIE_QUERY_SCHEMA = "hoodie.schema.internal.querySchema";
+  public static final String HOODIE_TABLE_PATH = "hoodie.tablePath";
   /**
    * Converts a spark schema to an hudi internal schema. Fields without IDs are kept and assigned fallback IDs.
    *

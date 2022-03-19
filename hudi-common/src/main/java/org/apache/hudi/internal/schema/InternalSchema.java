@@ -50,11 +50,11 @@ public class InternalSchema implements Serializable {
   private transient Map<String, Integer> nameToId = null;
   private transient Map<Integer, String> idToName = null;
 
-  public static InternalSchema getDummyInternalSchema() {
+  public static InternalSchema getEmptyInternalSchema() {
     return new InternalSchema(-1L, new ArrayList<>());
   }
 
-  public boolean isDummySchema() {
+  public boolean isEmptySchema() {
     return versionId < 0;
   }
 
