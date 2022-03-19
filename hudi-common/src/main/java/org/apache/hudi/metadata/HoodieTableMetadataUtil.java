@@ -384,7 +384,7 @@ public class HoodieTableMetadataUtil {
     HoodieTableMetaClient dataTableMetaClient = recordsGenerationParams.getDataMetaClient();
 
     List<String> columnsToIndex = getColumnsToIndex(recordsGenerationParams,
-        dataTableMetaClient.getTableConfig(), tryFetchSchemaFromCommit(dataTableMetaClient));
+        dataTableMetaClient.getTableConfig(), tryResolveSchemaForTable(dataTableMetaClient));
 
     if (columnsToIndex.isEmpty()) {
       // In case there are no columns to index, bail
@@ -712,7 +712,7 @@ public class HoodieTableMetadataUtil {
     HoodieTableMetaClient dataTableMetaClient = recordsGenerationParams.getDataMetaClient();
 
     final List<String> columnsToIndex = getColumnsToIndex(recordsGenerationParams,
-        dataTableMetaClient.getTableConfig(), tryFetchSchemaFromCommit(dataTableMetaClient));
+        dataTableMetaClient.getTableConfig(), tryResolveSchemaForTable(dataTableMetaClient));
 
     if (columnsToIndex.isEmpty()) {
       // In case there are no columns to index, bail
@@ -1060,8 +1060,7 @@ public class HoodieTableMetadataUtil {
     });
   }
 
-  @Nonnull
-  private static Option<Schema> tryFetchSchemaFromCommit(HoodieTableMetaClient dataTableMetaClient) {
+  private static Option<Schema> tryResolveSchemaForTable(HoodieTableMetaClient dataTableMetaClient) {
     if (dataTableMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
       return Option.empty();
     }
