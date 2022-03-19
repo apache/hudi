@@ -67,6 +67,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -379,7 +380,7 @@ public class HoodieTableMetadataUtil {
       deletedFiles.forEach(entry -> deleteFileList.add(Pair.of(partition, entry)));
     });
 
-    final List<String> columnsToIndex = getColumnsToIndex(recordsGenerationParams.getDataMetaClient(), recordsGenerationParams.isAllColumnStatsIndexEnabled());
+    final List<String> columnsToIndex = getColumnsToIndex(recordsGenerationParams, recordsGenerationParams.getDataMetaClient(), Option.empty());
     final int parallelism = Math.max(Math.min(deleteFileList.size(), recordsGenerationParams.getColumnStatsIndexParallelism()), 1);
     HoodieData<Pair<String, String>> deleteFileListRDD = engineContext.parallelize(deleteFileList, parallelism);
     return deleteFileListRDD.flatMap(deleteFileInfoPair -> {
@@ -698,7 +699,8 @@ public class HoodieTableMetadataUtil {
                                                                           Map<String, Map<String, Long>> partitionToAppendedFiles,
                                                                           MetadataRecordsGenerationParams recordsGenerationParams) {
     HoodieData<HoodieRecord> allRecordsRDD = engineContext.emptyHoodieData();
-    final List<String> columnsToIndex = getColumnsToIndex(recordsGenerationParams.getDataMetaClient(), recordsGenerationParams.isAllColumnStatsIndexEnabled());
+    final List<String> columnsToIndex = getColumnsToIndex(recordsGenerationParams,
+        recordsGenerationParams.getDataMetaClient(), Option.empty());
 
     final List<Pair<String, List<String>>> partitionToDeletedFilesList = partitionToDeletedFiles.entrySet()
         .stream().map(e -> Pair.of(e.getKey(), e.getValue())).collect(Collectors.toList());
@@ -838,55 +840,48 @@ public class HoodieTableMetadataUtil {
   public static HoodieData<HoodieRecord> convertMetadataToColumnStatsRecords(HoodieCommitMetadata commitMetadata,
                                                                              HoodieEngineContext engineContext,
                                                                              MetadataRecordsGenerationParams recordsGenerationParams) {
-    try {
-      List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
-          .flatMap(entry -> entry.stream()).collect(Collectors.toList());
-      return HoodieTableMetadataUtil.createColumnStatsFromWriteStats(engineContext, allWriteStats, recordsGenerationParams);
-    } catch (Exception e) {
-      throw new HoodieException("Failed to generate column stats records for metadata table ", e);
-    }
-  }
+    List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
+        .flatMap(Collection::stream).collect(Collectors.toList());
 
-  /**
-   * Create column stats from write status.
-   *
-   * @param engineContext           - Engine context
-   * @param allWriteStats           - Write status to convert
-   * @param recordsGenerationParams - Parameters for columns stats record generation
-   */
-  public static HoodieData<HoodieRecord> createColumnStatsFromWriteStats(HoodieEngineContext engineContext,
-                                                                         List<HoodieWriteStat> allWriteStats,
-                                                                         MetadataRecordsGenerationParams recordsGenerationParams) {
     if (allWriteStats.isEmpty()) {
       return engineContext.emptyHoodieData();
     }
-    final List<String> columnsToIndex = getColumnsToIndex(recordsGenerationParams.getDataMetaClient(), recordsGenerationParams.isAllColumnStatsIndexEnabled());
-    final int parallelism = Math.max(Math.min(allWriteStats.size(), recordsGenerationParams.getColumnStatsIndexParallelism()), 1);
-    HoodieData<HoodieWriteStat> allWriteStatsRDD = engineContext.parallelize(allWriteStats, parallelism);
-    return allWriteStatsRDD.flatMap(writeStat -> translateWriteStatToColumnStats(writeStat, recordsGenerationParams.getDataMetaClient(), columnsToIndex).iterator());
+
+    try {
+      Option<Schema> writerSchema =
+          Option.ofNullable(commitMetadata.getExtraMetadata().get(HoodieCommitMetadata.SCHEMA_KEY))
+              .map(writerSchemaStr -> new Schema.Parser().parse(writerSchemaStr));
+
+      List<String> columnsToIndex = getColumnsToIndex(recordsGenerationParams,
+          recordsGenerationParams.getDataMetaClient(), writerSchema);
+
+      int parallelism = Math.max(Math.min(allWriteStats.size(), recordsGenerationParams.getColumnStatsIndexParallelism()), 1);
+      return engineContext.parallelize(allWriteStats, parallelism)
+          .flatMap(writeStat ->
+              translateWriteStatToColumnStats(writeStat, recordsGenerationParams.getDataMetaClient(), columnsToIndex).iterator());
+    } catch (Exception e) {
+      throw new HoodieException("Failed to generate column stats records for metadata table", e);
+    }
   }
 
   /**
    * Get the latest columns for the table for column stats indexing.
    *
-   * @param datasetMetaClient                   - Data table meta client
-   * @param isMetaIndexColumnStatsForAllColumns - Is column stats indexing enabled for all columns
+   * @param dataTableMetaClient - Data table meta client
    */
-  private static List<String> getColumnsToIndex(HoodieTableMetaClient datasetMetaClient, boolean isMetaIndexColumnStatsForAllColumns) {
-    if (!isMetaIndexColumnStatsForAllColumns
-        || datasetMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants() < 1) {
-      return Arrays.asList(datasetMetaClient.getTableConfig().getRecordKeyFieldProp().split(","));
+  private static List<String> getColumnsToIndex(MetadataRecordsGenerationParams recordsGenParams,
+                                                HoodieTableMetaClient dataTableMetaClient,
+                                                Option<Schema> writerSchema) {
+    if (!recordsGenParams.isAllColumnStatsIndexEnabled()) {
+      // TODO why are we only indexing primary key? revisit fallback
+      return Arrays.asList(dataTableMetaClient.getTableConfig().getRecordKeyFields().get());
     }
 
-    TableSchemaResolver schemaResolver = new TableSchemaResolver(datasetMetaClient);
-    // consider nested fields as well. if column stats is enabled only for a subset of columns,
-    // directly use them instead of all columns from the latest table schema
-    try {
-      return schemaResolver.getTableAvroSchema().getFields().stream()
-          .map(entry -> entry.name()).collect(Collectors.toList());
-    } catch (Exception e) {
-      throw new HoodieException("Failed to get latest columns for " + datasetMetaClient.getBasePath());
-    }
+    return writerSchema.orElseGet(() -> fetchSchemaFromCommit(dataTableMetaClient))
+        .getFields()
+        .stream()
+        .map(Schema.Field::name)
+        .collect(Collectors.toList());
   }
 
   public static HoodieMetadataColumnStats mergeColumnStats(HoodieMetadataColumnStats oldColumnStats, HoodieMetadataColumnStats newColumnStats) {
@@ -914,7 +909,7 @@ public class HoodieTableMetadataUtil {
       List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = new ArrayList<>(columnRangeMap.values());
       return HoodieMetadataPayload.createColumnStatsRecords(writeStat.getPartitionPath(), columnRangeMetadataList, false);
     }
-    return getColumnStats(writeStat.getPartitionPath(), writeStat.getPath(), datasetMetaClient, columnsToIndex,false);
+    return getColumnStats(writeStat.getPartitionPath(), writeStat.getPath(), datasetMetaClient, columnsToIndex, false);
   }
 
   private static Stream<HoodieRecord> getColumnStats(final String partitionPath, final String filePathWithPartition,
@@ -1042,5 +1037,15 @@ public class HoodieTableMetadataUtil {
         columnStats.put(NULL_COUNT, Long.parseLong(columnStats.getOrDefault(NULL_COUNT, 0).toString()) + 1);
       }
     });
+  }
+
+  @Nonnull
+  private static Schema fetchSchemaFromCommit(HoodieTableMetaClient dataTableMetaClient) {
+    TableSchemaResolver schemaResolver = new TableSchemaResolver(dataTableMetaClient);
+    try {
+      return schemaResolver.getTableAvroSchema();
+    } catch (Exception e) {
+      throw new HoodieException("Failed to get latest columns for " + dataTableMetaClient.getBasePath(), e);
+    }
   }
 }
