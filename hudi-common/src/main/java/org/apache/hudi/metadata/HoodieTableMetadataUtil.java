@@ -80,6 +80,7 @@ import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldValAsString;
 import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.COLUMN_RANGE_MERGE_FUNCTION;
 import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.MAX;
@@ -874,9 +875,14 @@ public class HoodieTableMetadataUtil {
                     : Option.of(new Schema.Parser().parse(writerSchemaStr)));
 
       HoodieTableMetaClient dataTableMetaClient = recordsGenerationParams.getDataMetaClient();
+      HoodieTableConfig tableConfig = dataTableMetaClient.getTableConfig();
+
+      // NOTE: Writer schema added to commit metadata will not contain Hudi's metadata fields
+      Option<Schema> tableSchema = writerSchema.map(schema ->
+          tableConfig.populateMetaFields() ? addMetadataFields(schema) : schema);
 
       List<String> columnsToIndex = getColumnsToIndex(recordsGenerationParams,
-          dataTableMetaClient.getTableConfig(), writerSchema);
+          tableConfig, tableSchema);
 
       if (columnsToIndex.isEmpty()) {
         // In case there are no columns to index, bail
@@ -899,8 +905,8 @@ public class HoodieTableMetadataUtil {
                                                 HoodieTableConfig tableConfig,
                                                 Option<Schema> writerSchemaOpt) {
     if (recordsGenParams.isAllColumnStatsIndexEnabled() && writerSchemaOpt.isPresent()) {
-      return writerSchemaOpt.get().getFields()
-          .stream().map(Schema.Field::name).collect(Collectors.toList());
+      return writerSchemaOpt.get().getFields().stream()
+          .map(Schema.Field::name).collect(Collectors.toList());
     }
 
     // In case no writer schema could be obtained we fall back to only index primary key
