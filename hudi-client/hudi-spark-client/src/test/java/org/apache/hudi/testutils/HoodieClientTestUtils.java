@@ -38,6 +38,7 @@ import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.storage.HoodieHFileUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.avro.Schema;
@@ -243,7 +244,8 @@ public class HoodieClientTestUtils {
     Schema schema = null;
     for (String path : paths) {
       try {
-        HFile.Reader reader = HFile.createReader(fs, new Path(path), cacheConfig, true, fs.getConf());
+        HFile.Reader reader =
+            HoodieHFileUtils.createHFileReader(fs, new Path(path), cacheConfig, fs.getConf());
         if (schema == null) {
           schema = new Schema.Parser().parse(new String(reader.getHFileInfo().get(KEY_SCHEMA.getBytes())));
         }
