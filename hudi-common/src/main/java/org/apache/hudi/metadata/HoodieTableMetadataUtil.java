@@ -897,16 +897,15 @@ public class HoodieTableMetadataUtil {
    */
   private static List<String> getColumnsToIndex(MetadataRecordsGenerationParams recordsGenParams,
                                                 HoodieTableConfig tableConfig,
-                                                Option<Schema> writerSchema) {
-    if (!recordsGenParams.isAllColumnStatsIndexEnabled()) {
-      // TODO why are we only indexing primary key? revisit fallback
-      return Arrays.asList(tableConfig.getRecordKeyFields().get());
+                                                Option<Schema> writerSchemaOpt) {
+    if (recordsGenParams.isAllColumnStatsIndexEnabled() && writerSchemaOpt.isPresent()) {
+      return writerSchemaOpt.get().getFields()
+          .stream().map(Schema.Field::name).collect(Collectors.toList());
     }
 
-    return writerSchema.map(schema ->
-            schema.getFields().stream().map(Schema.Field::name).collect(Collectors.toList())
-        )
-        .orElse(Collections.emptyList());
+    // In case no writer schema could be obtained we fall back to only index primary key
+    // columns
+    return Arrays.asList(tableConfig.getRecordKeyFields().get());
   }
 
   public static HoodieMetadataColumnStats mergeColumnStats(HoodieMetadataColumnStats oldColumnStats, HoodieMetadataColumnStats newColumnStats) {
