@@ -355,13 +355,88 @@ public class TestHiveSyncTool {
     String instantTime = "100";
     String deltaCommitTime = "101";
     HiveTestUtil.createMORTable(instantTime, deltaCommitTime, 5, true,
-        useSchemaFromCommitMetadata);
+            useSchemaFromCommitMetadata);
 
     HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     tool.syncHoodieTable();
 
     String roTableName = hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_READ_OPTIMIZED_TABLE;
     String rtTableName = hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
+
+    String[] tableNames = new String[] {roTableName, rtTableName};
+    String[] readAsOptimizedResults = new String[] {"true", "false"};
+
+    SessionState.start(HiveTestUtil.getHiveConf());
+    Driver hiveDriver = new org.apache.hadoop.hive.ql.Driver(HiveTestUtil.getHiveConf());
+
+    String sparkTableProperties = getSparkTableProperties(syncAsDataSourceTable, useSchemaFromCommitMetadata);
+    for (int i = 0;i < 2; i++) {
+      String dbTableName = hiveSyncConfig.databaseName + "." + tableNames[i];
+      String readAsOptimized = readAsOptimizedResults[i];
+
+      hiveDriver.run("SHOW TBLPROPERTIES " + dbTableName);
+      List<String> results = new ArrayList<>();
+      hiveDriver.getResults(results);
+
+      String tblPropertiesWithoutDdlTime = String.join("\n",
+              results.subList(0, results.size() - 1));
+      assertEquals(
+              "EXTERNAL\tTRUE\n"
+                      + "last_commit_time_sync\t101\n"
+                      + sparkTableProperties
+                      + "tp_0\tp0\n"
+                      + "tp_1\tp1", tblPropertiesWithoutDdlTime);
+      assertTrue(results.get(results.size() - 1).startsWith("transient_lastDdlTime"));
+
+      results.clear();
+      // validate serde properties
+      hiveDriver.run("SHOW CREATE TABLE " + dbTableName);
+      hiveDriver.getResults(results);
+      String ddl = String.join("\n", results);
+      assertTrue(ddl.contains("'path'='" + hiveSyncConfig.basePath + "'"));
+      assertTrue(ddl.toLowerCase().contains("create external table"));
+      if (syncAsDataSourceTable) {
+        assertTrue(ddl.contains("'" + ConfigUtils.IS_QUERY_AS_RO_TABLE + "'='" + readAsOptimized + "'"));
+      }
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource({"syncDataSourceTableParams"})
+  public void testSyncMORTableWithCustomTableName(boolean useSchemaFromCommitMetadata,
+                                             boolean syncAsDataSourceTable,
+                                             String syncMode) throws Exception {
+    HiveSyncConfig hiveSyncConfig = HiveTestUtil.hiveSyncConfig;
+    HiveTestUtil.hiveSyncConfig.batchSyncNum = 3;
+    hiveSyncConfig.customMorTableName = true;
+    hiveSyncConfig.customROTableName = hiveSyncConfig.tableName + "1";
+    hiveSyncConfig.customRTTableName = hiveSyncConfig.tableName + "2";
+    Map<String, String> serdeProperties = new HashMap<String, String>() {
+      {
+        put("path", hiveSyncConfig.basePath);
+      }
+    };
+
+    Map<String, String> tableProperties = new HashMap<String, String>() {
+      {
+        put("tp_0", "p0");
+        put("tp_1", "p1");
+      }
+    };
+    hiveSyncConfig.syncAsSparkDataSourceTable = syncAsDataSourceTable;
+    hiveSyncConfig.syncMode = syncMode;
+    hiveSyncConfig.serdeProperties = ConfigUtils.configToString(serdeProperties);
+    hiveSyncConfig.tableProperties = ConfigUtils.configToString(tableProperties);
+    String instantTime = "100";
+    String deltaCommitTime = "101";
+    HiveTestUtil.createMORTable(instantTime, deltaCommitTime, 5, true,
+        useSchemaFromCommitMetadata);
+
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    tool.syncHoodieTable();
+
+    String roTableName = hiveSyncConfig.customROTableName;
+    String rtTableName = hiveSyncConfig.customRTTableName;
 
     String[] tableNames = new String[] {roTableName, rtTableName};
     String[] readAsOptimizedResults = new String[] {"true", "false"};

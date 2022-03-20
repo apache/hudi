@@ -675,6 +675,23 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("INT64 with original type TIMESTAMP_MICROS is converted to hive timestamp type.\n"
           + "Disabled by default for backward compatibility.");
 
+  public static final ConfigOption<Boolean> HIVE_SYNC_ENABLE_CUSTOM_TABLE_NAME = ConfigOptions
+          .key("hive_sync.enable_custom_table_name")
+          .booleanType()
+          .defaultValue(false)
+          .withDescription("define custom table name with merge on read table type");
+
+  public static final ConfigOption<String> HIVE_SYNC_CUSTOM_RO_NAME = ConfigOptions
+          .key("hive_sync.custom_ro_name")
+          .stringType()
+          .defaultValue("")
+          .withDescription("custom ro table name for merge on read , only valid when enable_custom_table_name is true, should different from custom_rt_name''");
+
+  public static final ConfigOption<String> HIVE_SYNC_CUSTOM_RT_NAME = ConfigOptions
+          .key("hive_sync.custom_rt_name")
+          .stringType()
+          .defaultValue("")
+          .withDescription("custom snapshot table name for merge on read, only valid when enable_custom_table_name is true, should different from custom_ro_name''");
   public static final ConfigOption<String> HIVE_SYNC_TABLE_PROPERTIES = ConfigOptions
       .key("hive_sync.table_properties")
       .stringType()
