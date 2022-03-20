@@ -21,8 +21,10 @@ package org.apache.hudi.streamer;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.util.AvroSchemaConverter;
@@ -97,12 +99,25 @@ public class HoodieFlinkStreamer {
       }
     }
 
-    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, parallelism, dataStream);
-    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream);
-    if (StreamerUtil.needsAsyncCompaction(conf)) {
-      Pipelines.compact(conf, pipeline);
+    // bulk_insert mode and Append mode is same in streaming
+    final String writeOperation = conf.get(FlinkOptions.OPERATION);
+    if (WriteOperationType.fromValue(writeOperation) == WriteOperationType.BULK_INSERT
+        || OptionsResolver.isAppendMode(conf)) {
+      Pipelines.append(conf, rowType, dataStream);
     } else {
-      Pipelines.clean(conf, pipeline);
+      // bootstrap
+      final DataStream<HoodieRecord> hoodieRecordDataStream =
+          Pipelines.bootstrap(conf, rowType, parallelism, dataStream, false, cfg.insertOverwrite);
+
+      // write pipeline
+      DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream);
+
+      // compaction
+      if (StreamerUtil.needsAsyncCompaction(conf)) {
+        Pipelines.compact(conf, pipeline);
+      } else {
+        Pipelines.clean(conf, pipeline);
+      }
     }
 
     env.execute(cfg.targetTableName);
