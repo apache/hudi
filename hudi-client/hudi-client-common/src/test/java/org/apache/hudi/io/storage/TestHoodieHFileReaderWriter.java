@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
@@ -35,6 +36,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.CellComparatorImpl;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.util.Pair;
@@ -42,6 +44,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
 import java.io.IOException;
@@ -69,6 +72,12 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.when;
 
 public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
+  private static final String DUMMY_BASE_PATH = "dummy_base_path";
+  // Number of records in HFile fixtures for compatibility tests
+  private static final int NUM_RECORDS_FIXTURE = 50;
+  private static final String SIMPLE_SCHEMA_HFILE_SUFFIX = "_simple.hfile";
+  private static final String COMPLEX_SCHEMA_HFILE_SUFFIX = "_complex.hfile";
+  private static final String BOOTSTRAP_INDEX_HFILE_SUFFIX = "_bootstrap_index_partitions.hfile";
 
   @Override
   protected Path getFilePath() {
@@ -80,7 +89,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       Schema avroSchema, boolean populateMetaFields) throws Exception {
     String instantTime = "000";
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
-        .withPath("dummy_base_path")
+        .withPath(DUMMY_BASE_PATH)
         .withIndexConfig(HoodieIndexConfig.newBuilder()
             .bloomFilterNumEntries(1000).bloomFilterFPP(0.00001).build())
         .withPopulateMetaFields(populateMetaFields)
@@ -192,19 +201,10 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
         fs.open(getFilePath()), (int) fs.getFileStatus(getFilePath()).getLen());
     // Reading byte array in HFile format, without actual file path
     HoodieHFileReader<GenericRecord> hfileReader =
-        new HoodieHFileReader<>(fs, new Path("dummy_base_path"), content);
+        new HoodieHFileReader<>(fs, new Path(DUMMY_BASE_PATH), content);
     Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
-    Iterator<GenericRecord> iterator = hfileReader.getRecordIterator(avroSchema);
-
-    int index = 0;
-    while (iterator.hasNext()) {
-      GenericRecord record = iterator.next();
-      String key = "key" + String.format("%02d", index);
-      assertEquals(key, record.get("_row_key").toString());
-      assertEquals(Integer.toString(index), record.get("time").toString());
-      assertEquals(index, record.get("number"));
-      index++;
-    }
+    assertEquals(NUM_RECORDS, hfileReader.getTotalRecords());
+    verifySimpleRecords(hfileReader.getRecordIterator(avroSchema));
   }
 
   @Test
@@ -232,6 +232,44 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     }
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "/hudi_0_9_hbase_1_2_3", "/hudi_0_10_hbase_1_2_3", "/hudi_0_11_hbase_2_4_9"})
+  public void testHoodieHFileCompatibility(String hfilePrefix) throws IOException {
+    // This fixture is generated from TestHoodieReaderWriterBase#testWriteReadPrimitiveRecord()
+    // using different Hudi releases
+    String simpleHFile = hfilePrefix + SIMPLE_SCHEMA_HFILE_SUFFIX;
+    // This fixture is generated from TestHoodieReaderWriterBase#testWriteReadComplexRecord()
+    // using different Hudi releases
+    String complexHFile = hfilePrefix + COMPLEX_SCHEMA_HFILE_SUFFIX;
+    // This fixture is generated from TestBootstrapIndex#testBootstrapIndex()
+    // using different Hudi releases.  The file is copied from .hoodie/.aux/.bootstrap/.partitions/
+    String bootstrapIndexFile = hfilePrefix + BOOTSTRAP_INDEX_HFILE_SUFFIX;
+
+    FileSystem fs = FSUtils.getFs(getFilePath().toString(), new Configuration());
+    byte[] content = readHFileFromResources(simpleHFile);
+    verifyHFileReader(
+        HoodieHFileUtils.createHFileReader(fs, new Path(DUMMY_BASE_PATH), content),
+        hfilePrefix, true, HFILE_COMPARATOR.getClass(), NUM_RECORDS_FIXTURE);
+    HoodieHFileReader<GenericRecord> hfileReader =
+        new HoodieHFileReader<>(fs, new Path(DUMMY_BASE_PATH), content);
+    Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
+    assertEquals(NUM_RECORDS_FIXTURE, hfileReader.getTotalRecords());
+    verifySimpleRecords(hfileReader.getRecordIterator(avroSchema));
+
+    content = readHFileFromResources(complexHFile);
+    verifyHFileReader(HoodieHFileUtils.createHFileReader(fs, new Path(DUMMY_BASE_PATH), content),
+        hfilePrefix, true, HFILE_COMPARATOR.getClass(), NUM_RECORDS_FIXTURE);
+    hfileReader = new HoodieHFileReader<>(fs, new Path(DUMMY_BASE_PATH), content);
+    avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchemaWithUDT.avsc");
+    assertEquals(NUM_RECORDS_FIXTURE, hfileReader.getTotalRecords());
+    verifySimpleRecords(hfileReader.getRecordIterator(avroSchema));
+
+    content = readHFileFromResources(bootstrapIndexFile);
+    verifyHFileReader(HoodieHFileUtils.createHFileReader(fs, new Path(DUMMY_BASE_PATH), content),
+        hfilePrefix, false, HFileBootstrapIndex.HoodieKVComparator.class, 4);
+  }
+
   private Set<String> getRandomKeys(int count, List<String> keys) {
     Set<String> rowKeys = new HashSet<>();
     int totalKeys = keys.size();
@@ -242,5 +280,27 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       }
     }
     return rowKeys;
+  }
+
+  private byte[] readHFileFromResources(String filename) throws IOException {
+    long size = TestHoodieHFileReaderWriter.class
+        .getResource(filename).openConnection().getContentLength();
+    return FileIOUtils.readAsByteArray(
+        TestHoodieHFileReaderWriter.class.getResourceAsStream(filename), (int) size);
+  }
+
+  private void verifyHFileReader(
+      HFile.Reader reader, String hfileName, boolean mayUseDefaultComparator,
+      Class<?> clazz, int count) {
+    // HFile version is 3
+    assertEquals(3, reader.getTrailer().getMajorVersion());
+    if (mayUseDefaultComparator && hfileName.contains("hudi_0_9")) {
+      // Pre Hudi 0.10, the default comparator is used for metadata table HFiles
+      // For bootstrap index HFiles, the custom comparator is always used
+      assertEquals(CellComparatorImpl.class, reader.getComparator().getClass());
+    } else {
+      assertEquals(clazz, reader.getComparator().getClass());
+    }
+    assertEquals(count, reader.getEntries());
   }
 }

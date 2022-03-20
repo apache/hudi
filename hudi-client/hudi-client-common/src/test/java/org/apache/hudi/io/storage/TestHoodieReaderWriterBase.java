@@ -108,19 +108,7 @@ public abstract class TestHoodieReaderWriterBase {
     Configuration conf = new Configuration();
     verifyMetadata(conf);
     verifySchema(conf, schemaPath);
-
-    HoodieFileReader<GenericRecord> hoodieReader = createReader(conf);
-
-    Iterator<GenericRecord> iter = hoodieReader.getRecordIterator();
-    int index = 0;
-    while (iter.hasNext()) {
-      GenericRecord record = iter.next();
-      String key = "key" + String.format("%02d", index);
-      assertEquals(key, record.get("_row_key").toString());
-      assertEquals(Integer.toString(index), record.get("time").toString());
-      assertEquals(index, record.get("number"));
-      index++;
-    }
+    verifySimpleRecords(createReader(conf).getRecordIterator());
   }
 
   @Test
@@ -147,13 +135,63 @@ public abstract class TestHoodieReaderWriterBase {
     Configuration conf = new Configuration();
     verifyMetadata(conf);
     verifySchema(conf, schemaPath);
+    verifyComplexRecords(createReader(conf).getRecordIterator());
+  }
 
+  @Test
+  public void testWriteReadWithEvolvedSchema() throws Exception {
+    writeFileWithSimpleSchema();
+
+    Configuration conf = new Configuration();
     HoodieFileReader<GenericRecord> hoodieReader = createReader(conf);
+    String[] schemaList = new String[] {
+        "/exampleEvolvedSchema.avsc", "/exampleEvolvedSchemaChangeOrder.avsc",
+        "/exampleEvolvedSchemaColumnRequire.avsc", "/exampleEvolvedSchemaColumnType.avsc",
+        "/exampleEvolvedSchemaDeleteColumn.avsc"};
 
-    Iterator<GenericRecord> iter = hoodieReader.getRecordIterator();
+    for (String evolvedSchemaPath : schemaList) {
+      verifyReaderWithSchema(evolvedSchemaPath, hoodieReader);
+    }
+  }
+
+  @Test
+  public void testReaderFilterRowKeys() throws Exception {
+    writeFileWithSimpleSchema();
+    Configuration conf = new Configuration();
+    verifyMetadata(conf);
+    verifyFilterRowKeys(createReader(conf));
+  }
+
+  protected void writeFileWithSimpleSchema() throws Exception {
+    Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
+    HoodieFileWriter<GenericRecord> writer = createWriter(avroSchema, true);
+    for (int i = 0; i < NUM_RECORDS; i++) {
+      GenericRecord record = new GenericData.Record(avroSchema);
+      String key = "key" + String.format("%02d", i);
+      record.put("_row_key", key);
+      record.put("time", Integer.toString(i));
+      record.put("number", i);
+      writer.writeAvro(key, record);
+    }
+    writer.close();
+  }
+
+  protected void verifySimpleRecords(Iterator<GenericRecord> iterator) {
     int index = 0;
-    while (iter.hasNext()) {
-      GenericRecord record = iter.next();
+    while (iterator.hasNext()) {
+      GenericRecord record = iterator.next();
+      String key = "key" + String.format("%02d", index);
+      assertEquals(key, record.get("_row_key").toString());
+      assertEquals(Integer.toString(index), record.get("time").toString());
+      assertEquals(index, record.get("number"));
+      index++;
+    }
+  }
+
+  protected void verifyComplexRecords(Iterator<GenericRecord> iterator) {
+    int index = 0;
+    while (iterator.hasNext()) {
+      GenericRecord record = iterator.next();
       String key = "key" + String.format("%02d", index);
       assertEquals(key, record.get("_row_key").toString());
       assertEquals(Integer.toString(index), record.get("time").toString());
@@ -177,45 +215,7 @@ public abstract class TestHoodieReaderWriterBase {
     }
   }
 
-  @Test
-  public void testWriteReadWithEvolvedSchema() throws Exception {
-    writeFileWithSimpleSchema();
-
-    Configuration conf = new Configuration();
-    HoodieFileReader<GenericRecord> hoodieReader = createReader(conf);
-    String[] schemaList = new String[] {
-        "/exampleEvolvedSchema.avsc", "/exampleEvolvedSchemaChangeOrder.avsc",
-        "/exampleEvolvedSchemaColumnRequire.avsc", "/exampleEvolvedSchemaColumnType.avsc",
-        "/exampleEvolvedSchemaDeleteColumn.avsc"};
-
-    for (String evolvedSchemaPath : schemaList) {
-      validateReaderWithSchema(evolvedSchemaPath, hoodieReader);
-    }
-  }
-
-  @Test
-  public void testReaderFilterRowKeys() throws Exception {
-    writeFileWithSimpleSchema();
-    Configuration conf = new Configuration();
-    verifyMetadata(conf);
-    validateFilterRowKeys(createReader(conf));
-  }
-
-  protected void writeFileWithSimpleSchema() throws Exception {
-    Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
-    HoodieFileWriter<GenericRecord> writer = createWriter(avroSchema, true);
-    for (int i = 0; i < NUM_RECORDS; i++) {
-      GenericRecord record = new GenericData.Record(avroSchema);
-      String key = "key" + String.format("%02d", i);
-      record.put("_row_key", key);
-      record.put("time", Integer.toString(i));
-      record.put("number", i);
-      writer.writeAvro(key, record);
-    }
-    writer.close();
-  }
-
-  private void validateFilterRowKeys(HoodieFileReader<GenericRecord> hoodieReader) {
+  private void verifyFilterRowKeys(HoodieFileReader<GenericRecord> hoodieReader) {
     Set<String> candidateRowKeys = IntStream.range(40, NUM_RECORDS * 2)
         .mapToObj(i -> "key" + String.format("%02d", i)).collect(Collectors.toSet());
     List<String> expectedKeys = IntStream.range(40, NUM_RECORDS)
@@ -224,17 +224,17 @@ public abstract class TestHoodieReaderWriterBase {
         .stream().sorted().collect(Collectors.toList()));
   }
 
-  private void validateReaderWithSchema(String schemaPath, HoodieFileReader<GenericRecord> hoodieReader) throws IOException {
+  private void verifyReaderWithSchema(String schemaPath, HoodieFileReader<GenericRecord> hoodieReader) throws IOException {
     Schema evolvedSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, schemaPath);
     Iterator<GenericRecord> iter = hoodieReader.getRecordIterator(evolvedSchema);
     int index = 0;
     while (iter.hasNext()) {
-      validateRecord(schemaPath, iter.next(), index);
+      verifyRecord(schemaPath, iter.next(), index);
       index++;
     }
   }
 
-  private void validateRecord(String schemaPath, GenericRecord record, int index) {
+  private void verifyRecord(String schemaPath, GenericRecord record, int index) {
     String numStr = String.format("%02d", index);
     assertEquals("key" + numStr, record.get("_row_key").toString());
     assertEquals(Integer.toString(index), record.get("time").toString());
