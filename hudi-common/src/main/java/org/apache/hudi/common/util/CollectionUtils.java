@@ -22,6 +22,7 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import java.lang.reflect.Array;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -37,6 +38,14 @@ import java.util.stream.Stream;
 public class CollectionUtils {
 
   public static final Properties EMPTY_PROPERTIES = new Properties();
+
+  public static boolean isNullOrEmpty(Collection<?> c) {
+    return Objects.isNull(c) || c.isEmpty();
+  }
+
+  public static boolean nonEmpty(Collection<?> c) {
+    return !isNullOrEmpty(c);
+  }
 
   /**
    * Combines provided arrays into one
