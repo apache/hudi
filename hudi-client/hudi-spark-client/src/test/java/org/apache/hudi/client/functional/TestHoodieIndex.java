@@ -72,6 +72,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import scala.Tuple2;
@@ -258,19 +259,23 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
     // Insert 200 records
-    JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
-    Assertions.assertNoWriteErrors(writeStatues.collect());
-    List<String> fileIds = writeStatues.map(WriteStatus::getFileId).collect();
-    // commit this upsert
-    writeClient.commit(newCommitTime, writeStatues);
+    JavaRDD<WriteStatus> writeStatusesRDD = writeClient.upsert(writeRecords, newCommitTime);
+    // NOTE: This will trigger an actual write
+    List<WriteStatus> writeStatuses = writeStatusesRDD.collect();
+    Assertions.assertNoWriteErrors(writeStatuses);
+    // Commit
+    writeClient.commit(newCommitTime, jsc.parallelize(writeStatuses));
+
+    List<String> fileIds = writeStatuses.stream().map(WriteStatus::getFileId).collect(Collectors.toList());
+
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
 
     // Now tagLocation for these records, hbaseIndex should tag them
     JavaRDD<HoodieRecord> javaRDD = tagLocation(index, writeRecords, hoodieTable);
-    assert (javaRDD.filter(HoodieRecord::isCurrentLocationKnown).collect().size() == totalRecords);
+    assertEquals(totalRecords, javaRDD.filter(HoodieRecord::isCurrentLocationKnown).collect().size());
 
     // check tagged records are tagged with correct fileIds
-    assert (javaRDD.filter(record -> record.getCurrentLocation().getFileId() == null).collect().size() == 0);
+    assertEquals(0, javaRDD.filter(record -> record.getCurrentLocation().getFileId() == null).collect().size());
     List<String> taggedFileIds = javaRDD.map(record -> record.getCurrentLocation().getFileId()).distinct().collect();
 
     Map<String, String> recordKeyToPartitionPathMap = new HashMap();
