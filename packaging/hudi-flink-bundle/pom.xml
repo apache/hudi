@@ -179,6 +179,9 @@
                 <relocation>
                   <pattern>org.apache.hadoop.hbase.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.hadoop.hbase.</shadedPattern>
+                  <excludes>
+                    <exclude>org.apache.hadoop.hbase.KeyValue$KeyComparator</exclude>
+                  </excludes>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hbase.</pattern>
