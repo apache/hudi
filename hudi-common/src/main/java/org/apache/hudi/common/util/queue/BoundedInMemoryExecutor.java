@@ -174,27 +174,19 @@ public class BoundedInMemoryExecutor<I, O, E> {
   }
 
   public boolean awaitTermination() {
-    boolean interruptedBefore = Thread.currentThread().isInterrupted();
+    // if current thread has been interrupted before awaitTermination was called, we still give
+    // executor a chance to proceeding. So clear the interrupt flag and reset it if needed before return.
+    boolean interruptedBefore = Thread.interrupted();
     boolean producerTerminated = false;
     boolean consumerTerminated = false;
     try {
       producerTerminated = producerExecutorService.awaitTermination(TERMINATE_WAITING_TIME_SECS, TimeUnit.SECONDS);
       consumerTerminated = consumerExecutorService.awaitTermination(TERMINATE_WAITING_TIME_SECS, TimeUnit.SECONDS);
-      return producerTerminated && consumerTerminated;
     } catch (InterruptedException ie) {
-      if (!interruptedBefore) {
-        Thread.currentThread().interrupt();
-        return false;
-      }
-      // if current thread has been interrupted before awaitTermination was called.
-      // We still give executorService a chance to wait termination as
-      // what is wanted to be interrupted may not be the waiting process.
-      try {
-        producerTerminated = producerExecutorService.awaitTermination(TERMINATE_WAITING_TIME_SECS, TimeUnit.SECONDS);
-        consumerTerminated = consumerExecutorService.awaitTermination(TERMINATE_WAITING_TIME_SECS, TimeUnit.SECONDS);
-      } catch (InterruptedException expected) {
-        // awaiting process is interrupted again.
-      }
+      // fail silently for any other interruption
+    }
+    // reset interrupt flag if needed
+    if (interruptedBefore) {
       Thread.currentThread().interrupt();
     }
     return producerTerminated && consumerTerminated;
