@@ -84,7 +84,10 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
-import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldValAsString;
+import static org.apache.hudi.avro.HoodieAvroUtils.compare;
+import static org.apache.hudi.avro.HoodieAvroUtils.convertToNativeJavaType;
+import static org.apache.hudi.avro.HoodieAvroUtils.convertValueForSpecificDataTypes;
+import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
 import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.COLUMN_RANGE_MERGE_FUNCTION;
 import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.MAX;
 import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.MIN;
@@ -1116,11 +1119,11 @@ public class HoodieTableMetadataUtil {
                                             Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap,
                                             Map<String, Map<String, Object>> columnToStats) {
     Map<String, Object> columnStats = columnToStats.get(field.name());
-    HoodieColumnRangeMetadata<Comparable> columnRangeMetadata = HoodieColumnRangeMetadata.create(
+    HoodieColumnRangeMetadata<Comparable> columnRangeMetadata = HoodieColumnRangeMetadata.<Comparable>create(
         filePath,
         field.name(),
-        (Comparable) String.valueOf(columnStats.get(MIN)),
-        (Comparable) String.valueOf(columnStats.get(MAX)),
+        convertToNativeJavaType(field.schema(), columnStats.get(MIN)),
+        convertToNativeJavaType(field.schema(), columnStats.get(MAX)),
         Long.parseLong(columnStats.getOrDefault(NULL_COUNT, 0).toString()),
         Long.parseLong(columnStats.getOrDefault(VALUE_COUNT, 0).toString()),
         Long.parseLong(columnStats.getOrDefault(TOTAL_SIZE, 0).toString()),
@@ -1145,23 +1148,29 @@ public class HoodieTableMetadataUtil {
     }
 
     fields.forEach(field -> {
-      Map<String, Object> columnStats = columnToStats.getOrDefault(field.name(), new HashMap<>());
-      final String fieldVal = getNestedFieldValAsString((GenericRecord) record, field.name(), true, consistentLogicalTimestampEnabled);
+      Map<String, Object> columnStats = columnToStats.get(field.name());
+      GenericRecord genericRecord = (GenericRecord) record;
+      final Object fieldVal = convertValueForSpecificDataTypes(field.schema(), genericRecord.get(field.name()), consistentLogicalTimestampEnabled);
+      final Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(genericRecord.getSchema(), field.name());
       // update stats
-      final int fieldSize = fieldVal == null ? 0 : fieldVal.length();
-      columnStats.put(TOTAL_SIZE, Long.parseLong(columnStats.getOrDefault(TOTAL_SIZE, 0).toString()) + fieldSize);
-      columnStats.put(TOTAL_UNCOMPRESSED_SIZE, Long.parseLong(columnStats.getOrDefault(TOTAL_UNCOMPRESSED_SIZE, 0).toString()) + fieldSize);
+      // NOTE: Unlike Parquet, Avro does not give the field size.
+      columnStats.put(TOTAL_SIZE, Long.parseLong(columnStats.getOrDefault(TOTAL_SIZE, 0).toString()));
+      columnStats.put(TOTAL_UNCOMPRESSED_SIZE, Long.parseLong(columnStats.getOrDefault(TOTAL_UNCOMPRESSED_SIZE, 0).toString()));
 
-      if (!isNullOrEmpty(fieldVal)) {
+      if (fieldVal != null) {
         // set the min value of the field
         if (!columnStats.containsKey(MIN)) {
           columnStats.put(MIN, fieldVal);
         }
-        if (fieldVal.compareTo(String.valueOf(columnStats.get(MIN))) < 0) {
+        if (compare(fieldVal, columnStats.get(MIN), fieldSchema) < 0) {
           columnStats.put(MIN, fieldVal);
         }
         // set the max value of the field
-        if (fieldVal.compareTo(String.valueOf(columnStats.getOrDefault(MAX, ""))) > 0) {
+        if (!columnStats.containsKey(MAX)) {
+          columnStats.put(MAX, fieldVal);
+        }
+        // set the max value of the field
+        if (compare(fieldVal, columnStats.get(MAX), fieldSchema) > 0) {
           columnStats.put(MAX, fieldVal);
         }
         // increment non-null value count

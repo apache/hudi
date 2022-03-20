@@ -1,0 +1,13 @@
+{"minValue":"1","maxValue":"97","nullCount":0,"columnName":"c5"}
+{"minValue":"0","maxValue":"959","nullCount":0,"columnName":"_hoodie_record_key"}
+{"minValue":"9","maxValue":"9","nullCount":0,"columnName":"c8"}
+{"minValue":"","maxValue":"","nullCount":0,"columnName":"_hoodie_partition_path"}
+{"minValue":"java.nio.HeapByteBuffer[pos=0 lim=1 cap=1]","maxValue":"java.nio.HeapByteBuffer[pos=0 lim=1 cap=1]","nullCount":0,"columnName":"c7"}
+{"minValue":"2020-01-01","maxValue":"2020-11-22","nullCount":0,"columnName":"c6"}
+{"minValue":"20220322212553214_0_1","maxValue":"20220322212553214_0_9","nullCount":0,"columnName":"_hoodie_commit_seqno"}
+{"minValue":"1637383255339000","maxValue":"1637383255550000","nullCount":0,"columnName":"c4"}
+{"minValue":"ffb3a613-81e3-43ca-90f7-8bb2ed5db1e6-0_0-23-37_20220322212553214.parquet","maxValue":"ffb3a613-81e3-43ca-90f7-8bb2ed5db1e6-0_0-23-37_20220322212553214.parquet","nullCount":0,"columnName":"_hoodie_file_name"}
+{"minValue":"20220322212553214","maxValue":"20220322212553214","nullCount":0,"columnName":"_hoodie_commit_time"}
+{"minValue":"0","maxValue":"959","nullCount":0,"columnName":"c1"}
+{"minValue":"19.000","maxValue":"994.355","nullCount":0,"columnName":"c3"}
+{"minValue":" 0sdc","maxValue":" 959sdc","nullCount":0,"columnName":"c2"}

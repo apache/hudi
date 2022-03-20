@@ -169,7 +169,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
     bootstrapParquetInputTableFromJSON(secondJSONTablePath, secondParquetTablePath)
 
-    val secondCommitInstance = "1"
+    val secondCommitInstance = "1"  
     val secondInputDf =
       spark.read
         .schema(sourceTableSchema)
