@@ -18,6 +18,17 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.common.config.SerializableSchema;
+import org.apache.hudi.common.model.HoodieOperation;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.SchemaCompatibilityException;
+
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Conversions.DecimalConversion;
 import org.apache.avro.JsonProperties;
@@ -40,16 +51,6 @@ import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.specific.SpecificRecordBase;
-import org.apache.hudi.common.config.SerializableSchema;
-import org.apache.hudi.common.model.HoodieOperation;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.SchemaCompatibilityException;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -499,6 +500,109 @@ public class HoodieAvroUtils {
     } else {
       throw new HoodieException("The value of " + parts[i] + " can not be null");
     }
+  }
+
+  /**
+   * Get schema for the given field and record. Field can be nested, denoted by dot notation. e.g: a.b.c
+   *
+   * @param record    - record containing the value of the given field
+   * @param fieldName - name of the field
+   * @return
+   */
+  public static Schema getNestedFieldSchemaFromRecord(GenericRecord record, String fieldName) {
+    String[] parts = fieldName.split("\\.");
+    GenericRecord valueNode = record;
+    int i = 0;
+    for (; i < parts.length; i++) {
+      String part = parts[i];
+      Object val = valueNode.get(part);
+
+      if (i == parts.length - 1) {
+        return resolveNullableSchema(valueNode.getSchema().getField(part).schema());
+      } else {
+        if (!(val instanceof GenericRecord)) {
+          throw new HoodieException("Cannot find a record at part value :" + part);
+        }
+        valueNode = (GenericRecord) val;
+      }
+    }
+    throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
+  }
+
+
+  /**
+   * Get schema for the given field and write schema. Field can be nested, denoted by dot notation. e.g: a.b.c
+   * Use this method when record is not available. Otherwise, prefer to use {@link #getNestedFieldSchemaFromRecord(GenericRecord, String)}
+   *
+   * @param writeSchema - write schema of the record
+   * @param fieldName   -  name of the field
+   * @return
+   */
+  public static Schema getNestedFieldSchemaFromWriteSchema(Schema writeSchema, String fieldName) {
+    String[] parts = fieldName.split("\\.");
+    int i = 0;
+    for (; i < parts.length; i++) {
+      String part = parts[i];
+      Schema schema = writeSchema.getField(part).schema();
+
+      if (i == parts.length - 1) {
+        return resolveNullableSchema(schema);
+      }
+    }
+    throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
+  }
+
+  /**
+   * Given a field schema, convert its value to native Java type.
+   *
+   * @param schema - field schema
+   * @param val    - field value
+   * @return
+   */
+  public static Comparable<?> convertToNativeJavaType(Schema schema, Object val) {
+    if (val == null) {
+      return StringUtils.EMPTY_STRING;
+    }
+    if (schema.getLogicalType() == LogicalTypes.date()) {
+      return java.sql.Date.valueOf((val.toString()));
+    }
+    switch (schema.getType()) {
+      case UNION:
+        return convertToNativeJavaType(resolveNullableSchema(schema), val);
+      case STRING:
+        return val.toString();
+      case BYTES:
+        return (ByteBuffer) val;
+      case INT:
+        return (Integer) val;
+      case LONG:
+        return (Long) val;
+      case FLOAT:
+        return (Float) val;
+      case DOUBLE:
+        return (Double) val;
+      case BOOLEAN:
+        return (Boolean) val;
+      case ENUM:
+      case MAP:
+      case FIXED:
+      case NULL:
+      case RECORD:
+      case ARRAY:
+        return null;
+      default:
+        throw new IllegalStateException("Unexpected type: " + schema.getType());
+    }
+  }
+
+  /**
+   * Type-aware object comparison. Used to compare two objects for an Avro field.
+   */
+  public static int compare(Object o1, Object o2, Schema schema) {
+    if (Schema.Type.MAP.equals(schema.getType())) {
+      return ((Map) o1).equals(o2) ? 0 : 1;
+    }
+    return GenericData.get().compare(o1, o2, schema);
   }
 
   /**
