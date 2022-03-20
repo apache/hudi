@@ -408,38 +408,41 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   }
 
   @SuppressWarnings("unchecked, rawtypes")
-  private boolean flushBucket(DataBucket bucket) {
+  private synchronized boolean flushBucket(DataBucket bucket) {
     String instant = instantToWrite(true);
+    try {
+      if (instant == null) {
+        // in case there are empty checkpoints that has no input data
+        LOG.info("No inflight instant when flushing data, skip.");
+        return false;
+      }
 
-    if (instant == null) {
-      // in case there are empty checkpoints that has no input data
-      LOG.info("No inflight instant when flushing data, skip.");
-      return false;
+      List<HoodieRecord> records = bucket.writeBuffer();
+      ValidationUtils.checkState(records.size() > 0, "Data bucket to flush has no buffering records");
+      if (config.getBoolean(FlinkOptions.PRE_COMBINE)) {
+        records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1);
+      }
+      bucket.preWrite(records);
+      final List<WriteStatus> writeStatus = new ArrayList<>(writeFunction.apply(records, instant));
+      records.clear();
+      final WriteMetadataEvent event = WriteMetadataEvent.builder()
+              .taskID(taskID)
+              .instantTime(instant) // the write instant may shift but the event still use the currentInstant.
+              .writeStatus(writeStatus)
+              .lastBatch(false)
+              .endInput(false)
+              .build();
+
+      this.eventGateway.sendEventToCoordinator(event);
+      writeStatuses.addAll(writeStatus);
+      return true;
+    } finally {
+      this.confirming = true;
     }
-
-    List<HoodieRecord> records = bucket.writeBuffer();
-    ValidationUtils.checkState(records.size() > 0, "Data bucket to flush has no buffering records");
-    if (config.getBoolean(FlinkOptions.PRE_COMBINE)) {
-      records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1);
-    }
-    bucket.preWrite(records);
-    final List<WriteStatus> writeStatus = new ArrayList<>(writeFunction.apply(records, instant));
-    records.clear();
-    final WriteMetadataEvent event = WriteMetadataEvent.builder()
-        .taskID(taskID)
-        .instantTime(instant) // the write instant may shift but the event still use the currentInstant.
-        .writeStatus(writeStatus)
-        .lastBatch(false)
-        .endInput(false)
-        .build();
-
-    this.eventGateway.sendEventToCoordinator(event);
-    writeStatuses.addAll(writeStatus);
-    return true;
   }
 
   @SuppressWarnings("unchecked, rawtypes")
-  private void flushRemaining(boolean endInput) {
+  private synchronized void flushRemaining(boolean endInput) {
     this.currentInstant = instantToWrite(hasData());
     if (this.currentInstant == null) {
       // in case there are empty checkpoints that has no input data
