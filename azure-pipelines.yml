@@ -26,6 +26,7 @@ variables:
   SPARK_VERSION: '2.4.4'
   HADOOP_VERSION: '2.7'
   SPARK_ARCHIVE: spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION)
+  EXCLUDE_TESTED_MODULES: '!hudi-examples/hudi-examples-common,!hudi-examples/hudi-examples-flink,!hudi-examples/hudi-examples-java,!hudi-examples/hudi-examples-spark,!hudi-common,!hudi-flink-datasource/hudi-flink,!hudi-client/hudi-spark-client,!hudi-client/hudi-client-common,!hudi-client/hudi-flink-client,!hudi-client/hudi-java-client,!hudi-cli,!hudi-utilities,!hudi-sync/hudi-hive-sync'
 
 stages:
   - stage: test
@@ -132,7 +133,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Punit-tests -pl !hudi-common,!hudi-flink-datasource/hudi-flink,!hudi-client/hudi-spark-client,!hudi-client/hudi-client-common,!hudi-client/hudi-flink-client,!hudi-client/hudi-java-client,!hudi-cli,!hudi-utilities,!hudi-sync/hudi-hive-sync
+              options: -Punit-tests -pl $(EXCLUDE_TESTED_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
@@ -141,7 +142,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Pfunctional-tests -pl !hudi-common,!hudi-flink-datasource/hudi-flink,!hudi-client/hudi-spark-client,!hudi-client/hudi-client-common,!hudi-client/hudi-flink-client,!hudi-client/hudi-java-client,!hudi-cli,!hudi-utilities,!hudi-sync/hudi-hive-sync
+              options: -Pfunctional-tests -pl $(EXCLUDE_TESTED_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
