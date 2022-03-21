@@ -60,9 +60,9 @@ trait SparkAdapter extends Serializable {
   def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer
 
   /**
-   * TODO
+   * Creates instance of [[HoodieAvroSchemaConverters]] allowing to convert b/w Avro and Catalyst schemas
    */
-  def getAvroSchemaConverters(): HoodieAvroSchemaConverters
+  def getAvroSchemaConverters: HoodieAvroSchemaConverters
 
   /**
    * Create the SparkRowSerDe.

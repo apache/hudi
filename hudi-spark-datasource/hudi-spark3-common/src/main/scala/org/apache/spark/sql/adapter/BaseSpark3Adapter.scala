@@ -45,7 +45,7 @@ abstract class BaseSpark3Adapter extends SparkAdapter {
     new Spark3RowSerDe(encoder)
   }
 
-  override def getAvroSchemaConverters(): HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
+  override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
 
   override def toTableIdentifier(aliasId: AliasIdentifier): TableIdentifier = {
     aliasId match {

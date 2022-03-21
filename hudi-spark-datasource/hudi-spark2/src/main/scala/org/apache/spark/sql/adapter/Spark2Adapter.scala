@@ -50,7 +50,7 @@ class Spark2Adapter extends SparkAdapter {
   override def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer =
     new HoodieSpark2_4AvroDeserializer(rootAvroType, rootCatalystType)
 
-  override def getAvroSchemaConverters(): HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
+  override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
 
   override def createSparkRowSerDe(encoder: ExpressionEncoder[Row]): SparkRowSerDe = {
     new Spark2RowSerDe(encoder)

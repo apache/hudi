@@ -90,14 +90,9 @@ mvn clean package -DskipTests -Dspark3
 mvn clean package -DskipTests -Dspark3.1.x
 ```
 
-### What about "spark-avro" module?
+### What about "spark-avro" module? 
 
-Previously, Hudi bundles were packaging (and shading) "spark-avro" module internally. However, due to multiple occasion 
-of it being broken b/w patch versions (most recent was, b/w 3.2.0 and 3.2.1) of Spark after substantial deliberation 
-we took a decision to let go such dependency and instead simply clone the structures we're relying on to better control 
-compatibility w/in Spark minor version branches (3.1.x, 3.2.x, etc).
-
-As such there's also no need to specify "spark-avro" in `--packages`.
+Starting from versions 0.11, Hudi no longer requires `spark-avro` to be specified using `--packages`
 
 ## Running Tests
 
