@@ -20,7 +20,6 @@ package org.apache.hudi.internal.schema.action;
 
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Types;
-import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 
 import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
 import org.junit.jupiter.api.Test;
@@ -61,7 +60,7 @@ public class TestMergeSchema {
     TableChanges.ColumnAddChange addChange1 = TableChanges.ColumnAddChange.get(updateSchema);
     addChange1.addColumns("col1", Types.BooleanType.get(), "add new col1");
     InternalSchema finalSchema = SchemaChangeUtils.applyTableChanges2Schema(updateSchema, addChange1);
-    InternalSchema mergeSchema = InternalSchemaUtils.mergeSchema(oldSchema, finalSchema);
+    InternalSchema mergeSchema = new InternalSchemaMerger(oldSchema, finalSchema, true, false).mergeSchema();
   }
 }
 

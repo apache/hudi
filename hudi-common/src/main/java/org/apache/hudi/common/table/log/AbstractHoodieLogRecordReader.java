@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -49,9 +50,8 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
-import org.apache.hudi.internal.schema.utils.AvroSchemaUtil;
-import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -375,7 +375,7 @@ public abstract class AbstractHoodieLogRecordReader {
       Option<Schema> schemaOption = getMergedSchema(dataBlock);
       while (recordItr.hasNext()) {
         IndexedRecord currentRecord = recordItr.next();
-        IndexedRecord record = schemaOption.isPresent() ? AvroSchemaUtil.rewriteRecord(currentRecord, schemaOption.get()) : currentRecord;
+        IndexedRecord record = schemaOption.isPresent() ? HoodieAvroUtils.rewriteRecordWithNewSchema(currentRecord, schemaOption.get()) : currentRecord;
         processNextRecord(createHoodieRecord(record, this.hoodieTableMetaClient.getTableConfig(), this.payloadClassFQN,
             this.preCombineField, this.withOperationField, this.simpleKeyGenFields, this.partitionName));
         totalLogRecords.incrementAndGet();
@@ -403,7 +403,7 @@ public abstract class AbstractHoodieLogRecordReader {
       if (!TableSchemaResolver.isSchemaCompatible(AvroInternalSchemaConverter.convert(fileSchema, readerSchema.getName()),
           AvroInternalSchemaConverter.convert(internalSchema, readerSchema.getName())) || !TableSchemaResolver.isSchemaCompatible(blockWriterSchema, readerSchema)) {
         Schema mergeSchema = AvroInternalSchemaConverter
-            .convert(InternalSchemaUtils.mergeSchema(fileSchema, internalSchema, true, false), readerSchema.getName());
+            .convert(new InternalSchemaMerger(fileSchema, internalSchema, true, false).mergeSchema(), readerSchema.getName());
         result = Option.of(mergeSchema);
       }
     }

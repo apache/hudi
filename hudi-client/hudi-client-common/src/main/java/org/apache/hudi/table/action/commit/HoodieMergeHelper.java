@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.avro.SchemaCompatibility;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.fs.FSUtils;
@@ -31,9 +32,9 @@ import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
-import org.apache.hudi.internal.schema.utils.AvroSchemaUtil;
-import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
+import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
@@ -95,7 +96,7 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
     // TODO support bootstrap
     if (querySchemaOpt.isPresent() && !baseFile.getBootstrapBaseFile().isPresent()) {
       // check implicitly add columns, and position reorder(spark sql may change cols order)
-      InternalSchema querySchema = AvroSchemaUtil.evolutionSchemaFromNewAvroSchema(readSchema, querySchemaOpt.get(), true);
+      InternalSchema querySchema = AvroSchemaEvolutionUtils.evolveSchemaFromNewAvroSchema(readSchema, querySchemaOpt.get(), true);
       long commitTime = Long.valueOf(FSUtils.getCommitTime(mergeHandle.getOldFilePath().getName()));
       InternalSchema writeInternalSchema = InternalSchemaCache.searchSchemaAndCache(commitTime, table.getMetaClient());
       List<String> colNamesFromQuerySchema = querySchema.getAllColsFullName();
@@ -105,7 +106,7 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
                       && writeInternalSchema.findIdByName(f) == querySchema.findIdByName(f)
                       && writeInternalSchema.findIdByName(f) != -1
                       && writeInternalSchema.findType(writeInternalSchema.findIdByName(f)).equals(querySchema.findType(writeInternalSchema.findIdByName(f)))).collect(Collectors.toList());
-      readSchema = AvroInternalSchemaConverter.convert(InternalSchemaUtils.mergeSchema(writeInternalSchema, querySchema, true, false), readSchema.getName());
+      readSchema = AvroInternalSchemaConverter.convert(new InternalSchemaMerger(writeInternalSchema, querySchema, true, false).mergeSchema(), readSchema.getName());
       Schema writeSchemaFromFile = AvroInternalSchemaConverter.convert(writeInternalSchema, readSchema.getName());
       needToReWriteRecord = sameCols.size() != colNamesFromWriteSchema.size()
               || SchemaCompatibility.checkReaderWriterCompatibility(writeSchemaFromFile, readSchema).getType() == org.apache.avro.SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
@@ -117,7 +118,7 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
         readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader, readSchema, externalSchemaTransformation);
       } else {
         if (needToReWriteRecord) {
-          readerIterator = AvroSchemaUtil.rewriteRecords(reader.getRecordIterator(), readSchema);
+          readerIterator = HoodieAvroUtils.rewriteRecordWithNewSchema(reader.getRecordIterator(), readSchema);
         } else {
           readerIterator = reader.getRecordIterator(readSchema);
         }

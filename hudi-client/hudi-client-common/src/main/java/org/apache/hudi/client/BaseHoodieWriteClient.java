@@ -75,11 +75,12 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
+import org.apache.hudi.internal.schema.action.InternalSchemaChangeApplier;
 import org.apache.hudi.internal.schema.action.TableChange;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
-import org.apache.hudi.internal.schema.utils.AvroSchemaUtil;
-import org.apache.hudi.internal.schema.utils.SchemaChangePersistHelper;
+import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
+import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -267,10 +268,10 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElse("");
       FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(table.getMetaClient());
       if (!historySchemaStr.isEmpty()) {
-        InternalSchema internalSchema = SerDeHelper.searchSchema(Long.parseLong(instantTime),
+        InternalSchema internalSchema = InternalSchemaUtils.searchSchema(Long.parseLong(instantTime),
             SerDeHelper.parseSchemas(historySchemaStr));
         Schema avroSchema = HoodieAvroUtils.createHoodieWriteSchema(new Schema.Parser().parse(config.getSchema()));
-        InternalSchema evolutionSchema = AvroSchemaUtil.evolutionSchemaFromNewAvroSchema(avroSchema, internalSchema);
+        InternalSchema evolutionSchema = AvroSchemaEvolutionUtils.evolveSchemaFromNewAvroSchema(avroSchema, internalSchema);
         if (evolutionSchema.equals(internalSchema)) {
           metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(evolutionSchema));
           schemasManager.persistHistorySchemaStr(instantTime, historySchemaStr);
@@ -1555,8 +1556,8 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    */
   public void addColumn(String colName, Schema schema, String doc, String position, TableChange.ColumnPositionChange.ColumnPositionType positionType) {
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    InternalSchema newSchema = SchemaChangePersistHelper
-        .applyAddChange(pair.getLeft(), colName, AvroInternalSchemaConverter.convertToField(schema), doc, position, positionType);
+    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft())
+        .applyAddChange(colName, AvroInternalSchemaConverter.convertToField(schema), doc, position, positionType);
     commitTableChange(newSchema, pair.getRight());
   }
 
@@ -1571,7 +1572,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    */
   public void deleteColumns(String... colNames) {
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    InternalSchema newSchema = SchemaChangePersistHelper.applyDeleteChange(pair.getLeft(), colNames);
+    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft()).applyDeleteChange(colNames);
     commitTableChange(newSchema, pair.getRight());
   }
 
@@ -1583,7 +1584,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    */
   public void renameColumn(String colName, String newName) {
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    InternalSchema newSchema = SchemaChangePersistHelper.applyRenameChange(pair.getLeft(), colName, newName);
+    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft()).applyRenameChange(colName, newName);
     commitTableChange(newSchema, pair.getRight());
   }
 
@@ -1595,7 +1596,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    */
   public void updateColumnNullability(String colName, boolean nullable) {
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    InternalSchema newSchema = SchemaChangePersistHelper.applyColumnNullabilityChange(pair.getLeft(), colName, nullable);
+    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft()).applyColumnNullabilityChange(colName, nullable);
     commitTableChange(newSchema, pair.getRight());
   }
 
@@ -1609,7 +1610,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    */
   public void updateColumnType(String colName, Type newType) {
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    InternalSchema newSchema = SchemaChangePersistHelper.applyColumnTypeChange(pair.getLeft(), colName, newType);
+    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft()).applyColumnTypeChange(colName, newType);
     commitTableChange(newSchema, pair.getRight());
   }
 
@@ -1621,7 +1622,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    */
   public void updateColumnComment(String colName, String doc) {
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    InternalSchema newSchema = SchemaChangePersistHelper.applyColumnCommentChange(pair.getLeft(), colName, doc);
+    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft()).applyColumnCommentChange(colName, doc);
     commitTableChange(newSchema, pair.getRight());
   }
 
@@ -1638,8 +1639,8 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     }
     //get internalSchema
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    InternalSchema newSchema = SchemaChangePersistHelper
-        .applyReOrderColPositionChange(pair.getLeft(), colName, referColName, orderType);
+    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft())
+        .applyReOrderColPositionChange(colName, referColName, orderType);
     commitTableChange(newSchema, pair.getRight());
   }
 

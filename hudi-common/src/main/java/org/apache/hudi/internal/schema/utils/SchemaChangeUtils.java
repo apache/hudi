@@ -185,7 +185,7 @@ public class SchemaChangeUtils {
    * @param deletes a wrapper class for all the DDL delete operations.
    * @return a new internalSchema.
    */
-  public static Type applyTableChange2Type(Type type, TableChanges.ColumnDeleteChange deletes) {
+  private static Type applyTableChange2Type(Type type, TableChanges.ColumnDeleteChange deletes) {
     switch (type.typeId()) {
       case RECORD:
         Types.RecordType record = (Types.RecordType) type;
@@ -250,7 +250,7 @@ public class SchemaChangeUtils {
    * @param updates a wrapper class for all the DDL update operations.
    * @return a new internalSchema.
    */
-  public static Type applyTableChange2Type(Type type, TableChanges.ColumnUpdateChange updates) {
+  private static Type applyTableChange2Type(Type type, TableChanges.ColumnUpdateChange updates) {
     switch (type.typeId()) {
       case RECORD:
         Types.RecordType record = (Types.RecordType) type;

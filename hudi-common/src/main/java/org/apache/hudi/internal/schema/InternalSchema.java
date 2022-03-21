@@ -21,7 +21,6 @@ package org.apache.hudi.internal.schema;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.internal.schema.Types.Field;
 import org.apache.hudi.internal.schema.Types.RecordType;
-import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -92,7 +91,7 @@ public class InternalSchema implements Serializable {
 
   private Map<Integer, String> buildIdToName() {
     if (idToName == null) {
-      idToName = InternalSchemaUtils.buildIdToName(record);
+      idToName = InternalSchemaBuilder.getBuilder().buildIdToName(record);
     }
     return idToName;
   }
@@ -103,14 +102,14 @@ public class InternalSchema implements Serializable {
         nameToId = idToName.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
         return nameToId;
       }
-      nameToId = InternalSchemaUtils.buildNameToId(record);
+      nameToId = InternalSchemaBuilder.getBuilder().buildNameToId(record);
     }
     return nameToId;
   }
 
   private Map<Integer, Field> buildIdToField() {
     if (idToField == null) {
-      idToField = InternalSchemaUtils.buildIdToField(record);
+      idToField = InternalSchemaBuilder.getBuilder().buildIdToField(record);
     }
     return idToField;
   }
@@ -120,7 +119,7 @@ public class InternalSchema implements Serializable {
    */
   public List<String> getAllColsFullName() {
     if (nameToId == null) {
-      nameToId = InternalSchemaUtils.buildNameToId(record);
+      nameToId = InternalSchemaBuilder.getBuilder().buildNameToId(record);
     }
     return Arrays.asList(nameToId.keySet().toArray(new String[0]));
   }

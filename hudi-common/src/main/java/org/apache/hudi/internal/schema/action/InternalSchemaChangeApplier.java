@@ -16,31 +16,34 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.internal.schema.utils;
+package org.apache.hudi.internal.schema.action;
 
-import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.action.TableChange;
-import org.apache.hudi.internal.schema.action.TableChanges;
-import org.apache.hudi.internal.schema.action.TableChangesHelper;
+import org.apache.hudi.internal.schema.Type;
+import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
 
 import java.util.Arrays;
 
-public class SchemaChangePersistHelper {
-  private SchemaChangePersistHelper() {}
+/**
+ * Manage schema change for HoodieWriteClient.
+ */
+public class InternalSchemaChangeApplier {
+  private InternalSchema latestSchema;
+
+  public InternalSchemaChangeApplier(InternalSchema latestSchema) {
+    this.latestSchema = latestSchema;
+  }
 
   /**
    * add columns to table.
    *
-   * @param latestSchema latest internal schema.
    * @param colName col name to be added. if we want to add col to a nested filed, the fullName should be specify
    * @param colType col type to be added.
    * @param doc col doc to be added.
    * @param position col position to be added
    * @param positionType col position change type. now support three change types: first/after/before
    */
-  public static InternalSchema applyAddChange(
-      InternalSchema latestSchema,
+  public InternalSchema applyAddChange(
       String colName,
       Type colType,
       String doc,
@@ -79,10 +82,9 @@ public class SchemaChangePersistHelper {
   /**
    * delete columns to table.
    *
-   * @param latestSchema latest internal schema.
    * @param colNames col name to be deleted. if we want to delete col from a nested filed, the fullName should be specify
    */
-  public static InternalSchema applyDeleteChange(InternalSchema latestSchema, String... colNames) {
+  public InternalSchema applyDeleteChange(String... colNames) {
     TableChanges.ColumnDeleteChange delete = TableChanges.ColumnDeleteChange.get(latestSchema);
     Arrays.stream(colNames).forEach(colName -> delete.deleteColumn(colName));
     return SchemaChangeUtils.applyTableChanges2Schema(latestSchema, delete);
@@ -91,11 +93,10 @@ public class SchemaChangePersistHelper {
   /**
    * rename col name for hudi table.
    *
-   * @param latestSchema latest internal schema.
    * @param colName col name to be renamed. if we want to rename col from a nested filed, the fullName should be specify
    * @param newName new name for current col. no need to specify fullName.
    */
-  public static InternalSchema applyRenameChange(InternalSchema latestSchema, String colName, String newName) {
+  public InternalSchema applyRenameChange(String colName, String newName) {
     TableChanges.ColumnUpdateChange updateChange = TableChanges.ColumnUpdateChange.get(latestSchema);
     updateChange.renameColumn(colName, newName);
     return SchemaChangeUtils.applyTableChanges2Schema(latestSchema, updateChange);
@@ -104,11 +105,10 @@ public class SchemaChangePersistHelper {
   /**
    * update col nullability for hudi table.
    *
-   * @param latestSchema latest internal schema.
    * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specify
    * @param nullable .
    */
-  public static InternalSchema applyColumnNullabilityChange(InternalSchema latestSchema, String colName, boolean nullable) {
+  public InternalSchema applyColumnNullabilityChange(String colName, boolean nullable) {
     TableChanges.ColumnUpdateChange updateChange = TableChanges.ColumnUpdateChange.get(latestSchema);
     updateChange.updateColumnNullability(colName, nullable);
     return SchemaChangeUtils.applyTableChanges2Schema(latestSchema, updateChange);
@@ -117,11 +117,10 @@ public class SchemaChangePersistHelper {
   /**
    * update col type for hudi table.
    *
-   * @param latestSchema latest internal schema.
    * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specify
    * @param newType .
    */
-  public static InternalSchema applyColumnTypeChange(InternalSchema latestSchema, String colName, Type newType) {
+  public InternalSchema applyColumnTypeChange(String colName, Type newType) {
     TableChanges.ColumnUpdateChange updateChange = TableChanges.ColumnUpdateChange.get(latestSchema);
     updateChange.updateColumnType(colName, newType);
     return SchemaChangeUtils.applyTableChanges2Schema(latestSchema, updateChange);
@@ -130,11 +129,10 @@ public class SchemaChangePersistHelper {
   /**
    * update col comment for hudi table.
    *
-   * @param latestSchema latest internal schema.
    * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specify
    * @param doc .
    */
-  public static InternalSchema applyColumnCommentChange(InternalSchema latestSchema, String colName, String doc) {
+  public InternalSchema applyColumnCommentChange(String colName, String doc) {
     TableChanges.ColumnUpdateChange updateChange = TableChanges.ColumnUpdateChange.get(latestSchema);
     updateChange.updateColumnComment(colName, doc);
     return SchemaChangeUtils.applyTableChanges2Schema(latestSchema, updateChange);
@@ -143,13 +141,11 @@ public class SchemaChangePersistHelper {
   /**
    * reorder the position of col.
    *
-   * @param latestSchema latest internal schema.
    * @param colName column which need to be reordered. if we want to change col from a nested filed, the fullName should be specify.
    * @param referColName reference position.
    * @param positionType col position change type. now support three change types: first/after/before
    */
-  public static InternalSchema applyReOrderColPositionChange(
-      InternalSchema latestSchema,
+  public InternalSchema applyReOrderColPositionChange(
       String colName,
       String referColName,
       TableChange.ColumnPositionChange.ColumnPositionType positionType) {

@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
+import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 
 import java.util.List;
@@ -85,7 +86,7 @@ public class InternalSchemaCache {
     // use segment lock to reduce competition.
     synchronized (lockList[tablePath.hashCode() & (lockList.length - 1)]) {
       TreeMap<Long, InternalSchema> historicalSchemas = HISTORICAL_SCHEMA_CACHE.getIfPresent(tablePath);
-      if (historicalSchemas == null || SerDeHelper.searchSchema(versionID, historicalSchemas) == null) {
+      if (historicalSchemas == null || InternalSchemaUtils.searchSchema(versionID, historicalSchemas) == null) {
         historicalSchemas = getHistoricalSchemas(metaClient);
         HISTORICAL_SCHEMA_CACHE.put(tablePath, historicalSchemas);
       } else {
@@ -95,7 +96,7 @@ public class InternalSchemaCache {
           HISTORICAL_SCHEMA_CACHE.put(tablePath, historicalSchemas);
         }
       }
-      return SerDeHelper.searchSchema(versionID, historicalSchemas);
+      return InternalSchemaUtils.searchSchema(versionID, historicalSchemas);
     }
   }
 

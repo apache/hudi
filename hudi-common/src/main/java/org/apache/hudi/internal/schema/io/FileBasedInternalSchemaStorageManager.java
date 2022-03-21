@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 
 import org.apache.log4j.LogManager;
@@ -157,7 +158,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
       return Option.empty();
     } else {
       treeMap = SerDeHelper.parseSchemas(historySchemaStr);
-      InternalSchema result = SerDeHelper.searchSchema(Long.valueOf(versionId), treeMap);
+      InternalSchema result = InternalSchemaUtils.searchSchema(Long.valueOf(versionId), treeMap);
       if (result == null) {
         return Option.empty();
       }

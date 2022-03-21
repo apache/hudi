@@ -18,6 +18,7 @@
 
 package org.apache.hudi.internal.schema;
 
+import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Assertions;
@@ -84,16 +85,16 @@ public class TestSerDeHelper {
           Arrays.asList(Types.Field.get(1, true, "schema" + i * 10, Types.LongType.get()))));
     }
 
-    Assertions.assertEquals(SerDeHelper.searchSchema(0, schemas).getRecord().fields().get(0),
+    Assertions.assertEquals(InternalSchemaUtils.searchSchema(0, schemas).getRecord().fields().get(0),
         Types.Field.get(1, true, "schema" + 0, Types.LongType.get()));
 
-    Assertions.assertEquals(SerDeHelper.searchSchema(9, schemas).getRecord().fields().get(0),
+    Assertions.assertEquals(InternalSchemaUtils.searchSchema(9, schemas).getRecord().fields().get(0),
         Types.Field.get(1, true, "schema" + 0, Types.LongType.get()));
 
-    Assertions.assertEquals(SerDeHelper.searchSchema(99, schemas).getRecord().fields().get(0),
+    Assertions.assertEquals(InternalSchemaUtils.searchSchema(99, schemas).getRecord().fields().get(0),
         Types.Field.get(1, true, "schema" + 90, Types.LongType.get()));
 
-    Assertions.assertEquals(SerDeHelper.searchSchema(9999, schemas).getRecord().fields().get(0),
+    Assertions.assertEquals(InternalSchemaUtils.searchSchema(9999, schemas).getRecord().fields().get(0),
         Types.Field.get(1, true, "schema" + 990, Types.LongType.get()));
   }
 

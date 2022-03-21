@@ -24,7 +24,9 @@ import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.InternalSchemaBuilder;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.internal.schema.action.TableChanges;
@@ -41,7 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class TestAvroSchemaUtil {
+public class TestAvroSchemaEvolutionUtils {
 
   @Test
   public void testPrimitiveTypes() {
@@ -185,7 +187,7 @@ public class TestAvroSchemaUtil {
             Types.RecordType.get(Types.Field.get(8, false, "lat", Types.FloatType.get()), Types.Field.get(9, false, "long", Types.FloatType.get())), false))
     );
     AtomicInteger newId = new AtomicInteger(100);
-    Types.RecordType recordWithNewId = (Types.RecordType)InternalSchemaUtils.refreshNewId(record, newId);
+    Types.RecordType recordWithNewId = (Types.RecordType) InternalSchemaBuilder.getBuilder().refreshNewId(record, newId);
 
     Types.RecordType newRecord = Types.RecordType.get(Types.Field.get(100, false, "id", Types.IntType.get()),
         Types.Field.get(101, true, "data", Types.StringType.get()),
@@ -247,10 +249,10 @@ public class TestAvroSchemaUtil {
     avroRecord.put("col31", 9999.999d);
     Schema currentDecimalType = avroSchema.getField("col4").schema().getTypes().get(1);
     BigDecimal bd = new BigDecimal("123.456").setScale(((LogicalTypes.Decimal) currentDecimalType.getLogicalType()).getScale());
-    avroRecord.put("col4", AvroSchemaUtil.DECIMAL_CONVERSION.toFixed(bd, currentDecimalType, currentDecimalType.getLogicalType()));
+    avroRecord.put("col4", HoodieAvroUtils.DECIMAL_CONVERSION.toFixed(bd, currentDecimalType, currentDecimalType.getLogicalType()));
     Schema currentDecimalType1 = avroSchema.getField("col41").schema().getTypes().get(1);
     BigDecimal bd1 = new BigDecimal("7890.456").setScale(((LogicalTypes.Decimal) currentDecimalType1.getLogicalType()).getScale());
-    avroRecord.put("col41", AvroSchemaUtil.DECIMAL_CONVERSION.toFixed(bd1, currentDecimalType1, currentDecimalType1.getLogicalType()));
+    avroRecord.put("col41", HoodieAvroUtils.DECIMAL_CONVERSION.toFixed(bd1, currentDecimalType1, currentDecimalType1.getLogicalType()));
 
     avroRecord.put("col5", "2011-01-01");
     avroRecord.put("col51", "199.342");
@@ -282,7 +284,7 @@ public class TestAvroSchemaUtil {
         .updateColumnType("col6", Types.StringType.get());
     InternalSchema newSchema = SchemaChangeUtils.applyTableChanges2Schema(internalSchema, updateChange);
     Schema newAvroSchema = AvroInternalSchemaConverter.convert(newSchema, avroSchema.getName());
-    GenericRecord newRecord = AvroSchemaUtil.rewriteRecord(avroRecord, newAvroSchema);
+    GenericRecord newRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, newAvroSchema);
 
     Assertions.assertEquals(GenericData.get().validate(newAvroSchema, newRecord), true);
   }
@@ -347,17 +349,9 @@ public class TestAvroSchemaUtil {
     );
 
     Schema newAvroSchema = AvroInternalSchemaConverter.convert(newRecord, schema.getName());
-    GenericRecord newAvroRecord = AvroSchemaUtil.rewriteRecord(avroRecord, newAvroSchema);
+    GenericRecord newAvroRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, newAvroSchema);
     // test the correctly of rewrite
     Assertions.assertEquals(GenericData.get().validate(newAvroSchema, newAvroRecord), true);
-
-    // test union type
-    Schema union = Schema.createUnion(Schema.create(Schema.Type.BOOLEAN), Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.FLOAT));
-    Schema schemaUnion = create("t1", new Schema.Field("ux", union, null, JsonProperties.NULL_VALUE));
-    GenericData.Record unionRecord = new GenericData.Record(schemaUnion);
-    unionRecord.put(0, "ss");
-    // test the correctly of rewrite
-    Assertions.assertEquals(GenericData.get().validate(schemaUnion, unionRecord), true);
   }
 
   @Test
@@ -399,9 +393,9 @@ public class TestAvroSchemaUtil {
                 Types.Field.get(5, false, "nest1", Types.BooleanType.get()),
                 Types.Field.get(5, true, "nest2", Types.BooleanType.get())))
     );
-    evolvedRecord = (Types.RecordType)InternalSchemaUtils.refreshNewId(evolvedRecord, new AtomicInteger(0));
+    evolvedRecord = (Types.RecordType)InternalSchemaBuilder.getBuilder().refreshNewId(evolvedRecord, new AtomicInteger(0));
     Schema evolvedAvroSchema = AvroInternalSchemaConverter.convert(evolvedRecord, "test1");
-    InternalSchema result = AvroSchemaUtil.evolutionSchemaFromNewAvroSchema(evolvedAvroSchema, oldSchema);
+    InternalSchema result = AvroSchemaEvolutionUtils.evolveSchemaFromNewAvroSchema(evolvedAvroSchema, oldSchema);
     Types.RecordType checkedRecord = Types.RecordType.get(
         Types.Field.get(0, false, "id", Types.IntType.get()),
         Types.Field.get(1, true, "data", Types.StringType.get()),

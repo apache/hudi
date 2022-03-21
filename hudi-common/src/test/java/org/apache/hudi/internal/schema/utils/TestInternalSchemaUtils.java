@@ -19,6 +19,7 @@
 package org.apache.hudi.internal.schema.utils;
 
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.InternalSchemaBuilder;
 import org.apache.hudi.internal.schema.Types;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Assertions;
@@ -61,7 +62,7 @@ public class TestInternalSchemaUtils {
   @Test
   public void testInternalSchemaVisitor() {
     Types.RecordType nestRecord = getNestRecordType();
-    Map<String, Integer> result = InternalSchemaUtils.buildNameToId(nestRecord);
+    Map<String, Integer> result = InternalSchemaBuilder.getBuilder().buildNameToId(nestRecord);
     Assertions.assertEquals(result.size(), 12);
     Assertions.assertEquals(result.get("locations.value.long"), 11);
     Assertions.assertEquals(result.get("locations.value.lat"), 10);
@@ -70,7 +71,7 @@ public class TestInternalSchemaUtils {
     Assertions.assertEquals(result.get("doubles.element"), 7);
 
     Types.RecordType simpleRecord = getSimpleRecordType();
-    Map<String, Integer> result1 = InternalSchemaUtils.buildNameToId(simpleRecord);
+    Map<String, Integer> result1 = InternalSchemaBuilder.getBuilder().buildNameToId(simpleRecord);
     Assertions.assertEquals(result1.size(), 5);
     Assertions.assertEquals(result1.get("double"), 4);
   }

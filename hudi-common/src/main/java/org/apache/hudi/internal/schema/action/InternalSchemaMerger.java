@@ -48,7 +48,46 @@ public class InternalSchemaMerger {
     this.useColumnTypeFromFileSchema = useColumnTypeFromFileSchema;
   }
 
-  public List<Types.Field> buildRecordType(List<Types.Field> oldFields, List<Type> newTypes) {
+  /**
+   * create final read schema to read avro/parquet file.
+   *
+   * @return read schema to read avro/parquet file.
+   */
+  public InternalSchema mergeSchema() {
+    Types.RecordType record = (Types.RecordType) mergeType(querySchema.getRecord(), 0);
+    return new InternalSchema(record.fields());
+  }
+
+  /**
+   * create final read schema to read avro/parquet file.
+   * this is auxiliary function used by mergeSchema.
+   */
+  private Type mergeType(Type type, int currentTypeId) {
+    switch (type.typeId()) {
+      case RECORD:
+        Types.RecordType record = (Types.RecordType) type;
+        List<Type> newTypes = new ArrayList<>();
+        for (Types.Field f : record.fields()) {
+          Type newType = mergeType(f.type(), f.fieldId());
+          newTypes.add(newType);
+        }
+        return Types.RecordType.get(buildRecordType(record.fields(), newTypes));
+      case ARRAY:
+        Types.ArrayType array = (Types.ArrayType) type;
+        Type newElementType;
+        Types.Field elementField = array.fields().get(0);
+        newElementType = mergeType(elementField.type(), elementField.fieldId());
+        return buildArrayType(array, newElementType);
+      case MAP:
+        Types.MapType map = (Types.MapType) type;
+        Type newValueType = mergeType(map.valueType(), map.valueId());
+        return buildMapType(map, newValueType);
+      default:
+        return buildPrimitiveType((Type.PrimitiveType) type, currentTypeId);
+    }
+  }
+
+  private List<Types.Field> buildRecordType(List<Types.Field> oldFields, List<Type> newTypes) {
     List<Types.Field> newFields = new ArrayList<>();
     for (int i = 0; i < newTypes.size(); i++) {
       Type newType = newTypes.get(i);
@@ -120,7 +159,7 @@ public class InternalSchemaMerger {
     return StringUtils.join(normalizedNameParts, ".");
   }
 
-  public Type buildArrayType(Types.ArrayType array, Type newType) {
+  private Type buildArrayType(Types.ArrayType array, Type newType) {
     Types.Field elementField = array.fields().get(0);
     int elementId = elementField.fieldId();
     if (elementField.type() == newType) {
@@ -130,7 +169,7 @@ public class InternalSchemaMerger {
     }
   }
 
-  public Type buildMapType(Types.MapType map, Type newValue) {
+  private Type buildMapType(Types.MapType map, Type newValue) {
     Types.Field valueFiled = map.fields().get(1);
     if (valueFiled.type() == newValue) {
       return map;
@@ -139,7 +178,7 @@ public class InternalSchemaMerger {
     }
   }
 
-  public Type buildPrimitiveType(Type.PrimitiveType typeFromQuerySchema, int currentPrimitiveTypeId) {
+  private Type buildPrimitiveType(Type.PrimitiveType typeFromQuerySchema, int currentPrimitiveTypeId) {
     Type typeFromFileSchema = fileSchema.findType(currentPrimitiveTypeId);
     if (typeFromFileSchema == null) {
       return typeFromQuerySchema;

@@ -22,7 +22,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
+import org.apache.hudi.internal.schema.InternalSchemaBuilder;
 import org.apache.hudi.internal.schema.Types;
 
 import java.util.ArrayList;
@@ -81,7 +81,7 @@ public interface TableChange {
 
     BaseColumnChange(InternalSchema schema) {
       this.internalSchema = schema;
-      this.id2parent = InternalSchemaUtils.index2Parents(schema.getRecord());
+      this.id2parent = InternalSchemaBuilder.getBuilder().index2Parents(schema.getRecord());
     }
 
     /**

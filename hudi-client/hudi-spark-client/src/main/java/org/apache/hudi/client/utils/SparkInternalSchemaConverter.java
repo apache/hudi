@@ -22,6 +22,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.spark.sql.execution.vectorized.WritableColumnVector;
 import org.apache.spark.sql.types.ArrayType;
@@ -222,7 +223,7 @@ public class SparkInternalSchemaConverter {
   }
 
   public static StructType mergeSchema(InternalSchema fileSchema, InternalSchema querySchema) {
-    InternalSchema schema = InternalSchemaUtils.mergeSchema(fileSchema, querySchema, true, true);
+    InternalSchema schema = new InternalSchemaMerger(fileSchema, querySchema, true, true).mergeSchema();
     return constructSparkSchemaFromInternalSchema(schema);
   }
 

@@ -37,7 +37,6 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
-import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -324,38 +323,6 @@ public class SerDeHelper {
       throw new HoodieException(e);
     }
     return result;
-  }
-
-  /**
-   * search target internalSchema by version number.
-   *
-   * @param versionId the internalSchema version to be search.
-   * @param internalSchemas internalSchemas to be searched.
-   * @return a internalSchema.
-   */
-  public static InternalSchema searchSchema(long versionId, List<InternalSchema> internalSchemas) {
-    TreeMap<Long, InternalSchema> treeMap = new TreeMap<>();
-    internalSchemas.forEach(s -> treeMap.put(s.schemaId(), s));
-    return searchSchema(versionId, treeMap);
-  }
-
-  /**
-   * search target internalSchema by version number.
-   *
-   * @param versionId the internalSchema version to be search.
-   * @param treeMap internalSchemas collections to be searched.
-   * @return a internalSchema.
-   */
-  public static InternalSchema searchSchema(long versionId, TreeMap<Long, InternalSchema> treeMap) {
-    if (treeMap.containsKey(versionId)) {
-      return treeMap.get(versionId);
-    } else {
-      SortedMap<Long, InternalSchema> headMap = treeMap.headMap(versionId);
-      if (!headMap.isEmpty()) {
-        return headMap.get(headMap.lastKey());
-      }
-    }
-    return InternalSchema.getEmptyInternalSchema();
   }
 
   /**

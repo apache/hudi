@@ -401,6 +401,11 @@ public class HoodieTableMetaClient implements Serializable {
     if (!fs.exists(metaPathDir)) {
       fs.mkdirs(metaPathDir);
     }
+    // create schema folder
+    Path schemaPathDir = new Path(basePath, SCHEMA_FOLDER_NAME);
+    if (!fs.exists(schemaPathDir)) {
+      fs.mkdirs(schemaPathDir);
+    }
 
     // if anything other than default archive log folder is specified, create that too
     String archiveLogPropVal = new HoodieConfig(props).getStringOrDefault(HoodieTableConfig.ARCHIVELOG_FOLDER);

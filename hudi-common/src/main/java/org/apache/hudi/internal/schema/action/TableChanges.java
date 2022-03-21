@@ -20,7 +20,7 @@ package org.apache.hudi.internal.schema.action;
 
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
+import org.apache.hudi.internal.schema.InternalSchemaBuilder;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
@@ -350,7 +350,7 @@ public class TableChanges {
         id2parent.put(nextId, parentId);
       }
       AtomicInteger assignNextId = new AtomicInteger(nextId + 1);
-      Type typeWithNewId = InternalSchemaUtils.refreshNewId(type, assignNextId);
+      Type typeWithNewId = InternalSchemaBuilder.getBuilder().refreshNewId(type, assignNextId);
       // only allow add optional columns.
       ArrayList<Types.Field> adds = parentId2AddCols.getOrDefault(parentId, new ArrayList<>());
       adds.add(Types.Field.get(nextId, true, name, typeWithNewId, doc));
