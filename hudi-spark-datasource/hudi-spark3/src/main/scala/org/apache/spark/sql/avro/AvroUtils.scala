@@ -26,8 +26,10 @@ import scala.collection.JavaConverters._
 
 /**
  * NOTE: This code is borrowed from Spark 3.2.1
- * NOTE: This code is borrowed, so that we can better control compatibility w/in Spark minor
- * branches (3.2.x, 3.1.x, etc)
+ *       This code is borrowed, so that we can better control compatibility w/in Spark minor
+ *       branches (3.2.x, 3.1.x, etc)
+ *
+ *       PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
  */
 private[avro] object AvroUtils {
 

@@ -44,8 +44,10 @@ import org.apache.spark.sql.types._
  * A serializer to serialize data in catalyst format to data in avro format.
  *
  * NOTE: This code is borrowed from Spark 3.1.2
- * NOTE: This code is borrowed, so that we can better control compatibility w/in Spark minor
+ *       This code is borrowed, so that we can better control compatibility w/in Spark minor
  *       branches (3.2.x, 3.1.x, etc)
+ *
+ *       PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
  */
 private[sql] class AvroSerializer(rootCatalystType: DataType,
                                   rootAvroType: Schema,

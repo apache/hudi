@@ -43,8 +43,10 @@ import org.apache.spark.unsafe.types.UTF8String
  * A deserializer to deserialize data in avro format to data in catalyst format.
  *
  * NOTE: This code is borrowed from Spark 3.2.1
- * NOTE: This code is borrowed, so that we can better control compatibility w/in Spark minor
- * branches (3.2.x, 3.1.x, etc)
+ *       This code is borrowed, so that we can better control compatibility w/in Spark minor
+ *       branches (3.2.x, 3.1.x, etc)
+ *
+ *       PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
  */
 private[sql] class AvroDeserializer(rootAvroType: Schema,
                                     rootCatalystType: DataType,
