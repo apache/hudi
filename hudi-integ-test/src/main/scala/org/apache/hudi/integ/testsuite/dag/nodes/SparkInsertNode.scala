@@ -47,7 +47,7 @@ class SparkInsertNode(dagNodeConfig: Config) extends DagNode[RDD[WriteStatus]] {
   override def execute(context: ExecutionContext, curItrCount: Int): Unit = {
     if (!config.isDisableGenerate) {
       println("Generating input data for node {}", this.getName)
-      context.getDeltaGenerator().writeRecords(context.getDeltaGenerator().generateInserts(config)).count()
+      writeRecords(context)
     }
     val inputDF = AvroConversionUtils.createDataFrame(context.getWriterContext.getHoodieTestSuiteWriter.getNextBatch,
       context.getWriterContext.getHoodieTestSuiteWriter.getSchema,
@@ -67,5 +67,9 @@ class SparkInsertNode(dagNodeConfig: Config) extends DagNode[RDD[WriteStatus]] {
 
   def getOperation(): String = {
     DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL
+  }
+
+  def writeRecords(context: ExecutionContext): Unit = {
+    context.getDeltaGenerator().writeRecords(context.getDeltaGenerator().generateInserts(config)).count()
   }
 }
