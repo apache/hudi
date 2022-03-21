@@ -51,10 +51,13 @@ public class DagScheduler {
   private static Logger log = LoggerFactory.getLogger(DagScheduler.class);
   private WorkflowDag workflowDag;
   private ExecutionContext executionContext;
+  private ExecutorService service;
+  private final String jobId;
 
-  public DagScheduler(WorkflowDag workflowDag, WriterContext writerContext, JavaSparkContext jsc) {
+  public DagScheduler(WorkflowDag workflowDag, WriterContext writerContext, JavaSparkContext jsc, String jobId) {
     this.workflowDag = workflowDag;
     this.executionContext = new ExecutionContext(jsc, writerContext);
+    this.jobId = jobId;
   }
 
   /**
@@ -63,16 +66,21 @@ public class DagScheduler {
    * @throws Exception Thrown if schedule failed.
    */
   public void schedule() throws Exception {
-    ExecutorService service = Executors.newFixedThreadPool(2);
+    service = Executors.newFixedThreadPool(2);
     try {
       execute(service, workflowDag);
+      log.info(jobId + " Invoking shutdown " + Thread.currentThread().getState());
       service.shutdown();
     } finally {
       if (!service.isShutdown()) {
-        log.info("Forcing shutdown of executor service, this might kill running tasks");
+        log.info(jobId + " Forcing shutdown of executor service, this might kill running tasks");
         service.shutdownNow();
       }
     }
+  }
+
+  public ExecutorService getService() {
+    return this.service;
   }
 
   /**
@@ -121,7 +129,7 @@ public class DagScheduler {
       // After each level, report and flush the metrics
       Metrics.flush();
     } while (curRound++ < workflowDag.getRounds());
-    log.info("Finished workloads");
+    log.info(jobId + " Finished workloads");
   }
 
   /**
@@ -137,12 +145,12 @@ public class DagScheduler {
       int repeatCount = node.getConfig().getRepeatCount();
       while (repeatCount > 0) {
         node.execute(executionContext, curRound);
-        log.info("Finished executing {}", node.getName());
+        log.info(jobId + " Finished executing {}", node.getName());
         repeatCount--;
       }
       node.setCompleted(true);
     } catch (Exception e) {
-      log.error("Exception executing node", e);
+      log.error(jobId + " Exception executing node", e);
       throw new HoodieException(e);
     }
   }

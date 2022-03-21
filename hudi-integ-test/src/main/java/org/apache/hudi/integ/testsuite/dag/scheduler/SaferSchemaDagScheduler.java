@@ -31,11 +31,11 @@ public class SaferSchemaDagScheduler extends DagScheduler {
   int processedVersion;
 
   public SaferSchemaDagScheduler(WorkflowDag workflowDag, WriterContext writerContext, JavaSparkContext jsc) {
-    super(workflowDag, writerContext, jsc);
+    super(workflowDag, writerContext, jsc, "testJobdI");
   }
 
   public SaferSchemaDagScheduler(WorkflowDag workflowDag, WriterContext writerContext, JavaSparkContext jsc, int version) {
-    super(workflowDag, writerContext, jsc);
+    super(workflowDag, writerContext, jsc, "testJobId");
     processedVersion = version;
   }
 

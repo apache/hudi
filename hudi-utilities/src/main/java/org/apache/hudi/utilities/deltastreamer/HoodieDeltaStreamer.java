@@ -162,6 +162,7 @@ public class HoodieDeltaStreamer implements Serializable {
   }
 
   public void shutdownGracefully() {
+    LOG.info("Shutting down HoodieDeltaSTreamer gracefully ");
     deltaSyncService.ifPresent(ds -> ds.shutdown(false));
   }
 
@@ -176,6 +177,7 @@ public class HoodieDeltaStreamer implements Serializable {
       bootstrapExecutor.get().execute();
     } else {
       if (cfg.continuousMode) {
+        LOG.warn("Continous mode ::::: ");
         deltaSyncService.ifPresent(ds -> {
           ds.start(this::onDeltaSyncShutdown);
           try {
@@ -187,6 +189,7 @@ public class HoodieDeltaStreamer implements Serializable {
         LOG.info("Delta Sync shutting down");
       } else {
         LOG.info("Delta Streamer running only single round");
+        LOG.warn("Calling sync once mode ::::");
         try {
           deltaSyncService.ifPresent(ds -> {
             try {
@@ -388,6 +391,14 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--retry-last-pending-inline-clustering", "-rc"}, description = "Retry last pending inline clustering plan before writing to sink.")
     public Boolean retryLastPendingInlineClusteringJob = false;
 
+    @Parameter(names = {"--enable-shutdown-with-continuous-mode"}, description = "Enable graceful shutdown with continuous mode on certain conditions")
+    public Boolean enableShutdownOnContinousMode = false;
+
+    @Parameter(names = {"--num-times-no-new-data-before-shutdown-with-continuous-mode"}, description = "When --enable-shutdown-with-continuous-mode is enabled, "
+        + "this config will determine when to shutdown deltastreamer if no new data is found in the source. If (numTimesNoNewDataBeforeShutdownWithContinuousMode) times,"
+        + " no new data is encountered, deltastreamer will shutdown gracefully")
+    public Integer numTimesNoNewDataBeforeShutdownWithContinuousMode = 3;
+
     public boolean isAsyncCompactionEnabled() {
       return continuousMode && !forceDisableCompaction
           && HoodieTableType.MERGE_ON_READ.equals(HoodieTableType.valueOf(tableType));
@@ -584,6 +595,8 @@ public class HoodieDeltaStreamer implements Serializable {
      */
     private transient DeltaSync deltaSync;
 
+    private long numTimesNoNewData = 0;
+
     public DeltaSyncService(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                             Option<TypedProperties> properties) throws IOException {
       this.cfg = cfg;
@@ -674,6 +687,14 @@ public class HoodieDeltaStreamer implements Serializable {
                     error = true;
                     throw new HoodieException("Async clustering failed.  Shutting down Delta Sync...");
                   }
+                }
+              }
+              if (cfg.enableShutdownOnContinousMode) {
+                // check if deltastreamer need to be shutdown
+                numTimesNoNewData = scheduledCompactionInstantAndRDD.isPresent() ? 0 : numTimesNoNewData + 1;
+                if (numTimesNoNewData >= cfg.numTimesNoNewDataBeforeShutdownWithContinuousMode) {
+                  error = true;
+                  throw new HoodieException("Shutting down on continuous mode condition met. Shutting down delta sync.");
                 }
               }
               long toSleepMs = cfg.minSyncIntervalSeconds * 1000 - (System.currentTimeMillis() - start);

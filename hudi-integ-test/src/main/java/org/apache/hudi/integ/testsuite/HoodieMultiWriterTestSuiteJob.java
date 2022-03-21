@@ -30,6 +30,7 @@ import org.apache.spark.sql.SparkSession;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -72,25 +73,29 @@ public class HoodieMultiWriterTestSuiteJob {
     AtomicBoolean jobFailed = new AtomicBoolean(false);
     AtomicInteger counter = new AtomicInteger(0);
     List<CompletableFuture<Boolean>> completableFutureList = new ArrayList<>();
+    JavaSparkContext finalJssc = jssc;
     testSuiteConfigList.forEach(hoodieTestSuiteConfig -> {
       try {
         // start each job at 20 seconds interval so that metaClient instantiation does not overstep
         Thread.sleep(counter.get() * 20000);
-        LOG.info("Starting job " + hoodieTestSuiteConfig.toString());
+        LOG.info("Starting job :::::::::::::::::::::::::::::::::::::  " + counter.get() + " :: " + hoodieTestSuiteConfig.toString());
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
       completableFutureList.add(CompletableFuture.supplyAsync(() -> {
         boolean toReturn = true;
+        HoodieTestSuiteJob hoodieTestSuiteJob = null;
+        int localJobCounter = counter.get();
         try {
-          new HoodieTestSuiteJob(hoodieTestSuiteConfig, jssc, false).runTestSuite();
-          LOG.info("Job completed successfully");
+          hoodieTestSuiteJob = new HoodieTestSuiteJob(hoodieTestSuiteConfig, finalJssc, false, "testjob" + localJobCounter);
+          hoodieTestSuiteJob.runTestSuite();
+          LOG.info("Job completed successfully ::::::::::::::::::::::::::::::::::::: ");
         } catch (Exception e) {
           if (!jobFailed.getAndSet(true)) {
-            LOG.error("Exception thrown " + e.getMessage() + ", cause : " + e.getCause());
-            throw new RuntimeException("HoodieTestSuiteJob Failed " + e.getCause() + ", and msg " + e.getMessage(), e);
+            LOG.error(localJobCounter + " :: Exception thrown ::::::::::::::::::::::::::::::::::::: " + e.getMessage() + ", cause : " + e.getCause());
+          throw new RuntimeException(localJobCounter + " :: HoodieTestSuiteJob Failed " + e.getCause() + ", and msg " + e.getMessage(), e);
           } else {
-            LOG.info("Already a job failed. so, not throwing any exception ");
+            LOG.info("Already a job failed. so, not throwing any exception ::::::::::::::::::::::::::::::::::::: " + Thread.currentThread().getState());
           }
         }
         return toReturn;
@@ -98,17 +103,29 @@ public class HoodieMultiWriterTestSuiteJob {
       counter.getAndIncrement();
     });
 
-    LOG.info("Going to await until all jobs complete");
+    LOG.info("Going to await until all jobs complete::::::::::::::::::::::::::::::::::::: ");
     try {
       CompletableFuture completableFuture = allOfTerminateOnFailure(completableFutureList);
       completableFuture.get();
+    } catch (ExecutionException e) {
+      LOG.error("Execution exception thrown ..... " + e.getMessage() + ", " + e.getCause());
     } finally {
-      executor.shutdownNow();
-      if (jssc != null) {
-        LOG.info("Completed and shutting down spark context ");
-        LOG.info("Shutting down spark session and JavaSparkContext");
-        SparkSession.builder().config(jssc.getConf()).enableHiveSupport().getOrCreate().stop();
-        jssc.close();
+      completableFutureList.forEach(entry -> LOG.warn("Status of each future from within finally Shutdown now invoked "
+          + "on Executor. Awaiting for 1 min to completion ::::::::::::::::::::::::::::::::::::: : isDone :: "
+          + entry.isDone() + ", is canclled " + entry.isCancelled()));
+      if (!executor.isShutdown()) {
+        executor.shutdownNow();
+        LOG.info("Shutdown now invoked on Executor. Awaiting for 1 min to completion ::::::::::::::::::::::::::::::::::::: ");
+        executor.awaitTermination(1, TimeUnit.MINUTES);
+        if (jssc != null) {
+          LOG.info("Completed and shutting down spark context ::::::::::::::::::::::::::::::::::::: ");
+          LOG.info("Shutting down spark session and JavaSparkContext::::::::::::::::::::::::::::::::::::: ");
+          SparkSession.builder().config(jssc.getConf()).enableHiveSupport().getOrCreate().stop();
+          jssc.close();
+          jssc = null;
+        }
+      } else {
+        LOG.info("Executor service already shutdown. And so , not triggering shutdown again");
       }
     }
   }
@@ -119,8 +136,10 @@ public class HoodieMultiWriterTestSuiteJob {
     for (CompletableFuture<?> f : futures) {
       f.exceptionally(ex -> {
         if (!jobFailed.getAndSet(true)) {
-          System.out.println("One of the job failed. Cancelling all other futures. " + ex.getCause() + ", " + ex.getMessage());
+          LOG.error("One of the job failed. Cancelling all other futures. :::::::::::::::::::::::::::::::::::::  " + ex.getCause() + ", " + ex.getMessage());
           futures.forEach(future -> future.cancel(true));
+        } else {
+          LOG.error("Already job failed. Hence skipping to cancell all other futures ");
         }
         return null;
       });

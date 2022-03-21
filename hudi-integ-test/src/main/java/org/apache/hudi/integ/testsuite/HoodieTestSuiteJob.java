@@ -60,6 +60,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 
@@ -96,21 +97,23 @@ public class HoodieTestSuiteJob {
   private boolean stopJsc = true;
   private BuiltinKeyGenerator keyGenerator;
   private transient HoodieTableMetaClient metaClient;
+  private final String jobId;
 
   public HoodieTestSuiteJob(HoodieTestSuiteConfig cfg, JavaSparkContext jsc) throws IOException {
-    this(cfg, jsc, true);
+    this(cfg, jsc, true, "testJobId");
   }
 
-  public HoodieTestSuiteJob(HoodieTestSuiteConfig cfg, JavaSparkContext jsc, boolean stopJsc) throws IOException {
+  public HoodieTestSuiteJob(HoodieTestSuiteConfig cfg, JavaSparkContext jsc, boolean stopJsc, String jobId) throws IOException {
     log.warn("Running spark job w/ app id " + jsc.sc().applicationId());
     this.cfg = cfg;
     this.jsc = jsc;
+    this.jobId = jobId;
     this.stopJsc = stopJsc;
     cfg.propsFilePath = FSUtils.addSchemeIfLocalPath(cfg.propsFilePath).toString();
     this.sparkSession = SparkSession.builder().config(jsc.getConf()).enableHiveSupport().getOrCreate();
     this.fs = FSUtils.getFs(cfg.inputBasePath, jsc.hadoopConfiguration());
     this.props = UtilHelpers.readConfig(fs.getConf(), new Path(cfg.propsFilePath), cfg.configs).getProps();
-    log.info("Creating workload generator with configs : {}", props.toString());
+    log.info(jobId + " Creating workload generator with configs : {}", props.toString());
     this.hiveConf = getDefaultHiveConf(jsc.hadoopConfiguration());
     this.keyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
 
@@ -177,7 +180,7 @@ public class HoodieTestSuiteJob {
 
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("workload-generator-" + cfg.outputTypeName
         + "-" + cfg.inputFormatName, cfg.sparkMaster);
-    new HoodieTestSuiteJob(cfg, jssc, true).runTestSuite();
+    new HoodieTestSuiteJob(cfg, jssc, true, "testJobId").runTestSuite();
   }
 
   public WorkflowDag createWorkflowDag() throws IOException {
@@ -190,11 +193,13 @@ public class HoodieTestSuiteJob {
   }
 
   public void runTestSuite() {
+    DagScheduler dagScheduler = null;
+    WriterContext writerContext = null;
     try {
       WorkflowDag workflowDag = createWorkflowDag();
       log.info("Workflow Dag => " + DagUtils.convertDagToYaml(workflowDag));
       long startTime = System.currentTimeMillis();
-      WriterContext writerContext = new WriterContext(jsc, props, cfg, keyGenerator, sparkSession);
+      writerContext = new WriterContext(jsc, props, cfg, keyGenerator, sparkSession);
       writerContext.initContext(jsc);
       startOtherServicesIfNeeded(writerContext);
       if (this.cfg.saferSchemaEvolution) {
@@ -206,17 +211,35 @@ public class HoodieTestSuiteJob {
         }
 
         int version = getSchemaVersionFromCommit(numRollbacks - 1);
-        SaferSchemaDagScheduler dagScheduler = new SaferSchemaDagScheduler(workflowDag, writerContext, jsc, version);
+        dagScheduler = new SaferSchemaDagScheduler(workflowDag, writerContext, jsc, version);
         dagScheduler.schedule();
       } else {
-        DagScheduler dagScheduler = new DagScheduler(workflowDag, writerContext, jsc);
+        dagScheduler = new DagScheduler(workflowDag, writerContext, jsc, jobId);
         dagScheduler.schedule();
       }
-      log.info("Finished scheduling all tasks, Time taken {}", System.currentTimeMillis() - startTime);
+      log.info(jobId + " Finished scheduling all tasks, Time taken {}", System.currentTimeMillis() - startTime);
     } catch (Exception e) {
-      log.error("Failed to run Test Suite ", e);
-      throw new HoodieException("Failed to run Test Suite ", e);
+      log.error(jobId + " Failed to run Test Suite " + Thread.currentThread().getState().toString(), e);
+      throw new HoodieException(jobId + "Failed to run Test Suite ", e);
     } finally {
+      if (dagScheduler != null) {
+        if (!dagScheduler.getService().isShutdown()) {
+          log.warn(jobId + " Calling dag sheduler shutdown from test usitejob ");
+          dagScheduler.getService().shutdownNow();
+          try {
+            dagScheduler.getService().awaitTermination(20, TimeUnit.SECONDS);
+          } catch (InterruptedException ex) {
+            log.warn("Interrupted exception thrown ");
+            ex.printStackTrace();
+          }
+        } else {
+          log.warn(jobId + " Not calling dag sheduler shutdown from test usitejob, since its already shutdown ");
+        }
+      }
+      log.warn(jobId + " Going to shutdown deltastreamer ");
+      if (writerContext != null) {
+        writerContext.getHoodieTestSuiteWriter().getDeltaStreamerWrapper().shutdownGracefully();
+      }
       stopQuietly();
     }
   }
@@ -227,8 +250,10 @@ public class HoodieTestSuiteJob {
         sparkSession.stop();
         jsc.stop();
       } catch (Exception e) {
-        log.error("Unable to stop spark session", e);
+        log.error(jobId + " Unable to stop spark session", e);
       }
+    } else {
+      log.warn(jobId + " Not stopping jsc ");
     }
   }
 
