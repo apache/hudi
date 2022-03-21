@@ -353,8 +353,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       Map<String, Map<String, Object>> columnToStats = new HashMap<>();
       columnsToIndex.forEach(column -> columnToStats.putIfAbsent(column, new HashMap<>()));
       // collect stats for columns at once per record and keep iterating through every record to eventually find col stats for all fields.
-      recordList.forEach(record -> aggregateColumnStats(record, columnsToIndex, columnToStats, config.isConsistentLogicalTimestampEnabled()));
-      columnsToIndex.forEach(column -> accumulateColumnRanges(column, filePath, columnRangeMap, columnToStats));
+      recordList.forEach(record -> aggregateColumnStats(record, writeSchemaWithMetaFields, columnToStats, config.isConsistentLogicalTimestampEnabled()));
+      writeSchemaWithMetaFields.getFields().forEach(field -> accumulateColumnRanges(field, filePath, columnRangeMap, columnToStats));
       stat.setRecordsStats(new HoodieDeltaWriteStat.RecordsStats<>(columnRangeMap));
     }
 

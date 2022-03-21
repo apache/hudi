@@ -54,6 +54,12 @@ public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
    */
   void initializeFileGroups(HoodieTableMetaClient dataMetaClient, MetadataPartitionType metadataPartition, String instantTime, int fileGroupCount) throws IOException;
 
+  /**
+   * Drop the given metadata indexes.
+   *
+   * @param indexesToDrop
+   * @throws IOException
+   */
   void dropIndex(List<MetadataPartitionType> indexesToDrop) throws IOException;
 
   /**

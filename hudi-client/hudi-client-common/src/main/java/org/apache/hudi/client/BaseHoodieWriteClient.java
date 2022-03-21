@@ -942,6 +942,24 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     return createTable(config, hadoopConf, config.isMetadataTableEnabled()).index(context, indexInstantTime);
   }
 
+  public void dropIndex(List<MetadataPartitionType> partitionTypes) {
+    HoodieTable table = createTable(config, hadoopConf);
+    String dropInstant = HoodieActiveTimeline.createNewInstantTime();
+    this.txnManager.beginTransaction();
+    try {
+      context.setJobStatus(this.getClass().getSimpleName(), "Dropping partitions from metadata table");
+      table.getMetadataWriter(dropInstant).ifPresent(w -> {
+        try {
+          ((HoodieTableMetadataWriter) w).dropIndex(partitionTypes);
+        } catch (IOException e) {
+          LOG.error("Failed to drop metadata index. ", e);
+        }
+      });
+    } finally {
+      this.txnManager.endTransaction();
+    }
+  }
+
   /**
    * Performs Compaction for the workload stored in instant-time.
    *

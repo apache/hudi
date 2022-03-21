@@ -20,7 +20,6 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
-import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -52,10 +51,8 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -88,6 +85,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -120,7 +118,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   protected boolean enabled;
   protected SerializableConfiguration hadoopConf;
   protected final transient HoodieEngineContext engineContext;
-  // TODO: HUDI-3258 Support secondary key via multiple partitions within a single type
   protected final List<MetadataPartitionType> enabledPartitionTypes;
 
   /**
@@ -403,7 +400,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     if (!exists) {
       if (metadataWriteConfig.isMetadataAsyncIndex()) {
         // with async metadata indexing enabled, there can be inflight writers
-        // TODO: schedule indexing only for enabled partition types
         MetadataRecordsGenerationParams indexParams = getRecordsGenerationParams();
         scheduleIndex(indexParams.getEnabledPartitionTypes());
         return;
@@ -668,11 +664,21 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   }
 
   public void dropIndex(List<MetadataPartitionType> indexesToDrop) throws IOException {
-    // TODO: update table config and do it in a transaction
+    Set<String> completedIndexes = Stream.of(dataMetaClient.getTableConfig().getCompletedMetadataIndexes().split(",")).collect(Collectors.toSet());
+    Set<String> inflightIndexes = Stream.of(dataMetaClient.getTableConfig().getInflightMetadataIndexes().split(",")).collect(Collectors.toSet());
     for (MetadataPartitionType partitionType : indexesToDrop) {
-      LOG.warn("Deleting Metadata Table partitions: " + partitionType.getPartitionPath());
-      dataMetaClient.getFs().delete(new Path(metadataWriteConfig.getBasePath(), partitionType.getPartitionPath()), true);
+      String partitionPath = partitionType.getPartitionPath();
+      if (inflightIndexes.contains(partitionPath)) {
+        LOG.error("Metadata indexing in progress: " + partitionPath);
+        return;
+      }
+      LOG.warn("Deleting Metadata Table partitions: " + partitionPath);
+      dataMetaClient.getFs().delete(new Path(metadataWriteConfig.getBasePath(), partitionPath), true);
+      completedIndexes.remove(partitionPath);
     }
+    // update table config
+    dataMetaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_INDEX_COMPLETED.key(), String.join(",", completedIndexes));
+    HoodieTableConfig.update(dataMetaClient.getFs(), new Path(dataMetaClient.getMetaPath()), dataMetaClient.getTableConfig().getProps());
   }
 
   private MetadataRecordsGenerationParams getRecordsGenerationParams() {
@@ -702,7 +708,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * @param canTriggerTableService true if table services can be triggered. false otherwise.
    */
   private <T> void processAndCommit(String instantTime, ConvertMetadataFunction convertMetadataFunction, boolean canTriggerTableService) {
-    List<String> partitionsToUpdate = getMetadataPartitionsToUpdate();
+    if (!dataWriteConfig.isMetadataTableEnabled()) {
+      return;
+    }
+    Set<String> partitionsToUpdate = getMetadataPartitionsToUpdate();
     partitionsToUpdate.forEach(p -> {
       if (enabled && metadata != null) {
         try {
@@ -716,36 +725,16 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     });
   }
 
-  private List<String> getMetadataPartitionsToUpdate() {
-    // find last (pending or) completed index instant and get partitions (to be) written
-    Option<HoodieInstant> lastIndexingInstant = dataMetaClient.getActiveTimeline()
-        .getTimelineOfActions(CollectionUtils.createImmutableSet(HoodieTimeline.INDEX_ACTION)).lastInstant();
-    if (lastIndexingInstant.isPresent()) {
-      try {
-        // TODO: handle inflight instant, if it is inflight then read from requested file.
-        HoodieIndexPlan indexPlan = TimelineMetadataUtils.deserializeIndexPlan(
-            dataMetaClient.getActiveTimeline().readIndexPlanAsBytes(lastIndexingInstant.get()).get());
-        return indexPlan.getIndexPartitionInfos().stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toList());
-      } catch (IOException e) {
-        LOG.warn("Could not read index plan. Falling back to FileSystem.exists() check.");
-        return getExistingMetadataPartitions();
-      }
+  private Set<String> getMetadataPartitionsToUpdate() {
+    // fetch partitions to update from table config
+    Set<String> partitionsToUpdate = Stream.of(dataMetaClient.getTableConfig().getCompletedMetadataIndexes().split(",")).collect(Collectors.toSet());
+    partitionsToUpdate.addAll(Stream.of(dataMetaClient.getTableConfig().getInflightMetadataIndexes().split(",")).collect(Collectors.toSet()));
+    if (!partitionsToUpdate.isEmpty()) {
+      return partitionsToUpdate;
     }
-    // TODO: return only enabled partitions
-    return MetadataPartitionType.allPaths();
-  }
-
-  private List<String> getExistingMetadataPartitions() {
-    return MetadataPartitionType.allPaths().stream()
-        .filter(p -> {
-          try {
-            // TODO: avoid fs.exists() check
-            return metadataMetaClient.getFs().exists(FSUtils.getPartitionPath(metadataWriteConfig.getBasePath(), p));
-          } catch (IOException e) {
-            return false;
-          }
-        })
-        .collect(Collectors.toList());
+    // fallback to update files partition only if table config returned no partitions
+    partitionsToUpdate.add(MetadataPartitionType.FILES.getPartitionPath());
+    return partitionsToUpdate;
   }
 
   @Override

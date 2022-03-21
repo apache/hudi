@@ -48,9 +48,13 @@ import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
 
+/**
+ * A tool to run metadata indexing asynchronously.
+ */
 public class HoodieIndexer {
 
   private static final Logger LOG = LogManager.getLogger(HoodieIndexer.class);
+  private static final String DROP_INDEX = "dropindex";
 
   private final HoodieIndexer.Config cfg;
   private TypedProperties props;
@@ -86,19 +90,17 @@ public class HoodieIndexer {
     public String sparkMemory = null;
     @Parameter(names = {"--retry", "-rt"}, description = "number of retries")
     public int retry = 0;
-    @Parameter(names = {"--schedule", "-sc"}, description = "Schedule indexing")
-    public Boolean runSchedule = false;
-    @Parameter(names = {"--strategy", "-st"}, description = "Comma-separated index types to be built, e.g. BLOOM,FILES,COLSTATS")
+    @Parameter(names = {"--index-types", "-it"}, description = "Comma-separated index types to be built, e.g. BLOOM_FILTERS,COLUMN_STATS", required = true)
     public String indexTypes = null;
     @Parameter(names = {"--mode", "-m"}, description = "Set job mode: Set \"schedule\" to generate an indexing plan; "
         + "Set \"execute\" to execute the indexing plan at the given instant, which means --instant-time is required here; "
-        + "Set \"scheduleAndExecute\" to generate an indexing plan first and execute that plan immediately")
+        + "Set \"scheduleandExecute\" to generate an indexing plan first and execute that plan immediately;"
+        + "Set \"dropindex\" to drop the index types specified in --index-types;")
     public String runningMode = null;
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
 
-    @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
-        + "hoodie client for compacting")
+    @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for hoodie client for indexing")
     public String propsFilePath = null;
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
@@ -149,6 +151,10 @@ public class HoodieIndexer {
           LOG.info("Running Mode: [" + EXECUTE + "];");
           return runIndexing(jsc);
         }
+        case DROP_INDEX: {
+          LOG.info("Running Mode: [" + DROP_INDEX + "];");
+          return dropIndex(jsc);
+        }
         default: {
           LOG.info("Unsupported running mode [" + cfg.runningMode + "], quit the job directly");
           return -1;
@@ -193,7 +199,7 @@ public class HoodieIndexer {
           throw new HoodieIndexException("There is no scheduled indexing in the table.");
         }
       }
-      return handleError(client.index(cfg.indexInstantTime));
+      return handleResponse(client.index(cfg.indexInstantTime)) ? 0 : 1;
     }
   }
 
@@ -202,21 +208,35 @@ public class HoodieIndexer {
     try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
       Option<String> indexingInstantTime = doSchedule(client);
       if (indexingInstantTime.isPresent()) {
-        return handleError(client.index(indexingInstantTime.get()));
+        return handleResponse(client.index(indexingInstantTime.get())) ? 0 : 1;
       } else {
         return -1;
       }
     }
   }
 
-  private int handleError(Option<HoodieIndexCommitMetadata> commitMetadata) {
+  private int dropIndex(JavaSparkContext jsc) throws Exception {
+    List<String> partitionsToDrop = Arrays.asList(cfg.indexTypes.split(","));
+    List<MetadataPartitionType> partitionTypes = partitionsToDrop.stream()
+        .map(MetadataPartitionType::valueOf).collect(Collectors.toList());
+    String schemaStr = UtilHelpers.getSchemaFromLatestInstant(metaClient);
+    try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
+      client.dropIndex(partitionTypes);
+      return 0;
+    } catch (Exception e) {
+      LOG.error("Failed to drop index. ", e);
+      return -1;
+    }
+  }
+
+  private boolean handleResponse(Option<HoodieIndexCommitMetadata> commitMetadata) {
     if (!commitMetadata.isPresent()) {
       LOG.error("Indexing failed as no commit metadata present.");
-      return -1;
+      return false;
     }
     List<HoodieIndexPartitionInfo> indexPartitionInfos = commitMetadata.get().getIndexPartitionInfos();
     LOG.info(String.format("Indexing complete for partitions: %s",
         indexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toList())));
-    return 0;
+    return true;
   }
 }
