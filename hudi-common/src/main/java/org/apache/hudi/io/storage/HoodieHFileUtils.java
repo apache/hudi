@@ -59,20 +59,20 @@ public class HoodieHFileUtils {
   /**
    * Creates HFile reader for byte array with default `primaryReplicaReader` as true.
    *
-   * @param fs      File system.
-   * @param path    Dummy path to file to read.
-   * @param content Content in byte array.
+   * @param fs        File system.
+   * @param dummyPath Dummy path to file to read.
+   * @param content   Content in byte array.
    * @return HFile reader
    * @throws IOException Upon error.
    */
   public static HFile.Reader createHFileReader(
-      FileSystem fs, Path path, byte[] content) throws IOException {
+      FileSystem fs, Path dummyPath, byte[] content) throws IOException {
     Configuration conf = new Configuration();
     HoodieHFileReader.SeekableByteArrayInputStream bis = new HoodieHFileReader.SeekableByteArrayInputStream(content);
     FSDataInputStream fsdis = new FSDataInputStream(bis);
     FSDataInputStreamWrapper stream = new FSDataInputStreamWrapper(fsdis);
     ReaderContext context = new ReaderContextBuilder()
-        .withFilePath(path)
+        .withFilePath(dummyPath)
         .withInputStreamWrapper(stream)
         .withFileSize(content.length)
         .withFileSystem(fs)

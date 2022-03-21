@@ -92,8 +92,8 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     this.reader = HoodieHFileUtils.createHFileReader(fs, path, cacheConfig, configuration);
   }
 
-  public HoodieHFileReader(FileSystem fs, Path path, byte[] content) throws IOException {
-    this.reader = HoodieHFileUtils.createHFileReader(fs, path, content);
+  public HoodieHFileReader(FileSystem fs, Path dummyPath, byte[] content) throws IOException {
+    this.reader = HoodieHFileUtils.createHFileReader(fs, dummyPath, content);
   }
 
   @Override
