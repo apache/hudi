@@ -37,7 +37,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -367,18 +366,12 @@ public class HoodieTableMetaClient implements Serializable {
       throw new HoodieException(HoodieTableConfig.POPULATE_META_FIELDS.key() + " already disabled for the table. Can't be re-enabled back");
     }
 
-    if (!getTableConfig().populateMetaFields()) {
-      // Meta fields can be disabled only with SimpleKeyGenerator, NonPartitionedKeyGenerator
-      String keyGeneratorClassName = properties.getProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key());
-      Set<String> whitelistedKeyGeneratorClassNames =
-          CollectionUtils.createImmutableSet(
-              "org.apache.hudi.keygen.SimpleKeyGenerator",
-              "org.apache.hudi.keygen.NonpartitionedKeyGenerator");
-
-      if (keyGeneratorClassName != null && !whitelistedKeyGeneratorClassNames.contains(keyGeneratorClassName)) {
-        throw new HoodieException(String.format("Only (%s) are supported when meta fields are disabled. Used (%s)",
-            whitelistedKeyGeneratorClassNames, keyGeneratorClassName));
-      }
+    // meta fields can be disabled only with SimpleKeyGenerator
+    if (!getTableConfig().populateMetaFields()
+        && !properties.getProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), "org.apache.hudi.keygen.SimpleKeyGenerator")
+        .equals("org.apache.hudi.keygen.SimpleKeyGenerator")) {
+      throw new HoodieException("Only simple key generator is supported when meta fields are disabled. KeyGenerator used : "
+          + properties.getProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key()));
     }
   }
 
