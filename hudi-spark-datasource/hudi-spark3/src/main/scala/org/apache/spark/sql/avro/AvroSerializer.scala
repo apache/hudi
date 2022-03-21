@@ -29,10 +29,11 @@ import org.apache.avro.generic.GenericData.{EnumSymbol, Fixed}
 import org.apache.avro.generic.GenericData.Record
 import org.apache.avro.util.Utf8
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.avro.AvroSerializer.{createDateRebaseFuncInWrite, createTimestampRebaseFuncInWrite}
 import org.apache.spark.sql.avro.AvroUtils.{toFieldDescription, toFieldStr}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{SpecializedGetters, SpecificInternalRow}
-import org.apache.spark.sql.catalyst.util.DateTimeUtils
+import org.apache.spark.sql.catalyst.util.{DateTimeUtils, RebaseDateTime}
 import org.apache.spark.sql.execution.datasources.DataSourceUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf.LegacyBehaviorPolicy
@@ -42,10 +43,10 @@ import org.apache.spark.sql.types._
  * A serializer to serialize data in catalyst format to data in avro format.
  *
  * NOTE: This code is borrowed from Spark 3.2.1
- *       This code is borrowed, so that we can better control compatibility w/in Spark minor
- *        branches (3.2.x, 3.1.x, etc)
+ * This code is borrowed, so that we can better control compatibility w/in Spark minor
+ * branches (3.2.x, 3.1.x, etc)
  *
- *       PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
+ * PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
  */
 private[sql] class AvroSerializer(rootCatalystType: DataType,
                                   rootAvroType: Schema,
@@ -62,10 +63,10 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
     converter.apply(catalystData)
   }
 
-  private val dateRebaseFunc = DataSourceUtils.createDateRebaseFuncInWrite(
+  private val dateRebaseFunc = createDateRebaseFuncInWrite(
     datetimeRebaseMode, "Avro")
 
-  private val timestampRebaseFunc = DataSourceUtils.createTimestampRebaseFuncInWrite(
+  private val timestampRebaseFunc = createTimestampRebaseFuncInWrite(
     datetimeRebaseMode, "Avro")
 
   private val converter: Any => Any = {
@@ -335,4 +336,41 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
         "schema will throw runtime exception if there is a record with null value.")
     }
   }
+}
+
+object AvroSerializer {
+
+  // NOTE: Following methods have been renamed in Spark 3.2.1 [1] making [[AvroSerializer]] implementation
+  //       (which relies on it) be only compatible with the exact same version of [[DataSourceUtils]].
+  //       To make sure this implementation is compatible w/ all Spark versions w/in Spark 3.2.x branch,
+  //       we're preemptively cloned those methods to make sure Hudi is compatible w/ Spark 3.2.0 as well as
+  //       w/ Spark >= 3.2.1
+  //
+  // [1] https://github.com/apache/spark/pull/34978
+
+  def createDateRebaseFuncInWrite(rebaseMode: LegacyBehaviorPolicy.Value,
+                                  format: String): Int => Int = rebaseMode match {
+    case LegacyBehaviorPolicy.EXCEPTION => days: Int =>
+      if (days < RebaseDateTime.lastSwitchGregorianDay) {
+        throw DataSourceUtils.newRebaseExceptionInWrite(format)
+      }
+      days
+    case LegacyBehaviorPolicy.LEGACY => RebaseDateTime.rebaseGregorianToJulianDays
+    case LegacyBehaviorPolicy.CORRECTED => identity[Int]
+  }
+
+  def createTimestampRebaseFuncInWrite(
+                                        rebaseMode: LegacyBehaviorPolicy.Value,
+                                        format: String): Long => Long = rebaseMode match {
+    case LegacyBehaviorPolicy.EXCEPTION => micros: Long =>
+      if (micros < RebaseDateTime.lastSwitchGregorianTs) {
+        throw DataSourceUtils.newRebaseExceptionInWrite(format)
+      }
+      micros
+    case LegacyBehaviorPolicy.LEGACY =>
+      val timeZone = SQLConf.get.sessionLocalTimeZone
+      RebaseDateTime.rebaseGregorianToJulianMicros(timeZone, _)
+    case LegacyBehaviorPolicy.CORRECTED => identity[Long]
+  }
+
 }
