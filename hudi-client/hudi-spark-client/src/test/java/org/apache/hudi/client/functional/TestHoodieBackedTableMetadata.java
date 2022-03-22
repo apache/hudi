@@ -65,10 +65,18 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
+
+import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -90,6 +98,53 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     // trigger an upsert
     doWriteOperation(testTable, "0000003");
     verifyBaseMetadataTable();
+  }
+
+  @Test
+  public void testMultiReaderForHoodieBackedTableMetadata() throws Exception {
+    final int taskNumber = 100;
+    HoodieTableType tableType = HoodieTableType.COPY_ON_WRITE;
+    init(tableType);
+    testTable.doWriteOperation("000001", INSERT, emptyList(), asList("p1"), 1);
+    HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), writeConfig.getSpillableMapBasePath(), false);
+    assertTrue(tableMetadata.enabled());
+    List<String> metadataPartitions = tableMetadata.getAllPartitionPaths();
+    String partition = metadataPartitions.get(0);
+    String finalPartition = basePath + "/" + partition;
+    ArrayList<String> duplicatedPartitions = new ArrayList<>(taskNumber);
+    for (int i = 0; i < taskNumber; i++) {
+      duplicatedPartitions.add(finalPartition);
+    }
+    ExecutorService executors = Executors.newFixedThreadPool(taskNumber);
+    AtomicBoolean flag = new AtomicBoolean(false);
+    AtomicInteger count = new AtomicInteger(0);
+    AtomicInteger filesNumber = new AtomicInteger(0);
+
+    for (String part : duplicatedPartitions) {
+      executors.submit(new Runnable() {
+        @Override
+        public void run() {
+          try {
+            count.incrementAndGet();
+            while (true) {
+              if (count.get() == taskNumber) {
+                break;
+              }
+            }
+            FileStatus[] files = tableMetadata.getAllFilesInPartition(new Path(part));
+            filesNumber.addAndGet(files.length);
+            LOG.warn(Arrays.toString(files) + " : " + files.length);
+            assertEquals(1, files.length);
+          } catch (Exception e) {
+            flag.set(true);
+          }
+        }
+      });
+    }
+    executors.shutdown();
+    executors.awaitTermination(24, TimeUnit.HOURS);
+    assertFalse(flag.get());
+    assertEquals(filesNumber.get(), taskNumber);
   }
 
   private void doWriteInsertAndUpsert(HoodieTestTable testTable) throws Exception {

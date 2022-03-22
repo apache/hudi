@@ -55,6 +55,7 @@ import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -397,7 +398,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * @return File reader and the record scanner pair for the requested file slice
    */
   private Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> getOrCreateReaders(String partitionName, FileSlice slice) {
-    return partitionReaders.computeIfAbsent(Pair.of(partitionName, slice.getFileId()), k -> openReaders(partitionName, slice));
+    if (reuse) {
+      return partitionReaders.computeIfAbsent(Pair.of(partitionName, slice.getFileId()), k -> {
+        return openReaders(partitionName, slice); });
+    } else {
+      return openReaders(partitionName, slice);
+    }
   }
 
   private Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> openReaders(String partitionName, FileSlice slice) {
