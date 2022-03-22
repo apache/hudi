@@ -95,6 +95,6 @@ public class TestHoodieOrcReaderWriter extends TestHoodieReaderWriterBase {
 
   @Override
   public void testReaderFilterRowKeys() {
-    // TODO: fix filterRowKeys test for ORC due to a bug in ORC logic
+    // TODO(HUDI-3682): fix filterRowKeys test for ORC due to a bug in ORC logic
   }
 }
