@@ -116,14 +116,27 @@ public class ConcurrentOperation {
                 this.metadataWrapper.getMetadataFromTimeline().getHoodieReplaceCommitMetadata().getPartitionToWriteStats()).keySet();
             this.operationType = WriteOperationType.fromValue(this.metadataWrapper.getMetadataFromTimeline().getHoodieReplaceCommitMetadata().getOperationType());
           } else {
-            HoodieRequestedReplaceMetadata requestedReplaceMetadata = this.metadataWrapper.getMetadataFromTimeline().getHoodieRequestedReplaceMetadata();
-            this.mutatedFileIds = requestedReplaceMetadata
-                .getClusteringPlan().getInputGroups()
-                .stream()
-                .flatMap(ig -> ig.getSlices().stream())
-                .map(file -> file.getFileId())
-                .collect(Collectors.toSet());
-            this.operationType = WriteOperationType.CLUSTER;
+            // we need to different handling for requested and inflight replacecommit because
+            // for requested replacecommit, clustering will generate a plan and HoodieRequestedReplaceMetadata will not be empty, but insert_overwrite/insert_overwrite_table could have empty content
+            // for inflight replacecommit, clustering will have no content in metadata, but insert_overwrite/insert_overwrite_table will have some commit metadata
+            if (instant.isRequested()) {
+              HoodieRequestedReplaceMetadata requestedReplaceMetadata = this.metadataWrapper.getMetadataFromTimeline().getHoodieRequestedReplaceMetadata();
+              if (requestedReplaceMetadata != null) {
+                this.mutatedFileIds = requestedReplaceMetadata
+                    .getClusteringPlan().getInputGroups()
+                    .stream()
+                    .flatMap(ig -> ig.getSlices().stream())
+                    .map(file -> file.getFileId())
+                    .collect(Collectors.toSet());
+                this.operationType = WriteOperationType.CLUSTER;
+              }
+            } else {
+              org.apache.hudi.avro.model.HoodieCommitMetadata inflightCommitMetadata = this.metadataWrapper.getMetadataFromTimeline().getHoodieInflightReplaceMetadata();
+              if (inflightCommitMetadata != null) {
+                this.mutatedFileIds = CommitUtils.getFileIdWithoutSuffixAndRelativePathsFromSpecificRecord(inflightCommitMetadata.getPartitionToWriteStats()).keySet();
+                this.operationType = WriteOperationType.fromValue(this.metadataWrapper.getMetadataFromTimeline().getHoodieCommitMetadata().getOperationType());
+              }
+            }
           }
           break;
         default:
