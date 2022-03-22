@@ -271,18 +271,18 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
         InternalSchema internalSchema = InternalSchemaUtils.searchSchema(Long.parseLong(instantTime),
             SerDeHelper.parseSchemas(historySchemaStr));
         Schema avroSchema = HoodieAvroUtils.createHoodieWriteSchema(new Schema.Parser().parse(config.getSchema()));
-        InternalSchema evolutionSchema = AvroSchemaEvolutionUtils.evolveSchemaFromNewAvroSchema(avroSchema, internalSchema);
-        if (evolutionSchema.equals(internalSchema)) {
-          metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(evolutionSchema));
+        InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.evolveSchemaFromNewAvroSchema(avroSchema, internalSchema);
+        if (evolvedSchema.equals(internalSchema)) {
+          metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(evolvedSchema));
           schemasManager.persistHistorySchemaStr(instantTime, historySchemaStr);
         } else {
-          evolutionSchema.setSchemaId(Long.parseLong(instantTime));
-          String newSchemaStr = SerDeHelper.toJson(evolutionSchema);
+          evolvedSchema.setSchemaId(Long.parseLong(instantTime));
+          String newSchemaStr = SerDeHelper.toJson(evolvedSchema);
           metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, newSchemaStr);
-          schemasManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(evolutionSchema, historySchemaStr));
+          schemasManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(evolvedSchema, historySchemaStr));
         }
         // update SCHEMA_KEY
-        metadata.addMetadata(SCHEMA_KEY, AvroInternalSchemaConverter.convert(evolutionSchema, avroSchema.getName()).toString());
+        metadata.addMetadata(SCHEMA_KEY, AvroInternalSchemaConverter.convert(evolvedSchema, avroSchema.getName()).toString());
       }
     }
     // update Metadata table

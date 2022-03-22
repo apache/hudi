@@ -402,7 +402,7 @@ public class HoodieTableMetaClient implements Serializable {
       fs.mkdirs(metaPathDir);
     }
     // create schema folder
-    Path schemaPathDir = new Path(basePath, SCHEMA_FOLDER_NAME);
+    Path schemaPathDir = new Path(metaPathDir, SCHEMA_FOLDER_NAME);
     if (!fs.exists(schemaPathDir)) {
       fs.mkdirs(schemaPathDir);
     }
