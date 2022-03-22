@@ -323,7 +323,7 @@ private object HoodieMergeOnReadRDD {
         .withBasePath(tablePath)
         .withLogFilePaths(logFiles.map(logFile => getFilePath(logFile.getPath)).asJava)
         .withReaderSchema(logSchema)
-        .withLatestInstantTime(tableState.latestCommit)
+        .withLatestInstantTime(tableState.latestCommitTimestamp)
         .withReadBlocksLazily(
           Try(hadoopConf.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP,
             HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED).toBoolean)

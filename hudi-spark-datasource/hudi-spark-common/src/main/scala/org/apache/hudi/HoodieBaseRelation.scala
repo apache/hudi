@@ -55,7 +55,7 @@ trait HoodieFileSplit {}
 case class HoodieTableSchema(structTypeSchema: StructType, avroSchemaStr: String)
 
 case class HoodieTableState(tablePath: String,
-                            latestCommit: String,
+                            latestCommitTimestamp: String,
                             recordKeyField: String,
                             preCombineFieldOpt: Option[String],
                             usesVirtualKeys: Boolean,
@@ -84,9 +84,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected lazy val basePath: String = metaClient.getBasePath
 
   // NOTE: Record key-field is assumed singular here due to the either of
-  //          - In case Hudi's metadata is enabled: record key will be pre-materialized (stored) as part
+  //          - In case Hudi's meta fields are enabled: record key will be pre-materialized (stored) as part
   //          of the record's payload (as part of the Hudi's metadata)
-  //          - In case Hudi's metadata is disabled (virtual keys): in that case record has to bear _single field_
+  //          - In case Hudi's meta fields are disabled (virtual keys): in that case record has to bear _single field_
   //          identified as its (unique) primary key w/in its payload (this is a limitation of [[SimpleKeyGenerator]],
   //          which is the only [[KeyGenerator]] permitted for virtual-keys payloads)
   protected lazy val recordKeyField: String =
@@ -280,7 +280,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     // Subset of the state of table's configuration as of at the time of the query
     HoodieTableState(
       tablePath = basePath,
-      latestCommit = queryTimestamp.get,
+      latestCommitTimestamp = queryTimestamp.get,
       recordKeyField = recordKeyField,
       preCombineFieldOpt = preCombineFieldOpt,
       usesVirtualKeys = !tableConfig.populateMetaFields(),
