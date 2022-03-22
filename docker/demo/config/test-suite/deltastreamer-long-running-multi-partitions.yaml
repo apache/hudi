@@ -59,6 +59,7 @@ dag_content:
     deps: first_upsert
   second_validate:
     config:
+      validate_once_every_itr : 5
       validate_hive: false
       delete_input_data: true
     type: ValidateDatasetNode

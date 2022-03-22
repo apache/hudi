@@ -28,13 +28,10 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.BaseSparkCommitActionExecutor;
-
-import org.apache.spark.api.java.JavaRDD;
 
 public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends BaseSparkCommitActionExecutor<T> {
@@ -52,10 +49,8 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
   }
 
   @Override
-  public HoodieWriteMetadata<JavaRDD<WriteStatus>> execute() {
-    HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = executeClustering(clusteringPlan);
-    JavaRDD<WriteStatus> transformedWriteStatuses = HoodieJavaRDD.getJavaRDD(writeMetadata.getWriteStatuses());
-    return writeMetadata.clone(transformedWriteStatuses);
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
+    return executeClustering(clusteringPlan);
   }
 
   @Override

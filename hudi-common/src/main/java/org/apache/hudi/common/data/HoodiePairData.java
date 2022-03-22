@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.data;
 
+import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
@@ -71,6 +72,8 @@ public abstract class HoodiePairData<K, V> implements Serializable {
    * @return the number of pairs per key in a {@link Map}.
    */
   public abstract Map<K, Long> countByKey();
+
+  public abstract HoodiePairData<K, V> reduceByKey(SerializableBiFunction<V, V, V> func, int parallelism);
 
   /**
    * @param func serializable map function.

@@ -20,6 +20,7 @@
 package org.apache.hudi.client.clustering.run.strategy;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -34,7 +35,6 @@ import org.apache.hudi.table.action.commit.SparkBulkInsertHelper;
 import org.apache.avro.Schema;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.api.java.JavaRDD;
 
 import java.util.List;
 import java.util.Map;
@@ -56,7 +56,7 @@ public class SparkSingleFileSortExecutionStrategy<T extends HoodieRecordPayload<
   }
 
   @Override
-  public JavaRDD<WriteStatus> performClusteringWithRecordsRDD(JavaRDD<HoodieRecord<T>> inputRecords,
+  public HoodieData<WriteStatus> performClusteringWithRecordsRDD(HoodieData<HoodieRecord<T>> inputRecords,
                                                               int numOutputGroups,
                                                               String instantTime,
                                                               Map<String, String> strategyParams,
@@ -74,7 +74,7 @@ public class SparkSingleFileSortExecutionStrategy<T extends HoodieRecordPayload<
     // Since clustering will write to single file group using HoodieUnboundedCreateHandle, set max file size to a large value.
     props.put(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key(), String.valueOf(Long.MAX_VALUE));
     HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder().withProps(props).build();
-    return (JavaRDD<WriteStatus>) SparkBulkInsertHelper.newInstance().bulkInsert(inputRecords, instantTime, getHoodieTable(), newConfig,
+    return (HoodieData<WriteStatus>) SparkBulkInsertHelper.newInstance().bulkInsert(inputRecords, instantTime, getHoodieTable(), newConfig,
         false, getPartitioner(strategyParams, schema), true, numOutputGroups, new SingleFileHandleCreateFactory(fileGroupIdList.get(0).getFileId(), preserveHoodieMetadata));
   }
 }

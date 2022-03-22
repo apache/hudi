@@ -52,7 +52,7 @@
     <module>packaging/hudi-timeline-server-bundle</module>
     <module>packaging/hudi-trino-bundle</module>
     <module>hudi-examples</module>
-    <module>hudi-flink</module>
+    <module>hudi-flink-datasource</module>
     <module>hudi-kafka-connect</module>
     <module>packaging/hudi-flink-bundle</module>
     <module>packaging/hudi-kafka-connect-bundle</module>
@@ -113,10 +113,17 @@
     <prometheus.version>0.8.0</prometheus.version>
     <http.version>4.4.1</http.version>
     <spark.version>${spark2.version}</spark.version>
-    <sparkbundle.version></sparkbundle.version>
-    <flink.version>1.14.3</flink.version>
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.2.1</spark3.version>
+    <sparkbundle.version></sparkbundle.version>
+    <flink1.14.version>1.14.4</flink1.14.version>
+    <flink1.13.version>1.13.6</flink1.13.version>
+    <flink.version>${flink1.14.version}</flink.version>
+    <hudi.flink.module>hudi-flink1.14.x</hudi.flink.module>
+    <flink.bundle.version>1.14</flink.bundle.version>
+    <flink.runtime.artifactId>flink-runtime</flink.runtime.artifactId>
+    <flink.table.runtime.artifactId>flink-table-runtime_${scala.binary.version}</flink.table.runtime.artifactId>
+    <flink.table.planner.artifactId>flink-table-planner_${scala.binary.version}</flink.table.planner.artifactId>
     <hudi.spark.module>hudi-spark2</hudi.spark.module>
     <hudi.spark.common.module>hudi-spark2-common</hudi.spark.common.module>
     <avro.version>1.8.2</avro.version>
@@ -1692,6 +1699,35 @@
       <activation>
         <property>
           <name>spark3.1.x</name>
+        </property>
+      </activation>
+    </profile>
+
+    <profile>
+      <id>flink1.14</id>
+      <activation>
+        <activeByDefault>true</activeByDefault>
+        <property>
+          <name>flink1.14</name>
+          <!-- add flink1.14 module to all profile -->
+          <value>!disabled</value>
+        </property>
+      </activation>
+    </profile>
+    <profile>
+      <id>flink1.13</id>
+      <properties>
+        <flink.version>${flink1.13.version}</flink.version>
+        <flink.runtime.artifactId>flink-runtime_${scala.binary.version}</flink.runtime.artifactId>
+        <flink.table.runtime.artifactId>flink-table-runtime-blink_${scala.binary.version}</flink.table.runtime.artifactId>
+        <flink.table.planner.artifactId>flink-table-planner-blink_${scala.binary.version}</flink.table.planner.artifactId>
+        <hudi.flink.module>hudi-flink1.13.x</hudi.flink.module>
+        <flink.bundle.version>1.13</flink.bundle.version>
+        <skipITs>true</skipITs>
+      </properties>
+      <activation>
+        <property>
+          <name>flink1.13</name>
         </property>
       </activation>
     </profile>

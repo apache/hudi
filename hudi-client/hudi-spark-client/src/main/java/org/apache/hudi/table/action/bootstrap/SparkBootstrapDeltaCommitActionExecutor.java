@@ -18,9 +18,8 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
-import java.util.Map;
-
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -29,7 +28,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.BaseSparkCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.SparkBulkInsertDeltaCommitActionExecutor;
-import org.apache.spark.api.java.JavaRDD;
+
+import java.util.Map;
 
 public class SparkBootstrapDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends SparkBootstrapCommitActionExecutor<T> {
@@ -41,7 +41,7 @@ public class SparkBootstrapDeltaCommitActionExecutor<T extends HoodieRecordPaylo
   }
 
   @Override
-  protected BaseSparkCommitActionExecutor<T> getBulkInsertActionExecutor(JavaRDD<HoodieRecord> inputRecordsRDD) {
+  protected BaseSparkCommitActionExecutor<T> getBulkInsertActionExecutor(HoodieData<HoodieRecord> inputRecordsRDD) {
     return new SparkBulkInsertDeltaCommitActionExecutor((HoodieSparkEngineContext) context, new HoodieWriteConfig.Builder().withProps(config.getProps())
         .withSchema(bootstrapSchema).build(), table, HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
         inputRecordsRDD, extraMetadata);
