@@ -141,8 +141,8 @@ public class HoodieTestTable {
     return new HoodieTestTable(metaClient.getBasePath(), metaClient.getRawFs(), metaClient);
   }
 
-  public static String makeNewCommitTime(int sequence) {
-    return String.format("%09d", sequence);
+  public static String makeNewCommitTime(int sequence, String instantFormat) {
+    return String.format(instantFormat, sequence);
   }
 
   public static String makeNewCommitTime() {
@@ -151,14 +151,6 @@ public class HoodieTestTable {
 
   public static String makeNewCommitTime(Instant dateTime) {
     return HoodieActiveTimeline.formatDate(Date.from(dateTime));
-  }
-
-  public static List<String> makeIncrementalCommitTimes(int num) {
-    return makeIncrementalCommitTimes(num, 1);
-  }
-
-  public static List<String> makeIncrementalCommitTimes(int num, int firstOffsetSeconds) {
-    return makeIncrementalCommitTimes(num, firstOffsetSeconds, 0);
   }
 
   public static List<String> makeIncrementalCommitTimes(int num, int firstOffsetSeconds, int deltaSecs) {

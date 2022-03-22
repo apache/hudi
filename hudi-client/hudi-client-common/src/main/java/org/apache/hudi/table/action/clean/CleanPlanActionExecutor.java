@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
@@ -58,8 +59,30 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
     this.extraMetadata = extraMetadata;
   }
 
-  protected Option<HoodieCleanerPlan> createCleanerPlan() {
-    return execute();
+  private int getCommitsSinceLastCleaning() {
+    Option<HoodieInstant> lastCleanInstant = table.getActiveTimeline().getCleanerTimeline().filterCompletedInstants().lastInstant();
+    HoodieTimeline commitTimeline = table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+
+    String latestCleanTs;
+    int numCommits = 0;
+    if (lastCleanInstant.isPresent()) {
+      latestCleanTs = lastCleanInstant.get().getTimestamp();
+      numCommits = commitTimeline.findInstantsAfter(latestCleanTs).countInstants();
+    } else {
+      numCommits = commitTimeline.countInstants();
+    }
+
+    return numCommits;
+  }
+
+  private boolean needsCleaning(CleaningTriggerStrategy strategy) {
+    if (strategy == CleaningTriggerStrategy.NUM_COMMITS) {
+      int numberOfCommits = getCommitsSinceLastCleaning();
+      int maxInlineCommitsForNextClean = config.getCleaningMaxCommits();
+      return numberOfCommits >= maxInlineCommitsForNextClean;
+    } else {
+      throw new HoodieException("Unsupported cleaning trigger strategy: " + config.getCleaningTriggerStrategy());
+    }
   }
 
   /**
@@ -128,6 +151,9 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
 
   @Override
   public Option<HoodieCleanerPlan> execute() {
+    if (!needsCleaning(config.getCleaningTriggerStrategy())) {
+      return Option.empty();
+    }
     // Plan a new clean action
     return requestClean(instantTime);
   }
