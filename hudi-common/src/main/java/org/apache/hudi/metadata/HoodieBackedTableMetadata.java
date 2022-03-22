@@ -54,6 +54,7 @@ import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -280,29 +281,38 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * @return File reader and the record scanner pair for the requested file slice
    */
   private Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> openReadersIfNeeded(String partitionName, FileSlice slice) {
-    return partitionReaders.computeIfAbsent(Pair.of(partitionName, slice.getFileId()), k -> {
-      try {
-        HoodieTimer timer = new HoodieTimer().startTimer();
+    if (reuse) {
+      return partitionReaders.computeIfAbsent(Pair.of(partitionName, slice.getFileId()), k -> {
+        return getHoodieMetadataMergedLogRecordReaderPair(partitionName, slice);
+      });
+    } else {
+      return getHoodieMetadataMergedLogRecordReaderPair(partitionName, slice);
+    }
+  }
 
-        // Open base file reader
-        Pair<HoodieFileReader, Long> baseFileReaderOpenTimePair = getBaseFileReader(slice, timer);
-        HoodieFileReader baseFileReader = baseFileReaderOpenTimePair.getKey();
-        final long baseFileOpenMs = baseFileReaderOpenTimePair.getValue();
+  @NotNull
+  private Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> getHoodieMetadataMergedLogRecordReaderPair(String partitionName, FileSlice slice) {
+    try {
+      HoodieTimer timer = new HoodieTimer().startTimer();
 
-        // Open the log record scanner using the log files from the latest file slice
-        List<HoodieLogFile> logFiles = slice.getLogFiles().collect(Collectors.toList());
-        Pair<HoodieMetadataMergedLogRecordReader, Long> logRecordScannerOpenTimePair =
-            getLogRecordScanner(logFiles, partitionName);
-        HoodieMetadataMergedLogRecordReader logRecordScanner = logRecordScannerOpenTimePair.getKey();
-        final long logScannerOpenMs = logRecordScannerOpenTimePair.getValue();
+      // Open base file reader
+      Pair<HoodieFileReader, Long> baseFileReaderOpenTimePair = getBaseFileReader(slice, timer);
+      HoodieFileReader baseFileReader = baseFileReaderOpenTimePair.getKey();
+      final long baseFileOpenMs = baseFileReaderOpenTimePair.getValue();
 
-        metrics.ifPresent(metrics -> metrics.updateMetrics(HoodieMetadataMetrics.SCAN_STR,
-            +baseFileOpenMs + logScannerOpenMs));
-        return Pair.of(baseFileReader, logRecordScanner);
-      } catch (IOException e) {
-        throw new HoodieIOException("Error opening readers for metadata table partition " + partitionName, e);
-      }
-    });
+      // Open the log record scanner using the log files from the latest file slice
+      List<HoodieLogFile> logFiles = slice.getLogFiles().collect(Collectors.toList());
+      Pair<HoodieMetadataMergedLogRecordReader, Long> logRecordScannerOpenTimePair =
+          getLogRecordScanner(logFiles, partitionName);
+      HoodieMetadataMergedLogRecordReader logRecordScanner = logRecordScannerOpenTimePair.getKey();
+      final long logScannerOpenMs = logRecordScannerOpenTimePair.getValue();
+
+      metrics.ifPresent(metrics -> metrics.updateMetrics(HoodieMetadataMetrics.SCAN_STR,
+          +baseFileOpenMs + logScannerOpenMs));
+      return Pair.of(baseFileReader, logRecordScanner);
+    } catch (IOException e) {
+      throw new HoodieIOException("Error opening readers for metadata table partition " + partitionName, e);
+    }
   }
 
   private Pair<HoodieFileReader, Long> getBaseFileReader(FileSlice slice, HoodieTimer timer) throws IOException {
