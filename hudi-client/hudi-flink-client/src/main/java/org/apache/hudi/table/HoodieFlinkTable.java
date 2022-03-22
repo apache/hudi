@@ -35,14 +35,9 @@ import org.apache.hudi.index.FlinkHoodieIndexFactory;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
-import org.apache.hudi.table.action.HoodieWriteMetadata;
-
-import java.util.List;
-
-import static org.apache.hudi.common.data.HoodieList.getList;
 
 public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
-    extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>>
+    extends HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>>
     implements ExplicitWriteHandleTable<T> {
 
   protected HoodieFlinkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
@@ -83,11 +78,6 @@ public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
       hoodieFlinkTable.getHoodieView().sync();
     }
     return hoodieFlinkTable;
-  }
-
-  public static HoodieWriteMetadata<List<WriteStatus>> convertMetadata(
-      HoodieWriteMetadata<HoodieData<WriteStatus>> metadata) {
-    return metadata.clone(getList(metadata.getWriteStatuses()));
   }
 
   @Override

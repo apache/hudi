@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit.delta;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -28,25 +29,23 @@ import org.apache.hudi.io.FlinkAppendHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import java.util.List;
-
 public class FlinkUpsertPreppedDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends BaseFlinkDeltaCommitActionExecutor<T> {
 
-  private final List<HoodieRecord<T>> preppedRecords;
+  private final HoodieData<HoodieRecord<T>> preppedRecords;
 
   public FlinkUpsertPreppedDeltaCommitActionExecutor(HoodieEngineContext context,
                                                      FlinkAppendHandle<?, ?, ?, ?> writeHandle,
                                                      HoodieWriteConfig config,
                                                      HoodieTable table,
                                                      String instantTime,
-                                                     List<HoodieRecord<T>> preppedRecords) {
+                                                     HoodieData<HoodieRecord<T>> preppedRecords) {
     super(context, writeHandle, config, table, instantTime, WriteOperationType.UPSERT_PREPPED);
     this.preppedRecords = preppedRecords;
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> execute() {
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
     return super.execute(preppedRecords);
   }
 }

@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -45,11 +46,11 @@ public interface ExplicitWriteHandleTable<T extends HoodieRecordPayload> {
    * @param records     hoodieRecords to upsert
    * @return HoodieWriteMetadata
    */
-  HoodieWriteMetadata<List<WriteStatus>> upsert(
+  HoodieWriteMetadata<HoodieData<WriteStatus>> upsert(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
       String instantTime,
-      List<HoodieRecord<T>> records);
+      HoodieData<HoodieRecord<T>> records);
 
   /**
    * Insert a batch of new records into Hoodie table at the supplied instantTime.
@@ -63,11 +64,11 @@ public interface ExplicitWriteHandleTable<T extends HoodieRecordPayload> {
    * @param records     hoodieRecords to upsert
    * @return HoodieWriteMetadata
    */
-  HoodieWriteMetadata<List<WriteStatus>> insert(
+  HoodieWriteMetadata<HoodieData<WriteStatus>> insert(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
       String instantTime,
-      List<HoodieRecord<T>> records);
+      HoodieData<HoodieRecord<T>> records);
 
   /**
    * Deletes a list of {@link HoodieKey}s from the Hoodie table, at the supplied instantTime {@link HoodieKey}s will be
@@ -82,11 +83,11 @@ public interface ExplicitWriteHandleTable<T extends HoodieRecordPayload> {
    * @param keys   {@link List} of {@link HoodieKey}s to be deleted
    * @return HoodieWriteMetadata
    */
-  HoodieWriteMetadata<List<WriteStatus>> delete(
+  HoodieWriteMetadata<HoodieData<WriteStatus>> delete(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
       String instantTime,
-      List<HoodieKey> keys);
+      HoodieData<HoodieKey> keys);
 
   /**
    * Upserts the given prepared records into the Hoodie table, at the supplied instantTime.
@@ -101,11 +102,11 @@ public interface ExplicitWriteHandleTable<T extends HoodieRecordPayload> {
    * @param preppedRecords  hoodieRecords to upsert
    * @return HoodieWriteMetadata
    */
-  HoodieWriteMetadata<List<WriteStatus>> upsertPrepped(
+  HoodieWriteMetadata<HoodieData<WriteStatus>> upsertPrepped(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
       String instantTime,
-      List<HoodieRecord<T>> preppedRecords);
+      HoodieData<HoodieRecord<T>> preppedRecords);
 
   /**
    * Inserts the given prepared records into the Hoodie table, at the supplied instantTime.
@@ -120,11 +121,11 @@ public interface ExplicitWriteHandleTable<T extends HoodieRecordPayload> {
    * @param preppedRecords  hoodieRecords to upsert
    * @return HoodieWriteMetadata
    */
-  HoodieWriteMetadata<List<WriteStatus>> insertPrepped(
+  HoodieWriteMetadata<HoodieData<WriteStatus>> insertPrepped(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
       String instantTime,
-      List<HoodieRecord<T>> preppedRecords);
+      HoodieData<HoodieRecord<T>> preppedRecords);
 
   /**
    * Replaces all the existing records and inserts the specified new records into Hoodie table at the supplied instantTime,
@@ -136,11 +137,11 @@ public interface ExplicitWriteHandleTable<T extends HoodieRecordPayload> {
    * @param records input records
    * @return HoodieWriteMetadata
    */
-  HoodieWriteMetadata<List<WriteStatus>> insertOverwrite(
+  HoodieWriteMetadata<HoodieData<WriteStatus>> insertOverwrite(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
       String instantTime,
-      List<HoodieRecord<T>> records);
+      HoodieData<HoodieRecord<T>> records);
 
   /**
    * Deletes all the existing records of the Hoodie table and inserts the specified new records into Hoodie table at the supplied instantTime,
@@ -152,9 +153,9 @@ public interface ExplicitWriteHandleTable<T extends HoodieRecordPayload> {
    * @param records input records
    * @return HoodieWriteMetadata
    */
-  HoodieWriteMetadata<List<WriteStatus>> insertOverwriteTable(
+  HoodieWriteMetadata<HoodieData<WriteStatus>> insertOverwriteTable(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
       String instantTime,
-      List<HoodieRecord<T>> records);
+      HoodieData<HoodieRecord<T>> records);
 }

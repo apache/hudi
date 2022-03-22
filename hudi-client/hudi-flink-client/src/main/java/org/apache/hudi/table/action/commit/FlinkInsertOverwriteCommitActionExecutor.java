@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -29,19 +30,17 @@ import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import java.util.List;
-
 public class FlinkInsertOverwriteCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends BaseFlinkCommitActionExecutor<T> {
 
-  protected List<HoodieRecord<T>> inputRecords;
+  protected HoodieData<HoodieRecord<T>> inputRecords;
 
   public FlinkInsertOverwriteCommitActionExecutor(HoodieEngineContext context,
                                                   HoodieWriteHandle<?, ?, ?, ?> writeHandle,
                                                   HoodieWriteConfig config,
                                                   HoodieTable table,
                                                   String instantTime,
-                                                  List<HoodieRecord<T>> inputRecords) {
+                                                  HoodieData<HoodieRecord<T>> inputRecords) {
     this(context, writeHandle, config, table, instantTime, inputRecords, WriteOperationType.INSERT_OVERWRITE);
   }
 
@@ -50,7 +49,7 @@ public class FlinkInsertOverwriteCommitActionExecutor<T extends HoodieRecordPayl
                                                   HoodieWriteConfig config,
                                                   HoodieTable table,
                                                   String instantTime,
-                                                  List<HoodieRecord<T>> inputRecords,
+                                                  HoodieData<HoodieRecord<T>> inputRecords,
                                                   WriteOperationType writeOperationType) {
     super(context, writeHandle, config, table, instantTime, writeOperationType);
     this.inputRecords = inputRecords;
@@ -62,7 +61,7 @@ public class FlinkInsertOverwriteCommitActionExecutor<T extends HoodieRecordPayl
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> execute() {
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
     return FlinkWriteHelper.newInstance().write(instantTime, inputRecords, context, table,
         config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, operationType);
   }

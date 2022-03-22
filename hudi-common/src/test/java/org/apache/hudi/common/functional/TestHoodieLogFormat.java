@@ -1842,7 +1842,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         new HashMap<HoodieLogBlock.HeaderMetadataType, String>() {{
           put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
           put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-        }};
+        }
+    };
 
     // Init Benchmark to report number of bytes actually read from the Block
     BenchmarkCounter.initCounterFromReporter(HadoopMapRedUtils.createTestReporter(), fs.getConf());
@@ -1869,7 +1870,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
             put(HoodieLogBlockType.AVRO_DATA_BLOCK, 0); // not supported
             put(HoodieLogBlockType.HFILE_DATA_BLOCK, 0); // not supported
             put(HoodieLogBlockType.PARQUET_DATA_BLOCK, 2605);
-          }};
+          }
+      };
 
       List<IndexedRecord> recordsRead = getRecords(dataBlockRead);
       assertEquals(projectedRecords.size(), recordsRead.size(),

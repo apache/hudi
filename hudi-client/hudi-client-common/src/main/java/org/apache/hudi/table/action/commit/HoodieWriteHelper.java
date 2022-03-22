@@ -32,7 +32,7 @@ import org.apache.hudi.table.HoodieTable;
 public class HoodieWriteHelper<T extends HoodieRecordPayload, R> extends BaseWriteHelper<T, HoodieData<HoodieRecord<T>>,
     HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> {
 
-  private HoodieWriteHelper() {
+  public HoodieWriteHelper() {
   }
 
   private static class WriteHelperHolder {

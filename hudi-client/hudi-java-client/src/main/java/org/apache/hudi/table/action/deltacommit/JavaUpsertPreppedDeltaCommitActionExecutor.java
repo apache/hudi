@@ -21,6 +21,8 @@ package org.apache.hudi.table.action.deltacommit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -45,23 +47,23 @@ public class JavaUpsertPreppedDeltaCommitActionExecutor<T extends HoodieRecordPa
 
   private static final Logger LOG = LogManager.getLogger(JavaUpsertPreppedDeltaCommitActionExecutor.class);
 
-  private final List<HoodieRecord<T>> preppedInputRecords;
+  private final HoodieData<HoodieRecord<T>> preppedInputRecords;
 
   public JavaUpsertPreppedDeltaCommitActionExecutor(HoodieJavaEngineContext context, HoodieWriteConfig config, HoodieTable table,
-                                                    String instantTime, List<HoodieRecord<T>> preppedInputRecords) {
+                                                    String instantTime, HoodieData<HoodieRecord<T>> preppedInputRecords) {
     super(context, config, table, instantTime, WriteOperationType.UPSERT_PREPPED);
     this.preppedInputRecords = preppedInputRecords;
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> execute() {
-    HoodieWriteMetadata<List<WriteStatus>> result = new HoodieWriteMetadata<>();
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = new HoodieWriteMetadata<>();
     // First group by target file id.
     HashMap<Pair<String, String>, List<HoodieRecord<T>>> recordsByFileId = new HashMap<>();
     List<HoodieRecord<T>> insertedRecords = new LinkedList<>();
 
     // Split records into inserts and updates.
-    for (HoodieRecord<T> record : preppedInputRecords) {
+    for (HoodieRecord<T> record : preppedInputRecords.collectAsList()) {
       if (!record.isCurrentLocationKnown()) {
         insertedRecords.add(record);
       } else {
@@ -86,7 +88,7 @@ public class JavaUpsertPreppedDeltaCommitActionExecutor<T extends HoodieRecordPa
 
       if (insertedRecords.size() > 0) {
         HoodieWriteMetadata<List<WriteStatus>> insertResult = JavaBulkInsertHelper.newInstance()
-            .bulkInsert(insertedRecords, instantTime, table, config, this, false, Option.empty());
+            .bulkInsert(HoodieList.of(insertedRecords), instantTime, table, config, this, false, Option.empty());
         allWriteStatuses.addAll(insertResult.getWriteStatuses());
       }
     } catch (Throwable e) {
@@ -96,7 +98,7 @@ public class JavaUpsertPreppedDeltaCommitActionExecutor<T extends HoodieRecordPa
       throw new HoodieUpsertException("Failed to upsert for commit time " + instantTime, e);
     }
 
-    updateIndex(allWriteStatuses, result);
+    updateIndex(HoodieList.of(allWriteStatuses), result);
     return result;
   }
 }

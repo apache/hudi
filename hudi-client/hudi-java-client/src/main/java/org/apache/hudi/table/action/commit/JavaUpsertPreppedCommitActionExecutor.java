@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -28,22 +29,20 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import java.util.List;
-
 public class JavaUpsertPreppedCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends BaseJavaCommitActionExecutor<T> {
 
-  private final List<HoodieRecord<T>> preppedRecords;
+  private final HoodieData<HoodieRecord<T>> preppedRecords;
 
   public JavaUpsertPreppedCommitActionExecutor(HoodieJavaEngineContext context,
                                                HoodieWriteConfig config, HoodieTable table,
-                                               String instantTime, List<HoodieRecord<T>> preppedRecords) {
+                                               String instantTime, HoodieData<HoodieRecord<T>> preppedRecords) {
     super(context, config, table, instantTime, WriteOperationType.UPSERT_PREPPED);
     this.preppedRecords = preppedRecords;
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> execute() {
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
     return super.execute(preppedRecords);
   }
 }

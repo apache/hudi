@@ -21,6 +21,7 @@ package org.apache.hudi.table;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -35,7 +36,6 @@ import org.apache.hudi.table.action.compact.RunCompactionActionExecutor;
 import org.apache.hudi.table.action.compact.ScheduleCompactionActionExecutor;
 import org.apache.hudi.table.action.deltacommit.JavaUpsertPreppedDeltaCommitActionExecutor;
 
-import java.util.List;
 import java.util.Map;
 
 public class HoodieJavaMergeOnReadTable<T extends HoodieRecordPayload> extends HoodieJavaCopyOnWriteTable<T> {
@@ -49,18 +49,18 @@ public class HoodieJavaMergeOnReadTable<T extends HoodieRecordPayload> extends H
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> upsertPrepped(HoodieEngineContext context,
-                                                              String instantTime,
-                                                              List<HoodieRecord<T>> preppedRecords) {
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> upsertPrepped(HoodieEngineContext context,
+                                                                    String instantTime,
+                                                                    HoodieData<HoodieRecord<T>> preppedRecords) {
     return new JavaUpsertPreppedDeltaCommitActionExecutor<>((HoodieJavaEngineContext) context, config,
         this, instantTime, preppedRecords).execute();
 
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> bulkInsertPrepped(HoodieEngineContext context,
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> bulkInsertPrepped(HoodieEngineContext context,
                                                                   String instantTime,
-                                                                  List<HoodieRecord<T>> preppedRecords,
+                                                                  HoodieData<HoodieRecord<T>> preppedRecords,
                                                                   Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     return new JavaBulkInsertPreppedCommitActionExecutor((HoodieJavaEngineContext) context, config,
         this, instantTime, preppedRecords, bulkInsertPartitioner).execute();
@@ -75,11 +75,11 @@ public class HoodieJavaMergeOnReadTable<T extends HoodieRecordPayload> extends H
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> compact(
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> compact(
       HoodieEngineContext context, String compactionInstantTime) {
     RunCompactionActionExecutor compactionExecutor = new RunCompactionActionExecutor(
         context, config, this, compactionInstantTime, new HoodieJavaMergeOnReadTableCompactor(),
         new HoodieJavaCopyOnWriteTable(config, context, getMetaClient()));
-    return convertMetadata(compactionExecutor.execute());
+    return compactionExecutor.execute();
   }
 }

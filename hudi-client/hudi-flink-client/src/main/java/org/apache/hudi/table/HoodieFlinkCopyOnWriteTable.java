@@ -29,6 +29,7 @@ import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
@@ -58,7 +59,7 @@ import org.apache.hudi.table.action.commit.FlinkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertOverwriteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertOverwriteTableCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertPreppedCommitActionExecutor;
-import org.apache.hudi.table.action.commit.FlinkMergeHelper;
+import org.apache.hudi.table.action.commit.HoodieMergeHelper;
 import org.apache.hudi.table.action.commit.FlinkUpsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkUpsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
@@ -109,11 +110,11 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
    * @param records     hoodieRecords to upsert
    * @return HoodieWriteMetadata
    */
-  public HoodieWriteMetadata<List<WriteStatus>> upsert(
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> upsert(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
       String instantTime,
-      List<HoodieRecord<T>> records) {
+      HoodieData<HoodieRecord<T>> records) {
     return new FlinkUpsertCommitActionExecutor<>(context, writeHandle, config, this, instantTime, records).execute();
   }
 
@@ -129,11 +130,11 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
    * @param records     hoodieRecords to upsert
    * @return HoodieWriteMetadata
    */
-  public HoodieWriteMetadata<List<WriteStatus>> insert(
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> insert(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
       String instantTime,
-      List<HoodieRecord<T>> records) {
+      HoodieData<HoodieRecord<T>> records) {
     return new FlinkInsertCommitActionExecutor<>(context, writeHandle, config, this, instantTime, records).execute();
   }
 
@@ -150,11 +151,11 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
    * @param keys   {@link List} of {@link HoodieKey}s to be deleted
    * @return HoodieWriteMetadata
    */
-  public HoodieWriteMetadata<List<WriteStatus>> delete(
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> delete(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
       String instantTime,
-      List<HoodieKey> keys) {
+      HoodieData<HoodieKey> keys) {
     return new FlinkDeleteCommitActionExecutor<>(context, writeHandle, config, this, instantTime, keys).execute();
   }
 
@@ -171,11 +172,11 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
    * @param preppedRecords  hoodieRecords to upsert
    * @return HoodieWriteMetadata
    */
-  public HoodieWriteMetadata<List<WriteStatus>> upsertPrepped(
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> upsertPrepped(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
       String instantTime,
-      List<HoodieRecord<T>> preppedRecords) {
+      HoodieData<HoodieRecord<T>> preppedRecords) {
     return new FlinkUpsertPreppedCommitActionExecutor<>(context, writeHandle, config, this, instantTime, preppedRecords).execute();
   }
 
@@ -192,52 +193,52 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
    * @param preppedRecords  hoodieRecords to upsert
    * @return HoodieWriteMetadata
    */
-  public HoodieWriteMetadata<List<WriteStatus>> insertPrepped(
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> insertPrepped(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
       String instantTime,
-      List<HoodieRecord<T>> preppedRecords) {
+      HoodieData<HoodieRecord<T>> preppedRecords) {
     return new FlinkInsertPreppedCommitActionExecutor<>(context, writeHandle, config, this, instantTime, preppedRecords).execute();
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> insertOverwrite(
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> insertOverwrite(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
       String instantTime,
-      List<HoodieRecord<T>> records) {
+      HoodieData<HoodieRecord<T>> records) {
     return new FlinkInsertOverwriteCommitActionExecutor(context, writeHandle, config, this, instantTime, records).execute();
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> insertOverwriteTable(
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> insertOverwriteTable(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
       String instantTime,
-      List<HoodieRecord<T>> records) {
+      HoodieData<HoodieRecord<T>> records) {
     return new FlinkInsertOverwriteTableCommitActionExecutor(context, writeHandle, config, this, instantTime, records).execute();
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> upsert(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> records) {
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> upsert(HoodieEngineContext context, String instantTime, HoodieData<HoodieRecord<T>> records) {
     throw new HoodieNotSupportedException("This method should not be invoked");
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> insert(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> records) {
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> insert(HoodieEngineContext context, String instantTime, HoodieData<HoodieRecord<T>> records) {
     throw new HoodieNotSupportedException("This method should not be invoked");
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> bulkInsert(HoodieEngineContext context,
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> bulkInsert(HoodieEngineContext context,
                                                            String instantTime,
-                                                           List<HoodieRecord<T>> records,
+                                                           HoodieData<HoodieRecord<T>> records,
                                                            Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     throw new HoodieNotSupportedException("BulkInsert is not supported yet");
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> delete(HoodieEngineContext context, String instantTime, List<HoodieKey> keys) {
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> delete(HoodieEngineContext context, String instantTime, HoodieData<HoodieKey> keys) {
     throw new HoodieNotSupportedException("This method should not be invoked");
   }
 
@@ -252,30 +253,30 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> upsertPrepped(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> preppedRecords) {
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> upsertPrepped(HoodieEngineContext context, String instantTime, HoodieData<HoodieRecord<T>> preppedRecords) {
     throw new HoodieNotSupportedException("This method should not be invoked");
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> insertPrepped(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> preppedRecords) {
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> insertPrepped(HoodieEngineContext context, String instantTime, HoodieData<HoodieRecord<T>> preppedRecords) {
     throw new HoodieNotSupportedException("This method should not be invoked");
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> bulkInsertPrepped(HoodieEngineContext context,
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> bulkInsertPrepped(HoodieEngineContext context,
                                                                   String instantTime,
-                                                                  List<HoodieRecord<T>> preppedRecords,
+                                                                  HoodieData<HoodieRecord<T>> preppedRecords,
                                                                   Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     throw new HoodieNotSupportedException("BulkInsertPrepped is not supported yet");
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> insertOverwrite(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> records) {
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> insertOverwrite(HoodieEngineContext context, String instantTime, HoodieData<HoodieRecord<T>> records) {
     throw new HoodieNotSupportedException("This method should not be invoked");
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> insertOverwriteTable(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> records) {
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> insertOverwriteTable(HoodieEngineContext context, String instantTime, HoodieData<HoodieRecord<T>> records) {
     throw new HoodieNotSupportedException("This method should not be invoked");
   }
 
@@ -285,7 +286,7 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> compact(
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> compact(
       HoodieEngineContext context, String compactionInstantTime) {
     throw new HoodieNotSupportedException("Compaction is not supported on a CopyOnWrite table");
   }
@@ -296,12 +297,12 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> cluster(final HoodieEngineContext context, final String clusteringInstantTime) {
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> cluster(final HoodieEngineContext context, final String clusteringInstantTime) {
     throw new HoodieNotSupportedException("Clustering is not supported on a Flink CopyOnWrite table");
   }
 
   @Override
-  public HoodieBootstrapWriteMetadata<List<WriteStatus>> bootstrap(HoodieEngineContext context, Option<Map<String, String>> extraMetadata) {
+  public HoodieBootstrapWriteMetadata<HoodieData<WriteStatus>> bootstrap(HoodieEngineContext context, Option<Map<String, String>> extraMetadata) {
     throw new HoodieNotSupportedException("Bootstrap is not supported yet");
   }
 
@@ -372,7 +373,7 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
-      FlinkMergeHelper.newInstance().runMerge(this, upsertHandle);
+      HoodieMergeHelper.newInstance().runMerge(this, upsertHandle);
     }
 
     // TODO(vc): This needs to be revisited

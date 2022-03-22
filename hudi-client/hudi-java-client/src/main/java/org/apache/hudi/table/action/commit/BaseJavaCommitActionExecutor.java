@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -66,7 +67,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload> extends
-    BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, HoodieWriteMetadata> {
+    BaseCommitActionExecutor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, HoodieWriteMetadata> {
 
   private static final Logger LOG = LogManager.getLogger(BaseJavaCommitActionExecutor.class);
 
@@ -88,8 +89,8 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> execute(List<HoodieRecord<T>> inputRecords) {
-    HoodieWriteMetadata<List<WriteStatus>> result = new HoodieWriteMetadata<>();
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(HoodieData<HoodieRecord<T>> inputRecords) {
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = new HoodieWriteMetadata<>();
 
     WorkloadProfile workloadProfile = null;
     if (isWorkloadProfileNeeded()) {
@@ -122,16 +123,15 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
         handleInsertPartition(instantTime, partition, records.iterator(), partitioner).forEachRemaining(writeStatuses::addAll);
       }
     });
-    updateIndex(writeStatuses, result);
-    updateIndexAndCommitIfNeeded(writeStatuses, result);
+    updateIndex(HoodieList.of(writeStatuses), result);
+    updateIndexAndCommitIfNeeded(HoodieList.of(writeStatuses), result);
     return result;
   }
 
-  protected List<WriteStatus> updateIndex(List<WriteStatus> writeStatuses, HoodieWriteMetadata<List<WriteStatus>> result) {
+  protected HoodieData<WriteStatus> updateIndex(HoodieData<WriteStatus> writeStatuses, HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     Instant indexStartTime = Instant.now();
     // Update the index back
-    List<WriteStatus> statuses = HoodieList.getList(
-        table.getIndex().updateLocation(HoodieList.of(writeStatuses), context, table));
+    HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table);
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
     return statuses;
@@ -150,8 +150,9 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
     }
   }
 
-  private Map<Integer, List<HoodieRecord<T>>> partition(List<HoodieRecord<T>> dedupedRecords, Partitioner partitioner) {
+  private Map<Integer, List<HoodieRecord<T>>> partition(HoodieData<HoodieRecord<T>> dedupedRecords, Partitioner partitioner) {
     Map<Integer, List<Pair<Pair<HoodieKey, Option<HoodieRecordLocation>>, HoodieRecord<T>>>> partitionedMidRecords = dedupedRecords
+        .collectAsList()
         .stream()
         .map(record -> Pair.of(Pair.of(record.getKey(), Option.ofNullable(record.getCurrentLocation())), record))
         .collect(Collectors.groupingBy(x -> partitioner.getPartition(x.getLeft())));
@@ -160,11 +161,12 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
     return results;
   }
 
-  protected Pair<HashMap<String, WorkloadStat>, WorkloadStat> buildProfile(List<HoodieRecord<T>> inputRecords) {
+  protected Pair<HashMap<String, WorkloadStat>, WorkloadStat> buildProfile(HoodieData<HoodieRecord<T>> inputRecords) {
     HashMap<String, WorkloadStat> partitionPathStatMap = new HashMap<>();
     WorkloadStat globalStat = new WorkloadStat();
 
     Map<Pair<String, Option<HoodieRecordLocation>>, Long> partitionLocationCounts = inputRecords
+        .collectAsList()
         .stream()
         .map(record -> Pair.of(
             Pair.of(record.getPartitionPath(), Option.ofNullable(record.getCurrentLocation())), record))
@@ -193,16 +195,16 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
   }
 
   @Override
-  protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<List<WriteStatus>> result) {
-    commit(extraMetadata, result, result.getWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()));
+  protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
+    commit(extraMetadata, result, result.getWriteStatuses().collectAsList().stream().map(WriteStatus::getStat).collect(Collectors.toList()));
   }
 
-  protected void setCommitMetadata(HoodieWriteMetadata<List<WriteStatus>> result) {
-    result.setCommitMetadata(Option.of(CommitUtils.buildMetadata(result.getWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+  protected void setCommitMetadata(HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
+    result.setCommitMetadata(Option.of(CommitUtils.buildMetadata(result.getWriteStatuses().collectAsList().stream().map(WriteStatus::getStat).collect(Collectors.toList()),
         result.getPartitionToReplaceFileIds(), extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType())));
   }
 
-  protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<List<WriteStatus>> result, List<HoodieWriteStat> writeStats) {
+  protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<HoodieData<WriteStatus>> result, List<HoodieWriteStat> writeStats) {
     String actionType = getCommitActionType();
     LOG.info("Committing " + instantTime + ", action Type " + actionType);
     result.setCommitted(true);
@@ -226,7 +228,7 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
     }
   }
 
-  protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
+  protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata) {
     return Collections.emptyMap();
   }
 
@@ -281,7 +283,7 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
-      JavaMergeHelper.newInstance().runMerge(table, upsertHandle);
+      HoodieMergeHelper.newInstance().runMerge(table, upsertHandle);
     }
 
     List<WriteStatus> statuses = upsertHandle.writeStatuses();
@@ -336,11 +338,10 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
     return getUpsertPartitioner(profile);
   }
 
-  public void updateIndexAndCommitIfNeeded(List<WriteStatus> writeStatuses, HoodieWriteMetadata result) {
+  public void updateIndexAndCommitIfNeeded(HoodieData<WriteStatus> writeStatuses, HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     Instant indexStartTime = Instant.now();
     // Update the index back
-    List<WriteStatus> statuses = HoodieList.getList(
-        table.getIndex().updateLocation(HoodieList.of(writeStatuses), context, table));
+    HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table);
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
     result.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(result));

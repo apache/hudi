@@ -20,6 +20,7 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.async.AsyncCleanerService;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -136,46 +137,49 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   public List<WriteStatus> upsert(List<HoodieRecord<T>> records, String instantTime) {
-    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
+    HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
         initTable(WriteOperationType.UPSERT, Option.ofNullable(instantTime));
     table.validateUpsertSchema();
     preWrite(instantTime, WriteOperationType.UPSERT, table.getMetaClient());
     final HoodieWriteHandle<?, ?, ?, ?> writeHandle = getOrCreateWriteHandle(records.get(0), getConfig(),
         instantTime, table, records.listIterator());
-    HoodieWriteMetadata<List<WriteStatus>> result = ((HoodieFlinkTable<T>) table).upsert(context, writeHandle, instantTime, records);
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = ((HoodieFlinkTable<T>) table).upsert(context, writeHandle, instantTime, HoodieList.of(records));
+    HoodieWriteMetadata<List<WriteStatus>> resultList = result.clone(HoodieList.getList(result.getWriteStatuses()));
     if (result.getIndexLookupDuration().isPresent()) {
       metrics.updateIndexMetrics(LOOKUP_STR, result.getIndexLookupDuration().get().toMillis());
     }
-    return postWrite(result, instantTime, table);
+    return postWrite(resultList, instantTime, table);
   }
 
   @Override
   public List<WriteStatus> upsertPreppedRecords(List<HoodieRecord<T>> preppedRecords, String instantTime) {
     // only used for metadata table, the upsert happens in single thread
-    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
+    HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
         initTable(WriteOperationType.UPSERT, Option.ofNullable(instantTime));
     table.validateUpsertSchema();
     preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
     final HoodieWriteHandle<?, ?, ?, ?> writeHandle = getOrCreateWriteHandle(preppedRecords.get(0), getConfig(),
         instantTime, table, preppedRecords.listIterator());
-    HoodieWriteMetadata<List<WriteStatus>> result = ((HoodieFlinkTable<T>) table).upsertPrepped(context, writeHandle, instantTime, preppedRecords);
-    return postWrite(result, instantTime, table);
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = ((HoodieFlinkTable<T>) table).upsertPrepped(context, writeHandle, instantTime, HoodieList.of(preppedRecords));
+    HoodieWriteMetadata<List<WriteStatus>> resultList = result.clone(HoodieList.getList(result.getWriteStatuses()));
+    return postWrite(resultList, instantTime, table);
   }
 
   @Override
   public List<WriteStatus> insert(List<HoodieRecord<T>> records, String instantTime) {
-    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
+    HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
         initTable(WriteOperationType.INSERT, Option.ofNullable(instantTime));
     table.validateUpsertSchema();
     preWrite(instantTime, WriteOperationType.INSERT, table.getMetaClient());
     // create the write handle if not exists
     final HoodieWriteHandle<?, ?, ?, ?> writeHandle = getOrCreateWriteHandle(records.get(0), getConfig(),
         instantTime, table, records.listIterator());
-    HoodieWriteMetadata<List<WriteStatus>> result = ((HoodieFlinkTable<T>) table).insert(context, writeHandle, instantTime, records);
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = ((HoodieFlinkTable<T>) table).insert(context, writeHandle, instantTime, HoodieList.of(records));
+    HoodieWriteMetadata<List<WriteStatus>> resultList = result.clone(HoodieList.getList(result.getWriteStatuses()));
     if (result.getIndexLookupDuration().isPresent()) {
       metrics.updateIndexMetrics(LOOKUP_STR, result.getIndexLookupDuration().get().toMillis());
     }
-    return postWrite(result, instantTime, table);
+    return postWrite(resultList, instantTime, table);
   }
 
   /**
@@ -187,15 +191,16 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
    */
   public List<WriteStatus> insertOverwrite(
       List<HoodieRecord<T>> records, final String instantTime) {
-    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
+    HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
         initTable(WriteOperationType.INSERT_OVERWRITE, Option.ofNullable(instantTime));
     table.validateInsertSchema();
     preWrite(instantTime, WriteOperationType.INSERT_OVERWRITE, table.getMetaClient());
     // create the write handle if not exists
     final HoodieWriteHandle<?, ?, ?, ?> writeHandle = getOrCreateWriteHandle(records.get(0), getConfig(),
         instantTime, table, records.listIterator());
-    HoodieWriteMetadata result = ((HoodieFlinkTable<T>) table).insertOverwrite(context, writeHandle, instantTime, records);
-    return postWrite(result, instantTime, table);
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = ((HoodieFlinkTable<T>) table).insertOverwrite(context, writeHandle, instantTime, HoodieList.of(records));
+    HoodieWriteMetadata<List<WriteStatus>> resultList = result.clone(HoodieList.getList(result.getWriteStatuses()));
+    return postWrite(resultList, instantTime, table);
   }
 
   /**
@@ -213,8 +218,10 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     // create the write handle if not exists
     final HoodieWriteHandle<?, ?, ?, ?> writeHandle = getOrCreateWriteHandle(records.get(0), getConfig(),
         instantTime, table, records.listIterator());
-    HoodieWriteMetadata result = ((HoodieFlinkTable<T>) table).insertOverwriteTable(context, writeHandle, instantTime, records);
-    return postWrite(result, instantTime, table);
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = ((HoodieFlinkTable<T>) table).insertOverwriteTable(context, writeHandle, instantTime, HoodieList.of(records));
+    HoodieWriteMetadata<List<WriteStatus>> resultList = result.clone(HoodieList.getList(result.getWriteStatuses()));
+
+    return postWrite(resultList, instantTime, table);
   }
 
   @Override
@@ -239,11 +246,12 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   public List<WriteStatus> delete(List<HoodieKey> keys, String instantTime) {
-    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
+    HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
         initTable(WriteOperationType.DELETE, Option.ofNullable(instantTime));
     preWrite(instantTime, WriteOperationType.DELETE, table.getMetaClient());
-    HoodieWriteMetadata<List<WriteStatus>> result = table.delete(context, instantTime, keys);
-    return postWrite(result, instantTime, table);
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.delete(context, instantTime, HoodieList.of(keys));
+    HoodieWriteMetadata<List<WriteStatus>> resultList = result.clone(HoodieList.getList(result.getWriteStatuses()));
+    return postWrite(resultList, instantTime, table);
   }
 
   @Override
@@ -387,7 +395,8 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   @Override
   protected HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime, boolean shouldComplete) {
     // only used for metadata table, the compaction happens in single thread
-    HoodieWriteMetadata<List<WriteStatus>> compactionMetadata = getHoodieTable().compact(context, compactionInstantTime);
+    HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = getHoodieTable().compact(context, compactionInstantTime);
+    HoodieWriteMetadata<List<WriteStatus>> compactionMetadata = writeMetadata.clone(HoodieList.getList(writeMetadata.getWriteStatuses()));
     commitCompaction(compactionInstantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
     return compactionMetadata;
   }
@@ -448,7 +457,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
       HoodieRecord<T> record,
       HoodieWriteConfig config,
       String instantTime,
-      HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
+      HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table,
       Iterator<HoodieRecord<T>> recordItr) {
     final HoodieRecordLocation loc = record.getCurrentLocation();
     final String fileID = loc.getFileId();

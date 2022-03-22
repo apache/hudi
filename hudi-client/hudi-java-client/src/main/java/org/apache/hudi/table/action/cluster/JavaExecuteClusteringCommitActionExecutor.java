@@ -34,8 +34,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.BaseJavaCommitActionExecutor;
 
-import java.util.List;
-
 public class JavaExecuteClusteringCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends BaseJavaCommitActionExecutor<T> {
 
@@ -53,10 +51,8 @@ public class JavaExecuteClusteringCommitActionExecutor<T extends HoodieRecordPay
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> execute() {
-    HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = executeClustering(clusteringPlan);
-    List<WriteStatus> transformedWriteStatuses = writeMetadata.getWriteStatuses().collectAsList();
-    return writeMetadata.clone(transformedWriteStatuses);
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
+    return executeClustering(clusteringPlan);
   }
 
   @Override

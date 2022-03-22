@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -42,7 +43,6 @@ import org.apache.hudi.table.action.compact.ScheduleCompactionActionExecutor;
 import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
 
-import java.util.List;
 import java.util.Map;
 
 public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload>
@@ -61,11 +61,11 @@ public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload>
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> upsert(
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> upsert(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
       String instantTime,
-      List<HoodieRecord<T>> hoodieRecords) {
+      HoodieData<HoodieRecord<T>> hoodieRecords) {
     ValidationUtils.checkArgument(writeHandle instanceof FlinkAppendHandle,
         "MOR write handle should always be a FlinkAppendHandle");
     FlinkAppendHandle<?, ?, ?, ?> appendHandle = (FlinkAppendHandle<?, ?, ?, ?>) writeHandle;
@@ -73,11 +73,11 @@ public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload>
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> upsertPrepped(
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> upsertPrepped(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
       String instantTime,
-      List<HoodieRecord<T>> preppedRecords) {
+      HoodieData<HoodieRecord<T>> preppedRecords) {
     ValidationUtils.checkArgument(writeHandle instanceof FlinkAppendHandle,
         "MOR write handle should always be a FlinkAppendHandle");
     FlinkAppendHandle<?, ?, ?, ?> appendHandle = (FlinkAppendHandle<?, ?, ?, ?>) writeHandle;
@@ -85,11 +85,11 @@ public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload>
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> insert(
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> insert(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
       String instantTime,
-      List<HoodieRecord<T>> hoodieRecords) {
+      HoodieData<HoodieRecord<T>> hoodieRecords) {
     if (writeHandle instanceof FlinkAppendHandle) {
       FlinkAppendHandle<?, ?, ?, ?> appendHandle = (FlinkAppendHandle<?, ?, ?, ?>) writeHandle;
       return new FlinkUpsertDeltaCommitActionExecutor<>(context, appendHandle, config, this, instantTime, hoodieRecords).execute();
@@ -110,12 +110,12 @@ public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload>
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> compact(
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> compact(
       HoodieEngineContext context, String compactionInstantTime) {
     RunCompactionActionExecutor compactionExecutor = new RunCompactionActionExecutor(
         context, config, this, compactionInstantTime, new HoodieFlinkMergeOnReadTableCompactor(),
         new HoodieFlinkCopyOnWriteTable(config, context, getMetaClient()));
-    return convertMetadata(compactionExecutor.execute());
+    return compactionExecutor.execute();
   }
 
   @Override
