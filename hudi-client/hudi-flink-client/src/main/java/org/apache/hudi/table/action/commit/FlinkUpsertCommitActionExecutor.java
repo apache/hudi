@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -32,21 +33,21 @@ import java.util.List;
 
 public class FlinkUpsertCommitActionExecutor<T extends HoodieRecordPayload<T>> extends BaseFlinkCommitActionExecutor<T> {
 
-  private List<HoodieRecord<T>> inputRecords;
+  private HoodieData<HoodieRecord<T>> inputRecords;
 
   public FlinkUpsertCommitActionExecutor(HoodieEngineContext context,
                                          HoodieWriteHandle<?, ?, ?, ?> writeHandle,
                                          HoodieWriteConfig config,
                                          HoodieTable table,
                                          String instantTime,
-                                         List<HoodieRecord<T>> inputRecords) {
+                                         HoodieData<HoodieRecord<T>> inputRecords) {
     super(context, writeHandle, config, table, instantTime, WriteOperationType.UPSERT);
     this.inputRecords = inputRecords;
   }
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
-    return FlinkWriteHelper.newInstance().write(instantTime, inputRecords, context, table,
+    return HoodieWriteHelper.newInstance().write(instantTime, inputRecords, context, table,
         config.shouldCombineBeforeUpsert(), config.getUpsertShuffleParallelism(), this, operationType);
   }
 }

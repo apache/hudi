@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -36,25 +37,25 @@ import java.util.stream.Collectors;
 public class JavaInsertOverwriteCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends BaseJavaCommitActionExecutor<T> {
 
-  private final List<HoodieRecord<T>> inputRecords;
+  private final HoodieData<HoodieRecord<T>> inputRecords;
 
   public JavaInsertOverwriteCommitActionExecutor(HoodieEngineContext context,
                                                  HoodieWriteConfig config, HoodieTable table,
-                                                 String instantTime, List<HoodieRecord<T>> inputRecords) {
+                                                 String instantTime, HoodieData<HoodieRecord<T>> inputRecords) {
     this(context, config, table, instantTime, inputRecords, WriteOperationType.INSERT_OVERWRITE);
   }
 
   public JavaInsertOverwriteCommitActionExecutor(HoodieEngineContext context,
                                                   HoodieWriteConfig config, HoodieTable table,
-                                                  String instantTime, List<HoodieRecord<T>> inputRecords,
+                                                  String instantTime, HoodieData<HoodieRecord<T>> inputRecords,
                                                   WriteOperationType writeOperationType) {
     super(context, config, table, instantTime, writeOperationType);
     this.inputRecords = inputRecords;
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> execute() {
-    return JavaWriteHelper.newInstance().write(instantTime, inputRecords, context, table,
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
+    return HoodieWriteHelper.newInstance().write(instantTime, inputRecords, context, table,
         config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, operationType);
   }
 
@@ -64,9 +65,9 @@ public class JavaInsertOverwriteCommitActionExecutor<T extends HoodieRecordPaylo
   }
 
   @Override
-  protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<List<WriteStatus>> writeResult) {
+  protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<HoodieData<WriteStatus>> writeResult) {
     return context.mapToPair(
-        writeResult.getWriteStatuses().stream().map(status -> status.getStat().getPartitionPath()).distinct().collect(Collectors.toList()),
+        writeResult.getWriteStatuses().map(status -> status.getStat().getPartitionPath()).distinct().collectAsList(),
         partitionPath ->
             Pair.of(partitionPath, getAllExistingFileIds(partitionPath)), 1
     );

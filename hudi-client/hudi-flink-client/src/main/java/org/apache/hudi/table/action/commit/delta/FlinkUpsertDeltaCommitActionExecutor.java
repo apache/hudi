@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.commit.delta;
 
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -26,27 +27,25 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.FlinkAppendHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.action.commit.FlinkWriteHelper;
-
-import java.util.List;
+import org.apache.hudi.table.action.commit.HoodieWriteHelper;
 
 public class FlinkUpsertDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends BaseFlinkDeltaCommitActionExecutor<T> {
-  private final List<HoodieRecord<T>> inputRecords;
+  private final HoodieData<HoodieRecord<T>> inputRecords;
 
   public FlinkUpsertDeltaCommitActionExecutor(HoodieEngineContext context,
                                               FlinkAppendHandle<?, ?, ?, ?> writeHandle,
                                               HoodieWriteConfig config,
                                               HoodieTable table,
                                               String instantTime,
-                                              List<HoodieRecord<T>> inputRecords) {
+                                              HoodieData<HoodieRecord<T>> inputRecords) {
     super(context, writeHandle, config, table, instantTime, WriteOperationType.UPSERT);
     this.inputRecords = inputRecords;
   }
 
   @Override
   public HoodieWriteMetadata execute() {
-    return FlinkWriteHelper.newInstance().write(instantTime, inputRecords, context, table,
+    return HoodieWriteHelper.newInstance().write(instantTime, inputRecords, context, table,
         config.shouldCombineBeforeUpsert(), config.getUpsertShuffleParallelism(), this, operationType);
   }
 }

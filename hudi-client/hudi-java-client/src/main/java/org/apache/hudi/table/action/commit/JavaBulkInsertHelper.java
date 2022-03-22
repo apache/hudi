@@ -19,6 +19,8 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -44,8 +46,8 @@ import java.util.List;
  * @param <T>
  */
 @SuppressWarnings("checkstyle:LineLength")
-public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends BaseBulkInsertHelper<T, List<HoodieRecord<T>>,
-    List<HoodieKey>, List<WriteStatus>, R> {
+public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends BaseBulkInsertHelper<T, HoodieData<HoodieRecord<T>>,
+    HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> {
 
   private JavaBulkInsertHelper() {
   }
@@ -59,11 +61,11 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Base
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> bulkInsert(final List<HoodieRecord<T>> inputRecords,
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> bulkInsert(final HoodieData<HoodieRecord<T>> inputRecords,
                                                            final String instantTime,
-                                                           final HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
+                                                           final HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table,
                                                            final HoodieWriteConfig config,
-                                                           final BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, R> executor,
+                                                           final BaseCommitActionExecutor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> executor,
                                                            final boolean performDedupe,
                                                            final Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     HoodieWriteMetadata result = new HoodieWriteMetadata();
@@ -77,16 +79,16 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Base
     }
 
     // write new files
-    List<WriteStatus> writeStatuses = bulkInsert(inputRecords, instantTime, table, config, performDedupe, userDefinedBulkInsertPartitioner, false, config.getBulkInsertShuffleParallelism(), new CreateHandleFactory(false));
+    HoodieData<WriteStatus> writeStatuses = bulkInsert(inputRecords, instantTime, table, config, performDedupe, userDefinedBulkInsertPartitioner, false, config.getBulkInsertShuffleParallelism(), new CreateHandleFactory(false));
     //update index
     ((BaseJavaCommitActionExecutor) executor).updateIndexAndCommitIfNeeded(writeStatuses, result);
     return result;
   }
 
   @Override
-  public List<WriteStatus> bulkInsert(List<HoodieRecord<T>> inputRecords,
+  public HoodieData<WriteStatus> bulkInsert(HoodieData<HoodieRecord<T>> inputRecords,
                                       String instantTime,
-                                      HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
+                                      HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table,
                                       HoodieWriteConfig config,
                                       boolean performDedupe,
                                       Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner,
@@ -95,10 +97,10 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Base
                                       WriteHandleFactory writeHandleFactory) {
 
     // De-dupe/merge if needed
-    List<HoodieRecord<T>> dedupedRecords = inputRecords;
+    HoodieData<HoodieRecord<T>> dedupedRecords = inputRecords;
 
     if (performDedupe) {
-      dedupedRecords = (List<HoodieRecord<T>>) JavaWriteHelper.newInstance().combineOnCondition(config.shouldCombineBeforeInsert(), inputRecords,
+      dedupedRecords = (HoodieData<HoodieRecord<T>>) HoodieWriteHelper.newInstance().combineOnCondition(config.shouldCombineBeforeInsert(), inputRecords,
           parallelism, table);
     }
 
@@ -114,12 +116,11 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Base
         config.getProps());
 
     List<WriteStatus> writeStatuses = new ArrayList<>();
-
     new JavaLazyInsertIterable<>(repartitionedRecords.iterator(), true,
         config, instantTime, table,
         fileIdPrefixProvider.createFilePrefix(""), table.getTaskContextSupplier(),
         new CreateHandleFactory<>()).forEachRemaining(writeStatuses::addAll);
 
-    return writeStatuses;
+    return HoodieList.of(writeStatuses);
   }
 }

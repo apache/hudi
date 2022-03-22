@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -39,7 +40,7 @@ public class JavaInsertOverwriteTableCommitActionExecutor<T extends HoodieRecord
 
   public JavaInsertOverwriteTableCommitActionExecutor(HoodieEngineContext context,
                                                       HoodieWriteConfig config, HoodieTable table,
-                                                      String instantTime, List<HoodieRecord<T>> inputRecords) {
+                                                      String instantTime, HoodieData<HoodieRecord<T>> inputRecords) {
     super(context, config, table, instantTime, inputRecords, WriteOperationType.INSERT_OVERWRITE_TABLE);
   }
 
@@ -49,7 +50,7 @@ public class JavaInsertOverwriteTableCommitActionExecutor<T extends HoodieRecord
   }
 
   @Override
-  protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<List<WriteStatus>> writeResult) {
+  protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<HoodieData<WriteStatus>> writeResult) {
     Map<String, List<String>> partitionToExistingFileIds = new HashMap<>();
     List<String> partitionPaths = FSUtils.getAllPartitionPaths(context,
         table.getMetaClient().getBasePath(), config.isMetadataTableEnabled(), config.shouldAssumeDatePartitioning());

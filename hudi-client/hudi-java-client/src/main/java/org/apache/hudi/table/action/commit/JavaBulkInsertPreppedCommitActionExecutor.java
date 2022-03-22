@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -30,17 +31,15 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import java.util.List;
-
 public class JavaBulkInsertPreppedCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends BaseJavaCommitActionExecutor<T> {
 
-  private final List<HoodieRecord<T>> preppedInputRecord;
+  private final HoodieData<HoodieRecord<T>> preppedInputRecord;
   private final Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner;
 
   public JavaBulkInsertPreppedCommitActionExecutor(HoodieJavaEngineContext context,
                                                    HoodieWriteConfig config, HoodieTable table,
-                                                   String instantTime, List<HoodieRecord<T>> preppedInputRecord,
+                                                   String instantTime, HoodieData<HoodieRecord<T>> preppedInputRecord,
                                                    Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     super(context, config, table, instantTime, WriteOperationType.BULK_INSERT);
     this.preppedInputRecord = preppedInputRecord;
@@ -48,7 +47,7 @@ public class JavaBulkInsertPreppedCommitActionExecutor<T extends HoodieRecordPay
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> execute() {
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
     try {
       return JavaBulkInsertHelper.newInstance().bulkInsert(preppedInputRecord, instantTime, table, config,
           this, false, userDefinedBulkInsertPartitioner);

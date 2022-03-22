@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -30,22 +31,21 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import java.util.List;
 import java.util.Map;
 
 public class JavaBulkInsertCommitActionExecutor<T extends HoodieRecordPayload<T>> extends BaseJavaCommitActionExecutor<T> {
 
-  private final List<HoodieRecord<T>> inputRecords;
+  private final HoodieData<HoodieRecord<T>> inputRecords;
   private final Option<BulkInsertPartitioner> bulkInsertPartitioner;
 
   public JavaBulkInsertCommitActionExecutor(HoodieJavaEngineContext context, HoodieWriteConfig config, HoodieTable table,
-                                            String instantTime, List<HoodieRecord<T>> inputRecords,
+                                            String instantTime, HoodieData<HoodieRecord<T>> inputRecords,
                                             Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     this(context, config, table, instantTime, inputRecords, bulkInsertPartitioner, Option.empty());
   }
 
   public JavaBulkInsertCommitActionExecutor(HoodieJavaEngineContext context, HoodieWriteConfig config, HoodieTable table,
-                                            String instantTime, List<HoodieRecord<T>> inputRecords,
+                                            String instantTime, HoodieData<HoodieRecord<T>> inputRecords,
                                             Option<BulkInsertPartitioner> bulkInsertPartitioner,
                                             Option<Map<String, String>> extraMetadata) {
     super(context, config, table, instantTime, WriteOperationType.BULK_INSERT, extraMetadata);
@@ -54,7 +54,7 @@ public class JavaBulkInsertCommitActionExecutor<T extends HoodieRecordPayload<T>
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> execute() {
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
     try {
       return JavaBulkInsertHelper.newInstance().bulkInsert(inputRecords, instantTime, table, config,
           this, true, bulkInsertPartitioner);

@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -27,24 +28,22 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import java.util.List;
-
 public class JavaUpsertCommitActionExecutor<T extends HoodieRecordPayload<T>> extends BaseJavaCommitActionExecutor<T> {
 
-  private List<HoodieRecord<T>> inputRecords;
+  private HoodieData<HoodieRecord<T>> inputRecords;
 
   public JavaUpsertCommitActionExecutor(HoodieEngineContext context,
                                          HoodieWriteConfig config,
                                          HoodieTable table,
                                          String instantTime,
-                                         List<HoodieRecord<T>> inputRecords) {
+                                        HoodieData<HoodieRecord<T>> inputRecords) {
     super(context, config, table, instantTime, WriteOperationType.UPSERT);
     this.inputRecords = inputRecords;
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> execute() {
-    return JavaWriteHelper.newInstance().write(instantTime, inputRecords, context, table,
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
+    return HoodieWriteHelper.newInstance().write(instantTime, inputRecords, context, table,
         config.shouldCombineBeforeUpsert(), config.getUpsertShuffleParallelism(), this, operationType);
   }
 }

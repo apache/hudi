@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -289,7 +290,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
 
     // Insert new records
     BaseJavaCommitActionExecutor actionExecutor = new JavaInsertCommitActionExecutor(context, config, table,
-        firstCommitTime, records);
+        firstCommitTime, HoodieList.of(records));
     List<WriteStatus> writeStatuses = new ArrayList<>();
     actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), records.iterator())
         .forEachRemaining(x -> writeStatuses.addAll((List<WriteStatus>)x));
@@ -332,7 +333,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
     // Insert new records
     final List<HoodieRecord> recs2 = records;
     BaseJavaCommitActionExecutor actionExecutor = new JavaInsertPreppedCommitActionExecutor(context, config, table,
-        instantTime, recs2);
+        instantTime, HoodieList.of(recs2));
 
     final List<WriteStatus> returnedStatuses = new ArrayList<>();
     actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), recs2.iterator())
@@ -353,7 +354,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
     // Insert new records
     final List<HoodieRecord> recs3 = records;
     BaseJavaCommitActionExecutor newActionExecutor = new JavaUpsertPreppedCommitActionExecutor(context, config, table,
-        instantTime, recs3);
+        instantTime, HoodieList.of(recs3));
 
     final List<WriteStatus> returnedStatuses1 = new ArrayList<>();
     newActionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), recs3.iterator())
@@ -388,7 +389,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
 
     // Insert new records
     BaseJavaCommitActionExecutor actionExecutor = new JavaUpsertCommitActionExecutor(context, config, table,
-        instantTime, records);
+        instantTime, HoodieList.of(records));
 
     Arrays.asList(1).stream()
         .map(i -> actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), records.iterator()))
@@ -421,7 +422,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
     // Perform inserts of 100 records to test CreateHandle and BufferedExecutor
     final List<HoodieRecord> inserts = dataGen.generateInsertsWithHoodieAvroPayload(instantTime, 100);
     BaseJavaCommitActionExecutor actionExecutor = new JavaInsertCommitActionExecutor(context, config, table,
-        instantTime, inserts);
+        instantTime, HoodieList.of(inserts));
 
     final List<List<WriteStatus>> ws = new ArrayList<>();
     actionExecutor.handleInsert(UUID.randomUUID().toString(), inserts.iterator())
@@ -438,7 +439,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
     String partitionPath = writeStatus.getPartitionPath();
     long numRecordsInPartition = updates.stream().filter(u -> u.getPartitionPath().equals(partitionPath)).count();
     BaseJavaCommitActionExecutor newActionExecutor = new JavaUpsertCommitActionExecutor(context, config, reloadedTable,
-        instantTime, updates);
+        instantTime, HoodieList.of(updates));
 
     taskContextSupplier.reset();
     final List<List<WriteStatus>> updateStatus = new ArrayList<>();
@@ -460,7 +461,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
     // Insert new records
     final List<HoodieRecord> inputRecords = generateTestRecordsForBulkInsert();
     JavaBulkInsertCommitActionExecutor bulkInsertExecutor = new JavaBulkInsertCommitActionExecutor(
-        context, config, table, instantTime, inputRecords, Option.empty());
+        context, config, table, instantTime, HoodieList.of(inputRecords), Option.empty());
     List<WriteStatus> returnedStatuses = (List<WriteStatus>)bulkInsertExecutor.execute().getWriteStatuses();
     verifyStatusResult(returnedStatuses, generateExpectedPartitionNumRecords(inputRecords));
   }
