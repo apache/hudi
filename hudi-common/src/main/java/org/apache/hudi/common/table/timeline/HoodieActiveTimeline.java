@@ -115,7 +115,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   protected HoodieActiveTimeline(HoodieTableMetaClient metaClient, Set<String> includedExtensions,
-      boolean applyLayoutFilters) {
+                                 boolean applyLayoutFilters) {
     // Filter all the filter in the metapath and include only the extensions passed and
     // convert them into HoodieInstant
     try {
@@ -169,7 +169,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       LOG.info("Creating a new instant " + instant);
       // Create the request replace file
       createFileInMetaPath(instant.getFileName(),
-              TimelineMetadataUtils.serializeRequestedReplaceMetadata(new HoodieRequestedReplaceMetadata()), false);
+          TimelineMetadataUtils.serializeRequestedReplaceMetadata(new HoodieRequestedReplaceMetadata()), false);
     } catch (IOException e) {
       throw new HoodieIOException("Error create requested replace commit ", e);
     }
@@ -373,7 +373,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * Transition Compaction State from inflight to Committed.
    *
    * @param inflightInstant Inflight instant
-   * @param data Extra Metadata
+   * @param data            Extra Metadata
    * @return commit instant
    */
   public HoodieInstant transitionCompactionInflightToComplete(HoodieInstant inflightInstant, Option<byte[]> data) {
@@ -398,7 +398,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * Transition Clean State from inflight to Committed.
    *
    * @param inflightInstant Inflight instant
-   * @param data Extra Metadata
+   * @param data            Extra Metadata
    * @return commit instant
    */
   public HoodieInstant transitionCleanInflightToComplete(HoodieInstant inflightInstant, Option<byte[]> data) {
@@ -414,7 +414,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * Transition Clean State from requested to inflight.
    *
    * @param requestedInstant requested instant
-   * @param data Optional data to be stored
+   * @param data             Optional data to be stored
    * @return commit instant
    */
   public HoodieInstant transitionCleanRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data) {
@@ -429,7 +429,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * Transition Rollback State from inflight to Committed.
    *
    * @param inflightInstant Inflight instant
-   * @param data Extra Metadata
+   * @param data            Extra Metadata
    * @return commit instant
    */
   public HoodieInstant transitionRollbackInflightToComplete(HoodieInstant inflightInstant, Option<byte[]> data) {
@@ -474,7 +474,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * Transition replace requested file to replace inflight.
    *
    * @param requestedInstant Requested instant
-   * @param data Extra Metadata
+   * @param data             Extra Metadata
    * @return inflight instant
    */
   public HoodieInstant transitionReplaceRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data) {
@@ -490,7 +490,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * Transition replace inflight to Committed.
    *
    * @param inflightInstant Inflight instant
-   * @param data Extra Metadata
+   * @param data            Extra Metadata
    * @return commit instant
    */
   public HoodieInstant transitionReplaceInflightToComplete(HoodieInstant inflightInstant, Option<byte[]> data) {
@@ -527,7 +527,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   private void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data,
-       boolean allowRedundantTransitions) {
+                               boolean allowRedundantTransitions) {
     ValidationUtils.checkArgument(fromInstant.getTimestamp().equals(toInstant.getTimestamp()));
     try {
       if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
@@ -601,7 +601,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   public void transitionRequestedToInflight(HoodieInstant requested, Option<byte[]> content,
-      boolean allowRedundantTransitions) {
+                                            boolean allowRedundantTransitions) {
     HoodieInstant inflight = new HoodieInstant(State.INFLIGHT, requested.getAction(), requested.getTimestamp());
     ValidationUtils.checkArgument(requested.isRequested(), "Instant " + requested + " in wrong state");
     transitionState(requested, inflight, content, allowRedundantTransitions);
@@ -659,26 +659,17 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   /**
    * Creates a new file in timeline with overwrite set to false. This ensures
    * files are created only once and never rewritten
+   *
    * @param fullPath File Path
-   * @param content Content to be stored
+   * @param content  Content to be stored
    */
   private void createImmutableFileInPath(Path fullPath, Option<byte[]> content) {
-    FSDataOutputStream fsout = null;
-    try {
-      fsout = metaClient.getFs().create(fullPath, false);
+    try (FSDataOutputStream fsout = metaClient.getFs().create(fullPath, false)) {
       if (content.isPresent()) {
         fsout.write(content.get());
       }
     } catch (IOException e) {
       throw new HoodieIOException("Failed to create file " + fullPath, e);
-    } finally {
-      try {
-        if (null != fsout) {
-          fsout.close();
-        }
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to close file " + fullPath, e);
-      }
     }
   }
 

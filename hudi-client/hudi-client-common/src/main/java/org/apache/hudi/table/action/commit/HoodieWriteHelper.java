@@ -26,8 +26,9 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.avro.Schema;
 
 public class HoodieWriteHelper<T extends HoodieRecordPayload, R> extends BaseWriteHelper<T, HoodieData<HoodieRecord<T>>,
     HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> {
@@ -52,7 +53,7 @@ public class HoodieWriteHelper<T extends HoodieRecordPayload, R> extends BaseWri
   @Override
   public HoodieData<HoodieRecord<T>> deduplicateRecords(
       HoodieData<HoodieRecord<T>> records,
-      HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
+      HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table,
       int parallelism) {
     boolean isIndexingGlobal = table.getIndex().isGlobal();
     return records.mapToPair(record -> {
@@ -62,8 +63,8 @@ public class HoodieWriteHelper<T extends HoodieRecordPayload, R> extends BaseWri
       return Pair.of(key, record);
     }).reduceByKey((rec1, rec2) -> {
       @SuppressWarnings("unchecked")
-      T reducedData = (T) rec2.getData().preCombine(rec1.getData());
-      HoodieKey reducedKey = rec1.getData().equals(reducedData) ? rec1.getKey() : rec2.getKey();
+      T reducedData = (T) rec2.getData().preCombine(rec1.getData(), null, new Schema.Parser().parse(table.getConfig().getWriteSchema()));
+      HoodieKey reducedKey = rec2.getData().compareTo(rec1.getData()) < 0 ? rec1.getKey() : rec2.getKey();
 
       return new HoodieAvroRecord<>(reducedKey, reducedData);
     }, parallelism).map(Pair::getRight);
