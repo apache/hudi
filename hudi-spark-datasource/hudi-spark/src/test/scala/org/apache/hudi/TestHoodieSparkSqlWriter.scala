@@ -665,55 +665,6 @@ class TestHoodieSparkSqlWriter {
   }
 
   /**
-   * Test case for build sync config for spark sql.
-   */
-  @Test
-  def testBuildSyncConfigForSparkSql(): Unit = {
-    val params = Map(
-      "path" -> tempBasePath,
-      DataSourceWriteOptions.TABLE_NAME.key -> "test_hoodie",
-      DataSourceWriteOptions.HIVE_PARTITION_FIELDS.key -> "partition",
-      DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.key -> "true",
-      DataSourceWriteOptions.HIVE_CREATE_MANAGED_TABLE.key -> "true"
-    )
-    val parameters = HoodieWriterUtils.parametersWithWriteDefaults(params)
-    val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(parameters)
-
-    val buildSyncConfigMethod =
-      HoodieSparkSqlWriter.getClass.getDeclaredMethod("buildSyncConfig", classOf[Path],
-        classOf[HoodieConfig], classOf[SQLConf])
-    buildSyncConfigMethod.setAccessible(true)
-
-    val hiveSyncConfig = buildSyncConfigMethod.invoke(HoodieSparkSqlWriter,
-      new Path(tempBasePath), hoodieConfig, spark.sessionState.conf).asInstanceOf[HiveSyncConfig]
-    assertTrue(hiveSyncConfig.skipROSuffix)
-    assertTrue(hiveSyncConfig.createManagedTable)
-    assertTrue(hiveSyncConfig.syncAsSparkDataSourceTable)
-    assertResult(spark.sessionState.conf.getConf(StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD))(hiveSyncConfig.sparkSchemaLengthThreshold)
-  }
-
-  /**
-   * Test case for build sync config for skip Ro Suffix values.
-   */
-  @Test
-  def testBuildSyncConfigForSkipRoSuffixValues(): Unit = {
-    val params = Map(
-      "path" -> tempBasePath,
-      DataSourceWriteOptions.TABLE_NAME.key -> "test_hoodie",
-      DataSourceWriteOptions.HIVE_PARTITION_FIELDS.key -> "partition"
-    )
-    val parameters = HoodieWriterUtils.parametersWithWriteDefaults(params)
-    val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(parameters)
-    val buildSyncConfigMethod =
-      HoodieSparkSqlWriter.getClass.getDeclaredMethod("buildSyncConfig", classOf[Path],
-        classOf[HoodieConfig], classOf[SQLConf])
-    buildSyncConfigMethod.setAccessible(true)
-    val hiveSyncConfig = buildSyncConfigMethod.invoke(HoodieSparkSqlWriter,
-      new Path(tempBasePath), hoodieConfig, spark.sessionState.conf).asInstanceOf[HiveSyncConfig]
-    assertFalse(hiveSyncConfig.skipROSuffix)
-  }
-
-  /**
    * Test case for incremental view with replacement.
    */
   @Test
