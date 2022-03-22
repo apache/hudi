@@ -75,6 +75,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
 
   /**
    * BucketID to file group mapping in each partition.
+   * Map(partition -> Map(bucketId, fileID)).
    */
   private Map<String, Map<Integer, String>> bucketIndex;
 
