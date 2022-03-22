@@ -309,7 +309,7 @@ object HoodieSparkUtils extends SparkAdapterSupport {
   }
 
   def getRequiredSchema(tableAvroSchema: Schema, requiredColumns: Array[String], internalSchema: InternalSchema = InternalSchema.getEmptyInternalSchema): (Schema, StructType, InternalSchema) = {
-    if (internalSchema.isEmptySchema) {
+    if (internalSchema.isEmptySchema || requiredColumns.isEmpty) {
       // First get the required avro-schema, then convert the avro-schema to spark schema.
       val name2Fields = tableAvroSchema.getFields.asScala.map(f => f.name() -> f).toMap
       // Here have to create a new Schema.Field object

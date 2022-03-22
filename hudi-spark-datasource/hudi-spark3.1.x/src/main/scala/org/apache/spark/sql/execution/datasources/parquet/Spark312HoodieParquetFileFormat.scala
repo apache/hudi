@@ -92,7 +92,7 @@ class Spark312HoodieParquetFileFormat extends ParquetFileFormat {
       // it's safe to do cols project here.
       val internalSchemaString = hadoopConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
       val querySchemaOption = SerDeHelper.fromJson(internalSchemaString)
-      if (querySchemaOption.isPresent) {
+      if (querySchemaOption.isPresent && !requiredSchema.isEmpty) {
         val prunedSchema = SparkInternalSchemaConverter.convertAndPruneStructTypeToInternalSchema(requiredSchema, querySchemaOption.get())
         hadoopConf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(prunedSchema))
       }
