@@ -23,7 +23,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.hbase.io.hfile.CacheConfig
 import org.apache.hadoop.mapred.JobConf
-import org.apache.hudi.HoodieBaseRelation.{getPartitionPath, isMetadataTable}
+import org.apache.hudi.HoodieBaseRelation.getPartitionPath
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.common.config.SerializableConfiguration
 import org.apache.hudi.common.fs.FSUtils
@@ -33,9 +33,8 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.hudi.io.storage.HoodieHFileReader
-import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
+import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -301,9 +300,6 @@ object HoodieBaseRelation {
 
   def getPartitionPath(fileStatus: FileStatus): Path =
     fileStatus.getPath.getParent
-
-  def isMetadataTable(metaClient: HoodieTableMetaClient): Boolean =
-    HoodieTableMetadata.isMetadataTable(metaClient.getBasePath)
 
   /**
    * Returns file-reader routine accepting [[PartitionedFile]] and returning an [[Iterator]]
