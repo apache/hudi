@@ -91,7 +91,7 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
 
     public static final ConfigProperty<String> PRECOMBINE_FIELD_TYPE_PROP = ConfigProperty
         .key("hoodie.deltastreamer.source.json.kafka.post.processor.maxwell.precombine.field.type")
-        .defaultValue("DATA_STRING")
+        .defaultValue("DATE_STRING")
         .withDocumentation("Data type of the preCombine field. could be NON_TIMESTAMP, DATE_STRING,"
             + "UNIX_TIMESTAMP or EPOCHMILLISECONDS. DATA_STRING by default ");
 
