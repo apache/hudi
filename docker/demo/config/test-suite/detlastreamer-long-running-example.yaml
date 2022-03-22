@@ -41,11 +41,6 @@ dag_content:
       num_records_insert: 300
     deps: second_insert
     type: InsertNode
-  first_validate:
-    config:
-      validate_hive: false
-    type: ValidateDatasetNode
-    deps: third_insert
   first_upsert:
     config:
       record_size: 1000
@@ -55,7 +50,7 @@ dag_content:
       num_records_upsert: 100
       num_partitions_upsert: 1
     type: UpsertNode
-    deps: first_validate
+    deps: third_insert
   first_delete:
     config:
       num_partitions_delete: 1
@@ -64,6 +59,7 @@ dag_content:
     deps: first_upsert
   second_validate:
     config:
+      validate_once_every_itr : 5
       validate_hive: false
       delete_input_data: true
     type: ValidateDatasetNode

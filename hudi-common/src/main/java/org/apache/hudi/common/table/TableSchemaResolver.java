@@ -509,19 +509,16 @@ public class TableSchemaResolver {
    * @return
    */
   public static MessageType readSchemaFromLogFile(FileSystem fs, Path path) throws IOException {
-    Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(path), null);
-    HoodieDataBlock lastBlock = null;
-    while (reader.hasNext()) {
-      HoodieLogBlock block = reader.next();
-      if (block instanceof HoodieDataBlock) {
-        lastBlock = (HoodieDataBlock) block;
+    try (Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(path), null)) {
+      HoodieDataBlock lastBlock = null;
+      while (reader.hasNext()) {
+        HoodieLogBlock block = reader.next();
+        if (block instanceof HoodieDataBlock) {
+          lastBlock = (HoodieDataBlock) block;
+        }
       }
+      return lastBlock != null ? new AvroSchemaConverter().convert(lastBlock.getSchema()) : null;
     }
-    reader.close();
-    if (lastBlock != null) {
-      return new AvroSchemaConverter().convert(lastBlock.getSchema());
-    }
-    return null;
   }
 
   public boolean isHasOperationField() {

@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
@@ -91,13 +90,11 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends BaseWrit
   @Override
   public List<HoodieRecord<T>> deduplicateRecords(
       List<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism) {
-    Map<Object, List<Pair<Object, HoodieRecord<T>>>> keyedRecords = records.stream().map(record -> {
-      // If index used is global, then records are expected to differ in their partitionPath
-      final Object key = record.getKey().getRecordKey();
-      return Pair.of(key, record);
-    }).collect(Collectors.groupingBy(Pair::getLeft));
+    // If index used is global, then records are expected to differ in their partitionPath
+    Map<Object, List<HoodieRecord<T>>> keyedRecords = records.stream()
+        .collect(Collectors.groupingBy(record -> record.getKey().getRecordKey()));
 
-    return keyedRecords.values().stream().map(x -> x.stream().map(Pair::getRight).reduce((rec1, rec2) -> {
+    return keyedRecords.values().stream().map(x -> x.stream().reduce((rec1, rec2) -> {
       final T data1 = rec1.getData();
       final T data2 = rec2.getData();
 
