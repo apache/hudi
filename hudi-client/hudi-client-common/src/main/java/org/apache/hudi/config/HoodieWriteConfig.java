@@ -61,6 +61,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 import org.apache.hudi.table.RandomFileIdPrefixProvider;
+import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
@@ -1153,6 +1154,18 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieCompactionConfig.CLEANER_PARALLELISM_VALUE);
   }
 
+  public int getCleaningMaxCommits() {
+    return getInt(HoodieCompactionConfig.CLEAN_MAX_COMMITS);
+  }
+
+  public CleaningTriggerStrategy getCleaningTriggerStrategy() {
+    return CleaningTriggerStrategy.valueOf(getString(HoodieCompactionConfig.CLEAN_TRIGGER_STRATEGY));
+  }
+
+  public boolean isAutoClean() {
+    return getBoolean(HoodieCompactionConfig.AUTO_CLEAN);
+  }
+
   public boolean getArchiveMergeEnable() {
     return getBoolean(HoodieCompactionConfig.ARCHIVE_MERGE_ENABLE);
   }
@@ -1167,10 +1180,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean isAsyncArchive() {
     return getBoolean(HoodieCompactionConfig.ASYNC_ARCHIVE);
-  }
-
-  public boolean isAutoClean() {
-    return getBoolean(HoodieCompactionConfig.AUTO_CLEAN);
   }
 
   public boolean isAsyncClean() {

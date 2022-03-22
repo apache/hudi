@@ -123,7 +123,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
     // Prepare the AvroParquetIO
     HoodieWriteConfig config = makeHoodieClientConfig();
     int startInstant = 1;
-    String firstCommitTime = makeNewCommitTime(startInstant++);
+    String firstCommitTime = makeNewCommitTime(startInstant++, "%09d");
     HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
     writeClient.startCommitWithTime(firstCommitTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -185,7 +185,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
 
     List<HoodieRecord> updatedRecords = Arrays.asList(updatedRecord1, insertedRecord1);
 
-    String newCommitTime = makeNewCommitTime(startInstant++);
+    String newCommitTime = makeNewCommitTime(startInstant++, "%09d");
     metaClient = HoodieTableMetaClient.reload(metaClient);
     writeClient.startCommitWithTime(newCommitTime);
     List<WriteStatus> statuses = writeClient.upsert(updatedRecords, newCommitTime);
