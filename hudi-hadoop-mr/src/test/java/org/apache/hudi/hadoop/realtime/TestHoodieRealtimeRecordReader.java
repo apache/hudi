@@ -104,11 +104,12 @@ public class TestHoodieRealtimeRecordReader {
   private Configuration hadoopConf;
 
   @BeforeEach
-  public void setUp() {
+  public void setUp() throws IOException {
     hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
     baseJobConf = new JobConf(hadoopConf);
     baseJobConf.set(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP, String.valueOf(1024 * 1024));
-    fs = FSUtils.getFs(basePath.toString(), baseJobConf);
+    String pathWithoutScheme = basePath.toString().contains(":") ? basePath.toString().substring(basePath.toString().indexOf(':') + 1) : basePath.toString();
+    fs = FSUtils.getFs("file:/" + pathWithoutScheme, baseJobConf);
   }
 
   @TempDir
@@ -810,13 +811,13 @@ public class TestHoodieRealtimeRecordReader {
   public void testLogOnlyReader() throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
-    HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(hadoopConf, "file:" + basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String baseInstant = "100";
     File partitionDir = InputFormatTestUtil.prepareNonPartitionedParquetTable(basePath, schema, 1, 100, baseInstant,
         HoodieTableType.MERGE_ON_READ);
-    FileCreateUtils.createDeltaCommit(basePath.toString(), baseInstant);
+    FileCreateUtils.createDeltaCommit("file:" + basePath.toString(), baseInstant);
     // Add the paths
-    FileInputFormat.setInputPaths(baseJobConf, partitionDir.getPath());
+    FileInputFormat.setInputPaths(baseJobConf, "file:" + partitionDir.getPath());
 
     FileSlice fileSlice = new FileSlice("default", baseInstant, "fileid1");
     try {
@@ -836,7 +837,7 @@ public class TestHoodieRealtimeRecordReader {
       fileSlice.addLogFile(new HoodieLogFile(writer.getLogFile().getPath(), size));
       RealtimeFileStatus realtimeFileStatus = new RealtimeFileStatus(
           new FileStatus(writer.getLogFile().getFileSize(), false, 1, 1, 0, writer.getLogFile().getPath()),
-          basePath.toString(),
+          "file:" + basePath.toString(),
           fileSlice.getLogFiles().collect(Collectors.toList()),
           false,
           Option.empty());
