@@ -366,23 +366,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       return lastInstant.getTimestamp();
     }
 
-    static void waitTillCondition(Function<Boolean, Boolean> condition, Future dsFuture, long timeoutInSecs) throws Exception {
-      Future<Boolean> res = Executors.newSingleThreadExecutor().submit(() -> {
-        boolean ret = false;
-        while (!ret && !dsFuture.isDone()) {
-          try {
-            Thread.sleep(3000);
-            ret = condition.apply(true);
-          } catch (Throwable error) {
-            LOG.warn("Got error :", error);
-            ret = false;
-          }
-        }
-        return true;
-      });
-      res.get(timeoutInSecs, TimeUnit.SECONDS);
-    }
-
     static void assertAtLeastNCommits(int minExpected, String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
       HoodieTimeline timeline = meta.getActiveTimeline().filterCompletedInstants();
@@ -747,12 +730,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     });
   }
 
-  static void deltaStreamerTestRunner(HoodieDeltaStreamer ds, HoodieDeltaStreamer.Config cfg, Function<Boolean, Boolean> condition) throws Exception {
+  void deltaStreamerTestRunner(HoodieDeltaStreamer ds, HoodieDeltaStreamer.Config cfg, Function<Boolean, Boolean> condition) throws Exception {
     deltaStreamerTestRunner(ds, cfg, condition, "single_ds_job");
   }
 
-  static void deltaStreamerTestRunner(HoodieDeltaStreamer ds, HoodieDeltaStreamer.Config cfg, Function<Boolean, Boolean> condition, String jobId) throws Exception {
-    Future dsFuture = Executors.newSingleThreadExecutor().submit(() -> {
+  void deltaStreamerTestRunner(HoodieDeltaStreamer ds, HoodieDeltaStreamer.Config cfg, Function<Boolean, Boolean> condition, String jobId) throws Exception {
+    Future dsFuture = executorService.submit(() -> {
       try {
         ds.sync();
       } catch (Exception ex) {
@@ -760,13 +743,30 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         throw new RuntimeException(ex.getMessage(), ex);
       }
     });
-    TestHelpers.waitTillCondition(condition, dsFuture, 360);
+    waitTillCondition(condition, dsFuture, 360);
     ds.shutdownGracefully();
     dsFuture.get();
   }
 
-  static void deltaStreamerTestRunner(HoodieDeltaStreamer ds, Function<Boolean, Boolean> condition) throws Exception {
+  void deltaStreamerTestRunner(HoodieDeltaStreamer ds, Function<Boolean, Boolean> condition) throws Exception {
     deltaStreamerTestRunner(ds, null, condition);
+  }
+
+  private void waitTillCondition(Function<Boolean, Boolean> condition, Future dsFuture, long timeoutInSecs) throws Exception {
+    Future<Boolean> res = executorService.submit(() -> {
+      boolean ret = false;
+      while (!ret && !dsFuture.isDone()) {
+        try {
+          Thread.sleep(3000);
+          ret = condition.apply(true);
+        } catch (Throwable error) {
+          LOG.warn("Got error :", error);
+          ret = false;
+        }
+      }
+      return true;
+    });
+    res.get(timeoutInSecs, TimeUnit.SECONDS);
   }
 
   @ParameterizedTest

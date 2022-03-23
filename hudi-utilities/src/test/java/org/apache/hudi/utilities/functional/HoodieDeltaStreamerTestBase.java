@@ -46,6 +46,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
@@ -93,6 +96,8 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   protected static String topicName;
   protected static String defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
   protected static int testNum = 1;
+
+  protected ExecutorService executorService;
 
   @BeforeAll
   public static void initClass() throws Exception {
@@ -190,6 +195,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   @BeforeEach
   public void setup() throws Exception {
     super.setup();
+    executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
   }
 
   @AfterAll
@@ -202,6 +208,8 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
   @AfterEach
   public void teardown() throws Exception {
+    executorService.shutdownNow();
+    executorService.awaitTermination(10, TimeUnit.SECONDS);
     super.teardown();
   }
 
