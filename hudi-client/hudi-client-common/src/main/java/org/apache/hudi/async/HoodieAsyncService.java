@@ -137,10 +137,8 @@ public abstract class HoodieAsyncService implements Serializable {
   /**
    * Start the service. Runs the service in a different thread and returns. Also starts a monitor thread to
    * run-callbacks in case of shutdown
-   * 
-   * @param onShutdownCallback
    */
-  public void start(Function<Boolean, Boolean> onShutdownCallback) {
+  public void start(Function<Boolean, Boolean> onCompleteCallback) {
     if (started) {
       LOG.warn("The async service already started.");
       return;
@@ -149,7 +147,7 @@ public abstract class HoodieAsyncService implements Serializable {
     future = res.getKey();
     executor = res.getValue();
     started = true;
-    shutdownCallback(onShutdownCallback);
+    shutdownCallback(onCompleteCallback);
   }
 
   /**

@@ -177,14 +177,14 @@ public class HoodieDeltaStreamer implements Serializable {
     } else {
       if (cfg.continuousMode) {
         deltaSyncService.ifPresent(ds -> {
-          ds.start(this::onDeltaSyncShutdown);
+          ds.start(this::onDeltaSyncComplete);
           try {
             ds.waitForShutdown();
           } catch (Exception e) {
             throw new HoodieException(e.getMessage(), e);
           }
         });
-        LOG.info("Delta Sync shutting down");
+        LOG.info("Shutdown DeltaStreamer");
       } else {
         LOG.info("Delta Streamer running only single round");
         try {
@@ -199,8 +199,8 @@ public class HoodieDeltaStreamer implements Serializable {
           LOG.error("Got error running delta sync once. Shutting down", ex);
           throw ex;
         } finally {
-          deltaSyncService.ifPresent(DeltaSyncService::close);
-          LOG.info("Shut down delta streamer");
+          deltaSyncService.ifPresent(ds -> ds.shutdown(false));
+          LOG.info("Shutdown DeltaStreamer");
         }
       }
     }
@@ -210,9 +210,8 @@ public class HoodieDeltaStreamer implements Serializable {
     return cfg;
   }
 
-  private boolean onDeltaSyncShutdown(boolean error) {
-    LOG.info("DeltaSync shutdown. Closing write client. Error?" + error);
-    deltaSyncService.ifPresent(DeltaSyncService::close);
+  private boolean onDeltaSyncComplete(boolean ignored) {
+    deltaSyncService.ifPresent(ds -> ds.shutdown(false));
     return true;
   }
 
@@ -784,13 +783,16 @@ public class HoodieDeltaStreamer implements Serializable {
       return true;
     }
 
-    /**
-     * Close all resources.
-     */
-    public void close() {
-      if (null != deltaSync) {
+    @Override
+    public void shutdown(boolean force) {
+      // NOTE: We're shutting down in a sequence which is inverse of the initialization one
+      if (deltaSync != null) {
         deltaSync.close();
       }
+
+      super.shutdown(force);
+
+      LOG.info("Shutdown DeltaSync Service");
     }
 
     public SchemaProvider getSchemaProvider() {
