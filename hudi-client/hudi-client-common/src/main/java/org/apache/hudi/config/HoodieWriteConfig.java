@@ -35,6 +35,7 @@ import org.apache.hudi.common.fs.FileSystemRetryConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -60,12 +61,15 @@ import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 import org.apache.hudi.table.RandomFileIdPrefixProvider;
+import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 
 import org.apache.hadoop.hbase.io.compress.Compression;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.orc.CompressionKind;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
@@ -93,6 +97,7 @@ import java.util.stream.Collectors;
         + "higher level frameworks (e.g Spark datasources, Flink sink) and utilities (e.g DeltaStreamer).")
 public class HoodieWriteConfig extends HoodieConfig {
 
+  private static final Logger LOG = LogManager.getLogger(HoodieWriteConfig.class);
   private static final long serialVersionUID = 0L;
 
   // This is a constant as is should never be changed via config (will invalidate previous commits)
@@ -100,7 +105,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final String DELTASTREAMER_CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
 
   public static final ConfigProperty<String> TBL_NAME = ConfigProperty
-      .key("hoodie.table.name")
+      .key(HoodieTableConfig.HOODIE_TABLE_NAME_KEY)
       .noDefaultValue()
       .withDocumentation("Table name that will be used for registering with metastores like HMS. Needs to be same across runs.");
 
@@ -903,6 +908,11 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(TBL_NAME);
   }
 
+  public HoodieTableType getTableType() {
+    return HoodieTableType.valueOf(getStringOrDefault(
+        HoodieTableConfig.TYPE, HoodieTableConfig.TYPE.defaultValue().name()).toUpperCase());
+  }
+
   public String getPreCombineField() {
     return getString(PRECOMBINE_FIELD_NAME);
   }
@@ -1144,6 +1154,18 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieCompactionConfig.CLEANER_PARALLELISM_VALUE);
   }
 
+  public int getCleaningMaxCommits() {
+    return getInt(HoodieCompactionConfig.CLEAN_MAX_COMMITS);
+  }
+
+  public CleaningTriggerStrategy getCleaningTriggerStrategy() {
+    return CleaningTriggerStrategy.valueOf(getString(HoodieCompactionConfig.CLEAN_TRIGGER_STRATEGY));
+  }
+
+  public boolean isAutoClean() {
+    return getBoolean(HoodieCompactionConfig.AUTO_CLEAN);
+  }
+
   public boolean getArchiveMergeEnable() {
     return getBoolean(HoodieCompactionConfig.ARCHIVE_MERGE_ENABLE);
   }
@@ -1158,10 +1180,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean isAsyncArchive() {
     return getBoolean(HoodieCompactionConfig.ASYNC_ARCHIVE);
-  }
-
-  public boolean isAutoClean() {
-    return getBoolean(HoodieCompactionConfig.AUTO_CLEAN);
   }
 
   public boolean isAsyncClean() {
@@ -1930,7 +1948,9 @@ public class HoodieWriteConfig extends HoodieConfig {
    * @return True if any table services are configured to run async, false otherwise.
    */
   public Boolean areAnyTableServicesAsync() {
-    return isAsyncClusteringEnabled() || !inlineCompactionEnabled() || isAsyncClean() || isAsyncArchive();
+    return isAsyncClusteringEnabled()
+        || (getTableType() == HoodieTableType.MERGE_ON_READ && !inlineCompactionEnabled())
+        || isAsyncClean() || isAsyncArchive();
   }
 
   public Boolean areAnyTableServicesScheduledInline() {
@@ -2390,18 +2410,55 @@ public class HoodieWriteConfig extends HoodieConfig {
           HoodieLayoutConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultValue(TIMELINE_LAYOUT_VERSION_NUM, String.valueOf(TimelineLayoutVersion.CURR_VERSION));
 
-      // Async table services can update the metadata table and a lock provider is
-      // needed to guard against any concurrent table write operations. If user has
-      // not configured any lock provider, let's use the InProcess lock provider.
+      autoAdjustConfigsForConcurrencyMode();
+    }
+
+    private void autoAdjustConfigsForConcurrencyMode() {
+      boolean isMetadataTableEnabled = writeConfig.getBoolean(HoodieMetadataConfig.ENABLE);
       final TypedProperties writeConfigProperties = writeConfig.getProps();
       final boolean isLockProviderPropertySet = writeConfigProperties.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME)
           || writeConfigProperties.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_PROP);
+      
       if (!isLockConfigSet) {
         HoodieLockConfig.Builder lockConfigBuilder = HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps());
-        if (!isLockProviderPropertySet && writeConfig.areAnyTableServicesAsync()) {
-          lockConfigBuilder.withLockProvider(InProcessLockProvider.class);
-        }
         writeConfig.setDefault(lockConfigBuilder.build());
+      }
+
+      if (isMetadataTableEnabled) {
+        // When metadata table is enabled, optimistic concurrency control must be used for
+        // single writer with async table services.
+        // Async table services can update the metadata table and a lock provider is
+        // needed to guard against any concurrent table write operations. If user has
+        // not configured any lock provider, let's use the InProcess lock provider.
+        boolean areTableServicesEnabled = writeConfig.areTableServicesEnabled();
+        boolean areAsyncTableServicesEnabled = writeConfig.areAnyTableServicesAsync();
+
+        if (!isLockProviderPropertySet && areTableServicesEnabled && areAsyncTableServicesEnabled) {
+          // This is targeted at Single writer with async table services
+          // If user does not set the lock provider, likely that the concurrency mode is not set either
+          // Override the configs for metadata table
+          writeConfig.setValue(WRITE_CONCURRENCY_MODE.key(),
+              WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
+          writeConfig.setValue(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
+              InProcessLockProvider.class.getName());
+          LOG.info(String.format("Automatically set %s=%s and %s=%s since user has not set the "
+                  + "lock provider for single writer with async table services",
+              WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value(),
+              HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName()));
+        }
+      }
+
+      // We check if "hoodie.cleaner.policy.failed.writes"
+      // is properly set to LAZY for optimistic concurrency control
+      String writeConcurrencyMode = writeConfig.getString(WRITE_CONCURRENCY_MODE);
+      if (WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value()
+          .equalsIgnoreCase(writeConcurrencyMode)) {
+        // In this case, we assume that the user takes care of setting the lock provider used
+        writeConfig.setValue(HoodieCompactionConfig.FAILED_WRITES_CLEANER_POLICY.key(),
+            HoodieFailedWritesCleaningPolicy.LAZY.name());
+        LOG.info(String.format("Automatically set %s=%s since optimistic concurrency control is used",
+            HoodieCompactionConfig.FAILED_WRITES_CLEANER_POLICY.key(),
+            HoodieFailedWritesCleaningPolicy.LAZY.name()));
       }
     }
 
@@ -2411,9 +2468,9 @@ public class HoodieWriteConfig extends HoodieConfig {
       new TimelineLayoutVersion(Integer.parseInt(layoutVersion));
       Objects.requireNonNull(writeConfig.getString(BASE_PATH));
       if (writeConfig.getString(WRITE_CONCURRENCY_MODE)
-          .equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name())) {
-        ValidationUtils.checkArgument(writeConfig.getString(HoodieCompactionConfig.FAILED_WRITES_CLEANER_POLICY)
-            != HoodieFailedWritesCleaningPolicy.EAGER.name(), "To enable optimistic concurrency control, set hoodie.cleaner.policy.failed.writes=LAZY");
+          .equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value())) {
+        ValidationUtils.checkArgument(!writeConfig.getString(HoodieCompactionConfig.FAILED_WRITES_CLEANER_POLICY)
+            .equals(HoodieFailedWritesCleaningPolicy.EAGER.name()), "To enable optimistic concurrency control, set hoodie.cleaner.policy.failed.writes=LAZY");
       }
     }
 

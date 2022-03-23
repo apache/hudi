@@ -108,14 +108,15 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private static final String BLOOM_FILTER_FIELD_IS_DELETED = FIELD_IS_DELETED;
 
   // HoodieMetadata column stats payload field ids
-  private static final String COLUMN_STATS_FIELD_MIN_VALUE = "minValue";
-  private static final String COLUMN_STATS_FIELD_MAX_VALUE = "maxValue";
-  private static final String COLUMN_STATS_FIELD_NULL_COUNT = "nullCount";
-  private static final String COLUMN_STATS_FIELD_VALUE_COUNT = "valueCount";
-  private static final String COLUMN_STATS_FIELD_TOTAL_SIZE = "totalSize";
-  private static final String COLUMN_STATS_FIELD_FILE_NAME = "fileName";
-  private static final String COLUMN_STATS_FIELD_TOTAL_UNCOMPRESSED_SIZE = "totalUncompressedSize";
-  private static final String COLUMN_STATS_FIELD_IS_DELETED = FIELD_IS_DELETED;
+  public static final String COLUMN_STATS_FIELD_MIN_VALUE = "minValue";
+  public static final String COLUMN_STATS_FIELD_MAX_VALUE = "maxValue";
+  public static final String COLUMN_STATS_FIELD_NULL_COUNT = "nullCount";
+  public static final String COLUMN_STATS_FIELD_VALUE_COUNT = "valueCount";
+  public static final String COLUMN_STATS_FIELD_TOTAL_SIZE = "totalSize";
+  public static final String COLUMN_STATS_FIELD_FILE_NAME = "fileName";
+  public static final String COLUMN_STATS_FIELD_COLUMN_NAME = "columnName";
+  public static final String COLUMN_STATS_FIELD_TOTAL_UNCOMPRESSED_SIZE = "totalUncompressedSize";
+  public static final String COLUMN_STATS_FIELD_IS_DELETED = FIELD_IS_DELETED;
 
   private String key = null;
   private int type = 0;
@@ -177,6 +178,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         } else {
           columnStatMetadata = HoodieMetadataColumnStats.newBuilder()
               .setFileName((String) columnStatsRecord.get(COLUMN_STATS_FIELD_FILE_NAME))
+              .setColumnName((String) columnStatsRecord.get(COLUMN_STATS_FIELD_COLUMN_NAME))
               .setMinValue((String) columnStatsRecord.get(COLUMN_STATS_FIELD_MIN_VALUE))
               .setMaxValue((String) columnStatsRecord.get(COLUMN_STATS_FIELD_MAX_VALUE))
               .setValueCount((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_VALUE_COUNT))
@@ -508,6 +510,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(),
           HoodieMetadataColumnStats.newBuilder()
               .setFileName(new Path(columnRangeMetadata.getFilePath()).getName())
+              .setColumnName(columnRangeMetadata.getColumnName())
               .setMinValue(columnRangeMetadata.getMinValue() == null ? null :
                   columnRangeMetadata.getMinValue().toString())
               .setMaxValue(columnRangeMetadata.getMaxValue() == null ? null :

@@ -20,6 +20,7 @@ package org.apache.hudi.integ.testsuite.dag.nodes
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config
+import org.apache.hudi.integ.testsuite.dag.ExecutionContext
 
 /**
  * Spark datasource based upsert node
@@ -30,5 +31,9 @@ class SparkUpsertNode(dagNodeConfig: Config) extends SparkInsertNode(dagNodeConf
 
   override def getOperation(): String = {
     DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL
+  }
+
+  override def writeRecords(context: ExecutionContext): Unit = {
+    context.getDeltaGenerator().writeRecords(context.getDeltaGenerator().generateUpdates(config)).count()
   }
 }

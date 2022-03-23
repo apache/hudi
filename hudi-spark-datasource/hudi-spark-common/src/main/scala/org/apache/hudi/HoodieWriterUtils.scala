@@ -18,13 +18,14 @@
 package org.apache.hudi
 
 import java.util.Properties
-
 import org.apache.hudi.DataSourceOptionsHelper.allAlternatives
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.hive.HiveSyncConfig
+import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 
@@ -64,21 +65,21 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(STREAMING_RETRY_INTERVAL_MS)
     hoodieConfig.setDefaultValue(STREAMING_IGNORE_FAILED_BATCH)
     hoodieConfig.setDefaultValue(META_SYNC_CLIENT_TOOL_CLASS_NAME)
-    hoodieConfig.setDefaultValue(HIVE_SYNC_ENABLED)
-    hoodieConfig.setDefaultValue(META_SYNC_ENABLED)
-    hoodieConfig.setDefaultValue(HIVE_DATABASE)
-    hoodieConfig.setDefaultValue(HIVE_TABLE)
-    hoodieConfig.setDefaultValue(HIVE_BASE_FILE_FORMAT)
-    hoodieConfig.setDefaultValue(HIVE_USER)
-    hoodieConfig.setDefaultValue(HIVE_PASS)
-    hoodieConfig.setDefaultValue(HIVE_URL)
-    hoodieConfig.setDefaultValue(METASTORE_URIS)
-    hoodieConfig.setDefaultValue(HIVE_PARTITION_FIELDS)
-    hoodieConfig.setDefaultValue(HIVE_PARTITION_EXTRACTOR_CLASS)
+    hoodieConfig.setDefaultValue(HiveSyncConfig.HIVE_SYNC_ENABLED)
+    hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_ENABLED)
+    hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_DATABASE_NAME)
+    hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_TABLE_NAME)
+    hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT)
+    hoodieConfig.setDefaultValue(HiveSyncConfig.METASTORE_URIS)
+    hoodieConfig.setDefaultValue(HiveSyncConfig.HIVE_USER)
+    hoodieConfig.setDefaultValue(HiveSyncConfig.HIVE_PASS)
+    hoodieConfig.setDefaultValue(HiveSyncConfig.HIVE_URL)
+    hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS)
+    hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS)
     hoodieConfig.setDefaultValue(HIVE_STYLE_PARTITIONING)
-    hoodieConfig.setDefaultValue(HIVE_USE_JDBC)
-    hoodieConfig.setDefaultValue(HIVE_CREATE_MANAGED_TABLE)
-    hoodieConfig.setDefaultValue(HIVE_SYNC_AS_DATA_SOURCE_TABLE)
+    hoodieConfig.setDefaultValue(HiveSyncConfig.HIVE_USE_JDBC)
+    hoodieConfig.setDefaultValue(HiveSyncConfig.HIVE_CREATE_MANAGED_TABLE)
+    hoodieConfig.setDefaultValue(HiveSyncConfig.HIVE_SYNC_AS_DATA_SOURCE_TABLE)
     hoodieConfig.setDefaultValue(ASYNC_COMPACT_ENABLE)
     hoodieConfig.setDefaultValue(INLINE_CLUSTERING_ENABLE)
     hoodieConfig.setDefaultValue(ASYNC_CLUSTERING_ENABLE)

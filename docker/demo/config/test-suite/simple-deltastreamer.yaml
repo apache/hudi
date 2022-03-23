@@ -41,17 +41,11 @@ dag_content:
       num_records_insert: 300
     deps: second_insert
     type: InsertNode
-  first_hive_sync:
-    config:
-      queue_name: "adhoc"
-      engine: "mr"
-    type: HiveSyncNode
-    deps: third_insert
   first_validate:
     config:
       validate_hive: false
     type: ValidateDatasetNode
-    deps: first_hive_sync
+    deps: third_insert
   first_upsert:
     config:
       record_size: 1000
@@ -68,15 +62,9 @@ dag_content:
       num_records_delete: 2000
     type: DeleteNode
     deps: first_upsert
-  second_hive_sync:
-    config:
-      queue_name: "adhoc"
-      engine: "mr"
-    type: HiveSyncNode
-    deps: first_delete
   second_validate:
     config:
       validate_hive: false
       delete_input_data: true
     type: ValidateDatasetNode
-    deps: second_hive_sync
+    deps: first_delete

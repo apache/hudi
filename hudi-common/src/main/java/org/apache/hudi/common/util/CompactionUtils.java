@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -59,13 +60,13 @@ public class CompactionUtils {
   /**
    * Generate compaction operation from file-slice.
    *
-   * @param partitionPath Partition path
-   * @param fileSlice File Slice
+   * @param partitionPath          Partition path
+   * @param fileSlice              File Slice
    * @param metricsCaptureFunction Metrics Capture function
    * @return Compaction Operation
    */
   public static HoodieCompactionOperation buildFromFileSlice(String partitionPath, FileSlice fileSlice,
-      Option<Function<Pair<String, FileSlice>, Map<String, Double>>> metricsCaptureFunction) {
+                                                             Option<Function<Pair<String, FileSlice>, Map<String, Double>>> metricsCaptureFunction) {
     HoodieCompactionOperation.Builder builder = HoodieCompactionOperation.newBuilder();
     builder.setPartitionPath(partitionPath);
     builder.setFileId(fileSlice.getFileId());
@@ -87,12 +88,12 @@ public class CompactionUtils {
    * Generate compaction plan from file-slices.
    *
    * @param partitionFileSlicePairs list of partition file-slice pairs
-   * @param extraMetadata Extra Metadata
-   * @param metricsCaptureFunction Metrics Capture function
+   * @param extraMetadata           Extra Metadata
+   * @param metricsCaptureFunction  Metrics Capture function
    */
   public static HoodieCompactionPlan buildFromFileSlices(List<Pair<String, FileSlice>> partitionFileSlicePairs,
-      Option<Map<String, String>> extraMetadata,
-      Option<Function<Pair<String, FileSlice>, Map<String, Double>>> metricsCaptureFunction) {
+                                                         Option<Map<String, String>> extraMetadata,
+                                                         Option<Function<Pair<String, FileSlice>, Map<String, Double>>> metricsCaptureFunction) {
     HoodieCompactionPlan.Builder builder = HoodieCompactionPlan.newBuilder();
     extraMetadata.ifPresent(builder::setExtraMetadata);
 
@@ -195,10 +196,76 @@ public class CompactionUtils {
 
   /**
    * Return all pending compaction instant times.
-   * 
+   *
    * @return
    */
   public static List<HoodieInstant> getPendingCompactionInstantTimes(HoodieTableMetaClient metaClient) {
     return metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstants().collect(Collectors.toList());
+  }
+
+  /**
+   * Returns a pair of (timeline containing the delta commits after the latest completed
+   * compaction commit, the completed compaction commit instant), if the latest completed
+   * compaction commit is present; a pair of (timeline containing all the delta commits,
+   * the first delta commit instant), if there is no completed compaction commit.
+   *
+   * @param activeTimeline Active timeline of a table.
+   * @return Pair of timeline containing delta commits and an instant.
+   */
+  public static Option<Pair<HoodieTimeline, HoodieInstant>> getDeltaCommitsSinceLatestCompaction(
+      HoodieActiveTimeline activeTimeline) {
+    Option<HoodieInstant> lastCompaction = activeTimeline.getCommitTimeline()
+        .filterCompletedInstants().lastInstant();
+    HoodieTimeline deltaCommits = activeTimeline.getDeltaCommitTimeline();
+
+    HoodieInstant latestInstant;
+    if (lastCompaction.isPresent()) {
+      latestInstant = lastCompaction.get();
+      // timeline containing the delta commits after the latest completed compaction commit,
+      // and the completed compaction commit instant
+      return Option.of(Pair.of(deltaCommits.findInstantsAfter(
+          latestInstant.getTimestamp(), Integer.MAX_VALUE), lastCompaction.get()));
+    } else {
+      if (deltaCommits.countInstants() > 0) {
+        latestInstant = deltaCommits.firstInstant().get();
+        // timeline containing all the delta commits, and the first delta commit instant
+        return Option.of(Pair.of(deltaCommits.findInstantsAfterOrEquals(
+            latestInstant.getTimestamp(), Integer.MAX_VALUE), latestInstant));
+      } else {
+        return Option.empty();
+      }
+    }
+  }
+
+  /**
+   * Gets the oldest instant to retain for MOR compaction.
+   * If there is no completed compaction,
+   * num delta commits >= "hoodie.compact.inline.max.delta.commits"
+   * If there is a completed compaction,
+   * num delta commits after latest completed compaction >= "hoodie.compact.inline.max.delta.commits"
+   *
+   * @param activeTimeline  Active timeline of a table.
+   * @param maxDeltaCommits Maximum number of delta commits that trigger the compaction plan,
+   *                        i.e., "hoodie.compact.inline.max.delta.commits".
+   * @return the oldest instant to keep for MOR compaction.
+   */
+  public static Option<HoodieInstant> getOldestInstantToRetainForCompaction(
+      HoodieActiveTimeline activeTimeline, int maxDeltaCommits) {
+    Option<Pair<HoodieTimeline, HoodieInstant>> deltaCommitsInfoOption =
+        CompactionUtils.getDeltaCommitsSinceLatestCompaction(activeTimeline);
+    if (deltaCommitsInfoOption.isPresent()) {
+      Pair<HoodieTimeline, HoodieInstant> deltaCommitsInfo = deltaCommitsInfoOption.get();
+      HoodieTimeline deltaCommitTimeline = deltaCommitsInfo.getLeft();
+      int numDeltaCommits = deltaCommitTimeline.countInstants();
+      if (numDeltaCommits < maxDeltaCommits) {
+        return Option.of(deltaCommitsInfo.getRight());
+      } else {
+        // delta commits with the last one to keep
+        List<HoodieInstant> instants = deltaCommitTimeline.getInstants()
+            .limit(numDeltaCommits - maxDeltaCommits + 1).collect(Collectors.toList());
+        return Option.of(instants.get(instants.size() - 1));
+      }
+    }
+    return Option.empty();
   }
 }

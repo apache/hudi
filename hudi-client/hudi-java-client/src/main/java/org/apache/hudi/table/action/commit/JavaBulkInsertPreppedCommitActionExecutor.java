@@ -36,12 +36,12 @@ public class JavaBulkInsertPreppedCommitActionExecutor<T extends HoodieRecordPay
     extends BaseJavaCommitActionExecutor<T> {
 
   private final List<HoodieRecord<T>> preppedInputRecord;
-  private final Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> userDefinedBulkInsertPartitioner;
+  private final Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner;
 
   public JavaBulkInsertPreppedCommitActionExecutor(HoodieJavaEngineContext context,
                                                    HoodieWriteConfig config, HoodieTable table,
                                                    String instantTime, List<HoodieRecord<T>> preppedInputRecord,
-                                                   Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> userDefinedBulkInsertPartitioner) {
+                                                   Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     super(context, config, table, instantTime, WriteOperationType.BULK_INSERT);
     this.preppedInputRecord = preppedInputRecord;
     this.userDefinedBulkInsertPartitioner = userDefinedBulkInsertPartitioner;

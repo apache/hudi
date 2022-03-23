@@ -117,7 +117,7 @@ public class TestHoodieConcatHandle extends HoodieJavaClientTestBase {
     records1.add(new HoodieAvroRecord(new HoodieKey(insertRow2.getRowKey(), insertRow2.getPartitionPath()), insertRow2));
 
     int startInstant = 1;
-    String firstCommitTime = makeNewCommitTime(startInstant++);
+    String firstCommitTime = makeNewCommitTime(startInstant++, "%09d");
     // First insert
     writeClient.startCommitWithTime(firstCommitTime);
     writeClient.insert(records1, firstCommitTime);
@@ -145,7 +145,7 @@ public class TestHoodieConcatHandle extends HoodieJavaClientTestBase {
     records2.add(new HoodieAvroRecord(new HoodieKey(insertRow1.getRowKey(), insertRow1.getPartitionPath()), insertRow1));
     records2.add(new HoodieAvroRecord(new HoodieKey(insertRow2.getRowKey(), insertRow2.getPartitionPath()), insertRow2));
 
-    String newCommitTime = makeNewCommitTime(startInstant++);
+    String newCommitTime = makeNewCommitTime(startInstant++, "%09d");
     writeClient.startCommitWithTime(newCommitTime);
     // Second insert is the same as the _row_key of the first one,test allowDuplicateInserts
     writeClient.insert(records2, newCommitTime);
@@ -183,7 +183,7 @@ public class TestHoodieConcatHandle extends HoodieJavaClientTestBase {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[]{partitionPath});
 
     int startInstant = 1;
-    String firstCommitTime = makeNewCommitTime(startInstant++);
+    String firstCommitTime = makeNewCommitTime(startInstant++, "%09d");
     List<HoodieRecord> records1 = dataGenerator.generateInserts(firstCommitTime, 100);
 
     // First insert
@@ -200,7 +200,7 @@ public class TestHoodieConcatHandle extends HoodieJavaClientTestBase {
       assertTrue(filter.mightContain(record.getRecordKey()));
     }
 
-    String newCommitTime = makeNewCommitTime(startInstant++);
+    String newCommitTime = makeNewCommitTime(startInstant++, "%09d");
     List<HoodieRecord> records2 = dataGenerator.generateUpdates(newCommitTime, 100);
     writeClient.startCommitWithTime(newCommitTime);
     // Second insert is the same as the _row_key of the first one,test allowDuplicateInserts
