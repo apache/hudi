@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -132,6 +133,23 @@ public class HoodiePartitionMetadata {
       if (is != null) {
         is.close();
       }
+    }
+  }
+
+  /**
+   * Read out the COMMIT_TIME_KEY metadata for this partition.
+   */
+  public Option<String> readPartitionCreatedCommitTime() {
+    try {
+      if (props.containsKey(COMMIT_TIME_KEY)) {
+        return Option.of(props.getProperty(COMMIT_TIME_KEY));
+      } else {
+        readFromFS();
+        return Option.of(props.getProperty(COMMIT_TIME_KEY));
+      }
+    } catch (IOException ioe) {
+      LOG.warn("Error fetch Hoodie partition metadata for " + partitionPath, ioe);
+      return Option.empty();
     }
   }
 
