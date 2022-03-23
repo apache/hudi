@@ -90,7 +90,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
     log.info("Inferring schema..")
     val schemaResolver = new TableSchemaResolver(metaClient)
     val iSchema = if (useEndInstantSchema && !commitsToReturn.isEmpty) {
-      InternalSchemaCache.searchSchemaAndCache(commitsToReturn.last.getTimestamp.toLong, metaClient)
+      InternalSchemaCache.searchSchemaAndCache(commitsToReturn.last.getTimestamp.toLong, metaClient, hoodieTable.getConfig.getInternalSchemaCacheEnable)
     } else {
       schemaResolver.getTableInternalSchemaFromCommitMetadata.orElse(null)
     }

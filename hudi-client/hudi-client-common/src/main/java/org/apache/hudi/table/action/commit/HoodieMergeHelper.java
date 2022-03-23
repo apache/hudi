@@ -98,7 +98,10 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
       // check implicitly add columns, and position reorder(spark sql may change cols order)
       InternalSchema querySchema = AvroSchemaEvolutionUtils.evolveSchemaFromNewAvroSchema(readSchema, querySchemaOpt.get(), true);
       long commitTime = Long.valueOf(FSUtils.getCommitTime(mergeHandle.getOldFilePath().getName()));
-      InternalSchema writeInternalSchema = InternalSchemaCache.searchSchemaAndCache(commitTime, table.getMetaClient());
+      InternalSchema writeInternalSchema = InternalSchemaCache.searchSchemaAndCache(commitTime, table.getMetaClient(), table.getConfig().getInternalSchemaCacheEnable());
+      if (writeInternalSchema.isEmptySchema()) {
+        throw new HoodieException(String.format("cannot find file schema for current commit %s", commitTime));
+      }
       List<String> colNamesFromQuerySchema = querySchema.getAllColsFullName();
       List<String> colNamesFromWriteSchema = writeInternalSchema.getAllColsFullName();
       List<String> sameCols = colNamesFromWriteSchema.stream()

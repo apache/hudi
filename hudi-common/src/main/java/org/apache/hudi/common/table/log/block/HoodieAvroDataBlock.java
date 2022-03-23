@@ -161,6 +161,10 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
 
       Schema finalReadSchema = readerSchema;
       if (!internalSchema.isEmptySchema()) {
+        // we should use write schema to read log file,
+        // since when we have done some DDL operation, the readerSchema maybe different from writeSchema, avro reader will throw exception.
+        // eg: origin writeSchema is: "a String, b double" then we add a new column now the readerSchema will be: "a string, c int, b double". it's wrong to use readerSchema to read old log file.
+        // after we read those record by writeSchema,  we rewrite those record with readerSchema in AbstractHoodieLogRecordReader
         finalReadSchema = writerSchema;
       }
 

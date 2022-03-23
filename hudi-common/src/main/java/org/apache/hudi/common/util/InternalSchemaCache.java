@@ -45,7 +45,7 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 public class InternalSchemaCache {
-  // use segment lock to reduce competition.
+  // Use segment lock to reduce competition.
   // the lock size should be powers of 2 for better hash.
   private static Object[] lockList = new Object[16];
 
@@ -61,22 +61,7 @@ public class InternalSchemaCache {
       HISTORICAL_SCHEMA_CACHE = Caffeine.newBuilder().maximumSize(1000).weakValues().build();
 
   /**
-   * search internalSchema based on versionID.
-   * first step: try to get internalSchema from hoodie commit files, we no need to add lock.
-   * if we cannot get internalSchema by first step, then we try to get internalSchema from cache.
-   *
-   * @param versionID schema version_id need to search
-   * @param tablePath current hoodie table base path
-   * @param hadoopConf hadoopConf
-   * @return internalSchema
-   */
-  public static InternalSchema searchSchemaAndCache(long versionID, String tablePath, Configuration hadoopConf) {
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tablePath).setConf(hadoopConf).build();
-    return searchSchemaAndCache(versionID, metaClient);
-  }
-
-  /**
-   * search internalSchema based on versionID.
+   * Search internalSchema based on versionID.
    * first step: try to get internalSchema from hoodie commit files, we no need to add lock.
    * if we cannot get internalSchema by first step, then we try to get internalSchema from cache.
    *
@@ -84,10 +69,14 @@ public class InternalSchemaCache {
    * @param metaClient current hoodie metaClient
    * @return internalSchema
    */
-  public static InternalSchema searchSchemaAndCache(long versionID, HoodieTableMetaClient metaClient) {
-    Option<InternalSchema> candidateSchema = searchSchema(versionID, metaClient);
+  public static InternalSchema searchSchemaAndCache(long versionID, HoodieTableMetaClient metaClient, boolean cacheEnable) {
+    Option<InternalSchema> candidateSchema = getSchemaByReadingCommitFile(versionID, metaClient);
     if (candidateSchema.isPresent()) {
       return candidateSchema.get();
+    }
+    if (!cacheEnable) {
+      // parse history schema and return directly
+      return InternalSchemaUtils.searchSchema(versionID, getHistoricalSchemas(metaClient));
     }
     String tablePath = metaClient.getBasePath();
     // use segment lock to reduce competition.
@@ -117,7 +106,7 @@ public class InternalSchemaCache {
     return result;
   }
 
-  private static Option<InternalSchema> searchSchema(long versionID, HoodieTableMetaClient metaClient) {
+  private static Option<InternalSchema> getSchemaByReadingCommitFile(long versionID, HoodieTableMetaClient metaClient) {
     try {
       HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
       List<HoodieInstant> instants = timeline.getInstants().filter(f -> f.getTimestamp().equals(String.valueOf(versionID))).collect(Collectors.toList());

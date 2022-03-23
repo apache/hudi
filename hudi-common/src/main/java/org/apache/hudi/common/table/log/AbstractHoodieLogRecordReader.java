@@ -396,7 +396,8 @@ public abstract class AbstractHoodieLogRecordReader {
     Option<Schema> result = Option.empty();
     if (!internalSchema.isEmptySchema()) {
       Long currentTime = Long.parseLong(dataBlock.getLogBlockHeader().get(INSTANT_TIME));
-      InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(currentTime, path, fs.getConf());
+      InternalSchema fileSchema = InternalSchemaCache
+          .searchSchemaAndCache(currentTime, hoodieTableMetaClient, false);
       // Get schema from the header
       Schema blockWriterSchema = new Schema.Parser().parse(dataBlock.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.SCHEMA));
 
