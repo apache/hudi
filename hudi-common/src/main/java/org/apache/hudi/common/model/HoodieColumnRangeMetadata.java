@@ -24,6 +24,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Objects;
 import java.util.function.BiFunction;
+import java.util.stream.Stream;
 
 /**
  * Hoodie metadata for the column range of data stored in columnar format (like Parquet)
@@ -49,10 +50,13 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
       (oldColumnRange, newColumnRange) -> new HoodieColumnRangeMetadata<>(
           newColumnRange.getFilePath(),
           newColumnRange.getColumnName(),
-          (Comparable) Arrays.asList(oldColumnRange.getMinValue(), newColumnRange.getMinValue())
-              .stream().filter(Objects::nonNull).min(Comparator.naturalOrder()).orElse(null),
-          (Comparable) Arrays.asList(oldColumnRange.getMinValue(), newColumnRange.getMinValue())
-              .stream().filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null),
+          Stream.of(oldColumnRange.getMinValue(), newColumnRange.getMinValue())
+              .filter(Objects::nonNull)
+              .min(Comparator.naturalOrder())
+              .orElse(null),
+          Stream.of(oldColumnRange.getMinValue(), newColumnRange.getMinValue())
+              .filter(Objects::nonNull)
+              .max(Comparator.naturalOrder()).orElse(null),
           oldColumnRange.getNullCount() + newColumnRange.getNullCount(),
           oldColumnRange.getValueCount() + newColumnRange.getValueCount(),
           oldColumnRange.getTotalSize() + newColumnRange.getTotalSize(),
@@ -85,10 +89,12 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
     return this.columnName;
   }
 
+  @Nullable
   public T getMinValue() {
     return this.minValue;
   }
 
+  @Nullable
   public T getMaxValue() {
     return this.maxValue;
   }
