@@ -124,7 +124,8 @@ public abstract class HoodieAsyncService implements Serializable {
           executor.shutdown();
           try {
             // Wait for some max time after requesting shutdown
-            executor.awaitTermination(24, TimeUnit.HOURS);
+            boolean finished = executor.awaitTermination(1, TimeUnit.MINUTES);
+            LOG.info(String.format("Service (%s) shutdown (%s)", getClass().getSimpleName(), finished));
           } catch (InterruptedException ie) {
             LOG.error("Interrupted while waiting for shutdown", ie);
           }
