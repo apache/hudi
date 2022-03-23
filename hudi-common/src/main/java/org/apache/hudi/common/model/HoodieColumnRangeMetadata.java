@@ -20,7 +20,6 @@ package org.apache.hudi.common.model;
 
 import javax.annotation.Nullable;
 import java.io.Serializable;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Objects;
 import java.util.function.BiFunction;
@@ -47,14 +46,14 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
   private final long totalUncompressedSize;
 
   public static final BiFunction<HoodieColumnRangeMetadata<Comparable>, HoodieColumnRangeMetadata<Comparable>, HoodieColumnRangeMetadata<Comparable>> COLUMN_RANGE_MERGE_FUNCTION =
-      (oldColumnRange, newColumnRange) -> new HoodieColumnRangeMetadata<>(
+      (oldColumnRange, newColumnRange) -> new HoodieColumnRangeMetadata<Comparable>(
           newColumnRange.getFilePath(),
           newColumnRange.getColumnName(),
-          Stream.of(oldColumnRange.getMinValue(), newColumnRange.getMinValue())
+          (Comparable) Stream.of(oldColumnRange.getMinValue(), newColumnRange.getMinValue())
               .filter(Objects::nonNull)
               .min(Comparator.naturalOrder())
               .orElse(null),
-          Stream.of(oldColumnRange.getMinValue(), newColumnRange.getMinValue())
+          (Comparable) Stream.of(oldColumnRange.getMinValue(), newColumnRange.getMinValue())
               .filter(Objects::nonNull)
               .max(Comparator.naturalOrder()).orElse(null),
           oldColumnRange.getNullCount() + newColumnRange.getNullCount(),
