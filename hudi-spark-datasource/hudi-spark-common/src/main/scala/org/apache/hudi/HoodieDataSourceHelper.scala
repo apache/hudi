@@ -26,8 +26,9 @@ import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{PredicateHelper, SpecificInternalRow, UnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.{PredicateHelper, SpecificInternalRow}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
@@ -52,6 +53,37 @@ object HoodieDataSourceHelper extends PredicateHelper with SparkAdapterSupport {
                                appendPartitionValues: Boolean = false): PartitionedFile => Iterator[InternalRow] = {
     val parquetFileFormat: ParquetFileFormat = sparkAdapter.createHoodieParquetFileFormat(appendPartitionValues).get
     val readParquetFile: PartitionedFile => Iterator[Any] = parquetFileFormat.buildReaderWithPartitionValues(
+      sparkSession = sparkSession,
+      dataSchema = dataSchema,
+      partitionSchema = partitionSchema,
+      requiredSchema = requiredSchema,
+      filters = filters,
+      options = options,
+      hadoopConf = hadoopConf
+    )
+
+    file: PartitionedFile => {
+      val iter = readParquetFile(file)
+      iter.flatMap {
+        case r: InternalRow => Seq(r)
+        case b: ColumnarBatch => b.rowIterator().asScala
+      }
+    }
+  }
+
+  /**
+   * Wrapper `buildReaderWithPartitionValues` of [[OrcFileFormat]]
+   * to deal with [[ColumnarBatch]] when enable orc vectorized reader if necessary.
+   */
+  def buildHoodieOrcReader(sparkSession: SparkSession,
+                           dataSchema: StructType,
+                           partitionSchema: StructType,
+                           requiredSchema: StructType,
+                           filters: Seq[Filter],
+                           options: Map[String, String],
+                           hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
+
+    val readParquetFile: PartitionedFile => Iterator[Any] = new OrcFileFormat().buildReaderWithPartitionValues(
       sparkSession = sparkSession,
       dataSchema = dataSchema,
       partitionSchema = partitionSchema,

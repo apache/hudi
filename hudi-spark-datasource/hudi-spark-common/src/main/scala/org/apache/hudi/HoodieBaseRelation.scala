@@ -457,6 +457,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
                                      filters: Seq[Filter],
                                      options: Map[String, String],
                                      hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
+    // NOTE: Reader should be initialized out of the returned lambda
+    // to avoid serialization of all these parameters down to Spark executor
     val hfileReader = createHFileReader(
       spark = spark,
       dataSchema = dataSchema,
@@ -478,11 +480,22 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       // when these corresponding partition-values are not persisted w/in the data file itself
       appendPartitionValues = shouldExtractPartitionValuesFromPartitionPath
     )
+    val orcReader = HoodieDataSourceHelper.buildHoodieOrcReader(
+      sparkSession = spark,
+      dataSchema = dataSchema.structTypeSchema,
+      partitionSchema = partitionSchema,
+      requiredSchema = requiredSchema.structTypeSchema,
+      filters = filters,
+      options = options,
+      hadoopConf = hadoopConf
+    )
 
     partitionedFile => {
       val extension = FSUtils.getFileExtension(partitionedFile.filePath)
       if (HoodieFileFormat.PARQUET.getFileExtension.equals(extension)) {
         parquetReader.apply(partitionedFile)
+      } else if (HoodieFileFormat.ORC.getFileExtension.equals(extension)) {
+        orcReader.apply(partitionedFile)
       } else if (HoodieFileFormat.HFILE.getFileExtension.equals(extension)) {
         hfileReader.apply(partitionedFile)
       } else {
