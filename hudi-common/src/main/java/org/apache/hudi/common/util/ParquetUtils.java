@@ -288,6 +288,7 @@ public class ParquetUtils extends BaseFileUtils {
   /**
    * Parse min/max statistics stored in parquet footers for all columns.
    */
+  @SuppressWarnings("rawtype")
   public List<HoodieColumnRangeMetadata<Comparable>> readRangeFromParquetMetadata(
       @Nonnull Configuration conf,
       @Nonnull Path parquetFilePath,
@@ -295,11 +296,13 @@ public class ParquetUtils extends BaseFileUtils {
   ) {
     ParquetMetadata metadata = readMetadata(conf, parquetFilePath);
     // Collect stats from all individual Parquet blocks
-    Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnToStatsListMap = metadata.getBlocks().stream().sequential()
-            .flatMap(blockMetaData -> blockMetaData.getColumns().stream()
-                    .filter(f -> cols.contains(f.getPath().toDotString()))
+    Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnToStatsListMap =
+        metadata.getBlocks().stream().sequential()
+          .flatMap(blockMetaData ->
+              blockMetaData.getColumns().stream()
+                .filter(f -> cols.contains(f.getPath().toDotString()))
                 .map(columnChunkMetaData ->
-                    new HoodieColumnRangeMetadata<Comparable>(
+                    HoodieColumnRangeMetadata.<Comparable>create(
                         parquetFilePath.getName(),
                         columnChunkMetaData.getPath().toDotString(),
                         convertToNativeJavaType(
@@ -312,7 +315,8 @@ public class ParquetUtils extends BaseFileUtils {
                         columnChunkMetaData.getValueCount(),
                         columnChunkMetaData.getTotalSize(),
                         columnChunkMetaData.getTotalUncompressedSize()))
-            ).collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName));
+          )
+          .collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName));
 
     // Combine those into file-level statistics
     // NOTE: Inlining this var makes javac (1.8) upset (due to its inability to infer
@@ -360,7 +364,7 @@ public class ParquetUtils extends BaseFileUtils {
       maxValue = one.getMaxValue();
     }
 
-    return new HoodieColumnRangeMetadata<T>(
+    return HoodieColumnRangeMetadata.create(
         one.getFilePath(),
         one.getColumnName(), minValue, maxValue,
         one.getNullCount() + another.getNullCount(),
@@ -369,7 +373,11 @@ public class ParquetUtils extends BaseFileUtils {
         one.getTotalUncompressedSize() + another.getTotalUncompressedSize());
   }
 
-  private static Comparable<?> convertToNativeJavaType(PrimitiveType primitiveType, Comparable val) {
+  private static Comparable<?> convertToNativeJavaType(PrimitiveType primitiveType, Comparable<?> val) {
+    if (val == null) {
+      return null;
+    }
+
     if (primitiveType.getOriginalType() == OriginalType.DECIMAL) {
       return extractDecimal(val, primitiveType.getDecimalMetadata());
     } else if (primitiveType.getOriginalType() == OriginalType.DATE) {
