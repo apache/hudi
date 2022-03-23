@@ -74,15 +74,18 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
           CompactionUtils.getCompactionPlan(table.getMetaClient(), instantTime);
 
       // try to load internalSchema to support schema Evolution
+      HoodieWriteConfig configCopy = config;
       Pair<Option<String>, Option<String>> schemaPair = InternalSchemaCache
           .getInternalSchemaAndAvroSchemaForClusteringAndCompaction(table.getMetaClient(), instantTime);
       if (schemaPair.getLeft().isPresent() && schemaPair.getRight().isPresent()) {
-        config.setInternalSchemaString(schemaPair.getLeft().get());
-        config.setSchema(schemaPair.getRight().get());
+        // should not influence the original config, just copy it
+        configCopy = HoodieWriteConfig.newBuilder().withProperties(config.getProps()).build();
+        configCopy.setInternalSchemaString(schemaPair.getLeft().get());
+        configCopy.setSchema(schemaPair.getRight().get());
       }
 
       HoodieData<WriteStatus> statuses = compactor.compact(
-          context, compactionPlan, table, config, instantTime, compactionHandler);
+          context, compactionPlan, table, configCopy, instantTime, compactionHandler);
 
       compactor.maybePersist(statuses, config);
       context.setJobStatus(this.getClass().getSimpleName(), "Preparing compaction metadata");

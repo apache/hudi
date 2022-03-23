@@ -78,6 +78,7 @@ public class SparkInternalSchemaConverter {
 
   public static final String HOODIE_QUERY_SCHEMA = "hoodie.schema.internal.querySchema";
   public static final String HOODIE_TABLE_PATH = "hoodie.tablePath";
+  public static final String HOODIE_VALID_COMMITS_LIST = "hoodie.valid.commits.list";
   /**
    * Converts a spark schema to an hudi internal schema. Fields without IDs are kept and assigned fallback IDs.
    *
@@ -155,7 +156,7 @@ public class SparkInternalSchemaConverter {
   }
 
   /**
-   * Converts a spark schema to an hudi internal schema, and prunes fields.
+   * Converts Spark schema to Hudi internal schema, and prune fields.
    * Fields without IDs are kept and assigned fallback IDs.
    *
    * @param sparkSchema a pruned spark schema
@@ -168,7 +169,7 @@ public class SparkInternalSchemaConverter {
   }
 
   /**
-   * collect all the leaf nodes names.
+   * Collect all the leaf nodes names.
    *
    * @param sparkSchema a spark schema
    * @return leaf nodes full names.

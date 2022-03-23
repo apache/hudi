@@ -85,7 +85,7 @@ public interface TableChange {
     }
 
     /**
-     * add position change.
+     * Add position change.
      *
      * @param srcName column which need to be reordered
      * @param dsrName reference position
@@ -143,7 +143,7 @@ public interface TableChange {
     }
 
     /**
-     * abstract method.
+     * Abstract method.
      * give a column fullName and return the field id
      *
      * @param fullName column fullName

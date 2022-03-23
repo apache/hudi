@@ -22,6 +22,10 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -33,7 +37,10 @@ import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 
+import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
@@ -135,24 +142,77 @@ public class InternalSchemaCache {
    */
   public static Pair<Option<String>, Option<String>> getInternalSchemaAndAvroSchemaForClusteringAndCompaction(HoodieTableMetaClient metaClient, String compactionAndClusteringInstant) {
     // try to load internalSchema to support Schema Evolution
-    HoodieTimeline timelineBeforeCurrentCompaction = metaClient.getActiveTimeline().filterCompletedInstants().findInstantsBefore(compactionAndClusteringInstant);
+    HoodieTimeline timelineBeforeCurrentCompaction = metaClient.getCommitsAndCompactionTimeline().findInstantsBefore(compactionAndClusteringInstant).filterCompletedInstants();
     Option<HoodieInstant> lastInstantBeforeCurrentCompaction =  timelineBeforeCurrentCompaction.lastInstant();
     if (lastInstantBeforeCurrentCompaction.isPresent()) {
+      // try to find internalSchema
+      byte[] data = timelineBeforeCurrentCompaction.getInstantDetails(lastInstantBeforeCurrentCompaction.get()).get();
+      HoodieCommitMetadata metadata;
       try {
-        // try to find internalSchema
-        byte[] data = timelineBeforeCurrentCompaction.getInstantDetails(lastInstantBeforeCurrentCompaction.get()).get();
-        HoodieCommitMetadata metadata = HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
-        String internalSchemaStr = metadata.getMetadata(SerDeHelper.LATEST_SCHEMA);
-        if (internalSchemaStr != null) {
-          String existingSchemaStr = metadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
-          return Pair.of(Option.of(internalSchemaStr), Option.of(existingSchemaStr));
-        }
+        metadata = HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
       } catch (Exception e) {
-        // swallow this exception. If we has not done some DDL, load internalSchema will failed,
-        // schema evolution should not affect the main process of current compaction.
+        throw new HoodieException(String.format("cannot read metadata from commit: %s", lastInstantBeforeCurrentCompaction.get()), e);
+      }
+      String internalSchemaStr = metadata.getMetadata(SerDeHelper.LATEST_SCHEMA);
+      if (internalSchemaStr != null) {
+        String existingSchemaStr = metadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
+        return Pair.of(Option.of(internalSchemaStr), Option.of(existingSchemaStr));
       }
     }
     return Pair.of(Option.empty(), Option.empty());
+  }
+
+  /**
+   * Give a schema versionId return its internalSchema.
+   * This method will be called by spark tasks, we should minimize time cost.
+   * We try our best to not use metaClient， since the initialization of metaClient is time cost
+   * step1：
+   * try to parser internalSchema from HoodieInstant directly
+   * step2：
+   * if we cannot parser internalSchema in step1，
+   * try to find internalSchema in historySchema.
+   *
+   * @param versionId the internalSchema version to be search.
+   * @param tablePath table path
+   * @param hadoopConf conf
+   * @param validCommits current validate commits, use to make up the commit file path/verify the validity of the history schema files
+   * @return a internalSchema.
+   */
+  public static InternalSchema getInternalSchemaByVersionId(long versionId, String tablePath, Configuration hadoopConf, String validCommits) {
+    Set<String> commitSet = Arrays.stream(validCommits.split(",")).collect(Collectors.toSet());
+    List<String> validateCommitList = commitSet.stream().map(fileName -> {
+      String fileExtension = HoodieInstant.getTimelineFileExtension(fileName);
+      return fileName.replace(fileExtension, "");
+    }).collect(Collectors.toList());
+
+    FileSystem fs = FSUtils.getFs(tablePath, hadoopConf);
+    Path hoodieMetaPath = new Path(tablePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    //step1:
+    Path candidateCommitFile = commitSet.stream().filter(fileName -> {
+      String fileExtension = HoodieInstant.getTimelineFileExtension(fileName);
+      return fileName.replace(fileExtension, "").equals(versionId + "");
+    }).findFirst().map(f -> new Path(hoodieMetaPath, f)).orElse(null);
+    if (candidateCommitFile != null) {
+      try {
+        byte[] data;
+        try (FSDataInputStream is = fs.open(candidateCommitFile)) {
+          data = FileIOUtils.readAsByteArray(is);
+        } catch (IOException e) {
+          throw e;
+        }
+        HoodieCommitMetadata metadata = HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
+        String latestInternalSchemaStr = metadata.getMetadata(SerDeHelper.LATEST_SCHEMA);
+        if (latestInternalSchemaStr != null) {
+          return SerDeHelper.fromJson(latestInternalSchemaStr).orElse(null);
+        }
+      } catch (Exception e1) {
+        // swallow this exception.
+      }
+    }
+    // step2:
+    FileBasedInternalSchemaStorageManager fileBasedInternalSchemaStorageManager = new FileBasedInternalSchemaStorageManager(hadoopConf, new Path(tablePath));
+    String lastestHistorySchema = fileBasedInternalSchemaStorageManager.getHistorySchemaStrByGivenValidCommits(validateCommitList);
+    return InternalSchemaUtils.searchSchema(versionId, SerDeHelper.parseSchemas(lastestHistorySchema));
   }
 }
 

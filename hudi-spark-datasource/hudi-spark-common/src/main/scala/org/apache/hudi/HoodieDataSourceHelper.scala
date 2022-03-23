@@ -81,9 +81,10 @@ object HoodieDataSourceHelper extends PredicateHelper with SparkAdapterSupport {
     }
   }
 
-  def getConfigurationForInternalSchema(conf: Configuration, internalSchema: InternalSchema, tablePath: String): Configuration = {
+  def getConfigurationForInternalSchema(conf: Configuration, internalSchema: InternalSchema, tablePath: String, validCommits: String): Configuration = {
     conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
     conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, tablePath)
+    conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
     conf
   }
 

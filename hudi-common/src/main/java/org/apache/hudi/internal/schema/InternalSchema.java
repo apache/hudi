@@ -115,7 +115,7 @@ public class InternalSchema implements Serializable {
   }
 
   /**
-   * get all columns full name.
+   * Get all columns full name.
    */
   public List<String> getAllColsFullName() {
     if (nameToId == null) {
@@ -125,7 +125,7 @@ public class InternalSchema implements Serializable {
   }
 
   /**
-   * set the version ID for this schema.
+   * Set the version ID for this schema.
    */
   public InternalSchema setSchemaId(long versionId) {
     this.versionId = versionId;
@@ -140,7 +140,7 @@ public class InternalSchema implements Serializable {
   }
 
   /**
-   * set the version ID for this schema.
+   * Set the version ID for this schema.
    */
   public void setMax_column_id(int maxColumnId) {
     this.maxColumnId = maxColumnId;

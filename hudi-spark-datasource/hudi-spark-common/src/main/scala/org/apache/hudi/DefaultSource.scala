@@ -24,6 +24,7 @@ import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
+import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
@@ -116,7 +117,8 @@ class DefaultSource extends RelationProvider
           val internalSchema = new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata
           val sparkSchema = SchemaConverters.toSqlType(new TableSchemaResolver(metaClient).getTableAvroSchema).dataType.asInstanceOf[StructType]
           val newParameters = parameters ++ Map(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA -> SerDeHelper.toJson(internalSchema.orElse(null)),
-            SparkInternalSchemaConverter.HOODIE_TABLE_PATH -> metaClient.getBasePath)
+            SparkInternalSchemaConverter.HOODIE_TABLE_PATH -> metaClient.getBasePath,
+            SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST -> getValidCommits(metaClient))
           if (internalSchema.isPresent) {
             // Use the HoodieFileIndex only if the 'path' is not globbed.
             // Or else we use the original way to read hoodie table.
@@ -145,6 +147,11 @@ class DefaultSource extends RelationProvider
             s"isBootstrappedTable: $isBootstrappedTable ")
       }
     }
+  }
+
+  def getValidCommits(metaClient: HoodieTableMetaClient): String = {
+    metaClient
+      .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstants.toArray().map(_.asInstanceOf[HoodieInstant].getFileName).mkString(",")
   }
 
   /**
@@ -257,7 +264,7 @@ class DefaultSource extends RelationProvider
 
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, optParams.getOrElse(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, ""))
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, optParams.getOrElse(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, ""))
-
+      sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, optParams.getOrElse(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, ""))
       val specifySchema = if (schema == null) {
         // Load the schema from the commit meta data.
         // Here we should specify the schema to the latest commit schema since

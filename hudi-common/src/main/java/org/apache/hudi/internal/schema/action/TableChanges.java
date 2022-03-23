@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class TableChanges {
 
-  /** deal with update columns changes for table. */
+  /** Deal with update columns changes for table. */
   public static class ColumnUpdateChange extends TableChange.BaseColumnChange {
     private final Map<Integer, Types.Field> updates = new HashMap<>();
 
@@ -172,7 +172,7 @@ public class TableChanges {
     }
 
     /**
-     * update nullable for column.
+     * Update nullable for column.
      * only support required type -> optional type
      *
      * @param name name of the column to update
@@ -228,7 +228,7 @@ public class TableChanges {
     }
   }
 
-  /** deal with delete columns changes for table. */
+  /** Deal with delete columns changes for table. */
   public static class ColumnDeleteChange extends TableChange.BaseColumnChange {
     private final Set deletes = new HashSet<>();
 
@@ -282,7 +282,7 @@ public class TableChanges {
     }
   }
 
-  /** deal with add columns changes for table. */
+  /** Deal with add columns changes for table. */
   public static class ColumnAddChange extends TableChange.BaseColumnChange {
     private final Map<String, Integer> fullColName2Id = new HashMap<>();
     private final Map<Integer, ArrayList<Types.Field>> parentId2AddCols = new HashMap<>();

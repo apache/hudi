@@ -36,7 +36,7 @@ public class SchemaChangeUtils {
   }
 
   /**
-   * whether to allow the column type to be updated.
+   * Whether to allow the column type to be updated.
    * now only support:
    * int => long/float/double/string
    * long => float/double/string

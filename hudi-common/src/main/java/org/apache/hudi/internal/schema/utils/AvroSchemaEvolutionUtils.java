@@ -37,9 +37,8 @@ public class AvroSchemaEvolutionUtils {
   }
 
   /**
-   * support evolution from a new avroSchema.
-   * notice: this is not a universal method,
-   * now hoodie support implicitly add columns when hoodie write operation,
+   * Support evolution from a new avroSchema.
+   * Now hoodie support implicitly add columns when hoodie write operation,
    * This ability needs to be preserved, so implicitly evolution for internalSchema should supported.
    *
    * @param evolvedSchema implicitly evolution of avro when hoodie write operation
@@ -107,9 +106,9 @@ public class AvroSchemaEvolutionUtils {
   }
 
   /**
-   * canonical the nullability.
-   * do not allow change cols Nullability field from optional to required.
-   * if above problem occurs, try to correct it.
+   * Canonical the nullability.
+   * Do not allow change cols Nullability field from optional to required.
+   * If above problem occurs, try to correct it.
    *
    * @param writeSchema writeSchema hoodie used to write data.
    * @param readSchema read schema

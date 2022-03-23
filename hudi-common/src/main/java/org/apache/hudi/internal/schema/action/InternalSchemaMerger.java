@@ -27,7 +27,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * auxiliary class.
+ * Auxiliary class.
  * help to merge file schema and query schema to produce final read schema for avro/parquet file
  */
 public class InternalSchemaMerger {
@@ -49,7 +49,7 @@ public class InternalSchemaMerger {
   }
 
   /**
-   * create final read schema to read avro/parquet file.
+   * Create final read schema to read avro/parquet file.
    *
    * @return read schema to read avro/parquet file.
    */
@@ -59,7 +59,7 @@ public class InternalSchemaMerger {
   }
 
   /**
-   * create final read schema to read avro/parquet file.
+   * Create final read schema to read avro/parquet file.
    * this is auxiliary function used by mergeSchema.
    */
   private Type mergeType(Type type, int currentTypeId) {

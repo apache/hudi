@@ -38,13 +38,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.apache.avro.Schema.Type.UNION;
 
 /**
- * auxiliary class.
+ * Auxiliary class.
  * Converts an avro schema into InternalSchema, or convert InternalSchema to an avro schema
  */
 public class AvroInternalSchemaConverter {
 
   /**
-   * convert internalSchema to avro Schema.
+   * Convert internalSchema to avro Schema.
    *
    * @param internalSchema internal schema.
    * @param tableName the record name.
@@ -55,7 +55,7 @@ public class AvroInternalSchemaConverter {
   }
 
   /**
-   * convert RecordType to avro Schema.
+   * Convert RecordType to avro Schema.
    *
    * @param type internal schema.
    * @param name the record name.
@@ -66,7 +66,7 @@ public class AvroInternalSchemaConverter {
   }
 
   /**
-   * convert internal type to avro Schema.
+   * Convert internal type to avro Schema.
    *
    * @param type internal type.
    * @param name the record name.
@@ -76,18 +76,18 @@ public class AvroInternalSchemaConverter {
     return buildAvroSchemaFromType(type, name);
   }
 
-  /** convert an avro schema into internal type. */
+  /** Convert an avro schema into internal type. */
   public static Type convertToField(Schema schema) {
     return buildTypeFromAvroSchema(schema);
   }
 
-  /** convert an avro schema into internalSchema. */
+  /** Convert an avro schema into internalSchema. */
   public static InternalSchema convert(Schema schema) {
     List<Types.Field> fields = ((Types.RecordType) convertToField(schema)).fields();
     return new InternalSchema(fields);
   }
 
-  /** check whether current avro schema is optional?. */
+  /** Check whether current avro schema is optional?. */
   public static boolean isOptional(Schema schema) {
     if (schema.getType() == UNION && schema.getTypes().size() == 2) {
       return schema.getTypes().get(0).getType() == Schema.Type.NULL || schema.getTypes().get(1).getType() == Schema.Type.NULL;
@@ -108,7 +108,7 @@ public class AvroInternalSchemaConverter {
   }
 
   /**
-   * build hudi type from avro schema.
+   * Build hudi type from avro schema.
    *
    * @param schema a avro schema.
    * @return a hudi type.
@@ -121,7 +121,7 @@ public class AvroInternalSchemaConverter {
   }
 
   /**
-   * converts an avro schema into hudi type.
+   * Converts an avro schema into hudi type.
    *
    * @param schema a avro schema.
    * @param visited track the visit node when do traversal for avro schema; used to check if the name of avro record schema is correct.
@@ -423,7 +423,7 @@ public class AvroInternalSchemaConverter {
   }
 
   /**
-   * return the minimum number of bytes needed to store a decimal with a give 'precision'.
+   * Return the minimum number of bytes needed to store a decimal with a give 'precision'.
    * reference from Spark release 3.1 .
    */
   private static int computeMinBytesForPrecision(int precision) {

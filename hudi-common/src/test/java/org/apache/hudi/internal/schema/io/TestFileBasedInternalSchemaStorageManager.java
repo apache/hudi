@@ -57,6 +57,7 @@ public class TestFileBasedInternalSchemaStorageManager extends HoodieCommonTestH
     fm.persistHistorySchemaStr("0000", SerDeHelper.inheritSchemas(currentSchema, ""));
     // Simulate commit.
     simulateCommit("0000");
+    metaClient.reloadActiveTimeline();
     // try to read schema
     InternalSchema readSchema = fm.getSchemaByKey("0").get();
     assertEquals(currentSchema, readSchema);
@@ -66,6 +67,7 @@ public class TestFileBasedInternalSchemaStorageManager extends HoodieCommonTestH
     fm.persistHistorySchemaStr("0001", SerDeHelper.inheritSchemas(secondSchema, fm.getHistorySchemaStr()));
     // Simulate commit.
     simulateCommit("0001");
+    metaClient.reloadActiveTimeline();
     // try to read schema
     assertEquals(secondSchema, fm.getSchemaByKey("1").get());
 
@@ -79,6 +81,7 @@ public class TestFileBasedInternalSchemaStorageManager extends HoodieCommonTestH
     lastSchema.setSchemaId(3L);
     fm.persistHistorySchemaStr("0004", SerDeHelper.inheritSchemas(lastSchema, fm.getHistorySchemaStr()));
     simulateCommit("0004");
+    metaClient.reloadActiveTimeline();
     // now the residual file created by 3st persist should be removed.
     File f = new File(metaClient.getSchemaFolderName() + File.separator + "0002.schemacommit");
     assertTrue(!f.exists());

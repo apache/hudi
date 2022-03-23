@@ -22,6 +22,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -39,6 +40,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
@@ -50,14 +52,13 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
 
   public static final String SCHEMA_NAME = ".schema";
   private final Path baseSchemaPath;
-  private Configuration conf;
+  private final Configuration conf;
   private HoodieTableMetaClient metaClient;
 
   public FileBasedInternalSchemaStorageManager(Configuration conf, Path baseTablePath) {
     Path metaPath = new Path(baseTablePath, ".hoodie");
     this.baseSchemaPath = new Path(metaPath, SCHEMA_NAME);
     this.conf = conf;
-    this.metaClient = HoodieTableMetaClient.builder().setBasePath(metaPath.getParent().toString()).setConf(conf).build();
   }
 
   public FileBasedInternalSchemaStorageManager(HoodieTableMetaClient metaClient) {
@@ -67,10 +68,18 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
     this.metaClient = metaClient;
   }
 
+  // make metaClient build lazy
+  private HoodieTableMetaClient getMetaClient() {
+    if (metaClient == null) {
+      metaClient = HoodieTableMetaClient.builder().setBasePath(baseSchemaPath.getParent().getParent().toString()).setConf(conf).build();
+    }
+    return metaClient;
+  }
+
   @Override
   public void persistHistorySchemaStr(String instantTime, String historySchemaStr) {
     cleanResidualFiles();
-    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+    HoodieActiveTimeline timeline = getMetaClient().getActiveTimeline();
     HoodieInstant hoodieInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, SAVE_SCHEMA_ACTION, instantTime);
     timeline.createNewInstant(hoodieInstant);
     byte[] writeContent = historySchemaStr.getBytes(StandardCharsets.UTF_8);
@@ -90,7 +99,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
         // clean residual files
         residualSchemaFiles.forEach(f -> {
           try {
-            fs.delete(new Path(metaClient.getSchemaFolderName(), f));
+            fs.delete(new Path(getMetaClient().getSchemaFolderName(), f));
           } catch (IOException o) {
             throw new HoodieException(o);
           }
@@ -118,23 +127,28 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
   }
 
   private List<String> getValidInstants() {
-    metaClient.reloadActiveTimeline();
-    return metaClient.getCommitsTimeline()
+    return getMetaClient().getCommitsTimeline()
         .filterCompletedInstants().getInstants().map(f -> f.getTimestamp()).collect(Collectors.toList());
   }
 
   @Override
   public String getHistorySchemaStr() {
-    List<String> validateCommits = getValidInstants();
+    return getHistorySchemaStrByGivenValidCommits(Collections.EMPTY_LIST);
+  }
+
+  @Override
+  public String getHistorySchemaStrByGivenValidCommits(List<String> validCommits) {
+    List<String> commitList = validCommits == null || validCommits.isEmpty() ? getValidInstants() : validCommits;
     try {
-      if (metaClient.getFs().exists(baseSchemaPath)) {
-        List<String> validateSchemaFiles = Arrays.stream(metaClient.getFs().listStatus(baseSchemaPath))
+      FileSystem fs = FSUtils.getFs(baseSchemaPath.toString(), conf);
+      if (fs.exists(baseSchemaPath)) {
+        List<String> validaSchemaFiles = Arrays.stream(fs.listStatus(baseSchemaPath))
             .filter(f -> f.isFile() && f.getPath().getName().endsWith(SAVE_SCHEMA_ACTION))
-            .map(file -> file.getPath().getName()).filter(f -> validateCommits.contains(f.split("\\.")[0])).sorted().collect(Collectors.toList());
-        if (!validateSchemaFiles.isEmpty()) {
-          Path latestFilePath = new Path(baseSchemaPath, validateSchemaFiles.get(validateSchemaFiles.size() - 1));
+            .map(file -> file.getPath().getName()).filter(f -> commitList.contains(f.split("\\.")[0])).sorted().collect(Collectors.toList());
+        if (!validaSchemaFiles.isEmpty()) {
+          Path latestFilePath = new Path(baseSchemaPath, validaSchemaFiles.get(validaSchemaFiles.size() - 1));
           byte[] content;
-          try (FSDataInputStream is = metaClient.getFs().open(latestFilePath)) {
+          try (FSDataInputStream is = fs.open(latestFilePath)) {
             content = FileIOUtils.readAsByteArray(is);
             LOG.info(String.format("read history schema success from file : %s", latestFilePath));
             return new String(content, StandardCharsets.UTF_8);

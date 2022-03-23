@@ -25,7 +25,7 @@ import org.apache.hudi.internal.schema.Types;
 import java.util.List;
 
 /**
- * base class of schema visitor.
+ * Base class of schema visitor.
  */
 public abstract class InternalSchemaVisitor<T> {
 

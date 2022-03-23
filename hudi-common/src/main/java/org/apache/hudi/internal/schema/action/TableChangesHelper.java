@@ -25,11 +25,11 @@ import java.util.LinkedList;
 import java.util.List;
 
 /**
- * helper class to support Table schema changes.
+ * Helper class to support Table schema changes.
  */
 public class TableChangesHelper {
   /**
-   * apply add operation and column position change operation.
+   * Apply add operation and column position change operation.
    *
    * @param fields origin column fields.
    * @param adds column fields to be added.

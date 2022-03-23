@@ -46,10 +46,10 @@ public class SerDeHelper {
 
   }
 
-  public static final String LATEST_SCHEMA = "latestSchema";
+  public static final String LATEST_SCHEMA = "latest_Schema";
   public static final String SCHEMAS = "schemas";
   private static final String MAX_COLUMN_ID = "max_column_id";
-  private static final String VERSION_ID = "version-id";
+  private static final String VERSION_ID = "version_id";
   private static final String TYPE = "type";
   private static final String RECORD = "record";
   private static final String ARRAY = "array";
@@ -61,9 +61,9 @@ public class SerDeHelper {
   private static final String DOC = "doc";
   private static final String NAME = "name";
   private static final String ID = "id";
-  private static final String ELEMENT_ID = "element-id";
-  private static final String KEY_ID = "key-id";
-  private static final String VALUE_ID = "value-id";
+  private static final String ELEMENT_ID = "element_id";
+  private static final String KEY_ID = "key_id";
+  private static final String VALUE_ID = "value_id";
   private static final String OPTIONAL = "optional";
   private static final String ELEMENT_OPTIONAL = "element_optional";
   private static final String VALUE_OPTIONAL = "value_optional";
@@ -72,7 +72,7 @@ public class SerDeHelper {
   private static final Pattern DECIMAL = Pattern.compile("decimal\\((\\d+),\\s+(\\d+)\\)");
 
   /**
-   * convert history internalSchemas to json.
+   * Convert history internalSchemas to json.
    * this is used when save history schemas into hudi.
    *
    * @param internalSchemas history internal schemas
@@ -97,7 +97,7 @@ public class SerDeHelper {
   }
 
   /**
-   * convert internalSchemas to json.
+   * Convert internalSchemas to json.
    *
    * @param internalSchema a internal schema
    * @return a string
@@ -261,7 +261,7 @@ public class SerDeHelper {
   }
 
   /**
-   * convert jsonNode to internalSchema.
+   * Convert jsonNode to internalSchema.
    *
    * @param jsonNode a jsonNode.
    * @return a internalSchema.
@@ -282,7 +282,7 @@ public class SerDeHelper {
   }
 
   /**
-   * convert string to internalSchema.
+   * Convert string to internalSchema.
    *
    * @param json a json string.
    * @return a internalSchema.
@@ -299,7 +299,7 @@ public class SerDeHelper {
   }
 
   /**
-   * convert json string to history internalSchemas.
+   * Convert json string to history internalSchemas.
    * TreeMap is used to hold history internalSchemas.
    *
    * @param json a json string
@@ -326,7 +326,7 @@ public class SerDeHelper {
   }
 
   /**
-   * add the new schema to the historical schemas.
+   * Add the new schema to the historical schemas.
    * use string operations to reduce overhead.
    *
    * @param newSchema a new internalSchema

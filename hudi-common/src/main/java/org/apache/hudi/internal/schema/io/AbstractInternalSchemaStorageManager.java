@@ -20,20 +20,28 @@ package org.apache.hudi.internal.schema.io;
 
 import org.apache.hudi.common.util.Option;
 
+import java.util.List;
+
 abstract class AbstractInternalSchemaStorageManager {
 
   /**
-   * persist history schema str.
+   * Persist history schema str.
    */
   public abstract void persistHistorySchemaStr(String instantTime, String historySchemaStr);
 
   /**
-   * get latest history schema string.
+   * Get latest history schema string.
    */
   public abstract String getHistorySchemaStr();
 
   /**
-   * Bulk Insert a batch of new records into Hoodie table at the supplied instantTime.
+   * Get latest history schema string.
+   * Using give validCommits to validate all legal histroy Schema files, and return the latest one.
+   */
+  public abstract String getHistorySchemaStrByGivenValidCommits(List<String> validCommits);
+
+  /**
+   * Get internalSchema by using given versionId
    *
    * @param versionId schema version_id need to search
    * @return internalSchema

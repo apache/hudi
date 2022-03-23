@@ -45,7 +45,7 @@ public class InternalSchemaUtils {
   }
 
   /**
-   * create project internalSchema, based on the project names which produced by query engine.
+   * Create project internalSchema, based on the project names which produced by query engine.
    * support nested project.
    *
    * @param schema a internal schema.
@@ -73,7 +73,7 @@ public class InternalSchemaUtils {
   }
 
   /**
-   * create project internalSchema.
+   * Create project internalSchema.
    * support nested project.
    *
    * @param schema a internal schema.
@@ -98,7 +98,7 @@ public class InternalSchemaUtils {
   }
 
   /**
-   * project hudi type by projected cols field_ids
+   * Project hudi type by projected cols field_ids
    * this is auxiliary function used by pruneInternalSchema.
    */
   private static Type pruneType(Type type, List<Integer> fieldIds) {
@@ -167,7 +167,7 @@ public class InternalSchemaUtils {
   }
 
   /**
-   * a helper function to help correct the colName of pushed filters.
+   * A helper function to help correct the colName of pushed filters.
    *
    * @param name origin col name from pushed filters.
    * @param fileSchema the real schema of avro/parquet file.
@@ -196,7 +196,7 @@ public class InternalSchemaUtils {
   }
 
   /**
-   * collect all type changed cols to build a colPosition -> (newColType, oldColType) map.
+   * Collect all type changed cols to build a colPosition -> (newColType, oldColType) map.
    * only collect top level col changed. eg: a is a nest field(record(b int, d long), now a.b is changed from int to long,
    * only a will be collected, a.b will excluded.
    *
@@ -227,7 +227,7 @@ public class InternalSchemaUtils {
   }
 
   /**
-   * search target internalSchema by version number.
+   * Search target internalSchema by version number.
    *
    * @param versionId the internalSchema version to be search.
    * @param internalSchemas internalSchemas to be searched.
@@ -240,7 +240,7 @@ public class InternalSchemaUtils {
   }
 
   /**
-   * search target internalSchema by version number.
+   * Search target internalSchema by version number.
    *
    * @param versionId the internalSchema version to be search.
    * @param treeMap internalSchemas collections to be searched.

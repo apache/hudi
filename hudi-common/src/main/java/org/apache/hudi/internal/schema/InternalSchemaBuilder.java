@@ -45,7 +45,7 @@ public class InternalSchemaBuilder implements Serializable {
 
 
   /**
-   * build a mapping from id to full field name for a internal Type.
+   * Build a mapping from id to full field name for a internal Type.
    * if a field y belong to a struct filed x, then the full name of y is x.y
    *
    * @param type hoodie internal type
@@ -58,7 +58,7 @@ public class InternalSchemaBuilder implements Serializable {
   }
 
   /**
-   * build a mapping from full field name to id for a internal Type.
+   * Build a mapping from full field name to id for a internal Type.
    * if a field y belong to a struct filed x, then the full name of y is x.y
    *
    * @param type hoodie internal type
@@ -69,7 +69,7 @@ public class InternalSchemaBuilder implements Serializable {
   }
 
   /**
-   * use to traverse all types in internalSchema with visitor.
+   * Use to traverse all types in internalSchema with visitor.
    *
    * @param schema hoodie internal schema
    * @return vistor expected result.
@@ -130,7 +130,7 @@ public class InternalSchemaBuilder implements Serializable {
   }
 
   /**
-   * build a mapping from id to field for a internal Type.
+   * Build a mapping from id to field for a internal Type.
    *
    * @param type hoodie internal type
    * @return a mapping from id to field
@@ -171,7 +171,7 @@ public class InternalSchemaBuilder implements Serializable {
   }
 
   /**
-   * build a mapping which maintain the relation between child field id and it's parent field id.
+   * Build a mapping which maintain the relation between child field id and it's parent field id.
    * if a child field y(which id is 9) belong to a nest field x(which id is 6), then (9 -> 6) will be added to the result map.
    * if a field has no parent field, nothings will be added.
    *

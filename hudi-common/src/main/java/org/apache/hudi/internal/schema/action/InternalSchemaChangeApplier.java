@@ -35,7 +35,7 @@ public class InternalSchemaChangeApplier {
   }
 
   /**
-   * add columns to table.
+   * Add columns to table.
    *
    * @param colName col name to be added. if we want to add col to a nested filed, the fullName should be specify
    * @param colType col type to be added.
@@ -80,7 +80,7 @@ public class InternalSchemaChangeApplier {
   }
 
   /**
-   * delete columns to table.
+   * Delete columns to table.
    *
    * @param colNames col name to be deleted. if we want to delete col from a nested filed, the fullName should be specify
    */
@@ -91,7 +91,7 @@ public class InternalSchemaChangeApplier {
   }
 
   /**
-   * rename col name for hudi table.
+   * Rename col name for hudi table.
    *
    * @param colName col name to be renamed. if we want to rename col from a nested filed, the fullName should be specify
    * @param newName new name for current col. no need to specify fullName.
@@ -103,7 +103,7 @@ public class InternalSchemaChangeApplier {
   }
 
   /**
-   * update col nullability for hudi table.
+   * Update col nullability for hudi table.
    *
    * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specify
    * @param nullable .
@@ -115,7 +115,7 @@ public class InternalSchemaChangeApplier {
   }
 
   /**
-   * update col type for hudi table.
+   * Update col type for hudi table.
    *
    * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specify
    * @param newType .
@@ -127,7 +127,7 @@ public class InternalSchemaChangeApplier {
   }
 
   /**
-   * update col comment for hudi table.
+   * Update col comment for hudi table.
    *
    * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specify
    * @param doc .
@@ -139,7 +139,7 @@ public class InternalSchemaChangeApplier {
   }
 
   /**
-   * reorder the position of col.
+   * Reorder the position of col.
    *
    * @param colName column which need to be reordered. if we want to change col from a nested filed, the fullName should be specify.
    * @param referColName reference position.
