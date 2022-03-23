@@ -20,65 +20,134 @@ package org.apache.hudi
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{GlobPattern, Path}
 import org.apache.hudi.HoodieBaseRelation.createBaseFileReader
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.HoodieConversionUtils.toScalaOption
+import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
+import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.{getCommitMetadata, getWritePartitionPaths, listAffectedFilesForCommits}
-import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
-import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{Row, SQLContext}
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.StructType
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
+import scala.collection.immutable
 
 /**
- * Experimental.
- * Relation, that implements the Hoodie incremental view for Merge On Read table.
- *
+ * @Experimental
  */
 class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
-                                     val optParams: Map[String, String],
-                                     val userSchema: Option[StructType],
-                                     val metaClient: HoodieTableMetaClient)
-  extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) {
+                                     optParams: Map[String, String],
+                                     userSchema: Option[StructType],
+                                     metaClient: HoodieTableMetaClient)
+  extends MergeOnReadSnapshotRelation(sqlContext, optParams, userSchema, Seq(), metaClient) with HoodieIncrementalRelationTrait {
 
-  private val commitTimeline = metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants()
-  if (commitTimeline.empty()) {
-    throw new HoodieException("No instants to incrementally pull")
-  }
-  if (!optParams.contains(DataSourceReadOptions.BEGIN_INSTANTTIME.key)) {
-    throw new HoodieException(s"Specify the begin instant time to pull from using " +
-      s"option ${DataSourceReadOptions.BEGIN_INSTANTTIME.key}")
-  }
-  if (!metaClient.getTableConfig.populateMetaFields()) {
-    throw new HoodieException("Incremental queries are not supported when meta fields are disabled")
+  override type FileSplit = HoodieMergeOnReadFileSplit
+
+  override protected def timeline: HoodieTimeline = {
+    val startTimestamp = optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)
+    val endTimestamp = optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key, super.timeline.lastInstant().get.getTimestamp)
+    super.timeline.findInstantsInRange(startTimestamp, endTimestamp)
   }
 
-  private val lastInstant = commitTimeline.lastInstant().get()
-  private val mergeType = optParams.getOrElse(
-    DataSourceReadOptions.REALTIME_MERGE.key,
-    DataSourceReadOptions.REALTIME_MERGE.defaultValue)
+  protected override def composeRDD(fileSplits: Seq[HoodieMergeOnReadFileSplit],
+                                    partitionSchema: StructType,
+                                    tableSchema: HoodieTableSchema,
+                                    requiredSchema: HoodieTableSchema,
+                                    filters: Array[Filter]): HoodieMergeOnReadRDD = {
+    val fullSchemaParquetReader = createBaseFileReader(
+      spark = sqlContext.sparkSession,
+      partitionSchema = partitionSchema,
+      tableSchema = tableSchema,
+      requiredSchema = tableSchema,
+      // This file-reader is used to read base file records, subsequently merging them with the records
+      // stored in delta-log files. As such, we have to read _all_ records from the base file, while avoiding
+      // applying any user-defined filtering _before_ we complete combining them w/ delta-log records (to make sure that
+      // we combine them correctly)
+      //
+      // The only filtering applicable here is the filtering to make sure we're only fetching records that
+      // fall into incremental span of the timeline being queried
+      filters = incrementalSpanRecordFilters,
+      options = optParams,
+      // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
+      //       to configure Parquet reader appropriately
+      hadoopConf = new Configuration(conf)
+    )
 
-  private val commitsTimelineToReturn = commitTimeline.findInstantsInRange(
-    optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
-    optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key, lastInstant.getTimestamp))
-  logDebug(s"${commitsTimelineToReturn.getInstants.iterator().toList.map(f => f.toString).mkString(",")}")
-  private val commitsToReturn = commitsTimelineToReturn.getInstants.iterator().toList
+    val requiredSchemaParquetReader = createBaseFileReader(
+      spark = sqlContext.sparkSession,
+      partitionSchema = partitionSchema,
+      tableSchema = tableSchema,
+      requiredSchema = requiredSchema,
+      filters = filters ++ incrementalSpanRecordFilters,
+      options = optParams,
+      // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
+      //       to configure Parquet reader appropriately
+      hadoopConf = new Configuration(conf)
+    )
 
-  private val maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(jobConf)
+    val hoodieTableState = HoodieTableState(HoodieRecord.RECORD_KEY_METADATA_FIELD, preCombineFieldOpt)
 
-  private val fileIndex = if (commitsToReturn.isEmpty) List() else buildFileIndex()
+    // TODO(HUDI-3639) implement incremental span record filtering w/in RDD to make sure returned iterator is appropriately
+    //                 filtered, since file-reader might not be capable to perform filtering
+    new HoodieMergeOnReadRDD(sqlContext.sparkContext, jobConf, fullSchemaParquetReader,
+      requiredSchemaParquetReader, hoodieTableState, tableSchema, requiredSchema, fileSplits)
+  }
+
+  override protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
+    if (includedCommits.isEmpty) {
+      List()
+    } else {
+      val latestCommit = includedCommits.last.getTimestamp
+      val commitsMetadata = includedCommits.map(getCommitMetadata(_, timeline)).asJava
+
+      val modifiedFiles = listAffectedFilesForCommits(conf, new Path(metaClient.getBasePath), commitsMetadata)
+      val fsView = new HoodieTableFileSystemView(metaClient, timeline, modifiedFiles)
+
+      val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
+
+      val fileSlices = modifiedPartitions.asScala.flatMap { relativePartitionPath =>
+        fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, latestCommit).iterator().asScala
+      }.toSeq
+
+      buildSplits(filterFileSlices(fileSlices, globPattern))
+    }
+  }
+
+  private def filterFileSlices(fileSlices: Seq[FileSlice], pathGlobPattern: String): Seq[FileSlice] = {
+    val filteredFileSlices = if (!StringUtils.isNullOrEmpty(pathGlobPattern)) {
+      val globMatcher = new GlobPattern("*" + pathGlobPattern)
+      fileSlices.filter(fileSlice => {
+        val path = toScalaOption(fileSlice.getBaseFile).map(_.getPath)
+          .orElse(toScalaOption(fileSlice.getLatestLogFile).map(_.getPath.toString))
+          .get
+        globMatcher.matches(path)
+      })
+    } else {
+      fileSlices
+    }
+    filteredFileSlices
+  }
+}
+
+trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
+
+  // Validate this Incremental implementation is properly configured
+  validate()
+
+  protected lazy val includedCommits: immutable.Seq[HoodieInstant] = timeline.getInstants.iterator().asScala.toList
 
   // Record filters making sure that only records w/in the requested bounds are being fetched as part of the
   // scan collected by this relation
-  private lazy val incrementalSpanRecordsFilters: Seq[Filter] = {
+  protected lazy val incrementalSpanRecordFilters: Seq[Filter] = {
     val isNotNullFilter = IsNotNull(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
-    val largerThanFilter = GreaterThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.head.getTimestamp)
-    val lessThanFilter = LessThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.last.getTimestamp)
+    val largerThanFilter = GreaterThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, includedCommits.head.getTimestamp)
+    val lessThanFilter = LessThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, includedCommits.last.getTimestamp)
+
     Seq(isNotNullFilter, largerThanFilter, lessThanFilter)
   }
 
@@ -89,132 +158,23 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
       preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
   }
 
-  override def doBuildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[InternalRow] = {
-    if (fileIndex.isEmpty) {
-      sqlContext.sparkContext.emptyRDD[InternalRow]
-    } else {
-      logDebug(s"buildScan requiredColumns = ${requiredColumns.mkString(",")}")
-      logDebug(s"buildScan filters = ${filters.mkString(",")}")
+  protected def validate(): Unit = {
+    if (super.timeline.empty()) {
+      throw new HoodieException("No instants to incrementally pull")
+    }
 
-      // config to ensure the push down filter for parquet will be applied.
-      sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.filterPushdown", "true")
-      sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.recordLevelFilter.enabled", "true")
-      sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "false")
+    if (!this.optParams.contains(DataSourceReadOptions.BEGIN_INSTANTTIME.key)) {
+      throw new HoodieException(s"Specify the begin instant time to pull from using " +
+        s"option ${DataSourceReadOptions.BEGIN_INSTANTTIME.key}")
+    }
 
-      val fetchedColumns: Array[String] = appendMandatoryColumns(requiredColumns)
-
-      val (requiredAvroSchema, requiredStructSchema) =
-        HoodieSparkUtils.getRequiredSchema(tableAvroSchema, fetchedColumns)
-
-      val partitionSchema = StructType(Nil)
-      val tableSchema = HoodieTableSchema(tableStructSchema, tableAvroSchema.toString)
-      val requiredSchema = HoodieTableSchema(requiredStructSchema, requiredAvroSchema.toString)
-
-      val fullSchemaParquetReader = createBaseFileReader(
-        spark = sqlContext.sparkSession,
-        partitionSchema = partitionSchema,
-        tableSchema = tableSchema,
-        requiredSchema = tableSchema,
-        // This file-reader is used to read base file records, subsequently merging them with the records
-        // stored in delta-log files. As such, we have to read _all_ records from the base file, while avoiding
-        // applying any user-defined filtering _before_ we complete combining them w/ delta-log records (to make sure that
-        // we combine them correctly)
-        //
-        // The only filtering applicable here is the filtering to make sure we're only fetching records that
-        // fall into incremental span of the timeline being queried
-        filters = incrementalSpanRecordsFilters,
-        options = optParams,
-        // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
-        //       to configure Parquet reader appropriately
-        hadoopConf = new Configuration(conf)
-      )
-      val requiredSchemaParquetReader = createBaseFileReader(
-        spark = sqlContext.sparkSession,
-        partitionSchema = partitionSchema,
-        tableSchema = tableSchema,
-        requiredSchema = requiredSchema,
-        filters = filters ++ incrementalSpanRecordsFilters,
-        options = optParams,
-        // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
-        //       to configure Parquet reader appropriately
-        hadoopConf = new Configuration(conf)
-      )
-
-      val hoodieTableState = HoodieTableState(HoodieRecord.RECORD_KEY_METADATA_FIELD, preCombineFieldOpt)
-
-      // TODO implement incremental span record filtering w/in RDD to make sure returned iterator is appropriately
-      //      filtered, since file-reader might not be capable to perform filtering
-      new HoodieMergeOnReadRDD(
-        sqlContext.sparkContext,
-        jobConf,
-        fullSchemaParquetReader,
-        requiredSchemaParquetReader,
-        hoodieTableState,
-        tableSchema,
-        requiredSchema,
-        fileIndex
-      )
+    if (!this.tableConfig.populateMetaFields()) {
+      throw new HoodieException("Incremental queries are not supported when meta fields are disabled")
     }
   }
 
-  def buildFileIndex(): List[HoodieMergeOnReadFileSplit] = {
-    val metadataList = commitsToReturn.map(instant => getCommitMetadata(instant, commitsTimelineToReturn))
-    val affectedFileStatus = listAffectedFilesForCommits(conf, new Path(metaClient.getBasePath), metadataList)
-    val fsView = new HoodieTableFileSystemView(metaClient, commitsTimelineToReturn, affectedFileStatus)
+  protected def globPattern: String =
+    optParams.getOrElse(DataSourceReadOptions.INCR_PATH_GLOB.key, DataSourceReadOptions.INCR_PATH_GLOB.defaultValue)
 
-    // Iterate partitions to create splits
-    val fileGroups = getWritePartitionPaths(metadataList).flatMap(partitionPath =>
-      fsView.getAllFileGroups(partitionPath).iterator()
-    ).toList
-    val latestCommit = fsView.getLastInstant.get.getTimestamp
-    if (log.isDebugEnabled) {
-      fileGroups.foreach(f => logDebug(s"current file group id: " +
-        s"${f.getFileGroupId} and file slices ${f.getLatestFileSlice.get.toString}"))
-    }
-
-    // Filter files based on user defined glob pattern
-    val pathGlobPattern = optParams.getOrElse(
-      DataSourceReadOptions.INCR_PATH_GLOB.key,
-      DataSourceReadOptions.INCR_PATH_GLOB.defaultValue)
-    val filteredFileGroup = if (!pathGlobPattern.equals(DataSourceReadOptions.INCR_PATH_GLOB.defaultValue)) {
-      val globMatcher = new GlobPattern("*" + pathGlobPattern)
-      fileGroups.filter(fg => {
-        val latestFileSlice = fg.getLatestFileSlice.get
-        if (latestFileSlice.getBaseFile.isPresent) {
-          globMatcher.matches(latestFileSlice.getBaseFile.get.getPath)
-        } else {
-          globMatcher.matches(latestFileSlice.getLatestLogFile.get.getPath.toString)
-        }
-      })
-    } else {
-      fileGroups
-    }
-
-    // Build HoodieMergeOnReadFileSplit.
-    filteredFileGroup.map(f => {
-      // Ensure get the base file when there is a pending compaction, which means the base file
-      // won't be in the latest file slice.
-      val baseFiles = f.getAllFileSlices.iterator().filter(slice => slice.getBaseFile.isPresent).toList
-      val partitionedFile = if (baseFiles.nonEmpty) {
-        val baseFile = baseFiles.head.getBaseFile
-        val filePath = MergeOnReadSnapshotRelation.getFilePath(baseFile.get.getFileStatus.getPath)
-        Option(PartitionedFile(InternalRow.empty, filePath, 0, baseFile.get.getFileLen))
-      }
-      else {
-        Option.empty
-      }
-
-      val logPath = if (f.getLatestFileSlice.isPresent) {
-        // If log path doesn't exist, we still include an empty path to avoid using
-        // the default parquet reader to ensure the push down filter will be applied.
-        Option(f.getLatestFileSlice.get().getLogFiles.iterator().toList)
-      }
-      else {
-        Option.empty
-      }
-
-      HoodieMergeOnReadFileSplit(partitionedFile, logPath,
-        latestCommit, metaClient.getBasePath, maxCompactionMemoryInBytes, mergeType)
-    })
-  }
 }
+
