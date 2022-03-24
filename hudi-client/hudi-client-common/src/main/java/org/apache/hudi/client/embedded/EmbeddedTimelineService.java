@@ -133,11 +133,11 @@ public class EmbeddedTimelineService {
 
   public void stop() {
     if (null != server) {
-      LOG.info("Closing Timeline server");
+      LOG.info("Shutting down Embedded Timeline service");
       this.server.close();
       this.server = null;
       this.viewManager = null;
-      LOG.info("Closed Timeline server");
+      LOG.info("Shutdown Embedded Timeline service");
     }
   }
 }

@@ -581,7 +581,7 @@ public class HoodieDeltaStreamer implements Serializable {
     /**
      * Delta Sync.
      */
-    private transient DeltaSync deltaSync;
+    private final transient DeltaSync deltaSync;
 
     public DeltaSyncService(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                             Option<TypedProperties> properties) throws IOException {
@@ -664,7 +664,7 @@ public class HoodieDeltaStreamer implements Serializable {
                 }
               }
               if (clusteringConfig.isAsyncClusteringEnabled()) {
-                Option<String> clusteringInstant = deltaSync.getClusteringInstantOpt();
+                Option<String> clusteringInstant = deltaSync.scheduleClustering();
                 if (clusteringInstant.isPresent()) {
                   LOG.info("Scheduled async clustering for instant: " + clusteringInstant.get());
                   asyncClusteringService.get().enqueuePendingAsyncServiceInstant(new HoodieInstant(State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringInstant.get()));

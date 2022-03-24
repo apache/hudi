@@ -116,7 +116,6 @@ public abstract class HoodieAsyncService implements Serializable {
   public void shutdown(boolean force) {
     if (!shutdownRequested || force) {
       shutdownRequested = true;
-      shutdown = true;
       if (executor != null) {
         if (force) {
           executor.shutdownNow();
@@ -131,6 +130,7 @@ public abstract class HoodieAsyncService implements Serializable {
           }
         }
       }
+      shutdown = true;
     }
   }
 
