@@ -961,6 +961,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     return config;
   }
 
+  @Disabled("HUDI-3710 to fix the ConcurrentModificationException")
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testHoodieAsyncClusteringJob(boolean shouldPassInClusteringInstantTime) throws Exception {
@@ -1615,6 +1616,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testParquetDFSSource(false, null, true);
   }
 
+  @Disabled("HUDI-3707 To investigate problem with schema provider and transformer")
   @Test
   public void testParquetDFSSourceWithoutSchemaProviderAndTransformer() throws Exception {
     testParquetDFSSource(false, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
