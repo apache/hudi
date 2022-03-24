@@ -46,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
-  private static volatile Logger log = LogManager.getLogger(TestHoodieMultiTableDeltaStreamer.class);
+  private static final Logger LOG = LogManager.getLogger(TestHoodieMultiTableDeltaStreamer.class);
 
   static class TestHelpers {
 
@@ -80,7 +80,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     Exception e = assertThrows(HoodieException.class, () -> {
       new HoodieMultiTableDeltaStreamer(cfg, jsc);
     }, "Should fail when hive sync table not provided with enableHiveSync flag");
-    log.debug("Expected error when creating table execution objects", e);
+    LOG.debug("Expected error when creating table execution objects", e);
     assertTrue(e.getMessage().contains("Meta sync table field not provided!"));
   }
 
@@ -90,7 +90,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     Exception e = assertThrows(IllegalArgumentException.class, () -> {
       new HoodieMultiTableDeltaStreamer(cfg, jsc);
     }, "Should fail when invalid props file is provided");
-    log.debug("Expected error when creating table execution objects", e);
+    LOG.debug("Expected error when creating table execution objects", e);
     assertTrue(e.getMessage().contains("Please provide valid common config file path!"));
   }
 
@@ -100,7 +100,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     Exception e = assertThrows(IllegalArgumentException.class, () -> {
       new HoodieMultiTableDeltaStreamer(cfg, jsc);
     }, "Should fail when invalid table config props file path is provided");
-    log.debug("Expected error when creating table execution objects", e);
+    LOG.debug("Expected error when creating table execution objects", e);
     assertTrue(e.getMessage().contains("Please provide valid table config file path!"));
   }
 
@@ -128,7 +128,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
       HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1, dfsBasePath + "/config", TestDataSource.class.getName(), true, true, null);
       new HoodieMultiTableDeltaStreamer(cfg, jsc);
     }, "Creation of execution object should fail without kafka topic");
-    log.debug("Creation of execution object failed with error: " + e.getMessage(), e);
+    LOG.debug("Creation of execution object failed with error: " + e.getMessage(), e);
     assertTrue(e.getMessage().contains("Please provide valid table config arguments!"));
   }
 
@@ -251,7 +251,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     TypedProperties props = new TypedProperties();
     props.setProperty("include", "base.properties");
     props.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
-    props.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
+    props.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
     props.setProperty("hoodie.deltastreamer.source.dfs.root", parquetSourceRoot);
     return props;
   }
@@ -271,7 +271,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
 
   private void syncAndVerify(HoodieMultiTableDeltaStreamer streamer, String targetBasePath1, String targetBasePath2, long table1ExpectedRecords, long table2ExpectedRecords) {
     streamer.sync();
-    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(table1ExpectedRecords, targetBasePath1 + "/*/*.parquet", sqlContext);
-    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(table2ExpectedRecords, targetBasePath2 + "/*/*.parquet", sqlContext);
+    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(table1ExpectedRecords, targetBasePath1, sqlContext);
+    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(table2ExpectedRecords, targetBasePath2, sqlContext);
   }
 }
