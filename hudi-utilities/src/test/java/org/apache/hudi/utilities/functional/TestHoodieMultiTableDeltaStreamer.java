@@ -34,6 +34,7 @@ import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -44,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Tag("functional")
 public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   private static final Logger LOG = LogManager.getLogger(TestHoodieMultiTableDeltaStreamer.class);
@@ -150,11 +152,13 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     TypedProperties properties = executionContexts.get(1).getProperties();
     properties.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source_uber.avsc");
     properties.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target_uber.avsc");
+    properties.setProperty("hoodie.datasource.write.partitionpath.field", "timestamp");
     properties.setProperty("hoodie.deltastreamer.source.kafka.topic", topicName2);
     executionContexts.get(1).setProperties(properties);
     TypedProperties properties1 = executionContexts.get(0).getProperties();
     properties1.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source_short_trip_uber.avsc");
     properties1.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target_short_trip_uber.avsc");
+    properties1.setProperty("hoodie.datasource.write.partitionpath.field", "timestamp");
     properties1.setProperty("hoodie.deltastreamer.source.kafka.topic", topicName1);
     executionContexts.get(0).setProperties(properties1);
     String targetBasePath1 = executionContexts.get(0).getConfig().targetBasePath;
