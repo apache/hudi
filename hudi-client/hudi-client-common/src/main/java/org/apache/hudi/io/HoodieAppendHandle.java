@@ -345,7 +345,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     }
 
     if (config.isMetadataColumnStatsIndexEnabled()) {
-      List<String> columnsToIndex = Stream.of(config.getColumnsEnabledForColumnStatsIndex().split(",")).map(String::trim).collect(Collectors.toList());
+      List<String> columnsToIndex = Stream.of(config.getColumnsEnabledForColumnStatsIndex().split(","))
+          .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap = stat.getRecordsStats().isPresent()
           ? stat.getRecordsStats().get().getStats() : new HashMap<>();
       final String filePath = stat.getPath();

@@ -43,7 +43,9 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE;
@@ -87,9 +89,16 @@ public class ScheduleIndexActionExecutor<T extends HoodieRecordPayload, I, K, O>
           WRITE_CONCURRENCY_MODE.key(), OPTIMISTIC_CONCURRENCY_CONTROL.name()));
     }
     // make sure that it is idempotent, check with previously pending index operations.
-    String[] indexesInflight = table.getMetaClient().getTableConfig().getInflightMetadataIndexes().split(",");
-    String[] indexesCompleted = table.getMetaClient().getTableConfig().getCompletedMetadataIndexes().split(",");
-
+    Set<String> indexesInflightOrCompleted = Stream.of(table.getMetaClient().getTableConfig().getInflightMetadataIndexes().split(","))
+        .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toSet());
+    indexesInflightOrCompleted.addAll(Stream.of(table.getMetaClient().getTableConfig().getInflightMetadataIndexes().split(","))
+        .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toSet()));
+    Set<String> requestedPartitions = partitionsToIndex.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
+    requestedPartitions.retainAll(indexesInflightOrCompleted);
+    if (!requestedPartitions.isEmpty()) {
+      LOG.error("Following partitions already exist or inflight: " + requestedPartitions);
+      return Option.empty();
+    }
     // get last completed instant
     Option<HoodieInstant> indexUptoInstant = table.getActiveTimeline().getContiguousCompletedWriteTimeline().lastInstant();
     if (indexUptoInstant.isPresent()) {

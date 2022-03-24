@@ -664,8 +664,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   }
 
   public void dropIndex(List<MetadataPartitionType> indexesToDrop) throws IOException {
-    Set<String> completedIndexes = Stream.of(dataMetaClient.getTableConfig().getCompletedMetadataIndexes().split(",")).collect(Collectors.toSet());
-    Set<String> inflightIndexes = Stream.of(dataMetaClient.getTableConfig().getInflightMetadataIndexes().split(",")).collect(Collectors.toSet());
+    Set<String> completedIndexes = Stream.of(dataMetaClient.getTableConfig().getCompletedMetadataIndexes().split(","))
+        .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toSet());
+    Set<String> inflightIndexes = Stream.of(dataMetaClient.getTableConfig().getInflightMetadataIndexes().split(","))
+        .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toSet());
     for (MetadataPartitionType partitionType : indexesToDrop) {
       String partitionPath = partitionType.getPartitionPath();
       if (inflightIndexes.contains(partitionPath)) {
@@ -687,8 +689,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         dataWriteConfig.getBloomIndexParallelism(),
         dataWriteConfig.isMetadataColumnStatsIndexEnabled(),
         dataWriteConfig.getColumnStatsIndexParallelism(),
-        Stream.of(dataWriteConfig.getColumnsEnabledForColumnStatsIndex().split(",")).map(String::trim).collect(Collectors.toList()),
-        Stream.of(dataWriteConfig.getColumnsEnabledForBloomFilterIndex().split(",")).map(String::trim).collect(Collectors.toList()));
+        Stream.of(dataWriteConfig.getColumnsEnabledForColumnStatsIndex().split(","))
+            .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList()),
+        Stream.of(dataWriteConfig.getColumnsEnabledForBloomFilterIndex().split(","))
+            .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList()));
   }
 
   /**
@@ -727,8 +731,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
   private Set<String> getMetadataPartitionsToUpdate() {
     // fetch partitions to update from table config
-    Set<String> partitionsToUpdate = Stream.of(dataMetaClient.getTableConfig().getCompletedMetadataIndexes().split(",")).collect(Collectors.toSet());
-    partitionsToUpdate.addAll(Stream.of(dataMetaClient.getTableConfig().getInflightMetadataIndexes().split(",")).collect(Collectors.toSet()));
+    Set<String> partitionsToUpdate = Stream.of(dataMetaClient.getTableConfig().getCompletedMetadataIndexes().split(","))
+        .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toSet());
+    partitionsToUpdate.addAll(Stream.of(dataMetaClient.getTableConfig().getInflightMetadataIndexes().split(","))
+        .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toSet()));
     if (!partitionsToUpdate.isEmpty()) {
       return partitionsToUpdate;
     }
