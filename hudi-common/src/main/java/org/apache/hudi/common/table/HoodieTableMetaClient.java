@@ -91,6 +91,7 @@ public class HoodieTableMetaClient implements Serializable {
       + ".fileids";
 
   public static final String MARKER_EXTN = ".marker";
+  public static final String FS_HOODIE_HDFS_IMPL_DISABLE_CACHE = "fs.hoodie-hdfs.impl.disable.cache";
 
   private String basePath;
   private transient HoodieWrapperFileSystem fs;
@@ -112,7 +113,7 @@ public class HoodieTableMetaClient implements Serializable {
     this.consistencyGuardConfig = consistencyGuardConfig;
     this.fileSystemRetryConfig = fileSystemRetryConfig;
     this.hadoopConf = new SerializableConfiguration(conf);
-    this.hadoopConf.get().set("fs.hoodie-hdfs.impl.disable.cache", "true");
+    this.hadoopConf.get().set(FS_HOODIE_HDFS_IMPL_DISABLE_CACHE, "true");
     Path basePathDir = new Path(basePath);
     this.basePath = basePathDir.toString();
     this.metaPath = new Path(basePath, METAFOLDER_NAME).toString();
