@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -248,16 +249,19 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
           int instantsInPreviousFile = instantsInRange.size();
           // Read the avro blocks
           while (reader.hasNext()) {
-            HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
-            // TODO If we can store additional metadata in datablock, we can skip parsing records
-            // (such as startTime, endTime of records in the block)
-            try (ClosableIterator<IndexedRecord> itr = blk.getRecordItr()) {
-              StreamSupport.stream(Spliterators.spliteratorUnknownSize(itr, Spliterator.IMMUTABLE), true)
-                  // Filter blocks in desired time window
-                  .filter(r -> commitsFilter.apply((GenericRecord) r))
-                  .map(r -> readCommit((GenericRecord) r, loadInstantDetails))
-                  .filter(c -> filter == null || filter.isInRange(c))
-                  .forEach(instantsInRange::add);
+            HoodieLogBlock block = reader.next();
+            if (block instanceof HoodieAvroDataBlock) {
+              HoodieAvroDataBlock avroBlock = (HoodieAvroDataBlock) block;
+              // TODO If we can store additional metadata in datablock, we can skip parsing records
+              // (such as startTime, endTime of records in the block)
+              try (ClosableIterator<IndexedRecord> itr = avroBlock.getRecordItr()) {
+                StreamSupport.stream(Spliterators.spliteratorUnknownSize(itr, Spliterator.IMMUTABLE), true)
+                    // Filter blocks in desired time window
+                    .filter(r -> commitsFilter.apply((GenericRecord) r))
+                    .map(r -> readCommit((GenericRecord) r, loadInstantDetails))
+                    .filter(c -> filter == null || filter.isInRange(c))
+                    .forEach(instantsInRange::add);
+              }
             }
           }
 
