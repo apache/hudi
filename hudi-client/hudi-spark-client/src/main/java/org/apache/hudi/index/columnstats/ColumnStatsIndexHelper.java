@@ -63,9 +63,6 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
-import static org.apache.hudi.common.util.ValidationUtils.checkState;
-import static org.apache.hudi.util.DataTypeUtils.areCompatible;
-
 public class ColumnStatsIndexHelper {
 
   private static final String COLUMN_STATS_INDEX_FILE_COLUMN_NAME = "file";
