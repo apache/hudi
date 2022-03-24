@@ -37,7 +37,14 @@ module.exports = {
             type: 'category',
             label: 'How To',
             items: [
-                'table_management',
+                {
+                    type: 'category',
+                    label: 'SQL',
+                    items: [
+                        'table_management',
+                        'procedures'
+                    ],
+                },
                 'writing_data',
                 'hoodie_deltastreamer',
                 'querying_data',
