@@ -174,7 +174,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     if (bucketIndex.containsKey(partition)) {
       return;
     }
-    Option<HoodieInstant> latestCommitTime = table.getFileSystemView().getTimeline().filterCompletedInstants().lastInstant();
+    Option<HoodieInstant> latestCommitTime = table.getHoodieView().getTimeline().filterCompletedInstants().lastInstant();
     if (!latestCommitTime.isPresent()) {
       bucketIndex.put(partition, new HashMap<>());
       return;
