@@ -137,7 +137,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     TypedProperties downstreamProps = new TypedProperties();
     downstreamProps.setProperty("include", "base.properties");
     downstreamProps.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
-    downstreamProps.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
+    downstreamProps.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
 
     // Source schema is the target schema of upstream table
     downstreamProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/target.avsc");
@@ -149,7 +149,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     invalidProps.setProperty("include", "sql-transformer.properties");
     invalidProps.setProperty("hoodie.datasource.write.keygenerator.class", "invalid");
     invalidProps.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
-    invalidProps.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
+    invalidProps.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
     invalidProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source.avsc");
     invalidProps.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target.avsc");
     UtilitiesTestBase.Helpers.savePropsToDFS(invalidProps, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_INVALID);
