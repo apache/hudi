@@ -64,8 +64,13 @@ public class EmbeddedTimelineServerHelper {
   private static EmbeddedTimelineService startTimelineService(
       HoodieEngineContext context, HoodieWriteConfig config) throws IOException {
     // Run Embedded Timeline Server
-    LOG.info("Starting Timeline service !!");
-    Option<String> hostAddr = context.getProperty(EngineProperty.EMBEDDED_SERVER_HOST);
+    LOG.info("Starting Timeline service");
+
+    // DEBUG
+    Option<String> hostAddr = Option.of("localhost");
+    // DEBUG
+
+    //Option<String> hostAddr = context.getProperty(EngineProperty.EMBEDDED_SERVER_HOST);
     EmbeddedTimelineService timelineService = new EmbeddedTimelineService(
         context, hostAddr.orElse(null), config);
     timelineService.startServer();
