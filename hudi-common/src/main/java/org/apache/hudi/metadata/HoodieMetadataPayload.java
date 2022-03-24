@@ -59,6 +59,7 @@ import static org.apache.hudi.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_LIST;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartition;
 
 /**
  * MetadataTable records are persisted with the schema defined in HoodieMetadata.avsc.
@@ -222,7 +223,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    */
   public static HoodieRecord<HoodieMetadataPayload> createPartitionListRecord(List<String> partitions) {
     Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>();
-    partitions.forEach(partition -> fileInfo.put(partition, new HoodieMetadataFileInfo(0L, false)));
+    partitions.forEach(partition -> fileInfo.put(getPartition(partition), new HoodieMetadataFileInfo(0L, false)));
 
     HoodieKey key = new HoodieKey(RECORDKEY_PARTITION_LIST, MetadataPartitionType.FILES.getPartitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_PARTITION_LIST,
