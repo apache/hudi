@@ -1073,18 +1073,18 @@ public class HoodieTableMetadataUtil {
    * Aggregates column stats for each field.
    *
    * @param record                            - current record
-   * @param schema                            - write schema
+   * @param fields                            - fields for which stats will be aggregated
    * @param columnToStats                     - map of column to map of each stat and its value which gets updates in this method
    * @param consistentLogicalTimestampEnabled - flag to deal with logical timestamp type when getting column value
    */
-  public static void aggregateColumnStats(IndexedRecord record, Schema schema,
+  public static void aggregateColumnStats(IndexedRecord record, List<Schema.Field> fields,
                                           Map<String, Map<String, Object>> columnToStats,
                                           boolean consistentLogicalTimestampEnabled) {
     if (!(record instanceof GenericRecord)) {
       throw new HoodieIOException("Record is not a generic type to get column range metadata!");
     }
 
-    schema.getFields().forEach(field -> {
+    fields.forEach(field -> {
       Map<String, Object> columnStats = columnToStats.getOrDefault(field.name(), new HashMap<>());
       final String fieldVal = getNestedFieldValAsString((GenericRecord) record, field.name(), true, consistentLogicalTimestampEnabled);
       // update stats
