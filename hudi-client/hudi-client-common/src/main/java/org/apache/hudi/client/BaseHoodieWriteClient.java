@@ -442,7 +442,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       HoodieTableMetaClient metaClient) {
     setOperationType(writeOperationType);
     this.lastCompletedTxnAndMetadata = TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient);
-    this.pendingRequestedInstants = TransactionUtils.getPendingRequestedInstants(metaClient);
+    this.pendingRequestedInstants = TransactionUtils.getInflightInstants(metaClient);
     this.pendingRequestedInstants.remove(instantTime);
     if (null == this.asyncCleanerService) {
       this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this);

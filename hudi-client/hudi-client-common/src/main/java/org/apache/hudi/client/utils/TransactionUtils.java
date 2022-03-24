@@ -37,7 +37,6 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Set;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -45,26 +44,6 @@ import java.util.stream.Stream;
 public class TransactionUtils {
 
   private static final Logger LOG = LogManager.getLogger(TransactionUtils.class);
-
-  /**
-   * Resolve any write conflicts when committing data.
-   *
-   * @param table
-   * @param currentTxnOwnerInstant
-   * @param thisCommitMetadata
-   * @param config
-   * @param lastCompletedTxnOwnerInstant
-   * @return
-   * @throws HoodieWriteConflictException
-   */
-  public static Option<HoodieCommitMetadata> resolveWriteConflictIfAny(
-      final HoodieTable table,
-      final Option<HoodieInstant> currentTxnOwnerInstant,
-      final Option<HoodieCommitMetadata> thisCommitMetadata,
-      final HoodieWriteConfig config,
-      Option<HoodieInstant> lastCompletedTxnOwnerInstant) throws HoodieWriteConflictException {
-    return resolveWriteConflictIfAny(table, currentTxnOwnerInstant, thisCommitMetadata, config, lastCompletedTxnOwnerInstant, false);
-  }
 
   /**
    * Resolve any write conflicts when committing data.
@@ -115,16 +94,6 @@ public class TransactionUtils {
     return thisCommitMetadata;
   }
 
-  public static Option<HoodieCommitMetadata> resolveWriteConflictIfAny(
-      final HoodieTable table,
-      final Option<HoodieInstant> currentTxnOwnerInstant,
-      final Option<HoodieCommitMetadata> thisCommitMetadata,
-      final HoodieWriteConfig config,
-      Option<HoodieInstant> lastCompletedTxnOwnerInstant,
-      boolean reloadActiveTimeline) throws HoodieWriteConflictException {
-    return resolveWriteConflictIfAny(table, currentTxnOwnerInstant, thisCommitMetadata, config, lastCompletedTxnOwnerInstant, reloadActiveTimeline, new HashSet<>());
-  }
-
   /**
    * Get the last completed transaction hoodie instant and {@link HoodieCommitMetadata#getExtraMetadata()}.
    *
@@ -164,7 +133,7 @@ public class TransactionUtils {
    * @param metaClient
    * @return
    */
-  public static Set<String> getPendingRequestedInstants(HoodieTableMetaClient metaClient) {
+  public static Set<String> getInflightInstants(HoodieTableMetaClient metaClient) {
     // collect pending deltaCommit/commit/compaction/clustering
     return metaClient
             .getActiveTimeline()

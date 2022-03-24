@@ -321,11 +321,11 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
-  private HoodieCommitMetadata createCommitMetadata(String instantTime, String writFileName) {
+  private HoodieCommitMetadata createCommitMetadata(String instantTime, String writeFileName) {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     commitMetadata.addMetadata("test", "test");
     HoodieWriteStat writeStat = new HoodieWriteStat();
-    writeStat.setFileId(writFileName);
+    writeStat.setFileId(writeFileName);
     commitMetadata.addWriteStat(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, writeStat);
     commitMetadata.setOperationType(WriteOperationType.INSERT);
     return commitMetadata;
@@ -446,7 +446,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     createInflightCommit(currentWriterInstant);
     // get PendingCommit during write 1 operation
     metaClient.reloadActiveTimeline();
-    Set<String> pendingInstant = TransactionUtils.getPendingRequestedInstants(metaClient);
+    Set<String> pendingInstant = TransactionUtils.getInflightInstants(metaClient);
     pendingInstant.remove(currentWriterInstant);
     // step4: finished pending cluster/compaction/commit operation
     createCompleteReplace(newInstantTime, WriteOperationType.CLUSTER);
