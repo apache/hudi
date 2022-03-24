@@ -21,37 +21,81 @@
   "fields" : [
   {
     "name" : "timestamp",
-    "type" : "long"
+    "type": [
+            "null",
+            "long"
+          ],
+     "default": null
   }, {
     "name" : "_row_key",
-    "type" : "string"
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
   }, {
      "name" : "partition_path",
-     "type" : "string"
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
    }, {
     "name" : "rider",
-    "type" : "string"
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
   }, {
     "name" : "driver",
-    "type" : "string"
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
   }, {
     "name" : "begin_lat",
-    "type" : "double"
+      "type": [
+        "null",
+        "double"
+      ],
+      "default": null
   }, {
     "name" : "begin_lon",
-    "type" : "double"
+      "type": [
+        "null",
+        "double"
+      ],
+      "default": null
   }, {
     "name" : "end_lat",
-    "type" : "double"
+      "type": [
+        "null",
+        "double"
+      ],
+      "default": null
   }, {
     "name" : "end_lon",
-    "type" : "double"
+      "type": [
+        "null",
+        "double"
+      ],
+      "default": null
   }, {
     "name" : "fare",
-    "type" : "double"
+      "type": [
+        "null",
+        "double"
+      ],
+      "default": null
   }, {
     "name" : "currency",
-    "type" : "string"
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
   }, {
     "name" : "_hoodie_is_deleted",
     "type" : "boolean",

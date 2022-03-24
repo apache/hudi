@@ -16,120 +16,244 @@
  * limitations under the License.
  */
 {
-  "type" : "record",
-  "name" : "triprec",
-  "fields" : [
-  {
-    "name" : "timestamp",
-    "type" : "long"
-  }, {
-    "name" : "_row_key",
-    "type" : "string"
-  }, {
-     "name" : "partition_path",
-     "type" : "string"
-  }, {
-    "name" : "rider",
-    "type" : "string"
-  }, {
-    "name" : "driver",
-    "type" : "string"
-  }, {
-    "name" : "begin_lat",
-    "type" : "double"
-  }, {
-    "name" : "begin_lon",
-    "type" : "double"
-  }, {
-    "name" : "end_lat",
-    "type" : "double"
-  }, {
-    "name" : "end_lon",
-    "type" : "double"
-  }, {
-    "name" : "distance_in_meters",
-    "type" : "int"
-  }, {
-    "name" : "seconds_since_epoch",
-    "type" : "long"
-  }, {
-    "name" : "weight",
-    "type" : "float"
-  }, {
-    "name" : "nation",
-    "type" : "bytes"
-  },{
-    "name" : "current_date",
-    "type" : {
-      "type" : "int",
-      "logicalType" : "date"
-      }
-  },{
-    "name" : "current_ts",
-    "type" : {
-      "type" : "long"
-      }
-  }, {
-    "name" : "height",
-    "type" : {
-      "type" : "fixed",
-      "name" : "abc",
-      "size" : 5,
-      "logicalType" : "decimal",
-      "precision" : 10,
-      "scale": 6
-      }
-  }, {
-    "name" :"city_to_state",
-    "type" : {
-      "type" : "map",
-      "values": "string"
-    }
-  }, {
-    "name" : "fare",
-    "type" : {
-      "type" : "record",
-      "name" : "fare",
-       "fields" : [
+  "type": "record",
+  "name": "hoodie_source",
+  "namespace": "hoodie.source",
+  "fields": [
+    {
+      "name": "timestamp",
+      "type": [
+        "null",
+        "long"
+      ],
+      "default": null
+    },
+    {
+      "name": "_row_key",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "partition_path",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "rider",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "driver",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "begin_lat",
+      "type": [
+        "null",
+        "double"
+      ],
+      "default": null
+    },
+    {
+      "name": "begin_lon",
+      "type": [
+        "null",
+        "double"
+      ],
+      "default": null
+    },
+    {
+      "name": "end_lat",
+      "type": [
+        "null",
+        "double"
+      ],
+      "default": null
+    },
+    {
+      "name": "end_lon",
+      "type": [
+        "null",
+        "double"
+      ],
+      "default": null
+    },
+    {
+      "name": "distance_in_meters",
+      "type": [
+        "null",
+        "int"
+      ],
+      "default": null
+    },
+    {
+      "name": "seconds_since_epoch",
+      "type": [
+        "null",
+        "long"
+      ],
+      "default": null
+    },
+    {
+      "name": "weight",
+      "type": [
+        "null",
+        "float"
+      ],
+      "default": null
+    },
+    {
+      "name": "nation",
+      "type": [
+        "null",
+        "bytes"
+      ],
+      "default": null
+    },
+    {
+      "name": "current_date",
+      "type": [
+        "null",
         {
-         "name" : "amount",
-         "type" : "double"
-        },
-        {
-         "name" : "currency",
-         "type" : "string"
+          "type": "int",
+          "logicalType": "date"
         }
-       ]
+      ],
+      "default": null
+    },
+    {
+      "name": "current_ts",
+      "type": [
+        "null",
+        "long"
+      ],
+      "default": null
+    },
+    {
+      "name": "height",
+      "type": [
+        "null",
+        {
+          "type": "fixed",
+          "name": "fixed",
+          "namespace": "hoodie.source.hoodie_source.height",
+          "size": 5,
+          "logicalType": "decimal",
+          "precision": 10,
+          "scale": 6
+        }
+      ],
+      "default": null
+    },
+    {
+      "name": "city_to_state",
+      "type": [
+        "null",
+        {
+          "type": "map",
+          "values": [
+            "string",
+            "null"
+          ]
+        }
+      ],
+      "default": null
+    },
+    {
+      "name": "fare",
+      "type": [
+        "null",
+        {
+          "type": "record",
+          "name": "fare",
+          "namespace": "hoodie.source.hoodie_source",
+          "fields": [
+            {
+              "name": "amount",
+              "type": [
+                "null",
+                "double"
+              ],
+              "default": null
+            },
+            {
+              "name": "currency",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            }
+          ]
+        }
+      ],
+      "default": null
+    },
+    {
+      "name": "tip_history",
+      "type": [
+        "null",
+        {
+          "type": "array",
+          "items": [
+            {
+              "type": "record",
+              "name": "tip_history",
+              "namespace": "hoodie.source.hoodie_source",
+              "fields": [
+                {
+                  "name": "amount",
+                  "type": [
+                    "null",
+                    "double"
+                  ],
+                  "default": null
+                },
+                {
+                  "name": "currency",
+                  "type": [
+                    "null",
+                    "string"
+                  ],
+                  "default": null
+                }
+              ]
+            },
+            "null"
+          ]
+        }
+      ],
+      "default": null
+    },
+    {
+      "name": "_hoodie_is_deleted",
+      "type": [
+        "null",
+        "boolean"
+      ],
+      "default": null
+    },
+    {
+      "name": "haversine_distance",
+      "type": [
+        "null",
+        "double"
+      ],
+      "default": null
     }
-  },
-  {
-    "name" : "tip_history",
-    "type" : {
-      "type" : "array",
-      "items" : {
-        "type" : "record",
-        "name" : "tip_history",
-        "fields" : [
-          {
-            "name" : "amount",
-            "type" : "double"
-          },
-          {
-            "name" : "currency",
-            "type" : "string"
-          }
-        ]
-      }
-    }
-  },
-  {
-     "name" : "_hoodie_is_deleted",
-     "type" : "boolean",
-     "default" : false
-  },
-  {
-     "name" : "haversine_distance",
-     "type" : "double"
-  }]
+  ]
 }
-

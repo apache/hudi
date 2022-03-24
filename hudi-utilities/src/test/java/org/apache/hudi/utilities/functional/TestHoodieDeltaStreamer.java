@@ -1625,7 +1625,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testParquetDFSSource(true, null);
   }
 
-  @Disabled("HUDI-3707 To investigate problem with schema provider and transformer")
   @Test
   public void testParquetDFSSourceWithSchemaFilesAndTransformer() throws Exception {
     testParquetDFSSource(true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
@@ -1636,7 +1635,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testORCDFSSource(false, null);
   }
 
-  @Disabled("HUDI-3707 To investigate problem with schema provider and transformer")
   @Test
   public void testORCDFSSourceWithSchemaProviderAndWithTransformer() throws Exception {
     testORCDFSSource(true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
@@ -1731,7 +1729,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testCsvDFSSource(true, '\t', false, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
   }
 
-  @Disabled("HUDI-3707 To investigate problem with schema provider and transformer")
   @Test
   public void testCsvDFSSourceWithHeaderAndSepWithSchemaProviderAndTransformer() throws Exception {
     // The CSV files have header, the columns are separated by '\t'
@@ -1774,7 +1771,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertTrue(e.getMessage().contains("cannot resolve '`begin_lat`' given input columns:"));
   }
 
-  @Disabled("HUDI-3707 To investigate problem with schema provider and transformer")
   @Test
   public void testCsvDFSSourceNoHeaderWithSchemaProviderAndTransformer() throws Exception {
     // The CSV files do not have header, the columns are separated by '\t'
