@@ -68,8 +68,8 @@ public class SparkSingleFileSortExecutionStrategy<T extends HoodieRecordPayload<
     LOG.info("Starting clustering for a group, parallelism:" + numOutputGroups + " commit:" + instantTime);
 
     HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder()
-            .withBulkInsertParallelism(numOutputGroups)
-            .withProps(getWriteConfig().getProps()).build();
+        .withBulkInsertParallelism(numOutputGroups)
+        .withProps(getWriteConfig().getProps()).build();
     // Since clustering will write to single file group using HoodieUnboundedCreateHandle, set max file size to a large value.
     newConfig.setValue(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE, String.valueOf(Long.MAX_VALUE));
     return (HoodieData<WriteStatus>) SparkBulkInsertHelper.newInstance().bulkInsert(inputRecords, instantTime, getHoodieTable(), newConfig,
