@@ -718,11 +718,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     Set<String> partitionsToUpdate = getMetadataPartitionsToUpdate();
     partitionsToUpdate.forEach(p -> {
       if (enabled && metadata != null) {
-        try {
-          initializeFileGroups(dataMetaClient, MetadataPartitionType.valueOf(p.toUpperCase(Locale.ROOT)), instantTime, 1);
-        } catch (IOException e) {
-          throw new HoodieIndexException(String.format("Unable to initialize file groups for metadata partition: %s, instant: %s", p, instantTime));
-        }
         Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap = convertMetadataFunction.convertMetadata();
         commit(instantTime, partitionRecordsMap, canTriggerTableService);
       }
@@ -765,8 +760,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             relativePartitionPath, indexUptoInstantTime));
       }
 
-      // return early and populate enabledPartitionTypses correctly (check in initialCommit)
-      MetadataPartitionType partitionType = MetadataPartitionType.valueOf(relativePartitionPath);
+      // return early and populate enabledPartitionTypes correctly (check in initialCommit)
+      MetadataPartitionType partitionType = MetadataPartitionType.valueOf(relativePartitionPath.toUpperCase(Locale.ROOT));
       if (!enabledPartitionTypes.contains(partitionType)) {
         throw new HoodieIndexException(String.format("Indexing for metadata partition: %s is not enabled", partitionType));
       }

@@ -147,8 +147,17 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
               info.getMetadataPartitionPath(),
               currentIndexedInstant))
           .collect(Collectors.toList());
-      return Option.of(HoodieIndexCommitMetadata.newBuilder()
-          .setVersion(LATEST_INDEX_COMMIT_METADATA_VERSION).setIndexPartitionInfos(finalIndexPartitionInfos).build());
+      HoodieIndexCommitMetadata indexCommitMetadata = HoodieIndexCommitMetadata.newBuilder()
+          .setVersion(LATEST_INDEX_COMMIT_METADATA_VERSION).setIndexPartitionInfos(finalIndexPartitionInfos).build();
+      try {
+        txnManager.beginTransaction();
+        table.getActiveTimeline().saveAsComplete(
+            new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, indexInstant.getTimestamp()),
+            TimelineMetadataUtils.serializeIndexCommitMetadata(indexCommitMetadata));
+      } finally {
+        txnManager.endTransaction();
+      }
+      return Option.of(indexCommitMetadata);
     } catch (IOException e) {
       throw new HoodieIndexException(String.format("Unable to index instant: %s", indexInstant));
     }

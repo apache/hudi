@@ -41,6 +41,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT;
@@ -90,7 +91,7 @@ public class HoodieIndexer {
     public String sparkMemory = null;
     @Parameter(names = {"--retry", "-rt"}, description = "number of retries")
     public int retry = 0;
-    @Parameter(names = {"--index-types", "-it"}, description = "Comma-separated index types to be built, e.g. BLOOM_FILTERS,COLUMN_STATS", required = true)
+    @Parameter(names = {"--index-types", "-ixt"}, description = "Comma-separated index types to be built, e.g. BLOOM_FILTERS,COLUMN_STATS", required = true)
     public String indexTypes = null;
     @Parameter(names = {"--mode", "-m"}, description = "Set job mode: Set \"schedule\" to generate an indexing plan; "
         + "Set \"execute\" to execute the indexing plan at the given instant, which means --instant-time is required here; "
@@ -173,7 +174,8 @@ public class HoodieIndexer {
   private Option<String> doSchedule(SparkRDDWriteClient<HoodieRecordPayload> client) {
     List<String> partitionsToIndex = Arrays.asList(cfg.indexTypes.split(","));
     List<MetadataPartitionType> partitionTypes = partitionsToIndex.stream()
-        .map(MetadataPartitionType::valueOf).collect(Collectors.toList());
+        .map(p -> MetadataPartitionType.valueOf(p.toUpperCase(Locale.ROOT)))
+        .collect(Collectors.toList());
     Option<String> indexingInstant = client.scheduleIndexing(partitionTypes);
     if (!indexingInstant.isPresent()) {
       LOG.error("Scheduling of index action did not return any instant.");
@@ -218,7 +220,8 @@ public class HoodieIndexer {
   private int dropIndex(JavaSparkContext jsc) throws Exception {
     List<String> partitionsToDrop = Arrays.asList(cfg.indexTypes.split(","));
     List<MetadataPartitionType> partitionTypes = partitionsToDrop.stream()
-        .map(MetadataPartitionType::valueOf).collect(Collectors.toList());
+        .map(p -> MetadataPartitionType.valueOf(p.toUpperCase(Locale.ROOT)))
+        .collect(Collectors.toList());
     String schemaStr = UtilHelpers.getSchemaFromLatestInstant(metaClient);
     try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
       client.dropIndex(partitionTypes);
