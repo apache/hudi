@@ -23,6 +23,7 @@ import static org.apache.spark.sql.SaveMode.Append;
 import static org.apache.spark.sql.SaveMode.Overwrite;
 import java.util.List;
 import org.apache.commons.lang.ArrayUtils;
+import org.apache.hudi.QuickstartUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;

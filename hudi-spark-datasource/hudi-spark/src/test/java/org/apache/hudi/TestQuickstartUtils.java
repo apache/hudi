@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.examples.quickstart;
+package org.apache.hudi;
 
 import org.apache.hudi.exception.HoodieException;
 import org.junit.jupiter.api.Assertions;
