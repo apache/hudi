@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -116,7 +115,7 @@ public abstract class AbstractHoodieLogRecordReader {
   // Total log files read - for metrics
   private AtomicLong totalLogFiles = new AtomicLong(0);
   // Internal schema
-  private InternalSchema internalSchema = InternalSchema.getEmptyInternalSchema();
+  private InternalSchema internalSchema;
   private final String path;
   // Total log blocks read - for metrics
   private AtomicLong totalLogBlocks = new AtomicLong(0);
@@ -398,15 +397,9 @@ public abstract class AbstractHoodieLogRecordReader {
       Long currentTime = Long.parseLong(dataBlock.getLogBlockHeader().get(INSTANT_TIME));
       InternalSchema fileSchema = InternalSchemaCache
           .searchSchemaAndCache(currentTime, hoodieTableMetaClient, false);
-      // Get schema from the header
-      Schema blockWriterSchema = new Schema.Parser().parse(dataBlock.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.SCHEMA));
-
-      if (!TableSchemaResolver.isSchemaCompatible(AvroInternalSchemaConverter.convert(fileSchema, readerSchema.getName()),
-          AvroInternalSchemaConverter.convert(internalSchema, readerSchema.getName())) || !TableSchemaResolver.isSchemaCompatible(blockWriterSchema, readerSchema)) {
-        Schema mergeSchema = AvroInternalSchemaConverter
-            .convert(new InternalSchemaMerger(fileSchema, internalSchema, true, false).mergeSchema(), readerSchema.getName());
-        result = Option.of(mergeSchema);
-      }
+      Schema mergeSchema = AvroInternalSchemaConverter
+          .convert(new InternalSchemaMerger(fileSchema, internalSchema, true, false).mergeSchema(), readerSchema.getName());
+      result = Option.of(mergeSchema);
     }
     return result;
   }

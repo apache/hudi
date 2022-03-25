@@ -46,7 +46,7 @@ public class SerDeHelper {
 
   }
 
-  public static final String LATEST_SCHEMA = "latest_Schema";
+  public static final String LATEST_SCHEMA = "latest_schema";
   public static final String SCHEMAS = "schemas";
   private static final String MAX_COLUMN_ID = "max_column_id";
   private static final String VERSION_ID = "version_id";

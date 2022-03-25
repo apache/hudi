@@ -935,7 +935,7 @@ public class HoodieAvroUtils {
 
       @Override
       public GenericRecord next() {
-        return rewriteRecord(oldRecords.next(), newSchema);
+        return rewriteRecordWithNewSchema(oldRecords.next(), newSchema);
       }
     };
   }

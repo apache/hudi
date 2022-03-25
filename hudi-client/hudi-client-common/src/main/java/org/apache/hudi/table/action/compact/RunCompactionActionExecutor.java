@@ -97,6 +97,7 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
       metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, config.getSchema());
       if (schemaPair.getLeft().isPresent()) {
         metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, schemaPair.getLeft().get());
+        metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaPair.getRight().get());
       }
       compactionMetadata.setWriteStatuses(statuses);
       compactionMetadata.setCommitted(false);

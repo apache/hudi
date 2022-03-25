@@ -274,6 +274,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
         InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.evolveSchemaFromNewAvroSchema(avroSchema, internalSchema);
         if (evolvedSchema.equals(internalSchema)) {
           metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(evolvedSchema));
+          //TODO save history schema by metaTable
           schemasManager.persistHistorySchemaStr(instantTime, historySchemaStr);
         } else {
           evolvedSchema.setSchemaId(Long.parseLong(instantTime));

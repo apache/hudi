@@ -26,6 +26,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -68,10 +69,9 @@ public class InternalSchema implements Serializable {
   public InternalSchema(long versionId, List<Field> cols) {
     this.versionId = versionId;
     this.record = RecordType.get(cols);
-    if (versionId >= 0) {
-      buildIdToName();
-      maxColumnId = idToName.keySet().stream().max(Comparator.comparing(Integer::valueOf)).get();
-    }
+    idToName = cols.isEmpty() ? new HashMap<>() : InternalSchemaBuilder.getBuilder().buildIdToName(record);
+    nameToId = cols.isEmpty() ? new HashMap<>() : idToName.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
+    maxColumnId = idToName.isEmpty() ? -1 : idToName.keySet().stream().max(Comparator.comparing(Integer::valueOf)).get();
   }
 
   public InternalSchema(long versionId, int maxColumnId, List<Field> cols) {

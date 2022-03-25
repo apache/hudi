@@ -149,36 +149,4 @@ abstract class BaseSpark3Adapter extends SparkAdapter {
       None
     }
   }
-
-  override def createResolveHudiAlterTableCommand(sparkSession: SparkSession): Rule[LogicalPlan] = {
-    if (SPARK_VERSION.startsWith("3.1") || SPARK_VERSION.startsWith("3.2")) {
-      val loadClassName = if (SPARK_VERSION.startsWith("3.1")) {
-        "org.apache.spark.sql.hudi.ResolveHudiAlterTableCommand312"
-      } else {
-        "org.apache.spark.sql.hudi.ResolveHudiAlterTableCommandSpark32"
-      }
-      val clazz = Class.forName(loadClassName, true, Thread.currentThread().getContextClassLoader)
-      val ctor = clazz.getConstructors.head
-      ctor.newInstance(sparkSession).asInstanceOf[Rule[LogicalPlan]]
-    } else {
-      new Rule[LogicalPlan] {
-        override def apply(plan: LogicalPlan): LogicalPlan = plan
-      }
-    }
-  }
-
-  override def createHoodieParquetFileFormat(): Option[ParquetFileFormat] = {
-    if (SPARK_VERSION.startsWith("3.1") || SPARK_VERSION.startsWith("3.2")) {
-      val loadClassName = if (SPARK_VERSION.startsWith("3.1")) {
-        "org.apache.spark.sql.execution.datasources.parquet.Spark312HoodieParquetFileFormat"
-      } else {
-        "org.apache.spark.sql.execution.datasources.parquet.Spark32HoodieParquetFileFormat"
-      }
-      val clazz = Class.forName(loadClassName, true, Thread.currentThread().getContextClassLoader)
-      val ctor = clazz.getConstructors.head
-      Some(ctor.newInstance().asInstanceOf[ParquetFileFormat])
-    } else {
-      None
-    }
-  }
 }

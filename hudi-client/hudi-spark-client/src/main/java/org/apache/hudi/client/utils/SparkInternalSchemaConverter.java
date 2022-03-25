@@ -79,6 +79,7 @@ public class SparkInternalSchemaConverter {
   public static final String HOODIE_QUERY_SCHEMA = "hoodie.schema.internal.querySchema";
   public static final String HOODIE_TABLE_PATH = "hoodie.tablePath";
   public static final String HOODIE_VALID_COMMITS_LIST = "hoodie.valid.commits.list";
+
   /**
    * Converts a spark schema to an hudi internal schema. Fields without IDs are kept and assigned fallback IDs.
    *

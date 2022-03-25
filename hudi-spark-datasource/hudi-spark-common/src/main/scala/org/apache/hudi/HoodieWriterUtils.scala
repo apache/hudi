@@ -18,6 +18,7 @@
 package org.apache.hudi
 
 import java.util.Properties
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.DataSourceOptionsHelper.allAlternatives
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
@@ -162,6 +163,13 @@ object HoodieWriterUtils {
     if (diffConfigs.nonEmpty) {
       diffConfigs.insert(0, "\nConfig conflict(key\tcurrent value\texisting value):\n")
       throw new HoodieException(diffConfigs.toString.trim)
+    }
+    // Check schema evolution for bootstrap table.
+    // now we do not support bootstrap table.
+    if (params.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)
+      && params.getOrElse(HoodieWriteConfig.SCHEMA_EVOLUTION_ENABLE.key(), "false").toBoolean) {
+      throw new HoodieException(String
+        .format("now schema evolution cannot support bootstrap table, pls set %s to false", HoodieWriteConfig.SCHEMA_EVOLUTION_ENABLE.key()))
     }
   }
 

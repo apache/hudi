@@ -155,6 +155,8 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
     if (!StringUtils.isNullOrEmpty(config.getInternalSchema())) {
       readerSchema = new Schema.Parser().parse(config.getSchema());
       internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
+      // its safe to modify config here, since we running in task side.
+      ((HoodieTable) compactionHandler).getConfig().setDefault(config);
     } else {
       readerSchema = HoodieAvroUtils.addMetadataFields(
           new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());

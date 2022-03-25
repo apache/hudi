@@ -39,6 +39,13 @@ public class InternalSchemaMerger {
   // if mergeRequiredFiledForce is true, we will ignore the col's required attribute.
   private final boolean ignoreRequiredAttribute;
   // Whether to use column Type from file schema to read files when we find some column type has changed.
+  // spark parquetReader need the original column type to read data, otherwise the parquetReader will failed.
+  // eg: current column type is StringType, now we changed it to decimalType,
+  // we should not pass decimalType to parquetReader, we must pass StringType to it; when we read out the data, we convert data from String to Decimal, everything is ok.
+  // for log reader
+  // since our reWriteRecordWithNewSchema function support rewrite directly, so we no need this parameter
+  // eg: current column type is StringType, now we changed it to decimalType,
+  // we can pass decimalType to reWriteRecordWithNewSchema directly, everything is ok.
   private boolean useColumnTypeFromFileSchema = true;
 
   public InternalSchemaMerger(InternalSchema fileSchema, InternalSchema querySchema, boolean ignoreRequiredAttribute, boolean useColumnTypeFromFileSchema) {

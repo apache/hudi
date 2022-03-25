@@ -30,12 +30,9 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 /**
- * Util methods to support evolve old avro schema based on a given schema.
+ * Utility methods to support evolve old avro schema based on a given schema.
  */
 public class AvroSchemaEvolutionUtils {
-  private AvroSchemaEvolutionUtils() {
-  }
-
   /**
    * Support evolution from a new avroSchema.
    * Now hoodie support implicitly add columns when hoodie write operation,

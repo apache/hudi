@@ -66,6 +66,11 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
                                     tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
                                     filters: Array[Filter]): HoodieMergeOnReadRDD = {
+    if (!internalSchema.isEmptySchema) {
+      // it is safe to enable vectorizedReader
+      sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.recordLevelFilter.enabled", "false")
+      sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "true")
+    }
     val fullSchemaParquetReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
       partitionSchema = partitionSchema,
