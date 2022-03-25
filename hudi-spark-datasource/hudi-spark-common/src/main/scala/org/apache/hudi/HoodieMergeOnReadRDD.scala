@@ -22,6 +22,7 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedRecord}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieMergeOnReadRDD.{AvroDeserializerSupport, collectFieldOrdinals, getPartitionPath, projectAvro, projectAvroUnsafe, projectRowUnsafe, resolveAvroSchemaNullability}
 import org.apache.hudi.MergeOnReadSnapshotRelation.getFilePath
@@ -34,6 +35,7 @@ import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
 import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
+import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.spark.rdd.RDD
@@ -58,10 +60,11 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            tableSchema: HoodieTableSchema,
                            requiredSchema: HoodieTableSchema,
                            tableState: HoodieTableState,
-                           maxCompactionMemoryInBytes: Long,
                            mergeType: String,
                            @transient fileSplits: Seq[HoodieMergeOnReadFileSplit])
   extends RDD[InternalRow](sc, Nil) with HoodieUnsafeRDD {
+
+  protected val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
 
   private val confBroadcast = sc.broadcast(new SerializableWritable(config))
   private val payloadProps = tableState.preCombineFieldOpt

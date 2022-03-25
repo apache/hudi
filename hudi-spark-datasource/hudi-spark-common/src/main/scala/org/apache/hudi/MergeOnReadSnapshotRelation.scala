@@ -56,8 +56,6 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
   protected val mergeType: String = optParams.getOrElse(DataSourceReadOptions.REALTIME_MERGE.key,
     DataSourceReadOptions.REALTIME_MERGE.defaultValue)
 
-  protected val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(jobConf)
-
   protected override def composeRDD(fileSplits: Seq[HoodieMergeOnReadFileSplit],
                                     partitionSchema: StructType,
                                     tableSchema: HoodieTableSchema,
@@ -93,7 +91,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
 
     val tableState = getTableState
     new HoodieMergeOnReadRDD(sqlContext.sparkContext, jobConf, fullSchemaParquetReader, requiredSchemaParquetReader,
-      tableSchema, requiredSchema, tableState, maxCompactionMemoryInBytes, mergeType, fileSplits)
+      tableSchema, requiredSchema, tableState, mergeType, fileSplits)
   }
 
   protected override def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
