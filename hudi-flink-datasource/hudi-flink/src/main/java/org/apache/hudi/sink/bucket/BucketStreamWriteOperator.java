@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sink;
+package org.apache.hudi.sink.bucket;
 
 import org.apache.hudi.sink.common.AbstractWriteOperator;
 import org.apache.hudi.sink.common.WriteOperatorFactory;

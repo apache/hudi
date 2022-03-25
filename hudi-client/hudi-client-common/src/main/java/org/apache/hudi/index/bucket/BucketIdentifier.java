@@ -38,11 +38,15 @@ public class BucketIdentifier {
   }
 
   public static int getBucketId(HoodieKey hoodieKey, String indexKeyFields, int numBuckets) {
+    return getBucketId(hoodieKey.getRecordKey(), indexKeyFields, numBuckets);
+  }
+
+  public static int getBucketId(String recordKey, String indexKeyFields, int numBuckets) {
     List<String> hashKeyFields;
-    if (!hoodieKey.getRecordKey().contains(":")) {
-      hashKeyFields = Collections.singletonList(hoodieKey.getRecordKey());
+    if (!recordKey.contains(":")) {
+      hashKeyFields = Collections.singletonList(recordKey);
     } else {
-      Map<String, String> recordKeyPairs = Arrays.stream(hoodieKey.getRecordKey().split(","))
+      Map<String, String> recordKeyPairs = Arrays.stream(recordKey.split(","))
           .map(p -> p.split(":"))
           .collect(Collectors.toMap(p -> p[0], p -> p[1]));
       hashKeyFields = Arrays.stream(indexKeyFields.split(","))
