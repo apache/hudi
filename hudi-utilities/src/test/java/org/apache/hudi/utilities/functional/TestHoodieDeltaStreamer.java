@@ -57,6 +57,7 @@ import org.apache.hudi.hive.HoodieHiveClient;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.utilities.DummySchemaProvider;
 import org.apache.hudi.utilities.HoodieClusteringJob;
+import org.apache.hudi.utilities.HoodieIndexer;
 import org.apache.hudi.utilities.deltastreamer.DeltaSync;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
@@ -398,6 +399,22 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
       int numDeltaCommits = (int) timeline.getInstants().count();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
+    }
+
+    static void assertPendingIndexCommit(String tablePath, FileSystem fs) {
+      HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build();
+      HoodieTimeline timeline = meta.getActiveTimeline().getAllCommitsTimeline().filterPendingIndexTimeline();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
+      int numIndexCommits = (int) timeline.getInstants().count();
+      assertEquals(1, numIndexCommits, "Got=" + numIndexCommits + ", exp=1");
+    }
+
+    static void assertCompletedIndexCommit(String tablePath, FileSystem fs) {
+      HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build();
+      HoodieTimeline timeline = meta.getActiveTimeline().getAllCommitsTimeline().filterCompletedIndexTimeline();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
+      int numIndexCommits = (int) timeline.getInstants().count();
+      assertEquals(1, numIndexCommits, "Got=" + numIndexCommits + ", exp=1");
     }
 
     static void assertNoReplaceCommits(String tablePath, FileSystem fs) {
@@ -962,6 +979,53 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       config.retryLastFailedClusteringJob = retryLastFailedClusteringJob;
     }
     return config;
+  }
+
+  private HoodieIndexer.Config buildIndexerConfig(String basePath,
+                                                  String tableName,
+                                                  String indexInstantTime,
+                                                  String runningMode,
+                                                  String indexTypes) {
+    HoodieIndexer.Config config = new HoodieIndexer.Config();
+    config.basePath = basePath;
+    config.tableName = tableName;
+    config.indexInstantTime = indexInstantTime;
+    config.propsFilePath = dfsBasePath + "/indexer.properties";
+    config.runningMode = runningMode;
+    config.indexTypes = indexTypes;
+    return config;
+  }
+
+  @Test
+  public void testHoodieIndexer() throws Exception {
+    String tableBasePath = dfsBasePath + "/asyncindexer";
+    HoodieDeltaStreamer ds = initialHoodieDeltaStreamer(tableBasePath, 1000, "false");
+
+    deltaStreamerTestRunner(ds, (r) -> {
+      TestHelpers.assertAtLeastNCommits(2, tableBasePath, dfs);
+
+      Option<String> scheduleIndexInstantTime = Option.empty();
+      try {
+        HoodieIndexer scheduleIndexingJob = new HoodieIndexer(jsc,
+            buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, null, SCHEDULE, "COLUMN_STATS"));
+        scheduleIndexInstantTime = scheduleIndexingJob.doSchedule();
+      } catch (Exception e) {
+        LOG.info("Schedule clustering failed", e);
+        return false;
+      }
+      if (scheduleIndexInstantTime.isPresent()) {
+        TestHelpers.assertPendingIndexCommit(tableBasePath, dfs);
+        LOG.info("Schedule clustering success, now cluster with instant time " + scheduleIndexInstantTime.get());
+        HoodieIndexer runIndexingJob = new HoodieIndexer(jsc,
+            buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, scheduleIndexInstantTime.get(), EXECUTE, "COLUMN_STATS"));
+        runIndexingJob.start(0);
+        LOG.info("Cluster success");
+      } else {
+        LOG.warn("Schedule clustering failed");
+      }
+      TestHelpers.assertCompletedIndexCommit(tableBasePath, dfs);
+      return true;
+    });
   }
 
   @Disabled("HUDI-3710 to fix the ConcurrentModificationException")

@@ -896,6 +896,24 @@ public class HoodieTableMetadataUtil {
     return fileSliceStream.sorted(Comparator.comparing(FileSlice::getFileId)).collect(Collectors.toList());
   }
 
+  /**
+   * Get the latest file slices for a given partition including the inflight ones.
+   *
+   * @param metaClient     - instance of {@link HoodieTableMetaClient}
+   * @param fileSystemView - hoodie table file system view, which will be fetched from meta client if not already present
+   * @param partition      - name of the partition whose file groups are to be loaded
+   * @return
+   */
+  public static List<FileSlice> getPartitionLatestFileSlicesIncludingInflight(HoodieTableMetaClient metaClient,
+                                                                              Option<HoodieTableFileSystemView> fileSystemView,
+                                                                              String partition) {
+    HoodieTableFileSystemView fsView = fileSystemView.orElse(getFileSystemView(metaClient));
+    Stream<FileSlice> fileSliceStream = fsView.fetchLatestFileSlicesIncludingInflight(partition);
+    return fileSliceStream
+        .sorted(Comparator.comparing(FileSlice::getFileId))
+        .collect(Collectors.toList());
+  }
+
   public static HoodieData<HoodieRecord> convertMetadataToColumnStatsRecords(HoodieCommitMetadata commitMetadata,
                                                                              HoodieEngineContext engineContext,
                                                                              MetadataRecordsGenerationParams recordsGenerationParams) {
@@ -911,8 +929,8 @@ public class HoodieTableMetadataUtil {
           Option.ofNullable(commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY))
               .flatMap(writerSchemaStr ->
                   isNullOrEmpty(writerSchemaStr)
-                    ? Option.empty()
-                    : Option.of(new Schema.Parser().parse(writerSchemaStr)));
+                      ? Option.empty()
+                      : Option.of(new Schema.Parser().parse(writerSchemaStr)));
 
       HoodieTableMetaClient dataTableMetaClient = recordsGenerationParams.getDataMetaClient();
       HoodieTableConfig tableConfig = dataTableMetaClient.getTableConfig();

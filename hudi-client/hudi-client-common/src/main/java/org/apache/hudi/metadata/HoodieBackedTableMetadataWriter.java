@@ -614,6 +614,12 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }
   }
 
+  public void scheduleIndex(HoodieTableMetaClient dataMetaClient, List<MetadataPartitionType> metadataPartitions, String instantTime) throws IOException {
+    for (MetadataPartitionType partitionType : metadataPartitions) {
+      initializeFileGroups(dataMetaClient, partitionType, instantTime, partitionType.getFileGroupCount());
+    }
+  }
+
   /**
    * Initialize file groups for a partition. For file listing, we just have one file group.
    *
@@ -770,6 +776,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     dataMetaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_INDEX_INFLIGHT.key(), indexPartitionInfos.stream()
         .map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.joining(",")));
     HoodieTableConfig.update(dataMetaClient.getFs(), new Path(dataMetaClient.getMetaPath()), dataMetaClient.getTableConfig().getProps());
+    // check here for enabled partition types whether filegroups initialized or not
     initialCommit(indexUptoInstantTime);
     dataMetaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_INDEX_INFLIGHT.key(), "");
     dataMetaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_INDEX_COMPLETED.key(), indexPartitionInfos.stream()
@@ -879,12 +886,18 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
       List<FileSlice> fileSlices =
           HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(fsView), partitionName);
+      if (fileSlices.isEmpty()) {
+        // scheduling of INDEX only initializes the file group and not add commit
+        // so if there are no committed file slices, look for inflight slices
+        fileSlices = HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight(metadataMetaClient, Option.ofNullable(fsView), partitionName);
+      }
       ValidationUtils.checkArgument(fileSlices.size() == fileGroupCount,
           String.format("Invalid number of file groups for partition:%s, found=%d, required=%d",
               partitionName, fileSlices.size(), fileGroupCount));
 
+      List<FileSlice> finalFileSlices = fileSlices;
       HoodieData<HoodieRecord> rddSinglePartitionRecords = records.map(r -> {
-        FileSlice slice = fileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(),
+        FileSlice slice = finalFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(),
             fileGroupCount));
         r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
         return r;

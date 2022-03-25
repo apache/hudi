@@ -36,6 +36,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.jetbrains.annotations.TestOnly;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -51,6 +52,27 @@ import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
 
 /**
  * A tool to run metadata indexing asynchronously.
+ * <p>
+ * Example command (assuming indexer.properties contains related index configs, see {@link org.apache.hudi.common.config.HoodieMetadataConfig} for configs):
+ * <p>
+ * spark-submit \
+ * --class org.apache.hudi.utilities.HoodieIndexer \
+ * /path/to/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
+ * --props /path/to/indexer.properties \
+ * --mode scheduleAndExecute \
+ * --base-path /tmp/hudi_trips_cow \
+ * --table-name hudi_trips_cow \
+ * --index-types COLUMN_STATS \
+ * --parallelism 1 \
+ * --spark-memory 1g
+ * <p>
+ * A sample indexer.properties file:
+ * <p>
+ * hoodie.metadata.index.async=true
+ * hoodie.metadata.index.column.stats.enable=true
+ * hoodie.metadata.index.check.timeout.seconds=60
+ * hoodie.write.concurrency.mode=optimistic_concurrency_control
+ * hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider
  */
 public class HoodieIndexer {
 
@@ -132,7 +154,7 @@ public class HoodieIndexer {
     jsc.stop();
   }
 
-  private int start(int retry) {
+  public int start(int retry) {
     return UtilHelpers.retry(retry, () -> {
       switch (cfg.runningMode.toLowerCase()) {
         case SCHEDULE: {
@@ -164,6 +186,11 @@ public class HoodieIndexer {
     }, "Indexer failed");
   }
 
+  @TestOnly
+  public Option<String> doSchedule() throws Exception {
+    return this.scheduleIndexing(jsc);
+  }
+
   private Option<String> scheduleIndexing(JavaSparkContext jsc) throws Exception {
     String schemaStr = UtilHelpers.getSchemaFromLatestInstant(metaClient);
     try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
@@ -176,6 +203,10 @@ public class HoodieIndexer {
     List<MetadataPartitionType> partitionTypes = partitionsToIndex.stream()
         .map(p -> MetadataPartitionType.valueOf(p.toUpperCase(Locale.ROOT)))
         .collect(Collectors.toList());
+    if (cfg.indexInstantTime != null) {
+      client.scheduleClusteringAtInstant(cfg.indexInstantTime, Option.empty());
+      return Option.of(cfg.indexInstantTime);
+    }
     Option<String> indexingInstant = client.scheduleIndexing(partitionTypes);
     if (!indexingInstant.isPresent()) {
       LOG.error("Scheduling of index action did not return any instant.");

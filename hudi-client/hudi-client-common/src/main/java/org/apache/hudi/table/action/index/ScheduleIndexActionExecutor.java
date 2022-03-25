@@ -124,9 +124,7 @@ public class ScheduleIndexActionExecutor<T extends HoodieRecordPayload, I, K, O>
       try {
         this.txnManager.beginTransaction(Option.of(indexInstant), Option.empty());
         // 3. initialize filegroups as per plan for the enabled partition types
-        for (MetadataPartitionType partitionType : partitionsToIndex) {
-          metadataWriter.initializeFileGroups(table.getMetaClient(), partitionType, indexInstant.getTimestamp(), partitionType.getFileGroupCount());
-        }
+        metadataWriter.scheduleIndex(table.getMetaClient(), partitionsToIndex, indexInstant.getTimestamp());
       } catch (IOException e) {
         LOG.error("Could not initialize file groups");
         throw new HoodieIOException(e.getMessage(), e);

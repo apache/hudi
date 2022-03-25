@@ -209,7 +209,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public HoodieTimeline filterCompletedIndexTimeline() {
-    return new HoodieDefaultTimeline(instants.stream().filter(s -> s.getAction().equals(INDEX_ACTION)).filter(HoodieInstant::isCompleted), details);
+    return new HoodieDefaultTimeline(instants.stream().filter(s -> s.getAction().equals(INDEX_ACTION) && s.isCompleted()), details);
   }
 
   /**
@@ -220,7 +220,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   /**
-   * Get all instants (commits, delta commits, compaction, clean, savepoint, rollback) that result in actions,
+   * Get all instants (commits, delta commits, compaction, clean, savepoint, rollback, replace commits, index) that result in actions,
    * in the active timeline.
    */
   public HoodieTimeline getAllCommitsTimeline() {

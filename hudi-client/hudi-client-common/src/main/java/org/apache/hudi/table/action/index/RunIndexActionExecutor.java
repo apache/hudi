@@ -61,6 +61,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.model.WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.INDEX_ACTION;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE;
 
 /**
@@ -140,7 +141,7 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
       } finally {
         executorService.shutdownNow();
       }
-      // build index commit metadata and return
+      // save index commit metadata and return
       List<HoodieIndexPartitionInfo> finalIndexPartitionInfos = indexPartitionInfos.stream()
           .map(info -> new HoodieIndexPartitionInfo(
               info.getVersion(),
@@ -152,7 +153,7 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
       try {
         txnManager.beginTransaction();
         table.getActiveTimeline().saveAsComplete(
-            new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, indexInstant.getTimestamp()),
+            new HoodieInstant(true, INDEX_ACTION, indexInstant.getTimestamp()),
             TimelineMetadataUtils.serializeIndexCommitMetadata(indexCommitMetadata));
       } finally {
         txnManager.endTransaction();
