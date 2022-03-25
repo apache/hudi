@@ -18,18 +18,16 @@
 
 package org.apache.hudi.io.storage;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.stream.Collectors;
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.bloom.BloomFilterFactory;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -41,26 +39,37 @@ import org.apache.hadoop.fs.PositionedReadable;
 import org.apache.hadoop.fs.Seekable;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.KeyValue;
-import org.apache.hadoop.hbase.io.FSDataInputStreamWrapper;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
+import org.apache.hadoop.hbase.io.hfile.HFileInfo;
 import org.apache.hadoop.hbase.io.hfile.HFileScanner;
+import org.apache.hadoop.hbase.nio.ByteBuff;
 import org.apache.hadoop.hbase.util.Pair;
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.bloom.BloomFilterFactory;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.util.ClosableIterator;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
+
 public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileReader<R> {
+  public static final String KEY_FIELD_NAME = "key";
+  public static final String KEY_SCHEMA = "schema";
+  public static final String KEY_BLOOM_FILTER_META_BLOCK = "bloomFilter";
+  public static final String KEY_BLOOM_FILTER_TYPE_CODE = "bloomFilterTypeCode";
+  public static final String KEY_MIN_RECORD = "minRecordKey";
+  public static final String KEY_MAX_RECORD = "maxRecordKey";
+
   private static final Logger LOG = LogManager.getLogger(HoodieHFileReader.class);
+
   private Path path;
   private Configuration conf;
   private HFile.Reader reader;
@@ -70,55 +79,35 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   // key retrieval.
   private HFileScanner keyScanner;
 
-  public static final String KEY_FIELD_NAME = "key";
-  public static final String KEY_SCHEMA = "schema";
-  public static final String KEY_BLOOM_FILTER_META_BLOCK = "bloomFilter";
-  public static final String KEY_BLOOM_FILTER_TYPE_CODE = "bloomFilterTypeCode";
-  public static final String KEY_MIN_RECORD = "minRecordKey";
-  public static final String KEY_MAX_RECORD = "maxRecordKey";
-
   public HoodieHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig) throws IOException {
     this.conf = configuration;
     this.path = path;
-    this.reader = HFile.createReader(FSUtils.getFs(path.toString(), configuration), path, cacheConfig, conf);
+    this.reader = HoodieHFileUtils.createHFileReader(FSUtils.getFs(path.toString(), configuration), path, cacheConfig, conf);
   }
 
   public HoodieHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig, FileSystem fs) throws IOException {
     this.conf = configuration;
     this.path = path;
     this.fsDataInputStream = fs.open(path);
-    this.reader = HFile.createReader(fs, path, cacheConfig, configuration);
+    this.reader = HoodieHFileUtils.createHFileReader(fs, path, cacheConfig, configuration);
   }
 
-  public HoodieHFileReader(byte[] content) throws IOException {
-    Configuration conf = new Configuration();
-    Path path = new Path("hoodie");
-    SeekableByteArrayInputStream bis = new SeekableByteArrayInputStream(content);
-    FSDataInputStream fsdis = new FSDataInputStream(bis);
-    this.reader = HFile.createReader(FSUtils.getFs("hoodie", conf), path, new FSDataInputStreamWrapper(fsdis),
-        content.length, new CacheConfig(conf), conf);
+  public HoodieHFileReader(FileSystem fs, Path dummyPath, byte[] content) throws IOException {
+    this.reader = HoodieHFileUtils.createHFileReader(fs, dummyPath, content);
   }
 
   @Override
   public String[] readMinMaxRecordKeys() {
-    try {
-      Map<byte[], byte[]> fileInfo = reader.loadFileInfo();
-      return new String[] { new String(fileInfo.get(KEY_MIN_RECORD.getBytes())),
-          new String(fileInfo.get(KEY_MAX_RECORD.getBytes()))};
-    } catch (IOException e) {
-      throw new HoodieException("Could not read min/max record key out of file information block correctly from path", e);
-    }
+    HFileInfo fileInfo = reader.getHFileInfo();
+    return new String[] {new String(fileInfo.get(KEY_MIN_RECORD.getBytes())),
+        new String(fileInfo.get(KEY_MAX_RECORD.getBytes()))};
   }
 
   @Override
   public Schema getSchema() {
     if (schema == null) {
-      try {
-        Map<byte[], byte[]> fileInfo = reader.loadFileInfo();
-        schema = new Schema.Parser().parse(new String(fileInfo.get(KEY_SCHEMA.getBytes())));
-      } catch (IOException e) {
-        throw new HoodieException("Could not read schema of file from path", e);
-      }
+      HFileInfo fileInfo = reader.getHFileInfo();
+      schema = new Schema.Parser().parse(new String(fileInfo.get(KEY_SCHEMA.getBytes())));
     }
 
     return schema;
@@ -133,10 +122,10 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
 
   @Override
   public BloomFilter readBloomFilter() {
-    Map<byte[], byte[]> fileInfo;
+    HFileInfo fileInfo;
     try {
-      fileInfo = reader.loadFileInfo();
-      ByteBuffer serializedFilter = reader.getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK, false);
+      fileInfo = reader.getHFileInfo();
+      ByteBuff serializedFilter = reader.getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK, false).getBufferWithoutHeader();
       byte[] filterBytes = new byte[serializedFilter.remaining()];
       serializedFilter.get(filterBytes); // read the bytes that were written
       return BloomFilterFactory.fromString(new String(filterBytes),
@@ -206,7 +195,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
       final HFileScanner scanner = reader.getScanner(false, false);
       if (scanner.seekTo()) {
         do {
-          Cell c = scanner.getKeyValue();
+          Cell c = scanner.getCell();
           final Pair<String, R> keyAndRecordPair = getRecordFromCell(c, writerSchema, readerSchema, keyFieldSchema);
           recordList.add(keyAndRecordPair);
         } while (scanner.next());
@@ -250,7 +239,6 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
    */
   public List<Pair<String, R>> readRecords(List<String> keys, Schema schema) throws IOException {
     this.schema = schema;
-    reader.loadFileInfo();
     List<Pair<String, R>> records = new ArrayList<>();
     for (String key: keys) {
       Option<R> value = getRecordByKey(key, schema);
@@ -263,7 +251,6 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
 
   public ClosableIterator<R> getRecordIterator(List<String> keys, Schema schema) throws IOException {
     this.schema = schema;
-    reader.loadFileInfo();
     Iterator<String> iterator = keys.iterator();
     return new ClosableIterator<R>() {
       private R next;
@@ -310,7 +297,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
           // To handle when hasNext() is called multiple times for idempotency and/or the first time
           if (this.next == null && !this.eof) {
             if (!scanner.isSeeked() && scanner.seekTo()) {
-              final Pair<String, R> keyAndRecordPair = getRecordFromCell(scanner.getKeyValue(), getSchema(), readerSchema, keyFieldSchema);
+              final Pair<String, R> keyAndRecordPair = getRecordFromCell(scanner.getCell(), getSchema(), readerSchema, keyFieldSchema);
               this.next = keyAndRecordPair.getSecond();
             }
           }
@@ -331,7 +318,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
           }
           R retVal = this.next;
           if (scanner.next()) {
-            final Pair<String, R> keyAndRecordPair = getRecordFromCell(scanner.getKeyValue(), getSchema(), readerSchema, keyFieldSchema);
+            final Pair<String, R> keyAndRecordPair = getRecordFromCell(scanner.getCell(), getSchema(), readerSchema, keyFieldSchema);
             this.next = keyAndRecordPair.getSecond();
           } else {
             this.next = null;
@@ -371,7 +358,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
       }
 
       if (keyScanner.seekTo(kv) == 0) {
-        Cell c = keyScanner.getKeyValue();
+        Cell c = keyScanner.getCell();
         // Extract the byte value before releasing the lock since we cannot hold on to the returned cell afterwards
         value = Arrays.copyOfRange(c.getValueArray(), c.getValueOffset(), c.getValueOffset() + c.getValueLength());
       }
