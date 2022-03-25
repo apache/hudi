@@ -17,16 +17,19 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieSpark3_2CatalystExpressionUtils, SparkSession}
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.parser.HoodieSpark3_2ExtendedSqlParser
 
 /**
- * The adapter for spark3.2.
+ * Implementation of [[SparkAdapter]] for Spark 3.2.x branch
  */
-class Spark3_2Adapter extends Spark3Adapter {
+class Spark3_2Adapter extends BaseSpark3Adapter {
+
+  override def createCatalystExpressionUtils(): HoodieCatalystExpressionUtils = HoodieSpark3_2CatalystExpressionUtils
+
   /**
    * if the logical plan is a TimeTravelRelation LogicalPlan.
    */
