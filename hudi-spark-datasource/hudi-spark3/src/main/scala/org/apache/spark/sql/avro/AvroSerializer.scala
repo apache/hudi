@@ -39,6 +39,8 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf.LegacyBehaviorPolicy
 import org.apache.spark.sql.types._
 
+import java.util.TimeZone
+
 /**
  * A serializer to serialize data in catalyst format to data in avro format.
  *
@@ -359,9 +361,8 @@ object AvroSerializer {
     case LegacyBehaviorPolicy.CORRECTED => identity[Int]
   }
 
-  def createTimestampRebaseFuncInWrite(
-                                        rebaseMode: LegacyBehaviorPolicy.Value,
-                                        format: String): Long => Long = rebaseMode match {
+  def createTimestampRebaseFuncInWrite(rebaseMode: LegacyBehaviorPolicy.Value,
+                                       format: String): Long => Long = rebaseMode match {
     case LegacyBehaviorPolicy.EXCEPTION => micros: Long =>
       if (micros < RebaseDateTime.lastSwitchGregorianTs) {
         throw DataSourceUtils.newRebaseExceptionInWrite(format)
@@ -369,7 +370,7 @@ object AvroSerializer {
       micros
     case LegacyBehaviorPolicy.LEGACY =>
       val timeZone = SQLConf.get.sessionLocalTimeZone
-      RebaseDateTime.rebaseGregorianToJulianMicros(timeZone, _)
+      RebaseDateTime.rebaseGregorianToJulianMicros(TimeZone.getTimeZone(timeZone), _)
     case LegacyBehaviorPolicy.CORRECTED => identity[Long]
   }
 

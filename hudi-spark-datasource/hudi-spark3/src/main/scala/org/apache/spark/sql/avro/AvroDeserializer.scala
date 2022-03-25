@@ -27,26 +27,27 @@ import org.apache.avro.LogicalTypes.{TimestampMicros, TimestampMillis}
 import org.apache.avro.Schema.Type._
 import org.apache.avro.generic._
 import org.apache.avro.util.Utf8
-import org.apache.spark.sql.avro.AvroDeserializer.{createDateRebaseFuncInRead, createTimestampRebaseFuncInRead}
+import org.apache.spark.sql.avro.AvroDeserializer.{RebaseSpec, createDateRebaseFuncInRead, createTimestampRebaseFuncInRead}
 import org.apache.spark.sql.avro.AvroUtils.{toFieldDescription, toFieldStr}
 import org.apache.spark.sql.catalyst.{InternalRow, NoopFilters, StructFilters}
 import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeArrayData}
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, DateTimeUtils, GenericArrayData, RebaseDateTime}
 import org.apache.spark.sql.catalyst.util.DateTimeConstants.MILLIS_PER_DAY
-import org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec
 import org.apache.spark.sql.execution.datasources.DataSourceUtils
 import org.apache.spark.sql.internal.SQLConf.LegacyBehaviorPolicy
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
+import java.util.TimeZone
+
 /**
  * A deserializer to deserialize data in avro format to data in catalyst format.
  *
  * NOTE: This code is borrowed from Spark 3.2.1
- *       This code is borrowed, so that we can better control compatibility w/in Spark minor
- *       branches (3.2.x, 3.1.x, etc)
+ * This code is borrowed, so that we can better control compatibility w/in Spark minor
+ * branches (3.2.x, 3.1.x, etc)
  *
- *       PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
+ * PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
  */
 private[sql] class AvroDeserializer(rootAvroType: Schema,
                                     rootCatalystType: DataType,
@@ -478,6 +479,12 @@ object AvroDeserializer {
   //
   // [1] https://github.com/apache/spark/pull/34978
 
+  // Specification of rebase operation including `mode` and the time zone in which it is performed
+  case class RebaseSpec(mode: LegacyBehaviorPolicy.Value, originTimeZone: Option[String] = None) {
+    // Use the default JVM time zone for backward compatibility
+    def timeZone: String = originTimeZone.getOrElse(TimeZone.getDefault.getID)
+  }
+
   def createDateRebaseFuncInRead(rebaseMode: LegacyBehaviorPolicy.Value,
                                  format: String): Int => Int = rebaseMode match {
     case LegacyBehaviorPolicy.EXCEPTION => days: Int =>
@@ -496,8 +503,8 @@ object AvroDeserializer {
         throw DataSourceUtils.newRebaseExceptionInRead(format)
       }
       micros
-    case LegacyBehaviorPolicy.LEGACY =>
-      RebaseDateTime.rebaseJulianToGregorianMicros(rebaseSpec.timeZone, _)
+    case LegacyBehaviorPolicy.LEGACY => micros: Long =>
+      RebaseDateTime.rebaseJulianToGregorianMicros(TimeZone.getTimeZone(rebaseSpec.timeZone), micros)
     case LegacyBehaviorPolicy.CORRECTED => identity[Long]
   }
 }
