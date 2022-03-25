@@ -39,14 +39,14 @@ import org.apache.spark.sql.types.DataType
 import org.apache.spark.sql.{Row, SparkSession}
 
 /**
- * The adapter for spark3.
+ * Base implementation of [[SparkAdapter]] for Spark 3.x branch
  */
-class Spark3Adapter extends SparkAdapter {
+abstract class BaseSpark3Adapter extends SparkAdapter {
 
-  def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer =
+  override def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer =
     new HoodieSparkAvroSerializer(rootCatalystType, rootAvroType, nullable)
 
-  def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer =
+  override def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer =
     new HoodieSpark3AvroDeserializer(rootAvroType, rootCatalystType)
 
   override def createSparkRowSerDe(encoder: ExpressionEncoder[Row]): SparkRowSerDe = {

@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,25 +16,16 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sink;
+package org.apache.spark.sql.adapter
 
-import org.apache.hudi.sink.common.AbstractWriteOperator;
-import org.apache.hudi.sink.common.WriteOperatorFactory;
-
-import org.apache.flink.configuration.Configuration;
+import org.apache.spark.sql.hudi.SparkAdapter
+import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieSpark3_1CatalystExpressionUtils}
 
 /**
- * Operator for {@link BucketStreamWriteFunction}.
- *
- * @param <I> The input type
+ * Implementation of [[SparkAdapter]] for Spark 3.1.x
  */
-public class BucketStreamWriteOperator<I> extends AbstractWriteOperator<I> {
+class Spark3_1Adapter extends BaseSpark3Adapter {
 
-  public BucketStreamWriteOperator(Configuration conf) {
-    super(new BucketStreamWriteFunction<>(conf));
-  }
+  override def createCatalystExpressionUtils(): HoodieCatalystExpressionUtils = HoodieSpark3_1CatalystExpressionUtils
 
-  public static <I> WriteOperatorFactory<I> getFactory(Configuration conf) {
-    return WriteOperatorFactory.instance(conf, new BucketStreamWriteOperator<>(conf));
-  }
 }

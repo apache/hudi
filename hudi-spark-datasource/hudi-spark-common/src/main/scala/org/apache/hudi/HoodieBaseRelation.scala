@@ -20,7 +20,7 @@ package org.apache.hudi
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileStatus, Path, PathFilter}
+import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.hbase.io.hfile.CacheConfig
 import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.{getPartitionPath, isMetadataTable}
@@ -32,7 +32,6 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils
-import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.hudi.io.storage.HoodieHFileReader
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
@@ -41,7 +40,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
-import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionDirectory, PartitionedFile}
+import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.StructType

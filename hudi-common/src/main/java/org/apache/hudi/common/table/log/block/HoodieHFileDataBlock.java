@@ -18,6 +18,18 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.inline.InLineFSUtils;
+import org.apache.hudi.common.fs.inline.InLineFileSystem;
+import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
+import org.apache.hudi.io.storage.HoodieHFileReader;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -30,17 +42,6 @@ import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.fs.inline.InLineFSUtils;
-import org.apache.hudi.common.fs.inline.InLineFileSystem;
-import org.apache.hudi.common.util.ClosableIterator;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
-import org.apache.hudi.io.storage.HoodieHFileReader;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -65,6 +66,9 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   private static final int DEFAULT_BLOCK_SIZE = 1024 * 1024;
 
   private final Option<Compression.Algorithm> compressionAlgorithm;
+  // This path is used for constructing HFile reader context, which should not be
+  // interpreted as the actual file path for the HFile data blocks
+  private final Path pathForReader;
 
   public HoodieHFileDataBlock(FSDataInputStream inputStream,
                               Option<byte[]> content,
@@ -73,16 +77,20 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
                               Option<Schema> readerSchema,
                               Map<HeaderMetadataType, String> header,
                               Map<HeaderMetadataType, String> footer,
-                              boolean enablePointLookups) {
+                              boolean enablePointLookups,
+                              Path pathForReader) {
     super(content, inputStream, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, HoodieHFileReader.KEY_FIELD_NAME, enablePointLookups);
     this.compressionAlgorithm = Option.empty();
+    this.pathForReader = pathForReader;
   }
 
   public HoodieHFileDataBlock(List<IndexedRecord> records,
                               Map<HeaderMetadataType, String> header,
-                              Compression.Algorithm compressionAlgorithm) {
+                              Compression.Algorithm compressionAlgorithm,
+                              Path pathForReader) {
     super(records, header, new HashMap<>(), HoodieHFileReader.KEY_FIELD_NAME);
     this.compressionAlgorithm = Option.of(compressionAlgorithm);
+    this.pathForReader = pathForReader;
   }
 
   @Override
@@ -95,6 +103,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     HFileContext context = new HFileContextBuilder()
         .withBlockSize(DEFAULT_BLOCK_SIZE)
         .withCompression(compressionAlgorithm.get())
+        .withCellComparator(new HoodieHBaseKVComparator())
         .build();
 
     Configuration conf = new Configuration();
@@ -128,7 +137,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     }
 
     HFile.Writer writer = HFile.getWriterFactory(conf, cacheConfig)
-        .withOutputStream(ostream).withFileContext(context).withComparator(new HoodieHBaseKVComparator()).create();
+        .withOutputStream(ostream).withFileContext(context).create();
 
     // Write the records
     sortedRecordsMap.forEach((recordKey, recordBytes) -> {
@@ -155,7 +164,8 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
     // Read the content
-    HoodieHFileReader<IndexedRecord> reader = new HoodieHFileReader<>(content);
+    HoodieHFileReader<IndexedRecord> reader = new HoodieHFileReader<>(
+        FSUtils.getFs(pathForReader.toString(), new Configuration()), pathForReader, content);
     // Sets up the writer schema
     reader.withSchema(writerSchema);
     Iterator<IndexedRecord> recordIterator = reader.getRecordIterator(readerSchema);
