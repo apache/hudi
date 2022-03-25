@@ -182,6 +182,8 @@ public abstract class AbstractStreamWriteFunction<I>
     boolean eventSent = false;
     for (WriteMetadataEvent event : this.writeMetadataState.get()) {
       if (Objects.equals(lastInflight, event.getInstantTime())) {
+        // Reset taskID for event
+        event.setTaskID(taskID);
         // The checkpoint succeed but the meta does not commit,
         // re-commit the inflight instant
         this.eventGateway.sendEventToCoordinator(event);
