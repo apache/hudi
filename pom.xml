@@ -103,7 +103,7 @@
     <log4j.test.version>2.17.0</log4j.test.version>
     <slf4j.version>1.7.30</slf4j.version>
     <joda.version>2.9.9</joda.version>
-    <hadoop.version>2.7.3</hadoop.version>
+    <hadoop.version>2.10.1</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
     <hive.version>2.3.1</hive.version>
     <hive.exec.classifier>core</hive.exec.classifier>
@@ -138,7 +138,8 @@
     <thrift.version>0.12.0</thrift.version>
     <jetty.version>9.4.15.v20190215</jetty.version>
     <htrace.version>3.1.0-incubating</htrace.version>
-    <hbase.version>1.2.3</hbase.version>
+    <hbase.version>2.4.9</hbase.version>
+    <hbase-thirdparty.version>3.5.1</hbase-thirdparty.version>
     <codehaus-jackson.version>1.9.13</codehaus-jackson.version>
     <h2.version>1.4.199</h2.version>
     <awaitility.version>3.1.2</awaitility.version>
@@ -170,6 +171,7 @@
     <proto.version>3.17.3</proto.version>
     <protoc.version>3.11.4</protoc.version>
     <dynamodb.lockclient.version>1.1.0</dynamodb.lockclient.version>
+    <zookeeper.version>3.5.7</zookeeper.version>
     <dynamodb-local.port>8000</dynamodb-local.port>
     <dynamodb-local.endpoint>http://localhost:${dynamodb-local.port}</dynamodb-local.endpoint>
   </properties>
@@ -1529,7 +1531,7 @@
                 <link>https://docs.spring.io/spring-shell/docs/1.2.0.RELEASE</link>
                 <link>https://fasterxml.github.io/jackson-databind/javadoc/2.6</link>
                 <link>https://hadoop.apache.org/docs/r${hadoop.version}/api</link>
-                <link>https://hbase.apache.org/1.2/apidocs</link>
+                <link>https://hbase.apache.org/2.4/apidocs</link>
                 <link>https://hive.apache.org/javadocs/r2.3.6/api</link>
                 <link>https://javadoc.io/static/io.javalin/javalin/2.3.0</link>
                 <link>https://javadoc.io/doc/org.apache.parquet/parquet-avro/${parquet.version}</link>
