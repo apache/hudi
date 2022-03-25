@@ -32,6 +32,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.{HoodieLogFile, HoodieRecord, HoodieRecordPayload, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
+import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
@@ -379,7 +380,7 @@ private object HoodieMergeOnReadRDD {
                         ordinals: List[Int],
                         recordBuilder: GenericRecordBuilder): GenericRecord = {
     val fields = projectedSchema.getFields.asScala
-    assert(fields.length == ordinals.length)
+    checkState(fields.length == ordinals.length)
     fields.zip(ordinals).foreach {
       case (field, pos) => recordBuilder.set(field, record.get(pos))
     }
@@ -434,7 +435,7 @@ private object HoodieMergeOnReadRDD {
       sparkAdapter.createAvroDeserializer(requiredAvroSchema, requiredStructTypeSchema)
 
     protected def deserialize(avroRecord: GenericRecord): InternalRow = {
-      assert(avroRecord.getSchema.getFields.size() == requiredStructTypeSchema.fields.length)
+      checkState(avroRecord.getSchema.getFields.size() == requiredStructTypeSchema.fields.length)
       deserializer.deserialize(avroRecord).get.asInstanceOf[InternalRow]
     }
   }
