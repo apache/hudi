@@ -20,7 +20,7 @@
 package org.apache.hudi.examples.spark
 
 import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
-import org.apache.hudi.examples.quickstart.QuickstartUtils.getQuickstartWriteConfigs
+import org.apache.hudi.QuickstartUtils.getQuickstartWriteConfigs
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.{HoodieAvroPayload, HoodieRecordPayload, HoodieTableType}
