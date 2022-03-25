@@ -97,7 +97,7 @@ public class CommitUtils {
                                                              String commitActionType,
                                                              WriteOperationType operationType) {
     final HoodieCommitMetadata commitMetadata;
-    if (commitActionType == HoodieTimeline.REPLACE_COMMIT_ACTION) {
+    if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(commitActionType)) {
       HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
       replaceMetadata.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
       commitMetadata = replaceMetadata;

@@ -960,8 +960,7 @@ public class HoodieTableMetadataUtil {
       } else {
         // TODO we should delete records instead of stubbing them
         columnRangeMetadataList =
-            columnsToIndex.stream().map(entry -> new HoodieColumnRangeMetadata<Comparable>(fileName,
-                    entry, null, null, 0, 0, 0, 0))
+            columnsToIndex.stream().map(entry -> HoodieColumnRangeMetadata.stub(fileName, entry))
                 .collect(Collectors.toList());
       }
       return HoodieMetadataPayload.createColumnStatsRecords(partitionPath, columnRangeMetadataList, isDeleted);
@@ -1012,11 +1011,11 @@ public class HoodieTableMetadataUtil {
                                             Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap,
                                             Map<String, Map<String, Object>> columnToStats) {
     Map<String, Object> columnStats = columnToStats.get(field.name());
-    HoodieColumnRangeMetadata<Comparable> columnRangeMetadata = new HoodieColumnRangeMetadata<>(
+    HoodieColumnRangeMetadata<Comparable> columnRangeMetadata = HoodieColumnRangeMetadata.create(
         filePath,
         field.name(),
-        String.valueOf(columnStats.get(MIN)),
-        String.valueOf(columnStats.get(MAX)),
+        (Comparable) String.valueOf(columnStats.get(MIN)),
+        (Comparable) String.valueOf(columnStats.get(MAX)),
         Long.parseLong(columnStats.getOrDefault(NULL_COUNT, 0).toString()),
         Long.parseLong(columnStats.getOrDefault(VALUE_COUNT, 0).toString()),
         Long.parseLong(columnStats.getOrDefault(TOTAL_SIZE, 0).toString()),

@@ -18,12 +18,13 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.exception.HoodieException;
+
 import com.beust.jcommander.IStringConverter;
 import com.beust.jcommander.ParameterException;
 import org.apache.flink.contrib.streaming.state.EmbeddedRocksDBStateBackend;
 import org.apache.flink.runtime.state.StateBackend;
 import org.apache.flink.runtime.state.hashmap.HashMapStateBackend;
-import org.apache.hudi.exception.HoodieException;
 
 /**
  * Converter that converts a string into Flink StateBackend.
