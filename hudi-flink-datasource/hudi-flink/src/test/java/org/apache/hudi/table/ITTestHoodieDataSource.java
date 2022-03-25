@@ -906,8 +906,8 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  void testBulkInsert(boolean hiveStylePartitioning) {
+  @MethodSource("indexAndPartitioningParams")
+  void testBulkInsert(String indexType, boolean hiveStylePartitioning) {
     TableEnvironment tableEnv = batchTableEnv;
     // csv source
     String csvSourceDDL = TestConfigurations.getCsvSourceDDL("csv_source", "test_source_5.data");
@@ -917,6 +917,7 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.OPERATION, "bulk_insert")
         .option(FlinkOptions.WRITE_BULK_INSERT_SHUFFLE_BY_PARTITION, true)
+        .option(FlinkOptions.INDEX_TYPE, indexType)
         .option(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning)
         .end();
     tableEnv.executeSql(hoodieTableDDL);
@@ -1259,6 +1260,19 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
             {HoodieTableType.COPY_ON_WRITE, true},
             {HoodieTableType.MERGE_ON_READ, false},
             {HoodieTableType.MERGE_ON_READ, true}};
+    return Stream.of(data).map(Arguments::of);
+  }
+
+  /**
+   * Return test params => (index type, hive style partitioning).
+   */
+  private static Stream<Arguments> indexAndPartitioningParams() {
+    Object[][] data =
+        new Object[][] {
+            {"FLINK_STATE", false},
+            {"FLINK_STATE", true},
+            {"BUCKET", false},
+            {"BUCKET", true}};
     return Stream.of(data).map(Arguments::of);
   }
 
