@@ -25,6 +25,8 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -38,8 +40,6 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.io.Writable;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -95,6 +95,7 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
 
     HFileContext context = new HFileContextBuilder().withBlockSize(hfileConfig.getBlockSize())
         .withCompression(hfileConfig.getCompressionAlgorithm())
+        .withCellComparator(hfileConfig.getHFileComparator())
         .build();
 
     conf.set(CacheConfig.PREFETCH_BLOCKS_ON_OPEN_KEY, String.valueOf(hfileConfig.shouldPrefetchBlocksOnOpen()));
@@ -104,7 +105,6 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
     this.writer = HFile.getWriterFactory(conf, cacheConfig)
         .withPath(this.fs, this.file)
         .withFileContext(context)
-        .withComparator(hfileConfig.getHfileComparator())
         .create();
 
     writer.appendFileInfo(HoodieHFileReader.KEY_SCHEMA.getBytes(), schema.toString().getBytes());
