@@ -206,17 +206,6 @@ object AvroConversionUtils {
     SchemaConverters.toSqlType(avroSchema).dataType.asInstanceOf[StructType]
   }
 
-  def buildAvroRecordBySchema(record: IndexedRecord,
-                              requiredSchema: Schema,
-                              requiredPos: Seq[Int],
-                              recordBuilder: GenericRecordBuilder): GenericRecord = {
-    val requiredFields = requiredSchema.getFields.asScala
-    assert(requiredFields.length == requiredPos.length)
-    val positionIterator = requiredPos.iterator
-    requiredFields.foreach(f => recordBuilder.set(f, record.get(positionIterator.next())))
-    recordBuilder.build()
-  }
-
   def getAvroRecordNameAndNamespace(tableName: String): (String, String) = {
     val name = HoodieAvroUtils.sanitizeName(tableName)
     (s"${name}_record", s"hoodie.${name}")

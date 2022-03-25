@@ -39,11 +39,7 @@ import org.apache.spark.sql.types.StructType
 import scala.collection.JavaConverters._
 
 case class HoodieMergeOnReadFileSplit(dataFile: Option[PartitionedFile],
-                                      logFiles: Option[List[HoodieLogFile]],
-                                      latestCommit: String,
-                                      tablePath: String,
-                                      maxCompactionMemoryInBytes: Long,
-                                      mergeType: String) extends HoodieFileSplit
+                                      logFiles: List[HoodieLogFile]) extends HoodieFileSplit
 
 class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
                                   optParams: Map[String, String],
@@ -54,13 +50,13 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
 
   override type FileSplit = HoodieMergeOnReadFileSplit
 
-  private val mergeType = optParams.getOrElse(
-    DataSourceReadOptions.REALTIME_MERGE.key,
+  override lazy val mandatoryColumns: Seq[String] =
+    Seq(recordKeyField) ++ preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
+
+  protected val mergeType: String = optParams.getOrElse(DataSourceReadOptions.REALTIME_MERGE.key,
     DataSourceReadOptions.REALTIME_MERGE.defaultValue)
 
-  private val maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(jobConf)
-
-  protected override def composeRDD(fileIndex: Seq[HoodieMergeOnReadFileSplit],
+  protected override def composeRDD(fileSplits: Seq[HoodieMergeOnReadFileSplit],
                                     partitionSchema: StructType,
                                     tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
@@ -93,10 +89,9 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       hadoopConf = new Configuration(conf)
     )
 
-    val tableState = HoodieTableState(recordKeyField, preCombineFieldOpt)
-
-    new HoodieMergeOnReadRDD(sqlContext.sparkContext, jobConf, fullSchemaParquetReader,
-      requiredSchemaParquetReader, tableState, tableSchema, requiredSchema, fileIndex)
+    val tableState = getTableState
+    new HoodieMergeOnReadRDD(sqlContext.sparkContext, jobConf, fullSchemaParquetReader, requiredSchemaParquetReader,
+      tableSchema, requiredSchema, tableState, mergeType, fileSplits)
   }
 
   protected override def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
@@ -123,15 +118,14 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
   protected def buildSplits(fileSlices: Seq[FileSlice]): List[HoodieMergeOnReadFileSplit] = {
     fileSlices.map { fileSlice =>
       val baseFile = toScalaOption(fileSlice.getBaseFile)
-      val logFiles = Option(fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList)
+      val logFiles = fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList
 
       val partitionedBaseFile = baseFile.map { file =>
         val filePath = getFilePath(file.getFileStatus.getPath)
         PartitionedFile(InternalRow.empty, filePath, 0, file.getFileLen)
       }
 
-      HoodieMergeOnReadFileSplit(partitionedBaseFile, logFiles, queryTimestamp.get,
-        metaClient.getBasePath, maxCompactionMemoryInBytes, mergeType)
+      HoodieMergeOnReadFileSplit(partitionedBaseFile, logFiles)
     }.toList
   }
 
