@@ -243,15 +243,15 @@ case class HoodieFileIndex(spark: SparkSession,
         //       column references from the filtering expressions, and only transpose records corresponding to the
         //       columns referenced in those
         val transposedColStatsDF =
-        queryReferencedColumns.map(colName =>
-          colStatsDF.filter(col(HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME).equalTo(colName))
-            .select(targetColStatsIndexColumns.map(col): _*)
-            .withColumnRenamed(HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT, getNumNullsColumnNameFor(colName))
-            .withColumnRenamed(HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE, getMinColumnNameFor(colName))
-            .withColumnRenamed(HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE, getMaxColumnNameFor(colName))
-        )
-          .reduceLeft((left, right) =>
-            left.join(right, usingColumn = HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME))
+          queryReferencedColumns.map(colName =>
+            colStatsDF.filter(col(HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME).equalTo(colName))
+              .select(targetColStatsIndexColumns.map(col): _*)
+              .withColumnRenamed(HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT, getNumNullsColumnNameFor(colName))
+              .withColumnRenamed(HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE, getMinColumnNameFor(colName))
+              .withColumnRenamed(HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE, getMaxColumnNameFor(colName))
+          )
+            .reduceLeft((left, right) =>
+              left.join(right, usingColumn = HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME))
 
         // Persist DF to avoid re-computing column statistics unraveling
         withPersistence(transposedColStatsDF) {
