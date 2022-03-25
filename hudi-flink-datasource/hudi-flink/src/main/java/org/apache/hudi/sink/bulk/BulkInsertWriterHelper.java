@@ -50,21 +50,21 @@ public class BulkInsertWriterHelper {
 
   private static final Logger LOG = LogManager.getLogger(BulkInsertWriterHelper.class);
 
-  private final String instantTime;
-  private final int taskPartitionId;
-  private final long taskId;
-  private final long taskEpochId;
-  private final HoodieTable hoodieTable;
-  private final HoodieWriteConfig writeConfig;
-  private final RowType rowType;
+  protected final String instantTime;
+  protected final int taskPartitionId;
+  protected final long taskId;
+  protected final long taskEpochId;
+  protected final HoodieTable hoodieTable;
+  protected final HoodieWriteConfig writeConfig;
+  protected final RowType rowType;
   private final Boolean arePartitionRecordsSorted;
   private final List<HoodieInternalWriteStatus> writeStatusList = new ArrayList<>();
   private HoodieRowDataCreateHandle handle;
   private String lastKnownPartitionPath = null;
   private final String fileIdPrefix;
   private int numFilesWritten = 0;
-  private final Map<String, HoodieRowDataCreateHandle> handles = new HashMap<>();
-  private final RowDataKeyGen keyGen;
+  protected final Map<String, HoodieRowDataCreateHandle> handles = new HashMap<>();
+  protected final RowDataKeyGen keyGen;
 
   public BulkInsertWriterHelper(Configuration conf, HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
                                 String instantTime, int taskPartitionId, long taskId, long taskEpochId, RowType rowType) {
