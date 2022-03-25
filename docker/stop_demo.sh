@@ -20,7 +20,7 @@ SCRIPT_PATH=$(cd `dirname $0`; pwd)
 # set up root directory
 WS_ROOT=`dirname $SCRIPT_PATH`
 # shut down cluster
-HUDI_WS=${WS_ROOT} docker-compose -f ${SCRIPT_PATH}/compose/docker-compose_hadoop284_hive233_spark244.yml down
+HUDI_WS=${WS_ROOT} docker-compose -f ${SCRIPT_PATH}/compose/docker-compose_hadoop310_hive312_spark244.yml down
 
 # remove houst mount directory
 rm -rf /tmp/hadoop_data
