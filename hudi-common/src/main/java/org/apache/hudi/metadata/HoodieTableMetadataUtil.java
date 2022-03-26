@@ -531,14 +531,35 @@ public class HoodieTableMetadataUtil {
       }
 
       // Case 2: The instant-to-rollback was never committed to Metadata Table. This can happen if the instant-to-rollback
-      // was a failed commit (never completed) as only completed instants are synced to Metadata Table.
-      // But the required Metadata Table instants should not have been archived
+      // was a failed commit (never completed).
+      //
+      // There are two cases for failed commit that we need to take care of:
+      //   1) The commit was synced to metadata table successfully but the dataset meta file switches state failed
+      //   (from INFLIGHT to COMPLETED), the committed files should be rolled back thus the rollback metadata
+      //   can not be skipped, usually a failover should be triggered and the metadata active timeline expects
+      //   to contain the commit, we could check whether the commit was synced to metadata table
+      //   through HoodieActiveTimeline#containsInstant.
+      //
+      //   2) The commit synced to metadata table failed or was never synced to metadata table,
+      //      in this case, the rollback metadata should be skipped.
+      //
+      // And in which case,
+      // metadataTableTimeline.getCommitsTimeline().isBeforeTimelineStarts(syncedInstant.getTimestamp())
+      // returns true ?
+      // It is most probably because of compaction rollback, we schedule a compaction plan early in the timeline (say t1)
+      // then after a long time schedule and execute the plan then try to rollback it.
+      //
+      //     scheduled   execution rollback            compaction actions
+      // -----  t1  -----  t3  ----- t4 -----          dataset timeline
+      //
+      // ----------  t2 (archive) -----------          metadata timeline
+      //
+      // when at time t4, we commit the compaction rollback,the above check returns true.
       HoodieInstant syncedInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, instantToRollback);
       if (metadataTableTimeline.getCommitsTimeline().isBeforeTimelineStarts(syncedInstant.getTimestamp())) {
         throw new HoodieMetadataException(String.format("The instant %s required to sync rollback of %s has been archived",
             syncedInstant, instantToRollback));
       }
-
       shouldSkip = !metadataTableTimeline.containsInstant(syncedInstant);
       if (!hasNonZeroRollbackLogFiles && shouldSkip) {
         LOG.info(String.format("Skipping syncing of rollbackMetadata at %s, since this instant was never committed to Metadata Table",

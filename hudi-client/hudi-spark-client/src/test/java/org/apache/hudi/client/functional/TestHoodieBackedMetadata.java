@@ -294,24 +294,29 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     AtomicInteger commitTime = new AtomicInteger(1);
     // trigger 2 regular writes(1 bootstrap commit). just 1 before archival can get triggered.
-    int i = 1;
-    for (; i <= 2; i++) {
+    for (int i = 1; i <= 2; i++) {
       doWriteOperation(testTable, "000000" + (commitTime.getAndIncrement()), INSERT);
     }
     // expected num commits = 1 (bootstrap) + 2 (writes)
     HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
     HoodieActiveTimeline metadataTimeline = metadataMetaClient.reloadActiveTimeline();
-    assertEquals(metadataTimeline.getCommitsTimeline().filterCompletedInstants().countInstants(), 3);
+    assertEquals(3, metadataTimeline.getCommitsTimeline().filterCompletedInstants().countInstants());
 
-    // trigger a async table service, archival should not kick in, even though conditions are met.
+    // trigger an async table service, archival should not kick in, even though conditions are met.
     doCluster(testTable, "000000" + commitTime.getAndIncrement());
     metadataTimeline = metadataMetaClient.reloadActiveTimeline();
-    assertEquals(metadataTimeline.getCommitsTimeline().filterCompletedInstants().countInstants(), 4);
+    assertEquals(4, metadataTimeline.getCommitsTimeline().filterCompletedInstants().countInstants());
 
-    // trigger a regular write operation. archival should kick in.
+    // start the timeline server for MARKERS cleaning up
+    getHoodieWriteClient(writeConfig);
+    // trigger a regular write operation. data set timeline archival should kick in.
+    doWriteOperation(testTable, "000000" + (commitTime.getAndIncrement()), INSERT);
+    archiveDataTable(writeConfig, HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build());
+
+    // trigger a regular write operation. metadata timeline archival should kick in.
     doWriteOperation(testTable, "000000" + (commitTime.getAndIncrement()), INSERT);
     metadataTimeline = metadataMetaClient.reloadActiveTimeline();
-    assertEquals(metadataTimeline.getCommitsTimeline().filterCompletedInstants().countInstants(), 3);
+    assertEquals(4, metadataTimeline.getCommitsTimeline().filterCompletedInstants().countInstants());
   }
 
   @ParameterizedTest
@@ -942,7 +947,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       }
     }
 
-    assertTrue(exceptionRaised, "Rollback of archived instants should fail");
+    assertFalse(exceptionRaised, "Metadata table should not archive instants that are in dataset active timeline");
     // Since each rollback also creates a deltacommit, we can only support rolling back of half of the original
     // instants present before rollback started.
     assertTrue(numRollbacks >= Math.max(minArchiveCommitsDataset, minArchiveCommitsMetadata) / 2,
