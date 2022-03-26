@@ -21,13 +21,14 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.KeyGenerator;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Map;
@@ -58,11 +59,24 @@ class TestTwoToThreeUpgradeHandler {
     assertEquals(KeyGenerator.class.getName(), kv.get(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME));
   }
 
-  @Test
-  void upgradeHandlerShouldThrowWhenKeyGeneratorNotSet() {
+  @ParameterizedTest
+  @EnumSource(EngineType.class)
+  void upgradeHandlerWhenKeyGeneratorNotSet(EngineType engineType) {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withEngineType(engineType)
+        .forTable("foo")
+        .withPath("/foo")
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .build();
     TwoToThreeUpgradeHandler handler = new TwoToThreeUpgradeHandler();
-    Throwable t = assertThrows(IllegalStateException.class, () -> handler
-        .upgrade(config, null, null, null));
-    assertTrue(t.getMessage().startsWith("Missing config:"));
+    if (engineType == EngineType.SPARK) {
+      Map<ConfigProperty, String> kv = handler.upgrade(config, null, null, null);
+      assertEquals(TwoToThreeUpgradeHandler.SPARK_SIMPLE_KEY_GENERATOR,
+          kv.get(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME));
+    } else {
+      Throwable t = assertThrows(IllegalStateException.class, () -> handler
+          .upgrade(writeConfig, null, null, null));
+      assertTrue(t.getMessage().startsWith("Missing config:"));
+    }
   }
 }

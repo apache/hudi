@@ -259,7 +259,11 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             .withInlineCompaction(false)
             .withMaxNumDeltaCommitsBeforeCompaction(writeConfig.getMetadataCompactDeltaCommitMax())
             // we will trigger archive manually, to ensure only regular writer invokes it
-            .withAutoArchive(false).build())
+            .withAutoArchive(false)
+            // by default, the HFile does not keep the metadata fields, set up as false
+            // to always use the metadata of the new record.
+            .withPreserveCommitMetadata(false)
+            .build())
         .withParallelism(parallelism, parallelism)
         .withDeleteParallelism(parallelism)
         .withRollbackParallelism(parallelism)

@@ -89,6 +89,7 @@ public class DeltaConfig implements Serializable {
     private static String START_PARTITION = "start_partition";
     private static String DELETE_INPUT_DATA = "delete_input_data";
     private static String VALIDATE_HIVE = "validate_hive";
+    private static String VALIDATE_ONCE_EVERY_ITR = "validate_once_every_itr";
     private static String EXECUTE_ITR_COUNT = "execute_itr_count";
     private static String VALIDATE_ARCHIVAL = "validate_archival";
     private static String VALIDATE_CLEAN = "validate_clean";
@@ -214,6 +215,10 @@ public class DeltaConfig implements Serializable {
 
     public boolean isValidateHive() {
       return Boolean.valueOf(configsMap.getOrDefault(VALIDATE_HIVE, false).toString());
+    }
+
+    public int validateOnceEveryIteration() {
+      return Integer.valueOf(configsMap.getOrDefault(VALIDATE_ONCE_EVERY_ITR, 1).toString());
     }
 
     public boolean isValidateFullData() {

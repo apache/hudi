@@ -18,19 +18,27 @@
 
 package org.apache.hudi.common.model;
 
+import javax.annotation.Nullable;
 import java.io.Serializable;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Objects;
 import java.util.function.BiFunction;
+import java.util.stream.Stream;
 
 /**
- * Hoodie Range metadata.
+ * Hoodie metadata for the column range of data stored in columnar format (like Parquet)
+ *
+ * NOTE: {@link Comparable} is used as raw-type so that we can handle polymorphism, where
+ *        caller apriori is not aware of the type {@link HoodieColumnRangeMetadata} is
+ *        associated with
  */
-public class HoodieColumnRangeMetadata<T> implements Serializable {
+@SuppressWarnings("rawtype")
+public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializable {
   private final String filePath;
   private final String columnName;
+  @Nullable
   private final T minValue;
+  @Nullable
   private final T maxValue;
   private final long nullCount;
   private final long valueCount;
@@ -38,21 +46,30 @@ public class HoodieColumnRangeMetadata<T> implements Serializable {
   private final long totalUncompressedSize;
 
   public static final BiFunction<HoodieColumnRangeMetadata<Comparable>, HoodieColumnRangeMetadata<Comparable>, HoodieColumnRangeMetadata<Comparable>> COLUMN_RANGE_MERGE_FUNCTION =
-      (oldColumnRange, newColumnRange) -> new HoodieColumnRangeMetadata<>(
+      (oldColumnRange, newColumnRange) -> new HoodieColumnRangeMetadata<Comparable>(
           newColumnRange.getFilePath(),
           newColumnRange.getColumnName(),
-          (Comparable) Arrays.asList(oldColumnRange.getMinValue(), newColumnRange.getMinValue())
-              .stream().filter(Objects::nonNull).min(Comparator.naturalOrder()).orElse(null),
-          (Comparable) Arrays.asList(oldColumnRange.getMinValue(), newColumnRange.getMinValue())
-              .stream().filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null),
+          (Comparable) Stream.of(oldColumnRange.getMinValue(), newColumnRange.getMinValue())
+              .filter(Objects::nonNull)
+              .min(Comparator.naturalOrder())
+              .orElse(null),
+          (Comparable) Stream.of(oldColumnRange.getMinValue(), newColumnRange.getMinValue())
+              .filter(Objects::nonNull)
+              .max(Comparator.naturalOrder()).orElse(null),
           oldColumnRange.getNullCount() + newColumnRange.getNullCount(),
           oldColumnRange.getValueCount() + newColumnRange.getValueCount(),
           oldColumnRange.getTotalSize() + newColumnRange.getTotalSize(),
           oldColumnRange.getTotalUncompressedSize() + newColumnRange.getTotalUncompressedSize()
       );
 
-  public HoodieColumnRangeMetadata(final String filePath, final String columnName, final T minValue, final T maxValue,
-                                   final long nullCount, long valueCount, long totalSize, long totalUncompressedSize) {
+  private HoodieColumnRangeMetadata(String filePath,
+                                    String columnName,
+                                    @Nullable T minValue,
+                                    @Nullable T maxValue,
+                                    long nullCount,
+                                    long valueCount,
+                                    long totalSize,
+                                    long totalUncompressedSize) {
     this.filePath = filePath;
     this.columnName = columnName;
     this.minValue = minValue;
@@ -71,10 +88,12 @@ public class HoodieColumnRangeMetadata<T> implements Serializable {
     return this.columnName;
   }
 
+  @Nullable
   public T getMinValue() {
     return this.minValue;
   }
 
+  @Nullable
   public T getMaxValue() {
     return this.maxValue;
   }
@@ -133,6 +152,23 @@ public class HoodieColumnRangeMetadata<T> implements Serializable {
         + '}';
   }
 
+  public static <T extends Comparable<T>> HoodieColumnRangeMetadata<T> create(String filePath,
+                                                                              String columnName,
+                                                                              @Nullable T minValue,
+                                                                              @Nullable T maxValue,
+                                                                              long nullCount,
+                                                                              long valueCount,
+                                                                              long totalSize,
+                                                                              long totalUncompressedSize) {
+    return new HoodieColumnRangeMetadata<>(filePath, columnName, minValue, maxValue, nullCount, valueCount, totalSize, totalUncompressedSize);
+  }
+
+  @SuppressWarnings("rawtype")
+  public static HoodieColumnRangeMetadata<Comparable> stub(String filePath,
+                                                           String columnName) {
+    return new HoodieColumnRangeMetadata<>(filePath, columnName, null, null, -1, -1, -1, -1);
+  }
+
   /**
    * Statistics that is collected in {@link org.apache.hudi.metadata.MetadataPartitionType#COLUMN_STATS} index.
    */
@@ -144,6 +180,6 @@ public class HoodieColumnRangeMetadata<T> implements Serializable {
     public static final String TOTAL_SIZE = "total_size";
     public static final String TOTAL_UNCOMPRESSED_SIZE = "total_uncompressed_size";
 
-    private Stats() {  }
+    private Stats() {}
   }
 }

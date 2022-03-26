@@ -48,9 +48,9 @@ public class GlobalHiveSyncTool extends HiveSyncTool {
   @Override
   protected void syncHoodieTable(String tableName, boolean useRealtimeInputFormat, boolean readAsOptimized) {
     super.syncHoodieTable(tableName, useRealtimeInputFormat, readAsOptimized);
-    if (((GlobalHiveSyncConfig)cfg).globallyReplicatedTimeStamp != null) {
+    if (((GlobalHiveSyncConfig) hiveSyncConfig).globallyReplicatedTimeStamp != null) {
       hoodieHiveClient.updateLastReplicatedTimeStamp(tableName,
-          ((GlobalHiveSyncConfig) cfg).globallyReplicatedTimeStamp);
+          ((GlobalHiveSyncConfig) hiveSyncConfig).globallyReplicatedTimeStamp);
     }
     LOG.info("Sync complete for " + tableName);
   }
