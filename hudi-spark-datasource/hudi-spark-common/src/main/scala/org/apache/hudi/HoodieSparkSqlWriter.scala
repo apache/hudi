@@ -562,6 +562,7 @@ object HoodieSparkSqlWriter {
 
     if (metaSyncEnabled) {
       val fs = basePath.getFileSystem(spark.sessionState.newHadoopConf())
+      val baseFileFormat = hoodieConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT);
       val properties = new TypedProperties()
       properties.putAll(hoodieConfig.getProps)
       properties.put(HiveSyncConfig.HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD.key, spark.sessionState.conf.getConf(StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD).toString)
@@ -572,7 +573,7 @@ object HoodieSparkSqlWriter {
       hiveConf.addResource(fs.getConf)
 
       syncClientToolClassSet.foreach(impl => {
-        SyncUtilHelpers.runHoodieMetaSync(impl.trim, properties, hiveConf, fs, basePath.toString, HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.defaultValue)
+        SyncUtilHelpers.runHoodieMetaSync(impl.trim, properties, hiveConf, fs, basePath.toString, baseFileFormat)
       })
     }
     true
