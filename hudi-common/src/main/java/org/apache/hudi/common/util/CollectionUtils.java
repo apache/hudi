@@ -33,6 +33,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 public class CollectionUtils {
@@ -112,6 +113,20 @@ public class CollectionUtils {
     List<E> diff = new ArrayList<>(one);
     diff.removeAll(another);
     return diff;
+  }
+
+  public static <E> Stream<List<E>> batchesAsStream(List<E> list, int batchSize) {
+    ValidationUtils.checkArgument(batchSize > 0, "batch size must be positive.");
+    int total = list.size();
+    if (total <= 0)
+      return Stream.empty();
+    int numFullBatches = (total - 1) / batchSize;
+    return IntStream.range(0, numFullBatches + 1).mapToObj(
+        n -> list.subList(n * batchSize, n == numFullBatches ? total : (n + 1) * batchSize));
+  }
+
+  public static <E> List<List<E>> batches(List<E> list, int batchSize) {
+    return batchesAsStream(list, batchSize).collect(Collectors.toList());
   }
 
   /**

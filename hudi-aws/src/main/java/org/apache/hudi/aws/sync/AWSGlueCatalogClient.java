@@ -80,6 +80,8 @@ import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 public class AWSGlueCatalogClient extends AbstractHiveSyncHoodieClient {
 
   private static final Logger LOG = LogManager.getLogger(AWSGlueCatalogClient.class);
+  private static final int MAX_PARTITIONS_PER_REQUEST = 100;
+  private static final int BATCH_REQUEST_SLEEP_SECONDS = 1;
   private final AWSGlue awsGlue;
   private final String databaseName;
 
@@ -122,13 +124,16 @@ public class AWSGlueCatalogClient extends AbstractHiveSyncHoodieClient {
         return new PartitionInput().withValues(partitionValues).withStorageDescriptor(partitionSd);
       }).collect(Collectors.toList());
 
-      BatchCreatePartitionRequest request = new BatchCreatePartitionRequest();
-      request.withDatabaseName(databaseName).withTableName(tableName).withPartitionInputList(partitionInputs);
+      for (List<PartitionInput> batch : CollectionUtils.batches(partitionInputs, MAX_PARTITIONS_PER_REQUEST)) {
+        BatchCreatePartitionRequest request = new BatchCreatePartitionRequest();
+        request.withDatabaseName(databaseName).withTableName(tableName).withPartitionInputList(batch);
 
-      BatchCreatePartitionResult result = awsGlue.batchCreatePartition(request);
-      if (CollectionUtils.nonEmpty(result.getErrors())) {
-        throw new HoodieGlueSyncException("Fail to add partitions to " + tableId(databaseName, tableName)
-            + " with error(s): " + result.getErrors());
+        BatchCreatePartitionResult result = awsGlue.batchCreatePartition(request);
+        if (CollectionUtils.nonEmpty(result.getErrors())) {
+          throw new HoodieGlueSyncException("Fail to add partitions to " + tableId(databaseName, tableName)
+              + " with error(s): " + result.getErrors());
+        }
+        Thread.sleep(BATCH_REQUEST_SLEEP_SECONDS);
       }
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to add partitions to " + tableId(databaseName, tableName), e);
@@ -154,13 +159,16 @@ public class AWSGlueCatalogClient extends AbstractHiveSyncHoodieClient {
         return new BatchUpdatePartitionRequestEntry().withPartitionInput(partitionInput).withPartitionValueList(partitionValues);
       }).collect(Collectors.toList());
 
-      BatchUpdatePartitionRequest request = new BatchUpdatePartitionRequest();
-      request.withDatabaseName(databaseName).withTableName(tableName).withEntries(updatePartitionEntries);
+      for (List<BatchUpdatePartitionRequestEntry> batch : CollectionUtils.batches(updatePartitionEntries, MAX_PARTITIONS_PER_REQUEST)) {
+        BatchUpdatePartitionRequest request = new BatchUpdatePartitionRequest();
+        request.withDatabaseName(databaseName).withTableName(tableName).withEntries(batch);
 
-      BatchUpdatePartitionResult result = awsGlue.batchUpdatePartition(request);
-      if (CollectionUtils.nonEmpty(result.getErrors())) {
-        throw new HoodieGlueSyncException("Fail to update partitions to " + tableId(databaseName, tableName)
-            + " with error(s): " + result.getErrors());
+        BatchUpdatePartitionResult result = awsGlue.batchUpdatePartition(request);
+        if (CollectionUtils.nonEmpty(result.getErrors())) {
+          throw new HoodieGlueSyncException("Fail to update partitions to " + tableId(databaseName, tableName)
+              + " with error(s): " + result.getErrors());
+        }
+        Thread.sleep(BATCH_REQUEST_SLEEP_SECONDS);
       }
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to update partitions to " + tableId(databaseName, tableName), e);
