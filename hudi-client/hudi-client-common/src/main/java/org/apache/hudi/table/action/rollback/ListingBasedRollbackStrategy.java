@@ -32,6 +32,7 @@ import java.util.stream.Collectors;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.PathFilter;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -114,7 +115,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
                 // and not corresponding base commit log files created with this as baseCommit since updates would
                 // have been written to the log files.
                 String baseFileExtension = getBaseFileExtension(metaClient);
-                hoodieRollbackRequests.add(deleteDataFilesOnlyRollbackRequest(instantToRollback, partitionPath, baseFileExtension,
+                hoodieRollbackRequests.add(deleteDataFilesOnlyRollbackRequest(instantToRollback, baseFileExtension, partitionPath,
                         metaClient.getFs()));
               } else {
                 // No deltacommits present after this compaction commit (inflight or requested). In this case, we
@@ -194,7 +195,8 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
                                                                    String basefileExtension, String partitionPath,
                                                                    FileSystem fs)
       throws IOException {
-    final FileStatus[] dataFilesToDeletedStatus = getBaseFilesToBeDeleted(basefileExtension, instantToRollback.getTimestamp(),
+    final FileStatus[] dataFilesToDeletedStatus =
+        getBaseFilesToBeDeleted(instantToRollback.getTimestamp(), basefileExtension,
             partitionPath, fs);
     return getHoodieRollbackRequest(partitionPath, dataFilesToDeletedStatus);
   }
@@ -215,11 +217,17 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
     }).collect(Collectors.toList());
   }
 
-  private FileStatus[] getBaseFilesToBeDeleted(String basefileExtension, String commit, String partitionPath,
+  private FileStatus[] getBaseFilesToBeDeleted(String commit, String basefileExtension, String partitionPath,
                                                FileSystem fs) throws IOException {
     LOG.info("Collecting files to be cleaned/rolledback up for path " + partitionPath + " and commit " + commit);
-    SerializablePathFilter pathFilter = getSerializablePathFilter(basefileExtension, commit);
-    return fs.listStatus(FSUtils.getPartitionPath(config.getBasePath(), partitionPath), pathFilter);
+    PathFilter filter = (path) -> {
+      if (path.toString().contains(basefileExtension)) {
+        String fileCommitTime = FSUtils.getCommitTime(path.getName());
+        return commit.equals(fileCommitTime);
+      }
+      return false;
+    };
+    return fs.listStatus(FSUtils.getPartitionPath(config.getBasePath(), partitionPath), filter);
   }
 
   private FileStatus[] getBaseAndLogFilesToBeDeleted(HoodieTableMetaClient metaClient, HoodieInstant instantToRollback, String partitionPath) throws IOException {
