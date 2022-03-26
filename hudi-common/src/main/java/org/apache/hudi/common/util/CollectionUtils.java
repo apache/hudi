@@ -118,8 +118,9 @@ public class CollectionUtils {
   public static <E> Stream<List<E>> batchesAsStream(List<E> list, int batchSize) {
     ValidationUtils.checkArgument(batchSize > 0, "batch size must be positive.");
     int total = list.size();
-    if (total <= 0)
+    if (total <= 0) {
       return Stream.empty();
+    }
     int numFullBatches = (total - 1) / batchSize;
     return IntStream.range(0, numFullBatches + 1).mapToObj(
         n -> list.subList(n * batchSize, n == numFullBatches ? total : (n + 1) * batchSize));

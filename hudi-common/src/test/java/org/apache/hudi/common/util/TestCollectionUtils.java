@@ -19,7 +19,6 @@
 
 package org.apache.hudi.common.util;
 
-
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
