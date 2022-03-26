@@ -27,7 +27,7 @@ import org.apache.spark.sql.hudi.TestHoodieSqlBase
 
 import scala.collection.JavaConverters.asScalaIteratorConverter
 
-class TestRunClusteringProcedure extends TestHoodieSqlBase {
+class TestClusteringProcedure extends TestHoodieSqlBase {
 
   test("Test Call run_clustering Procedure By Table") {
     withTempDir { tmp =>
