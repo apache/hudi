@@ -462,14 +462,15 @@ public class AWSGlueCatalogClient extends AbstractHiveSyncHoodieClient {
       }
       newParams.putAll(updatingParams);
 
-      TableInput updatedTableInput = new TableInput();
-      updatedTableInput.withName(tableName)
+      final Date now = new Date();
+      TableInput updatedTableInput = new TableInput()
+          .withName(tableName)
           .withTableType(table.getTableType())
           .withParameters(newParams)
           .withPartitionKeys(table.getPartitionKeys())
           .withStorageDescriptor(table.getStorageDescriptor())
-          .withLastAccessTime(new Date(System.currentTimeMillis()))
-          .withLastAnalyzedTime(new Date(System.currentTimeMillis()));
+          .withLastAccessTime(now)
+          .withLastAnalyzedTime(now);
 
       UpdateTableRequest request = new UpdateTableRequest();
       request.withDatabaseName(databaseName)
