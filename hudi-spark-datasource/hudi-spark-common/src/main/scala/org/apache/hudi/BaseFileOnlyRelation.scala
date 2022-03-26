@@ -65,6 +65,12 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
                                     tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
                                     filters: Array[Filter]): HoodieUnsafeRDD = {
+    if (!internalSchema.isEmptySchema) {
+      // it is safe to enable vectorizedReader
+      sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.recordLevelFilter.enabled", "false")
+      sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "true")
+    }
+
     val baseFileReader = createBaseFileReader(
       spark = sparkSession,
       partitionSchema = partitionSchema,
@@ -74,7 +80,7 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
-      hadoopConf = new Configuration(conf)
+      hadoopConf = HoodieDataSourceHelper.getConfigurationForInternalSchema(new Configuration(conf), requiredSchema.internalSchema, metaClient.getBasePath, validCommits)
     )
 
     new HoodieFileScanRDD(sparkSession, baseFileReader, fileSplits)

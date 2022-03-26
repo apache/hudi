@@ -821,7 +821,7 @@ public class HoodieAvroUtils {
         break;
       case BYTES:
         if (oldSchema.getType() == Schema.Type.STRING) {
-          return ((String) oldValue).getBytes(StandardCharsets.UTF_8);
+          return (oldValue.toString()).getBytes(StandardCharsets.UTF_8);
         }
         break;
       case STRING:
@@ -857,7 +857,7 @@ public class HoodieAvroUtils {
             LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) newSchema.getLogicalType();
             BigDecimal bigDecimal = null;
             if (oldSchema.getType() == Schema.Type.STRING) {
-              bigDecimal = new java.math.BigDecimal((String) oldValue)
+              bigDecimal = new java.math.BigDecimal(oldValue.toString())
                       .setScale(decimal.getScale());
             } else {
               // Due to Java, there will be precision problems in direct conversion, we should use string instead of use double
