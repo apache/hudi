@@ -33,15 +33,11 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetReader;
 
 public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileReader<R> {
-
-  private static final Logger LOG = LogManager.getLogger(HoodieParquetReader.class);
   
   private final Path path;
   private final Configuration conf;
