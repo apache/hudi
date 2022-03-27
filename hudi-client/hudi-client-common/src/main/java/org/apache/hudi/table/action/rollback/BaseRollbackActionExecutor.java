@@ -61,13 +61,15 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
   private final TransactionManager txnManager;
   private final boolean skipLocking;
 
+  protected HoodieInstant resolvedInstant;
+
   public BaseRollbackActionExecutor(HoodieEngineContext context,
-      HoodieWriteConfig config,
-      HoodieTable<T, I, K, O> table,
-      String instantTime,
-      HoodieInstant instantToRollback,
-      boolean deleteInstants,
-      boolean skipLocking) {
+                                    HoodieWriteConfig config,
+                                    HoodieTable<T, I, K, O> table,
+                                    String instantTime,
+                                    HoodieInstant instantToRollback,
+                                    boolean deleteInstants,
+                                    boolean skipLocking) {
     this(context, config, table, instantTime, instantToRollback, deleteInstants,
         false, config.shouldRollbackUsingMarkers(), skipLocking);
   }
@@ -83,6 +85,7 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
       boolean skipLocking) {
     super(context, config, table, instantTime);
     this.instantToRollback = instantToRollback;
+    this.resolvedInstant = instantToRollback;
     this.deleteInstants = deleteInstants;
     this.skipTimelinePublish = skipTimelinePublish;
     this.useMarkerBasedStrategy = useMarkerBasedStrategy;
@@ -118,9 +121,7 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
         Option.of(rollbackTimer.endTimer()),
         Collections.singletonList(instantToRollback),
         stats);
-    if (!skipTimelinePublish) {
-      finishRollback(inflightInstant, rollbackMetadata);
-    }
+    finishRollback(inflightInstant, rollbackMetadata);
 
     // Finally, remove the markers post rollback.
     WriteMarkersFactory.get(config.getMarkersType(), table, instantToRollback.getTimestamp())
@@ -237,18 +238,32 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
   }
 
   protected void finishRollback(HoodieInstant inflightInstant, HoodieRollbackMetadata rollbackMetadata) throws HoodieIOException {
+    boolean enableLocking = (!skipLocking && !skipTimelinePublish);
     try {
-      if (!skipLocking) {
+      if (enableLocking) {
         this.txnManager.beginTransaction(Option.empty(), Option.empty());
       }
-      writeTableMetadata(rollbackMetadata);
-      table.getActiveTimeline().transitionRollbackInflightToComplete(inflightInstant,
-          TimelineMetadataUtils.serializeRollbackMetadata(rollbackMetadata));
-      LOG.info("Rollback of Commits " + rollbackMetadata.getCommitsRollback() + " is complete");
+
+      // If publish the rollback to the timeline, we first write the rollback metadata
+      // to metadata table
+      if (!skipTimelinePublish) {
+        writeTableMetadata(rollbackMetadata);
+      }
+
+      // Then we delete the inflight instant in the data table timeline if enabled
+      deleteInflightAndRequestedInstant(deleteInstants, table.getActiveTimeline(), resolvedInstant);
+
+      // If publish the rollback to the timeline, we finally transition the inflight rollback
+      // to complete in the data table timeline
+      if (!skipTimelinePublish) {
+        table.getActiveTimeline().transitionRollbackInflightToComplete(inflightInstant,
+            TimelineMetadataUtils.serializeRollbackMetadata(rollbackMetadata));
+        LOG.info("Rollback of Commits " + rollbackMetadata.getCommitsRollback() + " is complete");
+      }
     } catch (IOException e) {
       throw new HoodieIOException("Error executing rollback at instant " + instantTime, e);
     } finally {
-      if (!skipLocking) {
+      if (enableLocking) {
         this.txnManager.endTransaction(Option.empty());
       }
     }
