@@ -224,7 +224,7 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
 
         // not specified all partition column
         checkExceptionContain(s"alter table $tableName drop partition (year='2021', month='10')")(
-          "All partition columns need to be specified for Hoodie's dropping partition"
+          "All partition columns need to be specified for Hoodie's partition"
         )
         // drop 2021-10-01 partition
         spark.sql(s"alter table $tableName drop partition (year='2021', month='10', day='01')")
