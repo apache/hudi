@@ -18,13 +18,14 @@
 
 package org.apache.hudi.hive.util;
 
+import java.util.ArrayList;
+import java.util.List;
+import org.apache.hadoop.hive.metastore.IMetaStoreClient;
+import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.PartitionValueExtractor;
-
-import java.util.ArrayList;
-import java.util.List;
 
 public class HivePartitionUtil {
 
@@ -47,5 +48,17 @@ public class HivePartitionUtil {
       partBuilder.add(config.partitionFields.get(i) + "=" + partitionValue);
     }
     return String.join("/", partBuilder);
+  }
+
+  public static Boolean partitionExists(IMetaStoreClient client, String tableName, String partitionPath,
+                                        PartitionValueExtractor partitionValueExtractor, HiveSyncConfig config) {
+    Partition newPartition;
+    try {
+      List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partitionPath);
+      newPartition = client.getPartition(config.databaseName, tableName, partitionValues);
+    } catch (Exception ignored) {
+      newPartition = null;
+    }
+    return newPartition != null;
   }
 }
