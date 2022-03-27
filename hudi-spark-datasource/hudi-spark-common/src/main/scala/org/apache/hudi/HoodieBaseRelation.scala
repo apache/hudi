@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.io.storage.HoodieHFileReader
 import org.apache.hudi.metadata.HoodieTableMetadata
+import org.apache.spark.TaskContext
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -47,6 +48,7 @@ import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Row, SQLContext, SparkSession}
 
+import java.io.Closeable
 import scala.collection.JavaConverters._
 import scala.util.Try
 
@@ -333,7 +335,13 @@ object HoodieBaseRelation {
     partitionedFile => {
       val extension = FSUtils.getFileExtension(partitionedFile.filePath)
       if (HoodieFileFormat.PARQUET.getFileExtension.equals(extension)) {
-        parquetReader.apply(partitionedFile)
+        val iter = parquetReader.apply(partitionedFile)
+        if (iter.isInstanceOf[Closeable]) {
+          // register a callback to close parquetReader which will be executed on task completion.
+          // when tasks finished, this method will be called, and release resources.
+          Option(TaskContext.get()).foreach(_.addTaskCompletionListener[Unit](_ => iter.asInstanceOf[Closeable].close()))
+        }
+        iter
       } else if (HoodieFileFormat.HFILE.getFileExtension.equals(extension)) {
         hfileReader.apply(partitionedFile)
       } else {

@@ -21,6 +21,8 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueue;
 import org.apache.hudi.exception.HoodieException;
 
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.parquet.hadoop.ParquetReader;
 
 import java.io.IOException;
@@ -30,6 +32,8 @@ import java.io.IOException;
  * {@link BoundedInMemoryQueue}
  */
 public class ParquetReaderIterator<T> implements ClosableIterator<T> {
+
+  private static final Logger LOG = LogManager.getLogger(ParquetReaderIterator.class);
 
   // Parquet reader for an existing parquet file
   private final ParquetReader<T> parquetReader;
