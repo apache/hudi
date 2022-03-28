@@ -20,6 +20,7 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -275,10 +276,7 @@ public class TestClientRollback extends HoodieClientTestBase {
 
   private static Stream<Arguments> testFailedRollbackCommitParams() {
     return Arrays.stream(new Boolean[][] {
-        {true, true},
-        {true, false},
-        {false, true},
-        {false, false}
+        {true, true}, {true, false}, {false, true}, {false, false},
     }).map(Arguments::of);
   }
 
@@ -288,7 +286,7 @@ public class TestClientRollback extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource("testFailedRollbackCommitParams")
   public void testFailedRollbackCommit(
-      boolean rollbackUsingMarkers, boolean instantToRollbackExists) throws Exception {
+      boolean enableMetadataTable, boolean instantToRollbackExists) throws Exception {
     // Let's create some commit files and base files
     final String p1 = "2016/05/01";
     final String p2 = "2016/05/02";
@@ -317,20 +315,26 @@ public class TestClientRollback extends HoodieClientTestBase {
         put(p3, "id33");
       }
     };
-    HoodieTestTable testTable = HoodieTestTable.of(metaClient)
-        .withPartitionMetaFiles(p1, p2, p3)
+
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withRollbackUsingMarkers(false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
+
+    HoodieTestTable testTable = enableMetadataTable
+        ? HoodieMetadataTestTable.of(metaClient, SparkHoodieBackedTableMetadataWriter.create(
+        metaClient.getHadoopConf(), config, context))
+        : HoodieTestTable.of(metaClient);
+
+    testTable.withPartitionMetaFiles(p1, p2, p3)
         .addCommit(commitTime1)
         .withBaseFilesInPartitions(partitionAndFileId1)
         .addCommit(commitTime2)
         .withBaseFilesInPartitions(partitionAndFileId2)
         .addInflightCommit(commitTime3)
         .withBaseFilesInPartitions(partitionAndFileId3);
-
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withRollbackUsingMarkers(false)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
 
