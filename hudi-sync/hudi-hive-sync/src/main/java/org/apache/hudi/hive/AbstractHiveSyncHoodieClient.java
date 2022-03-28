@@ -96,12 +96,24 @@ public abstract class AbstractHiveSyncHoodieClient extends AbstractSyncHoodieCli
     return events;
   }
 
+  /**
+   * Get all partitions for the table in the metastore.
+   */
   public abstract List<Partition> getAllPartitions(String tableName);
 
+  /**
+   * Check if a database already exists in the metastore.
+   */
   public abstract boolean databaseExists(String databaseName);
 
+  /**
+   * Create a database in the metastore.
+   */
   public abstract void createDatabase(String databaseName);
 
+  /**
+   * Update schema for the table in the metastore.
+   */
   public abstract void updateTableDefinition(String tableName, MessageType newSchema);
 
   /*

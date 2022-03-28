@@ -24,6 +24,7 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 
 import com.beust.jcommander.JCommander;
+import jdk.jfr.Experimental;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -37,6 +38,7 @@ import org.apache.hadoop.hive.conf.HiveConf;
  * expect using a different client {@link AWSGlueCatalogClient} that implements
  * the necessary functionality using Glue APIs.
  */
+@Experimental
 public class AwsGlueCatalogSyncTool extends HiveSyncTool {
 
   public AwsGlueCatalogSyncTool(TypedProperties props, Configuration conf, FileSystem fs) {

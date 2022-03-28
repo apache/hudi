@@ -81,7 +81,7 @@ public class AWSGlueCatalogClient extends AbstractHiveSyncHoodieClient {
 
   private static final Logger LOG = LogManager.getLogger(AWSGlueCatalogClient.class);
   private static final int MAX_PARTITIONS_PER_REQUEST = 100;
-  private static final int BATCH_REQUEST_SLEEP_SECONDS = 1;
+  private static final long BATCH_REQUEST_SLEEP_MILLIS = 1000L;
   private final AWSGlue awsGlue;
   private final String databaseName;
 
@@ -133,7 +133,7 @@ public class AWSGlueCatalogClient extends AbstractHiveSyncHoodieClient {
           throw new HoodieGlueSyncException("Fail to add partitions to " + tableId(databaseName, tableName)
               + " with error(s): " + result.getErrors());
         }
-        Thread.sleep(BATCH_REQUEST_SLEEP_SECONDS);
+        Thread.sleep(BATCH_REQUEST_SLEEP_MILLIS);
       }
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to add partitions to " + tableId(databaseName, tableName), e);
@@ -168,7 +168,7 @@ public class AWSGlueCatalogClient extends AbstractHiveSyncHoodieClient {
           throw new HoodieGlueSyncException("Fail to update partitions to " + tableId(databaseName, tableName)
               + " with error(s): " + result.getErrors());
         }
-        Thread.sleep(BATCH_REQUEST_SLEEP_SECONDS);
+        Thread.sleep(BATCH_REQUEST_SLEEP_MILLIS);
       }
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to update partitions to " + tableId(databaseName, tableName), e);
@@ -288,14 +288,15 @@ public class AWSGlueCatalogClient extends AbstractHiveSyncHoodieClient {
           .withOutputFormat(outputFormatClass)
           .withColumns(schemaWithoutPartitionKeys);
 
+      final Date now = new Date();
       TableInput tableInput = new TableInput()
           .withName(tableName)
           .withTableType(TableType.EXTERNAL_TABLE.toString())
           .withParameters(params)
           .withPartitionKeys(schemaPartitionKeys)
           .withStorageDescriptor(storageDescriptor)
-          .withLastAccessTime(new Date(System.currentTimeMillis()))
-          .withLastAnalyzedTime(new Date(System.currentTimeMillis()));
+          .withLastAccessTime(now)
+          .withLastAnalyzedTime(now);
       request.withDatabaseName(databaseName)
           .withTableInput(tableInput);
 
@@ -313,7 +314,6 @@ public class AWSGlueCatalogClient extends AbstractHiveSyncHoodieClient {
     try {
       // GlueMetastoreClient returns partition keys separate from Columns, hence get both and merge to
       // get the Schema of the table.
-      final long start = System.currentTimeMillis();
       Table table = getTable(awsGlue, databaseName, tableName);
       Map<String, String> partitionKeysMap =
           table.getPartitionKeys().stream().collect(Collectors.toMap(Column::getName, f -> f.getType().toUpperCase()));
@@ -324,8 +324,6 @@ public class AWSGlueCatalogClient extends AbstractHiveSyncHoodieClient {
       Map<String, String> schema = new HashMap<>();
       schema.putAll(columnsMap);
       schema.putAll(partitionKeysMap);
-      final long end = System.currentTimeMillis();
-      LOG.info(String.format("Time taken to getTableSchema: %s ms", (end - start)));
       return schema;
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to get schema for table " + tableId(databaseName, tableName), e);
