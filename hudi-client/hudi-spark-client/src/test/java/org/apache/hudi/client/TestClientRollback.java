@@ -48,6 +48,9 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -55,6 +58,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -269,11 +273,22 @@ public class TestClientRollback extends HoodieClientTestBase {
     }
   }
 
+  private static Stream<Arguments> testFailedRollbackCommitParams() {
+    return Arrays.stream(new Boolean[][] {
+        {true, true},
+        {true, false},
+        {false, true},
+        {false, false}
+    }).map(Arguments::of);
+  }
+
   /**
    * Test Cases for effects of rollbacking completed/inflight commits.
    */
-  @Test
-  public void testFailedRollbackCommit() throws Exception {
+  @ParameterizedTest
+  @MethodSource("testFailedRollbackCommitParams")
+  public void testFailedRollbackCommit(
+      boolean rollbackUsingMarkers, boolean instantToRollbackExists) throws Exception {
     // Let's create some commit files and base files
     final String p1 = "2016/05/01";
     final String p2 = "2016/05/02";
@@ -333,8 +348,10 @@ public class TestClientRollback extends HoodieClientTestBase {
       // delete rollback completed meta file and retry rollback.
       FileCreateUtils.deleteRollbackCommit(basePath, rollbackInstant.getTimestamp());
 
-      // recreate actual commit files so that we can retry the rollback
-      testTable.addInflightCommit(commitTime3).withBaseFilesInPartitions(partitionAndFileId3);
+      if (instantToRollbackExists) {
+        // recreate actual commit files if needed
+        testTable.addInflightCommit(commitTime3).withBaseFilesInPartitions(partitionAndFileId3);
+      }
 
       // retry rolling back the commit again.
       client.rollback(commitTime3);
