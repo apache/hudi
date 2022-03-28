@@ -23,6 +23,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieTimeline}
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.{HoodieCLIUtils, HoodieDataSourceHelpers}
+
 import org.apache.spark.sql.hudi.TestHoodieSqlBase
 
 import scala.collection.JavaConverters.asScalaIteratorConverter
