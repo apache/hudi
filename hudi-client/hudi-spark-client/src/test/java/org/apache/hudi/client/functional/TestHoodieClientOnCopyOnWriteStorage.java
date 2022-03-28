@@ -1430,7 +1430,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertNoWriteErrors(statusList);
     client.commit(commitTime1, statuses);
     metaClient.reloadActiveTimeline();
-    // rollback should have succeeded. Essentially, the pending clustering should not hinder the rollback of regular commits. 
+    // rollback should have succeeded. Essentially, the pending clustering should not hinder the rollback of regular commits.
     assertEquals(1, metaClient.getActiveTimeline().getCommitsTimeline().filterInflightsAndRequested().countInstants());
   }
 
