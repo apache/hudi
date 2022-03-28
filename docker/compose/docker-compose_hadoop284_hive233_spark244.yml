@@ -288,8 +288,6 @@ services:
       - ./hadoop.env
     depends_on:
       - sparkmaster
-    ports:
-      - '4042:4040'
     environment:
       - "SPARK_MASTER=spark://sparkmaster:7077"
     links:
