@@ -18,10 +18,6 @@
 
 package org.apache.hudi.common.bloom;
 
-import javax.annotation.Nonnull;
-
-import java.util.List;
-
 /**
  * A Bloom filter interface.
  */
@@ -33,13 +29,6 @@ public interface BloomFilter {
    * @param key the key to the added to the {@link BloomFilter}
    */
   void add(String key);
-
-  /**
-   * Add secondary key to the {@link BloomFilter}.
-   *
-   * @param keys list of secondary keys to add to the {@link BloomFilter}
-   */
-  void add(@Nonnull List<String> keys);
 
   /**
    * Tests for key membership.

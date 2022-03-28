@@ -1010,20 +1010,20 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, null, SCHEDULE, "COLUMN_STATS"));
         scheduleIndexInstantTime = scheduleIndexingJob.doSchedule();
       } catch (Exception e) {
-        LOG.info("Schedule clustering failed", e);
+        LOG.info("Schedule indexing failed", e);
         return false;
       }
       if (scheduleIndexInstantTime.isPresent()) {
         TestHelpers.assertPendingIndexCommit(tableBasePath, dfs);
-        LOG.info("Schedule clustering success, now cluster with instant time " + scheduleIndexInstantTime.get());
+        LOG.info("Schedule indexing success, now build index with instant time " + scheduleIndexInstantTime.get());
         HoodieIndexer runIndexingJob = new HoodieIndexer(jsc,
             buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, scheduleIndexInstantTime.get(), EXECUTE, "COLUMN_STATS"));
         runIndexingJob.start(0);
-        LOG.info("Cluster success");
+        LOG.info("Metadata indexing success");
+        TestHelpers.assertCompletedIndexCommit(tableBasePath, dfs);
       } else {
-        LOG.warn("Schedule clustering failed");
+        LOG.warn("Metadata indexing failed");
       }
-      TestHelpers.assertCompletedIndexCommit(tableBasePath, dfs);
       return true;
     });
   }

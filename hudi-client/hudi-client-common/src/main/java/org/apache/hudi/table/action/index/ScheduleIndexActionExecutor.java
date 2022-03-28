@@ -55,7 +55,7 @@ import static org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE;
  * <li>
  * 1. Fetch last completed instant on data timeline.
  * 2. Write the index plan to the <instant>.index.requested.
- * 3. Initialize filegroups for the enabled partition types within a transaction.
+ * 3. Initialize file groups for the enabled partition types within a transaction.
  * </li>
  */
 public class ScheduleIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieIndexPlan>> {
@@ -91,23 +91,39 @@ public class ScheduleIndexActionExecutor<T extends HoodieRecordPayload, I, K, O>
     // make sure that it is idempotent, check with previously pending index operations.
     Set<String> indexesInflightOrCompleted = Stream.of(table.getMetaClient().getTableConfig().getInflightMetadataIndexes().split(","))
         .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toSet());
-    indexesInflightOrCompleted.addAll(Stream.of(table.getMetaClient().getTableConfig().getInflightMetadataIndexes().split(","))
+    indexesInflightOrCompleted.addAll(Stream.of(table.getMetaClient().getTableConfig().getCompletedMetadataIndexes().split(","))
         .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toSet()));
     Set<String> requestedPartitions = partitionsToIndex.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
-    requestedPartitions.retainAll(indexesInflightOrCompleted);
+    requestedPartitions.removeAll(indexesInflightOrCompleted);
     if (!requestedPartitions.isEmpty()) {
-      LOG.error("Following partitions already exist or inflight: " + requestedPartitions);
-      return Option.empty();
+      LOG.warn(String.format("Following partitions already exist or inflight: %s. Going to index only these partitions: %s",
+          indexesInflightOrCompleted, requestedPartitions));
     }
+    List<MetadataPartitionType> finalPartitionsToIndex = partitionsToIndex.stream()
+        .filter(p -> requestedPartitions.contains(p.getPartitionPath())).collect(Collectors.toList());
     // get last completed instant
     Option<HoodieInstant> indexUptoInstant = table.getActiveTimeline().getContiguousCompletedWriteTimeline().lastInstant();
     if (indexUptoInstant.isPresent()) {
       final HoodieInstant indexInstant = HoodieTimeline.getIndexRequestedInstant(instantTime);
+      // start initializing file groups
+      // in case FILES partition itself was not initialized before (i.e. metadata was never enabled), this will initialize synchronously
+      HoodieTableMetadataWriter metadataWriter = table.getMetadataWriter(instantTime)
+          .orElseThrow(() -> new HoodieIndexException(String.format("Could not get metadata writer to initialize filegroups for indexing for instant: %s", instantTime)));
+      try {
+        this.txnManager.beginTransaction(Option.of(indexInstant), Option.empty());
+        metadataWriter.scheduleIndex(table.getMetaClient(), finalPartitionsToIndex, indexInstant.getTimestamp());
+      } catch (IOException e) {
+        LOG.error("Could not initialize file groups", e);
+        throw new HoodieIOException(e.getMessage(), e);
+      } finally {
+        this.txnManager.endTransaction(Option.of(indexInstant));
+      }
       // for each partitionToIndex add that time to the plan
-      List<HoodieIndexPartitionInfo> indexPartitionInfos = partitionsToIndex.stream()
+      List<HoodieIndexPartitionInfo> indexPartitionInfos = finalPartitionsToIndex.stream()
           .map(p -> new HoodieIndexPartitionInfo(LATEST_INDEX_PLAN_VERSION, p.getPartitionPath(), indexUptoInstant.get().getTimestamp()))
           .collect(Collectors.toList());
       HoodieIndexPlan indexPlan = new HoodieIndexPlan(LATEST_INDEX_PLAN_VERSION, indexPartitionInfos);
+      // update data timeline with requested instant
       try {
         table.getActiveTimeline().saveToPendingIndexCommit(indexInstant, TimelineMetadataUtils.serializeIndexPlan(indexPlan));
       } catch (IOException e) {
@@ -115,22 +131,6 @@ public class ScheduleIndexActionExecutor<T extends HoodieRecordPayload, I, K, O>
         throw new HoodieIOException(e.getMessage(), e);
       }
       table.getMetaClient().reloadActiveTimeline();
-
-      // start initializing filegroups
-      // 1. get metadata writer
-      HoodieTableMetadataWriter metadataWriter = table.getMetadataWriter(instantTime)
-          .orElseThrow(() -> new HoodieIndexException(String.format("Could not get metadata writer to initialize filegroups for indexing for instant: %s", instantTime)));
-      // 2. take a lock --> begin tx (data table)
-      try {
-        this.txnManager.beginTransaction(Option.of(indexInstant), Option.empty());
-        // 3. initialize filegroups as per plan for the enabled partition types
-        metadataWriter.scheduleIndex(table.getMetaClient(), partitionsToIndex, indexInstant.getTimestamp());
-      } catch (IOException e) {
-        LOG.error("Could not initialize file groups");
-        throw new HoodieIOException(e.getMessage(), e);
-      } finally {
-        this.txnManager.endTransaction(Option.of(indexInstant));
-      }
       return Option.of(indexPlan);
     }
     return Option.empty();

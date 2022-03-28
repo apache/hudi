@@ -41,7 +41,7 @@ public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
    * @param engineContext
    * @param indexPartitionInfos - partitions to index
    */
-  void index(HoodieEngineContext engineContext, List<HoodieIndexPartitionInfo> indexPartitionInfos);
+  void buildIndex(HoodieEngineContext engineContext, List<HoodieIndexPartitionInfo> indexPartitionInfos);
 
   /**
    * Initialize file groups while scheduling index action.

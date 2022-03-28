@@ -21,12 +21,12 @@ package org.apache.hudi.utilities;
 import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.metadata.MetadataPartitionType;
 
@@ -43,9 +43,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT;
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
@@ -87,7 +89,7 @@ public class HoodieIndexer {
   public HoodieIndexer(JavaSparkContext jsc, HoodieIndexer.Config cfg) {
     this.cfg = cfg;
     this.jsc = jsc;
-    this.props = StringUtils.isNullOrEmpty(cfg.propsFilePath)
+    this.props = isNullOrEmpty(cfg.propsFilePath)
         ? UtilHelpers.buildProperties(cfg.configs)
         : readConfigFromFileSystem(jsc, cfg);
     this.metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
@@ -155,6 +157,12 @@ public class HoodieIndexer {
   }
 
   public int start(int retry) {
+    // indexing should be done only if metadata is enabled
+    if (!props.getBoolean(HoodieMetadataConfig.ENABLE.key())) {
+      LOG.error(String.format("Metadata is not enabled. Please set %s to true.", HoodieMetadataConfig.ENABLE.key()));
+      return -1;
+    }
+
     return UtilHelpers.retry(retry, () -> {
       switch (cfg.runningMode.toLowerCase()) {
         case SCHEDULE: {
@@ -199,14 +207,7 @@ public class HoodieIndexer {
   }
 
   private Option<String> doSchedule(SparkRDDWriteClient<HoodieRecordPayload> client) {
-    List<String> partitionsToIndex = Arrays.asList(cfg.indexTypes.split(","));
-    List<MetadataPartitionType> partitionTypes = partitionsToIndex.stream()
-        .map(p -> MetadataPartitionType.valueOf(p.toUpperCase(Locale.ROOT)))
-        .collect(Collectors.toList());
-    if (cfg.indexInstantTime != null) {
-      client.scheduleClusteringAtInstant(cfg.indexInstantTime, Option.empty());
-      return Option.of(cfg.indexInstantTime);
-    }
+    List<MetadataPartitionType> partitionTypes = getRequestedPartitionTypes(cfg.indexTypes);
     Option<String> indexingInstant = client.scheduleIndexing(partitionTypes);
     if (!indexingInstant.isPresent()) {
       LOG.error("Scheduling of index action did not return any instant.");
@@ -217,7 +218,7 @@ public class HoodieIndexer {
   private int runIndexing(JavaSparkContext jsc) throws Exception {
     String schemaStr = UtilHelpers.getSchemaFromLatestInstant(metaClient);
     try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
-      if (StringUtils.isNullOrEmpty(cfg.indexInstantTime)) {
+      if (isNullOrEmpty(cfg.indexInstantTime)) {
         // Instant time is not specified
         // Find the earliest scheduled indexing instant for execution
         Option<HoodieInstant> earliestPendingIndexInstant = metaClient.getActiveTimeline()
@@ -249,10 +250,7 @@ public class HoodieIndexer {
   }
 
   private int dropIndex(JavaSparkContext jsc) throws Exception {
-    List<String> partitionsToDrop = Arrays.asList(cfg.indexTypes.split(","));
-    List<MetadataPartitionType> partitionTypes = partitionsToDrop.stream()
-        .map(p -> MetadataPartitionType.valueOf(p.toUpperCase(Locale.ROOT)))
-        .collect(Collectors.toList());
+    List<MetadataPartitionType> partitionTypes = getRequestedPartitionTypes(cfg.indexTypes);
     String schemaStr = UtilHelpers.getSchemaFromLatestInstant(metaClient);
     try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
       client.dropIndex(partitionTypes);
@@ -271,6 +269,24 @@ public class HoodieIndexer {
     List<HoodieIndexPartitionInfo> indexPartitionInfos = commitMetadata.get().getIndexPartitionInfos();
     LOG.info(String.format("Indexing complete for partitions: %s",
         indexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toList())));
-    return true;
+    return isIndexBuiltForAllRequestedTypes(indexPartitionInfos);
+  }
+
+  boolean isIndexBuiltForAllRequestedTypes(List<HoodieIndexPartitionInfo> indexPartitionInfos) {
+    Set<String> indexedPartitions = indexPartitionInfos.stream()
+        .map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toSet());
+    Set<String> requestedPartitions = getRequestedPartitionTypes(cfg.indexTypes).stream()
+        .map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
+    requestedPartitions.removeAll(indexedPartitions);
+    return requestedPartitions.isEmpty();
+  }
+
+  List<MetadataPartitionType> getRequestedPartitionTypes(String indexTypes) {
+    List<String> requestedIndexTypes = Arrays.asList(indexTypes.split(","));
+    return requestedIndexTypes.stream()
+        .map(p -> MetadataPartitionType.valueOf(p.toUpperCase(Locale.ROOT)))
+        // FILES partition is initialized synchronously while getting metadata writer
+        .filter(p -> !MetadataPartitionType.FILES.equals(p))
+        .collect(Collectors.toList());
   }
 }

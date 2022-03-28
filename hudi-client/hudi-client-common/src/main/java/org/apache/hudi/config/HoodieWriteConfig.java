@@ -1519,8 +1519,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getMetadataConfig().getColumnsEnabledForBloomFilterIndex();
   }
 
-  public int getIndexingCheckTimeout() {
-    return getMetadataConfig().getIndexingCheckTimeout();
+  public int getIndexingCheckTimeoutSeconds() {
+    return getMetadataConfig().getIndexingCheckTimeoutSeconds();
   }
 
   public int getColumnStatsIndexParallelism() {

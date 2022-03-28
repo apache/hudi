@@ -186,13 +186,13 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".index.column.stats.for.columns")
       .defaultValue("")
       .sinceVersion("0.11.0")
-      .withDocumentation("Comma-separated list of columns for which column stats index will be built.");
+      .withDocumentation("Comma-separated list of columns for which column stats index will be built. If not set, all columns will be indexed");
 
   public static final ConfigProperty<String> BLOOM_FILTER_INDEX_FOR_COLUMNS = ConfigProperty
       .key(METADATA_PREFIX + ".index.bloom.filter.for.columns")
       .defaultValue("")
       .sinceVersion("0.11.0")
-      .withDocumentation("Comma-separated list of columns for which bloom filter index will be built.");
+      .withDocumentation("Comma-separated list of columns for which bloom filter index will be built. If not set, only record key will be indexed.");
 
   public static final ConfigProperty<Integer> METADATA_INDEX_CHECK_TIMEOUT_SECONDS = ConfigProperty
       .key(METADATA_PREFIX + ".index.check.timeout.seconds")
@@ -267,7 +267,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getIntOrDefault(COLUMN_STATS_INDEX_PARALLELISM);
   }
 
-  public int getIndexingCheckTimeout() {
+  public int getIndexingCheckTimeoutSeconds() {
     return getIntOrDefault(METADATA_INDEX_CHECK_TIMEOUT_SECONDS);
   }
 
