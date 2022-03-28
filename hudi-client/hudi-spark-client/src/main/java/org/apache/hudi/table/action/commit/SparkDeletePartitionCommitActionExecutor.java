@@ -18,13 +18,12 @@
 
 package org.apache.hudi.table.action.commit;
 
-import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
@@ -42,6 +41,9 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+
+import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 
 public class SparkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends SparkInsertOverwriteCommitActionExecutor<T> {
@@ -68,13 +70,16 @@ public class SparkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayl
       result.setWriteStatuses(context.emptyHoodieData());
 
       // created requested
-      HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
-          .setOperationType(WriteOperationType.DELETE_PARTITION.name())
-          .setExtraMetadata(extraMetadata.orElse(Collections.emptyMap()))
-          .build();
       HoodieInstant dropPartitionsInstant = new HoodieInstant(REQUESTED, REPLACE_COMMIT_ACTION, instantTime);
-      table.getMetaClient().getActiveTimeline().saveToPendingReplaceCommit(dropPartitionsInstant,
-          TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
+      if (!table.getMetaClient().getFs().exists(new Path(table.getMetaClient().getMetaPath(),
+          dropPartitionsInstant.getFileName()))) {
+        HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
+            .setOperationType(WriteOperationType.DELETE_PARTITION.name())
+            .setExtraMetadata(extraMetadata.orElse(Collections.emptyMap()))
+            .build();
+        table.getMetaClient().getActiveTimeline().saveToPendingReplaceCommit(dropPartitionsInstant,
+            TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
+      }
 
       this.saveWorkloadProfileMetadataToInflight(new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())),
           instantTime);
