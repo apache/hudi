@@ -74,11 +74,9 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
     setTableName("hoodie_test")
     initMetaClient()
     val sourceJSONTablePath = getClass.getClassLoader.getResource("index/zorder/input-table-json").toString
-    val inputDF =
-    // NOTE: Schema here is provided for validation that the input date is in the appropriate format
-      spark.read
-        .schema(sourceTableSchema)
-        .json(sourceJSONTablePath)
+    val inputDF = spark.read
+      .schema(sourceTableSchema)
+      .json(sourceJSONTablePath)
 
     val opts = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
@@ -135,6 +133,37 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
     expectedColStatsIndexTableDf.schema.equals(colStatsDF.schema)
     expectedColStatsIndexTableDf.collect().sameElements(colStatsDF.collect())
+
+    // do an upsert and validate
+    val updateJSONTablePath = getClass.getClassLoader.getResource("index/zorder/another-input-table-json").toString
+    val updateDF = spark.read
+      .schema(sourceTableSchema)
+      .json(updateJSONTablePath)
+
+    updateDF.repartition(4)
+      .write
+      .format("hudi")
+      .options(opts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key, 100 * 1024)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+
+    val updatedMetadataTableDF = spark.read.format("org.apache.hudi")
+      .load(s"$metadataTablePath/${MetadataPartitionType.COLUMN_STATS.getPartitionPath}")
+
+    val updatedColStatsDF = updatedMetadataTableDF.where(col(HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS).isNotNull)
+      .select(requiredMetadataIndexColumns.map(col): _*)
+
+    val expectedColStatsIndexUpdatedDf =
+      spark.read
+        .schema(colStatsSchema)
+        .json(getClass.getClassLoader.getResource("index/zorder/update-column-stats-index-table.json").toString)
+
+    expectedColStatsIndexUpdatedDf.schema.equals(updatedColStatsDF.schema)
+    expectedColStatsIndexUpdatedDf.collect().sameElements(updatedMetadataTableDF.collect())
   }
 
   @Test
