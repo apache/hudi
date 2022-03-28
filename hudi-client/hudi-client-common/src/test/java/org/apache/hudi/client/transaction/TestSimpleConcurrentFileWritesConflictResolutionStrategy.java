@@ -428,44 +428,48 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
   @Test
   public void testConcurrentWritesWithPendingInstants() throws Exception {
     // step1: create a pending replace/commit/compact instant: C1,C11,C12
-    String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
-    createPendingReplace(newInstantTime, WriteOperationType.CLUSTER);
+    String newInstantTimeC1 = HoodieActiveTimeline.createNewInstantTime();
+    createPendingReplace(newInstantTimeC1, WriteOperationType.CLUSTER);
 
-    String newCompactionInstantTime = HoodieActiveTimeline.createNewInstantTime();
-    createPendingCompaction(newCompactionInstantTime);
+    String newCompactionInstantTimeC11 = HoodieActiveTimeline.createNewInstantTime();
+    createPendingCompaction(newCompactionInstantTimeC11);
 
-    String newCommitInstantTime = HoodieActiveTimeline.createNewInstantTime();
-    createInflightCommit(newCommitInstantTime);
-    // step2: create a complete commit which has no conflict with replace instant: C2
+    String newCommitInstantTimeC12 = HoodieActiveTimeline.createNewInstantTime();
+    createInflightCommit(newCommitInstantTimeC12);
+    // step2: create a complete commit which has no conflict with C1,C11,C12, named it as C2
     createCommit(HoodieActiveTimeline.createNewInstantTime());
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
     Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
-    // step3: write 1 starts, which has conflict with pendingReplaceCommit : C3
+    // step3: write 1 starts, which has conflict with C1,C11,C12, named it as C3
     String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
     createInflightCommit(currentWriterInstant);
+    // step4: create a requested commit, which has conflict with C3, named it as C4
+    String commitC4 = HoodieActiveTimeline.createNewInstantTime();
+    createRequestedCommit(commitC4);
     // get PendingCommit during write 1 operation
     metaClient.reloadActiveTimeline();
-    Set<String> pendingInstant = TransactionUtils.getInflightInstants(metaClient);
+    Set<String> pendingInstant = TransactionUtils.getInflightAndRequestedInstants(metaClient);
     pendingInstant.remove(currentWriterInstant);
-    // step4: finished pending cluster/compaction/commit operation
-    createCompleteReplace(newInstantTime, WriteOperationType.CLUSTER);
-    createCompleteCompaction(newCompactionInstantTime);
-    createCompleteCommit(newCommitInstantTime);
+    // step5: finished pending cluster/compaction/commit operation
+    createCompleteReplace(newInstantTimeC1, WriteOperationType.CLUSTER);
+    createCompleteCompaction(newCompactionInstantTimeC11);
+    createCompleteCommit(newCommitInstantTimeC12);
+    createCompleteCommit(commitC4);
 
-    // step5: do check
+    // step6: do check
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
-    // make sure c3 has conflict with c1;
+    // make sure c3 has conflict with C1,C11,C12,C4;
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant, "file-2");
     timeline.reload();
     List<HoodieInstant> completedInstantsDuringCurrentWriteOperation = TransactionUtils
             .getCompletedInstantsDuringCurrentWriteOperation(metaClient, pendingInstant).collect(Collectors.toList());
-    // C1,C11,C12 should be included
-    Assertions.assertTrue(completedInstantsDuringCurrentWriteOperation.size() == 3);
+    // C1,C11,C12,C4 should be included
+    Assertions.assertTrue(completedInstantsDuringCurrentWriteOperation.size() == 4);
 
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
-    // check C3 has conflict with C1,C11,C12
+    // check C3 has conflict with C1,C11,C12,C4
     for (HoodieInstant instant : completedInstantsDuringCurrentWriteOperation) {
       ConcurrentOperation thatCommitOperation = new ConcurrentOperation(instant, metaClient);
       Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
@@ -544,12 +548,9 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
             .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
-  private void createPendingCommit(String instantTime) throws Exception {
-    String fileId1 = "file-" + instantTime + "-1";
-    String fileId2 = "file-" + instantTime + "-2";
+  private void createRequestedCommit(String instantTime) throws Exception {
     HoodieTestTable.of(metaClient)
-            .addInflightCommit(instantTime)
-            .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
+            .addInflightCommit(instantTime);
   }
 
   private void createCompleteCommit(String instantTime) throws Exception {

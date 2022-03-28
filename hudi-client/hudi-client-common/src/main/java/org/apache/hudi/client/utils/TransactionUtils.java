@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -128,25 +129,33 @@ public class TransactionUtils {
   }
 
   /**
-   * Get pending instant.
+   * Get InflightAndRequest instants.
    *
    * @param metaClient
    * @return
    */
-  public static Set<String> getInflightInstants(HoodieTableMetaClient metaClient) {
-    // collect pending deltaCommit/commit/compaction/clustering
+  public static Set<String> getInflightAndRequestedInstants(HoodieTableMetaClient metaClient) {
+    // collect InflightAndRequest instants for deltaCommit/commit/compaction/clustering
+    Set<String> timelineActions = CollectionUtils
+        .createImmutableSet(HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.COMMIT_ACTION);
     return metaClient
-            .getActiveTimeline()
-            .filterInflights().getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
+        .getActiveTimeline()
+        .getTimelineOfActions(timelineActions)
+        .filterInflightsAndRequested()
+        .getInstants()
+        .map(HoodieInstant::getTimestamp)
+        .collect(Collectors.toSet());
   }
 
   public static Stream<HoodieInstant> getCompletedInstantsDuringCurrentWriteOperation(HoodieTableMetaClient metaClient, Set<String> pendingInstants) {
     // deal with pendingInstants
     // some pending instants maybe finished during current write operation,
     // we should check the conflict of those pending operation
-    return metaClient.reloadActiveTimeline()
-            .filterCompletedInstants()
-            .getInstants()
-            .filter(f -> pendingInstants.contains(f.getTimestamp()));
+    return metaClient
+        .reloadActiveTimeline()
+        .getCommitsTimeline()
+        .filterCompletedInstants()
+        .getInstants()
+        .filter(f -> pendingInstants.contains(f.getTimestamp()));
   }
 }
