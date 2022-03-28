@@ -14,20 +14,39 @@ jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
+      max-parallel: 7
       matrix:
         include:
-          - scala: "scala-2.11"
-            spark: "spark2"
-          - scala: "scala-2.11"
-            spark: "spark2,spark-shade-unbundle-avro"
-          - scala: "scala-2.12"
-            spark: "spark3.1.x"
-          - scala: "scala-2.12"
-            spark: "spark3.1.x,spark-shade-unbundle-avro"
-          - scala: "scala-2.12"
-            spark: "spark3"
-          - scala: "scala-2.12"
-            spark: "spark3,spark-shade-unbundle-avro"
+          # Spark 2.4.4
+          - scalaProfile: "scala-2.11"
+            sparkProfile: "spark2"
+            sparkVersion: "2.4.4"
+
+          # Spark 3.1.x
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.1.x"
+            sparkVersion: "3.1.0"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.1.x"
+            sparkVersion: "3.1.1"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.1.x"
+            sparkVersion: "3.1.2"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.1.x"
+            sparkVersion: "3.1.3"
+
+          # Spark 3.2.x
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.2.0"
+            sparkVersion: "3.2.0"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3"
+            sparkVersion: "3.2.1"
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 8
@@ -38,6 +57,16 @@ jobs:
           architecture: x64
       - name: Build Project
         env:
-          SCALA_PROFILE: ${{ matrix.scala }}
-          SPARK_PROFILE: ${{ matrix.spark }}
-        run: mvn install -P "$SCALA_PROFILE,$SPARK_PROFILE" -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_VERSION: ${{ matrix.sparkVersion }}
+        run:
+          mvn -T 2.5C clean install -P "$SCALA_PROFILE,$SPARK_PROFILE" -Dspark.version="$SPARK_VERSION" -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+      - name: Quickstart Test
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_VERSION: ${{ matrix.sparkVersion }}
+        if: ${{ !startsWith(env.SPARK_VERSION, '3.2.') }} # skip test spark 3.2 before hadoop upgrade to 3.x
+        run:
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dspark.version="$SPARK_VERSION" -DfailIfNoTests=false -pl hudi-examples/hudi-examples-flink,hudi-examples/hudi-examples-java,hudi-examples/hudi-examples-spark

@@ -27,6 +27,7 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieMetadataException;
 
@@ -36,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
  * Interface that supports querying various pieces of metadata about a hudi table.
@@ -70,6 +72,17 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   static String getDataTableBasePathFromMetadataTable(String metadataTableBasePath) {
     checkArgument(isMetadataTable(metadataTableBasePath));
     return metadataTableBasePath.substring(0, metadataTableBasePath.lastIndexOf(HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH) - 1);
+  }
+
+  /**
+   * Return the base path of the dataset.
+   *
+   * @param metadataTableBasePath The base path of the metadata table
+   */
+  static String getDatasetBasePath(String metadataTableBasePath) {
+    int endPos = metadataTableBasePath.lastIndexOf(Path.SEPARATOR + HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH);
+    checkState(endPos != -1, metadataTableBasePath + " should be base path of the metadata table");
+    return metadataTableBasePath.substring(0, endPos);
   }
 
   /**

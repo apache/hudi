@@ -780,7 +780,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         return allColumnNameList.stream()
             .flatMap(columnName ->
                 tableMetadata.getColumnStats(partitionFileNameList, columnName).values().stream()
-                    .map(stats -> new HoodieColumnRangeMetadata<>(
+                    .map(stats -> HoodieColumnRangeMetadata.create(
                         stats.getFileName(),
                         columnName,
                         stats.getMinValue(),
@@ -799,7 +799,7 @@ public class HoodieMetadataTableValidator implements Serializable {
                     metaClient.getHadoopConf(),
                     new Path(new Path(metaClient.getBasePath(), partitionPath), filename),
                     allColumnNameList).stream())
-            .map(rangeMetadata -> new HoodieColumnRangeMetadata<String>(
+            .map(rangeMetadata -> HoodieColumnRangeMetadata.create(
                 rangeMetadata.getFilePath(),
                 rangeMetadata.getColumnName(),
                 // Note: here we ignore the type in the validation,

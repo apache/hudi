@@ -72,6 +72,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.util.DataTypeUtils.areCompatible;
 
 public class ColumnStatsIndexHelper {
@@ -111,17 +112,17 @@ public class ColumnStatsIndexHelper {
    * | another_base_file.parquet |        -10 |          0 |           5 |
    * +---------------------------+------------+------------+-------------+
    * </pre>
-   *
+   * <p>
    * NOTE: Currently {@link TimestampType} is not supported, since Parquet writer
    * does not support statistics for it.
-   *
+   * <p>
    * TODO leverage metadata table after RFC-27 lands
-   * @VisibleForTesting
    *
-   * @param sparkSession encompassing Spark session
-   * @param baseFilesPaths list of base-files paths to be sourced for column-stats index
+   * @param sparkSession         encompassing Spark session
+   * @param baseFilesPaths       list of base-files paths to be sourced for column-stats index
    * @param orderedColumnSchemas target ordered columns
    * @return Spark's {@link Dataset} holding an index table
+   * @VisibleForTesting
    */
   @Nonnull
   public static Dataset<Row> buildColumnStatsTableFor(
@@ -223,13 +224,13 @@ public class ColumnStatsIndexHelper {
    *   <li>Cleans up any residual index tables, that weren't cleaned up before</li>
    * </ol>
    *
-   * @param sparkSession encompassing Spark session
+   * @param sparkSession      encompassing Spark session
    * @param sourceTableSchema instance of {@link StructType} bearing source table's writer's schema
-   * @param sourceBaseFiles list of base-files to be indexed
-   * @param orderedCols target ordered columns
-   * @param indexFolderPath col-stats index folder path
-   * @param commitTime current operation commit instant
-   * @param completedCommits all previously completed commit instants
+   * @param sourceBaseFiles   list of base-files to be indexed
+   * @param orderedCols       target ordered columns
+   * @param indexFolderPath   col-stats index folder path
+   * @param commitTime        current operation commit instant
+   * @param completedCommits  all previously completed commit instants
    */
   public static void updateColumnStatsIndexFor(
       @Nonnull SparkSession sparkSession,
@@ -424,57 +425,64 @@ public class ColumnStatsIndexHelper {
     return String.format("%s_%s", col, statName);
   }
 
-  private static Pair<Object, Object>
-      fetchMinMaxValues(
-          @Nonnull DataType colType,
-          @Nonnull HoodieColumnRangeMetadata<Comparable> colMetadata) {
+  private static Pair<Object, Object> fetchMinMaxValues(@Nonnull DataType colType,
+                                                        @Nonnull HoodieColumnRangeMetadata<Comparable> colMetadata) {
+    Comparable<?> minValue = colMetadata.getMinValue();
+    Comparable<?> maxValue = colMetadata.getMaxValue();
+
+    checkState((minValue == null) == (maxValue == null), "Either both min/max values should be null or neither");
+
+    if (minValue == null || maxValue == null) {
+      return Pair.of(null, null);
+    }
+
     if (colType instanceof IntegerType) {
       return Pair.of(
-          new Integer(colMetadata.getMinValue().toString()),
-          new Integer(colMetadata.getMaxValue().toString())
+          new Integer(minValue.toString()),
+          new Integer(maxValue.toString())
       );
     } else if (colType instanceof DoubleType) {
       return Pair.of(
-          new Double(colMetadata.getMinValue().toString()),
-          new Double(colMetadata.getMaxValue().toString())
+          new Double(minValue.toString()),
+          new Double(maxValue.toString())
       );
     } else if (colType instanceof StringType) {
       return Pair.of(
-          colMetadata.getMinValue().toString(),
-          colMetadata.getMaxValue().toString());
+          minValue.toString(),
+          maxValue.toString());
     } else if (colType instanceof DecimalType) {
       return Pair.of(
-          new BigDecimal(colMetadata.getMinValue().toString()),
-          new BigDecimal(colMetadata.getMaxValue().toString()));
+          new BigDecimal(minValue.toString()),
+          new BigDecimal(maxValue.toString()));
     } else if (colType instanceof DateType) {
       return Pair.of(
-          java.sql.Date.valueOf(colMetadata.getMinValue().toString()),
-          java.sql.Date.valueOf(colMetadata.getMaxValue().toString()));
+          java.sql.Date.valueOf(minValue.toString()),
+          java.sql.Date.valueOf(maxValue.toString()));
     } else if (colType instanceof LongType) {
       return Pair.of(
-          new Long(colMetadata.getMinValue().toString()),
-          new Long(colMetadata.getMaxValue().toString()));
+          new Long(minValue.toString()),
+          new Long(maxValue.toString()));
     } else if (colType instanceof ShortType) {
       return Pair.of(
-          new Short(colMetadata.getMinValue().toString()),
-          new Short(colMetadata.getMaxValue().toString()));
+          new Short(minValue.toString()),
+          new Short(maxValue.toString()));
     } else if (colType instanceof FloatType) {
       return Pair.of(
-          new Float(colMetadata.getMinValue().toString()),
-          new Float(colMetadata.getMaxValue().toString()));
+          new Float(minValue.toString()),
+          new Float(maxValue.toString()));
     } else if (colType instanceof BinaryType) {
       return Pair.of(
-          ((ByteBuffer) colMetadata.getMinValue()).array(),
-          ((ByteBuffer) colMetadata.getMaxValue()).array());
+          ((ByteBuffer) minValue).array(),
+          ((ByteBuffer) maxValue).array());
     } else if (colType instanceof BooleanType) {
       return Pair.of(
-          Boolean.valueOf(colMetadata.getMinValue().toString()),
-          Boolean.valueOf(colMetadata.getMaxValue().toString()));
+          Boolean.valueOf(minValue.toString()),
+          Boolean.valueOf(maxValue.toString()));
     } else if (colType instanceof ByteType) {
       return Pair.of(
-          Byte.valueOf(colMetadata.getMinValue().toString()),
-          Byte.valueOf(colMetadata.getMaxValue().toString()));
-    }  else {
+          Byte.valueOf(minValue.toString()),
+          Byte.valueOf(maxValue.toString()));
+    } else {
       throw new HoodieException(String.format("Not support type:  %s", colType));
     }
   }

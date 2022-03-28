@@ -382,23 +382,13 @@ public class HoodieAvroUtils {
     return newRecord;
   }
 
-  public static GenericRecord rewriteRecord(GenericRecord genericRecord, Schema newSchema, boolean copyOverMetaFields, GenericRecord fallbackRecord) {
+  public static GenericRecord rewriteRecordWithMetadata(GenericRecord genericRecord, Schema newSchema, String fileName) {
     GenericRecord newRecord = new GenericData.Record(newSchema);
-    boolean isSpecificRecord = genericRecord instanceof SpecificRecordBase;
     for (Schema.Field f : newSchema.getFields()) {
-      if (!(isSpecificRecord && isMetadataField(f.name()))) {
-        copyOldValueOrSetDefault(genericRecord, newRecord, f);
-      }
-      if (isMetadataField(f.name()) && copyOverMetaFields) {
-        // if meta field exists in primary generic record, copy over.
-        if (genericRecord.getSchema().getField(f.name()) != null) {
-          copyOldValueOrSetDefault(genericRecord, newRecord, f);
-        } else if (fallbackRecord != null && fallbackRecord.getSchema().getField(f.name()) != null) {
-          // if not, try to copy from the fallback record.
-          copyOldValueOrSetDefault(fallbackRecord, newRecord, f);
-        }
-      }
+      copyOldValueOrSetDefault(genericRecord, newRecord, f);
     }
+    // do not preserve FILENAME_METADATA_FIELD
+    newRecord.put(HoodieRecord.FILENAME_METADATA_FIELD_POS, fileName);
     if (!GenericData.get().validate(newSchema, newRecord)) {
       throw new SchemaCompatibilityException(
           "Unable to validate the rewritten record " + genericRecord + " against schema " + newSchema);

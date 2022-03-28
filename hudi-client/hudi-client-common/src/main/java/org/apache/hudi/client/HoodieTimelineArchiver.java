@@ -469,7 +469,22 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         throw new HoodieException("Error limiting instant archival based on metadata table", e);
       }
     }
-    
+
+    // If this is a metadata table, do not archive the commits that live in data set
+    // active timeline. This is required by metadata table,
+    // see HoodieTableMetadataUtil#processRollbackMetadata for details.
+    if (HoodieTableMetadata.isMetadataTable(config.getBasePath())) {
+      HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()
+          .setBasePath(HoodieTableMetadata.getDatasetBasePath(config.getBasePath()))
+          .setConf(metaClient.getHadoopConf())
+          .build();
+      Option<String> earliestActiveDatasetCommit = dataMetaClient.getActiveTimeline().firstInstant().map(HoodieInstant::getTimestamp);
+      if (earliestActiveDatasetCommit.isPresent()) {
+        instants = instants.filter(instant ->
+            HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.LESSER_THAN, earliestActiveDatasetCommit.get()));
+      }
+    }
+
     return instants.flatMap(hoodieInstant ->
         groupByTsAction.get(Pair.of(hoodieInstant.getTimestamp(),
             HoodieInstant.getComparableAction(hoodieInstant.getAction()))).stream());

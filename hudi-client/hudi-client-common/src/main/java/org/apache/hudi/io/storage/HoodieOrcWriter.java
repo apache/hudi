@@ -165,9 +165,4 @@ public class HoodieOrcWriter<T extends HoodieRecordPayload, R extends IndexedRec
 
     writer.close();
   }
-
-  @Override
-  public long getBytesWritten() {
-    return fs.getBytesWritten(file);
-  }
 }

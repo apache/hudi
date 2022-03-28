@@ -18,8 +18,6 @@
 
 package org.apache.hudi.streamer;
 
-import org.apache.flink.runtime.state.StateBackend;
-import org.apache.flink.runtime.state.hashmap.HashMapStateBackend;
 import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -32,6 +30,8 @@ import org.apache.hudi.util.StreamerUtil;
 
 import com.beust.jcommander.Parameter;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.runtime.state.StateBackend;
+import org.apache.flink.runtime.state.hashmap.HashMapStateBackend;
 
 import java.util.ArrayList;
 import java.util.HashMap;

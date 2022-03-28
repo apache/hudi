@@ -90,12 +90,11 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
       hadoopConf = new Configuration(conf)
     )
 
-    val hoodieTableState = HoodieTableState(HoodieRecord.RECORD_KEY_METADATA_FIELD, preCombineFieldOpt)
-
+    val hoodieTableState = getTableState
     // TODO(HUDI-3639) implement incremental span record filtering w/in RDD to make sure returned iterator is appropriately
     //                 filtered, since file-reader might not be capable to perform filtering
-    new HoodieMergeOnReadRDD(sqlContext.sparkContext, jobConf, fullSchemaParquetReader,
-      requiredSchemaParquetReader, hoodieTableState, tableSchema, requiredSchema, fileSplits)
+    new HoodieMergeOnReadRDD(sqlContext.sparkContext, jobConf, fullSchemaParquetReader, requiredSchemaParquetReader,
+      tableSchema, requiredSchema, hoodieTableState, mergeType, fileSplits)
   }
 
   override protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
