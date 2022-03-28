@@ -165,7 +165,7 @@ public class HoodieTableMetadataUtil {
     ArrayList<String> partitionsAdded = new ArrayList<>(commitMetadata.getPartitionToWriteStats().keySet());
 
     // Add record bearing deleted partitions list
-    List<String> partitionsDeleted = getPartitionsDeleted(commitMetadata);
+    ArrayList<String> partitionsDeleted = getPartitionsDeleted(commitMetadata);
 
     records.add(HoodieMetadataPayload.createPartitionListRecord(partitionsAdded, partitionsDeleted));
 
