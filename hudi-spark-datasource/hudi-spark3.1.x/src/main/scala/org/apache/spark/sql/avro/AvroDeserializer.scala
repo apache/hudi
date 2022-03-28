@@ -17,28 +17,27 @@
 
 package org.apache.spark.sql.avro
 
-import java.math.BigDecimal
-import java.nio.ByteBuffer
-
-import scala.collection.JavaConverters._
-import scala.collection.mutable.ArrayBuffer
-
-import org.apache.avro.{LogicalTypes, Schema, SchemaBuilder}
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.LogicalTypes.{TimestampMicros, TimestampMillis}
 import org.apache.avro.Schema.Type._
 import org.apache.avro.generic._
 import org.apache.avro.util.Utf8
-
-import org.apache.spark.sql.catalyst.{InternalRow, NoopFilters, StructFilters}
+import org.apache.avro.{LogicalTypes, Schema, SchemaBuilder}
+import org.apache.spark.sql.avro.AvroDeserializer.{createDateRebaseFuncInRead, createTimestampRebaseFuncInRead}
 import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeArrayData}
-import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, DateTimeUtils, GenericArrayData}
 import org.apache.spark.sql.catalyst.util.DateTimeConstants.MILLIS_PER_DAY
+import org.apache.spark.sql.catalyst.util._
+import org.apache.spark.sql.catalyst.{InternalRow, NoopFilters, StructFilters}
 import org.apache.spark.sql.execution.datasources.DataSourceUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf.LegacyBehaviorPolicy
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
+
+import java.math.BigDecimal
+import java.nio.ByteBuffer
+import scala.collection.JavaConverters._
+import scala.collection.mutable.ArrayBuffer
 
 /**
  * A deserializer to deserialize data in avro format to data in catalyst format.
@@ -64,10 +63,10 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
 
   private lazy val decimalConversions = new DecimalConversion()
 
-  private val dateRebaseFunc = DataSourceUtils.creteDateRebaseFuncInRead(
+  private val dateRebaseFunc = createDateRebaseFuncInRead(
     datetimeRebaseMode, "Avro")
 
-  private val timestampRebaseFunc = DataSourceUtils.creteTimestampRebaseFuncInRead(
+  private val timestampRebaseFunc = createTimestampRebaseFuncInRead(
     datetimeRebaseMode, "Avro")
 
   private val converter: Any => Option[Any] = rootCatalystType match {
@@ -332,11 +331,12 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
     val validFieldIndexes = ArrayBuffer.empty[Int]
     val fieldWriters = ArrayBuffer.empty[(CatalystDataUpdater, Any) => Unit]
 
+    val avroSchemaHelper = new AvroUtils.AvroSchemaHelper(avroType)
     val length = sqlType.length
     var i = 0
     while (i < length) {
       val sqlField = sqlType.fields(i)
-      AvroUtils.getAvroFieldByName(avroType, sqlField.name) match {
+      avroSchemaHelper.getFieldByName(sqlField.name) match {
         case Some(avroField) =>
           validFieldIndexes += avroField.pos()
 
@@ -457,3 +457,37 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
     override def setDecimal(ordinal: Int, value: Decimal): Unit = array.update(ordinal, value)
   }
 }
+
+object AvroDeserializer {
+
+  // NOTE: Following methods have been renamed in Spark 3.1.3 [1] making [[AvroDeserializer]] implementation
+  //       (which relies on it) be only compatible with the exact same version of [[DataSourceUtils]].
+  //       To make sure this implementation is compatible w/ all Spark versions w/in Spark 3.1.x branch,
+  //       we're preemptively cloned those methods to make sure Hudi is compatible w/ Spark 3.1.2 as well as
+  //       w/ Spark >= 3.1.3
+  //
+  // [1] https://github.com/apache/spark/pull/34978
+
+  def createDateRebaseFuncInRead(rebaseMode: LegacyBehaviorPolicy.Value,
+                                 format: String): Int => Int = rebaseMode match {
+    case LegacyBehaviorPolicy.EXCEPTION => days: Int =>
+      if (days < RebaseDateTime.lastSwitchJulianDay) {
+        throw DataSourceUtils.newRebaseExceptionInRead(format)
+      }
+      days
+    case LegacyBehaviorPolicy.LEGACY => RebaseDateTime.rebaseJulianToGregorianDays
+    case LegacyBehaviorPolicy.CORRECTED => identity[Int]
+  }
+
+  def createTimestampRebaseFuncInRead(rebaseMode: LegacyBehaviorPolicy.Value,
+                                      format: String): Long => Long = rebaseMode match {
+    case LegacyBehaviorPolicy.EXCEPTION => micros: Long =>
+      if (micros < RebaseDateTime.lastSwitchJulianTs) {
+        throw DataSourceUtils.newRebaseExceptionInRead(format)
+      }
+      micros
+    case LegacyBehaviorPolicy.LEGACY => RebaseDateTime.rebaseJulianToGregorianMicros
+    case LegacyBehaviorPolicy.CORRECTED => identity[Long]
+  }
+}
+
