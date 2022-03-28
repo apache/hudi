@@ -35,7 +35,7 @@ import org.apache.hadoop.hive.conf.HiveConf;
  * to enable querying via Glue ETLs, Athena etc.
  *
  * Extends HiveSyncTool since most logic is similar to Hive syncing,
- * expect using a different client {@link AWSGlueCatalogClient} that implements
+ * expect using a different client {@link AWSGlueCatalogSyncClient} that implements
  * the necessary functionality using Glue APIs.
  */
 @Experimental
@@ -51,7 +51,7 @@ public class AwsGlueCatalogSyncTool extends HiveSyncTool {
 
   @Override
   protected void initClient(HiveSyncConfig hiveSyncConfig, HiveConf hiveConf) {
-    hoodieHiveClient = new AWSGlueCatalogClient(hiveSyncConfig, hiveConf, fs);
+    hoodieHiveClient = new AWSGlueCatalogSyncClient(hiveSyncConfig, hiveConf, fs);
   }
 
   public static void main(String[] args) {

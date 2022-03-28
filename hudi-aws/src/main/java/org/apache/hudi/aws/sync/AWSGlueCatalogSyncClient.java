@@ -77,15 +77,15 @@ import static org.apache.hudi.sync.common.util.TableUtils.tableId;
  * This class implements all the AWS APIs to enable syncing of a Hudi Table with the
  * AWS Glue Data Catalog (https://docs.aws.amazon.com/glue/latest/dg/populate-data-catalog.html).
  */
-public class AWSGlueCatalogClient extends AbstractHiveSyncHoodieClient {
+public class AWSGlueCatalogSyncClient extends AbstractHiveSyncHoodieClient {
 
-  private static final Logger LOG = LogManager.getLogger(AWSGlueCatalogClient.class);
+  private static final Logger LOG = LogManager.getLogger(AWSGlueCatalogSyncClient.class);
   private static final int MAX_PARTITIONS_PER_REQUEST = 100;
   private static final long BATCH_REQUEST_SLEEP_MILLIS = 1000L;
   private final AWSGlue awsGlue;
   private final String databaseName;
 
-  public AWSGlueCatalogClient(HiveSyncConfig syncConfig, Configuration hadoopConf, FileSystem fs) {
+  public AWSGlueCatalogSyncClient(HiveSyncConfig syncConfig, Configuration hadoopConf, FileSystem fs) {
     super(syncConfig, hadoopConf, fs);
     this.awsGlue = AWSGlueClientBuilder.standard().build();
     this.databaseName = syncConfig.databaseName;
@@ -231,18 +231,17 @@ public class AWSGlueCatalogClient extends AbstractHiveSyncHoodieClient {
 
   @Override
   public List<FieldSchema> getTableCommentUsingMetastoreClient(String tableName) {
-    // no op; unsupported
-    return Collections.emptyList();
+    throw new UnsupportedOperationException("Not supported: `getTableCommentUsingMetastoreClient`");
   }
 
   @Override
   public void updateTableComments(String tableName, List<FieldSchema> oldSchema, List<Schema.Field> newSchema) {
-    // no op; unsupported
+    throw new UnsupportedOperationException("Not supported: `updateTableComments`");
   }
 
   @Override
   public void updateTableComments(String tableName, List<FieldSchema> oldSchema, Map<String, String> newComments) {
-    // no op; unsupported
+    throw new UnsupportedOperationException("Not supported: `updateTableComments`");
   }
 
   @Override
@@ -372,7 +371,7 @@ public class AWSGlueCatalogClient extends AbstractHiveSyncHoodieClient {
     CreateDatabaseRequest request = new CreateDatabaseRequest();
     request.setDatabaseInput(new DatabaseInput()
         .withName(databaseName)
-        .withDescription("automatically created by hudi")
+        .withDescription("Automatically created by " + this.getClass().getName())
         .withParameters(null)
         .withLocationUri(null));
     try {
@@ -416,18 +415,17 @@ public class AWSGlueCatalogClient extends AbstractHiveSyncHoodieClient {
 
   @Override
   public Option<String> getLastReplicatedTime(String tableName) {
-    // no op; unsupported
-    return Option.empty();
+    throw new UnsupportedOperationException("Not supported: `getLastReplicatedTime`");
   }
 
   @Override
   public void updateLastReplicatedTimeStamp(String tableName, String timeStamp) {
-    // no op; unsupported
+    throw new UnsupportedOperationException("Not supported: `updateLastReplicatedTimeStamp`");
   }
 
   @Override
   public void deleteLastReplicatedTimeStamp(String tableName) {
-    // no op; unsupported
+    throw new UnsupportedOperationException("Not supported: `deleteLastReplicatedTimeStamp`");
   }
 
   private enum TableType {
