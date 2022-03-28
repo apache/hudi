@@ -1,0 +1,26 @@
+{"minValue":"0","maxValue":"959","nullCount":0,"columnName":"c1"}
+{"minValue":"64.768","maxValue":"979.272","nullCount":0,"columnName":"c3"}
+{"minValue":"20220328202039002","maxValue":"20220328202039002","nullCount":0,"columnName":"_hoodie_commit_time"}
+{"minValue":"20220328202039002_0_41","maxValue":"20220328202039002_0_80","nullCount":0,"columnName":"_hoodie_commit_seqno"}
+{"minValue":"20220328202022669_0_1","maxValue":"20220328202022669_0_9","nullCount":0,"columnName":"_hoodie_commit_seqno"}
+{"minValue":"2020-01-01","maxValue":"2020-11-21","nullCount":0,"columnName":"c6"}
+{"minValue":"2020-01-01","maxValue":"2020-11-22","nullCount":0,"columnName":"c6"}
+{"minValue":" 111sdc","maxValue":" 8sdc","nullCount":0,"columnName":"c2"}
+{"minValue":"1637307284159000","maxValue":"1637307284201000","nullCount":0,"columnName":"c4"}
+{"minValue":"10deb9bc-f7b0-4c5c-8cd4-eccb92788c8c-0_0-70-115_20220328202039002.parquet","maxValue":"10deb9bc-f7b0-4c5c-8cd4-eccb92788c8c-0_0-70-115_20220328202039002.parquet","nullCount":0,"columnName":"_hoodie_file_name"}
+{"minValue":"19.000","maxValue":"994.355","nullCount":0,"columnName":"c3"}
+{"minValue":" 0sdc","maxValue":" 959sdc","nullCount":0,"columnName":"c2"}
+{"minValue":"8","maxValue":"770","nullCount":0,"columnName":"c1"}
+{"minValue":"b8dc14a9-c067-4b9c-9d29-eaa09bd35c4b-0_0-23-37_20220328202022669.parquet","maxValue":"b8dc14a9-c067-4b9c-9d29-eaa09bd35c4b-0_0-23-37_20220328202022669.parquet","nullCount":0,"columnName":"_hoodie_file_name"}
+{"minValue":"20220328202022669","maxValue":"20220328202022669","nullCount":0,"columnName":"_hoodie_commit_time"}
+{"minValue":"1637383255339000","maxValue":"1637383255550000","nullCount":0,"columnName":"c4"}
+{"minValue":"1","maxValue":"97","nullCount":0,"columnName":"c5"}
+{"minValue":"0","maxValue":"959","nullCount":0,"columnName":"_hoodie_record_key"}
+{"minValue":"9","maxValue":"9","nullCount":0,"columnName":"c8"}
+{"minValue":"9","maxValue":"9","nullCount":0,"columnName":"c8"}
+{"minValue":"","maxValue":"","nullCount":0,"columnName":"_hoodie_partition_path"}
+{"minValue":"111","maxValue":"8","nullCount":0,"columnName":"_hoodie_record_key"}
+{"minValue":"2","maxValue":"78","nullCount":0,"columnName":"c5"}
+{"minValue":"","maxValue":"","nullCount":0,"columnName":"_hoodie_partition_path"}
+{"minValue":"java.nio.HeapByteBuffer[pos=0 lim=1 cap=1]","maxValue":"java.nio.HeapByteBuffer[pos=0 lim=1 cap=1]","nullCount":0,"columnName":"c7"}
+{"minValue":"java.nio.HeapByteBuffer[pos=0 lim=1 cap=1]","maxValue":"java.nio.HeapByteBuffer[pos=0 lim=1 cap=1]","nullCount":0,"columnName":"c7"}

@@ -20,12 +20,18 @@ package org.apache.hudi.functional
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, LocatedFileStatus, Path}
+import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.ParquetUtils
+import org.apache.hudi.config.{HoodieStorageConfig, HoodieWriteConfig}
 import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper
+import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata, MetadataPartitionType}
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql._
 import org.apache.spark.sql.expressions.UserDefinedFunction
-import org.apache.spark.sql.functions.typedLit
+import org.apache.spark.sql.functions.{col, typedLit}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Tag, Test}
@@ -64,6 +70,103 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
   override def tearDown() = {
     cleanupFileSystem()
     cleanupSparkContexts()
+  }
+
+  @Test
+  def testMetadataColumnStatsIndex(): Unit = {
+    setTableName("hoodie_test")
+    initMetaClient()
+    val sourceJSONTablePath = getClass.getClassLoader.getResource("index/zorder/input-table-json").toString
+    val inputDF = spark.read
+      .schema(sourceTableSchema)
+      .json(sourceJSONTablePath)
+
+    val opts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      RECORDKEY_FIELD.key -> "c1",
+      PRECOMBINE_FIELD.key -> "c1",
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS.key -> "true",
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+    )
+
+    inputDF.repartition(4)
+      .write
+      .format("hudi")
+      .options(opts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key, 100 * 1024)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+
+    val metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(basePath)
+
+    val targetColStatsIndexColumns = Seq(
+      HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE,
+      HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE,
+      HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT)
+
+    val requiredMetadataIndexColumns =
+      (targetColStatsIndexColumns :+ HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME).map(colName =>
+        s"${HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS}.${colName}")
+
+    // Read Metadata Table's Column Stats Index into Spark's [[DataFrame]]
+    val metadataTableDF = spark.read.format("org.apache.hudi")
+      .load(s"$metadataTablePath/${MetadataPartitionType.COLUMN_STATS.getPartitionPath}")
+
+    val colStatsDF = metadataTableDF.where(col(HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS).isNotNull)
+      .select(requiredMetadataIndexColumns.map(col): _*)
+
+    // Match against expected column stats table
+    val colStatsSchema =
+      new StructType()
+        .add("minValue", StringType)
+        .add("maxValue", StringType)
+        .add("nullCount", LongType)
+        .add("columnName", StringType)
+    val expectedColStatsIndexTableDf =
+      spark.read
+        .schema(colStatsSchema)
+        .json(getClass.getClassLoader.getResource("index/zorder/column-stats-index-table.json").toString)
+
+    expectedColStatsIndexTableDf.schema.equals(colStatsDF.schema)
+    expectedColStatsIndexTableDf.collect().sameElements(colStatsDF.collect())
+
+    // do an upsert and validate
+    val updateJSONTablePath = getClass.getClassLoader.getResource("index/zorder/another-input-table-json").toString
+    val updateDF = spark.read
+      .schema(sourceTableSchema)
+      .json(updateJSONTablePath)
+
+    updateDF.repartition(4)
+      .write
+      .format("hudi")
+      .options(opts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key, 100 * 1024)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+
+    val updatedMetadataTableDF = spark.read.format("org.apache.hudi")
+      .load(s"$metadataTablePath/${MetadataPartitionType.COLUMN_STATS.getPartitionPath}")
+
+    val updatedColStatsDF = updatedMetadataTableDF.where(col(HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS).isNotNull)
+      .select(requiredMetadataIndexColumns.map(col): _*)
+
+    val expectedColStatsIndexUpdatedDf =
+      spark.read
+        .schema(colStatsSchema)
+        .json(getClass.getClassLoader.getResource("index/zorder/update-column-stats-index-table.json").toString)
+
+    expectedColStatsIndexUpdatedDf.schema.equals(updatedColStatsDF.schema)
+    expectedColStatsIndexUpdatedDf.collect().sameElements(updatedMetadataTableDF.collect())
   }
 
   @Test
@@ -169,7 +272,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
     bootstrapParquetInputTableFromJSON(secondJSONTablePath, secondParquetTablePath)
 
-    val secondCommitInstance = "1"  
+    val secondCommitInstance = "1"
     val secondInputDf =
       spark.read
         .schema(sourceTableSchema)
