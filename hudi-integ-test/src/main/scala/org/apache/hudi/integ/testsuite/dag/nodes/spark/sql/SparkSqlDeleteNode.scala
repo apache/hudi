@@ -48,7 +48,7 @@ class SparkSqlDeleteNode(dagNodeConfig: Config) extends BaseSparkSqlNode(dagNode
       context.getWriterContext.getCfg.targetTableName, sparkSession.sparkContext.defaultParallelism)
     LOG.info("Number of records to delete: " + recordsToDelete.count())
     // The update records corresponding to the SQL are only used for data validation
-    context.getDeltaGenerator().writeRecords(recordsToDelete).count()
+    context.getDeltaGenerator().writeRecords(recordsToDelete).getValue().count()
     recordsToDelete
   }
 
