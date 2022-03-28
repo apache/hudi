@@ -187,9 +187,4 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
     writer.close();
     writer = null;
   }
-
-  @Override
-  public long getBytesWritten() {
-    return fs.getBytesWritten(file);
-  }
 }

@@ -62,10 +62,12 @@ object AvroConversionUtils {
    * @param rootCatalystType Catalyst [[StructType]] to be transformed into
    * @return converter accepting Avro payload and transforming it into a Catalyst one (in the form of [[InternalRow]])
    */
-  def createAvroToInternalRowConverter(rootAvroType: Schema, rootCatalystType: StructType): GenericRecord => Option[InternalRow] =
-    record => sparkAdapter.createAvroDeserializer(rootAvroType, rootCatalystType)
+  def createAvroToInternalRowConverter(rootAvroType: Schema, rootCatalystType: StructType): GenericRecord => Option[InternalRow] = {
+    val deserializer = sparkAdapter.createAvroDeserializer(rootAvroType, rootCatalystType)
+    record => deserializer
       .deserialize(record)
       .map(_.asInstanceOf[InternalRow])
+  }
 
   /**
    * Creates converter to transform Catalyst payload into Avro one
@@ -76,7 +78,8 @@ object AvroConversionUtils {
    * @return converter accepting Catalyst payload (in the form of [[InternalRow]]) and transforming it into an Avro one
    */
   def createInternalRowToAvroConverter(rootCatalystType: StructType, rootAvroType: Schema, nullable: Boolean): InternalRow => GenericRecord = {
-    row => sparkAdapter.createAvroSerializer(rootCatalystType, rootAvroType, nullable)
+    val serializer = sparkAdapter.createAvroSerializer(rootCatalystType, rootAvroType, nullable)
+    row => serializer
       .serialize(row)
       .asInstanceOf[GenericRecord]
   }

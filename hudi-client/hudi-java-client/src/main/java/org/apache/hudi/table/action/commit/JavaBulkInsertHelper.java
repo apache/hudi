@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -111,7 +112,7 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Base
 
     FileIdPrefixProvider fileIdPrefixProvider = (FileIdPrefixProvider) ReflectionUtils.loadClass(
         config.getFileIdPrefixProviderClassName(),
-        config.getProps());
+        new TypedProperties(config.getProps()));
 
     List<WriteStatus> writeStatuses = new ArrayList<>();
 
