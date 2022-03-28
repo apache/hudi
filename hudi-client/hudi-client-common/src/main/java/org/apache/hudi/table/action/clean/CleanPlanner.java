@@ -209,6 +209,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
    */
   private List<String> getPartitionPathsForFullCleaning() {
     // Go to brute force mode of scanning all partitions
+    // TableMetadata has dropped pratitions, so only all partitions can be obtained from the file
     try {
       FileSystemBackedTableMetadata fsBackedTableMetadata = new FileSystemBackedTableMetadata(context,
           context.getHadoopConf(), config.getBasePath(), config.shouldAssumeDatePartitioning());
