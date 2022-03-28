@@ -91,7 +91,9 @@ import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.TOTAL
 import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.VALUE_COUNT;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
+import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_INIT_TIMESTAMP_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
+import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 
 /**
  * A utility to convert timeline information to metadata table records.
@@ -477,6 +479,18 @@ public class HoodieTableMetadataUtil {
     return partitionToRecordsMap;
   }
 
+  public static boolean isMetadataTableInitCommit(String instantTimestamp) {
+    if (SOLO_COMMIT_TIMESTAMP.equals(instantTimestamp)) {
+      return true;
+    }
+    String newInstantTimestamp = HoodieActiveTimeline.createNewInstantTime();
+    if (instantTimestamp.length() - newInstantTimestamp.length() == 3
+        && instantTimestamp.endsWith(METADATA_TABLE_INIT_TIMESTAMP_SUFFIX)) {
+      return true;
+    }
+    return false;
+  }
+
   /**
    * Convert rollback action metadata to files partition records.
    */
@@ -556,7 +570,9 @@ public class HoodieTableMetadataUtil {
       //
       // when at time t4, we commit the compaction rollback,the above check returns true.
       HoodieInstant syncedInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, instantToRollback);
-      if (metadataTableTimeline.getCommitsTimeline().isBeforeTimelineStarts(syncedInstant.getTimestamp())) {
+      Option<HoodieInstant> firstInstant = metadataTableTimeline.getCommitsTimeline().firstInstant();
+      if (firstInstant.isPresent() && !isMetadataTableInitCommit(firstInstant.get().getTimestamp())
+          && metadataTableTimeline.getCommitsTimeline().isBeforeTimelineStarts(syncedInstant.getTimestamp())) {
         throw new HoodieMetadataException(String.format("The instant %s required to sync rollback of %s has been archived",
             syncedInstant, instantToRollback));
       }

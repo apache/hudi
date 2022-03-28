@@ -504,9 +504,11 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }
 
     // If there is no commit on the dataset yet, use the SOLO_COMMIT_TIMESTAMP as the instant time for initial commit
-    // Otherwise, we use the timestamp of the latest completed action.
+    // Otherwise, we use the timestamp of the latest completed action with the suffix "000".
     String createInstantTime = dataMetaClient.getActiveTimeline().filterCompletedInstants()
-        .getReverseOrderedInstants().findFirst().map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
+        .getReverseOrderedInstants().findFirst().map(HoodieInstant::getTimestamp)
+        .map(timestamp -> timestamp + HoodieTableMetadata.METADATA_TABLE_INIT_TIMESTAMP_SUFFIX)
+        .orElse(SOLO_COMMIT_TIMESTAMP);
     LOG.info("Creating a new metadata table in " + metadataWriteConfig.getBasePath() + " at instant " + createInstantTime);
 
     initializeMetaClient(dataWriteConfig.getMetadataConfig().populateMetaFields());
@@ -820,7 +822,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // Trigger compaction with suffixes based on the same instant time. This ensures that any future
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.
-    final String compactionInstantTime = latestDeltacommitTime + "001";
+    final String compactionInstantTime = latestDeltacommitTime
+        + HoodieTableMetadata.METADATA_TABLE_COMPACTION_TIMESTAMP_SUFFIX;
     if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
       writeClient.compact(compactionInstantTime);
     }
@@ -843,7 +846,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // Trigger cleaning with suffixes based on the same instant time. This ensures that any future
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.
-    writeClient.clean(instantTime + "002");
+    writeClient.clean(instantTime + HoodieTableMetadata.METADATA_TABLE_CLEAN_TIMESTAMP_SUFFIX);
   }
 
   /**

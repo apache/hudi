@@ -18,8 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -27,9 +25,11 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieMetadataException;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -52,6 +52,9 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * can be prepped even before bootstrap is done.
    */
   String SOLO_COMMIT_TIMESTAMP = "00000000000000";
+  String METADATA_TABLE_INIT_TIMESTAMP_SUFFIX = "000";
+  String METADATA_TABLE_COMPACTION_TIMESTAMP_SUFFIX = "001";
+  String METADATA_TABLE_CLEAN_TIMESTAMP_SUFFIX = "002";
   // Key for the record which saves list of all partitions
   String RECORDKEY_PARTITION_LIST = "__all_partitions__";
   // The partition name used for non-partitioned tables
