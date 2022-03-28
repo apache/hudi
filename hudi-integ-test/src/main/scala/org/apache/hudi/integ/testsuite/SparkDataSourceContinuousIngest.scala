@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi
+package org.apache.hudi.integ.testsuite
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, FileSystem, Path, PathFilter}
@@ -26,44 +26,44 @@ import org.apache.spark.sql.{SaveMode, SparkSession}
 
 import java.io.Serializable
 
-class SparkDataSourceContinuousIngestion(val spark: SparkSession, val conf: Configuration, val sourcePath: Path,
-                                         val sourceFormat: String, val checkpointFile: Path, hudiBasePath: Path, hudiOptions: java.util.Map[String, String],
-                                         minSyncIntervalSeconds: Long) extends Serializable {
+class SparkDataSourceContinuousIngest(val spark: SparkSession, val conf: Configuration, val sourcePath: Path,
+                                      val sourceFormat: String, val checkpointFile: Path, hudiBasePath: Path, hudiOptions: java.util.Map[String, String],
+                                      minSyncIntervalSeconds: Long) extends Serializable {
 
   private val log = LogManager.getLogger(getClass)
 
   def startIngestion(): Unit = {
     val fs = sourcePath.getFileSystem(conf)
-    var sortedBatch : Array[FileStatus] = null
+    var orderedBatch : Array[FileStatus] = null
     if (fs.exists(checkpointFile)) {
       log.info("Checkpoint file exists. ")
       val checkpoint = spark.sparkContext.textFile(checkpointFile.toString).collect()(0)
       log.warn("Checkpoint to resume from " + checkpoint)
 
-      sortedBatch = fetchListOfFilesToConsume(fs, sourcePath, new PathFilter {
+      orderedBatch = fetchListOfFilesToConsume(fs, sourcePath, new PathFilter {
         override def accept(path: Path): Boolean = {
           path.getName.toLong > checkpoint.toLong
         }
       })
       if (log.isDebugEnabled) {
         log.debug("List of batches to consume in order ")
-        sortedBatch.foreach(entry => log.warn(" " + entry.getPath.getName))
+        orderedBatch.foreach(entry => log.warn(" " + entry.getPath.getName))
       }
 
     } else {
       log.warn("No checkpoint file exists. Starting from scratch ")
-      sortedBatch = fetchListOfFilesToConsume(fs, sourcePath, new PathFilter {
+      orderedBatch = fetchListOfFilesToConsume(fs, sourcePath, new PathFilter {
         override def accept(path: Path): Boolean = {
           true
         }
       })
       if (log.isDebugEnabled) {
         log.debug("List of batches to consume in order ")
-        sortedBatch.foreach(entry => log.warn(" " + entry.getPath.getName))
+        orderedBatch.foreach(entry => log.warn(" " + entry.getPath.getName))
       }
     }
 
-    sortedBatch.foreach(entry => {
+    orderedBatch.foreach(entry => {
       log.info("Consuming from batch " + entry)
       val pathToConsume = new Path(sourcePath.toString + "/" + entry.getPath.getName)
       val df = spark.read.format(sourceFormat).load(pathToConsume.toString)

@@ -17,11 +17,12 @@
  * under the License.
  */
 
-package org.apache.hudi;
+package org.apache.hudi.integ.testsuite;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.integ.testsuite.SparkDataSourceContinuousIngest;
 import org.apache.hudi.utilities.HoodieRepairTool;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.utilities.UtilHelpers;
@@ -44,11 +45,11 @@ import java.util.Map;
 /**
  * Sample command
  *
- * ./bin/spark-submit   --class org.apache.hudi.SparkDSContinuousIngestTool   --driver-memory 4g   --executor-memory 4g \
+ * ./bin/spark-submit --packages org.apache.spark:spark-avro_2.11:2.4.4 --driver-memory 4g   --executor-memory 4g \
  * --conf spark.serializer=org.apache.spark.serializer.KryoSerializer   --conf spark.sql.catalogImplementation=hive \
- * --packages org.apache.spark:spark-avro_2.11:2.4.4 \
- * ${HUDI_DIR}/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
- * --source-path file:///tmp/hudi_src/   --checkpoint-file-path /tmp/hudi/checkpoint  \
+ * --class org.apache.hudi.integ.testsuite.SparkDSContinuousIngestTool \
+ * /Users/nsb/Documents/personal/projects/nov26/hudi/packaging/hudi-integ-test-bundle/target/hudi-integ-test-bundle-0.11.0-SNAPSHOT.jar \
+ * --source-path file:///Users/nsb/Documents/personal/datasets/spark_ds_continuous   --checkpoint-file-path /tmp/hudi/checkpoint  \
  * --base-path file:///tmp/hudi/tbl_path/   --props /tmp/hudi_props.out
  *
  * Contents of hudi_props.out
@@ -106,11 +107,11 @@ public class SparkDSContinuousIngestTool {
 
   public void run() {
     try {
-      SparkDataSourceContinuousIngestion sparkDataSourceContinuousIngestion =
-          new SparkDataSourceContinuousIngestion(sparkSession, context.getHadoopConf().get(), new Path(cfg.sourcePath), cfg.sparkFormat,
+      SparkDataSourceContinuousIngest sparkDataSourceContinuousIngest =
+          new SparkDataSourceContinuousIngest(sparkSession, context.getHadoopConf().get(), new Path(cfg.sourcePath), cfg.sparkFormat,
               new Path(cfg.checkpointFilePath), new Path(cfg.basePath), getPropsAsMap(props),
               cfg.minSyncIntervalSeconds);
-      sparkDataSourceContinuousIngestion.startIngestion();
+      sparkDataSourceContinuousIngest.startIngestion();
     } finally {
       sparkSession.stop();
       context.getJavaSparkContext().stop();
