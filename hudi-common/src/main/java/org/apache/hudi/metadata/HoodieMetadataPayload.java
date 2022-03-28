@@ -321,9 +321,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private HoodieMetadataColumnStats combineColumnStatsMetadata(HoodieMetadataPayload previousRecord) {
     checkArgument(previousRecord.getColumnStatMetadata().isPresent());
     checkArgument(getColumnStatMetadata().isPresent());
-    checkArgument(previousRecord.getColumnStatMetadata().get()
-        .getFileName().equals(this.columnStatMetadata.getFileName()));
-    return HoodieTableMetadataUtil.mergeColumnStats(previousRecord.getColumnStatMetadata().get(), this.columnStatMetadata);
+
+    HoodieMetadataColumnStats previousColStatsRecord = previousRecord.getColumnStatMetadata().get();
+    HoodieMetadataColumnStats newColumnStatsRecord = getColumnStatMetadata().get();
+
+    return HoodieTableMetadataUtil.mergeColumnStats(previousColStatsRecord, newColumnStatsRecord);
   }
 
   @Override
