@@ -21,6 +21,7 @@ package org.apache.hudi.hive.ddl;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
+import org.apache.hudi.hive.util.HivePartitionUtil;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -29,12 +30,10 @@ import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.Driver;
-import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.hudi.hive.util.HivePartitionUtil;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -52,14 +51,12 @@ import java.util.stream.Collectors;
 public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   private static final Logger LOG = LogManager.getLogger(HiveQueryDDLExecutor.class);
   private final HiveSyncConfig config;
-  private final IMetaStoreClient metaStoreClient;
   private SessionState sessionState = null;
   private Driver hiveDriver = null;
 
-  public HiveQueryDDLExecutor(HiveSyncConfig config, FileSystem fs, HiveConf configuration) throws HiveException, MetaException {
-    super(config, fs);
+  public HiveQueryDDLExecutor(HiveSyncConfig config, FileSystem fs, HiveConf configuration, IMetaStoreClient metaStoreClientOption) throws HiveException, MetaException {
+    super(config, fs, metaStoreClientOption);
     this.config = config;
-    this.metaStoreClient = Hive.get(configuration).getMSC();
     try {
       this.sessionState = new SessionState(configuration,
           UserGroupInformation.getCurrentUser().getShortUserName());
@@ -79,6 +76,10 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       }
       throw new HoodieHiveSyncException("Failed to create HiveQueryDDL object", e);
     }
+  }
+
+  public HiveQueryDDLExecutor(HiveSyncConfig hiveSyncConfig, FileSystem fs, HiveConf configuration) throws HiveException, MetaException {
+    this(hiveSyncConfig, fs, configuration, null);
   }
 
   @Override
@@ -109,7 +110,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       // HiveMetastoreClient returns partition keys separate from Columns, hence get both and merge to
       // get the Schema of the table.
       final long start = System.currentTimeMillis();
-      Table table = metaStoreClient.getTable(config.databaseName, tableName);
+      Table table = client.getTable(config.databaseName, tableName);
       Map<String, String> partitionKeysMap =
           table.getPartitionKeys().stream().collect(Collectors.toMap(FieldSchema::getName, f -> f.getType().toUpperCase()));
 
@@ -138,7 +139,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     try {
       for (String dropPartition : partitionsToDrop) {
         String partitionClause = HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, config);
-        metaStoreClient.dropPartition(config.databaseName, tableName, partitionClause, false);
+        client.dropPartition(config.databaseName, tableName, partitionClause, false);
         LOG.info("Drop partition " + dropPartition + " on " + tableName);
       }
     } catch (Exception e) {
@@ -147,10 +148,4 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     }
   }
 
-  @Override
-  public void close() {
-    if (metaStoreClient != null) {
-      Hive.closeCurrent();
-    }
-  }
 }
