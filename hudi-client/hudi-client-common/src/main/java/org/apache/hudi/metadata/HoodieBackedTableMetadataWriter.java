@@ -550,7 +550,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     HoodieTableConfig.update(dataMetaClient.getFs(), new Path(dataMetaClient.getMetaPath()), dataMetaClient.getTableConfig().getProps());
   }
 
-  private HoodieTableMetaClient initializeMetaClient(boolean populatMetaFields) throws IOException {
+  private HoodieTableMetaClient initializeMetaClient(boolean populateMetaFields) throws IOException {
     return HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(HoodieTableType.MERGE_ON_READ)
         .setTableName(tableName)
@@ -558,7 +558,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .setPayloadClassName(HoodieMetadataPayload.class.getName())
         .setBaseFileFormat(HoodieFileFormat.HFILE.toString())
         .setRecordKeyFields(RECORD_KEY_FIELD_NAME)
-        .setPopulateMetaFields(populatMetaFields)
+        .setPopulateMetaFields(populateMetaFields)
         .setKeyGeneratorClassProp(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
         .initTable(hadoopConf.get(), metadataWriteConfig.getBasePath());
   }
@@ -737,26 +737,29 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     Set<String> partitionsToUpdate = getMetadataPartitionsToUpdate();
     Set<String> inflightIndexes = Stream.of(dataMetaClient.getTableConfig().getInflightMetadataIndexes().split(","))
         .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toSet());
-    partitionsToUpdate.forEach(p -> {
-      if (enabled && metadata != null) {
-        Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap = convertMetadataFunction.convertMetadata();
-        // if indexing is inflight then don't trigger table service
-        commit(instantTime, partitionRecordsMap, !inflightIndexes.contains(p) && canTriggerTableService);
-      }
-    });
+    // if indexing is inflight then do not trigger table service
+    boolean doNotTriggerTableService = partitionsToUpdate.stream().anyMatch(inflightIndexes::contains);
+
+    if (enabled && metadata != null) {
+      // convert metadata and filter only the entries whose partition path are in partitionsToUpdate
+      Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap = convertMetadataFunction.convertMetadata().entrySet().stream()
+          .filter(entry -> partitionsToUpdate.contains(entry.getKey().getPartitionPath())).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+      commit(instantTime, partitionRecordsMap, !doNotTriggerTableService && canTriggerTableService);
+    }
   }
 
   private Set<String> getMetadataPartitionsToUpdate() {
     // fetch partitions to update from table config
     Set<String> partitionsToUpdate = Stream.of(dataMetaClient.getTableConfig().getCompletedMetadataIndexes().split(","))
         .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toSet());
+    // add inflight indexes as well because the file groups have already been initialized, so writers can log updates
     partitionsToUpdate.addAll(Stream.of(dataMetaClient.getTableConfig().getInflightMetadataIndexes().split(","))
         .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toSet()));
     if (!partitionsToUpdate.isEmpty()) {
       return partitionsToUpdate;
     }
-    // fallback to update files partition only if table config returned no partitions
-    partitionsToUpdate.add(MetadataPartitionType.FILES.getPartitionPath());
+    // fallback to all enabled partitions if table config returned no partitions
+    partitionsToUpdate.addAll(getEnabledPartitionTypes().stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toList()));
     return partitionsToUpdate;
   }
 
