@@ -174,9 +174,7 @@ object CreateHoodieTableCommand {
     val client = HiveClientUtils.newClientForMetadata(sparkSession.sparkContext.conf,
       sparkSession.sessionState.newHadoopConf())
     // create hive table.
-    if (!client.tableExists(table.identifier.database.get, table.identifier.table)) {
-      client.createTable(tableWithDataSourceProps, ignoreIfExists)
-    }
+    client.createTable(tableWithDataSourceProps, ignoreIfExists = true)
   }
 
   // This code is forked from org.apache.spark.sql.hive.HiveExternalCatalog#tableMetaToTableProps
