@@ -19,10 +19,11 @@ package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.HoodieDatasetUtils.withPersistence
-import org.apache.hudi.HoodieFileIndex.{collectReferencedColumns, getConfigProperties}
+import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferencedColumns, getConfigProperties}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper.{getMaxColumnNameFor, getMinColumnNameFor, getNumNullsColumnNameFor}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
@@ -84,7 +85,7 @@ case class HoodieFileIndex(spark: SparkSession,
 
   override def rootPaths: Seq[Path] = queryPaths.asScala
 
-  def isDataSkippingEnabled(): Boolean = {
+  def isDataSkippingEnabled: Boolean = {
     options.getOrElse(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(),
       spark.sessionState.conf.getConfString(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "false")).toBoolean
   }
@@ -123,8 +124,12 @@ case class HoodieFileIndex(spark: SparkSession,
       lookupCandidateFilesInMetadataTable(dataFilters) match {
         case Success(opt) => opt
         case Failure(e) =>
-          logError("Failed to lookup candidate files in Z-index", e)
-          Option.empty
+          logError("Failed to lookup candidate files in File Index", e)
+
+          spark.sqlContext.getConf(DataSkippingFailureMode.configName, DataSkippingFailureMode.Fallback.value) match {
+            case DataSkippingFailureMode.Fallback.value => Option.empty
+            case DataSkippingFailureMode.Strict.value   => throw new HoodieException(e);
+          }
       }
 
     logDebug(s"Overlapping candidate files from Column Stats Index: ${candidateFilesNamesOpt.getOrElse(Set.empty)}")
@@ -194,7 +199,7 @@ case class HoodieFileIndex(spark: SparkSession,
     val fs = metaClient.getFs
     val metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(basePath)
 
-    if (!isDataSkippingEnabled() || !fs.exists(new Path(metadataTablePath)) || queryFilters.isEmpty) {
+    if (!isDataSkippingEnabled || !fs.exists(new Path(metadataTablePath)) || queryFilters.isEmpty) {
       Option.empty
     } else {
       val targetColStatsIndexColumns = Seq(
@@ -301,6 +306,22 @@ case class HoodieFileIndex(spark: SparkSession,
 }
 
 object HoodieFileIndex extends Logging {
+
+  object DataSkippingFailureMode extends Enumeration {
+    val configName = "hoodie.fileIndex.dataSkippingFailureMode"
+
+    type DataSkippingFailureMode = Value
+
+    case class Val(value: String) extends super.Val {
+      override def toString(): String = value
+    }
+
+    import scala.language.implicitConversions
+    implicit def valueToVal(x: Value): DataSkippingFailureMode = x.asInstanceOf[Val]
+
+    val Fallback: Val = Val("fallback")
+    val Strict: Val   = Val("strict")
+  }
 
   private def collectReferencedColumns(spark: SparkSession, queryFilters: Seq[Expression], schema: StructType): Seq[String] = {
     val resolver = spark.sessionState.analyzer.resolver

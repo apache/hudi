@@ -18,13 +18,14 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.HoodieClientTestBase
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -91,6 +92,9 @@ class TestLayoutOptimization extends HoodieClientTestBase {
     // Bulk Insert Operation
     val records = recordsToStrings(dataGen.generateInserts("001", targetRecordsCount)).toList
     val writeDf: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+    // If there are any failures in the Data Skipping flow, test should fail
+    spark.sqlContext.setConf(DataSkippingFailureMode.configName, DataSkippingFailureMode.Strict.value);
 
     writeDf.write.format("org.apache.hudi")
       .options(commonOpts)
