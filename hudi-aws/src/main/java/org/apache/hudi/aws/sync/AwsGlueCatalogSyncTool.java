@@ -18,16 +18,15 @@
 
 package org.apache.hudi.aws.sync;
 
+import com.beust.jcommander.JCommander;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hudi.annotations.Experimental;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
-
-import com.beust.jcommander.JCommander;
-import jdk.jfr.Experimental;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.hive.conf.HiveConf;
 
 /**
  * Currently Experimental. Utility class that implements syncing a Hudi Table with the
