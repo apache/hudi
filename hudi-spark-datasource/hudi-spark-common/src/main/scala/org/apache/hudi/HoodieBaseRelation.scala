@@ -70,7 +70,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
                                   val metaClient: HoodieTableMetaClient,
                                   val optParams: Map[String, String],
                                   userSchema: Option[StructType])
-  extends BaseRelation with PrunedFilteredScan with Logging {
+  extends BaseRelation with PrunedFilteredScan with Logging with SparkAdapterSupport {
 
   type FileSplit <: HoodieFileSplit
 
@@ -120,7 +120,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       // If there is no commit in the table, we can't get the schema
       // t/h [[TableSchemaResolver]], fallback to the provided [[userSchema]] instead.
       userSchema match {
-        case Some(s) => SchemaConverters.toAvroType(s)
+        case Some(s) => sparkAdapter.getAvroSchemaConverters.toAvroType(s, nullable = false, "record")
         case _ => throw new IllegalArgumentException("User-provided schema is required in case the table is empty")
       }
     )

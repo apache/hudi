@@ -92,7 +92,6 @@ import java.util.stream.Collectors;
  * ```
  * spark-submit \
  *  --class org.apache.hudi.utilities.HoodieMetadataTableValidator \
- *  --packages org.apache.spark:spark-avro_2.11:2.4.4 \
  *  --master spark://xxxx:7077 \
  *  --driver-memory 1g \
  *  --executor-memory 1g \
@@ -111,7 +110,6 @@ import java.util.stream.Collectors;
  * ```
  * spark-submit \
  *  --class org.apache.hudi.utilities.HoodieMetadataTableValidator \
- *  --packages org.apache.spark:spark-avro_2.11:2.4.4 \
  *  --master spark://xxxx:7077 \
  *  --driver-memory 1g \
  *  --executor-memory 1g \

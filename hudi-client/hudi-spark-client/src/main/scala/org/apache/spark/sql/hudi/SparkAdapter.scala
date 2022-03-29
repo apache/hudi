@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi
 
 import org.apache.avro.Schema
 import org.apache.hudi.client.utils.SparkRowSerDe
-import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
+import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
@@ -58,6 +58,11 @@ trait SparkAdapter extends Serializable {
    * Avro payloads into Spark's [[InternalRow]]
    */
   def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer
+
+  /**
+   * Creates instance of [[HoodieAvroSchemaConverters]] allowing to convert b/w Avro and Catalyst schemas
+   */
+  def getAvroSchemaConverters: HoodieAvroSchemaConverters
 
   /**
    * Create the SparkRowSerDe.

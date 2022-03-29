@@ -20,10 +20,12 @@ package org.apache.spark.sql.avro
 import org.apache.avro.Schema
 import org.apache.spark.sql.types.DataType
 
-class HoodieSparkAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean)
-  extends HoodieAvroSerializer {
+class HoodieSpark2_4AvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType)
+  extends HoodieAvroDeserializer {
 
-  val avroSerializer = new AvroSerializer(rootCatalystType, rootAvroType, nullable)
+  private val avroDeserializer = new AvroDeserializer(rootAvroType, rootCatalystType)
 
-  override def serialize(catalystData: Any): Any = avroSerializer.serialize(catalystData)
+  // As of Spark 3.1, this will return data wrapped with Option, so we make sure these interfaces
+  // are aligned across Spark versions
+  def deserialize(data: Any): Option[Any] = Some(avroDeserializer.deserialize(data))
 }
