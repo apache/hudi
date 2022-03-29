@@ -341,8 +341,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
                                                                     Option<T> actionMetadata,
                                                                     Option<String> inflightInstantTimestamp);
 
-  protected abstract void scheduleIndex(List<MetadataPartitionType> partitionTypes);
-
   public void initTableMetadata() {
     try {
       if (this.metadata != null) {

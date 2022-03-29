@@ -937,13 +937,9 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    */
   public Option<String> scheduleIndexing(List<MetadataPartitionType> partitionTypes) {
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
-    return scheduleIndexingAtInstant(partitionTypes, instantTime) ? Option.of(instantTime) : Option.empty();
-  }
-
-  private boolean scheduleIndexingAtInstant(List<MetadataPartitionType> partitionTypes, String instantTime) throws HoodieIOException {
     Option<HoodieIndexPlan> indexPlan = createTable(config, hadoopConf, config.isMetadataTableEnabled())
         .scheduleIndex(context, instantTime, partitionTypes);
-    return indexPlan.isPresent();
+    return indexPlan.isPresent() ? Option.of(instantTime) : Option.empty();
   }
 
   /**

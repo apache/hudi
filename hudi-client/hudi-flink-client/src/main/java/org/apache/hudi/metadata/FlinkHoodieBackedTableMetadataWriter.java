@@ -100,11 +100,6 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void scheduleIndex(List<MetadataPartitionType> partitionsTypes) {
-    throw new UnsupportedOperationException("Metadata indexing not supported for Flink table yet.");
-  }
-
-  @Override
   protected void commit(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap,
                         boolean canTriggerTableService) {
     ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");

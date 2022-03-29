@@ -137,7 +137,7 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
       currentIndexedInstant = indexUptoInstant;
       ExecutorService executorService = Executors.newFixedThreadPool(MAX_CONCURRENT_INDEXING);
       Future<?> indexingCatchupTaskFuture = executorService.submit(
-          new IndexingCatchupTask(metadataWriter, instantsToIndex, metadataCompletedTimestamps, table.getMetaClient()));
+          new IndexingCatchupTask(metadataWriter, instantsToIndex, metadataCompletedTimestamps, table.getMetaClient(), metadataMetaClient));
       try {
         LOG.info("Starting index catchup task");
         indexingCatchupTaskFuture.get(config.getIndexingCheckTimeoutSeconds(), TimeUnit.SECONDS);
@@ -216,28 +216,31 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
     private final List<HoodieInstant> instantsToIndex;
     private final Set<String> metadataCompletedInstants;
     private final HoodieTableMetaClient metaClient;
+    private final HoodieTableMetaClient metadataMetaClient;
 
     IndexingCatchupTask(HoodieTableMetadataWriter metadataWriter,
                         List<HoodieInstant> instantsToIndex,
                         Set<String> metadataCompletedInstants,
-                        HoodieTableMetaClient metaClient) {
+                        HoodieTableMetaClient metaClient,
+                        HoodieTableMetaClient metadataMetaClient) {
       this.metadataWriter = metadataWriter;
       this.instantsToIndex = instantsToIndex;
       this.metadataCompletedInstants = metadataCompletedInstants;
       this.metaClient = metaClient;
+      this.metadataMetaClient = metadataMetaClient;
     }
 
     @Override
     public void run() {
       for (HoodieInstant instant : instantsToIndex) {
         // metadata index already updated for this instant
-        if (metadataCompletedInstants.contains(instant.getTimestamp())) {
+        if (!metadataCompletedInstants.isEmpty() && metadataCompletedInstants.contains(instant.getTimestamp())) {
           currentIndexedInstant = instant.getTimestamp();
           continue;
         }
         while (!instant.isCompleted()) {
           try {
-            LOG.info("instant not completed, reloading timeline " + instant);
+            LOG.warn("instant not completed, reloading timeline " + instant);
             // reload timeline and fetch instant details again wait until timeout
             String instantTime = instant.getTimestamp();
             Option<HoodieInstant> currentInstant = metaClient.reloadActiveTimeline()
@@ -249,8 +252,14 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
             throw new HoodieIndexException(String.format("Thread interrupted while running indexing check for instant: %s", instant), e);
           }
         }
-        // update metadata for this completed instant
+        // if instant completed, ensure that there was metadata commit, else update metadata for this completed instant
         if (COMPLETED.equals(instant.getState())) {
+          String instantTime = instant.getTimestamp();
+          Option<HoodieInstant> metadataInstant = metadataMetaClient.reloadActiveTimeline()
+              .filterCompletedInstants().filter(i -> i.getTimestamp().equals(instantTime)).firstInstant();
+          if (metadataInstant.isPresent()) {
+            continue;
+          }
           try {
             // we need take a lock here as inflight writer could also try to update the timeline
             txnManager.beginTransaction(Option.of(instant), Option.empty());
