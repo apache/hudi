@@ -118,7 +118,7 @@ public class SerDeHelper {
   }
 
   private static void toJson(InternalSchema internalSchema, JsonGenerator generator) throws IOException {
-    toJson(internalSchema.getRecord(), internalSchema.getMax_column_id(), internalSchema.schemaId(), generator);
+    toJson(internalSchema.getRecord(), internalSchema.getMaxColumnId(), internalSchema.schemaId(), generator);
   }
 
   private static void toJson(Types.RecordType record, Integer maxColumnId, Long versionId, JsonGenerator generator) throws IOException {

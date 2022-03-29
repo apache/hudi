@@ -109,7 +109,7 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
       checkSchemaChange(Seq(originalColName), table)
       deleteChange.deleteColumn(originalColName)
     }
-    SchemaChangeUtils.applyTableChanges2Schema(oldSchema, deleteChange).setSchemaId(oldSchema.getMax_column_id)
+    SchemaChangeUtils.applyTableChanges2Schema(oldSchema, deleteChange).setSchemaId(oldSchema.getMaxColumnId)
   }
 
 
@@ -128,8 +128,8 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
   def applyDeleteAction(sparkSession: SparkSession): Unit = {
     val (oldSchema, historySchema) = getInternalSchemaAndHistorySchemaStr(sparkSession)
     val newSchema = applyDeleteAction2Schema(sparkSession, oldSchema, changes.map(_.asInstanceOf[DeleteColumn]))
-    // delete action should not change the max_column_id field.
-    newSchema.setMax_column_id(oldSchema.getMax_column_id)
+    // delete action should not change the getMaxColumnId field.
+    newSchema.setMaxColumnId(oldSchema.getMaxColumnId)
     val verifiedHistorySchema = if (historySchema == null || historySchema.isEmpty) {
       SerDeHelper.inheritSchemas(oldSchema, "")
     } else {

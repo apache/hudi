@@ -105,8 +105,8 @@ case class AlterTableCommand312(table: CatalogTable, changes: Seq[TableChange], 
       deleteChange.deleteColumn(originalColName)
     }
     val newSchema = SchemaChangeUtils.applyTableChanges2Schema(oldSchema, deleteChange)
-    // delete action should not change the max_column_id field.
-    newSchema.setMax_column_id(oldSchema.getMax_column_id)
+    // delete action should not change the getMaxColumnId field.
+    newSchema.setMaxColumnId(oldSchema.getMaxColumnId)
     val verifiedHistorySchema = if (historySchema == null || historySchema.isEmpty) {
       SerDeHelper.inheritSchemas(oldSchema, "")
     } else {

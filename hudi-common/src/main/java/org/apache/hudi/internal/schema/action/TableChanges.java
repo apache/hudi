@@ -360,7 +360,7 @@ public class TableChanges {
 
     private ColumnAddChange(InternalSchema internalSchema) {
       super(internalSchema);
-      this.nextId = internalSchema.getMax_column_id() + 1;
+      this.nextId = internalSchema.getMaxColumnId() + 1;
     }
 
     public Map<Integer, ArrayList<Types.Field>> getParentId2AddCols() {
