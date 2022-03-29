@@ -61,6 +61,16 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
     }
   }
 
+  override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
+    val rawRdd = super.buildScan(requiredColumns, filters).asInstanceOf[RDD[InternalRow]]
+    val filterParams = setUpFilterParams()
+    rawRdd.mapPartitions {f =>
+      // apply filter for incremental query
+      val filterPreds = GeneratePredicate.generate(filterParams.filter, filterParams.attributes)
+      f.filter(filterPreds.eval(_))
+    }.asInstanceOf[RDD[Row]]
+  }
+
   protected override def composeRDD(fileSplits: Seq[HoodieMergeOnReadFileSplit],
                                     tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
@@ -71,6 +81,9 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
     val requiredFilters = incrementalSpanRecordFilters
     val optionalFilters = filters
     val readers = createBaseFileReaders(tableSchema, requiredSchema, requestedColumns, requiredFilters, optionalFilters)
+
+    // setUp tableRequiredSchema
+    tableRequiredSchema = requiredSchema.structTypeSchema
 
     val hoodieTableState = getTableState
     // TODO(HUDI-3639) implement incremental span record filtering w/in RDD to make sure returned iterator is appropriately
@@ -122,6 +135,17 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
     }
     filteredFileSlices
   }
+
+  private def setUpFilterParams(): FilterParams = {
+    val attrs = HoodieSparkUtils.toAttribute(tableRequiredSchema)
+    val filterExpression = convertToExpressions(incrementalSpanRecordFilters.toArray).map { e =>
+      e transform {
+        case a: AttributeReference =>
+          attrs.find(_.name.equalsIgnoreCase(a.name)).get
+      }
+    }.reduce(And)
+    FilterParams(filterExpression, attrs)
+  }
 }
 
 trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
@@ -161,6 +185,8 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   protected lazy val affectedFilesInCommits: Array[FileStatus] = {
     listAffectedFilesForCommits(conf, new Path(metaClient.getBasePath), commitsMetadata)
   }
+
+  protected var tableRequiredSchema: StructType = _
 
   // Record filters making sure that only records w/in the requested bounds are being fetched as part of the
   // scan collected by this relation
@@ -202,3 +228,4 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
 
 }
 
+case class FilterParams(filter: Expression, attributes: Seq[Attribute]) extends Serializable
