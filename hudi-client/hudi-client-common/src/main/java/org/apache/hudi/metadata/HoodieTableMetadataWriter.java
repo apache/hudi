@@ -23,7 +23,9 @@ import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 
+import java.io.IOException;
 import java.io.Serializable;
+import java.util.List;
 
 /**
  * Interface that supports updating metadata for a given table, as actions complete.
@@ -60,4 +62,12 @@ public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
    */
   void update(HoodieRollbackMetadata rollbackMetadata, String instantTime);
 
+  /**
+   * Drop the given metadata indexes. This path reuses DELETE_PARTITION operation.
+   *
+   * @param instantTime - instant time when replacecommit corresponding to the drop will be recorded in the metadata timeline
+   * @param indexesToDrop - list of {@link MetadataPartitionType} to drop
+   * @throws IOException
+   */
+  void dropIndex(String instantTime, List<MetadataPartitionType> indexesToDrop);
 }
