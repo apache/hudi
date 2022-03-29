@@ -98,10 +98,12 @@ public class Pipelines {
       InternalTypeInfo<RowData> typeInfo = InternalTypeInfo.of(rowTypeWithFileId);
       dataStream = dataStream.partitionCustom(partitioner, rowDataKeyGen::getRecordKey)
           .map(record -> BucketBulkInsertWriterHelper.rowWithFileId(rowDataKeyGen, record, indexKeyFields, bucketNum),
-              typeInfo);
+              typeInfo)
+          .setParallelism(dataStream.getParallelism()); // same parallelism as source
       if (conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT)) {
         SortOperatorGen sortOperatorGen = BucketBulkInsertWriterHelper.getFileIdSorterGen(rowTypeWithFileId);
-        dataStream = dataStream.transform("file_sorter", typeInfo, sortOperatorGen.createSortOperator());
+        dataStream = dataStream.transform("file_sorter", typeInfo, sortOperatorGen.createSortOperator())
+            .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS)); // same parallelism as write task to avoid shuffle
         ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
             conf.getInteger(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
       }
