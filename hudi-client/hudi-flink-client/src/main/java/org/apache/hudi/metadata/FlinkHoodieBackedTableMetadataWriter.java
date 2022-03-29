@@ -164,7 +164,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  public void dropIndex(String instantTime, List<MetadataPartitionType> indexesToDrop) {
+  public void dropPartitions(String instantTime, List<MetadataPartitionType> partitions) {
     throw new HoodieNotSupportedException("Dropping metadata index not supported for Flink metadata table yet.");
   }
 }

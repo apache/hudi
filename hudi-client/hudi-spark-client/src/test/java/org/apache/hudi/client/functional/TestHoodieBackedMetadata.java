@@ -488,7 +488,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // metadata writer to delete column_stats partition
       HoodieBackedTableMetadataWriter metadataWriter = metadataWriter(client);
       assertNotNull(metadataWriter, "MetadataWriter should have been initialized");
-      metadataWriter.dropIndex("0000003", Arrays.asList(MetadataPartitionType.COLUMN_STATS));
+      metadataWriter.dropPartitions("0000003", Arrays.asList(MetadataPartitionType.COLUMN_STATS));
 
       HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
       List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, metadataMetaClient.getBasePath(), false, false);
