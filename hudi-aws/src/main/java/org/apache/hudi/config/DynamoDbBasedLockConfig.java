@@ -103,8 +103,8 @@ public class DynamoDbBasedLockConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> DYNAMODB_ENDPOINT_URL = ConfigProperty
       .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "endpoint_url")
-      .defaultValue("us-east-1")
-      .sinceVersion("0.11.0")
+      .noDefaultValue()
+      .sinceVersion("0.10.1")
       .withDocumentation("For DynamoDB based lock provider, the url endpoint used for Amazon DynamoDB service."
                          + " Useful for development with a local dynamodb instance.");
 }
