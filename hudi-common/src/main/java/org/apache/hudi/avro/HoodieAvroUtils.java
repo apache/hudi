@@ -18,6 +18,9 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.avro.Conversions;
+import org.apache.avro.UnresolvedUnionException;
+import org.apache.avro.data.TimeConversions;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -70,6 +73,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.HashMap;
 import java.util.TimeZone;
 import java.util.Iterator;
@@ -111,7 +115,7 @@ public class HoodieAvroUtils {
   }
 
   public static <T extends IndexedRecord> byte[] indexedRecordToBytes(T record) {
-    GenericDatumWriter<T> writer = new GenericDatumWriter<>(record.getSchema());
+    GenericDatumWriter<T> writer = new GenericDatumWriter<>(record.getSchema(), ConvertingGenericData.INSTANCE);
     try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
       BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, reuseEncoder.get());
       reuseEncoder.set(encoder);
@@ -392,7 +396,7 @@ public class HoodieAvroUtils {
       }
     }
 
-    if (!GenericData.get().validate(newSchema, newRecord)) {
+    if (!ConvertingGenericData.INSTANCE.validate(newSchema, newRecord)) {
       throw new SchemaCompatibilityException(
           "Unable to validate the rewritten record " + oldRecord + " against schema " + newSchema);
     }
@@ -1066,5 +1070,113 @@ public class HoodieAvroUtils {
         return rewriteRecordWithNewSchema(oldRecords.next(), newSchema);
       }
     };
+  }
+
+  // TODO elaborate
+  public static class ConvertingGenericData extends GenericData {
+
+    private static final DecimalConversion DECIMAL_CONVERSION = new DecimalConversion();
+    private static final Conversions.UUIDConversion UUID_CONVERSION = new Conversions.UUIDConversion();
+    private static final TimeConversions.DateConversion DATE_CONVERSION = new TimeConversions.DateConversion();
+    private static final TimeConversions.TimeMillisConversion TIME_MILLIS_CONVERSION = new TimeConversions.TimeMillisConversion();
+    private static final TimeConversions.TimeMicrosConversion TIME_MICROS_CONVERSION = new TimeConversions.TimeMicrosConversion();
+    private static final TimeConversions.TimestampMillisConversion TIMESTAMP_MILLIS_CONVERSION = new TimeConversions.TimestampMillisConversion();
+    private static final TimeConversions.TimestampMicrosConversion TIMESTAMP_MICROS_CONVERSION = new TimeConversions.TimestampMicrosConversion();
+    private static final TimeConversions.LocalTimestampMillisConversion LOCAL_TIMESTAMP_MILLIS_CONVERSION = new TimeConversions.LocalTimestampMillisConversion();
+    private static final TimeConversions.LocalTimestampMicrosConversion LOCAL_TIMESTAMP_MICROS_CONVERSION = new TimeConversions.LocalTimestampMicrosConversion();
+
+    public static final GenericData INSTANCE = new ConvertingGenericData();
+
+    private ConvertingGenericData() {
+      addLogicalTypeConversion(DECIMAL_CONVERSION);
+      addLogicalTypeConversion(UUID_CONVERSION);
+      addLogicalTypeConversion(DATE_CONVERSION);
+      addLogicalTypeConversion(TIME_MILLIS_CONVERSION);
+      addLogicalTypeConversion(TIME_MICROS_CONVERSION);
+      addLogicalTypeConversion(TIMESTAMP_MILLIS_CONVERSION);
+      addLogicalTypeConversion(TIMESTAMP_MICROS_CONVERSION);
+      addLogicalTypeConversion(LOCAL_TIMESTAMP_MILLIS_CONVERSION);
+      addLogicalTypeConversion(LOCAL_TIMESTAMP_MICROS_CONVERSION);
+    }
+
+    @Override
+    public boolean validate(Schema schema, Object datum) {
+      switch (schema.getType()) {
+        case RECORD:
+          if (!isRecord(datum)) {
+            return false;
+          }
+          for (Field f : schema.getFields()) {
+            if (!validate(f.schema(), getField(datum, f.name(), f.pos()))) {
+              return false;
+            }
+          }
+          return true;
+        case ENUM:
+          if (!isEnum(datum)) {
+            return false;
+          }
+          return schema.getEnumSymbols().contains(datum.toString());
+        case ARRAY:
+          if (!(isArray(datum))) {
+            return false;
+          }
+          for (Object element : getArrayAsCollection(datum)) {
+            if (!validate(schema.getElementType(), element)) {
+              return false;
+            }
+          }
+          return true;
+        case MAP:
+          if (!(isMap(datum))) {
+            return false;
+          }
+          @SuppressWarnings(value = "unchecked")
+          Map<Object, Object> map = (Map<Object, Object>) datum;
+          for (Map.Entry<Object, Object> entry : map.entrySet()) {
+            if (!validate(schema.getValueType(), entry.getValue())) {
+              return false;
+            }
+          }
+          return true;
+        case UNION:
+          try {
+            int i = resolveUnion(schema, datum);
+            return validate(schema.getTypes().get(i), datum);
+          } catch (UnresolvedUnionException e) {
+            return false;
+          }
+        case FIXED:
+          return (datum instanceof GenericFixed && ((GenericFixed) datum).bytes().length == schema.getFixedSize())
+              || DECIMAL_CONVERSION.getConvertedType().isInstance(datum);
+        case STRING:
+          return isString(datum)
+              || UUID_CONVERSION.getConvertedType().isInstance(datum);
+        case BYTES:
+          return isBytes(datum)
+              || DECIMAL_CONVERSION.getConvertedType().isInstance(datum);
+        case INT:
+          return isInteger(datum)
+              || DATE_CONVERSION.getConvertedType().isInstance(datum)
+              || TIME_MILLIS_CONVERSION.getConvertedType().isInstance(datum);
+        case LONG:
+          return isLong(datum)
+              || TIME_MICROS_CONVERSION.getConvertedType().isInstance(datum)
+              || TIMESTAMP_MILLIS_CONVERSION.getConvertedType().isInstance(datum)
+              || TIMESTAMP_MICROS_CONVERSION.getConvertedType().isInstance(datum)
+              || LOCAL_TIMESTAMP_MICROS_CONVERSION.getConvertedType().isInstance(datum)
+              || LOCAL_TIMESTAMP_MILLIS_CONVERSION.getConvertedType().isInstance(datum);
+        case FLOAT:
+          return isFloat(datum);
+        case DOUBLE:
+          return isDouble(datum);
+        case BOOLEAN:
+          return isBoolean(datum);
+        case NULL:
+          return datum == null;
+        default:
+          return false;
+      }
+    }
   }
 }
