@@ -87,9 +87,8 @@ import static org.apache.avro.Schema.Type.UNION;
  */
 public class HoodieAvroUtils {
 
-  private static ThreadLocal<BinaryEncoder> reuseEncoder = ThreadLocal.withInitial(() -> null);
-
-  private static ThreadLocal<BinaryDecoder> reuseDecoder = ThreadLocal.withInitial(() -> null);
+  private static final ThreadLocal<BinaryEncoder> BINARY_ENCODER = ThreadLocal.withInitial(() -> null);
+  private static final ThreadLocal<BinaryDecoder> BINARY_DECODER = ThreadLocal.withInitial(() -> null);
 
   private static final long MILLIS_PER_DAY = 86400000L;
 
@@ -97,9 +96,9 @@ public class HoodieAvroUtils {
   public static final Conversions.DecimalConversion DECIMAL_CONVERSION = new Conversions.DecimalConversion();
 
   // As per https://avro.apache.org/docs/current/spec.html#names
-  private static String INVALID_AVRO_CHARS_IN_NAMES = "[^A-Za-z0-9_]";
-  private static String INVALID_AVRO_FIRST_CHAR_IN_NAMES = "[^A-Za-z_]";
-  private static String MASK_FOR_INVALID_CHARS_IN_NAMES = "__";
+  private static final String INVALID_AVRO_CHARS_IN_NAMES = "[^A-Za-z0-9_]";
+  private static final String INVALID_AVRO_FIRST_CHAR_IN_NAMES = "[^A-Za-z_]";
+  private static final String MASK_FOR_INVALID_CHARS_IN_NAMES = "__";
 
   // All metadata fields are optional strings.
   public static final Schema METADATA_FIELD_SCHEMA =
@@ -117,8 +116,8 @@ public class HoodieAvroUtils {
   public static <T extends IndexedRecord> byte[] indexedRecordToBytes(T record) {
     GenericDatumWriter<T> writer = new GenericDatumWriter<>(record.getSchema(), ConvertingGenericData.INSTANCE);
     try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-      BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, reuseEncoder.get());
-      reuseEncoder.set(encoder);
+      BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, BINARY_ENCODER.get());
+      BINARY_ENCODER.set(encoder);
       writer.write(record, encoder);
       encoder.flush();
       return out.toByteArray();
@@ -153,9 +152,9 @@ public class HoodieAvroUtils {
    * Convert serialized bytes back into avro record.
    */
   public static GenericRecord bytesToAvro(byte[] bytes, Schema writerSchema, Schema readerSchema) throws IOException {
-    BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(bytes, reuseDecoder.get());
-    reuseDecoder.set(decoder);
-    GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(writerSchema, readerSchema);
+    BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(bytes, BINARY_DECODER.get());
+    BINARY_DECODER.set(decoder);
+    GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(writerSchema, readerSchema, ConvertingGenericData.INSTANCE);
     return reader.read(null, decoder);
   }
 
