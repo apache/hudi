@@ -18,10 +18,28 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.avro.Conversions;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hudi.avro.model.BooleanWrapper;
+import org.apache.hudi.avro.model.BytesWrapper;
+import org.apache.hudi.avro.model.DateWrapper;
+import org.apache.hudi.avro.model.DecimalWrapper;
+import org.apache.hudi.avro.model.DoubleWrapper;
+import org.apache.hudi.avro.model.FloatWrapper;
 import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
+import org.apache.hudi.avro.model.IntWrapper;
+import org.apache.hudi.avro.model.LongWrapper;
+import org.apache.hudi.avro.model.StringWrapper;
+import org.apache.hudi.avro.model.TimestampMicrosWrapper;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
@@ -35,16 +53,11 @@ import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.io.storage.HoodieHFileReader;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.sql.Date;
+import java.sql.Timestamp;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
@@ -120,6 +133,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static final String COLUMN_STATS_FIELD_COLUMN_NAME = "columnName";
   public static final String COLUMN_STATS_FIELD_TOTAL_UNCOMPRESSED_SIZE = "totalUncompressedSize";
   public static final String COLUMN_STATS_FIELD_IS_DELETED = FIELD_IS_DELETED;
+
+  private static final Conversions.DecimalConversion AVRO_DECIMAL_CONVERSION = new Conversions.DecimalConversion();
 
   private String key = null;
   private int type = 0;
@@ -544,8 +559,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
           HoodieMetadataColumnStats.newBuilder()
               .setFileName(new Path(columnRangeMetadata.getFilePath()).getName())
               .setColumnName(columnRangeMetadata.getColumnName())
-              .setMinValue(columnRangeMetadata.getMinValue())
-              .setMaxValue(columnRangeMetadata.getMaxValue())
+              .setMinValue(wrapStatisticValue(columnRangeMetadata.getMinValue()))
+              .setMaxValue(wrapStatisticValue(columnRangeMetadata.getMaxValue()))
               .setNullCount(columnRangeMetadata.getNullCount())
               .setValueCount(columnRangeMetadata.getValueCount())
               .setTotalSize(columnRangeMetadata.getTotalSize())
@@ -612,6 +627,37 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     }
     sb.append('}');
     return sb.toString();
+  }
+
+  private static Object wrapStatisticValue(Comparable<?> statValue) {
+    if (statValue instanceof Date) {
+      return DateWrapper.newBuilder().setValue(((Date) statValue).toLocalDate()).build();
+    } else if (statValue instanceof BigDecimal) {
+      Schema valueSchema = DecimalWrapper.SCHEMA$.getField("value").schema();
+      return DecimalWrapper.newBuilder()
+          .setValue(AVRO_DECIMAL_CONVERSION.toBytes((BigDecimal) statValue, null, valueSchema.getLogicalType()))
+          .build();
+    } else if (statValue instanceof Timestamp) {
+      return TimestampMicrosWrapper.newBuilder()
+          .setValue(((Timestamp) statValue).toInstant())
+          .build();
+    } else if (statValue instanceof Boolean) {
+      return BooleanWrapper.newBuilder().setValue((Boolean) statValue).build();
+    } else if (statValue instanceof Integer) {
+      return IntWrapper.newBuilder().setValue((Integer) statValue).build();
+    } else if (statValue instanceof Long) {
+      return LongWrapper.newBuilder().setValue((Long) statValue).build();
+    } else if (statValue instanceof Float) {
+      return FloatWrapper.newBuilder().setValue((Float) statValue).build();
+    } else if (statValue instanceof Double) {
+      return DoubleWrapper.newBuilder().setValue((Double) statValue).build();
+    } else if (statValue instanceof ByteBuffer) {
+      return BytesWrapper.newBuilder().setValue((ByteBuffer) statValue).build();
+    } else if (statValue instanceof String) {
+      return StringWrapper.newBuilder().setValue((String) statValue).build();
+    } else {
+      throw new UnsupportedOperationException(String.format("Unsupported type of the statistic (%s)", statValue.getClass()));
+    }
   }
 
   private static void validatePayload(int type, Map<String, HoodieMetadataFileInfo> filesystemMetadata) {
