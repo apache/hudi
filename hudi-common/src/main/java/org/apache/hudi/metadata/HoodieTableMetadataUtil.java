@@ -125,6 +125,23 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
+   * Deletes the metadata partition from the file system.
+   *
+   * @param basePath      - base path of the dataset
+   * @param context       - instance of {@link HoodieEngineContext}
+   * @param partitionType - {@link MetadataPartitionType} of the partition to delete
+   */
+  public static void deleteMetadataPartition(String basePath, HoodieEngineContext context, MetadataPartitionType partitionType) {
+    final String metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
+    FileSystem fs = FSUtils.getFs(metadataTablePath, context.getHadoopConf().get());
+    try {
+      fs.delete(new Path(metadataTablePath, partitionType.getPartitionPath()), true);
+    } catch (Exception e) {
+      throw new HoodieMetadataException(String.format("Failed to remove metadata partition %s from path %s", partitionType, metadataTablePath), e);
+    }
+  }
+
+  /**
    * Check if the given metadata partition exists.
    *
    * @param basePath base path of the dataset

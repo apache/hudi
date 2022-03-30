@@ -220,7 +220,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     deleteInstantFile(instant);
   }
 
-  private void deleteInstantFileIfExists(HoodieInstant instant) {
+  public void deleteInstantFileIfExists(HoodieInstant instant) {
     LOG.info("Deleting instant " + instant);
     Path inFlightCommitFilePath = new Path(metaClient.getMetaPath(), instant.getFileName());
     try {
