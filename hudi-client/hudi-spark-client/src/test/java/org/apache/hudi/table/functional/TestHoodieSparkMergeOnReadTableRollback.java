@@ -21,7 +21,6 @@ package org.apache.hudi.table.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -151,7 +150,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     // NOTE: First writer will have Metadata table DISABLED
     HoodieWriteConfig.Builder cfgBuilder =
         getConfigBuilder(false, rollbackUsingMarkers, HoodieIndex.IndexType.SIMPLE);
-    
+
     addConfigsForPopulateMetaFields(cfgBuilder, true);
     HoodieWriteConfig cfg = cfgBuilder.build();
 
@@ -547,7 +546,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         validateRecords(cfg, metaClient, updates5);
 
         // restore to 003 and validate records.
-        client.restoreToInstant("003", HoodieMetadataConfig.ENABLE.defaultValue());
+        client.restoreToInstant("003", cfg.isMetadataTableEnabled());
         validateRecords(cfg, metaClient, updates2);
       }
     }
