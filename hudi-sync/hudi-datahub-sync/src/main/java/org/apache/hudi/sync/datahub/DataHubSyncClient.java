@@ -132,8 +132,8 @@ public class DataHubSyncClient extends AbstractSyncHoodieClient {
   }
 
   @Override
-  public void dropPartitionsToTable(String tableName, List<String> partitionsToDrop) {
-    throw new UnsupportedOperationException("Not supported: `dropPartitionsToTable`");
+  public void dropPartitions(String tableName, List<String> partitionsToDrop) {
+    throw new UnsupportedOperationException("Not supported: `dropPartitions`");
   }
 
   @Override

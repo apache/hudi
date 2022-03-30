@@ -177,12 +177,6 @@ public class HoodieBigQuerySyncClient extends AbstractSyncHoodieClient {
     throw new UnsupportedOperationException("No support for addPartitionsToTable yet.");
   }
 
-  @Override
-  public void dropPartitionsToTable(final String tableName, final List<String> partitionsToDrop) {
-    // bigQuery discovers the new partitions automatically, so do nothing.
-    throw new UnsupportedOperationException("No support for dropPartitionsToTable yet.");
-  }
-
   public boolean datasetExists() {
     Dataset dataset = bigquery.getDataset(DatasetId.of(syncConfig.projectId, syncConfig.datasetName));
     return dataset != null;
@@ -234,6 +228,12 @@ public class HoodieBigQuerySyncClient extends AbstractSyncHoodieClient {
   public void updatePartitionsToTable(final String tableName, final List<String> changedPartitions) {
     // bigQuery updates the partitions automatically, so do nothing.
     throw new UnsupportedOperationException("No support for updatePartitionsToTable yet.");
+  }
+
+  @Override
+  public void dropPartitions(String tableName, List<String> partitionsToDrop) {
+    // bigQuery discovers the new partitions automatically, so do nothing.
+    throw new UnsupportedOperationException("No support for dropPartitions yet.");
   }
 
   @Override
