@@ -533,25 +533,26 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return getColumnStatsIndexKey(partitionIndexID, fileIndexID, columnIndexID);
   }
 
-  public static Stream<HoodieRecord> createColumnStatsRecords(
-      String partitionName, Collection<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList, boolean isDeleted) {
+  public static Stream<HoodieRecord> createColumnStatsRecords(String partitionName,
+                                                              Collection<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList,
+                                                              boolean isDeleted) {
     return columnRangeMetadataList.stream().map(columnRangeMetadata -> {
       HoodieKey key = new HoodieKey(getColumnStatsIndexKey(partitionName, columnRangeMetadata),
           MetadataPartitionType.COLUMN_STATS.getPartitionPath());
+
       HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(),
           HoodieMetadataColumnStats.newBuilder()
               .setFileName(new Path(columnRangeMetadata.getFilePath()).getName())
               .setColumnName(columnRangeMetadata.getColumnName())
-              .setMinValue(columnRangeMetadata.getMinValue() == null ? null :
-                  columnRangeMetadata.getMinValue().toString())
-              .setMaxValue(columnRangeMetadata.getMaxValue() == null ? null :
-                  columnRangeMetadata.getMaxValue().toString())
+              .setMinValue(columnRangeMetadata.getMinValue())
+              .setMaxValue(columnRangeMetadata.getMaxValue())
               .setNullCount(columnRangeMetadata.getNullCount())
               .setValueCount(columnRangeMetadata.getValueCount())
               .setTotalSize(columnRangeMetadata.getTotalSize())
               .setTotalUncompressedSize(columnRangeMetadata.getTotalUncompressedSize())
               .setIsDeleted(isDeleted)
               .build());
+
       return new HoodieAvroRecord<>(key, payload);
     });
   }
