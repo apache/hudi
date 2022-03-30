@@ -483,12 +483,11 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       records = dataGen.generateInserts(newCommitTime, 10);
       writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
-      validateMetadata(client);
 
       // metadata writer to delete column_stats partition
       HoodieBackedTableMetadataWriter metadataWriter = metadataWriter(client);
       assertNotNull(metadataWriter, "MetadataWriter should have been initialized");
-      metadataWriter.dropPartitions("0000003", Arrays.asList(MetadataPartitionType.COLUMN_STATS));
+      metadataWriter.deletePartitions("0000003", Arrays.asList(MetadataPartitionType.COLUMN_STATS));
 
       HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
       List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, metadataMetaClient.getBasePath(), false, false);

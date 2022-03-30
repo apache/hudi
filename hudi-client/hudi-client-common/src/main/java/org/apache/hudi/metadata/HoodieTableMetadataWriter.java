@@ -102,5 +102,5 @@ public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
    * @param partitions - list of {@link MetadataPartitionType} to drop
    * @throws IOException
    */
-  void dropPartitions(String instantTime, List<MetadataPartitionType> partitions);
+  void deletePartitions(String instantTime, List<MetadataPartitionType> partitions);
 }
