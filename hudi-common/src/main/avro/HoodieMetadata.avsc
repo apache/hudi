@@ -122,16 +122,38 @@
                             "doc": "Minimum value in the range. Based on user data table schema, we can convert this to appropriate type",
                             "name": "minValue",
                             "type": [
+                                // Those types should be aligned with Parquet `Statistics` impl
+                                // making sure that we implement semantic consistent across file formats
+                                //
+                                // NOTE: Other logical types (decimal, date, timestamp, etc) will be converted
+                                //       into one of the following types, making sure that their corresponding
+                                //       ordering is preserved
                                 "null",
-                                "string"
+                                "boolean",
+                                "int",
+                                "long",
+                                "float",
+                                "double",
+                                "bytes"
                             ]
                         },
                         {
                             "doc": "Maximum value in the range. Based on user data table schema, we can convert it to appropriate type",
                             "name": "maxValue",
                             "type": [
+                                // Those types should be aligned with Parquet `Statistics` impl
+                                // making sure that we implement semantic consistent across file formats
+                                //
+                                // NOTE: Other logical types (decimal, date, timestamp, etc) will be converted
+                                //       into one of the following types, making sure that their corresponding
+                                //       ordering is preserved
                                 "null",
-                                "string"
+                                "boolean",
+                                "int",
+                                "long",
+                                "float",
+                                "double",
+                                "bytes"
                             ]
                         },
                         {
