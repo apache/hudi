@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -443,6 +444,21 @@ public class HoodieMetadataTableValidator implements Serializable {
   private List<String> validatePartitions(HoodieSparkEngineContext engineContext, String basePath) {
     // compare partitions
     List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(engineContext, basePath, false, cfg.assumeDatePartitioning);
+    HoodieTimeline completedTimeline = metaClient.getActiveTimeline().filterCompletedInstants();
+
+    // ignore partitions created by uncommitted ingestion.
+    allPartitionPathsFromFS = allPartitionPathsFromFS.stream().parallel().filter(part -> {
+      HoodiePartitionMetadata hoodiePartitionMetadata = new HoodiePartitionMetadata(metaClient.getFs(), new Path(basePath, part));
+
+      Option<String> instantOption = hoodiePartitionMetadata.readPartitionCreatedCommitTime();
+      if (instantOption.isPresent()) {
+        String instantTime = instantOption.get();
+        return completedTimeline.containsOrBeforeTimelineStarts(instantTime);
+      } else {
+        return false;
+      }
+    }).collect(Collectors.toList());
+
     List<String> allPartitionPathsMeta = FSUtils.getAllPartitionPaths(engineContext, basePath, true, cfg.assumeDatePartitioning);
 
     Collections.sort(allPartitionPathsFromFS);
