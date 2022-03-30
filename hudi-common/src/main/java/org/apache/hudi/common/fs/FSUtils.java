@@ -246,7 +246,7 @@ public class FSUtils {
     final List<String> partitions = new ArrayList<>();
     processFiles(fs, basePathStr, (locatedFileStatus) -> {
       Path filePath = locatedFileStatus.getPath();
-      if (filePath.getName().equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE)) {
+      if (filePath.getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
         partitions.add(getRelativePartitionPath(basePath, filePath.getParent()));
       }
       return true;

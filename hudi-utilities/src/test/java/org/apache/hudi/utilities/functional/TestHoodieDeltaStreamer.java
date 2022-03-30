@@ -30,6 +30,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -1983,6 +1985,26 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @Test
   public void testInsertOverwriteTable() throws Exception {
     testDeltaStreamerWithSpecifiedOperation(dfsBasePath + "/insert_overwrite_table", WriteOperationType.INSERT_OVERWRITE_TABLE);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testPartitionMetafileFormat(boolean partitionMetafileUseDataFormat) throws Exception {
+    String tableBasePath = dfsBasePath + "/test_partition_metafile_" + String.valueOf(partitionMetafileUseDataFormat);
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
+    cfg.partitionMetafileUseDataFormat = partitionMetafileUseDataFormat;
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+    TestHelpers.assertRecordCount(1000, tableBasePath, sqlContext);
+
+    Option<Path> metafilePath = HoodiePartitionMetadata.getPartitionMetafilePath(dfs,
+        new Path(tableBasePath.toString(), HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH));
+    if (partitionMetafileUseDataFormat) {
+      // Extension should be the same as the data file format of the table
+      assertTrue(metafilePath.get().toString().endsWith(HoodieFileFormat.valueOf(cfg.baseFileFormat).getFileExtension()));
+    } else {
+      // No extension as it is in properties file format
+      assertTrue(metafilePath.get().toString().endsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX));
+    }
   }
 
   @Disabled("Local run passing; flaky in CI environment.")

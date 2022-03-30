@@ -1074,7 +1074,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
           if (!status.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
             this.subDirectories.add(status.getPath());
           }
-        } else if (status.getPath().getName().equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE)) {
+        } else if (status.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
           // Presence of partition meta file implies this is a HUDI partition
           this.isHoodiePartition = true;
         } else if (FSUtils.isDataFile(status.getPath())) {

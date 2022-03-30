@@ -756,6 +756,10 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     return metaClient.getTableConfig().getLogFileFormat();
   }
 
+  public Option<HoodieFileFormat> getPartitionMetafileFormat() {
+    return metaClient.getTableConfig().getPartitionMetafileFormat();
+  }
+
   public String getBaseFileExtension() {
     return getBaseFileFormat().getFileExtension();
   }

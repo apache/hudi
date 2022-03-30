@@ -243,6 +243,11 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--base-file-format"}, description = "File format for the base files. PARQUET (or) HFILE", required = false)
     public String baseFileFormat = "PARQUET";
 
+    @Parameter(names = { "--partition-metafile-use-data-format" }, description = "If true, partition metafile will use "
+        + "the same file format as the data files in this table. If false, partition metafiles will be properties files.",
+        required = false, arity = 1)
+    public boolean partitionMetafileUseDataFormat = false;
+
     @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
         + "hoodie client, schema provider, key generator and data source. For hoodie client props, sane defaults are "
         + "used, but recommend use to provide basic things like metrics endpoints, hive configs etc. For sources, refer"
@@ -468,7 +473,7 @@ public class HoodieDeltaStreamer implements Serializable {
               compactSchedulingMinShare, clusterSchedulingMinShare, forceDisableCompaction, checkpoint,
               initialCheckpointProvider, help);
     }
-  
+
     @Override
     public String toString() {
       return "Config{"

@@ -133,7 +133,8 @@ public class RepairsCommand implements CommandMarker {
         row[1] = "No";
         if (!dryRun) {
           HoodiePartitionMetadata partitionMetadata =
-              new HoodiePartitionMetadata(HoodieCLI.fs, latestCommit, basePath, partitionPath);
+              new HoodiePartitionMetadata(HoodieCLI.fs, latestCommit, basePath, partitionPath,
+                  client.getTableConfig().getPartitionMetafileFormat());
           partitionMetadata.trySave(0);
           row[2] = "Repaired";
         }
