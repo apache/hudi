@@ -47,9 +47,11 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -180,8 +182,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
           columnStatMetadata = HoodieMetadataColumnStats.newBuilder()
               .setFileName((String) columnStatsRecord.get(COLUMN_STATS_FIELD_FILE_NAME))
               .setColumnName((String) columnStatsRecord.get(COLUMN_STATS_FIELD_COLUMN_NAME))
-              .setMinValue((String) columnStatsRecord.get(COLUMN_STATS_FIELD_MIN_VALUE))
-              .setMaxValue((String) columnStatsRecord.get(COLUMN_STATS_FIELD_MAX_VALUE))
+              .setMinValue(columnStatsRecord.get(COLUMN_STATS_FIELD_MIN_VALUE))
+              .setMaxValue(columnStatsRecord.get(COLUMN_STATS_FIELD_MAX_VALUE))
               .setValueCount((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_VALUE_COUNT))
               .setNullCount((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_NULL_COUNT))
               .setTotalSize((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_TOTAL_SIZE))
@@ -351,7 +353,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     HoodieMetadataColumnStats previousColStatsRecord = previousRecord.getColumnStatMetadata().get();
     HoodieMetadataColumnStats newColumnStatsRecord = getColumnStatMetadata().get();
 
-    return HoodieTableMetadataUtil.mergeColumnStats(previousColStatsRecord, newColumnStatsRecord);
+    return mergeColumnStatsRecords(previousColStatsRecord, newColumnStatsRecord);
   }
 
   @Override
@@ -552,6 +554,38 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
               .build());
       return new HoodieAvroRecord<>(key, payload);
     });
+  }
+
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  private static HoodieMetadataColumnStats mergeColumnStatsRecords(HoodieMetadataColumnStats prevColumnStats,
+                                                                   HoodieMetadataColumnStats newColumnStats) {
+    checkArgument(Objects.equals(prevColumnStats.getFileName(), newColumnStats.getFileName()));
+    checkArgument(Objects.equals(prevColumnStats.getColumnName(), newColumnStats.getColumnName()));
+
+    if (newColumnStats.getIsDeleted()) {
+      return newColumnStats;
+    }
+
+    Object minValue = Stream.of((Comparable) prevColumnStats.getMinValue(), (Comparable) newColumnStats.getMinValue())
+        .filter(Objects::nonNull)
+        .min(Comparator.naturalOrder())
+        .orElse(null);
+
+    Object maxValue = Stream.of((Comparable) prevColumnStats.getMinValue(), (Comparable) newColumnStats.getMinValue())
+        .filter(Objects::nonNull)
+        .max(Comparator.naturalOrder())
+        .orElse(null);
+
+    return HoodieMetadataColumnStats.newBuilder()
+        .setFileName(newColumnStats.getFileName())
+        .setMinValue(minValue)
+        .setMaxValue(maxValue)
+        .setValueCount(prevColumnStats.getValueCount() + newColumnStats.getValueCount())
+        .setNullCount(prevColumnStats.getNullCount() + newColumnStats.getNullCount())
+        .setTotalSize(prevColumnStats.getTotalSize() + newColumnStats.getTotalSize())
+        .setTotalUncompressedSize(prevColumnStats.getTotalUncompressedSize() + newColumnStats.getTotalUncompressedSize())
+        .setIsDeleted(newColumnStats.getIsDeleted())
+        .build();
   }
 
   @Override

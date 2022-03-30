@@ -1017,36 +1017,15 @@ public class HoodieTableMetadataUtil {
     return Arrays.asList(tableConfig.getRecordKeyFields().get());
   }
 
-  public static HoodieMetadataColumnStats mergeColumnStats(HoodieMetadataColumnStats prevColumnStatsRecord,
-                                                           HoodieMetadataColumnStats newColumnStatsRecord) {
-    checkArgument(prevColumnStatsRecord.getFileName().equals(newColumnStatsRecord.getFileName()));
-    checkArgument(prevColumnStatsRecord.getColumnName().equals(newColumnStatsRecord.getColumnName()));
-
-    if (newColumnStatsRecord.getIsDeleted()) {
-      return newColumnStatsRecord;
-    }
-
-    return HoodieMetadataColumnStats.newBuilder()
-        .setFileName(newColumnStatsRecord.getFileName())
-        .setColumnName(newColumnStatsRecord.getColumnName())
-        .setMinValue(Stream.of(prevColumnStatsRecord.getMinValue(), newColumnStatsRecord.getMinValue()).filter(Objects::nonNull).min(Comparator.naturalOrder()).orElse(null))
-        .setMaxValue(Stream.of(prevColumnStatsRecord.getMinValue(), newColumnStatsRecord.getMinValue()).filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null))
-        .setValueCount(prevColumnStatsRecord.getValueCount() + newColumnStatsRecord.getValueCount())
-        .setNullCount(prevColumnStatsRecord.getNullCount() + newColumnStatsRecord.getNullCount())
-        .setTotalSize(prevColumnStatsRecord.getTotalSize() + newColumnStatsRecord.getTotalSize())
-        .setTotalUncompressedSize(prevColumnStatsRecord.getTotalUncompressedSize() + newColumnStatsRecord.getTotalUncompressedSize())
-        .setIsDeleted(newColumnStatsRecord.getIsDeleted())
-        .build();
-  }
-
-  public static Stream<HoodieRecord> translateWriteStatToColumnStats(HoodieWriteStat writeStat,
+  private static Stream<HoodieRecord> translateWriteStatToColumnStats(HoodieWriteStat writeStat,
                                                                      HoodieTableMetaClient datasetMetaClient,
                                                                      List<String> columnsToIndex) {
     if (writeStat instanceof HoodieDeltaWriteStat && ((HoodieDeltaWriteStat) writeStat).getRecordsStats().isPresent()) {
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap = ((HoodieDeltaWriteStat) writeStat).getRecordsStats().get().getStats();
-      List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = new ArrayList<>(columnRangeMap.values());
+      Collection<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = columnRangeMap.values();
       return HoodieMetadataPayload.createColumnStatsRecords(writeStat.getPartitionPath(), columnRangeMetadataList, false);
     }
+
     return getColumnStats(writeStat.getPartitionPath(), writeStat.getPath(), datasetMetaClient, columnsToIndex, false);
   }
 
@@ -1122,6 +1101,7 @@ public class HoodieTableMetadataUtil {
     HoodieColumnRangeMetadata<Comparable> columnRangeMetadata = HoodieColumnRangeMetadata.<Comparable>create(
         filePath,
         field.name(),
+        // TODO fix
         convertToNativeJavaType(field.schema(), columnStats.get(MIN)),
         convertToNativeJavaType(field.schema(), columnStats.get(MAX)),
         Long.parseLong(columnStats.getOrDefault(NULL_COUNT, 0).toString()),
