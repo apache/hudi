@@ -164,7 +164,7 @@ public class TestParquetFileMetaToWriteStatusConvertor extends HoodieCommonTestH
           new HoodieAvroRecord<>(key, dataGen.generateRandomValue(key, instantTime));
       Option<IndexedRecord> indexedRecord = record.getData().getInsertValue(originalSchema);
       IndexedRecord recordWithMetadataInSchema =
-          HoodieAvroUtils.rewriteRecord((GenericRecord) indexedRecord.get(), originalSchema);
+          HoodieAvroUtils.rewriteRecord((GenericRecord) indexedRecord.get(), hoodieSchemaWithMetadataFields);
       fileWriter.writeAvroWithMetadata(record.getKey(), recordWithMetadataInSchema);
     }
     fileWriter.close();
