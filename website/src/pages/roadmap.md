@@ -10,13 +10,13 @@ down by areas on our [stack](blog/2021/07/21/streaming-data-lake-platform/#hudi-
 
 ## H1 2022 Releases
 
-Next major release : [0.11.0](https://issues.apache.org/jira/projects/HUDI/versions/12350673) (Mar 2022)
+Next major release : [0.11.0](https://issues.apache.org/jira/projects/HUDI/versions/12350673) (Apr 2022)
 
 |Release|Timeline|
 |------------|--------|
 |[0.10.1](https://issues.apache.org/jira/projects/HUDI/versions/12351135)|Jan 2022|
-|[0.11.0](https://issues.apache.org/jira/projects/HUDI/versions/12350673)|Mar 2022|
-|[0.12.0](https://issues.apache.org/jira/projects/HUDI/versions/12351209)|May 2022|
+|[0.11.0](https://issues.apache.org/jira/projects/HUDI/versions/12350673)|Apr 2022|
+|[0.12.0](https://issues.apache.org/jira/projects/HUDI/versions/12351209)|Jun 2022|
 |[1.0.0](https://issues.apache.org/jira/projects/HUDI/versions/12351210)|Summer 2022|
 
 ## Transactions/Database Layer
@@ -26,11 +26,11 @@ Next major release : [0.11.0](https://issues.apache.org/jira/projects/HUDI/versi
 |Space-filling curves hardening & perf improvements |0.11|[HUDI-2100](https://issues.apache.org/jira/browse/HUDI-2100)|
 |Metadata table update via multi-table transactions, turned on by default |0.11|[HUDI-1292](https://issues.apache.org/jira/browse/HUDI-1292)|
 |Metadata Index, as a bloom index alternative, fetching col_stats and bloom_filters from metadata table, improving upsert performance. |0.11|[HUDI-1822](https://issues.apache.org/jira/browse/HUDI-1822), [RFC-37](https://github.com/apache/hudi/pull/3989)|
-|Record-level index to speed up uuid based upserts/deletes |0.11|[HUDI-53](https://issues.apache.org/jira/browse/HUDI-53)|
 |Support for Encryption |0.11|[HUDI-2370](https://issues.apache.org/jira/browse/HUDI-2370)|
 |Schema-on-read for non-backwards compatible schema evolution |0.11|[HUDI-2429](https://issues.apache.org/jira/browse/HUDI-2429)|
 |Improvements to merge-on-read log merging/reading with streaming semantics |0.11|[HUDI-3081](https://issues.apache.org/jira/browse/HUDI-3081)|
 |Indexed columns support & elimination of partitioning |0.11|[HUDI-512](https://issues.apache.org/jira/browse/HUDI-512)|
+|Record-level index to speed up uuid based upserts/deletes |0.12|[HUDI-53](https://issues.apache.org/jira/browse/HUDI-53)|
 |Eager conflict detection for Optimistic Concurrency Control |0.12|[HUDI-1575](https://issues.apache.org/jira/browse/HUDI-1575)|
 |Indexed timeline and infinite retention of versions |0.12|RFC coming soon|
 |Improvements to streaming read and full CDC data model support |0.12| [HUDI-2749](https://issues.apache.org/jira/browse/HUDI-2749), RFC coming soon|
@@ -47,7 +47,7 @@ Next major release : [0.11.0](https://issues.apache.org/jira/projects/HUDI/versi
 |Spark SQL DML fixes & enhancements |0.11|[HUDI-1658](https://issues.apache.org/jira/browse/HUDI-1658)|
 |Data-skipping for Hive and Spark based on col_stats from metadata table  |0.11|[HUDI-1296](https://issues.apache.org/jira/browse/HUDI-1296), [RFC-27](https://github.com/apache/hudi/pull/4280)|
 |Non-keyed tables with updates and deletes |0.11|[HUDI-2968](https://issues.apache.org/jira/browse/HUDI-2968)|
-|Trino Connector for Hudi, with read/query support  |0.11|[HUDI-2687](https://issues.apache.org/jira/browse/HUDI-2687), [RFC-38](https://github.com/apache/hudi/pull/3964)|
+|Trino Connector for Hudi, with read/query support  |0.12|[HUDI-2687](https://issues.apache.org/jira/browse/HUDI-2687), [RFC-38](https://github.com/apache/hudi/pull/3964)|
 |Spark Datasource V2|0.12|[HUDI-1297](https://issues.apache.org/jira/browse/HUDI-1297) ,[HUDI-2531](https://issues.apache.org/jira/browse/HUDI-2531)|
 |Complete ORC Support across query engines |0.12|[HUDI-57](https://issues.apache.org/jira/browse/HUDI-57)|
 |Presto Connector for Hudi, with read/query support |0.12|[PRESTO-17006](https://github.com/prestodb/presto/issues/17006)|
@@ -61,7 +61,7 @@ Next major release : [0.11.0](https://issues.apache.org/jira/projects/HUDI/versi
 |Feature|Target Release|Tracking|
 |------------|--------|-----------|
 |Native support for AWS Glue Metastore   |0.11|[HUDI-2757](https://issues.apache.org/jira/browse/HUDI-2757)|
-|BigQuery and Snowflake external table integration   |0.11|[RFC-34](https://github.com/apache/hudi/pull/4503)|
+|BigQuery and Snowflake external table integration   |0.12|[RFC-34](https://github.com/apache/hudi/pull/4503)|
 |JDBC Incremental Source GA   |0.12|[HUDI-1859](https://issues.apache.org/jira/browse/HUDI-1859)|
 |Mutable, CDC Stream support for Kafka Connect Sink   |0.12|[HUDI-2324](https://issues.apache.org/jira/browse/HUDI-2324)|
 |Airbyte integration   |0.12|RFC coming soon|
