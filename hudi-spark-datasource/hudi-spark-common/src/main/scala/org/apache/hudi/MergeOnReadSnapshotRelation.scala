@@ -56,6 +56,11 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
   protected val mergeType: String = optParams.getOrElse(DataSourceReadOptions.REALTIME_MERGE.key,
     DataSourceReadOptions.REALTIME_MERGE.defaultValue)
 
+  override def imbueConfigs(sqlContext: SQLContext): Unit = {
+    super.imbueConfigs(sqlContext)
+    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "true")
+  }
+
   protected override def composeRDD(fileSplits: Seq[HoodieMergeOnReadFileSplit],
                                     partitionSchema: StructType,
                                     tableSchema: HoodieTableSchema,

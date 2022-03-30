@@ -55,6 +55,11 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
   override lazy val mandatoryColumns: Seq[String] =
     Seq(recordKeyField)
 
+  override def imbueConfigs(sqlContext: SQLContext): Unit = {
+    super.imbueConfigs(sqlContext)
+    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "true")
+  }
+
   protected override def composeRDD(fileSplits: Seq[HoodieBaseFileSplit],
                                     partitionSchema: StructType,
                                     tableSchema: HoodieTableSchema,
