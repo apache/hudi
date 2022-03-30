@@ -65,7 +65,6 @@ import java.util.stream.Collectors;
  * --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
  * --conf spark.sql.catalogImplementation=hive \
  * --conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
- * --packages org.apache.spark:spark-avro_2.12:3.1.2 \
  * $HUDI_DIR/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-0.11.0-SNAPSHOT.jar \
  * --mode dry_run \
  * --base-path base_path \
@@ -89,7 +88,6 @@ import java.util.stream.Collectors;
  * --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
  * --conf spark.sql.catalogImplementation=hive \
  * --conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
- * --packages org.apache.spark:spark-avro_2.12:3.1.2 \
  * $HUDI_DIR/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-0.11.0-SNAPSHOT.jar \
  * --mode repair \
  * --base-path base_path \
@@ -112,7 +110,6 @@ import java.util.stream.Collectors;
  * --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
  * --conf spark.sql.catalogImplementation=hive \
  * --conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
- * --packages org.apache.spark:spark-avro_2.12:3.1.2 \
  * $HUDI_DIR/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-0.11.0-SNAPSHOT.jar \
  * --mode dry_run \
  * --base-path base_path \
@@ -133,7 +130,6 @@ import java.util.stream.Collectors;
  * --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
  * --conf spark.sql.catalogImplementation=hive \
  * --conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
- * --packages org.apache.spark:spark-avro_2.12:3.1.2 \
  * $HUDI_DIR/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-0.11.0-SNAPSHOT.jar \
  * --mode undo \
  * --base-path base_path \

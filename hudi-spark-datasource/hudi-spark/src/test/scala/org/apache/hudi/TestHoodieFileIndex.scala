@@ -20,6 +20,7 @@ package org.apache.hudi
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.client.HoodieJavaWriteClient
 import org.apache.hudi.client.common.HoodieJavaEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -353,6 +354,9 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS.key -> "true",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
     )
+
+    // If there are any failures in the Data Skipping flow, test should fail
+    spark.sqlContext.setConf(DataSkippingFailureMode.configName, DataSkippingFailureMode.Strict.value);
 
     inputDF.repartition(4)
       .write

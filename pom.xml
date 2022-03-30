@@ -154,8 +154,6 @@
     <main.basedir>${project.basedir}</main.basedir>
     <spark.bundle.hive.scope>provided</spark.bundle.hive.scope>
     <spark.bundle.hive.shade.prefix/>
-    <spark.bundle.avro.scope>compile</spark.bundle.avro.scope>
-    <spark.bundle.spark.shade.prefix>org.apache.hudi.spark.</spark.bundle.spark.shade.prefix>
     <utilities.bundle.hive.scope>provided</utilities.bundle.hive.scope>
     <utilities.bundle.hive.shade.prefix/>
     <argLine>-Xmx2g</argLine>
@@ -601,14 +599,6 @@
         <classifier>tests</classifier>
         <version>${spark.version}</version>
         <scope>test</scope>
-      </dependency>
-
-      <!-- Spark (Packages) -->
-      <dependency>
-        <groupId>org.apache.spark</groupId>
-        <artifactId>spark-avro_${scala.binary.version}</artifactId>
-        <version>${spark.version}</version>
-        <scope>provided</scope>
       </dependency>
 
       <!-- Flink -->
@@ -1678,7 +1668,7 @@
     <profile>
       <id>spark3.1.x</id>
       <properties>
-        <spark3.version>3.1.2</spark3.version>
+        <spark3.version>3.1.3</spark3.version>
         <spark.version>${spark3.version}</spark.version>
         <sparkbundle.version>${spark3.version}</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>

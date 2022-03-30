@@ -18,6 +18,11 @@
 
 package org.apache.hudi.table;
 
+import org.apache.avro.Schema;
+import org.apache.avro.specific.SpecificRecordBase;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
@@ -72,16 +77,8 @@ import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.storage.HoodieLayoutFactory;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
-
-import org.apache.avro.Schema;
-import org.apache.avro.specific.SpecificRecordBase;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-
-import javax.annotation.Nonnull;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -260,19 +257,6 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    * @return HoodieWriteMetadata
    */
   public abstract HoodieWriteMetadata<O> insertOverwriteTable(HoodieEngineContext context, String instantTime, I records);
-
-  /**
-   * Updates Metadata Indexes (like Column Stats index)
-   * TODO rebase onto metadata table (post RFC-27)
-   *
-   * @param context instance of {@link HoodieEngineContext}
-   * @param instantTime instant of the carried operation triggering the update
-   */
-  public abstract void updateMetadataIndexes(
-      @Nonnull HoodieEngineContext context,
-      @Nonnull List<HoodieWriteStat> stats,
-      @Nonnull String instantTime
-  ) throws Exception;
 
   public HoodieWriteConfig getConfig() {
     return config;

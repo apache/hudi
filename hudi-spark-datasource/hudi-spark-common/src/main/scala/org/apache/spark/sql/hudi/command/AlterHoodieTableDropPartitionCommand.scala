@@ -20,14 +20,12 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
-import org.apache.hudi.hive.{HiveSyncConfig, MultiPartKeysValueExtractor}
 import org.apache.hudi.hive.ddl.HiveSyncMode
+import org.apache.hudi.hive.{HiveSyncConfig, MultiPartKeysValueExtractor}
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkSqlWriter}
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.execution.command.DDLUtils
@@ -114,58 +112,5 @@ case class AlterHoodieTableDropPartitionCommand(
         HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName
       )
     }
-  }
-
-  def normalizePartitionSpec[T](
-      partitionSpec: Map[String, T],
-      partColNames: Seq[String],
-      tblName: String,
-      resolver: Resolver): Map[String, T] = {
-    val normalizedPartSpec = partitionSpec.toSeq.map { case (key, value) =>
-      val normalizedKey = partColNames.find(resolver(_, key)).getOrElse {
-        throw new AnalysisException(s"$key is not a valid partition column in table $tblName.")
-      }
-      normalizedKey -> value
-    }
-
-    if (normalizedPartSpec.size < partColNames.size) {
-      throw new AnalysisException(
-        "All partition columns need to be specified for Hoodie's dropping partition")
-    }
-
-    val lowerPartColNames = partColNames.map(_.toLowerCase)
-    if (lowerPartColNames.distinct.length != lowerPartColNames.length) {
-      val duplicateColumns = lowerPartColNames.groupBy(identity).collect {
-        case (x, ys) if ys.length > 1 => s"`$x`"
-      }
-      throw new AnalysisException(
-        s"Found duplicate column(s) in the partition schema: ${duplicateColumns.mkString(", ")}")
-    }
-
-    normalizedPartSpec.toMap
-  }
-
-  def getPartitionPathToDrop(
-      hoodieCatalogTable: HoodieCatalogTable,
-      normalizedSpecs: Seq[Map[String, String]]): String = {
-    val table = hoodieCatalogTable.table
-    val allPartitionPaths = hoodieCatalogTable.getPartitionPaths
-    val enableHiveStylePartitioning = isHiveStyledPartitioning(allPartitionPaths, table)
-    val enableEncodeUrl = isUrlEncodeEnabled(allPartitionPaths, table)
-    val partitionsToDrop = normalizedSpecs.map { spec =>
-      hoodieCatalogTable.partitionFields.map { partitionColumn =>
-        val encodedPartitionValue = if (enableEncodeUrl) {
-          PartitionPathEncodeUtils.escapePathName(spec(partitionColumn))
-        } else {
-          spec(partitionColumn)
-        }
-        if (enableHiveStylePartitioning) {
-          partitionColumn + "=" + encodedPartitionValue
-        } else {
-          encodedPartitionValue
-        }
-      }.mkString("/")
-    }.mkString(",")
-    partitionsToDrop
   }
 }

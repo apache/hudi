@@ -90,21 +90,9 @@ mvn clean package -DskipTests -Dspark3
 mvn clean package -DskipTests -Dspark3.1.x
 ```
 
-### Build without spark-avro module
+### What about "spark-avro" module? 
 
-The default hudi-jar bundles spark-avro module. To build without spark-avro module, build using `spark-shade-unbundle-avro` profile
-
-```
-# Checkout code and build
-git clone https://github.com/apache/hudi.git && cd hudi
-mvn clean package -DskipTests -Pspark-shade-unbundle-avro
-
-# Start command
-spark-2.4.4-bin-hadoop2.7/bin/spark-shell \
-  --packages org.apache.spark:spark-avro_2.11:2.4.4 \
-  --jars `ls packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.11-*.*.*-SNAPSHOT.jar` \
-  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
-```
+Starting from versions 0.11, Hudi no longer requires `spark-avro` to be specified using `--packages`
 
 ## Running Tests
 

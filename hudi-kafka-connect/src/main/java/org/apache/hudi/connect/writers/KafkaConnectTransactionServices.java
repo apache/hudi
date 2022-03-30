@@ -163,7 +163,9 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
           Arrays.asList(connectConfigs.getMetaSyncClasses().split(",")));
       FileSystem fs = FSUtils.getFs(tableBasePath, new Configuration());
       for (String impl : syncClientToolClasses) {
-        SyncUtilHelpers.runHoodieMetaSync(impl.trim(), connectConfigs.getProps(), hadoopConf, fs, tableBasePath, HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.defaultValue());
+        // TODO kafka connect config needs to support setting base file format
+        String baseFileFormat = connectConfigs.getStringOrDefault(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT);
+        SyncUtilHelpers.runHoodieMetaSync(impl.trim(), connectConfigs.getProps(), hadoopConf, fs, tableBasePath, baseFileFormat);
       }
     }
   }

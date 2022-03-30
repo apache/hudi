@@ -672,14 +672,24 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       Option<HoodieInstant> commitInstantOpt = Option.fromJavaOptional(table.getActiveTimeline().getCommitsTimeline().getInstants()
           .filter(instant -> HoodieActiveTimeline.EQUALS.test(instant.getTimestamp(), commitInstantTime))
           .findFirst());
-      if (commitInstantOpt.isPresent()) {
-        LOG.info("Scheduling Rollback at instant time :" + rollbackInstantTime);
+      if (commitInstantOpt.isPresent() || pendingRollbackInfo.isPresent()) {
+        LOG.info(String.format("Scheduling Rollback at instant time : %s "
+                + "(exists in active timeline: %s), with rollback plan: %s",
+            rollbackInstantTime, commitInstantOpt.isPresent(), pendingRollbackInfo.isPresent()));
         Option<HoodieRollbackPlan> rollbackPlanOption = pendingRollbackInfo.map(entry -> Option.of(entry.getRollbackPlan()))
             .orElseGet(() -> table.scheduleRollback(context, rollbackInstantTime, commitInstantOpt.get(), false, config.shouldRollbackUsingMarkers()));
         if (rollbackPlanOption.isPresent()) {
-          // execute rollback
-          HoodieRollbackMetadata rollbackMetadata = table.rollback(context, rollbackInstantTime, commitInstantOpt.get(), true,
-              skipLocking);
+          // There can be a case where the inflight rollback failed after the instant files
+          // are deleted for commitInstantTime, so that commitInstantOpt is empty as it is
+          // not present in the timeline.  In such a case, the hoodie instant instance
+          // is reconstructed to allow the rollback to be reattempted, and the deleteInstants
+          // is set to false since they are already deleted.
+          // Execute rollback
+          HoodieRollbackMetadata rollbackMetadata = commitInstantOpt.isPresent()
+              ? table.rollback(context, rollbackInstantTime, commitInstantOpt.get(), true, skipLocking)
+              : table.rollback(context, rollbackInstantTime, new HoodieInstant(
+                  true, rollbackPlanOption.get().getInstantToRollback().getAction(), commitInstantTime),
+              false, skipLocking);
           if (timerContext != null) {
             long durationInMs = metrics.getDurationInMs(timerContext.stop());
             metrics.updateRollbackMetrics(durationInMs, rollbackMetadata.getTotalFilesDeleted());

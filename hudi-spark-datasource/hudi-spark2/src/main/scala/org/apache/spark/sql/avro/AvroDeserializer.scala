@@ -37,10 +37,16 @@ import scala.collection.mutable.ArrayBuffer
 /**
  * A deserializer to deserialize data in avro format to data in catalyst format.
  *
- * NOTE: This is a version of {@code AvroDeserializer} impl from Spark 2.4.4 w/ the fix for SPARK-30267
+ * NOTE: This code is borrowed from Spark 2.4.4
+ *       This code is borrowed, so that we can better control compatibility w/in Spark minor
+ *       branches (3.2.x, 3.1.x, etc)
+ *
+ *       PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
+ *
+ * NOTE: This is a version of [[AvroDeserializer]] impl from Spark 2.4.4 w/ the fix for SPARK-30267
  *       applied on top of it
  */
-class PatchedAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType) {
+class AvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType) {
   private lazy val decimalConversions = new DecimalConversion()
 
   private val converter: Any => Any = rootCatalystType match {

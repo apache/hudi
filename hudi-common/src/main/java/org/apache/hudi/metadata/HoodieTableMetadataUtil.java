@@ -90,6 +90,7 @@ import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.TOTAL
 import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.TOTAL_UNCOMPRESSED_SIZE;
 import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.VALUE_COUNT;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 
@@ -935,20 +936,25 @@ public class HoodieTableMetadataUtil {
     return Arrays.asList(tableConfig.getRecordKeyFields().get());
   }
 
-  public static HoodieMetadataColumnStats mergeColumnStats(HoodieMetadataColumnStats oldColumnStats, HoodieMetadataColumnStats newColumnStats) {
-    ValidationUtils.checkArgument(oldColumnStats.getFileName().equals(newColumnStats.getFileName()));
-    if (newColumnStats.getIsDeleted()) {
-      return newColumnStats;
+  public static HoodieMetadataColumnStats mergeColumnStats(HoodieMetadataColumnStats prevColumnStatsRecord,
+                                                           HoodieMetadataColumnStats newColumnStatsRecord) {
+    checkArgument(prevColumnStatsRecord.getFileName().equals(newColumnStatsRecord.getFileName()));
+    checkArgument(prevColumnStatsRecord.getColumnName().equals(newColumnStatsRecord.getColumnName()));
+
+    if (newColumnStatsRecord.getIsDeleted()) {
+      return newColumnStatsRecord;
     }
+
     return HoodieMetadataColumnStats.newBuilder()
-        .setFileName(newColumnStats.getFileName())
-        .setMinValue(Stream.of(oldColumnStats.getMinValue(), newColumnStats.getMinValue()).filter(Objects::nonNull).min(Comparator.naturalOrder()).orElse(null))
-        .setMaxValue(Stream.of(oldColumnStats.getMinValue(), newColumnStats.getMinValue()).filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null))
-        .setValueCount(oldColumnStats.getValueCount() + newColumnStats.getValueCount())
-        .setNullCount(oldColumnStats.getNullCount() + newColumnStats.getNullCount())
-        .setTotalSize(oldColumnStats.getTotalSize() + newColumnStats.getTotalSize())
-        .setTotalUncompressedSize(oldColumnStats.getTotalUncompressedSize() + newColumnStats.getTotalUncompressedSize())
-        .setIsDeleted(newColumnStats.getIsDeleted())
+        .setFileName(newColumnStatsRecord.getFileName())
+        .setColumnName(newColumnStatsRecord.getColumnName())
+        .setMinValue(Stream.of(prevColumnStatsRecord.getMinValue(), newColumnStatsRecord.getMinValue()).filter(Objects::nonNull).min(Comparator.naturalOrder()).orElse(null))
+        .setMaxValue(Stream.of(prevColumnStatsRecord.getMinValue(), newColumnStatsRecord.getMinValue()).filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null))
+        .setValueCount(prevColumnStatsRecord.getValueCount() + newColumnStatsRecord.getValueCount())
+        .setNullCount(prevColumnStatsRecord.getNullCount() + newColumnStatsRecord.getNullCount())
+        .setTotalSize(prevColumnStatsRecord.getTotalSize() + newColumnStatsRecord.getTotalSize())
+        .setTotalUncompressedSize(prevColumnStatsRecord.getTotalUncompressedSize() + newColumnStatsRecord.getTotalUncompressedSize())
+        .setIsDeleted(newColumnStatsRecord.getIsDeleted())
         .build();
   }
 

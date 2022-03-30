@@ -20,7 +20,7 @@ package org.apache.spark.sql.adapter
 import org.apache.avro.Schema
 import org.apache.hudi.Spark2RowSerDe
 import org.apache.hudi.client.utils.SparkRowSerDe
-import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer, HoodieSpark2AvroDeserializer, HoodieSparkAvroSerializer}
+import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer, HoodieSpark2_4AvroDeserializer, HoodieSpark2_4AvroSerializer, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.{Expression, Like}
@@ -38,17 +38,19 @@ import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieSpark2Catalyst
 import scala.collection.mutable.ArrayBuffer
 
 /**
- * The adapter for spark2.
+ * Implementation of [[SparkAdapter]] for Spark 2.4.x
  */
 class Spark2Adapter extends SparkAdapter {
 
   override def createCatalystExpressionUtils(): HoodieCatalystExpressionUtils = HoodieSpark2CatalystExpressionUtils
 
   override def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer =
-    new HoodieSparkAvroSerializer(rootCatalystType, rootAvroType, nullable)
+    new HoodieSpark2_4AvroSerializer(rootCatalystType, rootAvroType, nullable)
 
   override def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer =
-    new HoodieSpark2AvroDeserializer(rootAvroType, rootCatalystType)
+    new HoodieSpark2_4AvroDeserializer(rootAvroType, rootCatalystType)
+
+  override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
 
   override def createSparkRowSerDe(encoder: ExpressionEncoder[Row]): SparkRowSerDe = {
     new Spark2RowSerDe(encoder)
