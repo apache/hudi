@@ -357,6 +357,9 @@ public class HoodieMetadataTableValidator implements Serializable {
     String basePath = metaClient.getBasePath();
     Set<String> baseFilesForCleaning = Collections.emptySet();
 
+    // check metadata table is available to read.
+    checkMetadataTableIsAvailable();
+
     if (cfg.skipDataFilesForCleaning) {
       HoodieTimeline inflightCleaningTimeline = metaClient.getActiveTimeline().getCleanerTimeline().filterInflights();
 
@@ -412,6 +415,25 @@ public class HoodieMetadataTableValidator implements Serializable {
       LOG.info("Metadata table validation succeeded.");
     } else {
       LOG.warn("Metadata table validation failed.");
+    }
+  }
+
+  /**
+   * Check metadata is initialized and available to ready.
+   * If not we will log.warn and skip current validation.
+   */
+  private void checkMetadataTableIsAvailable() {
+    try {
+      HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
+          .setConf(jsc.hadoopConfiguration()).setBasePath(new Path(cfg.basePath, HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH).toString())
+          .setLoadActiveTimelineOnLoad(true)
+          .build();
+      int finishedInstants = mdtMetaClient.getActiveTimeline().filterCompletedInstants().countInstants();
+      if (finishedInstants == 0) {
+        throw new HoodieValidationException("There is no completed instant for metadata table.");
+      }
+    } catch (Exception ex) {
+      LOG.warn("Metadata table is not available to ready for now, ", ex);
     }
   }
 
