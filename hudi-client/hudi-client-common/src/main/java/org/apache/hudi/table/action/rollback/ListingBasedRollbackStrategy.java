@@ -200,7 +200,11 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
 
   @NotNull
   private List<String> getFilesToBeDeleted(FileStatus[] dataFilesToDeletedStatus) {
-    return Arrays.stream(dataFilesToDeletedStatus).map(fileStatus -> fileStatus.getPath().toString()).collect(Collectors.toList());
+    return Arrays.stream(dataFilesToDeletedStatus).map(fileStatus -> {
+      String dataFileToBeDeleted = fileStatus.getPath().toString();
+      // strip scheme E.g: file:/var/folders
+      return dataFileToBeDeleted.substring(dataFileToBeDeleted.indexOf(":") + 1);
+    }).collect(Collectors.toList());
   }
 
   private FileStatus[] listFilesToBeDeleted(String commit, String basefileExtension, String partitionPath,
