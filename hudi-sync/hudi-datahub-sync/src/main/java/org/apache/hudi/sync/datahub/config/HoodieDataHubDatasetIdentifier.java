@@ -25,6 +25,11 @@ import com.linkedin.common.FabricType;
 import com.linkedin.common.urn.DataPlatformUrn;
 import com.linkedin.common.urn.DatasetUrn;
 
+/**
+ * Construct and provide the default {@link DatasetUrn} to identify the Dataset on DataHub.
+ *
+ * Extend this to customize the way of constructing {@link DatasetUrn}.
+ */
 public class HoodieDataHubDatasetIdentifier {
 
   public static final String DEFAULT_HOODIE_DATAHUB_PLATFORM_NAME = "hudi";

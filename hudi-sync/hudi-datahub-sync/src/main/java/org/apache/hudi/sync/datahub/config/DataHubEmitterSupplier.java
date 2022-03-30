@@ -23,5 +23,10 @@ import datahub.client.rest.RestEmitter;
 
 import java.util.function.Supplier;
 
+/**
+ * To supply a {@link RestEmitter} to sync with DataHub.
+ *
+ * Implement this to have full control of the {@link RestEmitter}'s creation.
+ */
 public interface DataHubEmitterSupplier extends Supplier<RestEmitter> {
 }

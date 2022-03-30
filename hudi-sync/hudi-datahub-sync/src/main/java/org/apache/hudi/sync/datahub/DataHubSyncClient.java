@@ -194,7 +194,7 @@ public class DataHubSyncClient extends AbstractSyncHoodieClient {
 
   static Schema getAvroSchemaWithoutMetadataFields(HoodieTableMetaClient metaClient) {
     try {
-      return new TableSchemaResolver(metaClient).getTableAvroSchema(false);
+      return new TableSchemaResolver(metaClient).getTableAvroSchema(true);
     } catch (Exception e) {
       throw new HoodieSyncException("Failed to read avro schema", e);
     }
