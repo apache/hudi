@@ -18,9 +18,6 @@
 
 package org.apache.hudi.table.action.rollback;
 
-import static org.apache.hudi.client.utils.MetadataConversionUtils.getHoodieCommitMetadata;
-import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
-import static org.apache.hudi.table.action.rollback.BaseRollbackHelper.EMPTY_STRING;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -53,6 +50,10 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
+
+import static org.apache.hudi.client.utils.MetadataConversionUtils.getHoodieCommitMetadata;
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.table.action.rollback.BaseRollbackHelper.EMPTY_STRING;
 
 /**
  * Listing based rollback strategy to fetch list of {@link HoodieRollbackRequest}s.
@@ -199,11 +200,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
 
   @NotNull
   private List<String> getFilesToBeDeleted(FileStatus[] dataFilesToDeletedStatus) {
-    return Arrays.stream(dataFilesToDeletedStatus).map(fileStatus -> {
-      String dataFileToBeDeleted = fileStatus.getPath().toString();
-      // strip scheme
-      return dataFileToBeDeleted.substring(dataFileToBeDeleted.indexOf(":") + 1);
-    }).collect(Collectors.toList());
+    return Arrays.stream(dataFilesToDeletedStatus).map(fileStatus -> fileStatus.getPath().toString()).collect(Collectors.toList());
   }
 
   private FileStatus[] listFilesToBeDeleted(String commit, String basefileExtension, String partitionPath,
