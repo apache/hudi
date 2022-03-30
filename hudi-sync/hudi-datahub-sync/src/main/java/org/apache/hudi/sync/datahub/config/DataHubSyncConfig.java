@@ -78,7 +78,7 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
     emitterSupplierClass = getStringOrDefault(META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS, null);
 
     datasetIdentifier = (HoodieDataHubDatasetIdentifier) ReflectionUtils
-        .loadClass(identifierClass, new Class<?>[]{TypedProperties.class}, props);
+        .loadClass(identifierClass, new Class<?>[] {TypedProperties.class}, props);
   }
 
   public RestEmitter getRestEmitter() {

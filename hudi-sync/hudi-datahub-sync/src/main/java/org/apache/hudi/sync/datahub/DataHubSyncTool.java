@@ -31,9 +31,8 @@ import org.apache.hadoop.fs.FileSystem;
 /**
  * To sync with DataHub via REST APIs.
  *
- * @see <a href="https://datahubproject.io/">https://datahubproject.io/</a>
- *
  * @Experimental
+ * @see <a href="https://datahubproject.io/">https://datahubproject.io/</a>
  */
 public class DataHubSyncTool extends AbstractSyncTool {
 

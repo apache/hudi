@@ -27,7 +27,7 @@ import com.linkedin.common.urn.DatasetUrn;
 
 /**
  * Construct and provide the default {@link DatasetUrn} to identify the Dataset on DataHub.
- *
+ * <p>
  * Extend this to customize the way of constructing {@link DatasetUrn}.
  */
 public class HoodieDataHubDatasetIdentifier {
