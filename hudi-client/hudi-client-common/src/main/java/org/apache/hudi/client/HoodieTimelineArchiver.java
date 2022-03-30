@@ -179,7 +179,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     } finally {
       close();
       if (acquireLock) {
-        txnManager.close();
+        txnManager.endTransaction();
       }
     }
   }

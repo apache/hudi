@@ -437,16 +437,15 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
       completableFutureList.add(CompletableFuture.supplyAsync(() -> {
         HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
         try {
+          // wait until 4 commits are available so that archival thread will have something to archive.
           countDownLatch.await(30, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
-          e.printStackTrace();
+          throw new HoodieException("Should not have thrown InterruptedException ", e);
         }
         metaClient.reloadActiveTimeline();
         while (!metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().get().getTimestamp().endsWith("29")
             || metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() > 4) {
           try {
-            //System.out.println("Archiving " + index + ", total completed instants " + metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants());
-            //System.out.println("Last active instant " + metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().get().toString());
             HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(writeConfig, table);
             archiver.archiveIfRequired(context, true);
             // if not for below sleep, both archiving threads acquires lock in quick succession and does not give space for main thread
@@ -457,7 +456,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
           } catch (IOException e) {
             throw new HoodieException("IOException thrown while archiving ", e);
           } catch (InterruptedException e) {
-            e.printStackTrace();
+            throw new HoodieException("Should not have thrown InterruptedException ", e);
           }
           table.getMetaClient().reloadActiveTimeline();
         }
@@ -469,6 +468,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     for (int i = 1; i < 30; i++) {
       testTable.doWriteOperation("0000000" + String.format("%02d", i), WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
       if (i == 5) {
+        // start up archival threads only after 4 commits.
         countDownLatch.countDown();
       }
     }
