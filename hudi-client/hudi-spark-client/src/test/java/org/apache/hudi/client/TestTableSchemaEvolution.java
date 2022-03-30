@@ -19,6 +19,7 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -291,7 +292,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     }
 
     // Rollback to the original schema
-    client.restoreToInstant("004");
+    client.restoreToInstant("004", HoodieMetadataConfig.ENABLE.defaultValue());
     checkLatestDeltaCommit("004");
 
     // Updates with original schema are now allowed
@@ -432,7 +433,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
 
     // Revert to the older commit and ensure that the original schema can now
     // be used for inserts and inserts.
-    client.restoreToInstant("003");
+    client.restoreToInstant("003", HoodieMetadataConfig.ENABLE.defaultValue());
     curTimeline = metaClient.reloadActiveTimeline().getCommitTimeline().filterCompletedInstants();
     assertTrue(curTimeline.lastInstant().get().getTimestamp().equals("003"));
     checkReadRecords("000", numRecords);

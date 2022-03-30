@@ -31,6 +31,7 @@ import org.apache.hudi.client.clustering.run.strategy.SparkSingleFileSortExecuti
 import org.apache.hudi.client.validator.SparkPreCommitValidator;
 import org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator;
 import org.apache.hudi.client.validator.SqlQuerySingleResultPreCommitValidator;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -585,7 +586,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     client.savepoint("004", "user1","comment1");
 
-    client.restoreToInstant("004");
+    client.restoreToInstant("004", HoodieMetadataConfig.ENABLE.defaultValue());
 
     assertFalse(metaClient.reloadActiveTimeline().getRollbackTimeline().lastInstant().isPresent());
 

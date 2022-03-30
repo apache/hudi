@@ -18,27 +18,22 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.spark.launcher.SparkLauncher;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
-import java.io.FileNotFoundException;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -113,31 +108,9 @@ public class SavepointsCommand implements CommandMarker {
       return "Commit " + instantTime + " not found in Commits " + timeline;
     }
 
-    boolean metadataTableEnable = HoodieMetadataConfig.ENABLE.defaultValue();
-    try {
-      // Delete metadata table directly when users trigger savepoint rollback through cli if mdt existed and beforeTimelineStarts
-      String basePath = metaClient.getBasePath();
-      String metadataTableBase = HoodieTableMetadata.getMetadataTableBasePath(basePath);
-      Path metadataTableBasePath = new Path(metadataTableBase);
-      FileStatus[] statuses = HoodieCLI.fs.listStatus(metadataTableBasePath);
-      HoodieTableMetaClient mdtClient = HoodieTableMetaClient.builder().setConf(HoodieCLI.conf).setBasePath(metadataTableBase).build();
-      // Same as HoodieTableMetadataUtil#processRollbackMetadata
-      HoodieInstant syncedInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime);
-      // The instant required to sync rollback to MDT has been archived and the mdt syncing will be failed
-      // So that we need to delete the whole MDT here.
-      if (statuses.length > 0 && mdtClient.getCommitsTimeline().isBeforeTimelineStarts(syncedInstant.getTimestamp())) {
-        HoodieCLI.fs.delete(metadataTableBasePath, true);
-        // rollbackToSavepoint action will try to bootstrap MDT at first but sync to MDT will fail at the current scenario.
-        // so that we need to disable metadata here.
-        metadataTableEnable = false;
-      }
-    } catch (FileNotFoundException e) {
-      // Metadata directory does not exist
-    }
-
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     sparkLauncher.addAppArgs(SparkMain.SparkCommand.ROLLBACK_TO_SAVEPOINT.toString(), master, sparkMemory,
-        instantTime, metaClient.getBasePath(), String.valueOf(metadataTableEnable));
+        instantTime, metaClient.getBasePath());
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();

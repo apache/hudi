@@ -149,6 +149,8 @@ public class ITTestSavepointsCommand extends AbstractShellIntegrationTest {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build()).build();
     SparkHoodieBackedTableMetadataWriter.create(HoodieCLI.conf, writeConfig, new HoodieSparkEngineContext(jsc));
 
+    assertTrue(HoodieCLI.fs.exists(metadataTableBasePath));
+
     // roll back to savepoint
     CommandResult cr = getShell().executeCommand(
         String.format("savepoint rollback --savepoint %s --sparkMaster %s", savepoint, "local"));
