@@ -81,11 +81,9 @@ corresponding profile
 | Spark 2.4, Scala 2.12 | hudi-spark2.4-bundle_2.12 | `-Pspark2.4,scala-2.12` | For Spark 2.4.4, which is the same as the default and Scala 2.12 |
 | Spark 3.1, Scala 2.12 | hudi-spark3.1-bundle_2.12 | `-Pspark3.1` | For Spark 3.1.x |
 | Spark 3.2, Scala 2.12 | hudi-spark3.2-bundle_2.12 | `-Pspark3.2` | For Spark 3.2.x |
-| Spark 2, Scala 2.11 | hudi-spark2-bundle_2.11 | `-Pspark2` | This is the same as `Spark 2.4, Scala 2.11` |
-| Spark 2, Scala 2.12 | hudi-spark2-bundle_2.12 | `-Pspark2,scala-2.12` | This is the same as `Spark 2.4, Scala 2.12` |
 | Spark 3, Scala 2.12 | hudi-spark3-bundle_2.12 | `-Pspark3` | This is the same as `Spark 3.2, Scala 2.12` |
 | Spark, Scala 2.11 | hudi-spark-bundle_2.11 | Default | The default profile, supporting Spark 2.4.4 |
-| Spark, Scala 2.12 | hudi-spark-bundle_2.12 | `-Pscala-2.12` | The default profile (for Spark 2.4.x) with Scala 2.12 |
+| Spark, Scala 2.12 | hudi-spark-bundle_2.12 | `-Pscala-2.12` | The default profile (for Spark 2.4.4) with Scala 2.12 |
 
 For example,
 ```
