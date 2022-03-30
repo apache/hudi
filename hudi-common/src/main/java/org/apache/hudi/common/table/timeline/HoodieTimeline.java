@@ -55,11 +55,11 @@ public interface HoodieTimeline extends Serializable {
   String COMPACTION_ACTION = "compaction";
   String REQUESTED_EXTENSION = ".requested";
   String RESTORE_ACTION = "restore";
-  String INDEX_ACTION = "indexing";
+  String INDEXING_ACTION = "indexing";
 
   String[] VALID_ACTIONS_IN_TIMELINE = {COMMIT_ACTION, DELTA_COMMIT_ACTION,
       CLEAN_ACTION, SAVEPOINT_ACTION, RESTORE_ACTION, ROLLBACK_ACTION,
-      COMPACTION_ACTION, REPLACE_COMMIT_ACTION, INDEX_ACTION};
+      COMPACTION_ACTION, REPLACE_COMMIT_ACTION, INDEXING_ACTION};
 
   String COMMIT_EXTENSION = "." + COMMIT_ACTION;
   String DELTA_COMMIT_EXTENSION = "." + DELTA_COMMIT_ACTION;
@@ -85,9 +85,9 @@ public interface HoodieTimeline extends Serializable {
   String INFLIGHT_REPLACE_COMMIT_EXTENSION = "." + REPLACE_COMMIT_ACTION + INFLIGHT_EXTENSION;
   String REQUESTED_REPLACE_COMMIT_EXTENSION = "." + REPLACE_COMMIT_ACTION + REQUESTED_EXTENSION;
   String REPLACE_COMMIT_EXTENSION = "." + REPLACE_COMMIT_ACTION;
-  String INFLIGHT_INDEX_COMMIT_EXTENSION = "." + INDEX_ACTION + INFLIGHT_EXTENSION;
-  String REQUESTED_INDEX_COMMIT_EXTENSION = "." + INDEX_ACTION + REQUESTED_EXTENSION;
-  String INDEX_COMMIT_EXTENSION = "." + INDEX_ACTION;
+  String INFLIGHT_INDEX_COMMIT_EXTENSION = "." + INDEXING_ACTION + INFLIGHT_EXTENSION;
+  String REQUESTED_INDEX_COMMIT_EXTENSION = "." + INDEXING_ACTION + REQUESTED_EXTENSION;
+  String INDEX_COMMIT_EXTENSION = "." + INDEXING_ACTION;
 
   String INVALID_INSTANT_TS = "0";
 
@@ -365,11 +365,11 @@ public interface HoodieTimeline extends Serializable {
   }
 
   static HoodieInstant getIndexRequestedInstant(final String timestamp) {
-    return new HoodieInstant(State.REQUESTED, INDEX_ACTION, timestamp);
+    return new HoodieInstant(State.REQUESTED, INDEXING_ACTION, timestamp);
   }
 
   static HoodieInstant getIndexInflightInstant(final String timestamp) {
-    return new HoodieInstant(State.INFLIGHT, INDEX_ACTION, timestamp);
+    return new HoodieInstant(State.INFLIGHT, INDEXING_ACTION, timestamp);
   }
 
   /**

@@ -658,11 +658,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * @return inflight instant
    */
   public HoodieInstant transitionIndexRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data) {
-    ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.INDEX_ACTION),
-        String.format("%s is not equal to %s action", requestedInstant.getAction(), INDEX_ACTION));
+    ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.INDEXING_ACTION),
+        String.format("%s is not equal to %s action", requestedInstant.getAction(), INDEXING_ACTION));
     ValidationUtils.checkArgument(requestedInstant.isRequested(),
         String.format("Instant %s not in requested state", requestedInstant.getTimestamp()));
-    HoodieInstant inflightInstant = new HoodieInstant(State.INFLIGHT, INDEX_ACTION, requestedInstant.getTimestamp());
+    HoodieInstant inflightInstant = new HoodieInstant(State.INFLIGHT, INDEXING_ACTION, requestedInstant.getTimestamp());
     transitionState(requestedInstant, inflightInstant, data);
     return inflightInstant;
   }
@@ -673,11 +673,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * @return completed instant
    */
   public HoodieInstant transitionIndexInflightToComplete(HoodieInstant inflightInstant, Option<byte[]> data) {
-    ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.INDEX_ACTION),
-        String.format("%s is not equal to %s action", inflightInstant.getAction(), INDEX_ACTION));
+    ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.INDEXING_ACTION),
+        String.format("%s is not equal to %s action", inflightInstant.getAction(), INDEXING_ACTION));
     ValidationUtils.checkArgument(inflightInstant.isInflight(),
         String.format("Instant %s not inflight", inflightInstant.getTimestamp()));
-    HoodieInstant commitInstant = new HoodieInstant(State.COMPLETED, INDEX_ACTION, inflightInstant.getTimestamp());
+    HoodieInstant commitInstant = new HoodieInstant(State.COMPLETED, INDEXING_ACTION, inflightInstant.getTimestamp());
     transitionState(inflightInstant, commitInstant, data);
     return commitInstant;
   }
@@ -688,11 +688,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * @return requested instant
    */
   public HoodieInstant revertIndexInflightToRequested(HoodieInstant inflightInstant) {
-    ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.INDEX_ACTION),
-        String.format("%s is not equal to %s action", inflightInstant.getAction(), INDEX_ACTION));
+    ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.INDEXING_ACTION),
+        String.format("%s is not equal to %s action", inflightInstant.getAction(), INDEXING_ACTION));
     ValidationUtils.checkArgument(inflightInstant.isInflight(),
         String.format("Instant %s not inflight", inflightInstant.getTimestamp()));
-    HoodieInstant requestedInstant = new HoodieInstant(State.REQUESTED, INDEX_ACTION, inflightInstant.getTimestamp());
+    HoodieInstant requestedInstant = new HoodieInstant(State.REQUESTED, INDEXING_ACTION, inflightInstant.getTimestamp());
     if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
       transitionState(inflightInstant, requestedInstant, Option.empty());
     } else {
@@ -705,8 +705,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * Save content for inflight/requested index instant.
    */
   public void saveToPendingIndexAction(HoodieInstant instant, Option<byte[]> content) {
-    ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.INDEX_ACTION),
-        String.format("%s is not equal to %s action", instant.getAction(), INDEX_ACTION));
+    ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.INDEXING_ACTION),
+        String.format("%s is not equal to %s action", instant.getAction(), INDEXING_ACTION));
     createFileInMetaPath(instant.getFileName(), content, false);
   }
 

@@ -545,9 +545,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   }
 
   private void updateInitializedPartitionsInTableConfig(List<MetadataPartitionType> partitionTypes) {
-    Set<String> completedIndexes = getCompletedMetadataPartitions(dataMetaClient.getTableConfig());
-    completedIndexes.addAll(partitionTypes.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet()));
-    dataMetaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS.key(), String.join(",", completedIndexes));
+    Set<String> completedPartitions = getCompletedMetadataPartitions(dataMetaClient.getTableConfig());
+    completedPartitions.addAll(partitionTypes.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet()));
+    dataMetaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS.key(), String.join(",", completedPartitions));
     HoodieTableConfig.update(dataMetaClient.getFs(), new Path(dataMetaClient.getMetaPath()), dataMetaClient.getTableConfig().getProps());
   }
 

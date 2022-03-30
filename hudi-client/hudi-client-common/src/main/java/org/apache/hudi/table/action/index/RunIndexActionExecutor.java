@@ -62,11 +62,10 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED;
-import static org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.INDEX_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.INDEXING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.RESTORE_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE;
@@ -171,15 +170,23 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
   }
 
   private void abort(HoodieInstant indexInstant, Set<String> requestedPartitions) {
+    Set<String> inflightPartitions = getInflightMetadataPartitions(table.getMetaClient().getTableConfig());
+    Set<String> completedPartitions = getCompletedMetadataPartitions(table.getMetaClient().getTableConfig());
     // delete metadata partition
     requestedPartitions.forEach(partition -> {
       MetadataPartitionType partitionType = MetadataPartitionType.valueOf(partition.toUpperCase(Locale.ROOT));
       if (metadataPartitionExists(table.getMetaClient().getBasePath(), context, partitionType)) {
         deleteMetadataPartition(table.getMetaClient().getBasePath(), context, partitionType);
       }
+      inflightPartitions.remove(partition);
+      completedPartitions.remove(partition);
     });
+    // update table config
+    table.getMetaClient().getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT.key(), String.join(",", inflightPartitions));
+    table.getMetaClient().getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS.key(), String.join(",", completedPartitions));
+    HoodieTableConfig.update(table.getMetaClient().getFs(), new Path(table.getMetaClient().getMetaPath()), table.getMetaClient().getTableConfig().getProps());
     // delete inflight instant
-    table.getMetaClient().reloadActiveTimeline().deleteInstantFileIfExists(new HoodieInstant(INFLIGHT, indexInstant.getAction(), indexInstant.getTimestamp()));
+    table.getMetaClient().reloadActiveTimeline().deleteInstantFileIfExists(HoodieTimeline.getIndexInflightInstant(indexInstant.getTimestamp()));
   }
 
   private List<HoodieInstant> getInstantsToCatchup(String indexUptoInstant) {
@@ -224,7 +231,7 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
       updateMetadataPartitionsTableConfig(table.getMetaClient(),
           finalIndexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toSet()));
       table.getActiveTimeline().saveAsComplete(
-          new HoodieInstant(true, INDEX_ACTION, indexInstant.getTimestamp()),
+          new HoodieInstant(true, INDEXING_ACTION, indexInstant.getTimestamp()),
           TimelineMetadataUtils.serializeIndexCommitMetadata(indexCommitMetadata));
     } finally {
       txnManager.endTransaction();
@@ -250,20 +257,20 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
   private static List<HoodieInstant> getRemainingArchivedAndActiveInstantsSince(String instant, HoodieTableMetaClient metaClient) {
     List<HoodieInstant> remainingInstantsToIndex = metaClient.getArchivedTimeline().getInstants()
         .filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(), GREATER_THAN_OR_EQUALS, instant))
-        .filter(i -> !INDEX_ACTION.equals(i.getAction()))
+        .filter(i -> !INDEXING_ACTION.equals(i.getAction()))
         .collect(Collectors.toList());
     remainingInstantsToIndex.addAll(metaClient.getActiveTimeline().findInstantsAfter(instant).getInstants()
         .filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(), GREATER_THAN_OR_EQUALS, instant))
-        .filter(i -> !INDEX_ACTION.equals(i.getAction()))
+        .filter(i -> !INDEXING_ACTION.equals(i.getAction()))
         .collect(Collectors.toList()));
     return remainingInstantsToIndex;
   }
 
   private static List<HoodieInstant> getCompletedArchivedAndActiveInstantsAfter(String instant, HoodieTableMetaClient metaClient) {
     List<HoodieInstant> completedInstants = metaClient.getArchivedTimeline().filterCompletedInstants().findInstantsAfter(instant)
-        .getInstants().filter(i -> !INDEX_ACTION.equals(i.getAction())).collect(Collectors.toList());
+        .getInstants().filter(i -> !INDEXING_ACTION.equals(i.getAction())).collect(Collectors.toList());
     completedInstants.addAll(metaClient.reloadActiveTimeline().filterCompletedInstants().findInstantsAfter(instant)
-        .getInstants().filter(i -> !INDEX_ACTION.equals(i.getAction())).collect(Collectors.toList()));
+        .getInstants().filter(i -> !INDEXING_ACTION.equals(i.getAction())).collect(Collectors.toList()));
     return completedInstants;
   }
 

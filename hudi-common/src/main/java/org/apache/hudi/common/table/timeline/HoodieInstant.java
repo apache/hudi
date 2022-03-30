@@ -172,7 +172,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
       return isInflight() ? HoodieTimeline.makeInflightReplaceFileName(timestamp)
           : isRequested() ? HoodieTimeline.makeRequestedReplaceFileName(timestamp)
           : HoodieTimeline.makeReplaceFileName(timestamp);
-    } else if (HoodieTimeline.INDEX_ACTION.equals(action)) {
+    } else if (HoodieTimeline.INDEXING_ACTION.equals(action)) {
       return isInflight() ? HoodieTimeline.makeInflightIndexFileName(timestamp)
           : isRequested() ? HoodieTimeline.makeRequestedIndexFileName(timestamp)
           : HoodieTimeline.makeIndexCommitFileName(timestamp);

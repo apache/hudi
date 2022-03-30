@@ -208,7 +208,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
         return Option.of("hoodieCompactionPlan");
       case HoodieTimeline.REPLACE_COMMIT_ACTION:
         return Option.of("hoodieReplaceCommitMetadata");
-      case HoodieTimeline.INDEX_ACTION:
+      case HoodieTimeline.INDEXING_ACTION:
         return Option.of("hoodieIndexCommitMetadata");
       default:
         LOG.error(String.format("Unknown action in metadata (%s)", action));

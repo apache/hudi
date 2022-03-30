@@ -194,12 +194,12 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public HoodieTimeline filterPendingIndexTimeline() {
-    return new HoodieDefaultTimeline(instants.stream().filter(s -> s.getAction().equals(INDEX_ACTION) && !s.isCompleted()), details);
+    return new HoodieDefaultTimeline(instants.stream().filter(s -> s.getAction().equals(INDEXING_ACTION) && !s.isCompleted()), details);
   }
 
   @Override
   public HoodieTimeline filterCompletedIndexTimeline() {
-    return new HoodieDefaultTimeline(instants.stream().filter(s -> s.getAction().equals(INDEX_ACTION) && s.isCompleted()), details);
+    return new HoodieDefaultTimeline(instants.stream().filter(s -> s.getAction().equals(INDEXING_ACTION) && s.isCompleted()), details);
   }
 
   /**
@@ -215,7 +215,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
    */
   public HoodieTimeline getAllCommitsTimeline() {
     return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION,
-            CLEAN_ACTION, COMPACTION_ACTION, SAVEPOINT_ACTION, ROLLBACK_ACTION, REPLACE_COMMIT_ACTION, INDEX_ACTION));
+            CLEAN_ACTION, COMPACTION_ACTION, SAVEPOINT_ACTION, ROLLBACK_ACTION, REPLACE_COMMIT_ACTION, INDEXING_ACTION));
   }
 
   /**
