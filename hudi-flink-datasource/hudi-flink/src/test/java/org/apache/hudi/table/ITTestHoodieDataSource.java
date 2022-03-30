@@ -1179,7 +1179,7 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
   @ParameterizedTest
   @ValueSource(strings = {"insert", "upsert", "bulk_insert"})
   void testBuiltinFunctionWithCatalog(String operation) {
-    TableEnvironment tableEnv = streamTableEnv;
+    TableEnvironment tableEnv = batchTableEnv;
 
     String hudiCatalogDDL = catalog("hudi_" + operation)
         .catalogPath(tempFile.getAbsolutePath())
