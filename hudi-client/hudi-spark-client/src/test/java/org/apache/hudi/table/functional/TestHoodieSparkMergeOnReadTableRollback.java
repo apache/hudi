@@ -481,7 +481,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       copyOfRecords.clear();
 
       // Rollback latest commit first
-      client.restoreToInstant("000", HoodieMetadataConfig.ENABLE.defaultValue());
+      client.restoreToInstant("000", cfg.isMetadataTableEnabled());
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
       allFiles = listAllBaseFilesInPath(hoodieTable);
@@ -531,7 +531,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
       if (!restoreAfterCompaction) {
         // restore to 002 and validate records.
-        client.restoreToInstant("002", HoodieMetadataConfig.ENABLE.defaultValue());
+        client.restoreToInstant("002", cfg.isMetadataTableEnabled());
         validateRecords(cfg, metaClient, updates1);
       } else {
         // trigger compaction and then trigger couple of upserts followed by restore.
