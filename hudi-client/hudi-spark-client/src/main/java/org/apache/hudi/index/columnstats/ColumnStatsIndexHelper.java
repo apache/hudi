@@ -63,6 +63,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+// TODO merge w/ ColumnStatsIndexSupport
 public class ColumnStatsIndexHelper {
 
   private static final String COLUMN_STATS_INDEX_FILE_COLUMN_NAME = "file";
