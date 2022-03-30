@@ -238,8 +238,10 @@
                                             "type": {
                                                 "type": "bytes",
                                                 "logicalType": "decimal",
-                                                "precision": 18,
-                                                "scale": 5
+                                                // NOTE: This is equivalent to Spark's [[DoubleDecimal]] and should
+                                                //       be enough for almost any possible use-cases
+                                                "precision": 30,
+                                                "scale": 15
                                             },
                                             "name": "value"
                                         }
