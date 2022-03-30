@@ -114,7 +114,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
     }
   }
 
-  List<HoodieRollbackStat> getListBasedRollBackStats(HoodieTable table, HoodieEngineContext context, Option<HoodieInstant> commitInstantOpt) {
+  List<HoodieRollbackStat> getListBasedRollBackStats(HoodieTable<?, ?, ?, ?> table, HoodieEngineContext context, Option<HoodieInstant> commitInstantOpt) {
     List<HoodieRollbackRequest> hoodieRollbackRequests =
         new ListingBasedRollbackStrategy(table, context, table.getConfig(), commitInstantOpt.get().getTimestamp())
             .getRollbackRequests(commitInstantOpt.get());
@@ -131,7 +131,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
    * @param table       {@link HoodieTable} instance to use
    * @return the marker file name thus curated.
    */
-  private static String getFileNameForMarkerFromLogFile(String logFilePath, HoodieTable table) {
+  private static String getFileNameForMarkerFromLogFile(String logFilePath, HoodieTable<?, ?, ?, ?> table) {
     Path logPath = new Path(table.getMetaClient().getBasePath(), logFilePath);
     String fileId = FSUtils.getFileIdFromLogPath(logPath);
     String baseInstant = FSUtils.getBaseCommitTimeFromLogPath(logPath);

@@ -36,6 +36,7 @@ import org.apache.hadoop.fs.PathFilter;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -88,19 +89,26 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
 
       context.setJobStatus(this.getClass().getSimpleName(), "Creating Listing Rollback Plan");
 
+      HoodieTableType tableType = table.getMetaClient().getTableType();
+      String baseFileExtension = getBaseFileExtension(metaClient);
+      Option<HoodieCommitMetadata> commitMetadataOptional = getHoodieCommitMetadata(metaClient, instantToRollback);
+      Boolean isCommitMetadataCompleted = checkCommitMetadataCompleted(instantToRollback, commitMetadataOptional);
+
       return context.flatMap(partitionPaths, partitionPath -> {
         List<HoodieRollbackRequest> hoodieRollbackRequests = new ArrayList<>(partitionPaths.size());
-        if (table.getMetaClient().getTableType() == HoodieTableType.COPY_ON_WRITE) {
-          hoodieRollbackRequests.add(
-              deleteDataAndLogFilesRollbackRequest(instantToRollback, metaClient, partitionPath));
-        } else {
+        FileStatus[] filesToDelete =
+            fetchFilesFromInstant(instantToRollback, partitionPath, metaClient.getBasePath(), baseFileExtension,
+                metaClient.getFs(), commitMetadataOptional, isCommitMetadataCompleted);
+
+        if (HoodieTableType.COPY_ON_WRITE == tableType) {
+          hoodieRollbackRequests.add(getHoodieRollbackRequest(partitionPath, filesToDelete));
+        } else if (HoodieTableType.MERGE_ON_READ == tableType) {
           String commit = instantToRollback.getTimestamp();
           HoodieActiveTimeline activeTimeline = table.getMetaClient().reloadActiveTimeline();
           switch (instantToRollback.getAction()) {
             case HoodieTimeline.COMMIT_ACTION:
             case HoodieTimeline.REPLACE_COMMIT_ACTION:
-              hoodieRollbackRequests.add(
-                  deleteDataAndLogFilesRollbackRequest(instantToRollback, metaClient, partitionPath));
+              hoodieRollbackRequests.add(getHoodieRollbackRequest(partitionPath, filesToDelete));
               break;
             case HoodieTimeline.COMPACTION_ACTION:
               // If there is no delta commit present after the current commit (if compaction), no action, else we
@@ -114,15 +122,14 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
                 // and has not yet finished. In this scenario we should delete only the newly created base files
                 // and not corresponding base commit log files created with this as baseCommit since updates would
                 // have been written to the log files.
-                String baseFileExtension = getBaseFileExtension(metaClient);
-                hoodieRollbackRequests.add(deleteDataFilesOnlyRollbackRequest(instantToRollback, baseFileExtension, partitionPath,
-                        metaClient.getFs()));
+                hoodieRollbackRequests.add(getHoodieRollbackRequest(partitionPath,
+                    listFilesToBeDeleted(instantToRollback.getTimestamp(), baseFileExtension, partitionPath,
+                        metaClient.getFs())));
               } else {
                 // No deltacommits present after this compaction commit (inflight or requested). In this case, we
                 // can also delete any log files that were created with this compaction commit as base
                 // commit.
-                hoodieRollbackRequests.add(
-                    deleteDataAndLogFilesRollbackRequest(instantToRollback, metaClient, partitionPath));
+                hoodieRollbackRequests.add(getHoodieRollbackRequest(partitionPath, filesToDelete));
               }
               break;
             case HoodieTimeline.DELTA_COMMIT_ACTION:
@@ -156,18 +163,20 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
               // In case all data was inserts and the commit failed, delete the file belonging to that commit
               // We do not know fileIds for inserts (first inserts are either log files or base files),
               // delete all files for the corresponding failed commit, if present (same as COW)
-              hoodieRollbackRequests.add(
-                  deleteDataAndLogFilesRollbackRequest(instantToRollback, metaClient, partitionPath));
+              hoodieRollbackRequests.add(getHoodieRollbackRequest(partitionPath, filesToDelete));
 
               // append rollback blocks for updates and inserts as A.2 and B.2
               if (commitMetadata.getPartitionToWriteStats().containsKey(partitionPath)) {
                 hoodieRollbackRequests.addAll(
-                    getRollbackRequestForAppend(partitionPath, instantToRollback, commitMetadata, table));
+                    getRollbackRequestToAppend(partitionPath, instantToRollback, commitMetadata, table));
               }
               break;
             default:
               throw new HoodieRollbackException("Unknown listing type, during rollback of " + instantToRollback);
           }
+        } else {
+          throw new HoodieRollbackException(
+              String.format("Unsupported table type: %s, during listing rollback of %s", tableType, instantToRollback));
         }
         return hoodieRollbackRequests.stream();
       }, numPartitions);
@@ -182,30 +191,10 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
   }
 
   @NotNull
-  private HoodieRollbackRequest deleteDataAndLogFilesRollbackRequest(HoodieInstant instantToRollback,
-                                                                     HoodieTableMetaClient metaClient,
-                                                                     String partitionPath)
-      throws IOException {
-    final FileStatus[] filesToDeletedStatus = getBaseAndLogFilesToBeDeleted(metaClient, instantToRollback, partitionPath);
-    return getHoodieRollbackRequest(partitionPath, filesToDeletedStatus);
-  }
-
-  @NotNull
-  private HoodieRollbackRequest deleteDataFilesOnlyRollbackRequest(HoodieInstant instantToRollback,
-                                                                   String basefileExtension, String partitionPath,
-                                                                   FileSystem fs)
-      throws IOException {
-    final FileStatus[] dataFilesToDeletedStatus =
-        getBaseFilesToBeDeleted(instantToRollback.getTimestamp(), basefileExtension,
-            partitionPath, fs);
-    return getHoodieRollbackRequest(partitionPath, dataFilesToDeletedStatus);
-  }
-
-  @NotNull
   private HoodieRollbackRequest getHoodieRollbackRequest(String partitionPath, FileStatus[] filesToDeletedStatus) {
-    List<String> filesToBeDeleted = getFilesToBeDeleted(filesToDeletedStatus);
+    List<String> filesToDelete = getFilesToBeDeleted(filesToDeletedStatus);
     return new HoodieRollbackRequest(
-        partitionPath, EMPTY_STRING, EMPTY_STRING, filesToBeDeleted, Collections.emptyMap());
+        partitionPath, EMPTY_STRING, EMPTY_STRING, filesToDelete, Collections.emptyMap());
   }
 
   @NotNull
@@ -217,8 +206,8 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
     }).collect(Collectors.toList());
   }
 
-  private FileStatus[] getBaseFilesToBeDeleted(String commit, String basefileExtension, String partitionPath,
-                                               FileSystem fs) throws IOException {
+  private FileStatus[] listFilesToBeDeleted(String commit, String basefileExtension, String partitionPath,
+                                            FileSystem fs) throws IOException {
     LOG.info("Collecting files to be cleaned/rolledback up for path " + partitionPath + " and commit " + commit);
     PathFilter filter = (path) -> {
       if (path.toString().contains(basefileExtension)) {
@@ -230,21 +219,41 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
     return fs.listStatus(FSUtils.getPartitionPath(config.getBasePath(), partitionPath), filter);
   }
 
-  private FileStatus[] getBaseAndLogFilesToBeDeleted(HoodieTableMetaClient metaClient, HoodieInstant instantToRollback, String partitionPath) throws IOException {
-    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
-    Option<HoodieCommitMetadata> commitMetadataOptional = getHoodieCommitMetadata(timeline, instantToRollback);
-    String baseFileExtension = getBaseFileExtension(metaClient);
-    SerializablePathFilter pathFilter = getSerializablePathFilter(baseFileExtension, instantToRollback.getTimestamp());
-    Path[] filePaths;
-    if (commitMetadataOptional.isPresent() && instantToRollback.isCompleted()
-        && !WriteOperationType.UNKNOWN.equals(commitMetadataOptional.get().getOperationType())) {
-      filePaths = getFilesFromCommitMetadata(metaClient.getBasePath(), commitMetadataOptional.get(), partitionPath);
+  private FileStatus[] fetchFilesFromInstant(HoodieInstant instantToRollback, String partitionPath, String basePath,
+                                             String baseFileExtension, HoodieWrapperFileSystem fs,
+                                             Option<HoodieCommitMetadata> commitMetadataOptional,
+                                             Boolean isCommitMetadataCompleted) throws IOException {
+    if (isCommitMetadataCompleted) {
+      return fetchFilesFromCommitMetadata(instantToRollback, partitionPath, basePath, commitMetadataOptional.get(),
+          baseFileExtension, fs);
     } else {
-      filePaths = listFilesToBeDeleted(metaClient.getBasePath(), partitionPath);
+      return fetchFilesFromListFiles(instantToRollback, partitionPath, basePath, baseFileExtension, fs);
     }
+  }
 
-    return metaClient.getFs().listStatus(filePaths, pathFilter);
+  private FileStatus[] fetchFilesFromCommitMetadata(HoodieInstant instantToRollback, String partitionPath,
+                                                    String basePath, HoodieCommitMetadata commitMetadata,
+                                                    String baseFileExtension, HoodieWrapperFileSystem fs)
+      throws IOException {
+    SerializablePathFilter pathFilter = getSerializablePathFilter(baseFileExtension, instantToRollback.getTimestamp());
+    Path[] filePaths = getFilesFromCommitMetadata(basePath, commitMetadata, partitionPath);
+
+    return fs.listStatus(filePaths, pathFilter);
+  }
+
+  private FileStatus[] fetchFilesFromListFiles(HoodieInstant instantToRollback, String partitionPath, String basePath,
+                                               String baseFileExtension, HoodieWrapperFileSystem fs)
+      throws IOException {
+    SerializablePathFilter pathFilter = getSerializablePathFilter(baseFileExtension, instantToRollback.getTimestamp());
+    Path[] filePaths = listFilesToBeDeleted(basePath, partitionPath);
+
+    return fs.listStatus(filePaths, pathFilter);
+  }
+
+  private Boolean checkCommitMetadataCompleted(HoodieInstant instantToRollback,
+                                               Option<HoodieCommitMetadata> commitMetadataOptional) {
+    return commitMetadataOptional.isPresent() && instantToRollback.isCompleted()
+        && !WriteOperationType.UNKNOWN.equals(commitMetadataOptional.get().getOperationType());
   }
 
   private static Path[] listFilesToBeDeleted(String basePath, String partitionPath) {
@@ -271,8 +280,8 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
     };
   }
 
-  public static List<HoodieRollbackRequest> getRollbackRequestForAppend(String partitionPath, HoodieInstant rollbackInstant,
-                                                                        HoodieCommitMetadata commitMetadata, HoodieTable<?, ?, ?, ?> table) {
+  public static List<HoodieRollbackRequest> getRollbackRequestToAppend(String partitionPath, HoodieInstant rollbackInstant,
+                                                                       HoodieCommitMetadata commitMetadata, HoodieTable<?, ?, ?, ?> table) {
     List<HoodieRollbackRequest> hoodieRollbackRequests =  new ArrayList<>();
     checkArgument(rollbackInstant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION));
 
