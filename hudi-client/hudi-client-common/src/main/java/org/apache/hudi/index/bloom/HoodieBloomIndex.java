@@ -206,7 +206,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
    * @return List of partition and file column range info pairs
    */
   protected List<Pair<String, BloomIndexFileInfo>> loadColumnRangesFromMetaIndex(
-      List<String> partitions, final HoodieEngineContext context, final HoodieTable hoodieTable) {
+      List<String> partitions, final HoodieEngineContext context, final HoodieTable<?, ?, ?, ?> hoodieTable) {
     // also obtain file ranges, if range pruning is enabled
     context.setJobStatus(this.getClass().getName(), "Load meta index key ranges for file slices");
 
@@ -221,15 +221,16 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
         return Stream.empty();
       }
       try {
-        Map<Pair<String, String>, HoodieMetadataColumnStats> fileToColumnStatsMap = hoodieTable
-            .getMetadataTable().getColumnStats(partitionFileNameList, keyField);
+        Map<Pair<String, String>, HoodieMetadataColumnStats> fileToColumnStatsMap =
+            hoodieTable.getMetadataTable().getColumnStats(partitionFileNameList, keyField);
         List<Pair<String, BloomIndexFileInfo>> result = new ArrayList<>();
         for (Map.Entry<Pair<String, String>, HoodieMetadataColumnStats> entry : fileToColumnStatsMap.entrySet()) {
           result.add(Pair.of(entry.getKey().getLeft(),
               new BloomIndexFileInfo(
                   FSUtils.getFileId(entry.getKey().getRight()),
-                  entry.getValue().getMinValue(),
-                  entry.getValue().getMaxValue()
+                  // NOTE: Here we assume that the type of the primary key field is string
+                  (String) entry.getValue().getMinValue(),
+                  (String) entry.getValue().getMaxValue()
               )));
         }
         return result.stream();

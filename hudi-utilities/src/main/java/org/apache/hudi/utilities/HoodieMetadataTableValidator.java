@@ -660,6 +660,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         }).collect(Collectors.toList());
   }
 
+  @SuppressWarnings("rawtypes")
   private void validateAllColumnStats(
       HoodieMetadataValidationContext metadataTableBasedContext,
       HoodieMetadataValidationContext fsBasedContext,
@@ -667,9 +668,9 @@ public class HoodieMetadataTableValidator implements Serializable {
       Set<String> baseDataFilesForCleaning) {
 
     List<String> latestBaseFilenameList = getLatestBaseFileNames(fsBasedContext, partitionPath, baseDataFilesForCleaning);
-    List<HoodieColumnRangeMetadata<String>> metadataBasedColStats = metadataTableBasedContext
+    List<HoodieColumnRangeMetadata<Comparable>> metadataBasedColStats = metadataTableBasedContext
         .getSortedColumnStatsList(partitionPath, latestBaseFilenameList);
-    List<HoodieColumnRangeMetadata<String>> fsBasedColStats = fsBasedContext
+    List<HoodieColumnRangeMetadata<Comparable>> fsBasedColStats = fsBasedContext
         .getSortedColumnStatsList(partitionPath, latestBaseFilenameList);
 
     validate(metadataBasedColStats, fsBasedColStats, partitionPath, "column stats");
@@ -777,10 +778,10 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   public static class HoodieColumnRangeMetadataComparator
-      implements Comparator<HoodieColumnRangeMetadata<String>>, Serializable {
+      implements Comparator<HoodieColumnRangeMetadata<Comparable>>, Serializable {
 
     @Override
-    public int compare(HoodieColumnRangeMetadata<String> o1, HoodieColumnRangeMetadata<String> o2) {
+    public int compare(HoodieColumnRangeMetadata<Comparable> o1, HoodieColumnRangeMetadata<Comparable> o2) {
       return o1.toString().compareTo(o2.toString());
     }
   }
@@ -837,7 +838,8 @@ public class HoodieMetadataTableValidator implements Serializable {
           .sorted(new HoodieFileGroupComparator()).collect(Collectors.toList());
     }
 
-    public List<HoodieColumnRangeMetadata<String>> getSortedColumnStatsList(
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public List<HoodieColumnRangeMetadata<Comparable>> getSortedColumnStatsList(
         String partitionPath, List<String> baseFileNameList) {
       LOG.info("All column names for getting column stats: " + allColumnNameList);
       if (enableMetadataTable) {
@@ -846,11 +848,11 @@ public class HoodieMetadataTableValidator implements Serializable {
         return allColumnNameList.stream()
             .flatMap(columnName ->
                 tableMetadata.getColumnStats(partitionFileNameList, columnName).values().stream()
-                    .map(stats -> HoodieColumnRangeMetadata.create(
+                    .map(stats -> HoodieColumnRangeMetadata.<Comparable>create(
                         stats.getFileName(),
                         columnName,
-                        stats.getMinValue(),
-                        stats.getMaxValue(),
+                        (Comparable) stats.getMinValue(),
+                        (Comparable) stats.getMaxValue(),
                         stats.getNullCount(),
                         stats.getValueCount(),
                         stats.getTotalSize(),
@@ -865,13 +867,11 @@ public class HoodieMetadataTableValidator implements Serializable {
                     metaClient.getHadoopConf(),
                     new Path(new Path(metaClient.getBasePath(), partitionPath), filename),
                     allColumnNameList).stream())
-            .map(rangeMetadata -> HoodieColumnRangeMetadata.create(
+            .map(rangeMetadata -> HoodieColumnRangeMetadata.<Comparable>create(
                 rangeMetadata.getFilePath(),
                 rangeMetadata.getColumnName(),
-                // Note: here we ignore the type in the validation,
-                // since column stats from metadata table store the min/max values as String
-                rangeMetadata.getMinValue().toString(),
-                rangeMetadata.getMaxValue().toString(),
+                rangeMetadata.getMinValue(),
+                rangeMetadata.getMaxValue(),
                 rangeMetadata.getNullCount(),
                 rangeMetadata.getValueCount(),
                 rangeMetadata.getTotalSize(),
