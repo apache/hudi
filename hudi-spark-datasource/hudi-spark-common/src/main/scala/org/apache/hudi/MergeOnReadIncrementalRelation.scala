@@ -48,6 +48,11 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
 
   override type FileSplit = HoodieMergeOnReadFileSplit
 
+  override def imbueConfigs(sqlContext: SQLContext): Unit = {
+    super.imbueConfigs(sqlContext)
+    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "false")
+  }
+
   override protected def timeline: HoodieTimeline = {
     val startTimestamp = optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)
     val endTimestamp = optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key, super.timeline.lastInstant().get.getTimestamp)

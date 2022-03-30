@@ -18,7 +18,7 @@
 
 package org.apache.spark.sql.execution.benchmark
 
-import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.{HoodieFileIndex, HoodieSparkUtils}
 import org.apache.spark.SparkConf
 import org.apache.spark.hudi.benchmark.{HoodieBenchmark, HoodieBenchmarkBase}
 import org.apache.spark.sql.{DataFrame, RowFactory, SparkSession}
@@ -100,6 +100,14 @@ object CowTableReadBenchmark extends HoodieBenchmarkBase {
     try f finally tableNames.foreach(spark.catalog.dropTempView)
   }
 
+  /**
+    * Java HotSpot(TM) 64-Bit Server VM 1.8.0_92-b14 on Windows 10 10.0
+    * Intel64 Family 6 Model 94 Stepping 3, GenuineIntel
+    * perf cow snapshot read:                   Best Time(ms)   Avg Time(ms)   Stdev(ms)    Rate(M/s)   Per Row(ns)   Relative
+    * ------------------------------------------------------------------------------------------------------------------------
+    * vectorized disable                                 2178           2180           2          4.6         217.8       1.0X
+    * vectorized enable                                   659            674          24         15.2          65.9       3.3X
+    */
   private def cowTableReadBenchmark(tableName: String = "cowBenchmark"): Unit = {
     withTempDir {f =>
       withTempTable(tableName) {
