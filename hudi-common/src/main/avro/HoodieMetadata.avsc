@@ -132,22 +132,83 @@
                                 {
                                     "namespace": "org.apache.hudi.avro.model",
                                     "type": "record",
-                                    "name": "PrimitiveTypeWrapper",
-                                    "doc": "A record wrapping primitive types to be able to be used it w/in Avro's Union",
+                                    "name": "BooleanWrapper",
+                                    "doc": "A record wrapping boolean type to be able to be used it w/in Avro's Union",
                                     "fields": [
                                         {
-                                            "type": [
-                                                "boolean",
-                                                "int",
-                                                "long",
-                                                "float",
-                                                "double",
-                                                "bytes",
-                                                // NOTE: While Parquet encodes strings as bytes, we encode it as native Avro primitive
-                                                //       type primarily for convenience to avoid unnecessary manual encoding.
-                                                //       Both Parquet and Avro encode strings as an UTF8
-                                                "string"
-                                            ],
+                                            "type": "boolean",
+                                            "name": "value"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "namespace": "org.apache.hudi.avro.model",
+                                    "type": "record",
+                                    "name": "IntWrapper",
+                                    "doc": "A record wrapping int type to be able to be used it w/in Avro's Union",
+                                    "fields": [
+                                        {
+                                            "type": "int",
+                                            "name": "value"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "namespace": "org.apache.hudi.avro.model",
+                                    "type": "record",
+                                    "name": "LongWrapper",
+                                    "doc": "A record wrapping long type to be able to be used it w/in Avro's Union",
+                                    "fields": [
+                                        {
+                                            "type": "long",
+                                            "name": "value"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "namespace": "org.apache.hudi.avro.model",
+                                    "type": "record",
+                                    "name": "FloatWrapper",
+                                    "doc": "A record wrapping float type to be able to be used it w/in Avro's Union",
+                                    "fields": [
+                                        {
+                                            "type": "float",
+                                            "name": "value"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "namespace": "org.apache.hudi.avro.model",
+                                    "type": "record",
+                                    "name": "DoubleWrapper",
+                                    "doc": "A record wrapping double type to be able to be used it w/in Avro's Union",
+                                    "fields": [
+                                        {
+                                            "type": "double",
+                                            "name": "value"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "namespace": "org.apache.hudi.avro.model",
+                                    "type": "record",
+                                    "name": "BytesWrapper",
+                                    "doc": "A record wrapping bytes type to be able to be used it w/in Avro's Union",
+                                    "fields": [
+                                        {
+                                            "type": "bytes",
+                                            "name": "value"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "namespace": "org.apache.hudi.avro.model",
+                                    "type": "record",
+                                    "name": "StringWrapper",
+                                    "doc": "A record wrapping string type to be able to be used it w/in Avro's Union",
+                                    "fields": [
+                                        {
+                                            "type": "string",
                                             "name": "value"
                                         }
                                     ]
@@ -228,7 +289,13 @@
                                 //       into one of the following types, making sure that their corresponding
                                 //       ordering is preserved
                                 "null",
-                                "org.apache.hudi.avro.model.PrimitiveTypeWrapper",
+                                "org.apache.hudi.avro.model.BooleanWrapper",
+                                "org.apache.hudi.avro.model.IntWrapper",
+                                "org.apache.hudi.avro.model.LongWrapper",
+                                "org.apache.hudi.avro.model.FloatWrapper",
+                                "org.apache.hudi.avro.model.DoubleWrapper",
+                                "org.apache.hudi.avro.model.BytesWrapper",
+                                "org.apache.hudi.avro.model.StringWrapper",
                                 "org.apache.hudi.avro.model.DateWrapper",
                                 "org.apache.hudi.avro.model.DecimalWrapper",
                                 "org.apache.hudi.avro.model.TimeMicrosWrapper",
