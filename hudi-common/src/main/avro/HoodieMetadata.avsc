@@ -129,16 +129,92 @@
                                 //       into one of the following types, making sure that their corresponding
                                 //       ordering is preserved
                                 "null",
-                                "boolean",
-                                "int",
-                                "long",
-                                "float",
-                                "double",
-                                "bytes",
-                                // NOTE: While Parquet encodes strings as bytes, we encode it as native Avro primitive
-                                //       type primarily for convenience to avoid unnecessary manual encoding.
-                                //       Both Parquet and Avro encode strings as an UTF8
-                                "string"
+                                {
+                                    "namespace": "org.apache.hudi.avro.model",
+                                    "type": "record",
+                                    "name": "PrimitiveTypeWrapper",
+                                    "doc": "A record wrapping primitive types to be able to be used it w/in Avro's Union",
+                                    "fields": [
+                                        {
+                                            "type": [
+                                                "boolean",
+                                                "int",
+                                                "long",
+                                                "float",
+                                                "double",
+                                                "bytes",
+                                                // NOTE: While Parquet encodes strings as bytes, we encode it as native Avro primitive
+                                                //       type primarily for convenience to avoid unnecessary manual encoding.
+                                                //       Both Parquet and Avro encode strings as an UTF8
+                                                "string"
+                                            ],
+                                            "name": "value"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "namespace": "org.apache.hudi.avro.model",
+                                    "type": "record",
+                                    "name": "DateWrapper",
+                                    "doc": "A record wrapping Date logical type to be able to be used it w/in Avro's Union",
+                                    "fields": [
+                                        {
+                                            "type": {
+                                                "type": "int",
+                                                "logicalType": "date"
+                                            },
+                                            "name": "value"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "namespace": "org.apache.hudi.avro.model",
+                                    "type": "record",
+                                    "name": "DecimalWrapper",
+                                    "doc": "A record wrapping Decimal logical type to be able to be used it w/in Avro's Union",
+                                    "fields": [
+                                        {
+                                            "type": {
+                                                "type": "bytes",
+                                                "logicalType": "decimal",
+                                                "precision": 18,
+                                                "scale": 5
+                                            },
+                                            "name": "value"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "namespace": "org.apache.hudi.avro.model",
+                                    "type": "record",
+                                    "name": "TimeMicrosWrapper",
+                                    "doc": "A record wrapping Time-micros logical type to be able to be used it w/in Avro's Union",
+                                    "fields": [
+                                        {
+                                            "type": {
+                                                "type": "long",
+                                                "logicalType": "time-micros"
+                                            },
+                                            "name": "value"
+
+                                        }
+                                    ]
+                                },
+                                {
+                                    "namespace": "org.apache.hudi.avro.model",
+                                    "type": "record",
+                                    "name": "TimestampMicrosWrapper",
+                                    "doc": "A record wrapping Timestamp-micros logical type to be able to be used it w/in Avro's Union",
+                                    "fields": [
+                                        {
+                                            "type": {
+                                                "type": "long",
+                                                "logicalType": "timestamp-micros"
+                                            },
+                                            "name": "value"
+                                        }
+                                    ]
+                                }
                             ]
                         },
                         {
@@ -152,16 +228,11 @@
                                 //       into one of the following types, making sure that their corresponding
                                 //       ordering is preserved
                                 "null",
-                                "boolean",
-                                "int",
-                                "long",
-                                "float",
-                                "double",
-                                "bytes",
-                                // NOTE: While Parquet encodes strings as bytes, we encode it as native Avro primitive
-                                //       type primarily for convenience to avoid unnecessary manual encoding.
-                                //       Both Parquet and Avro encode strings as an UTF8
-                                "string"
+                                "org.apache.hudi.avro.model.PrimitiveTypeWrapper",
+                                "org.apache.hudi.avro.model.DateWrapper",
+                                "org.apache.hudi.avro.model.DecimalWrapper",
+                                "org.apache.hudi.avro.model.TimeMicrosWrapper",
+                                "org.apache.hudi.avro.model.TimestampMicrosWrapper"
                             ]
                         },
                         {
