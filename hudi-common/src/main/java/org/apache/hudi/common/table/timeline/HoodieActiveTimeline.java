@@ -704,7 +704,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   /**
    * Save content for inflight/requested index instant.
    */
-  public void saveToPendingIndexCommit(HoodieInstant instant, Option<byte[]> content) {
+  public void saveToPendingIndexAction(HoodieInstant instant, Option<byte[]> content) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.INDEX_ACTION),
         String.format("%s is not equal to %s action", instant.getAction(), INDEX_ACTION));
     createFileInMetaPath(instant.getFileName(), content, false);

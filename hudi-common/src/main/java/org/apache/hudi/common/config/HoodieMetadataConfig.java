@@ -183,23 +183,23 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           .withDocumentation("Parallelism to use, when generating column stats index.");
 
   public static final ConfigProperty<String> COLUMN_STATS_INDEX_FOR_COLUMNS = ConfigProperty
-      .key(METADATA_PREFIX + ".index.column.stats.for.columns")
-      .defaultValue("")
+      .key(METADATA_PREFIX + ".index.column.stats.column.list")
+      .noDefaultValue()
       .sinceVersion("0.11.0")
       .withDocumentation("Comma-separated list of columns for which column stats index will be built. If not set, all columns will be indexed");
 
   public static final ConfigProperty<String> BLOOM_FILTER_INDEX_FOR_COLUMNS = ConfigProperty
-      .key(METADATA_PREFIX + ".index.bloom.filter.for.columns")
-      .defaultValue("")
+      .key(METADATA_PREFIX + ".index.bloom.filter.column.list")
+      .noDefaultValue()
       .sinceVersion("0.11.0")
       .withDocumentation("Comma-separated list of columns for which bloom filter index will be built. If not set, only record key will be indexed.");
 
   public static final ConfigProperty<Integer> METADATA_INDEX_CHECK_TIMEOUT_SECONDS = ConfigProperty
       .key(METADATA_PREFIX + ".index.check.timeout.seconds")
-      .defaultValue(300)
+      .defaultValue(900)
       .sinceVersion("0.11.0")
-      .withDocumentation("After the async indexer has finished indexing upto the base instant, it will reconcile with commits that happened after the base instant. "
-          + "This check could take finite amount of time depending on number of commits, so it needs to be bounded by a timeout which can configured with this key.");
+      .withDocumentation("After the async indexer has finished indexing upto the base instant, it will ensure that all inflight writers "
+          + "reliably write index updates as well. If this timeout expires, then the indexer will abort itself safely.");
 
   public static final ConfigProperty<Boolean> POPULATE_META_FIELDS = ConfigProperty
       .key(METADATA_PREFIX + ".populate.meta.fields")

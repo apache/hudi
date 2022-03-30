@@ -507,7 +507,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    * @param partitionsToIndex List of {@link MetadataPartitionType} that should be indexed.
    * @return HoodieIndexPlan containing metadata partitions and instant upto which they should be indexed.
    */
-  public abstract Option<HoodieIndexPlan> scheduleIndex(HoodieEngineContext context, String indexInstantTime, List<MetadataPartitionType> partitionsToIndex);
+  public abstract Option<HoodieIndexPlan> scheduleIndexing(HoodieEngineContext context, String indexInstantTime, List<MetadataPartitionType> partitionsToIndex);
 
   /**
    * Execute requested index action.

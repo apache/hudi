@@ -36,30 +36,30 @@ import java.util.List;
 public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
 
   /**
-   * Execute the index action for the given partitions.
+   * Builds the given metadata partitions to create index.
    *
    * @param engineContext
-   * @param indexPartitionInfos - partitions to index
+   * @param indexPartitionInfos - information about partitions to build such as partition type and base instant time
    */
-  void buildIndex(HoodieEngineContext engineContext, List<HoodieIndexPartitionInfo> indexPartitionInfos);
+  void buildMetadataPartitions(HoodieEngineContext engineContext, List<HoodieIndexPartitionInfo> indexPartitionInfos);
 
   /**
-   * Initialize file groups while scheduling index action.
+   * Initialize file groups for the given metadata partitions when indexing is requested.
    *
    * @param dataMetaClient     - meta client for the data table
    * @param metadataPartitions - metadata partitions for which file groups needs to be initialized
    * @param instantTime        - instant time of the index action
    * @throws IOException
    */
-  void scheduleIndex(HoodieTableMetaClient dataMetaClient, List<MetadataPartitionType> metadataPartitions, String instantTime) throws IOException;
+  void initializeMetadataPartitions(HoodieTableMetaClient dataMetaClient, List<MetadataPartitionType> metadataPartitions, String instantTime) throws IOException;
 
   /**
-   * Drop the given metadata indexes.
+   * Drop the given metadata partitions.
    *
-   * @param indexesToDrop
+   * @param metadataPartitions
    * @throws IOException
    */
-  void dropIndex(List<MetadataPartitionType> indexesToDrop) throws IOException;
+  void dropMetadataPartitions(List<MetadataPartitionType> metadataPartitions) throws IOException;
 
   /**
    * Update the metadata table due to a COMMIT operation.

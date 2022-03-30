@@ -55,7 +55,7 @@ public interface HoodieTimeline extends Serializable {
   String COMPACTION_ACTION = "compaction";
   String REQUESTED_EXTENSION = ".requested";
   String RESTORE_ACTION = "restore";
-  String INDEX_ACTION = "index";
+  String INDEX_ACTION = "indexing";
 
   String[] VALID_ACTIONS_IN_TIMELINE = {COMMIT_ACTION, DELTA_COMMIT_ACTION,
       CLEAN_ACTION, SAVEPOINT_ACTION, RESTORE_ACTION, ROLLBACK_ACTION,

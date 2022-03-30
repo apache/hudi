@@ -938,7 +938,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   public Option<String> scheduleIndexing(List<MetadataPartitionType> partitionTypes) {
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
     Option<HoodieIndexPlan> indexPlan = createTable(config, hadoopConf, config.isMetadataTableEnabled())
-        .scheduleIndex(context, instantTime, partitionTypes);
+        .scheduleIndexing(context, instantTime, partitionTypes);
     return indexPlan.isPresent() ? Option.of(instantTime) : Option.empty();
   }
 
@@ -965,7 +965,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       context.setJobStatus(this.getClass().getSimpleName(), "Dropping partitions from metadata table");
       table.getMetadataWriter(dropInstant).ifPresent(w -> {
         try {
-          ((HoodieTableMetadataWriter) w).dropIndex(partitionTypes);
+          ((HoodieTableMetadataWriter) w).dropMetadataPartitions(partitionTypes);
         } catch (IOException e) {
           throw new HoodieIndexException("Failed to drop metadata index. ", e);
         }

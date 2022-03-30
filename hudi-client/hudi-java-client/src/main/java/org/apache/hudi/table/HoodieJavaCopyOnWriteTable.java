@@ -247,7 +247,7 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
   }
 
   @Override
-  public Option<HoodieIndexPlan> scheduleIndex(HoodieEngineContext context, String indexInstantTime, List<MetadataPartitionType> partitionsToIndex) {
+  public Option<HoodieIndexPlan> scheduleIndexing(HoodieEngineContext context, String indexInstantTime, List<MetadataPartitionType> partitionsToIndex) {
     return new ScheduleIndexActionExecutor<>(context, config, this, indexInstantTime, partitionsToIndex).execute();
   }
 

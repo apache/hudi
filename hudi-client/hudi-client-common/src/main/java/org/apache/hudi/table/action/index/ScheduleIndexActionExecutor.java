@@ -24,6 +24,7 @@ import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -45,10 +46,11 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getCompletedMetadataPartitions;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
 
 /**
  * Schedules INDEX action.
@@ -64,42 +66,33 @@ public class ScheduleIndexActionExecutor<T extends HoodieRecordPayload, I, K, O>
   private static final Integer INDEX_PLAN_VERSION_1 = 1;
   private static final Integer LATEST_INDEX_PLAN_VERSION = INDEX_PLAN_VERSION_1;
 
-  private final List<MetadataPartitionType> partitionsToIndex;
+  private final List<MetadataPartitionType> partitionIndexTypes;
   private final TransactionManager txnManager;
 
   public ScheduleIndexActionExecutor(HoodieEngineContext context,
                                      HoodieWriteConfig config,
                                      HoodieTable<T, I, K, O> table,
                                      String instantTime,
-                                     List<MetadataPartitionType> partitionsToIndex) {
+                                     List<MetadataPartitionType> partitionIndexTypes) {
     super(context, config, table, instantTime);
-    this.partitionsToIndex = partitionsToIndex;
+    this.partitionIndexTypes = partitionIndexTypes;
     this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
   }
 
   @Override
   public Option<HoodieIndexPlan> execute() {
-    // validate partitionsToIndex
-    if (!EnumSet.allOf(MetadataPartitionType.class).containsAll(partitionsToIndex)) {
-      throw new HoodieIndexException("Not all partitions are valid: " + partitionsToIndex);
-    }
-    // ensure lock provider configured
-    if (!config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl() || StringUtils.isNullOrEmpty(config.getLockProviderClass())) {
-      throw new HoodieIndexException(String.format("Need to set %s as %s and configure lock provider class",
-          WRITE_CONCURRENCY_MODE.key(), OPTIMISTIC_CONCURRENCY_CONTROL.name()));
-    }
+    validateBeforeScheduling();
     // make sure that it is idempotent, check with previously pending index operations.
-    Set<String> indexesInflightOrCompleted = Stream.of(table.getMetaClient().getTableConfig().getInflightMetadataIndexes().split(","))
-        .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toSet());
-    indexesInflightOrCompleted.addAll(Stream.of(table.getMetaClient().getTableConfig().getCompletedMetadataIndexes().split(","))
-        .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toSet()));
-    Set<String> requestedPartitions = partitionsToIndex.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
+    HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
+    Set<String> indexesInflightOrCompleted = getInflightMetadataPartitions(tableConfig);
+    indexesInflightOrCompleted.addAll(getCompletedMetadataPartitions(tableConfig));
+    Set<String> requestedPartitions = partitionIndexTypes.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
     requestedPartitions.removeAll(indexesInflightOrCompleted);
     if (!requestedPartitions.isEmpty()) {
       LOG.warn(String.format("Following partitions already exist or inflight: %s. Going to index only these partitions: %s",
           indexesInflightOrCompleted, requestedPartitions));
     }
-    List<MetadataPartitionType> finalPartitionsToIndex = partitionsToIndex.stream()
+    List<MetadataPartitionType> finalPartitionsToIndex = partitionIndexTypes.stream()
         .filter(p -> requestedPartitions.contains(p.getPartitionPath())).collect(Collectors.toList());
     // get last completed instant
     Option<HoodieInstant> indexUptoInstant = table.getActiveTimeline().getContiguousCompletedWriteTimeline().lastInstant();
@@ -111,7 +104,7 @@ public class ScheduleIndexActionExecutor<T extends HoodieRecordPayload, I, K, O>
           .orElseThrow(() -> new HoodieIndexException(String.format("Could not get metadata writer to initialize filegroups for indexing for instant: %s", instantTime)));
       try {
         this.txnManager.beginTransaction(Option.of(indexInstant), Option.empty());
-        metadataWriter.scheduleIndex(table.getMetaClient(), finalPartitionsToIndex, indexInstant.getTimestamp());
+        metadataWriter.initializeMetadataPartitions(table.getMetaClient(), finalPartitionsToIndex, indexInstant.getTimestamp());
       } catch (IOException e) {
         LOG.error("Could not initialize file groups", e);
         throw new HoodieIOException(e.getMessage(), e);
@@ -125,7 +118,7 @@ public class ScheduleIndexActionExecutor<T extends HoodieRecordPayload, I, K, O>
       HoodieIndexPlan indexPlan = new HoodieIndexPlan(LATEST_INDEX_PLAN_VERSION, indexPartitionInfos);
       // update data timeline with requested instant
       try {
-        table.getActiveTimeline().saveToPendingIndexCommit(indexInstant, TimelineMetadataUtils.serializeIndexPlan(indexPlan));
+        table.getActiveTimeline().saveToPendingIndexAction(indexInstant, TimelineMetadataUtils.serializeIndexPlan(indexPlan));
       } catch (IOException e) {
         LOG.error("Error while saving index requested file", e);
         throw new HoodieIOException(e.getMessage(), e);
@@ -134,5 +127,16 @@ public class ScheduleIndexActionExecutor<T extends HoodieRecordPayload, I, K, O>
       return Option.of(indexPlan);
     }
     return Option.empty();
+  }
+
+  private void validateBeforeScheduling() {
+    if (!EnumSet.allOf(MetadataPartitionType.class).containsAll(partitionIndexTypes)) {
+      throw new HoodieIndexException("Not all index types are valid: " + partitionIndexTypes);
+    }
+    // ensure lock provider configured
+    if (!config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl() || StringUtils.isNullOrEmpty(config.getLockProviderClass())) {
+      throw new HoodieIndexException(String.format("Need to set %s as %s and configure lock provider class",
+          WRITE_CONCURRENCY_MODE.key(), OPTIMISTIC_CONCURRENCY_CONTROL.name()));
+    }
   }
 }

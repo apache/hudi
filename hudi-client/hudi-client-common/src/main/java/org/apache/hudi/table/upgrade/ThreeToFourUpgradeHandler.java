@@ -29,7 +29,7 @@ import java.util.Hashtable;
 import java.util.Map;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
-import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_INDEX_COMPLETED;
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
 
 /**
@@ -44,7 +44,7 @@ public class ThreeToFourUpgradeHandler implements UpgradeHandler {
     // if metadata is enabled and files partition exist then update TABLE_METADATA_INDEX_COMPLETED
     // schema for the files partition is same between the two versions
     if (config.isMetadataTableEnabled() && metadataPartitionExists(config.getBasePath(), context, MetadataPartitionType.FILES)) {
-      tablePropsToAdd.put(TABLE_METADATA_INDEX_COMPLETED, MetadataPartitionType.FILES.getPartitionPath());
+      tablePropsToAdd.put(TABLE_METADATA_PARTITIONS, MetadataPartitionType.FILES.getPartitionPath());
     }
     return tablePropsToAdd;
   }

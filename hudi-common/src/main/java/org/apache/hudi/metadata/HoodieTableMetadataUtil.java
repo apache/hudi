@@ -76,6 +76,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -1140,5 +1141,13 @@ public class HoodieTableMetadataUtil {
     } catch (Exception e) {
       throw new HoodieException("Failed to get latest columns for " + dataTableMetaClient.getBasePath(), e);
     }
+  }
+
+  public static Set<String> getInflightMetadataPartitions(HoodieTableConfig tableConfig) {
+    return StringUtils.toSet(tableConfig.getMetadataPartitionsInflight());
+  }
+
+  public static Set<String> getCompletedMetadataPartitions(HoodieTableConfig tableConfig) {
+    return StringUtils.toSet(tableConfig.getMetadataPartitions());
   }
 }
