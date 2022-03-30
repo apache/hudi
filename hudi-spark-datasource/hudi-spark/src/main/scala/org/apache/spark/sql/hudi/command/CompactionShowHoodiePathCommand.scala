@@ -19,41 +19,32 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.HoodieTimeline
-import org.apache.hudi.common.util.CompactionUtils
+
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
-import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.spark.sql.execution.command.RunnableCommand
+import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedureUtils, ShowCompactionProcedure}
 import org.apache.spark.sql.types.{IntegerType, StringType}
+import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.unsafe.types.UTF8String
 
-import scala.collection.JavaConverters.asScalaIteratorConverter
-
+@Deprecated
 case class CompactionShowHoodiePathCommand(path: String, limit: Int)
-  extends RunnableCommand {
+  extends HoodieLeafRunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
-    val metaClient = HoodieTableMetaClient.builder().setBasePath(path.toString)
+    val metaClient = HoodieTableMetaClient.builder().setBasePath(path)
       .setConf(sparkSession.sessionState.newHadoopConf()).build()
 
     assert(metaClient.getTableType == HoodieTableType.MERGE_ON_READ,
       s"Cannot show compaction on a Non Merge On Read table.")
-    val timeLine = metaClient.getActiveTimeline
-    val compactionInstants = timeLine.getInstants.iterator().asScala
-      .filter(p => p.getAction == HoodieTimeline.COMPACTION_ACTION)
-      .toSeq
-      .sortBy(f => f.getTimestamp)
-      .reverse
-      .take(limit)
-    val compactionPlans = compactionInstants.map(instant =>
-      (instant, CompactionUtils.getCompactionPlan(metaClient, instant.getTimestamp)))
-    compactionPlans.map { case (instant, plan) =>
-      Row(instant.getTimestamp, instant.getAction, plan.getOperations.size())
-    }
+
+    val args = Map("path" -> UTF8String.fromString(path), "limit" -> limit)
+    val procedureArgs = HoodieProcedureUtils.buildProcedureArgs(args)
+    ShowCompactionProcedure.builder.get().build.call(procedureArgs)
   }
 
   override val output: Seq[Attribute] = {
     Seq(
-      AttributeReference("timestamp", StringType, nullable = false)(),
+      AttributeReference("instant", StringType, nullable = false)(),
       AttributeReference("action", StringType, nullable = false)(),
       AttributeReference("size", IntegerType, nullable = false)()
     )

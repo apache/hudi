@@ -18,17 +18,18 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hadoop.InputSplitUtils;
-
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.InputSplitWithLocationInfo;
+import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.InputSplitUtils;
 
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Realtime Input Split Interface.
@@ -39,7 +40,13 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
    * Return Log File Paths.
    * @return
    */
-  List<String> getDeltaLogPaths();
+  default List<String> getDeltaLogPaths() {
+    return getDeltaLogFiles().stream().map(entry -> entry.getPath().toString()).collect(Collectors.toList());
+  }
+
+  List<HoodieLogFile> getDeltaLogFiles();
+
+  void setDeltaLogFiles(List<HoodieLogFile> deltaLogFiles);
 
   /**
    * Return Max Instant Time.
@@ -57,14 +64,12 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
    * Returns Virtual key info if meta fields are disabled.
    * @return
    */
-  Option<HoodieVirtualKeyInfo> getHoodieVirtualKeyInfo();
+  Option<HoodieVirtualKeyInfo> getVirtualKeyInfo();
 
   /**
-   * Update Log File Paths.
-   *
-   * @param deltaLogPaths
+   * Returns the flag whether this split belongs to an Incremental Query
    */
-  void setDeltaLogPaths(List<String> deltaLogPaths);
+  boolean getBelongsToIncrementalQuery();
 
   /**
    * Update Maximum valid instant time.
@@ -78,57 +83,72 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
    */
   void setBasePath(String basePath);
 
-  void setHoodieVirtualKeyInfo(Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo);
+  /**
+   * Sets the flag whether this split belongs to an Incremental Query
+   */
+  void setBelongsToIncrementalQuery(boolean belongsToIncrementalQuery);
+
+  void setVirtualKeyInfo(Option<HoodieVirtualKeyInfo> virtualKeyInfo);
 
   default void writeToOutput(DataOutput out) throws IOException {
     InputSplitUtils.writeString(getBasePath(), out);
     InputSplitUtils.writeString(getMaxCommitTime(), out);
-    out.writeInt(getDeltaLogPaths().size());
-    for (String logFilePath : getDeltaLogPaths()) {
-      InputSplitUtils.writeString(logFilePath, out);
+    InputSplitUtils.writeBoolean(getBelongsToIncrementalQuery(), out);
+
+    out.writeInt(getDeltaLogFiles().size());
+    for (HoodieLogFile logFile : getDeltaLogFiles()) {
+      InputSplitUtils.writeString(logFile.getPath().toString(), out);
+      out.writeLong(logFile.getFileSize());
     }
-    if (!getHoodieVirtualKeyInfo().isPresent()) {
+
+    Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt = getVirtualKeyInfo();
+    if (!virtualKeyInfoOpt.isPresent()) {
       InputSplitUtils.writeBoolean(false, out);
     } else {
       InputSplitUtils.writeBoolean(true, out);
-      InputSplitUtils.writeString(getHoodieVirtualKeyInfo().get().getRecordKeyField(), out);
-      InputSplitUtils.writeString(getHoodieVirtualKeyInfo().get().getPartitionPathField(), out);
-      InputSplitUtils.writeString(String.valueOf(getHoodieVirtualKeyInfo().get().getRecordKeyFieldIndex()), out);
-      InputSplitUtils.writeString(String.valueOf(getHoodieVirtualKeyInfo().get().getPartitionPathFieldIndex()), out);
+      InputSplitUtils.writeString(virtualKeyInfoOpt.get().getRecordKeyField(), out);
+      InputSplitUtils.writeString(virtualKeyInfoOpt.get().getPartitionPathField(), out);
+      InputSplitUtils.writeString(String.valueOf(virtualKeyInfoOpt.get().getRecordKeyFieldIndex()), out);
+      InputSplitUtils.writeString(String.valueOf(virtualKeyInfoOpt.get().getPartitionPathFieldIndex()), out);
     }
   }
 
   default void readFromInput(DataInput in) throws IOException {
     setBasePath(InputSplitUtils.readString(in));
     setMaxCommitTime(InputSplitUtils.readString(in));
+    setBelongsToIncrementalQuery(InputSplitUtils.readBoolean(in));
+
     int totalLogFiles = in.readInt();
-    List<String> deltaLogPaths = new ArrayList<>(totalLogFiles);
+    List<HoodieLogFile> deltaLogPaths = new ArrayList<>(totalLogFiles);
     for (int i = 0; i < totalLogFiles; i++) {
-      deltaLogPaths.add(InputSplitUtils.readString(in));
+      String logFilePath = InputSplitUtils.readString(in);
+      long logFileSize = in.readLong();
+      deltaLogPaths.add(new HoodieLogFile(new Path(logFilePath), logFileSize));
     }
-    setDeltaLogPaths(deltaLogPaths);
+    setDeltaLogFiles(deltaLogPaths);
+
     boolean hoodieVirtualKeyPresent = InputSplitUtils.readBoolean(in);
     if (hoodieVirtualKeyPresent) {
       String recordKeyField = InputSplitUtils.readString(in);
       String partitionPathField = InputSplitUtils.readString(in);
       int recordFieldIndex = Integer.parseInt(InputSplitUtils.readString(in));
       int partitionPathIndex = Integer.parseInt(InputSplitUtils.readString(in));
-      setHoodieVirtualKeyInfo(Option.of(new HoodieVirtualKeyInfo(recordKeyField, partitionPathField, recordFieldIndex, partitionPathIndex)));
+      setVirtualKeyInfo(Option.of(new HoodieVirtualKeyInfo(recordKeyField, partitionPathField, recordFieldIndex, partitionPathIndex)));
     }
   }
 
   /**
    * The file containing this split's data.
    */
-  public Path getPath();
+  Path getPath();
 
   /**
    * The position of the first byte in the file to process.
    */
-  public long getStart();
+  long getStart();
 
   /**
    * The number of bytes in the file to process.
    */
-  public long getLength();
+  long getLength();
 }

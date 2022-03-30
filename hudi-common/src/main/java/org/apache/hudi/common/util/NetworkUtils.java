@@ -21,7 +21,12 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.exception.HoodieException;
 
 import java.io.IOException;
-import java.net.ServerSocket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.InterfaceAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
+import java.util.Enumeration;
 
 /**
  * A utility class for network.
@@ -29,20 +34,28 @@ import java.net.ServerSocket;
 public class NetworkUtils {
 
   public static synchronized String getHostname() {
-    ServerSocket s = null;
     try {
-      s = new ServerSocket(0);
-      return s.getInetAddress().getHostAddress();
-    } catch (IOException e) {
-      throw new HoodieException("Unable to find server port", e);
-    } finally {
-      if (null != s) {
-        try {
-          s.close();
-        } catch (IOException e) {
-          throw new HoodieException("Unable to close server port", e);
+      Enumeration<NetworkInterface> networkInterfaceEnumeration = NetworkInterface.getNetworkInterfaces();
+      while (networkInterfaceEnumeration.hasMoreElements()) {
+        for (InterfaceAddress interfaceAddress : networkInterfaceEnumeration.nextElement().getInterfaceAddresses()) {
+          InetAddress address = interfaceAddress.getAddress();
+          if (!address.isLinkLocalAddress() && !address.isLoopbackAddress() && !address.isAnyLocalAddress()) {
+            return address.getHostAddress();
+          }
         }
       }
+    } catch (SocketException e) {
+      throw new HoodieException("Unable to find server port", e);
+    }
+
+    // fallback
+    try (DatagramSocket s = new DatagramSocket()) {
+      // see https://stackoverflow.com/questions/9481865/getting-the-ip-address-of-the-current-machine-using-java
+      // for details.
+      s.connect(InetAddress.getByName("8.8.8.8"), 10002);
+      return s.getLocalAddress().getHostAddress();
+    } catch (IOException e) {
+      throw new HoodieException("Unable to find server port", e);
     }
   }
 }

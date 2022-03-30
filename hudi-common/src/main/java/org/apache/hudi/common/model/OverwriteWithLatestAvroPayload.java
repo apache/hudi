@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.avro.JsonProperties;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 
@@ -26,6 +27,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.Objects;
 
 /**
  * Default payload used for delta streamer.
@@ -47,10 +49,14 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
   }
 
   @Override
-  public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload another) {
-    // pick the payload with greatest ordering value
-    if (another.orderingVal.compareTo(orderingVal) > 0) {
-      return another;
+  public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue) {
+    if (oldValue.recordBytes.length == 0) {
+      // use natural order for delete record
+      return this;
+    }
+    if (oldValue.orderingVal.compareTo(orderingVal) > 0) {
+      // pick the payload with greatest ordering value
+      return oldValue;
     } else {
       return this;
     }
@@ -79,7 +85,7 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
    * @returns {@code true} if record represents a delete record. {@code false} otherwise.
    */
   protected boolean isDeleteRecord(GenericRecord genericRecord) {
-    final String isDeleteKey = "_hoodie_is_deleted";
+    final String isDeleteKey = HoodieRecord.HOODIE_IS_DELETED;
     // Modify to be compatible with new version Avro.
     // The new version Avro throws for GenericRecord.get if the field name
     // does not exist in the schema.
@@ -94,6 +100,9 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
    * Return true if value equals defaultValue otherwise false.
    */
   public Boolean overwriteField(Object value, Object defaultValue) {
-    return defaultValue == null ? value == null : defaultValue.toString().equals(String.valueOf(value));
+    if (JsonProperties.NULL_VALUE.equals(defaultValue)) {
+      return value == null;
+    }
+    return Objects.equals(value, defaultValue);
   }
 }

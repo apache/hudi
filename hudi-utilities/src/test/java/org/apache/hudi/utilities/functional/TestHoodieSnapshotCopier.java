@@ -29,6 +29,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -39,6 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Disabled("Disable due to flakiness and feature deprecation.")
 @Tag("functional")
 public class TestHoodieSnapshotCopier extends FunctionalTestHarness {
 
@@ -69,8 +71,7 @@ public class TestHoodieSnapshotCopier extends FunctionalTestHarness {
     // Do the snapshot
     HoodieSnapshotCopier copier = new HoodieSnapshotCopier();
     copier.snapshot(jsc(), basePath, outputPath, true,
-        HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS,
-        HoodieMetadataConfig.METADATA_VALIDATE_PROP.defaultValue());
+        HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS);
 
     // Nothing changed; we just bail out
     assertEquals(fs.listStatus(new Path(basePath)).length, 1);
@@ -95,7 +96,7 @@ public class TestHoodieSnapshotCopier extends FunctionalTestHarness {
     new File(basePath + "/2016/05/01/").mkdirs();
     new File(basePath + "/2016/05/02/").mkdirs();
     new File(basePath + "/2016/05/06/").mkdirs();
-    HoodieTestDataGenerator.writePartitionMetadata(fs, new String[] {"2016/05/01", "2016/05/02", "2016/05/06"},
+    HoodieTestDataGenerator.writePartitionMetadataDeprecated(fs, new String[] {"2016/05/01", "2016/05/02", "2016/05/06"},
         basePath);
     // Make commit1
     File file11 = new File(basePath + "/2016/05/01/" + FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, "id11"));
@@ -123,8 +124,7 @@ public class TestHoodieSnapshotCopier extends FunctionalTestHarness {
 
     // Do a snapshot copy
     HoodieSnapshotCopier copier = new HoodieSnapshotCopier();
-    copier.snapshot(jsc(), basePath, outputPath, false, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS,
-        HoodieMetadataConfig.METADATA_VALIDATE_PROP.defaultValue());
+    copier.snapshot(jsc(), basePath, outputPath, false, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS);
 
     // Check results
     assertTrue(fs.exists(new Path(outputPath + "/2016/05/01/" + file11.getName())));

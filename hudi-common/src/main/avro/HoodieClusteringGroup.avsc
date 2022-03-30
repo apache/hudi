@@ -19,7 +19,6 @@
    "namespace":"org.apache.hudi.avro.model",
    "type":"record",
    "name":"HoodieClusteringGroup",
-   "type":"record",
    "fields":[
       {
          /* Group of files that needs to merged. All the slices in a group will belong to same partition initially.

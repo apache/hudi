@@ -232,7 +232,9 @@ public class CommitsCommand implements CommandMarker {
       @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath,
       @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
       @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
-         help = "Spark executor memory") final String sparkMemory)
+         help = "Spark executor memory") final String sparkMemory,
+      @CliOption(key = "rollbackUsingMarkers", unspecifiedDefaultValue = "true",
+         help = "Enabling marker based rollback") final String rollbackUsingMarkers)
       throws Exception {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline completedTimeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
@@ -243,7 +245,7 @@ public class CommitsCommand implements CommandMarker {
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     sparkLauncher.addAppArgs(SparkMain.SparkCommand.ROLLBACK.toString(), master, sparkMemory, instantTime,
-        HoodieCLI.getTableMetaClient().getBasePath());
+        HoodieCLI.getTableMetaClient().getBasePath(), rollbackUsingMarkers);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();

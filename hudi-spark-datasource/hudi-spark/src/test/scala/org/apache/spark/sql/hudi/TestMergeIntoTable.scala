@@ -35,7 +35,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
            |  ts long
            |) using hudi
            | location '${tmp.getCanonicalPath}'
-           | options (
+           | tblproperties (
            |  primaryKey ='id',
            |  preCombineField = 'ts'
            | )
@@ -87,7 +87,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
            | on s0.id = $tableName.id
            | when matched then update set
            | id = s0.id, name = s0.name, price = s0.price + $tableName.price, ts = s0.ts
-           | when not matched and id % 2 = 0 then insert *
+           | when not matched and s0.id % 2 = 0 then insert *
        """.stripMargin)
       checkAnswer(s"select id, name, price, ts from $tableName")(
         Seq(1, "a1", 30.0, 1002),
@@ -102,9 +102,9 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
            |  select 1 as id, 'a1' as name, 12 as price, 1003 as ts
            | ) s0
            | on s0.id = $tableName.id
-           | when matched and id != 1 then update set
+           | when matched and s0.id != 1 then update set
            |    id = s0.id, name = s0.name, price = s0.price, ts = s0.ts
-           | when matched and id = 1 then delete
+           | when matched and s0.id = 1 then delete
            | when not matched then insert *
        """.stripMargin)
       val cnt = spark.sql(s"select * from $tableName where id = 1").count()
@@ -137,7 +137,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
            |  ts long
            |) using hudi
            | location '${tmp.getCanonicalPath}/$targetTable'
-           | options (
+           | tblproperties (
            |  primaryKey ='id',
            |  preCombineField = 'ts'
            | )
@@ -178,7 +178,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
            |  )
            | ) s0
            | on s0.s_id = t0.id
-           | when matched and ts = 1001 then update set id = s0.s_id, name = t0.name, price =
+           | when matched and s0.ts = 1001 then update set id = s0.s_id, name = t0.name, price =
            | s0.price, ts = s0.ts
          """.stripMargin
       )
@@ -203,7 +203,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
            |  ts long,
            |  dt string
            | ) using hudi
-           | options (
+           | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
            |  preCombineField = 'ts'
@@ -233,7 +233,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
            |  select 1 as id, 'a1' as name, 12 as price, 1001 as ts, '2021-03-21' as dt
            | ) as s0
            | on t0.id = s0.id
-           | when matched and id % 2 = 0 then update set *
+           | when matched and s0.id % 2 = 0 then update set *
          """.stripMargin
       )
       checkAnswer(s"select id,name,price,dt from $tableName")(
@@ -313,7 +313,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
            |  price double,
            |  dt string
            | ) using hudi
-           | options (
+           | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id'
            | )
@@ -369,7 +369,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
              |  v long,
              |  dt string
              | ) using hudi
-             | options (
+             | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
              |  preCombineField = 'v'
@@ -439,7 +439,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
              | price double,
              | _ts long
              |) using hudi
-             |options(
+             |tblproperties(
              | type ='$tableType',
              | primaryKey = 'id',
              | preCombineField = '_ts'
@@ -457,7 +457,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
              | price double,
              | _ts long
              |) using hudi
-             |options(
+             |tblproperties(
              | type ='$tableType',
              | primaryKey = 'id',
              | preCombineField = '_ts'
@@ -488,7 +488,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
              |merge into $targetTable t0
              |using $sourceTable s0
              |on t0.id = s0.id
-             |when matched and cast(_ts as string) > '1000' then update set *
+             |when matched and cast(s0._ts as string) > '1000' then update set *
            """.stripMargin)
         checkAnswer(s"select id, name, price, _ts from $targetTable")(
           Seq(1, "a1", 12, 1001)
@@ -512,7 +512,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
              |using $sourceTable s0
              |on t0.id = s0.id
              |when matched then update set *
-             |when not matched and name = 'a2' then insert *
+             |when not matched and s0.name = 'a2' then insert *
            """.stripMargin)
         checkAnswer(s"select id, name, price, _ts from $targetTable order by id")(
           Seq(1, "a1", 12, 1001),
@@ -553,7 +553,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
              |  c $dataType
              |) using hudi
              | location '${tmp.getCanonicalPath}/$tableName'
-             | options (
+             | tblproperties (
              |  primaryKey ='id',
              |  preCombineField = 'c'
              | )
@@ -604,7 +604,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
            |  ts long
            |) using hudi
            | location '${tmp.getCanonicalPath}'
-           | options (
+           | tblproperties (
            |  primaryKey ='id',
            |  type = 'mor',
            |  preCombineField = 'ts',
@@ -665,7 +665,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
              |  ts long
              |) using hudi
              | location '${tmp.getCanonicalPath}/$tableName'
-             | options (
+             | tblproperties (
              |  primaryKey ='id',
              |  preCombineField = 'ts'
              | )
@@ -711,7 +711,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
              |  ts long
              |) using hudi
              | location '${tmp.getCanonicalPath}/$tableName'
-             | options (
+             | tblproperties (
              |  primaryKey ='id',
              |  preCombineField = 'ts'
              | )

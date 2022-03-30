@@ -19,9 +19,13 @@
 package org.apache.hudi.io;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -35,10 +39,6 @@ import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.table.HoodieTable;
-
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -59,18 +59,33 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
   protected long recordsDeleted = 0;
   private Map<String, HoodieRecord<T>> recordMap;
   private boolean useWriterSchema = false;
+  private final boolean preserveMetadata;
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
     this(config, instantTime, hoodieTable, partitionPath, fileId, Option.empty(),
-        taskContextSupplier);
+        taskContextSupplier, false);
+  }
+
+  public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                            String partitionPath, String fileId, TaskContextSupplier taskContextSupplier,
+                            boolean preserveMetadata) {
+    this(config, instantTime, hoodieTable, partitionPath, fileId, Option.empty(),
+        taskContextSupplier, preserveMetadata);
   }
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, Option<Schema> overriddenSchema,
                             TaskContextSupplier taskContextSupplier) {
+    this(config, instantTime, hoodieTable, partitionPath, fileId, overriddenSchema, taskContextSupplier, false);
+  }
+
+  public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                            String partitionPath, String fileId, Option<Schema> overriddenSchema,
+                            TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, overriddenSchema,
         taskContextSupplier);
+    this.preserveMetadata = preserveMetadata;
     writeStatus.setFileId(fileId);
     writeStatus.setPartitionPath(partitionPath);
     writeStatus.setStat(new HoodieWriteStat());
@@ -96,14 +111,15 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
       String partitionPath, String fileId, Map<String, HoodieRecord<T>> recordMap,
       TaskContextSupplier taskContextSupplier) {
-    this(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier);
+    this(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier, config.isPreserveHoodieCommitMetadataForCompaction());
     this.recordMap = recordMap;
     this.useWriterSchema = true;
   }
 
   @Override
   public boolean canWrite(HoodieRecord record) {
-    return fileWriter.canWrite() && record.getPartitionPath().equals(writeStatus.getPartitionPath());
+    return (fileWriter.canWrite() && record.getPartitionPath().equals(writeStatus.getPartitionPath()))
+        || layoutControlsNumFiles();
   }
 
   /**
@@ -111,15 +127,22 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
    */
   @Override
   public void write(HoodieRecord record, Option<IndexedRecord> avroRecord) {
-    Option recordMetadata = record.getData().getMetadata();
+    Option recordMetadata = ((HoodieRecordPayload) record.getData()).getMetadata();
+    if (HoodieOperation.isDelete(record.getOperation())) {
+      avroRecord = Option.empty();
+    }
     try {
       if (avroRecord.isPresent()) {
         if (avroRecord.get().equals(IGNORE_RECORD)) {
           return;
         }
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
-        IndexedRecord recordWithMetadataInSchema = rewriteRecord((GenericRecord) avroRecord.get());
-        fileWriter.writeAvroWithMetadata(recordWithMetadataInSchema, record);
+        if (preserveMetadata) {
+          fileWriter.writeAvro(record.getRecordKey(),
+              rewriteRecordWithMetadata((GenericRecord) avroRecord.get(), path.getName()));
+        } else {
+          fileWriter.writeAvroWithMetadata(rewriteRecord((GenericRecord) avroRecord.get()), record);
+        }
         // update the new location of record, so we know where to find it next
         record.unseal();
         record.setNewLocation(new HoodieRecordLocation(instantTime, writeStatus.getFileId()));
@@ -209,20 +232,14 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
     stat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
     stat.setFileId(writeStatus.getFileId());
     stat.setPath(new Path(config.getBasePath()), path);
-    stat.setTotalWriteBytes(computeTotalWriteBytes());
-    stat.setFileSizeInBytes(computeFileSizeInBytes());
     stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
+
+    long fileSize = FSUtils.getFileSize(fs, path);
+    stat.setTotalWriteBytes(fileSize);
+    stat.setFileSizeInBytes(fileSize);
+
     RuntimeStats runtimeStats = new RuntimeStats();
     runtimeStats.setTotalCreateTime(timer.endTimer());
     stat.setRuntimeStats(runtimeStats);
   }
-
-  protected long computeTotalWriteBytes() throws IOException {
-    return FSUtils.getFileSize(fs, path);
-  }
-
-  protected long computeFileSizeInBytes() throws IOException {
-    return FSUtils.getFileSize(fs, path);
-  }
-
 }

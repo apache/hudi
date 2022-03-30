@@ -16,7 +16,6 @@
  * limitations under the License.
  */
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieDataSourceHelpers;
@@ -25,14 +24,17 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.NonPartitionedExtractor;
+import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -150,9 +152,9 @@ public class HoodieJavaApp {
         // use to combine duplicate records in input/with disk val
         .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
         // Used by hive sync and queries
-        .option(HoodieWriteConfig.TABLE_NAME.key(), tableName)
+        .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
         // Add Key Extractor
-        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS().key(),
+        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName())
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "false")
@@ -179,13 +181,13 @@ public class HoodieJavaApp {
         .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key")
         .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition")
         .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
-        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS().key(),
+        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
-        .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP.key(), "1")
+        .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1")
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "false")
         .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")
-        .option(HoodieWriteConfig.TABLE_NAME.key(), tableName).mode(SaveMode.Append);
+        .option(HoodieWriteConfig.TBL_NAME.key(), tableName).mode(SaveMode.Append);
 
     updateHiveSyncConfig(writer);
     writer.save(tablePath);
@@ -206,14 +208,14 @@ public class HoodieJavaApp {
         .option(DataSourceWriteOptions.OPERATION().key(), "delete")
         .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key")
         .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition")
-        .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "_row_key")
-        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS().key(),
+        .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
+        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
-        .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP.key(), "1")
+        .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1")
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "false")
         .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")
-        .option(HoodieWriteConfig.TABLE_NAME.key(), tableName).mode(SaveMode.Append);
+        .option(HoodieWriteConfig.TBL_NAME.key(), tableName).mode(SaveMode.Append);
 
     updateHiveSyncConfig(writer);
     writer.save(tablePath);
@@ -254,23 +256,25 @@ public class HoodieJavaApp {
   private DataFrameWriter<Row> updateHiveSyncConfig(DataFrameWriter<Row> writer) {
     if (enableHiveSync) {
       LOG.info("Enabling Hive sync to " + hiveJdbcUrl);
-      writer = writer.option(DataSourceWriteOptions.HIVE_TABLE().key(), hiveTable)
-          .option(DataSourceWriteOptions.HIVE_DATABASE().key(), hiveDB)
-          .option(DataSourceWriteOptions.HIVE_URL().key(), hiveJdbcUrl)
-          .option(DataSourceWriteOptions.HIVE_USER().key(), hiveUser)
-          .option(DataSourceWriteOptions.HIVE_PASS().key(), hivePass)
-          .option(DataSourceWriteOptions.HIVE_SYNC_ENABLED().key(), "true");
+      writer = writer.option(HiveSyncConfig.META_SYNC_TABLE_NAME.key(), hiveTable)
+          .option(HiveSyncConfig.META_SYNC_DATABASE_NAME.key(), hiveDB)
+          .option(HiveSyncConfig.HIVE_URL.key(), hiveJdbcUrl)
+          .option(HiveSyncConfig.HIVE_USER.key(), hiveUser)
+          .option(HiveSyncConfig.HIVE_PASS.key(), hivePass)
+          .option(HiveSyncConfig.HIVE_SYNC_ENABLED.key(), "true");
       if (nonPartitionedTable) {
         writer = writer
-            .option(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS().key(),
+            .option(HiveSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
                 NonPartitionedExtractor.class.getCanonicalName())
             .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "");
       } else if (useMultiPartitionKeys) {
-        writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), "year,month,day").option(
-            DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS().key(),
+        writer = writer.option(HiveSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "year,month,day").option(
+            HiveSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
             MultiPartKeysValueExtractor.class.getCanonicalName());
       } else {
-        writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), "dateStr");
+        writer = writer.option(HiveSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "dateStr").option(
+            HiveSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
+            SlashEncodedDayPartitionValueExtractor.class.getCanonicalName());
       }
     }
     return writer;

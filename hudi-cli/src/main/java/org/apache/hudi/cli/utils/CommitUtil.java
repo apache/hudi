@@ -25,9 +25,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 
 import java.io.IOException;
-import java.text.ParseException;
-import java.time.Instant;
-import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Date;
 import java.util.List;
@@ -51,18 +48,6 @@ public class CommitUtil {
 
   public static String getTimeDaysAgo(int numberOfDays) {
     Date date = Date.from(ZonedDateTime.now().minusDays(numberOfDays).toInstant());
-    return HoodieActiveTimeline.COMMIT_FORMATTER.format(date);
-  }
-
-  /**
-   * Add hours to specified time. If hours <0, this acts as remove hours.
-   * example, say compactionCommitTime: "20200202020000"
-   *  a) hours: +1, returns 20200202030000
-   *  b) hours: -1, returns 20200202010000
-   */
-  public static String addHours(String compactionCommitTime, int hours) throws ParseException {
-    Instant instant = HoodieActiveTimeline.COMMIT_FORMATTER.parse(compactionCommitTime).toInstant();
-    ZonedDateTime commitDateTime = ZonedDateTime.ofInstant(instant, ZoneId.systemDefault());
-    return HoodieActiveTimeline.COMMIT_FORMATTER.format(Date.from(commitDateTime.plusHours(hours).toInstant()));
+    return HoodieActiveTimeline.formatDate(date);
   }
 }

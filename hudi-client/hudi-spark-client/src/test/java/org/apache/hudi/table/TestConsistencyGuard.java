@@ -45,7 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  */
 public class TestConsistencyGuard extends HoodieClientTestHarness {
 
-  private static final String BASE_FILE_EXTENSION = HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue().getFileExtension();
+  private static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
 
   // multiple parameters, uses Collection<Object[]>
   public static List<Arguments> consistencyGuardType() {
@@ -169,9 +169,9 @@ public class TestConsistencyGuard extends HoodieClientTestHarness {
     return getConsistencyGuardConfig(3, 10, 10);
   }
 
-  private ConsistencyGuardConfig getConsistencyGuardConfig(int maxChecks, int initalSleep, int maxSleep) {
+  private ConsistencyGuardConfig getConsistencyGuardConfig(int maxChecks, int initialSleep, int maxSleep) {
     return ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true)
-        .withInitialConsistencyCheckIntervalMs(initalSleep).withMaxConsistencyCheckIntervalMs(maxSleep)
+        .withInitialConsistencyCheckIntervalMs(initialSleep).withMaxConsistencyCheckIntervalMs(maxSleep)
         .withMaxConsistencyChecks(maxChecks).build();
   }
 }

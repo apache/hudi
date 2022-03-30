@@ -18,7 +18,15 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
+import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.mapred.InputSplit;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.RecordReader;
+import org.apache.hadoop.mapred.Reporter;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.hadoop.HoodieHFileInputFormat;
@@ -26,49 +34,22 @@ import org.apache.hudi.hadoop.UseFileSplitsFromInputFormat;
 import org.apache.hudi.hadoop.UseRecordReaderFromInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
-import org.apache.hadoop.io.ArrayWritable;
-import org.apache.hadoop.io.NullWritable;
-import org.apache.hadoop.mapred.FileSplit;
-import org.apache.hadoop.mapred.InputSplit;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.RecordReader;
-import org.apache.hadoop.mapred.Reporter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.stream.Stream;
 
 /**
  * HoodieRealtimeInputFormat for HUDI datasets which store data in HFile base file format.
  */
 @UseRecordReaderFromInputFormat
 @UseFileSplitsFromInputFormat
-public class HoodieHFileRealtimeInputFormat extends HoodieHFileInputFormat {
+public class HoodieHFileRealtimeInputFormat extends HoodieMergeOnReadTableInputFormat {
 
   private static final Logger LOG = LogManager.getLogger(HoodieHFileRealtimeInputFormat.class);
 
-  @Override
-  public InputSplit[] getSplits(JobConf job, int numSplits) throws IOException {
-    Stream<FileSplit> fileSplits = Arrays.stream(super.getSplits(job, numSplits)).map(is -> (FileSplit) is);
-    return HoodieRealtimeInputFormatUtils.getRealtimeSplits(job, fileSplits);
-  }
-
-  @Override
-  public FileStatus[] listStatus(JobConf job) throws IOException {
-    // Call the HoodieInputFormat::listStatus to obtain all latest hfiles, based on commit timeline.
-    return super.listStatus(job);
-  }
-
-  @Override
-  protected HoodieDefaultTimeline filterInstantsTimeline(HoodieDefaultTimeline timeline) {
-    // no specific filtering for Realtime format
-    return timeline;
-  }
+  // NOTE: We're only using {@code HoodieHFileInputFormat} to compose {@code RecordReader}
+  private final HoodieHFileInputFormat hFileInputFormat = new HoodieHFileInputFormat();
 
   @Override
   public RecordReader<NullWritable, ArrayWritable> getRecordReader(final InputSplit split, final JobConf jobConf,
@@ -91,7 +72,6 @@ public class HoodieHFileRealtimeInputFormat extends HoodieHFileInputFormat {
           // For e:g _hoodie_record_key would be missing and merge step would throw exceptions.
           // TO fix this, hoodie columns are appended late at the time record-reader gets built instead of construction
           // time.
-          HoodieRealtimeInputFormatUtils.cleanProjectionColumnIds(jobConf);
           HoodieRealtimeInputFormatUtils.addRequiredProjectionFields(jobConf, Option.empty());
 
           this.conf = jobConf;
@@ -99,6 +79,7 @@ public class HoodieHFileRealtimeInputFormat extends HoodieHFileInputFormat {
         }
       }
     }
+    HoodieRealtimeInputFormatUtils.cleanProjectionColumnIds(jobConf);
 
     LOG.info("Creating record reader with readCols :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR)
         + ", Ids :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
@@ -107,6 +88,12 @@ public class HoodieHFileRealtimeInputFormat extends HoodieHFileInputFormat {
         "HoodieRealtimeRecordReader can only work on HoodieRealtimeFileSplit and not with " + split);
 
     return new HoodieRealtimeRecordReader((HoodieRealtimeFileSplit) split, jobConf,
-        super.getRecordReader(split, jobConf, reporter));
+        hFileInputFormat.getRecordReader(split, jobConf, reporter));
+  }
+
+  @Override
+  protected boolean isSplitable(FileSystem fs, Path filename) {
+    // This file isn't splittable.
+    return false;
   }
 }

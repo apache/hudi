@@ -26,9 +26,9 @@ import java.io.IOException;
 import java.util.Locale;
 import java.util.Properties;
 
-/**
- * Common Configurations used across Hudi.
- */
+@ConfigClassProperty(name = "Common Configurations",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "The following set of configurations are common across Hudi.")
 public class HoodieCommonConfig extends HoodieConfig {
 
   public static final ConfigProperty<ExternalSpillableMap.DiskMapType> SPILLABLE_DISK_MAP_TYPE = ConfigProperty

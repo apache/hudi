@@ -49,8 +49,8 @@ public class SchemaRegistryProvider extends SchemaProvider {
    */
   public static class Config {
 
-    private static final String SRC_SCHEMA_REGISTRY_URL_PROP = "hoodie.deltastreamer.schemaprovider.registry.url";
-    private static final String TARGET_SCHEMA_REGISTRY_URL_PROP =
+    public static final String SRC_SCHEMA_REGISTRY_URL_PROP = "hoodie.deltastreamer.schemaprovider.registry.url";
+    public static final String TARGET_SCHEMA_REGISTRY_URL_PROP =
         "hoodie.deltastreamer.schemaprovider.registry.targetUrl";
   }
 

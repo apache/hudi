@@ -41,14 +41,14 @@ import java.util.Properties;
 public class HoodieMemoryConfig extends HoodieConfig {
 
   // Default max memory fraction during hash-merge, excess spills to disk
-  public static final ConfigProperty<String> MAX_MEMORY_FRACTION_FOR_MERGE_PROP = ConfigProperty
+  public static final ConfigProperty<String> MAX_MEMORY_FRACTION_FOR_MERGE = ConfigProperty
       .key("hoodie.memory.merge.fraction")
       .defaultValue(String.valueOf(0.6))
       .withDocumentation("This fraction is multiplied with the user memory fraction (1 - spark.memory.fraction) "
           + "to get a final fraction of heap space to use during merge");
 
   // Default max memory fraction during compaction, excess spills to disk
-  public static final ConfigProperty<String> MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP = ConfigProperty
+  public static final ConfigProperty<String> MAX_MEMORY_FRACTION_FOR_COMPACTION = ConfigProperty
       .key("hoodie.memory.compaction.fraction")
       .defaultValue(String.valueOf(0.6))
       .withDocumentation("HoodieCompactedLogScanner reads logblocks, converts records to HoodieRecords and then "
@@ -62,32 +62,69 @@ public class HoodieMemoryConfig extends HoodieConfig {
   // Minimum memory size (100MB) for the spillable map.
   public static final long DEFAULT_MIN_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES = 100 * 1024 * 1024L;
 
-  public static final ConfigProperty<Long> MAX_MEMORY_FOR_MERGE_PROP = ConfigProperty
+  public static final ConfigProperty<Long> MAX_MEMORY_FOR_MERGE = ConfigProperty
       .key("hoodie.memory.merge.max.size")
       .defaultValue(DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
       .withDocumentation("Maximum amount of memory used for merge operations, before spilling to local storage.");
 
-  public static final ConfigProperty<String> MAX_MEMORY_FOR_COMPACTION_PROP = ConfigProperty
+  public static final ConfigProperty<String> MAX_MEMORY_FOR_COMPACTION = ConfigProperty
       .key("hoodie.memory.compaction.max.size")
       .noDefaultValue()
       .withDocumentation("Maximum amount of memory used for compaction operations, before spilling to local storage.");
 
-  public static final ConfigProperty<Integer> MAX_DFS_STREAM_BUFFER_SIZE_PROP = ConfigProperty
+  public static final ConfigProperty<Integer> MAX_DFS_STREAM_BUFFER_SIZE = ConfigProperty
       .key("hoodie.memory.dfs.buffer.max.size")
       .defaultValue(16 * 1024 * 1024)
       .withDocumentation("Property to control the max memory for dfs input stream buffer size");
 
-  public static final ConfigProperty<String> SPILLABLE_MAP_BASE_PATH_PROP = ConfigProperty
+  public static final ConfigProperty<String> SPILLABLE_MAP_BASE_PATH = ConfigProperty
       .key("hoodie.memory.spillable.map.path")
       .defaultValue("/tmp/")
       .withDocumentation("Default file path prefix for spillable map");
 
-  public static final ConfigProperty<Double> WRITESTATUS_FAILURE_FRACTION_PROP = ConfigProperty
+  public static final ConfigProperty<Double> WRITESTATUS_FAILURE_FRACTION = ConfigProperty
       .key("hoodie.memory.writestatus.failure.fraction")
       .defaultValue(0.1)
       .withDocumentation("Property to control how what fraction of the failed record, exceptions we report back to driver. "
           + "Default is 10%. If set to 100%, with lot of failures, this can cause memory pressure, cause OOMs and "
           + "mask actual data errors.");
+
+  /** @deprecated Use {@link #MAX_MEMORY_FRACTION_FOR_MERGE} and its methods instead */
+  @Deprecated
+  public static final String MAX_MEMORY_FRACTION_FOR_MERGE_PROP = MAX_MEMORY_FRACTION_FOR_MERGE.key();
+  /** @deprecated Use {@link #MAX_MEMORY_FRACTION_FOR_MERGE} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_MAX_MEMORY_FRACTION_FOR_MERGE = MAX_MEMORY_FRACTION_FOR_MERGE.defaultValue();
+  /** @deprecated Use {@link #MAX_MEMORY_FRACTION_FOR_COMPACTION} and its methods instead */
+  @Deprecated
+  public static final String MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP = MAX_MEMORY_FRACTION_FOR_COMPACTION.key();
+  /** @deprecated Use {@link #MAX_MEMORY_FRACTION_FOR_COMPACTION} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_MAX_MEMORY_FRACTION_FOR_COMPACTION = MAX_MEMORY_FRACTION_FOR_COMPACTION.defaultValue();
+  /** @deprecated Use {@link #MAX_MEMORY_FOR_MERGE} and its methods instead */
+  @Deprecated
+  public static final String MAX_MEMORY_FOR_MERGE_PROP = MAX_MEMORY_FOR_MERGE.key();
+  /** @deprecated Use {@link #MAX_MEMORY_FOR_COMPACTION} and its methods instead */
+  @Deprecated
+  public static final String MAX_MEMORY_FOR_COMPACTION_PROP = MAX_MEMORY_FOR_COMPACTION.key();
+  /** @deprecated Use {@link #MAX_DFS_STREAM_BUFFER_SIZE} and its methods instead */
+  @Deprecated
+  public static final String MAX_DFS_STREAM_BUFFER_SIZE_PROP = MAX_DFS_STREAM_BUFFER_SIZE.key();
+  /** @deprecated Use {@link #MAX_DFS_STREAM_BUFFER_SIZE} and its methods instead */
+  @Deprecated
+  public static final int DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE = MAX_DFS_STREAM_BUFFER_SIZE.defaultValue();
+  /** @deprecated Use {@link #SPILLABLE_MAP_BASE_PATH} and its methods instead */
+  @Deprecated
+  public static final String SPILLABLE_MAP_BASE_PATH_PROP = SPILLABLE_MAP_BASE_PATH.key();
+  /** @deprecated Use {@link #SPILLABLE_MAP_BASE_PATH} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_SPILLABLE_MAP_BASE_PATH = SPILLABLE_MAP_BASE_PATH.defaultValue();
+  /** @deprecated Use {@link #WRITESTATUS_FAILURE_FRACTION} and its methods instead */
+  @Deprecated
+  public static final String WRITESTATUS_FAILURE_FRACTION_PROP = WRITESTATUS_FAILURE_FRACTION.key();
+  /** @deprecated Use {@link #WRITESTATUS_FAILURE_FRACTION} and its methods instead */
+  @Deprecated
+  public static final double DEFAULT_WRITESTATUS_FAILURE_FRACTION = WRITESTATUS_FAILURE_FRACTION.defaultValue();
 
   private HoodieMemoryConfig() {
     super();
@@ -114,28 +151,28 @@ public class HoodieMemoryConfig extends HoodieConfig {
     }
 
     public Builder withMaxMemoryFractionPerPartitionMerge(double maxMemoryFractionPerPartitionMerge) {
-      memoryConfig.setValue(MAX_MEMORY_FRACTION_FOR_MERGE_PROP, String.valueOf(maxMemoryFractionPerPartitionMerge));
+      memoryConfig.setValue(MAX_MEMORY_FRACTION_FOR_MERGE, String.valueOf(maxMemoryFractionPerPartitionMerge));
       return this;
     }
 
     public Builder withMaxMemoryMaxSize(long mergeMaxSize, long compactionMaxSize) {
-      memoryConfig.setValue(MAX_MEMORY_FOR_MERGE_PROP, String.valueOf(mergeMaxSize));
-      memoryConfig.setValue(MAX_MEMORY_FOR_COMPACTION_PROP, String.valueOf(compactionMaxSize));
+      memoryConfig.setValue(MAX_MEMORY_FOR_MERGE, String.valueOf(mergeMaxSize));
+      memoryConfig.setValue(MAX_MEMORY_FOR_COMPACTION, String.valueOf(compactionMaxSize));
       return this;
     }
 
     public Builder withMaxMemoryFractionPerCompaction(double maxMemoryFractionPerCompaction) {
-      memoryConfig.setValue(MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP, String.valueOf(maxMemoryFractionPerCompaction));
+      memoryConfig.setValue(MAX_MEMORY_FRACTION_FOR_COMPACTION, String.valueOf(maxMemoryFractionPerCompaction));
       return this;
     }
 
     public Builder withMaxDFSStreamBufferSize(int maxStreamBufferSize) {
-      memoryConfig.setValue(MAX_DFS_STREAM_BUFFER_SIZE_PROP, String.valueOf(maxStreamBufferSize));
+      memoryConfig.setValue(MAX_DFS_STREAM_BUFFER_SIZE, String.valueOf(maxStreamBufferSize));
       return this;
     }
 
     public Builder withWriteStatusFailureFraction(double failureFraction) {
-      memoryConfig.setValue(WRITESTATUS_FAILURE_FRACTION_PROP, String.valueOf(failureFraction));
+      memoryConfig.setValue(WRITESTATUS_FAILURE_FRACTION, String.valueOf(failureFraction));
       return this;
     }
 

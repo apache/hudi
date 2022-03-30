@@ -48,4 +48,15 @@ public class HoodiePayloadProps {
    * to tell if the current record is a update record or insert record for mor table.
    */
   public static final String PAYLOAD_IS_UPDATE_RECORD_FOR_MOR = "hoodie.is.update.record.for.mor";
+
+  /** @deprecated Use {@link #PAYLOAD_ORDERING_FIELD_PROP_KEY} */
+  @Deprecated
+  public static final String PAYLOAD_ORDERING_FIELD_PROP = PAYLOAD_ORDERING_FIELD_PROP_KEY;
+  @Deprecated
+  public static String DEFAULT_PAYLOAD_ORDERING_FIELD_VAL = "ts";
+  /** @deprecated Use {@link #PAYLOAD_EVENT_TIME_FIELD_PROP_KEY} */
+  @Deprecated
+  public static final String PAYLOAD_EVENT_TIME_FIELD_PROP = PAYLOAD_EVENT_TIME_FIELD_PROP_KEY;
+  @Deprecated
+  public static String DEFAULT_PAYLOAD_EVENT_TIME_FIELD_VAL = "ts";
 }

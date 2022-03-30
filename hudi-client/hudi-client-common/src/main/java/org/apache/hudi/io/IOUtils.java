@@ -25,27 +25,31 @@ import org.apache.hudi.common.util.Option;
 
 import static org.apache.hudi.config.HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
 import static org.apache.hudi.config.HoodieMemoryConfig.DEFAULT_MIN_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
-import static org.apache.hudi.config.HoodieMemoryConfig.MAX_MEMORY_FOR_COMPACTION_PROP;
-import static org.apache.hudi.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE_PROP;
-import static org.apache.hudi.config.HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP;
-import static org.apache.hudi.config.HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_MERGE_PROP;
+import static org.apache.hudi.config.HoodieMemoryConfig.MAX_MEMORY_FOR_COMPACTION;
+import static org.apache.hudi.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
+import static org.apache.hudi.config.HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION;
+import static org.apache.hudi.config.HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_MERGE;
 
 public class IOUtils {
   /**
-   * Dynamic calculation of max memory to use for for spillable map. user.available.memory = executor.memory *
-   * (1 - memory.fraction) spillable.available.memory = user.available.memory * hoodie.memory.fraction. Anytime
-   * the engine memory fractions/total memory is changed, the memory used for spillable map changes
-   * accordingly
+   * Dynamic calculation of max memory to use for spillable map. There is always more than one task
+   * running on a executor and the each task maintains a spillable map.
+   * user.available.memory = executor.memory * (1 - memory.fraction)
+   * spillable.available.memory = user.available.memory * hoodie.memory.fraction / executor.cores.
+   * Anytime the engine memory fractions/total memory is changed, the memory used for spillable map
+   * changes accordingly.
    */
   public static long getMaxMemoryAllowedForMerge(TaskContextSupplier context, String maxMemoryFraction) {
     Option<String> totalMemoryOpt = context.getProperty(EngineProperty.TOTAL_MEMORY_AVAILABLE);
     Option<String> memoryFractionOpt = context.getProperty(EngineProperty.MEMORY_FRACTION_IN_USE);
+    Option<String> totalCoresOpt = context.getProperty(EngineProperty.TOTAL_CORES_PER_EXECUTOR);
 
-    if (totalMemoryOpt.isPresent() && memoryFractionOpt.isPresent()) {
+    if (totalMemoryOpt.isPresent() && memoryFractionOpt.isPresent() && totalCoresOpt.isPresent()) {
       long executorMemoryInBytes = Long.parseLong(totalMemoryOpt.get());
       double memoryFraction = Double.parseDouble(memoryFractionOpt.get());
       double maxMemoryFractionForMerge = Double.parseDouble(maxMemoryFraction);
-      double userAvailableMemory = executorMemoryInBytes * (1 - memoryFraction);
+      long executorCores = Long.parseLong(totalCoresOpt.get());
+      double userAvailableMemory = executorMemoryInBytes * (1 - memoryFraction) / executorCores;
       long maxMemoryForMerge = (long) Math.floor(userAvailableMemory * maxMemoryFractionForMerge);
       return Math.max(DEFAULT_MIN_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES, maxMemoryForMerge);
     } else {
@@ -54,18 +58,18 @@ public class IOUtils {
   }
 
   public static long getMaxMemoryPerPartitionMerge(TaskContextSupplier context, HoodieConfig hoodieConfig) {
-    if (hoodieConfig.contains(MAX_MEMORY_FOR_MERGE_PROP)) {
-      return hoodieConfig.getLong(MAX_MEMORY_FOR_MERGE_PROP);
+    if (hoodieConfig.contains(MAX_MEMORY_FOR_MERGE)) {
+      return hoodieConfig.getLong(MAX_MEMORY_FOR_MERGE);
     }
-    String fraction = hoodieConfig.getStringOrDefault(MAX_MEMORY_FRACTION_FOR_MERGE_PROP);
+    String fraction = hoodieConfig.getStringOrDefault(MAX_MEMORY_FRACTION_FOR_MERGE);
     return getMaxMemoryAllowedForMerge(context, fraction);
   }
 
   public static long getMaxMemoryPerCompaction(TaskContextSupplier context, HoodieConfig hoodieConfig) {
-    if (hoodieConfig.contains(MAX_MEMORY_FOR_COMPACTION_PROP)) {
-      return hoodieConfig.getLong(MAX_MEMORY_FOR_COMPACTION_PROP);
+    if (hoodieConfig.contains(MAX_MEMORY_FOR_COMPACTION)) {
+      return hoodieConfig.getLong(MAX_MEMORY_FOR_COMPACTION);
     }
-    String fraction = hoodieConfig.getStringOrDefault(MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP);
+    String fraction = hoodieConfig.getStringOrDefault(MAX_MEMORY_FRACTION_FOR_COMPACTION);
     return getMaxMemoryAllowedForMerge(context, fraction);
   }
 }

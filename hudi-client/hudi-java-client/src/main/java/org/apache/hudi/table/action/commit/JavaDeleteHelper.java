@@ -19,8 +19,10 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.Pair;
@@ -42,7 +44,7 @@ import java.util.stream.Collectors;
 
 @SuppressWarnings("checkstyle:LineLength")
 public class JavaDeleteHelper<R> extends
-    AbstractDeleteHelper<EmptyHoodieRecordPayload, List<HoodieRecord<EmptyHoodieRecordPayload>>, List<HoodieKey>, List<WriteStatus>, R> {
+    BaseDeleteHelper<EmptyHoodieRecordPayload, List<HoodieRecord<EmptyHoodieRecordPayload>>, List<HoodieKey>, List<WriteStatus>, R> {
 
   private JavaDeleteHelper() {
   }
@@ -94,11 +96,11 @@ public class JavaDeleteHelper<R> extends
       }
 
       List<HoodieRecord<EmptyHoodieRecordPayload>> dedupedRecords =
-          dedupedKeys.stream().map(key -> new HoodieRecord<>(key, new EmptyHoodieRecordPayload())).collect(Collectors.toList());
+          dedupedKeys.stream().map(key -> new HoodieAvroRecord<>(key, new EmptyHoodieRecordPayload())).collect(Collectors.toList());
       Instant beginTag = Instant.now();
       // perform index look up to get existing location of records
-      List<HoodieRecord<EmptyHoodieRecordPayload>> taggedRecords =
-          table.getIndex().tagLocation(dedupedRecords, context, table);
+      List<HoodieRecord<EmptyHoodieRecordPayload>> taggedRecords = HoodieList.getList(
+          table.getIndex().tagLocation(HoodieList.of(dedupedRecords), context, table));
       Duration tagLocationDuration = Duration.between(beginTag, Instant.now());
 
       // filter out non existent keys/records

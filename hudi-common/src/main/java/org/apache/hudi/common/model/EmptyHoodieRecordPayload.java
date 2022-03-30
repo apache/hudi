@@ -36,8 +36,8 @@ public class EmptyHoodieRecordPayload implements HoodieRecordPayload<EmptyHoodie
   }
 
   @Override
-  public EmptyHoodieRecordPayload preCombine(EmptyHoodieRecordPayload another) {
-    return another;
+  public EmptyHoodieRecordPayload preCombine(EmptyHoodieRecordPayload oldValue) {
+    return oldValue;
   }
 
   @Override

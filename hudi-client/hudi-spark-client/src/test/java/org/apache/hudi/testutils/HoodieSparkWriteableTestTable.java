@@ -25,10 +25,12 @@ import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -39,18 +41,33 @@ import java.util.UUID;
 public class HoodieSparkWriteableTestTable extends HoodieWriteableTestTable {
   private static final Logger LOG = LogManager.getLogger(HoodieSparkWriteableTestTable.class);
 
-  private HoodieSparkWriteableTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient, Schema schema, BloomFilter filter) {
-    super(basePath, fs, metaClient, schema, filter);
+  private HoodieSparkWriteableTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient, Schema schema,
+                                        BloomFilter filter, HoodieTableMetadataWriter metadataWriter) {
+    super(basePath, fs, metaClient, schema, filter, metadataWriter);
   }
 
   public static HoodieSparkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema, BloomFilter filter) {
-    return new HoodieSparkWriteableTestTable(metaClient.getBasePath(), metaClient.getRawFs(), metaClient, schema, filter);
+    return new HoodieSparkWriteableTestTable(metaClient.getBasePath(), metaClient.getRawFs(),
+        metaClient, schema, filter, null);
+  }
+
+  public static HoodieSparkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema, BloomFilter filter,
+                                                 HoodieTableMetadataWriter metadataWriter) {
+    return new HoodieSparkWriteableTestTable(metaClient.getBasePath(), metaClient.getRawFs(),
+        metaClient, schema, filter, metadataWriter);
   }
 
   public static HoodieSparkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema) {
     BloomFilter filter = BloomFilterFactory
         .createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.SIMPLE.name());
     return of(metaClient, schema, filter);
+  }
+
+  public static HoodieSparkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema,
+                                                 HoodieTableMetadataWriter metadataWriter) {
+    BloomFilter filter = BloomFilterFactory
+        .createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.DYNAMIC_V0.name());
+    return of(metaClient, schema, filter, metadataWriter);
   }
 
   public static HoodieSparkWriteableTestTable of(HoodieTable hoodieTable, Schema schema) {
@@ -92,11 +109,11 @@ public class HoodieSparkWriteableTestTable extends HoodieWriteableTestTable {
   }
 
   public HoodieSparkWriteableTestTable withInserts(String partition, String fileId, HoodieRecord... records) throws Exception {
-    return withInserts(partition, fileId, Arrays.asList(records));
+    withInserts(partition, fileId, Arrays.asList(records));
+    return this;
   }
 
-  public HoodieSparkWriteableTestTable withInserts(String partition, String fileId, List<HoodieRecord> records) throws Exception {
-    super.withInserts(partition, fileId, records, new SparkTaskContextSupplier());
-    return this;
+  public Path withInserts(String partition, String fileId, List<HoodieRecord> records) throws Exception {
+    return super.withInserts(partition, fileId, records, new SparkTaskContextSupplier());
   }
 }

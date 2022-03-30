@@ -29,19 +29,18 @@ import org.apache.orc.RecordReader;
 import org.apache.orc.TypeDescription;
 
 import java.io.IOException;
-import java.util.Iterator;
 
 /**
  * This class wraps a ORC reader and provides an iterator based api to read from an ORC file.
  */
-public class OrcReaderIterator<T> implements Iterator<T> {
+public class OrcReaderIterator<T> implements ClosableIterator<T> {
 
   private final RecordReader recordReader;
   private final Schema avroSchema;
-  List<String> fieldNames;
-  List<TypeDescription> orcFieldTypes;
-  Schema[] avroFieldSchemas;
-  private VectorizedRowBatch batch;
+  private final List<String> fieldNames;
+  private final List<TypeDescription> orcFieldTypes;
+  private final Schema[] avroFieldSchemas;
+  private final VectorizedRowBatch batch;
   private int rowInBatch;
   private T next;
 
@@ -52,7 +51,7 @@ public class OrcReaderIterator<T> implements Iterator<T> {
     this.orcFieldTypes = orcSchema.getChildren();
     this.avroFieldSchemas = fieldNames.stream()
         .map(fieldName -> avroSchema.getField(fieldName).schema())
-        .toArray(size -> new Schema[size]);
+        .toArray(Schema[]::new);
     this.batch = orcSchema.createRowBatch();
     this.rowInBatch = 0;
   }
@@ -114,5 +113,10 @@ public class OrcReaderIterator<T> implements Iterator<T> {
     }
     rowInBatch++;
     return record;
+  }
+
+  @Override
+  public void close() {
+    FileIOUtils.closeQuietly(this.recordReader);
   }
 }

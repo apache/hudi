@@ -41,12 +41,18 @@ public class DayBasedCompactionStrategy extends CompactionStrategy {
   // For now, use SimpleDateFormat as default partition format
   protected static final String DATE_PARTITION_FORMAT = "yyyy/MM/dd";
   // Sorts compaction in LastInFirstCompacted order
+
+  // NOTE: {@code SimpleDataFormat} is NOT thread-safe
+  // TODO replace w/ DateTimeFormatter
+  private static final ThreadLocal<SimpleDateFormat> DATE_FORMAT =
+      ThreadLocal.withInitial(() -> new SimpleDateFormat(DATE_PARTITION_FORMAT, Locale.ENGLISH));
+
   protected static Comparator<String> comparator = (String leftPartition, String rightPartition) -> {
     try {
       leftPartition = getPartitionPathWithoutPartitionKeys(leftPartition);
       rightPartition = getPartitionPathWithoutPartitionKeys(rightPartition);
-      Date left = new SimpleDateFormat(DATE_PARTITION_FORMAT, Locale.ENGLISH).parse(leftPartition);
-      Date right = new SimpleDateFormat(DATE_PARTITION_FORMAT, Locale.ENGLISH).parse(rightPartition);
+      Date left = DATE_FORMAT.get().parse(leftPartition);
+      Date right = DATE_FORMAT.get().parse(rightPartition);
       return left.after(right) ? -1 : right.after(left) ? 1 : 0;
     } catch (ParseException e) {
       throw new HoodieException("Invalid Partition Date Format", e);

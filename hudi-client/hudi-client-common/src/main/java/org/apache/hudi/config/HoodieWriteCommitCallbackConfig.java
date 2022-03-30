@@ -38,13 +38,13 @@ public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
 
   public static final String CALLBACK_PREFIX = "hoodie.write.commit.callback.";
 
-  public static final ConfigProperty<Boolean> CALLBACK_ON = ConfigProperty
+  public static final ConfigProperty<Boolean> TURN_CALLBACK_ON = ConfigProperty
       .key(CALLBACK_PREFIX + "on")
       .defaultValue(false)
       .sinceVersion("0.6.0")
       .withDocumentation("Turn commit callback on/off. off by default.");
 
-  public static final ConfigProperty<String> CALLBACK_CLASS_PROP = ConfigProperty
+  public static final ConfigProperty<String> CALLBACK_CLASS_NAME = ConfigProperty
       .key(CALLBACK_PREFIX + "class")
       .defaultValue("org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback")
       .sinceVersion("0.6.0")
@@ -52,23 +52,69 @@ public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
           + "org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback by default");
 
   // ***** HTTP callback configs *****
-  public static final ConfigProperty<String> CALLBACK_HTTP_URL_PROP = ConfigProperty
+  public static final ConfigProperty<String> CALLBACK_HTTP_URL = ConfigProperty
       .key(CALLBACK_PREFIX + "http.url")
       .noDefaultValue()
       .sinceVersion("0.6.0")
       .withDocumentation("Callback host to be sent along with callback messages");
 
-  public static final ConfigProperty<String> CALLBACK_HTTP_API_KEY = ConfigProperty
+  public static final ConfigProperty<String> CALLBACK_HTTP_API_KEY_VALUE = ConfigProperty
       .key(CALLBACK_PREFIX + "http.api.key")
       .defaultValue("hudi_write_commit_http_callback")
       .sinceVersion("0.6.0")
       .withDocumentation("Http callback API key. hudi_write_commit_http_callback by default");
 
-  public static final ConfigProperty<Integer> CALLBACK_HTTP_TIMEOUT_SECONDS = ConfigProperty
+  public static final ConfigProperty<Integer> CALLBACK_HTTP_TIMEOUT_IN_SECONDS = ConfigProperty
       .key(CALLBACK_PREFIX + "http.timeout.seconds")
       .defaultValue(3)
       .sinceVersion("0.6.0")
       .withDocumentation("Callback timeout in seconds. 3 by default");
+
+  /**
+   * @deprecated Use {@link #TURN_CALLBACK_ON} and its methods instead
+   */
+  @Deprecated
+  public static final String CALLBACK_ON = TURN_CALLBACK_ON.key();
+  /**
+   * @deprecated Use {@link #TURN_CALLBACK_ON} and its methods instead
+   */
+  @Deprecated
+  public static final boolean DEFAULT_CALLBACK_ON = TURN_CALLBACK_ON.defaultValue();
+  /**
+   * @deprecated Use {@link #CALLBACK_CLASS_NAME} and its methods instead
+   */
+  @Deprecated
+  public static final String CALLBACK_CLASS_PROP = CALLBACK_CLASS_NAME.key();
+  /**
+   * @deprecated Use {@link #CALLBACK_CLASS_NAME} and its methods instead
+   */
+  @Deprecated
+  public static final String DEFAULT_CALLBACK_CLASS_PROP = CALLBACK_CLASS_NAME.defaultValue();
+  /**
+   * @deprecated Use {@link #CALLBACK_HTTP_URL} and its methods instead
+   */
+  @Deprecated
+  public static final String CALLBACK_HTTP_URL_PROP = CALLBACK_HTTP_URL.key();
+  /**
+   * @deprecated Use {@link #CALLBACK_HTTP_API_KEY_VALUE} and its methods instead
+   */
+  @Deprecated
+  public static final String CALLBACK_HTTP_API_KEY = CALLBACK_HTTP_API_KEY_VALUE.key();
+  /**
+   * @deprecated Use {@link #CALLBACK_HTTP_API_KEY_VALUE} and its methods instead
+   */
+  @Deprecated
+  public static final String DEFAULT_CALLBACK_HTTP_API_KEY = CALLBACK_HTTP_API_KEY_VALUE.defaultValue();
+  /**
+   * @deprecated Use {@link #CALLBACK_HTTP_TIMEOUT_IN_SECONDS} and its methods instead
+   */
+  @Deprecated
+  public static final String CALLBACK_HTTP_TIMEOUT_SECONDS = CALLBACK_HTTP_TIMEOUT_IN_SECONDS.key();
+  /**
+   * @deprecated Use {@link #CALLBACK_HTTP_TIMEOUT_IN_SECONDS} and its methods instead
+   */
+  @Deprecated
+  public static final int DEFAULT_CALLBACK_HTTP_TIMEOUT_SECONDS = CALLBACK_HTTP_TIMEOUT_IN_SECONDS.defaultValue();
 
   private HoodieWriteCommitCallbackConfig() {
     super();
@@ -95,27 +141,27 @@ public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
     }
 
     public HoodieWriteCommitCallbackConfig.Builder writeCommitCallbackOn(String callbackOn) {
-      writeCommitCallbackConfig.setValue(CALLBACK_ON, callbackOn);
+      writeCommitCallbackConfig.setValue(TURN_CALLBACK_ON, callbackOn);
       return this;
     }
 
     public HoodieWriteCommitCallbackConfig.Builder withCallbackClass(String callbackClass) {
-      writeCommitCallbackConfig.setValue(CALLBACK_CLASS_PROP, callbackClass);
+      writeCommitCallbackConfig.setValue(CALLBACK_CLASS_NAME, callbackClass);
       return this;
     }
 
     public HoodieWriteCommitCallbackConfig.Builder withCallbackHttpUrl(String url) {
-      writeCommitCallbackConfig.setValue(CALLBACK_HTTP_URL_PROP, url);
+      writeCommitCallbackConfig.setValue(CALLBACK_HTTP_URL, url);
       return this;
     }
 
     public Builder withCallbackHttpTimeoutSeconds(String timeoutSeconds) {
-      writeCommitCallbackConfig.setValue(CALLBACK_HTTP_TIMEOUT_SECONDS, timeoutSeconds);
+      writeCommitCallbackConfig.setValue(CALLBACK_HTTP_TIMEOUT_IN_SECONDS, timeoutSeconds);
       return this;
     }
 
     public Builder withCallbackHttpApiKey(String apiKey) {
-      writeCommitCallbackConfig.setValue(CALLBACK_HTTP_API_KEY, apiKey);
+      writeCommitCallbackConfig.setValue(CALLBACK_HTTP_API_KEY_VALUE, apiKey);
       return this;
     }
 

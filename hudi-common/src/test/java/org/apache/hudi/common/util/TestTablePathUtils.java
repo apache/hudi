@@ -17,12 +17,13 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -37,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class TestTablePathUtils {
-  private static final String BASE_FILE_EXTENSION = HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue().getFileExtension();
+  private static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
 
   @TempDir
   static File tempDir;
@@ -92,20 +93,28 @@ public final class TestTablePathUtils {
 
   @Test
   void getTablePathFromMetadataFolderPath() throws IOException {
-    Path metadataFolder = new Path(tablePath, HoodieTableMetaClient.METAFOLDER_NAME);
-    Option<Path> inferredTablePath = TablePathUtils.getTablePath(fs, metadataFolder);
+    Path metaFolder = new Path(tablePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    Option<Path> inferredTablePath = TablePathUtils.getTablePath(fs, metaFolder);
     assertEquals(tablePath, inferredTablePath.get());
   }
 
   @Test
   void getTablePathFromMetadataSubFolderPath() throws IOException {
     Path auxFolder = new Path(tablePath, HoodieTableMetaClient.AUXILIARYFOLDER_NAME);
-    Option<Path> inferredTablePath = TablePathUtils.getTablePath(fs, auxFolder);
-    assertEquals(tablePath, inferredTablePath.get());
+    assertEquals(tablePath, TablePathUtils.getTablePath(fs, auxFolder).get());
 
     Path bootstrapIndexFolder = new Path(tablePath, HoodieTableMetaClient.BOOTSTRAP_INDEX_ROOT_FOLDER_PATH);
-    inferredTablePath = TablePathUtils.getTablePath(fs, bootstrapIndexFolder);
-    assertEquals(tablePath, inferredTablePath.get());
+    assertEquals(tablePath, TablePathUtils.getTablePath(fs, bootstrapIndexFolder).get());
+
+    Path metadataTableFolder = new Path(tablePath, HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH);
+    Path metadataTableMetaFolder = new Path(metadataTableFolder, HoodieTableMetaClient.METAFOLDER_NAME);
+    assertTrue(new File(metadataTableMetaFolder.toUri()).mkdirs());
+
+    assertEquals(metadataTableFolder, TablePathUtils.getTablePath(fs, metadataTableFolder).get());
+
+    Path metadataTablePartitionFolder = new Path(metadataTableFolder, "column_stats");
+    assertTrue(new File(metadataTablePartitionFolder.toUri()).mkdir());
+    assertEquals(metadataTableFolder, TablePathUtils.getTablePath(fs, metadataTablePartitionFolder).get());
   }
 
   @Test

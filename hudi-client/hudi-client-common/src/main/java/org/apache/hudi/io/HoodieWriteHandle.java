@@ -33,7 +33,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.MarkerFiles;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -108,13 +108,13 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   protected HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath, String fileId,
                               HoodieTable<T, I, K, O> hoodieTable, Option<Schema> overriddenSchema,
                               TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, hoodieTable);
+    super(config, Option.of(instantTime), hoodieTable);
     this.partitionPath = partitionPath;
     this.fileId = fileId;
     this.tableSchema = overriddenSchema.orElseGet(() -> getSpecifiedTableSchema(config));
-    this.tableSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(tableSchema);
+    this.tableSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(tableSchema, config.allowOperationMetadataField());
     this.writeSchema = overriddenSchema.orElseGet(() -> getWriteSchema(config));
-    this.writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema);
+    this.writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
     this.timer = new HoodieTimer().startTimer();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
@@ -177,8 +177,8 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
    * @param partitionPath Partition path
    */
   protected void createMarkerFile(String partitionPath, String dataFileName) {
-    MarkerFiles markerFiles = new MarkerFiles(hoodieTable, instantTime);
-    markerFiles.create(partitionPath, dataFileName, getIOType());
+    WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime)
+        .create(partitionPath, dataFileName, getIOType());
   }
 
   public Schema getWriterSchemaWithMetaFields() {
@@ -195,6 +195,10 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
     return false;
   }
 
+  boolean layoutControlsNumFiles() {
+    return hoodieTable.getStorageLayout().determinesNumFileGroups();
+  }
+
   /**
    * Perform the actual writing of the given record into the backing file.
    */
@@ -206,7 +210,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
    * Perform the actual writing of the given record into the backing file.
    */
   public void write(HoodieRecord record, Option<IndexedRecord> avroRecord, Option<Exception> exception) {
-    Option recordMetadata = record.getData().getMetadata();
+    Option recordMetadata = ((HoodieRecordPayload) record.getData()).getMetadata();
     if (exception.isPresent() && exception.get() instanceof Throwable) {
       // Not throwing exception from here, since we don't want to fail the entire job for a single record
       writeStatus.markFailure(record, exception.get(), recordMetadata);
@@ -221,6 +225,10 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
    */
   protected GenericRecord rewriteRecord(GenericRecord record) {
     return HoodieAvroUtils.rewriteRecord(record, writeSchemaWithMetaFields);
+  }
+
+  protected GenericRecord rewriteRecordWithMetadata(GenericRecord record, String fileName) {
+    return HoodieAvroUtils.rewriteRecordWithMetadata(record, writeSchemaWithMetaFields, fileName);
   }
 
   public abstract List<WriteStatus> close();

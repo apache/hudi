@@ -51,8 +51,7 @@ public class ReflectionUtils {
     synchronized (CLAZZ_CACHE) {
       if (!CLAZZ_CACHE.containsKey(clazzName)) {
         try {
-          Class<?> clazz = Class.forName(clazzName, true,
-              Thread.currentThread().getContextClassLoader());
+          Class<?> clazz = Class.forName(clazzName);
           CLAZZ_CACHE.put(clazzName, clazz);
         } catch (ClassNotFoundException e) {
           throw new HoodieException("Unable to load class", e);
@@ -90,6 +89,24 @@ public class ReflectionUtils {
       return getClass(clazz).getConstructor(constructorArgTypes).newInstance(constructorArgs);
     } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
       throw new HoodieException("Unable to instantiate class " + clazz, e);
+    }
+  }
+
+  /**
+   * Check if the clazz has the target constructor or not.
+   *
+   * When catch {@link HoodieException} from {@link #loadClass}, it's inconvenient to say if the exception was thrown
+   * due to the instantiation's own logic or missing constructor.
+   *
+   * TODO: ReflectionUtils should throw a specific exception to indicate Reflection problem.
+   */
+  public static boolean hasConstructor(String clazz, Class<?>[] constructorArgTypes) {
+    try {
+      getClass(clazz).getConstructor(constructorArgTypes);
+      return true;
+    } catch (NoSuchMethodException e) {
+      LOG.warn("Unable to instantiate class " + clazz, e);
+      return false;
     }
   }
 

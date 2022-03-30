@@ -1,0 +1,132 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+aircompressor/io.airlift/0.15//aircompressor-0.15.jar
+annotations/org.jetbrains/17.0.0//annotations-17.0.0.jar
+aopalliance/aopalliance/1.0//aopalliance-1.0.jar
+apacheds-i18n/org.apache.directory.server/2.0.0-M15//apacheds-i18n-2.0.0-M15.jar
+apacheds-kerberos-codec/org.apache.directory.server/2.0.0-M15//apacheds-kerberos-codec-2.0.0-M15.jar
+api-asn1-api/org.apache.directory.api/1.0.0-M20//api-asn1-api-1.0.0-M20.jar
+api-util/org.apache.directory.api/1.0.0-M20//api-util-1.0.0-M20.jar
+asm/asm/3.1//asm-3.1.jar
+avro/org.apache.avro/1.8.2//avro-1.8.2.jar
+commons-beanutils-core/commons-beanutils/1.8.0//commons-beanutils-core-1.8.0.jar
+commons-beanutils/commons-beanutils/1.7.0//commons-beanutils-1.7.0.jar
+commons-cli/commons-cli/1.2//commons-cli-1.2.jar
+commons-codec/commons-codec/1.9//commons-codec-1.9.jar
+commons-collections/commons-collections/3.2.2//commons-collections-3.2.2.jar
+commons-compress/org.apache.commons/1.8.1//commons-compress-1.8.1.jar
+commons-configuration/commons-configuration/1.6//commons-configuration-1.6.jar
+commons-daemon/commons-daemon/1.0.13//commons-daemon-1.0.13.jar
+commons-digester/commons-digester/1.8//commons-digester-1.8.jar
+commons-httpclient/commons-httpclient/3.1//commons-httpclient-3.1.jar
+commons-io/commons-io/2.4//commons-io-2.4.jar
+commons-lang/commons-lang/2.6//commons-lang-2.6.jar
+commons-logging/commons-logging/1.2//commons-logging-1.2.jar
+commons-math/org.apache.commons/2.2//commons-math-2.2.jar
+commons-math3/org.apache.commons/3.1.1//commons-math3-3.1.1.jar
+commons-net/commons-net/3.1//commons-net-3.1.jar
+commons-pool/commons-pool/1.6//commons-pool-1.6.jar
+curator-client/org.apache.curator/2.7.1//curator-client-2.7.1.jar
+curator-framework/org.apache.curator/2.7.1//curator-framework-2.7.1.jar
+curator-recipes/org.apache.curator/2.7.1//curator-recipes-2.7.1.jar
+disruptor/com.lmax/3.3.0//disruptor-3.3.0.jar
+fastutil/it.unimi.dsi/7.0.13//fastutil-7.0.13.jar
+findbugs-annotations/com.github.stephenc.findbugs/1.3.9-1//findbugs-annotations-1.3.9-1.jar
+fluent-hc/org.apache.httpcomponents/4.4.1//fluent-hc-4.4.1.jar
+gson/com.google.code.gson/2.3.1//gson-2.3.1.jar
+guava/com.google.guava/12.0.1//guava-12.0.1.jar
+guice-servlet/com.google.inject.extensions/3.0//guice-servlet-3.0.jar
+guice/com.google.inject/3.0//guice-3.0.jar
+hadoop-annotations/org.apache.hadoop/2.7.3//hadoop-annotations-2.7.3.jar
+hadoop-auth/org.apache.hadoop/2.7.3//hadoop-auth-2.7.3.jar
+hadoop-client/org.apache.hadoop/2.7.3//hadoop-client-2.7.3.jar
+hadoop-common/org.apache.hadoop/2.7.3//hadoop-common-2.7.3.jar
+hadoop-hdfs/org.apache.hadoop/2.7.3//hadoop-hdfs-2.7.3.jar
+hadoop-mapreduce-client-app/org.apache.hadoop/2.7.3//hadoop-mapreduce-client-app-2.7.3.jar
+hadoop-mapreduce-client-common/org.apache.hadoop/2.7.3//hadoop-mapreduce-client-common-2.7.3.jar
+hadoop-mapreduce-client-core/org.apache.hadoop/2.7.3//hadoop-mapreduce-client-core-2.7.3.jar
+hadoop-mapreduce-client-jobclient/org.apache.hadoop/2.7.3//hadoop-mapreduce-client-jobclient-2.7.3.jar
+hadoop-mapreduce-client-shuffle/org.apache.hadoop/2.7.3//hadoop-mapreduce-client-shuffle-2.7.3.jar
+hadoop-yarn-api/org.apache.hadoop/2.7.3//hadoop-yarn-api-2.7.3.jar
+hadoop-yarn-client/org.apache.hadoop/2.7.3//hadoop-yarn-client-2.7.3.jar
+hadoop-yarn-common/org.apache.hadoop/2.7.3//hadoop-yarn-common-2.7.3.jar
+hadoop-yarn-server-common/org.apache.hadoop/2.7.3//hadoop-yarn-server-common-2.7.3.jar
+hamcrest-core/org.hamcrest/1.3//hamcrest-core-1.3.jar
+hbase-annotations/org.apache.hbase/1.2.3//hbase-annotations-1.2.3.jar
+hbase-client/org.apache.hbase/1.2.3//hbase-client-1.2.3.jar
+hbase-common/org.apache.hbase/1.2.3//hbase-common-1.2.3.jar
+hbase-common/org.apache.hbase/1.2.3/tests/hbase-common-1.2.3-tests.jar
+hbase-hadoop-compat/org.apache.hbase/1.2.3//hbase-hadoop-compat-1.2.3.jar
+hbase-hadoop2-compat/org.apache.hbase/1.2.3//hbase-hadoop2-compat-1.2.3.jar
+hbase-prefix-tree/org.apache.hbase/1.2.3//hbase-prefix-tree-1.2.3.jar
+hbase-procedure/org.apache.hbase/1.2.3//hbase-procedure-1.2.3.jar
+hbase-protocol/org.apache.hbase/1.2.3//hbase-protocol-1.2.3.jar
+hbase-server/org.apache.hbase/1.2.3//hbase-server-1.2.3.jar
+hive-storage-api/org.apache.hive/2.6.0//hive-storage-api-2.6.0.jar
+htrace-core/org.apache.htrace/3.1.0-incubating//htrace-core-3.1.0-incubating.jar
+httpclient/org.apache.httpcomponents/4.4.1//httpclient-4.4.1.jar
+httpcore/org.apache.httpcomponents/4.4.1//httpcore-4.4.1.jar
+jackson-annotations/com.fasterxml.jackson.core/2.6.7//jackson-annotations-2.6.7.jar
+jackson-core-asl/org.codehaus.jackson/1.9.13//jackson-core-asl-1.9.13.jar
+jackson-core/com.fasterxml.jackson.core/2.6.7//jackson-core-2.6.7.jar
+jackson-databind/com.fasterxml.jackson.core/2.6.7.3//jackson-databind-2.6.7.3.jar
+jackson-mapper-asl/org.codehaus.jackson/1.9.13//jackson-mapper-asl-1.9.13.jar
+jamon-runtime/org.jamon/2.4.1//jamon-runtime-2.4.1.jar
+java-xmlbuilder/com.jamesmurty.utils/0.4//java-xmlbuilder-0.4.jar
+javax.inject/javax.inject/1//javax.inject-1.jar
+jaxb-api/javax.xml.bind/2.2.11//jaxb-api-2.2.11.jar
+jaxb-impl/com.sun.xml.bind/2.2.3-1//jaxb-impl-2.2.3-1.jar
+jcodings/org.jruby.jcodings/1.0.8//jcodings-1.0.8.jar
+jcommander/com.beust/1.72//jcommander-1.72.jar
+jersey-client/com.sun.jersey/1.9//jersey-client-1.9.jar
+jersey-core/com.sun.jersey/1.9//jersey-core-1.9.jar
+jersey-guice/com.sun.jersey.contribs/1.9//jersey-guice-1.9.jar
+jersey-json/com.sun.jersey/1.9//jersey-json-1.9.jar
+jersey-server/com.sun.jersey/1.9//jersey-server-1.9.jar
+jets3t/net.java.dev.jets3t/0.9.0//jets3t-0.9.0.jar
+jettison/org.codehaus.jettison/1.1//jettison-1.1.jar
+joni/org.jruby.joni/2.1.2//joni-2.1.2.jar
+jsch/com.jcraft/0.1.42//jsch-0.1.42.jar
+junit/junit/4.12//junit-4.12.jar
+kryo-shaded/com.esotericsoftware/4.0.2//kryo-shaded-4.0.2.jar
+leveldbjni-all/org.fusesource.leveldbjni/1.8//leveldbjni-all-1.8.jar
+log4j/log4j/1.2.17//log4j-1.2.17.jar
+metrics-core/com.yammer.metrics/2.2.0//metrics-core-2.2.0.jar
+minlog/com.esotericsoftware/1.3.0//minlog-1.3.0.jar
+netty-all/io.netty/4.0.23.Final//netty-all-4.0.23.Final.jar
+objenesis/org.objenesis/2.5.1//objenesis-2.5.1.jar
+orc-core/org.apache.orc/1.6.0/nohive/orc-core-1.6.0-nohive.jar
+orc-shims/org.apache.orc/1.6.0//orc-shims-1.6.0.jar
+paranamer/com.thoughtworks.paranamer/2.7//paranamer-2.7.jar
+parquet-avro/org.apache.parquet/1.10.1//parquet-avro-1.10.1.jar
+parquet-column/org.apache.parquet/1.10.1//parquet-column-1.10.1.jar
+parquet-common/org.apache.parquet/1.10.1//parquet-common-1.10.1.jar
+parquet-encoding/org.apache.parquet/1.10.1//parquet-encoding-1.10.1.jar
+parquet-format/org.apache.parquet/2.4.0//parquet-format-2.4.0.jar
+parquet-hadoop/org.apache.parquet/1.10.1//parquet-hadoop-1.10.1.jar
+parquet-jackson/org.apache.parquet/1.10.1//parquet-jackson-1.10.1.jar
+protobuf-java/com.google.protobuf/2.5.0//protobuf-java-2.5.0.jar
+rocksdbjni/org.rocksdb/5.17.2//rocksdbjni-5.17.2.jar
+slf4j-api/org.slf4j/1.7.7//slf4j-api-1.7.7.jar
+slf4j-log4j12/org.slf4j/1.6.1//slf4j-log4j12-1.6.1.jar
+snappy-java/org.xerial.snappy/1.1.1.3//snappy-java-1.1.1.3.jar
+xercesImpl/xerces/2.9.1//xercesImpl-2.9.1.jar
+xml-apis/xml-apis/1.3.04//xml-apis-1.3.04.jar
+xmlenc/xmlenc/0.52//xmlenc-0.52.jar
+xz/org.tukaani/1.5//xz-1.5.jar
+zookeeper/org.apache.zookeeper/3.4.6//zookeeper-3.4.6.jar

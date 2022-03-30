@@ -17,12 +17,12 @@
   <parent>
     <artifactId>hudi-spark-datasource</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.9.0-SNAPSHOT</version>
+    <version>0.11.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
   <artifactId>hudi-spark3_2.12</artifactId>
-  <version>0.9.0-SNAPSHOT</version>
+  <version>0.11.0-SNAPSHOT</version>
 
   <name>hudi-spark3_2.12</name>
   <packaging>jar</packaging>
@@ -144,6 +144,24 @@
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
       </plugin>
+      <plugin>
+        <groupId>org.antlr</groupId>
+        <artifactId>antlr4-maven-plugin</artifactId>
+        <version>${antlr.version}</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>antlr4</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <visitor>true</visitor>
+          <listener>true</listener>
+          <sourceDirectory>../hudi-spark3/src/main/antlr4</sourceDirectory>
+          <libDirectory>../hudi-spark3/src/main/antlr4/imports</libDirectory>
+        </configuration>
+      </plugin>
     </plugins>
   </build>
 
@@ -158,6 +176,7 @@
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-sql_2.12</artifactId>
       <version>${spark3.version}</version>
+      <scope>provided</scope>
       <optional>true</optional>
     </dependency>
 
@@ -185,6 +204,11 @@
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-spark3-common</artifactId>
       <version>${project.version}</version>
     </dependency>
 

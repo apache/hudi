@@ -185,12 +185,12 @@ class HoodieSpark2ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterface
     */
   protected def mayApplyAliasPlan(tableAlias: TableAliasContext, plan: LogicalPlan): LogicalPlan = {
     if (tableAlias.strictIdentifier != null) {
-      val subquery = SubqueryAlias(tableAlias.strictIdentifier.getText, plan)
+      val alias = tableAlias.strictIdentifier.getText
       if (tableAlias.identifierList != null) {
         val columnNames = visitIdentifierList(tableAlias.identifierList)
-        UnresolvedSubqueryColumnAliases(columnNames, subquery)
+        SubqueryAlias(alias, UnresolvedSubqueryColumnAliases(columnNames, plan))
       } else {
-        subquery
+        SubqueryAlias(alias, plan)
       }
     } else {
       plan

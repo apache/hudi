@@ -19,6 +19,7 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
@@ -26,10 +27,12 @@ import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
@@ -38,7 +41,10 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -102,17 +108,22 @@ public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
   }
 
   public HoodieFlinkWriteableTestTable withInserts(String partition, String fileId, List<HoodieRecord> records) throws Exception {
-    return (HoodieFlinkWriteableTestTable) withInserts(partition, fileId, records, new org.apache.hudi.client.FlinkTaskContextSupplier(null));
-  }
-
-  public HoodieFlinkWriteableTestTable withLogAppends(List<HoodieRecord> records) throws Exception {
-    for (List<HoodieRecord> groupedRecords: records.stream().collect(Collectors.groupingBy(HoodieRecord::getCurrentLocation)).values()) {
-      appendRecordsToLogFile(groupedRecords);
-    }
+    withInserts(partition, fileId, records, new org.apache.hudi.client.FlinkTaskContextSupplier(null));
     return this;
   }
 
-  private void appendRecordsToLogFile(List<HoodieRecord> groupedRecords) throws Exception {
+  public Map<String, List<HoodieLogFile>> withLogAppends(List<HoodieRecord> records) throws Exception {
+    Map<String, List<HoodieLogFile>> partitionToLogfilesMap = new HashMap<>();
+    for (List<HoodieRecord> groupedRecords : records.stream().collect(
+        Collectors.groupingBy(HoodieRecord::getCurrentLocation)).values()) {
+      final Pair<String, HoodieLogFile> appendedLogFile = appendRecordsToLogFile(groupedRecords);
+      partitionToLogfilesMap.computeIfAbsent(
+          appendedLogFile.getKey(), k -> new ArrayList<>()).add(appendedLogFile.getValue());
+    }
+    return partitionToLogfilesMap;
+  }
+
+  private Pair<String, HoodieLogFile> appendRecordsToLogFile(List<HoodieRecord> groupedRecords) throws Exception {
     String partitionPath = groupedRecords.get(0).getPartitionPath();
     HoodieRecordLocation location = groupedRecords.get(0).getCurrentLocation();
     try (HoodieLogFormat.Writer logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(basePath, partitionPath))
@@ -123,14 +134,15 @@ public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
       header.put(HeaderMetadataType.SCHEMA, schema.toString());
       logWriter.appendBlock(new HoodieAvroDataBlock(groupedRecords.stream().map(r -> {
         try {
-          GenericRecord val = (GenericRecord) r.getData().getInsertValue(schema).get();
+          GenericRecord val = (GenericRecord) ((HoodieRecordPayload) r.getData()).getInsertValue(schema).get();
           HoodieAvroUtils.addHoodieKeyToRecord(val, r.getRecordKey(), r.getPartitionPath(), "");
-          return (org.apache.avro.generic.IndexedRecord) val;
-        } catch (java.io.IOException e) {
+          return (IndexedRecord) val;
+        } catch (IOException e) {
           LOG.warn("Failed to convert record " + r.toString(), e);
           return null;
         }
-      }).collect(Collectors.toList()), header));
+      }).collect(Collectors.toList()), header, HoodieRecord.RECORD_KEY_METADATA_FIELD));
+      return Pair.of(partitionPath, logWriter.getLogFile());
     }
   }
 }

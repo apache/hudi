@@ -37,6 +37,10 @@ public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload>
   // java serializable
   private final byte[] recordBytes;
 
+  public HoodieAvroPayload(GenericRecord record, Comparable<?> orderingVal) {
+    this(Option.of(record));
+  }
+
   public HoodieAvroPayload(Option<GenericRecord> record) {
     if (record.isPresent()) {
       this.recordBytes = HoodieAvroUtils.avroToBytes(record.get());
@@ -46,7 +50,7 @@ public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload>
   }
 
   @Override
-  public HoodieAvroPayload preCombine(HoodieAvroPayload another) {
+  public HoodieAvroPayload preCombine(HoodieAvroPayload oldValue) {
     return this;
   }
 

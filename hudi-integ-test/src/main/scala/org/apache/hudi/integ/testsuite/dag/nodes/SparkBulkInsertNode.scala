@@ -30,11 +30,12 @@ import scala.collection.JavaConverters._
 
 /**
  * Spark datasource based bulk insert node
- * @param config1
+ *
+ * @param dagNodeConfig DAG node configurations.
  */
-class SparkBulkInsertNode(config1: Config) extends DagNode[RDD[WriteStatus]] {
+class SparkBulkInsertNode(dagNodeConfig: Config) extends DagNode[RDD[WriteStatus]] {
 
-  config = config1
+  config = dagNodeConfig
 
   /**
    * Execute the {@link DagNode}.
@@ -45,7 +46,7 @@ class SparkBulkInsertNode(config1: Config) extends DagNode[RDD[WriteStatus]] {
    */
   override def execute(context: ExecutionContext, curItrCount: Int): Unit = {
     if (!config.isDisableGenerate) {
-      context.getDeltaGenerator().writeRecords(context.getDeltaGenerator().generateInserts(config)).count()
+      context.getDeltaGenerator().writeRecords(context.getDeltaGenerator().generateInserts(config)).getValue().count()
     }
     val inputDF = AvroConversionUtils.createDataFrame(context.getWriterContext.getHoodieTestSuiteWriter.getNextBatch,
       context.getWriterContext.getHoodieTestSuiteWriter.getSchema,
@@ -59,7 +60,7 @@ class SparkBulkInsertNode(config1: Config) extends DagNode[RDD[WriteStatus]] {
       .option(DataSourceWriteOptions.ENABLE_ROW_WRITER.key(), String.valueOf(config.enableRowWriting()))
       .option(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX.key(), "deltastreamer.checkpoint.key")
       .option("deltastreamer.checkpoint.key", context.getWriterContext.getHoodieTestSuiteWriter.getLastCheckpoint.orElse(""))
-      .option(HoodieWriteConfig.TABLE_NAME.key(), context.getHoodieTestSuiteWriter.getCfg.targetTableName)
+      .option(HoodieWriteConfig.TBL_NAME.key(), context.getHoodieTestSuiteWriter.getCfg.targetTableName)
       .mode(saveMode)
       .save(context.getHoodieTestSuiteWriter.getWriteConfig.getBasePath)
   }

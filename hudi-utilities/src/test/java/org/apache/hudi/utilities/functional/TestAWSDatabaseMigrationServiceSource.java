@@ -19,7 +19,7 @@
 package org.apache.hudi.utilities.functional;
 
 import org.apache.hudi.payload.AWSDmsAvroPayload;
-import org.apache.hudi.testutils.FunctionalTestHarness;
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.transform.AWSDmsTransformer;
 
 import org.apache.avro.Schema;
@@ -38,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("functional")
-public class TestAWSDatabaseMigrationServiceSource extends FunctionalTestHarness {
+public class TestAWSDatabaseMigrationServiceSource extends SparkClientFunctionalTestHarness {
 
   @Test
   public void testPayload() throws IOException {

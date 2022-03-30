@@ -18,7 +18,6 @@
 
 package org.apache.hudi.execution;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -29,6 +28,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.avro.Schema;
 
 import java.util.Iterator;
 import java.util.List;
@@ -57,8 +58,20 @@ public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends Hood
                                  String idPrefix,
                                  TaskContextSupplier taskContextSupplier,
                                  WriteHandleFactory writeHandleFactory) {
+    this(recordItr, areRecordsSorted, config, instantTime, hoodieTable, idPrefix, taskContextSupplier, false, writeHandleFactory);
+  }
+
+  public SparkLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,
+                                 boolean areRecordsSorted,
+                                 HoodieWriteConfig config,
+                                 String instantTime,
+                                 HoodieTable hoodieTable,
+                                 String idPrefix,
+                                 TaskContextSupplier taskContextSupplier,
+                                 boolean useWriterSchema,
+                                 WriteHandleFactory writeHandleFactory) {
     super(recordItr, areRecordsSorted, config, instantTime, hoodieTable, idPrefix, taskContextSupplier, writeHandleFactory);
-    this.useWriterSchema = false;
+    this.useWriterSchema = useWriterSchema;
   }
 
   @Override
@@ -72,8 +85,8 @@ public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends Hood
         schema = HoodieAvroUtils.addMetadataFields(schema);
       }
       bufferedIteratorExecutor =
-          new SparkBoundedInMemoryExecutor<>(hoodieConfig, inputItr, getInsertHandler(),
-            getTransformFunction(schema, hoodieConfig));
+          new BoundedInMemoryExecutor<>(hoodieConfig.getWriteBufferLimitBytes(), inputItr, getInsertHandler(),
+              getTransformFunction(schema, hoodieConfig), hoodieTable.getPreExecuteRunnable());
       final List<WriteStatus> result = bufferedIteratorExecutor.execute();
       assert result != null && !result.isEmpty() && !bufferedIteratorExecutor.isRemaining();
       return result;

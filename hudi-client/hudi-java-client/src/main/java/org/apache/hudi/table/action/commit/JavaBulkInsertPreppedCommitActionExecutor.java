@@ -26,9 +26,8 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
-import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.BulkInsertPartitioner;
-
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.util.List;
@@ -37,12 +36,12 @@ public class JavaBulkInsertPreppedCommitActionExecutor<T extends HoodieRecordPay
     extends BaseJavaCommitActionExecutor<T> {
 
   private final List<HoodieRecord<T>> preppedInputRecord;
-  private final Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner;
+  private final Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner;
 
   public JavaBulkInsertPreppedCommitActionExecutor(HoodieJavaEngineContext context,
                                                    HoodieWriteConfig config, HoodieTable table,
                                                    String instantTime, List<HoodieRecord<T>> preppedInputRecord,
-                                                   Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner) {
+                                                   Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     super(context, config, table, instantTime, WriteOperationType.BULK_INSERT);
     this.preppedInputRecord = preppedInputRecord;
     this.userDefinedBulkInsertPartitioner = userDefinedBulkInsertPartitioner;

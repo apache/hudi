@@ -77,8 +77,8 @@ public class TestDefaultHoodieRecordPayload {
     assertEquals(payload1.preCombine(payload2, props), payload2);
     assertEquals(payload2.preCombine(payload1, props), payload2);
 
-    assertEquals(record1, payload1.getInsertValue(schema).get());
-    assertEquals(record2, payload2.getInsertValue(schema).get());
+    assertEquals(record1, payload1.getInsertValue(schema, props).get());
+    assertEquals(record2, payload2.getInsertValue(schema, props).get());
 
     assertEquals(payload1.combineAndGetUpdateValue(record2, schema, props).get(), record2);
     assertEquals(payload2.combineAndGetUpdateValue(record1, schema, props).get(), record2);
@@ -103,8 +103,8 @@ public class TestDefaultHoodieRecordPayload {
     assertEquals(payload1.preCombine(payload2, props), payload2);
     assertEquals(payload2.preCombine(payload1, props), payload2);
 
-    assertEquals(record1, payload1.getInsertValue(schema).get());
-    assertFalse(payload2.getInsertValue(schema).isPresent());
+    assertEquals(record1, payload1.getInsertValue(schema, props).get());
+    assertFalse(payload2.getInsertValue(schema, props).isPresent());
 
     assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schema, props).get(), delRecord1);
     assertFalse(payload2.combineAndGetUpdateValue(record1, schema, props).isPresent());
@@ -141,5 +141,41 @@ public class TestDefaultHoodieRecordPayload {
     assertTrue(payload2.getMetadata().isPresent());
     assertEquals(eventTime,
         Long.parseLong(payload2.getMetadata().get().get(DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY)));
+  }
+
+  @Test
+  public void testEmptyProperty() throws IOException {
+    GenericRecord record1 = new GenericData.Record(schema);
+    record1.put("id", "1");
+    record1.put("partition", "partition0");
+    record1.put("ts", 0L);
+    record1.put("_hoodie_is_deleted", false);
+
+    GenericRecord record2 = new GenericData.Record(schema);
+    record2.put("id", "1");
+    record2.put("partition", "partition0");
+    record2.put("ts", 1L);
+    record2.put("_hoodie_is_deleted", false);
+
+    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(Option.of(record1));
+    Properties properties = new Properties();
+    payload.getInsertValue(schema, properties);
+    payload.combineAndGetUpdateValue(record2, schema, properties);
+  }
+
+  @ParameterizedTest
+  @ValueSource(longs = {1L, 1612542030000L})
+  public void testGetEventTimeInMetadataForInserts(long eventTime) throws IOException {
+    GenericRecord record = new GenericData.Record(schema);
+
+    record.put("id", "1");
+    record.put("partition", "partition0");
+    record.put("ts", eventTime);
+    record.put("_hoodie_is_deleted", false);
+    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(record, eventTime);
+    payload.getInsertValue(schema, props);
+    assertTrue(payload.getMetadata().isPresent());
+    assertEquals(eventTime,
+        Long.parseLong(payload.getMetadata().get().get(DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY)));
   }
 }

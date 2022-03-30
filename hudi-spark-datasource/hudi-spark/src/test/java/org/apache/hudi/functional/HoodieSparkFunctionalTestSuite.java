@@ -23,7 +23,7 @@ import org.junit.platform.suite.api.SelectPackages;
 import org.junit.runner.RunWith;
 
 @RunWith(JUnitPlatform.class)
-@SelectPackages("org.apache.hudi.hive.functional")
+@SelectPackages("org.apache.hudi.functional")
 @IncludeTags("functional")
 public class HoodieSparkFunctionalTestSuite {
 

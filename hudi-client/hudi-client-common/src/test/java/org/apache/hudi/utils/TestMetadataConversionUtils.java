@@ -176,7 +176,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     commitMetadata.setOperationType(WriteOperationType.COMPACT);
     commitMetadata.setCompacted(true);
     HoodieTestTable.of(metaClient)
-        .addCommit(instantTime, commitMetadata)
+        .addCommit(instantTime, Option.of(commitMetadata))
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
@@ -188,7 +188,6 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     rollbackPartitionMetadata.setPartitionPath("p1");
     rollbackPartitionMetadata.setSuccessDeleteFiles(Arrays.asList("f1"));
     rollbackPartitionMetadata.setFailedDeleteFiles(new ArrayList<>());
-    rollbackPartitionMetadata.setWrittenLogFiles(new HashMap<>());
     rollbackPartitionMetadata.setRollbackLogFiles(new HashMap<>());
     Map<String, HoodieRollbackPartitionMetadata> partitionMetadataMap = new HashMap<>();
     partitionMetadataMap.put("p1", rollbackPartitionMetadata);
@@ -206,7 +205,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     commitMetadata.addMetadata("test", "test");
     commitMetadata.setOperationType(WriteOperationType.INSERT);
     HoodieTestTable.of(metaClient)
-        .addCommit(instantTime, commitMetadata)
+        .addCommit(instantTime, Option.of(commitMetadata))
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 

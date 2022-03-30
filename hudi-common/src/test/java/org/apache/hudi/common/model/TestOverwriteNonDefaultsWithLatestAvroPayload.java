@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -43,7 +45,8 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
             new Schema.Field("partition", Schema.create(Schema.Type.STRING), "", ""),
             new Schema.Field("ts", Schema.create(Schema.Type.LONG), "", null),
             new Schema.Field("_hoodie_is_deleted", Schema.create(Schema.Type.BOOLEAN), "", false),
-            new Schema.Field("city", Schema.create(Schema.Type.STRING), "", "NY")
+            new Schema.Field("city", Schema.create(Schema.Type.STRING), "", "NY"),
+            new Schema.Field("child", Schema.createArray(Schema.create(Schema.Type.STRING)), "", Collections.emptyList())
             ));
   }
 
@@ -55,6 +58,7 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     record1.put("ts", 0L);
     record1.put("_hoodie_is_deleted", false);
     record1.put("city", "NY0");
+    record1.put("child", Arrays.asList("A"));
 
     GenericRecord record2 = new GenericData.Record(schema);
     record2.put("id", "2");
@@ -62,6 +66,7 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     record2.put("ts", 1L);
     record2.put("_hoodie_is_deleted", false);
     record2.put("city", "NY");
+    record2.put("child", Collections.emptyList());
 
     GenericRecord record3 = new GenericData.Record(schema);
     record3.put("id", "2");
@@ -69,6 +74,7 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     record3.put("ts", 1L);
     record3.put("_hoodie_is_deleted", false);
     record3.put("city", "NY0");
+    record3.put("child", Arrays.asList("A"));
 
 
     OverwriteNonDefaultsWithLatestAvroPayload payload1 = new OverwriteNonDefaultsWithLatestAvroPayload(record1, 1);
@@ -91,6 +97,7 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     record1.put("ts", 0L);
     record1.put("_hoodie_is_deleted", false);
     record1.put("city", "NY0");
+    record1.put("child", Collections.emptyList());
 
     GenericRecord delRecord1 = new GenericData.Record(schema);
     delRecord1.put("id", "2");
@@ -98,6 +105,7 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     delRecord1.put("ts", 1L);
     delRecord1.put("_hoodie_is_deleted", true);
     delRecord1.put("city", "NY0");
+    delRecord1.put("child", Collections.emptyList());
 
     GenericRecord record2 = new GenericData.Record(schema);
     record2.put("id", "1");
@@ -105,6 +113,7 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     record2.put("ts", 0L);
     record2.put("_hoodie_is_deleted", true);
     record2.put("city", "NY0");
+    record2.put("child", Collections.emptyList());
 
     OverwriteNonDefaultsWithLatestAvroPayload payload1 = new OverwriteNonDefaultsWithLatestAvroPayload(record1, 1);
     OverwriteNonDefaultsWithLatestAvroPayload payload2 = new OverwriteNonDefaultsWithLatestAvroPayload(delRecord1, 2);
@@ -117,5 +126,35 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
 
     assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schema).get(), record2);
     assertFalse(payload2.combineAndGetUpdateValue(record1, schema).isPresent());
+  }
+  
+  @Test
+  public void testNullColumn() throws IOException {
+    Schema avroSchema = Schema.createRecord(Arrays.asList(
+            new Schema.Field("id", Schema.createUnion(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)), "", JsonProperties.NULL_VALUE),
+            new Schema.Field("name", Schema.createUnion(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)), "", JsonProperties.NULL_VALUE),
+            new Schema.Field("age", Schema.createUnion(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)), "", JsonProperties.NULL_VALUE),
+            new Schema.Field("job", Schema.createUnion(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)), "", JsonProperties.NULL_VALUE)
+            ));
+    GenericRecord record1 = new GenericData.Record(avroSchema);
+    record1.put("id", "1");
+    record1.put("name", "aa");
+    record1.put("age", "1");
+    record1.put("job", "1");
+
+    GenericRecord record2 = new GenericData.Record(avroSchema);
+    record2.put("id", "1");
+    record2.put("name", "bb");
+    record2.put("age", "2");
+    record2.put("job", null);
+
+    GenericRecord record3 = new GenericData.Record(avroSchema);
+    record3.put("id", "1");
+    record3.put("name", "bb");
+    record3.put("age", "2");
+    record3.put("job", "1");
+
+    OverwriteNonDefaultsWithLatestAvroPayload payload2 = new OverwriteNonDefaultsWithLatestAvroPayload(record2, 1);
+    assertEquals(payload2.combineAndGetUpdateValue(record1, avroSchema).get(), record3);
   }
 }

@@ -19,6 +19,7 @@
 package org.apache.hudi;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -149,7 +150,7 @@ public class QuickstartUtils {
         existingKeys.put(currSize + i, key);
         numExistingKeys++;
         try {
-          return new HoodieRecord(key, generateRandomValue(key, randomString));
+          return new HoodieAvroRecord(key, generateRandomValue(key, randomString));
         } catch (IOException e) {
           throw new HoodieIOException(e.getMessage(), e);
         }
@@ -165,7 +166,7 @@ public class QuickstartUtils {
     }
 
     public HoodieRecord generateUpdateRecord(HoodieKey key, String randomString) throws IOException {
-      return new HoodieRecord(key, generateRandomValue(key, randomString));
+      return new HoodieAvroRecord(key, generateRandomValue(key, randomString));
     }
 
     /**
@@ -241,6 +242,8 @@ public class QuickstartUtils {
     Map<String, String> demoConfigs = new HashMap<>();
     demoConfigs.put("hoodie.insert.shuffle.parallelism", "2");
     demoConfigs.put("hoodie.upsert.shuffle.parallelism", "2");
+    demoConfigs.put("hoodie.bulkinsert.shuffle.parallelism", "2");
+    demoConfigs.put("hoodie.delete.shuffle.parallelism", "2");
     return demoConfigs;
   }
 }

@@ -31,13 +31,14 @@ import java.util.List;
 /**
  * A scanner used to scan hoodie unmerged log records.
  */
-public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScanner {
+public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReader {
 
   private final LogRecordScannerCallback callback;
 
   private HoodieUnMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
-      String latestInstantTime, boolean readBlocksLazily, boolean reverseReader, int bufferSize, LogRecordScannerCallback callback) {
-    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize, Option.empty());
+                                         String latestInstantTime, boolean readBlocksLazily, boolean reverseReader, int bufferSize,
+                                         LogRecordScannerCallback callback, Option<InstantRange> instantRange) {
+    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize, instantRange, false);
     this.callback = callback;
   }
 
@@ -71,7 +72,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
   /**
    * Builder used to build {@code HoodieUnMergedLogRecordScanner}.
    */
-  public static class Builder extends AbstractHoodieLogRecordScanner.Builder {
+  public static class Builder extends AbstractHoodieLogRecordReader.Builder {
     private FileSystem fs;
     private String basePath;
     private List<String> logFilePaths;
@@ -80,6 +81,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
     private boolean readBlocksLazily;
     private boolean reverseReader;
     private int bufferSize;
+    private Option<InstantRange> instantRange = Option.empty();
     // specific configurations
     private LogRecordScannerCallback callback;
 
@@ -123,6 +125,11 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
       return this;
     }
 
+    public Builder withInstantRange(Option<InstantRange> instantRange) {
+      this.instantRange = instantRange;
+      return this;
+    }
+
     public Builder withLogRecordScannerCallback(LogRecordScannerCallback callback) {
       this.callback = callback;
       return this;
@@ -131,7 +138,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
     @Override
     public HoodieUnMergedLogRecordScanner build() {
       return new HoodieUnMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
-          latestInstantTime, readBlocksLazily, reverseReader, bufferSize, callback);
+          latestInstantTime, readBlocksLazily, reverseReader, bufferSize, callback, instantRange);
     }
   }
 }

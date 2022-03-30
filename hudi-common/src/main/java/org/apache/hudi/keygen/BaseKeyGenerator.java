@@ -32,13 +32,16 @@ public abstract class BaseKeyGenerator extends KeyGenerator {
   protected List<String> partitionPathFields;
   protected final boolean encodePartitionPath;
   protected final boolean hiveStylePartitioning;
+  protected final boolean consistentLogicalTimestampEnabled;
 
   protected BaseKeyGenerator(TypedProperties config) {
     super(config);
     this.encodePartitionPath = config.getBoolean(KeyGeneratorOptions.URL_ENCODE_PARTITIONING.key(),
         Boolean.parseBoolean(KeyGeneratorOptions.URL_ENCODE_PARTITIONING.defaultValue()));
-    this.hiveStylePartitioning = config.getBoolean(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING.key(),
-        Boolean.parseBoolean(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING.defaultValue()));
+    this.hiveStylePartitioning = config.getBoolean(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(),
+        Boolean.parseBoolean(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.defaultValue()));
+    this.consistentLogicalTimestampEnabled = config.getBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+        Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
   }
 
   /**
@@ -77,5 +80,9 @@ public abstract class BaseKeyGenerator extends KeyGenerator {
 
   public List<String> getPartitionPathFields() {
     return partitionPathFields;
+  }
+
+  public boolean isConsistentLogicalTimestampEnabled() {
+    return consistentLogicalTimestampEnabled;
   }
 }

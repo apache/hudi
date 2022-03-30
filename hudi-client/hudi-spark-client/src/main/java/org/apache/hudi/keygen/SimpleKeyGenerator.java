@@ -36,8 +36,8 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
   private final SimpleAvroKeyGenerator simpleAvroKeyGenerator;
 
   public SimpleKeyGenerator(TypedProperties props) {
-    this(props, props.getString(KeyGeneratorOptions.RECORDKEY_FIELD.key()),
-        props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD.key()));
+    this(props, props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()),
+        props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
   }
 
   SimpleKeyGenerator(TypedProperties props, String partitionPathField) {
@@ -47,9 +47,9 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
   SimpleKeyGenerator(TypedProperties props, String recordKeyField, String partitionPathField) {
     super(props);
     this.recordKeyFields = recordKeyField == null
-        ? Collections.emptyList()
-        : Collections.singletonList(recordKeyField);
-    this.partitionPathFields = Collections.singletonList(partitionPathField);
+        ? Collections.emptyList() : Collections.singletonList(recordKeyField);
+    this.partitionPathFields = partitionPathField == null
+        ? Collections.emptyList() : Collections.singletonList(partitionPathField);
     simpleAvroKeyGenerator = new SimpleAvroKeyGenerator(props, recordKeyField, partitionPathField);
   }
 

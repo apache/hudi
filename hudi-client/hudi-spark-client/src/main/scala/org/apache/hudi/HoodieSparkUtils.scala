@@ -21,11 +21,16 @@ package org.apache.hudi
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hudi.avro.HoodieAvroUtils.rewriteRecord
 import org.apache.hudi.client.utils.SparkRowSerDe
+import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenerator}
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Literal}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, InMemoryFileIndex}
@@ -33,11 +38,22 @@ import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
-import scala.collection.JavaConverters.asScalaBufferConverter
+import java.util.Properties
+import scala.collection.JavaConverters._
 
 object HoodieSparkUtils extends SparkAdapterSupport {
 
+  def isSpark2: Boolean = SPARK_VERSION.startsWith("2.")
+
   def isSpark3: Boolean = SPARK_VERSION.startsWith("3.")
+
+  def isSpark3_0: Boolean = SPARK_VERSION.startsWith("3.0")
+
+  def isSpark3_1: Boolean = SPARK_VERSION.startsWith("3.1")
+
+  def isSpark3_2: Boolean = SPARK_VERSION.startsWith("3.2")
+
+  def gteqSpark3_2: Boolean = SPARK_VERSION > "3.2"
 
   def getMetaSchema: StructType = {
     StructType(HoodieRecord.HOODIE_META_COLUMNS.asScala.map(col => {
@@ -54,12 +70,28 @@ object HoodieSparkUtils extends SparkAdapterSupport {
   }
 
   /**
-   * This method copied from [[org.apache.spark.deploy.SparkHadoopUtil]].
-   * [[org.apache.spark.deploy.SparkHadoopUtil]] becomes private since Spark 3.0.0 and hence we had to copy it locally.
+   * This method is inspired from [[org.apache.spark.deploy.SparkHadoopUtil]] with some modifications like
+   * skipping meta paths.
    */
   def globPath(fs: FileSystem, pattern: Path): Seq[Path] = {
-    Option(fs.globStatus(pattern)).map { statuses =>
-      statuses.map(_.getPath.makeQualified(fs.getUri, fs.getWorkingDirectory)).toSeq
+    // find base path to assist in skipping meta paths
+    var basePath = pattern.getParent
+    while (basePath.getName.equals("*")) {
+      basePath = basePath.getParent
+    }
+
+    Option(fs.globStatus(pattern)).map { statuses => {
+      val nonMetaStatuses = statuses.filterNot(entry => {
+        // skip all entries in meta path
+        var leafPath = entry.getPath
+        // walk through every parent until we reach base path. if .hoodie is found anywhere, path needs to be skipped
+        while (!leafPath.equals(basePath) && !leafPath.getName.equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
+            leafPath = leafPath.getParent
+        }
+        leafPath.getName.equals(HoodieTableMetaClient.METAFOLDER_NAME)
+      })
+      nonMetaStatuses.map(_.getPath.makeQualified(fs.getUri, fs.getWorkingDirectory)).toSeq
+    }
     }.getOrElse(Seq.empty[Path])
   }
 
@@ -82,35 +114,53 @@ object HoodieSparkUtils extends SparkAdapterSupport {
   def checkAndGlobPathIfNecessary(paths: Seq[String], fs: FileSystem): Seq[Path] = {
     paths.flatMap(path => {
       val qualified = new Path(path).makeQualified(fs.getUri, fs.getWorkingDirectory)
-      val globPaths = globPathIfNecessary(fs, qualified)
-      globPaths
+      globPathIfNecessary(fs, qualified)
     })
   }
 
-  def createInMemoryFileIndex(sparkSession: SparkSession, globbedPaths: Seq[Path]): InMemoryFileIndex = {
-    val fileStatusCache = FileStatusCache.getOrCreate(sparkSession)
-    new InMemoryFileIndex(sparkSession, globbedPaths, Map(), Option.empty, fileStatusCache)
+  /**
+   * @deprecated please use other overload [[createRdd]]
+   */
+  def createRdd(df: DataFrame, structName: String, recordNamespace: String, reconcileToLatestSchema: Boolean,
+                latestTableSchema: org.apache.hudi.common.util.Option[Schema] = org.apache.hudi.common.util.Option.empty()): RDD[GenericRecord] = {
+    val latestTableSchemaConverted = if (latestTableSchema.isPresent && reconcileToLatestSchema) Some(latestTableSchema.get()) else None
+    createRdd(df, structName, recordNamespace, latestTableSchemaConverted)
   }
 
-  def createRdd(df: DataFrame, structName: String, recordNamespace: String): RDD[GenericRecord] = {
-    val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, recordNamespace)
-    createRdd(df, avroSchema, structName, recordNamespace)
-  }
+  def createRdd(df: DataFrame, structName: String, recordNamespace: String, readerAvroSchemaOpt: Option[Schema]): RDD[GenericRecord] = {
+    val writerSchema = df.schema
+    val writerAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(writerSchema, structName, recordNamespace)
+    val readerAvroSchema = readerAvroSchemaOpt.getOrElse(writerAvroSchema)
+    // We check whether passed in reader schema is identical to writer schema to avoid costly serde loop of
+    // making Spark deserialize its internal representation [[InternalRow]] into [[Row]] for subsequent conversion
+    // (and back)
+    val sameSchema = writerAvroSchema.equals(readerAvroSchema)
+    val (nullable, _) = AvroConversionUtils.resolveAvroTypeNullability(writerAvroSchema)
 
-  def createRdd(df: DataFrame, avroSchema: Schema, structName: String, recordNamespace: String)
-  : RDD[GenericRecord] = {
-    // Use the Avro schema to derive the StructType which has the correct nullability information
-    val dataType = SchemaConverters.toSqlType(avroSchema).dataType.asInstanceOf[StructType]
-    val encoder = RowEncoder.apply(dataType).resolveAndBind()
-    val deserializer = sparkAdapter.createSparkRowSerDe(encoder)
-    df.queryExecution.toRdd.map(row => deserializer.deserializeRow(row))
-      .mapPartitions { records =>
-        if (records.isEmpty) Iterator.empty
-        else {
-          val convertor = AvroConversionHelper.createConverterToAvro(dataType, structName, recordNamespace)
-          records.map { x => convertor(x).asInstanceOf[GenericRecord] }
-        }
+    // NOTE: We have to serialize Avro schema, and then subsequently parse it on the executor node, since Spark
+    //       serializer is not able to digest it
+    val readerAvroSchemaStr = readerAvroSchema.toString
+    val writerAvroSchemaStr = writerAvroSchema.toString
+    // NOTE: We're accessing toRdd here directly to avoid [[InternalRow]] to [[Row]] conversion
+    df.queryExecution.toRdd.mapPartitions { rows =>
+      if (rows.isEmpty) {
+        Iterator.empty
+      } else {
+        val transform: GenericRecord => GenericRecord =
+          if (sameSchema) identity
+          else {
+            val readerAvroSchema = new Schema.Parser().parse(readerAvroSchemaStr)
+            rewriteRecord(_, readerAvroSchema)
+          }
+
+        // Since caller might request to get records in a different ("evolved") schema, we will be rewriting from
+        // existing Writer's schema into Reader's (avro) schema
+        val writerAvroSchema = new Schema.Parser().parse(writerAvroSchemaStr)
+        val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerAvroSchema, nullable = nullable)
+
+        rows.map { ir => transform(convert(ir)) }
       }
+    }
   }
 
   def getDeserializer(structType: StructType) : SparkRowSerDe = {
@@ -122,14 +172,24 @@ object HoodieSparkUtils extends SparkAdapterSupport {
    * Convert Filters to Catalyst Expressions and joined by And. If convert success return an
    * Non-Empty Option[Expression],or else return None.
    */
-  def convertToCatalystExpressions(filters: Array[Filter],
-                                   tableSchema: StructType): Option[Expression] = {
-    val expressions = filters.map(convertToCatalystExpression(_, tableSchema))
+  def convertToCatalystExpressions(filters: Seq[Filter],
+                                   tableSchema: StructType): Seq[Option[Expression]] = {
+    filters.map(convertToCatalystExpression(_, tableSchema))
+  }
+
+
+  /**
+   * Convert Filters to Catalyst Expressions and joined by And. If convert success return an
+   * Non-Empty Option[Expression],or else return None.
+   */
+  def convertToCatalystExpression(filters: Array[Filter],
+                                  tableSchema: StructType): Option[Expression] = {
+    val expressions = convertToCatalystExpressions(filters, tableSchema)
     if (expressions.forall(p => p.isDefined)) {
       if (expressions.isEmpty) {
         None
       } else if (expressions.length == 1) {
-        expressions(0)
+        expressions.head
       } else {
         Some(expressions.map(_.get).reduce(org.apache.spark.sql.catalyst.expressions.And))
       }
@@ -200,9 +260,39 @@ object HoodieSparkUtils extends SparkAdapterSupport {
           val leftExp = toAttribute(attribute, tableSchema)
           val rightExp = Literal.create(s"%$value%")
           sparkAdapter.createLike(leftExp, rightExp)
-        case _=> null
+        case _ => null
       }
     )
+  }
+
+  /**
+   * @param properties config properties
+   * @return partition columns
+   */
+  def getPartitionColumns(properties: Properties): String = {
+    val props = new TypedProperties(properties)
+    val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props)
+    getPartitionColumns(keyGenerator, props)
+  }
+
+  /**
+   * @param keyGen key generator
+   * @return partition columns
+   */
+  def getPartitionColumns(keyGen: KeyGenerator, typedProperties: TypedProperties): String = {
+    keyGen match {
+      // For CustomKeyGenerator and CustomAvroKeyGenerator, the partition path filed format
+      // is: "field_name: field_type", we extract the field_name from the partition path field.
+      case c: BaseKeyGenerator
+        if c.isInstanceOf[CustomKeyGenerator] || c.isInstanceOf[CustomAvroKeyGenerator] =>
+        c.getPartitionPathFields.asScala.map(pathField =>
+          pathField.split(CustomAvroKeyGenerator.SPLIT_REGEX)
+            .headOption.getOrElse(s"Illegal partition path field format: '$pathField' for ${c.getClass.getSimpleName}"))
+          .mkString(",")
+
+      case b: BaseKeyGenerator => b.getPartitionPathFields.asScala.mkString(",")
+      case _ => typedProperties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
+    }
   }
 
   private def toAttribute(columnName: String, tableSchema: StructType): AttributeReference = {
@@ -210,5 +300,31 @@ object HoodieSparkUtils extends SparkAdapterSupport {
     assert(field.isDefined, s"Cannot find column: $columnName, Table Columns are: " +
       s"${tableSchema.fieldNames.mkString(",")}")
     AttributeReference(columnName, field.get.dataType, field.get.nullable)()
+  }
+
+  def getRequiredSchema(tableAvroSchema: Schema, requiredColumns: Array[String]): (Schema, StructType) = {
+    // First get the required avro-schema, then convert the avro-schema to spark schema.
+    val name2Fields = tableAvroSchema.getFields.asScala.map(f => f.name() -> f).toMap
+    // Here have to create a new Schema.Field object
+    // to prevent throwing exceptions like "org.apache.avro.AvroRuntimeException: Field already used".
+    val requiredFields = requiredColumns.map(c => name2Fields(c))
+      .map(f => new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal(), f.order())).toList
+    val requiredAvroSchema = Schema.createRecord(tableAvroSchema.getName, tableAvroSchema.getDoc,
+      tableAvroSchema.getNamespace, tableAvroSchema.isError, requiredFields.asJava)
+    val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
+    (requiredAvroSchema, requiredStructSchema)
+  }
+
+  def toAttribute(tableSchema: StructType): Seq[AttributeReference] = {
+    tableSchema.map { field =>
+      AttributeReference(field.name, field.dataType, field.nullable, field.metadata)()
+    }
+  }
+
+  def collectFieldIndexes(projectedSchema: StructType, originalSchema: StructType): Seq[Int] = {
+    val nameToIndex = originalSchema.fields.zipWithIndex.map{ case (field, index) =>
+      field.name -> index
+    }.toMap
+    projectedSchema.map(field => nameToIndex(field.name))
   }
 }
