@@ -20,9 +20,10 @@ package org.apache.hudi
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats
 import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper.{getMaxColumnNameFor, getMinColumnNameFor, getNumNullsColumnNameFor}
 import org.apache.hudi.metadata.{HoodieMetadataPayload, MetadataPartitionType}
+import org.apache.spark.sql.HoodieSparkTypeUtils.isWiderThan
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions.col
-import org.apache.spark.sql.types.{DataType, StructField, StructType}
+import org.apache.spark.sql.types.{DataType, DecimalType, StructField, StructType}
 
 /**
  * Mixin trait abstracting away heavy-lifting of interactions with Metadata Table's Column Stats Index,
@@ -62,12 +63,16 @@ trait ColumnStatsIndexSupport {
     colStatsDF
   }
 
-
   private def findCarryingField(colType: DataType, statisticStructType: StructType): StructField = {
     statisticStructType.fields
       .find { wrapperField =>
         wrapperField.dataType match {
-          case StructType(Array(valueField)) => valueField.dataType == colType
+          case StructType(Array(valueField)) =>
+            (valueField.dataType, colType) match {
+              case (valueDecimalType: DecimalType, colDecimalType: DecimalType) => isWiderThan(valueDecimalType, colDecimalType)
+              case (valueType, colType) => valueType == colType
+            }
+
           case _ =>
             throw new IllegalArgumentException(s"Invalid format of the statistic wrapper (${wrapperField.dataType})")
         }
