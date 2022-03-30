@@ -46,8 +46,9 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getCompletedMetadataPartitions;
 import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
@@ -208,11 +209,26 @@ public class HoodieIndexer {
 
   private Option<String> doSchedule(SparkRDDWriteClient<HoodieRecordPayload> client) {
     List<MetadataPartitionType> partitionTypes = getRequestedPartitionTypes(cfg.indexTypes);
+    checkArgument(partitionTypes.size() == 1, "Currently, only one index type can be scheduled at a time.");
+    if (indexExists(partitionTypes)) {
+      return Option.empty();
+    }
     Option<String> indexingInstant = client.scheduleIndexing(partitionTypes);
     if (!indexingInstant.isPresent()) {
       LOG.error("Scheduling of index action did not return any instant.");
     }
     return indexingInstant;
+  }
+
+  private boolean indexExists(List<MetadataPartitionType> partitionTypes) {
+    Set<String> indexedMetadataPartitions = getCompletedMetadataPartitions(metaClient.getTableConfig());
+    Set<String> requestedIndexPartitionPaths = partitionTypes.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
+    requestedIndexPartitionPaths.retainAll(indexedMetadataPartitions);
+    if (!requestedIndexPartitionPaths.isEmpty()) {
+      LOG.error("Following indexes already built: " + requestedIndexPartitionPaths);
+      return true;
+    }
+    return false;
   }
 
   private int runIndexing(JavaSparkContext jsc) throws Exception {
@@ -223,7 +239,6 @@ public class HoodieIndexer {
         // Find the earliest scheduled indexing instant for execution
         Option<HoodieInstant> earliestPendingIndexInstant = metaClient.getActiveTimeline()
             .filterPendingIndexTimeline()
-            .filter(i -> !(i.isCompleted() || INFLIGHT.equals(i.getState())))
             .firstInstant();
         if (earliestPendingIndexInstant.isPresent()) {
           cfg.indexInstantTime = earliestPendingIndexInstant.get().getTimestamp();
