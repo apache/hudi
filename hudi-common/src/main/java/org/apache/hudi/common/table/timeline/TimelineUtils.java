@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -177,22 +176,5 @@ public class TimelineUtils {
     } catch (IOException e) {
       throw new HoodieIOException("Unable to read instant information: " + instant + " for " + metaClient.getBasePath(), e);
     }
-  }
-
-  public static boolean isDeletePartitionOperation(HoodieTableMetaClient metaClient, Option<HoodieInstant> instantToRetain) {
-    try {
-      if (instantToRetain.isPresent() && HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instantToRetain.get().getAction())) {
-        HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata.fromBytes(
-            metaClient.getActiveTimeline().getInstantDetails(instantToRetain.get()).get(), HoodieReplaceCommitMetadata.class);
-
-        if (replaceCommitMetadata != null
-            && WriteOperationType.DELETE_PARTITION.equals(replaceCommitMetadata.getOperationType())) {
-          return true;
-        }
-      }
-    } catch (Exception e) {
-      throw new HoodieException("Failed to get commit metadata", e);
-    }
-    return false;
   }
 }

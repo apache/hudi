@@ -687,7 +687,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
 
   public HoodieInstant createCleanMetadata(String instantTime, boolean inflightOnly, boolean isEmpty) throws IOException {
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant("", "", ""), "", new HashMap<>(),
-            CleanPlanV2MigrationHandler.VERSION, new HashMap<>());
+            CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>());
     if (inflightOnly) {
       HoodieTestTable.of(metaClient).addInflightClean(instantTime, cleanerPlan);
     } else {

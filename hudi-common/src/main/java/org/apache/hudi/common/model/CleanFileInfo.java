@@ -27,10 +27,6 @@ public class CleanFileInfo implements Serializable {
   private final String filePath;
   private final boolean isBootstrapBaseFile;
 
-  public CleanFileInfo(String filePath) {
-    this(filePath, false);
-  }
-
   public CleanFileInfo(String filePath, boolean isBootstrapBaseFile) {
     this.filePath = filePath;
     this.isBootstrapBaseFile = isBootstrapBaseFile;

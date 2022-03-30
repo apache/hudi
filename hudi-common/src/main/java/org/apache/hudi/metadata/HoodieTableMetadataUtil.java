@@ -38,10 +38,8 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -164,10 +162,7 @@ public class HoodieTableMetadataUtil {
     // Add record bearing added partitions list
     ArrayList<String> partitionsAdded = new ArrayList<>(commitMetadata.getPartitionToWriteStats().keySet());
 
-    // Add record bearing deleted partitions list
-    ArrayList<String> partitionsDeleted = getPartitionsDeleted(commitMetadata);
-
-    records.add(HoodieMetadataPayload.createPartitionListRecord(partitionsAdded, partitionsDeleted));
+    records.add(HoodieMetadataPayload.createPartitionListRecord(partitionsAdded));
 
     // Update files listing records for each individual partition
     List<HoodieRecord<HoodieMetadataPayload>> updatedPartitionFilesRecords =
@@ -215,18 +210,6 @@ public class HoodieTableMetadataUtil {
         + ". #partitions_updated=" + records.size());
 
     return records;
-  }
-
-  private static ArrayList<String> getPartitionsDeleted(HoodieCommitMetadata commitMetadata) {
-    if (commitMetadata instanceof HoodieReplaceCommitMetadata
-        && WriteOperationType.DELETE_PARTITION.equals(commitMetadata.getOperationType())) {
-      Map<String, List<String>> partitionToReplaceFileIds =
-          ((HoodieReplaceCommitMetadata) commitMetadata).getPartitionToReplaceFileIds();
-      if (!partitionToReplaceFileIds.isEmpty()) {
-        return new ArrayList<>(partitionToReplaceFileIds.keySet());
-      }
-    }
-    return new ArrayList<>();
   }
 
   /**
@@ -332,6 +315,7 @@ public class HoodieTableMetadataUtil {
                                                                           String instantTime) {
     List<HoodieRecord> records = new LinkedList<>();
     int[] fileDeleteCount = {0};
+    List<String> deletedPartitions = new ArrayList<>();
     cleanMetadata.getPartitionMetadata().forEach((partitionName, partitionMetadata) -> {
       final String partition = getPartition(partitionName);
       // Files deleted from a partition
@@ -341,8 +325,16 @@ public class HoodieTableMetadataUtil {
 
       records.add(record);
       fileDeleteCount[0] += deletedFiles.size();
+      boolean isPartitionDeleted = partitionMetadata.getIsPartitionDeleted();
+      if (isPartitionDeleted) {
+        deletedPartitions.add(partitionName);
+      }
     });
 
+    if (!deletedPartitions.isEmpty()) {
+      // if there are partitions to be deleted, add them to delete list
+      records.add(HoodieMetadataPayload.createPartitionListRecord(deletedPartitions, true));
+    }
     LOG.info("Updating at " + instantTime + " from Clean. #partitions_updated=" + records.size()
         + ", #files_deleted=" + fileDeleteCount[0]);
     return records;

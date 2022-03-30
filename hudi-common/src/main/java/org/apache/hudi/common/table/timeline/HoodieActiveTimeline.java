@@ -544,7 +544,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         LOG.info("Checking for file exists ?" + new Path(metaClient.getMetaPath(), fromInstant.getFileName()));
         ValidationUtils.checkArgument(metaClient.getFs().exists(new Path(metaClient.getMetaPath(),
             fromInstant.getFileName())));
-
         // Use Write Once to create Target File
         if (allowRedundantTransitions) {
           FileIOUtils.createFileInPath(metaClient.getFs(), new Path(metaClient.getMetaPath(), toInstant.getFileName()), data);

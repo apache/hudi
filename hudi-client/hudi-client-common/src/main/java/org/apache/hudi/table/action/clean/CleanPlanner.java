@@ -18,20 +18,6 @@
 
 package org.apache.hudi.table.action.clean;
 
-import java.io.IOException;
-import java.io.Serializable;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Date;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -51,7 +37,6 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV1MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
@@ -60,10 +45,23 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieSavepointException;
-import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.IOException;
+import java.io.Serializable;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Cleaner is responsible for garbage collecting older files in a given partition path. Such that
@@ -166,7 +164,6 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
         }
       }
     }
-
     return getPartitionPathsForFullCleaning();
   }
 
@@ -209,14 +206,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
    */
   private List<String> getPartitionPathsForFullCleaning() {
     // Go to brute force mode of scanning all partitions
-    // TableMetadata has dropped pratitions, so only all partitions can be obtained from the file
-    try {
-      FileSystemBackedTableMetadata fsBackedTableMetadata = new FileSystemBackedTableMetadata(context,
-          context.getHadoopConf(), config.getBasePath(), config.shouldAssumeDatePartitioning());
-      return fsBackedTableMetadata.getAllPartitionPaths();
-    } catch (IOException e) {
-      return Collections.emptyList();
-    }
+    return FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), config.getBasePath());
   }
 
   /**
@@ -224,7 +214,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
    * policy is useful, if you are simply interested in querying the table, and you don't want too many versions for a
    * single file (i.e run it with versionsRetained = 1)
    */
-  private List<CleanFileInfo> getFilesToCleanKeepingLatestVersions(String partitionPath) {
+  private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestVersions(String partitionPath) {
     LOG.info("Cleaning " + partitionPath + ", retaining latest " + config.getCleanerFileVersionsRetained()
         + " file versions. ");
     List<CleanFileInfo> deletePaths = new ArrayList<>();
@@ -236,7 +226,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     // In this scenario, we will assume that once replaced a file group automatically becomes eligible for cleaning completely
     // In other words, the file versions only apply to the active file groups.
     deletePaths.addAll(getReplacedFilesEligibleToClean(savepointedFiles, partitionPath, Option.empty()));
-
+    boolean toDeletePartition = false;
     List<HoodieFileGroup> fileGroups = fileSystemView.getAllFileGroups(partitionPath).collect(Collectors.toList());
     for (HoodieFileGroup fileGroup : fileGroups) {
       int keepVersions = config.getCleanerFileVersionsRetained();
@@ -264,10 +254,14 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
         deletePaths.addAll(getCleanFileInfoForSlice(nextSlice));
       }
     }
-    return deletePaths;
+    // if there are no valid file groups for the partition, mark it to be deleted
+    if (fileGroups.isEmpty()) {
+      toDeletePartition = true;
+    }
+    return Pair.of(toDeletePartition, deletePaths);
   }
 
-  private List<CleanFileInfo> getFilesToCleanKeepingLatestCommits(String partitionPath) {
+  private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestCommits(String partitionPath) {
     return getFilesToCleanKeepingLatestCommits(partitionPath, config.getCleanerCommitsRetained(), HoodieCleaningPolicy.KEEP_LATEST_COMMITS);
   }
 
@@ -285,7 +279,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
    * <p>
    * This policy is the default.
    */
-  private List<CleanFileInfo> getFilesToCleanKeepingLatestCommits(String partitionPath, int commitsRetained, HoodieCleaningPolicy policy) {
+  private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestCommits(String partitionPath, int commitsRetained, HoodieCleaningPolicy policy) {
     LOG.info("Cleaning " + partitionPath + ", retaining latest " + commitsRetained + " commits. ");
     List<CleanFileInfo> deletePaths = new ArrayList<>();
 
@@ -295,6 +289,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
         .collect(Collectors.toList());
 
     // determine if we have enough commits, to start cleaning.
+    boolean toDeletePartition = false;
     if (commitTimeline.countInstants() > commitsRetained) {
       Option<HoodieInstant> earliestCommitToRetainOption = getEarliestCommitToRetain();
       HoodieInstant earliestCommitToRetain = earliestCommitToRetainOption.get();
@@ -360,8 +355,12 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
           }
         }
       }
+      // if there are no valid file groups for the partition, mark it to be deleted
+      if (fileGroups.isEmpty()) {
+        toDeletePartition = true;
+      }
     }
-    return deletePaths;
+    return Pair.of(toDeletePartition, deletePaths);
   }
 
   /**
@@ -372,38 +371,22 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
    * @param partitionPath partition path to check
    * @return list of files to clean
    */
-  private List<CleanFileInfo> getFilesToCleanKeepingLatestHours(String partitionPath) {
+  private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestHours(String partitionPath) {
     return getFilesToCleanKeepingLatestCommits(partitionPath, 0, HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS);
   }
 
   private List<CleanFileInfo> getReplacedFilesEligibleToClean(List<String> savepointedFiles, String partitionPath, Option<HoodieInstant> earliestCommitToRetain) {
-    final List<HoodieFileGroup> replacedGroups;
-    final boolean isDeletePartition = TimelineUtils.isDeletePartitionOperation(hoodieTable.getMetaClient(), earliestCommitToRetain);
-
-    if (earliestCommitToRetain.isPresent() && !isDeletePartition) {
-      replacedGroups = fileSystemView.getReplacedFileGroupsBefore(earliestCommitToRetain.get().getTimestamp(), partitionPath)
-          .collect(Collectors.toList());
+    final Stream<HoodieFileGroup> replacedGroups;
+    if (earliestCommitToRetain.isPresent()) {
+      replacedGroups = fileSystemView.getReplacedFileGroupsBefore(earliestCommitToRetain.get().getTimestamp(), partitionPath);
     } else {
-      replacedGroups = fileSystemView.getAllReplacedFileGroups(partitionPath).collect(Collectors.toList());
+      replacedGroups = fileSystemView.getAllReplacedFileGroups(partitionPath);
     }
-
-    List<HoodieFileGroup> allFileGroups = fileSystemView.getAllFileGroups(partitionPath).collect(Collectors.toList());
-    Set<String> replacedGroupIds = replacedGroups.stream().map(HoodieFileGroup::getFileGroupId)
-        .map(HoodieFileGroupId::getFileId).collect(Collectors.toSet());
-    List<HoodieFileGroup> differentFileGroups = allFileGroups.stream()
-        .filter(p -> !(replacedGroupIds.contains(p.getFileGroupId().getFileId()))).collect(Collectors.toList());
-
-    if (differentFileGroups.isEmpty() && !replacedGroups.isEmpty()) {
-      return Stream.of(partitionPath)
-          .map(x -> FSUtils.getPartitionPath(hoodieTable.getMetaClient().getBasePath(), x).toString())
-          .map(CleanFileInfo::new).collect(Collectors.toList());
-    } else {
-      return replacedGroups.stream().flatMap(HoodieFileGroup::getAllFileSlices)
-          // do not delete savepointed files  (archival will make sure corresponding replacecommit file is not deleted)
-          .filter(slice -> !slice.getBaseFile().isPresent() || !savepointedFiles.contains(slice.getBaseFile().get().getFileName()))
-          .flatMap(slice -> getCleanFileInfoForSlice(slice).stream())
-          .collect(Collectors.toList());
-    }
+    return replacedGroups.flatMap(HoodieFileGroup::getAllFileSlices)
+        // do not delete savepointed files  (archival will make sure corresponding replacecommit file is not deleted)
+        .filter(slice -> !slice.getBaseFile().isPresent() || !savepointedFiles.contains(slice.getBaseFile().get().getFileName()))
+        .flatMap(slice -> getCleanFileInfoForSlice(slice).stream())
+        .collect(Collectors.toList());
   }
 
   /**
@@ -442,9 +425,9 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
   /**
    * Returns files to be cleaned for the given partitionPath based on cleaning policy.
    */
-  public List<CleanFileInfo> getDeletePaths(String partitionPath) {
+  public Pair<Boolean, List<CleanFileInfo>> getDeletePaths(String partitionPath) {
     HoodieCleaningPolicy policy = config.getCleanerPolicy();
-    List<CleanFileInfo> deletePaths;
+    Pair<Boolean, List<CleanFileInfo>> deletePaths;
     if (policy == HoodieCleaningPolicy.KEEP_LATEST_COMMITS) {
       deletePaths = getFilesToCleanKeepingLatestCommits(partitionPath);
     } else if (policy == HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS) {
@@ -454,8 +437,10 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     } else {
       throw new IllegalArgumentException("Unknown cleaning policy : " + policy.name());
     }
-    LOG.info(deletePaths.size() + " patterns used to delete in partition path:" + partitionPath);
-
+    LOG.info(deletePaths.getValue().size() + " patterns used to delete in partition path:" + partitionPath);
+    if (deletePaths.getKey()) {
+      LOG.info("Partition " + partitionPath + " to be deleted");
+    }
     return deletePaths;
   }
 

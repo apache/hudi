@@ -28,6 +28,7 @@ import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.hadoop.util.Time;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -1755,11 +1756,30 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertNoWriteErrors(writeStatuses);
       validateMetadata(client);
 
-      // trigger clean to delete partitions
+      // delete partitions
       newCommitTime = HoodieActiveTimeline.createNewInstantTime(5000);
       client.startCommitWithTime(newCommitTime);
       client.deletePartitions(singletonList(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH), newCommitTime);
       validateMetadata(client);
+
+      // add 1 more commit
+      newCommitTime = HoodieActiveTimeline.createNewInstantTime(5000);
+      client.startCommitWithTime(newCommitTime);
+      records = dataGen.generateInserts(newCommitTime, 10);
+      upsertRecords = new ArrayList<>();
+      for (HoodieRecord entry : records) {
+        if (entry.getPartitionPath().equals(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)) {
+          upsertRecords.add(entry);
+        }
+      }
+      writeStatuses = client.upsert(jsc.parallelize(upsertRecords, 1), newCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+
+      // trigger clean which will actually triggger deletion of the partition
+      newCommitTime = HoodieActiveTimeline.createNewInstantTime(5000);
+      HoodieCleanMetadata cleanMetadata = client.clean(newCommitTime);
+      validateMetadata(client);
+      assertEquals(1, metadata(client).getAllPartitionPaths().size());
     }
   }
 
