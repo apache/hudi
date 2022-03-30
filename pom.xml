@@ -1631,6 +1631,7 @@
       </activation>
     </profile>
 
+    <!-- hudi-spark3-bundle is an alias for hudi-spark3.2-bundle -->
     <profile>
       <id>spark3</id>
       <properties>
