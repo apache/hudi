@@ -430,9 +430,13 @@ public class HoodieAvroUtils {
 
     if (fieldValue != null) {
       // In case field's value is a nested record, we have to rewrite it as well
-      Object newFieldValue = fieldValue instanceof GenericRecord
-          ? rewriteRecord((GenericRecord) fieldValue, resolveNullableSchema(field.schema()))
-          : fieldValue;
+      Object newFieldValue;
+      if (fieldValue instanceof GenericRecord) {
+        GenericRecord record = (GenericRecord) fieldValue;
+        newFieldValue = rewriteRecord(record, resolveUnionSchema(field.schema(), record.getSchema().getFullName()));
+      } else {
+        newFieldValue = fieldValue;
+      }
       newRecord.put(field.name(), newFieldValue);
     } else if (field.defaultVal() instanceof JsonProperties.Null) {
       newRecord.put(field.name(), null);
@@ -755,6 +759,26 @@ public class HoodieAvroUtils {
                                              String[] columns,
                                              SerializableSchema schema, boolean consistentLogicalTimestampEnabled) {
     return getRecordColumnValues(record, columns, schema.get(), consistentLogicalTimestampEnabled);
+  }
+
+  private static Schema resolveUnionSchema(Schema schema, String fieldSchemaFullName) {
+    if (schema.getType() != Schema.Type.UNION) {
+      return schema;
+    }
+
+    List<Schema> innerTypes = schema.getTypes();
+    Schema nonNullType =
+        innerTypes.stream()
+            .filter(it -> it.getType() != Schema.Type.NULL && Objects.equals(it.getFullName(), fieldSchemaFullName))
+            .findFirst()
+            .orElse(null);
+
+    if (nonNullType == null) {
+      throw new AvroRuntimeException(
+          String.format("Unsupported Avro UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
+    }
+
+    return nonNullType;
   }
 
   private static Schema resolveNullableSchema(Schema schema) {
