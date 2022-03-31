@@ -66,7 +66,7 @@ import java.util.stream.StreamSupport;
 // TODO merge w/ ColumnStatsIndexSupport
 public class ColumnStatsIndexHelper {
 
-  private static final String COLUMN_STATS_INDEX_FILE_COLUMN_NAME = "file";
+  private static final String COLUMN_STATS_INDEX_FILE_COLUMN_NAME = "fileName";
   private static final String COLUMN_STATS_INDEX_MIN_VALUE_STAT_NAME = "minValue";
   private static final String COLUMN_STATS_INDEX_MAX_VALUE_STAT_NAME = "maxValue";
   private static final String COLUMN_STATS_INDEX_NUM_NULLS_STAT_NAME = "num_nulls";

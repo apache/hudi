@@ -116,8 +116,8 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
         .schema(expectedColStatsSchema)
         .json(getClass.getClassLoader.getResource("index/zorder/z-index-table.json").toString)
 
-    expectedColStatsIndexTableDf.schema.equals(transposedColStatsDF.schema)
-    expectedColStatsIndexTableDf.collect().sameElements(transposedColStatsDF.collect())
+    assertEquals(expectedColStatsIndexTableDf.schema, transposedColStatsDF.schema)
+    assertEquals(asJson(sort(expectedColStatsIndexTableDf)), asJson(sort(replace(transposedColStatsDF))))
 
     // do an upsert and validate
     val updateJSONTablePath = getClass.getClassLoader.getResource("index/zorder/another-input-table-json").toString
@@ -143,8 +143,8 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
         .schema(expectedColStatsSchema)
         .json(getClass.getClassLoader.getResource("index/zorder/update-column-stats-index-table.json").toString)
 
-    expectedColStatsIndexUpdatedDf.schema.equals(transposedUpdatedColStatsDF.schema)
-    expectedColStatsIndexUpdatedDf.collect().sameElements(transposedUpdatedColStatsDF.collect())
+    assertEquals(expectedColStatsIndexUpdatedDf.schema, transposedUpdatedColStatsDF.schema)
+    assertEquals(asJson(sort(expectedColStatsIndexUpdatedDf)), asJson(sort(replace(transposedUpdatedColStatsDF))))
   }
 
   @Test

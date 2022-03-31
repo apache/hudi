@@ -115,7 +115,6 @@ trait ColumnStatsIndexSupport {
           val carryingField = findCarryingField(colType, statisticRecordSchema)
 
           columnStatsDF.filter(col(HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME).equalTo(colName))
-            .withColumnRenamed(HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT, getNumNullsColumnNameFor(colName))
             .withColumn(
               getMinColumnNameFor(colName),
               genStatValueExtractionExpr(HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE, carryingField, colType)
@@ -124,6 +123,7 @@ trait ColumnStatsIndexSupport {
               getMaxColumnNameFor(colName),
               genStatValueExtractionExpr(HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE, carryingField, colType)
             )
+            .withColumnRenamed(HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT, getNumNullsColumnNameFor(colName))
             .drop(
               HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME,
               HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE,
