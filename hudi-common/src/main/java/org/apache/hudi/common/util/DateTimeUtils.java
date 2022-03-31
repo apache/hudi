@@ -40,9 +40,19 @@ public class DateTimeUtils {
       Collections.unmodifiableMap(initMap());
 
   /**
-   * Converts provided {@link Instant} to microseconds
+   * Converts provided microseconds (from epoch) to {@link Instant}
    */
-  public static long toMicros(Instant instant) {
+  public static Instant microsToInstant(long microsFromEpoch) {
+    long epochSeconds = microsFromEpoch / (1_000_000L);
+    long nanoAdjustment = (microsFromEpoch % (1_000_000L)) * 1_000L;
+
+    return Instant.ofEpochSecond(epochSeconds, nanoAdjustment);
+  }
+
+  /**
+   * Converts provided {@link Instant} to microseconds (from epoch)
+   */
+  public static long instantToMicros(Instant instant) {
     long seconds = instant.getEpochSecond();
     int nanos = instant.getNano();
 

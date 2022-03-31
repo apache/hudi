@@ -73,7 +73,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.TypeUtils.unsafeCast;
-import static org.apache.hudi.common.util.DateTimeUtils.toMicros;
+import static org.apache.hudi.common.util.DateTimeUtils.microsToInstant;
+import static org.apache.hudi.common.util.DateTimeUtils.instantToMicros;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_LIST;
@@ -585,20 +586,24 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       return newColumnStats;
     }
 
-    Object minValue = Stream.of((Comparable) prevColumnStats.getMinValue(), (Comparable) newColumnStats.getMinValue())
+    Comparable minValue = Stream.of(
+            (Comparable) unwrapStatisticValueWrapper(prevColumnStats.getMinValue()),
+            (Comparable) unwrapStatisticValueWrapper(newColumnStats.getMinValue()))
         .filter(Objects::nonNull)
         .min(Comparator.naturalOrder())
         .orElse(null);
 
-    Object maxValue = Stream.of((Comparable) prevColumnStats.getMinValue(), (Comparable) newColumnStats.getMinValue())
+    Comparable maxValue = Stream.of(
+            (Comparable) unwrapStatisticValueWrapper(prevColumnStats.getMinValue()),
+            (Comparable) unwrapStatisticValueWrapper(newColumnStats.getMinValue()))
         .filter(Objects::nonNull)
         .max(Comparator.naturalOrder())
         .orElse(null);
 
     return HoodieMetadataColumnStats.newBuilder()
         .setFileName(newColumnStats.getFileName())
-        .setMinValue(minValue)
-        .setMaxValue(maxValue)
+        .setMinValue(wrapStatisticValue(minValue))
+        .setMaxValue(wrapStatisticValue(maxValue))
         .setValueCount(prevColumnStats.getValueCount() + newColumnStats.getValueCount())
         .setNullCount(prevColumnStats.getNullCount() + newColumnStats.getNullCount())
         .setTotalSize(prevColumnStats.getTotalSize() + newColumnStats.getTotalSize())
@@ -642,7 +647,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     } else if (statValue instanceof BigDecimal) {
       Schema valueSchema = DecimalWrapper.SCHEMA$.getField("value").schema();
       return DecimalWrapper.newBuilder()
-          .setValue(AVRO_DECIMAL_CONVERSION.toBytes((BigDecimal) statValue, null, valueSchema.getLogicalType()))
+          .setValue(AVRO_DECIMAL_CONVERSION.toBytes((BigDecimal) statValue, valueSchema, valueSchema.getLogicalType()))
           .build();
     } else if (statValue instanceof Timestamp) {
       // NOTE: Due to breaking changes in code-gen b/w Avro 1.8.2 and 1.10, we can't
@@ -650,7 +655,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       //       and hereby have to encode statistic manually
       Instant instant = ((Timestamp) statValue).toInstant();
       return TimestampMicrosWrapper.newBuilder()
-          .setValue(toMicros(instant))
+          .setValue(instantToMicros(instant))
           .build();
     } else if (statValue instanceof Boolean) {
       return BooleanWrapper.newBuilder().setValue((Boolean) statValue).build();
@@ -668,6 +673,33 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       return StringWrapper.newBuilder().setValue((String) statValue).build();
     } else {
       throw new UnsupportedOperationException(String.format("Unsupported type of the statistic (%s)", statValue.getClass()));
+    }
+  }
+
+  private static Comparable<?> unwrapStatisticValueWrapper(Object statValueWrapper) {
+    if (statValueWrapper instanceof DateWrapper) {
+      return LocalDate.ofEpochDay(((DateWrapper) statValueWrapper).getValue());
+    } else if (statValueWrapper instanceof DecimalWrapper) {
+      Schema valueSchema = DecimalWrapper.SCHEMA$.getField("value").schema();
+      return AVRO_DECIMAL_CONVERSION.fromBytes(((DecimalWrapper) statValueWrapper).getValue(), valueSchema, valueSchema.getLogicalType());
+    } else if (statValueWrapper instanceof TimestampMicrosWrapper) {
+      return microsToInstant(((TimestampMicrosWrapper) statValueWrapper).getValue());
+    } else if (statValueWrapper instanceof BooleanWrapper) {
+      return ((BooleanWrapper) statValueWrapper).getValue();
+    } else if (statValueWrapper instanceof IntWrapper) {
+      return ((IntWrapper) statValueWrapper).getValue();
+    } else if (statValueWrapper instanceof LongWrapper) {
+      return ((LongWrapper) statValueWrapper).getValue();
+    } else if (statValueWrapper instanceof FloatWrapper) {
+      return ((FloatWrapper) statValueWrapper).getValue();
+    } else if (statValueWrapper instanceof DoubleWrapper) {
+      return ((DoubleWrapper) statValueWrapper).getValue();
+    } else if (statValueWrapper instanceof BytesWrapper) {
+      return ((BytesWrapper) statValueWrapper).getValue();
+    } else if (statValueWrapper instanceof StringWrapper) {
+      return ((StringWrapper) statValueWrapper).getValue();
+    } else {
+      throw new UnsupportedOperationException(String.format("Unsupported type of the statistic (%s)", statValueWrapper.getClass()));
     }
   }
 
