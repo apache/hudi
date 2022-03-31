@@ -154,7 +154,7 @@ public class HoodieAvroUtils {
   public static GenericRecord bytesToAvro(byte[] bytes, Schema writerSchema, Schema readerSchema) throws IOException {
     BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(bytes, BINARY_DECODER.get());
     BINARY_DECODER.set(decoder);
-    GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(writerSchema, readerSchema, ConvertingGenericData.INSTANCE);
+    GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(writerSchema, readerSchema);
     return reader.read(null, decoder);
   }
 
