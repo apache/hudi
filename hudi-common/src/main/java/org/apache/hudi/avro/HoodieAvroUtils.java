@@ -585,7 +585,7 @@ public class HoodieAvroUtils {
    */
   public static Comparable<?> convertToNativeJavaType(Schema schema, Object val) {
     if (val == null) {
-      return StringUtils.EMPTY_STRING;
+      return null;
     }
     if (schema.getLogicalType() == LogicalTypes.date()) {
       return java.sql.Date.valueOf((val.toString()));
