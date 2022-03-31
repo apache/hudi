@@ -123,11 +123,12 @@ trait ColumnStatsIndexSupport {
               getMaxColumnNameFor(colName),
               genStatValueExtractionExpr(HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE, carryingField, colType)
             )
-            .withColumnRenamed(HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT, getNumNullsColumnNameFor(colName))
+            .withColumn(getNumNullsColumnNameFor(colName), col(HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT))
             .drop(
               HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME,
               HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE,
-              HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE)
+              HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE,
+              HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT)
       }
       .reduceLeft((left, right) =>
         left.join(right, usingColumn = HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME))
@@ -151,21 +152,4 @@ object ColumnStatsIndexSupport {
   private def genStatValueExtractionExpr(statColumnName: String, carryingField: StructField, tableColType: DataType) = {
     col(s"$statColumnName.${carryingField.name}.$statisticWrapperValueFieldName").cast(tableColType)
   }
-
-//  private def genSelectNonNullValueExpr(statColumnName: String, statisticRecordSchema: StructType): Column = {
-//    statisticRecordSchema.fields
-//      .foldLeft[Column](null) {
-//        case (acc, wrapperField) =>
-//          if (acc == null)
-//            when(
-//              col(s"$statColumnName.${wrapperField.name}").isNotNull,
-//              col(s"$statColumnName.${wrapperField.name}.$statisticWrapperValueFieldName"))
-//          else
-//            acc.when(
-//              col(s"$statColumnName.${wrapperField.name}").isNotNull,
-//              col(s"$statColumnName.${wrapperField.name}.$statisticWrapperValueFieldName")
-//            )
-//      }
-//  }
-
 }
