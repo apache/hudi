@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.async.AsyncArchiveService;
 import org.apache.hudi.async.AsyncCleanerService;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
@@ -66,6 +67,7 @@ import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -643,9 +645,30 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * @return true if the savepoint was restored to successfully
    */
   public void restoreToSavepoint(String savepointTime) {
-    HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty());
+    boolean initialMetadataTableIfNecessary = config.isMetadataTableEnabled();
+    if (initialMetadataTableIfNecessary) {
+      try {
+        // Delete metadata table directly when users trigger savepoint rollback if mdt existed and beforeTimelineStarts
+        String metadataTableBasePathStr = HoodieTableMetadata.getMetadataTableBasePath(config.getBasePath());
+        HoodieTableMetaClient mdtClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePathStr).build();
+        // Same as HoodieTableMetadataUtil#processRollbackMetadata
+        HoodieInstant syncedInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, savepointTime);
+        // The instant required to sync rollback to MDT has been archived and the mdt syncing will be failed
+        // So that we need to delete the whole MDT here.
+        if (mdtClient.getCommitsTimeline().isBeforeTimelineStarts(syncedInstant.getTimestamp())) {
+          mdtClient.getFs().delete(new Path(metadataTableBasePathStr), true);
+          // rollbackToSavepoint action will try to bootstrap MDT at first but sync to MDT will fail at the current scenario.
+          // so that we need to disable metadata initialized here.
+          initialMetadataTableIfNecessary = false;
+        }
+      } catch (Exception e) {
+        // Metadata directory does not exist
+      }
+    }
+
+    HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), initialMetadataTableIfNecessary);
     SavepointHelpers.validateSavepointPresence(table, savepointTime);
-    restoreToInstant(savepointTime);
+    restoreToInstant(savepointTime, initialMetadataTableIfNecessary);
     SavepointHelpers.validateSavepointRestore(table, savepointTime);
   }
 
@@ -659,7 +682,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   /**
    * @Deprecated
    * Rollback the inflight record changes with the given commit time. This
-   * will be removed in future in favor of {@link BaseHoodieWriteClient#restoreToInstant(String)}
+   * will be removed in future in favor of {@link BaseHoodieWriteClient#restoreToInstant(String, boolean)
    *
    * @param commitInstantTime Instant time of the commit
    * @param pendingRollbackInfo pending rollback instant and plan if rollback failed from previous attempt.
@@ -717,12 +740,12 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    *
    * @param instantTime Instant time to which restoration is requested
    */
-  public HoodieRestoreMetadata restoreToInstant(final String instantTime) throws HoodieRestoreException {
+  public HoodieRestoreMetadata restoreToInstant(final String instantTime, boolean initialMetadataTableIfNecessary) throws HoodieRestoreException {
     LOG.info("Begin restore to instant " + instantTime);
     final String restoreInstantTime = HoodieActiveTimeline.createNewInstantTime();
     Timer.Context timerContext = metrics.getRollbackCtx();
     try {
-      HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty());
+      HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), initialMetadataTableIfNecessary);
       Option<HoodieRestorePlan> restorePlanOption = table.scheduleRestore(context, restoreInstantTime, instantTime);
       if (restorePlanOption.isPresent()) {
         HoodieRestoreMetadata restoreMetadata = table.restore(context, restoreInstantTime, instantTime);
@@ -1288,14 +1311,14 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * @param instantTime current inflight instant time
    * @return instantiated {@link HoodieTable}
    */
-  protected abstract HoodieTable doInitTable(HoodieTableMetaClient metaClient, Option<String> instantTime);
+  protected abstract HoodieTable doInitTable(HoodieTableMetaClient metaClient, Option<String> instantTime, boolean initialMetadataTableIfNecessary);
 
   /**
    * Instantiates and initializes instance of {@link HoodieTable}, performing crucial bootstrapping
    * operations such as:
    *
    * NOTE: This method is engine-agnostic and SHOULD NOT be overloaded, please check on
-   * {@link #doInitTable(HoodieTableMetaClient, Option<String>)} instead
+   * {@link #doInitTable(HoodieTableMetaClient, Option, boolean)} instead
    *
    * <ul>
    *   <li>Checking whether upgrade/downgrade is required</li>
@@ -1303,7 +1326,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    *   <li>Initializing metrics contexts</li>
    * </ul>
    */
-  protected final HoodieTable initTable(WriteOperationType operationType, Option<String> instantTime) {
+  protected final HoodieTable initTable(WriteOperationType operationType, Option<String> instantTime, boolean initialMetadataTableIfNecessary) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
     // Setup write schemas for deletes
     if (operationType == WriteOperationType.DELETE) {
@@ -1315,7 +1338,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     this.txnManager.beginTransaction();
     try {
       tryUpgrade(metaClient, instantTime);
-      table = doInitTable(metaClient, instantTime);
+      table = doInitTable(metaClient, instantTime, initialMetadataTableIfNecessary);
     } finally {
       this.txnManager.endTransaction();
     }
@@ -1346,6 +1369,10 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     }
 
     return table;
+  }
+
+  protected final HoodieTable initTable(WriteOperationType operationType, Option<String> instantTime) {
+    return initTable(operationType, instantTime, config.isMetadataTableEnabled());
   }
 
   /**

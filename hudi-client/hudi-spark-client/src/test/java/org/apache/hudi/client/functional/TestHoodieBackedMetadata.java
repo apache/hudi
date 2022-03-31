@@ -1208,7 +1208,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       validateMetadata(client);
 
       // Restore
-      client.restoreToInstant("0000006");
+      client.restoreToInstant("0000006", writeConfig.isMetadataTableEnabled());
       validateMetadata(client);
     }
   }

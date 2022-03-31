@@ -425,11 +425,13 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected HoodieTable doInitTable(HoodieTableMetaClient metaClient, Option<String> instantTime) {
-    // Initialize Metadata Table to make sure it's bootstrapped _before_ the operation,
-    // if it didn't exist before
-    // See https://issues.apache.org/jira/browse/HUDI-3343 for more details
-    initializeMetadataTable(instantTime);
+  protected HoodieTable doInitTable(HoodieTableMetaClient metaClient, Option<String> instantTime, boolean initialMetadataTableIfNecessary) {
+    if (initialMetadataTableIfNecessary) {
+      // Initialize Metadata Table to make sure it's bootstrapped _before_ the operation,
+      // if it didn't exist before
+      // See https://issues.apache.org/jira/browse/HUDI-3343 for more details
+      initializeMetadataTable(instantTime);
+    }
 
     // Create a Hoodie table which encapsulated the commits and files visible
     return HoodieSparkTable.create(config, (HoodieSparkEngineContext) context, metaClient, config.isMetadataTableEnabled());

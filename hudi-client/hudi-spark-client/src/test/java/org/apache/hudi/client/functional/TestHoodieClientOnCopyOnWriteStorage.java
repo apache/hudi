@@ -585,7 +585,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     client.savepoint("004", "user1","comment1");
 
-    client.restoreToInstant("004");
+    client.restoreToInstant("004", config.isMetadataTableEnabled());
 
     assertFalse(metaClient.reloadActiveTimeline().getRollbackTimeline().lastInstant().isPresent());
 

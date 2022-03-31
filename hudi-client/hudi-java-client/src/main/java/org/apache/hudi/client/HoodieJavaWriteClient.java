@@ -233,7 +233,7 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected HoodieTable doInitTable(HoodieTableMetaClient metaClient, Option<String> instantTime) {
+  protected HoodieTable doInitTable(HoodieTableMetaClient metaClient, Option<String> instantTime, boolean initialMetadataTableIfNecessary) {
     // new JavaUpgradeDowngrade(metaClient, config, context).run(metaClient, HoodieTableVersion.current(), config, context, instantTime);
 
     // Create a Hoodie table which encapsulated the commits and files visible

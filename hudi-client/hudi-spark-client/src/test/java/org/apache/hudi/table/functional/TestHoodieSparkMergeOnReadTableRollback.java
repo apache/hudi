@@ -150,7 +150,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     // NOTE: First writer will have Metadata table DISABLED
     HoodieWriteConfig.Builder cfgBuilder =
         getConfigBuilder(false, rollbackUsingMarkers, HoodieIndex.IndexType.SIMPLE);
-    
+
     addConfigsForPopulateMetaFields(cfgBuilder, true);
     HoodieWriteConfig cfg = cfgBuilder.build();
 
@@ -480,7 +480,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       copyOfRecords.clear();
 
       // Rollback latest commit first
-      client.restoreToInstant("000");
+      client.restoreToInstant("000", cfg.isMetadataTableEnabled());
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
       allFiles = listAllBaseFilesInPath(hoodieTable);
@@ -530,7 +530,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
       if (!restoreAfterCompaction) {
         // restore to 002 and validate records.
-        client.restoreToInstant("002");
+        client.restoreToInstant("002", cfg.isMetadataTableEnabled());
         validateRecords(cfg, metaClient, updates1);
       } else {
         // trigger compaction and then trigger couple of upserts followed by restore.
@@ -546,7 +546,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         validateRecords(cfg, metaClient, updates5);
 
         // restore to 003 and validate records.
-        client.restoreToInstant("003");
+        client.restoreToInstant("003", cfg.isMetadataTableEnabled());
         validateRecords(cfg, metaClient, updates2);
       }
     }
