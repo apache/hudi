@@ -640,7 +640,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   }
 
   private static Object wrapStatisticValue(Comparable<?> statValue) {
-    if (statValue instanceof Date) {
+    if (statValue == null) {
+      return null;
+    } else if (statValue instanceof Date) {
       // NOTE: Due to breaking changes in code-gen b/w Avro 1.8.2 and 1.10, we can't
       //       rely on logical types to do proper encoding of the native Java types,
       //       and hereby have to encode statistic manually
@@ -679,7 +681,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   }
 
   static Comparable<?> unwrapStatisticValueWrapper(Object statValueWrapper) {
-    if (statValueWrapper instanceof DateWrapper) {
+    if (statValueWrapper == null) {
+      return null;
+    } else if (statValueWrapper instanceof DateWrapper) {
       return LocalDate.ofEpochDay(((DateWrapper) statValueWrapper).getValue());
     } else if (statValueWrapper instanceof DecimalWrapper) {
       Schema valueSchema = DecimalWrapper.SCHEMA$.getField("value").schema();
