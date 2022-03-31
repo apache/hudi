@@ -166,7 +166,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       /*
        * Write 1 (only inserts)
        */
-      String newCommitTime = "001";
+      String newCommitTime = "000000001";
       client.startCommitWithTime(newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
@@ -183,7 +183,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
       Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().firstInstant();
       assertTrue(deltaCommit.isPresent());
-      assertEquals("001", deltaCommit.get().getTimestamp(), "Delta commit should be 001");
+      assertEquals("000000001", deltaCommit.get().getTimestamp(), "Delta commit should be 000000001");
 
       Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitTimeline().firstInstant();
       assertFalse(commit.isPresent());
@@ -201,7 +201,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       /*
        * Write 2 (inserts + updates - testing failed delta commit)
        */
-      final String commitTime1 = "002";
+      final String commitTime1 = "000000002";
       // WriteClient with custom config (disable small file handling)
       // NOTE: Second writer will have Metadata table ENABLED
       try (SparkRDDWriteClient secondClient = getHoodieWriteClient(getHoodieWriteConfigWithSmallFileHandlingOff(true));) {
