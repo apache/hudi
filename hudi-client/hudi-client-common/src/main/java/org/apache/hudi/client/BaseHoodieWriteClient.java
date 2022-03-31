@@ -214,7 +214,8 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     try {
       preCommit(inflightInstant, metadata);
       commit(table, commitActionType, instantTime, metadata, stats);
-      postCommit(table, metadata, instantTime, extraMetadata);
+      // already within lock, and so no lock requried for archival
+      postCommit(table, metadata, instantTime, extraMetadata, false);
       LOG.info("Committed " + instantTime);
       releaseResources();
     } catch (IOException e) {
@@ -474,14 +475,16 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * @param metadata      Commit Metadata corresponding to committed instant
    * @param instantTime   Instant Time
    * @param extraMetadata Additional Metadata passed by user
+   * @param acquireLockForArchival true if lock has to be acquired for archival. false otherwise.
    */
-  protected void postCommit(HoodieTable table, HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata) {
+  protected void postCommit(HoodieTable table, HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata,
+                            boolean acquireLockForArchival) {
     try {
       // Delete the marker directory for the instant.
       WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
       autoCleanOnCommit();
-      autoArchiveOnCommit(table);
+      autoArchiveOnCommit(table, acquireLockForArchival);
     } finally {
       this.heartbeatClient.stop(instantTime);
     }
@@ -565,7 +568,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     }
   }
 
-  protected void autoArchiveOnCommit(HoodieTable table) {
+  protected void autoArchiveOnCommit(HoodieTable table, boolean acquireLockForArchival) {
     if (!config.isAutoArchive()) {
       return;
     }
@@ -576,7 +579,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       LOG.info("Async archiver has finished");
     } else {
       LOG.info("Start to archive synchronously.");
-      archive(table);
+      archive(table, acquireLockForArchival);
     }
   }
 
@@ -845,15 +848,16 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * Trigger archival for the table. This ensures that the number of commits do not explode
    * and keep increasing unbounded over time.
    * @param table table to commit on.
+   * @param acquireLockForArchival true if lock has to be acquired for archival. false otherwise.
    */
-  protected void archive(HoodieTable table) {
+  protected void archive(HoodieTable table, boolean acquireLockForArchival) {
     if (!tableServicesEnabled(config)) {
       return;
     }
     try {
       // We cannot have unbounded commit files. Archive commits if we have to archive
       HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(config, table);
-      archiver.archiveIfRequired(context);
+      archiver.archiveIfRequired(context, acquireLockForArchival);
     } catch (IOException ioe) {
       throw new HoodieIOException("Failed to archive", ioe);
     }
@@ -866,7 +870,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   public void archive() {
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = createTable(config, hadoopConf);
-    archive(table);
+    archive(table, true);
   }
 
   /**

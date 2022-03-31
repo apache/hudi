@@ -200,7 +200,7 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
             result.getWriteStats().get().size());
       }
 
-      postCommit(hoodieTable, result.getCommitMetadata().get(), instantTime, Option.empty());
+      postCommit(hoodieTable, result.getCommitMetadata().get(), instantTime, Option.empty(), true);
 
       emitCommitMetrics(instantTime, result.getCommitMetadata().get(), hoodieTable.getMetaClient().getCommitActionType());
     }

@@ -21,6 +21,7 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieMergeArchiveFilePlan;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.MetadataConversionUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -71,6 +72,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -96,6 +98,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private final int minInstantsToKeep;
   private final HoodieTable<T, I, K, O> table;
   private final HoodieTableMetaClient metaClient;
+  private final TransactionManager txnManager;
 
   public HoodieTimelineArchiver(HoodieWriteConfig config, HoodieTable<T, I, K, O> table) {
     this.config = config;
@@ -104,6 +107,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     this.archiveFilePath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getArchivePath());
     this.maxInstantsToKeep = config.getMaxCommitsToKeep();
     this.minInstantsToKeep = config.getMinCommitsToKeep();
+    this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
   }
 
   private Writer openWriter() {
@@ -143,11 +147,18 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     }
   }
 
+  public boolean archiveIfRequired(HoodieEngineContext context) throws IOException {
+    return archiveIfRequired(context, false);
+  }
+
   /**
    * Check if commits need to be archived. If yes, archive commits.
    */
-  public boolean archiveIfRequired(HoodieEngineContext context) throws IOException {
+  public boolean archiveIfRequired(HoodieEngineContext context, boolean acquireLock) throws IOException {
     try {
+      if (acquireLock) {
+        txnManager.beginTransaction();
+      }
       List<HoodieInstant> instantsToArchive = getInstantsToArchive().collect(Collectors.toList());
       verifyLastMergeArchiveFilesIfNecessary(context);
       boolean success = true;
@@ -167,6 +178,9 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       return success;
     } finally {
       close();
+      if (acquireLock) {
+        txnManager.endTransaction();
+      }
     }
   }
 
@@ -485,9 +499,16 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       }
     }
 
-    return instants.flatMap(hoodieInstant ->
-        groupByTsAction.get(Pair.of(hoodieInstant.getTimestamp(),
-            HoodieInstant.getComparableAction(hoodieInstant.getAction()))).stream());
+    return instants.flatMap(hoodieInstant -> {
+      List<HoodieInstant> instantsToStream = groupByTsAction.get(Pair.of(hoodieInstant.getTimestamp(),
+                HoodieInstant.getComparableAction(hoodieInstant.getAction())));
+      if (instantsToStream != null) {
+        return instantsToStream.stream();
+      } else {
+        // if a concurrent writer archived the instant
+        return Collections.EMPTY_LIST.stream();
+      }
+    });
   }
 
   private boolean deleteArchivedInstants(List<HoodieInstant> archivedInstants, HoodieEngineContext context) throws IOException {
