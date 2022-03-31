@@ -76,7 +76,8 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
     Path deletePath = new Path(deletePathStr);
     LOG.debug("Working on delete path :" + deletePath);
     try {
-      boolean deleteResult = fs.delete(deletePath, false);
+      boolean isDirectory = fs.isDirectory(deletePath);
+      boolean deleteResult = fs.delete(deletePath, isDirectory);
       if (deleteResult) {
         LOG.debug("Cleaned file at path :" + deletePath);
       }
@@ -137,12 +138,22 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
             .flatMap(x -> x.getValue().stream().map(y -> new ImmutablePair<>(x.getKey(),
                 new CleanFileInfo(y.getFilePath(), y.getIsBootstrapBaseFile()))));
 
+    List<String> partitionsToBeDeleted = cleanerPlan.getPartitionsToBeDeleted() != null ? cleanerPlan.getPartitionsToBeDeleted() : new ArrayList<>();
+
     Stream<ImmutablePair<String, PartitionCleanStat>> partitionCleanStats =
         context.mapPartitionsToPairAndReduceByKey(filesToBeDeletedPerPartition,
             iterator -> deleteFilesFunc(iterator, table), PartitionCleanStat::merge, cleanerParallelism);
 
     Map<String, PartitionCleanStat> partitionCleanStatsMap = partitionCleanStats
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+
+    partitionsToBeDeleted.forEach(entry -> {
+      try {
+        deleteFileAndGetResult(table.getMetaClient().getFs(), table.getMetaClient().getBasePath() + "/" + entry);
+      } catch (IOException e) {
+        LOG.warn("Partition deletion failed " + entry);
+      }
+    });
 
     // Return PartitionCleanStat for each partition passed.
     return cleanerPlan.getFilePathsToBeDeletedPerPartition().keySet().stream().map(partitionPath -> {
@@ -162,6 +173,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
           .withDeleteBootstrapBasePathPatterns(partitionCleanStat.getDeleteBootstrapBasePathPatterns())
           .withSuccessfulDeleteBootstrapBaseFiles(partitionCleanStat.getSuccessfulDeleteBootstrapBaseFiles())
           .withFailedDeleteBootstrapBaseFiles(partitionCleanStat.getFailedDeleteBootstrapBaseFiles())
+          .isPartitionDeleted(partitionsToBeDeleted.contains(partitionPath))
           .build();
     }).collect(Collectors.toList());
   }

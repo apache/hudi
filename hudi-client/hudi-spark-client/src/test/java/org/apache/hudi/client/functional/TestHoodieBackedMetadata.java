@@ -18,7 +18,17 @@
 
 package org.apache.hudi.client.functional;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+import org.apache.hadoop.hbase.util.Pair;
+import org.apache.hadoop.util.Time;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -32,6 +42,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -89,16 +100,6 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.upgrade.SparkUpgradeDowngradeHelper;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
-import org.apache.hadoop.hbase.util.Pair;
-import org.apache.hadoop.util.Time;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -1724,6 +1725,61 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
       validateMetadata(client);
+    }
+  }
+
+  @Test
+  public void testDeletePartitions() throws Exception {
+    init(HoodieTableType.COPY_ON_WRITE);
+
+    int maxCommits = 1;
+    HoodieWriteConfig cfg = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(maxCommits).build())
+        .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1).withDeleteParallelism(1)
+        .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
+        .build();
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      client.startCommitWithTime(newCommitTime);
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 10);
+      List<HoodieRecord> upsertRecords = new ArrayList<>();
+      for (HoodieRecord entry : records) {
+        if (entry.getPartitionPath().equals(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)
+            || entry.getPartitionPath().equals(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)) {
+          upsertRecords.add(entry);
+        }
+      }
+      List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(upsertRecords, 1), newCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      validateMetadata(client);
+
+      // delete partitions
+      newCommitTime = HoodieActiveTimeline.createNewInstantTime(5000);
+      client.startCommitWithTime(newCommitTime);
+      client.deletePartitions(singletonList(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH), newCommitTime);
+      validateMetadata(client);
+
+      // add 1 more commit
+      newCommitTime = HoodieActiveTimeline.createNewInstantTime(5000);
+      client.startCommitWithTime(newCommitTime);
+      records = dataGen.generateInserts(newCommitTime, 10);
+      upsertRecords = new ArrayList<>();
+      for (HoodieRecord entry : records) {
+        if (entry.getPartitionPath().equals(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)) {
+          upsertRecords.add(entry);
+        }
+      }
+      writeStatuses = client.upsert(jsc.parallelize(upsertRecords, 1), newCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+
+      // trigger clean which will actually triggger deletion of the partition
+      newCommitTime = HoodieActiveTimeline.createNewInstantTime(5000);
+      HoodieCleanMetadata cleanMetadata = client.clean(newCommitTime);
+      validateMetadata(client);
+      assertEquals(1, metadata(client).getAllPartitionPaths().size());
     }
   }
 
