@@ -21,16 +21,5 @@ hadoop fs -mkdir -p    /user/hive/warehouse
 hadoop fs -chmod g+w   /tmp
 hadoop fs -chmod g+w   /user/hive/warehouse
 
-TEZ_HDFS_PATH="/apps/tez-${TEZ_VERSION}"
-
-hadoop fs -mkdir -p       ${TEZ_HDFS_PATH}
-hadoop fs -copyFromLocal  ${TEZ_HOME}/share/tez.tar.gz ${TEZ_HDFS_PATH}
-
-TEZ_CONF_DIR=$HADOOP_CONF_DIR
-TEZ_CLASSPATH="${TEZ_HOME}/*:${TEZ_HOME}/lib/*:${TEZ_CONF_DIR}"
-
-# AUX_CLASSPATH is being added onto the HADOOP_CLASSPATH by Hive
-export AUX_CLASSPATH="${HUDI_HADOOP_BUNDLE}:${TEZ_CLASSPATH}"
-
 cd $HIVE_HOME/bin
 ./hiveserver2 --hiveconf hive.server2.enable.doAs=false --hiveconf hive.aux.jars.path=file://${HUDI_HADOOP_BUNDLE}
