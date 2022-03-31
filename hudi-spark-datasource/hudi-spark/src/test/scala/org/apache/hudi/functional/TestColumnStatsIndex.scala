@@ -106,10 +106,8 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
 
     val metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(basePath)
 
-    val targetDataTableColumns = sourceTableSchema.fields.map(f => (f.name, f.dataType))
-
     val colStatsDF = readColumnStatsIndex(spark, metadataTablePath)
-    val transposedColStatsDF = transposeColumnStatsIndex(colStatsDF, targetDataTableColumns)
+    val transposedColStatsDF = transposeColumnStatsIndex(spark, colStatsDF, sourceTableSchema.fieldNames, sourceTableSchema)
 
     val expectedColStatsSchema = ColumnStatsIndexHelper.composeIndexSchema(sourceTableSchema.fields.toSeq.asJava)
 
@@ -129,8 +127,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
     val manualColStatsTableDF =
       buildColumnStatsTableManually(basePath, sourceTableSchema.fieldNames, expectedColStatsSchema)
 
-    // TODO fix
-    //assertEquals(asJson(sort(manualColStatsTableDF)), asJson(sort(transposedColStatsDF)))
+    assertEquals(asJson(sort(manualColStatsTableDF)), asJson(sort(transposedColStatsDF)))
 
     // do an upsert and validate
     val updateJSONTablePath = getClass.getClassLoader.getResource("index/zorder/another-input-table-json").toString
@@ -149,7 +146,8 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
 
-    val transposedUpdatedColStatsDF = transposeColumnStatsIndex(readColumnStatsIndex(spark, metadataTablePath), targetDataTableColumns)
+    val updatedColStatsDF = readColumnStatsIndex(spark, metadataTablePath)
+    val transposedUpdatedColStatsDF = transposeColumnStatsIndex(spark, updatedColStatsDF, sourceTableSchema.fieldNames, sourceTableSchema)
 
     val expectedColStatsIndexUpdatedDF =
       spark.read
@@ -163,8 +161,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
     val manualUpdatedColStatsTableDF =
       buildColumnStatsTableManually(basePath, sourceTableSchema.fieldNames, expectedColStatsSchema)
 
-    // TODO fix
-    //assertEquals(asJson(sort(manualUpdatedColStatsTableDF)), asJson(sort(transposedUpdatedColStatsDF)))
+    assertEquals(asJson(sort(manualUpdatedColStatsTableDF)), asJson(sort(transposedUpdatedColStatsDF)))
   }
 
   @Test
