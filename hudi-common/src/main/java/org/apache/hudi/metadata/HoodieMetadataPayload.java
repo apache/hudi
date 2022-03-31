@@ -586,14 +586,16 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       return newColumnStats;
     }
 
-    Comparable minValue = Stream.of(
+    Comparable minValue =
+        (Comparable) Stream.of(
             (Comparable) unwrapStatisticValueWrapper(prevColumnStats.getMinValue()),
             (Comparable) unwrapStatisticValueWrapper(newColumnStats.getMinValue()))
         .filter(Objects::nonNull)
         .min(Comparator.naturalOrder())
         .orElse(null);
 
-    Comparable maxValue = Stream.of(
+    Comparable maxValue =
+        (Comparable) Stream.of(
             (Comparable) unwrapStatisticValueWrapper(prevColumnStats.getMinValue()),
             (Comparable) unwrapStatisticValueWrapper(newColumnStats.getMinValue()))
         .filter(Objects::nonNull)
