@@ -24,7 +24,6 @@ import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -50,8 +49,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.model.WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getCompletedMetadataPartitions;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightAndCompletedMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
 
 /**
@@ -85,14 +83,15 @@ public class ScheduleIndexActionExecutor<T extends HoodieRecordPayload, I, K, O>
   public Option<HoodieIndexPlan> execute() {
     validateBeforeScheduling();
     // make sure that it is idempotent, check with previously pending index operations.
-    HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
-    Set<String> indexesInflightOrCompleted = getInflightMetadataPartitions(tableConfig);
-    indexesInflightOrCompleted.addAll(getCompletedMetadataPartitions(tableConfig));
+    Set<String> indexesInflightOrCompleted = getInflightAndCompletedMetadataPartitions(table.getMetaClient().getTableConfig());
     Set<String> requestedPartitions = partitionIndexTypes.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
     requestedPartitions.removeAll(indexesInflightOrCompleted);
     if (!requestedPartitions.isEmpty()) {
       LOG.warn(String.format("Following partitions already exist or inflight: %s. Going to index only these partitions: %s",
           indexesInflightOrCompleted, requestedPartitions));
+    } else {
+      LOG.error("All requested index types are inflight or completed: " + partitionIndexTypes);
+      return Option.empty();
     }
     List<MetadataPartitionType> finalPartitionsToIndex = partitionIndexTypes.stream()
         .filter(p -> requestedPartitions.contains(p.getPartitionPath())).collect(Collectors.toList());

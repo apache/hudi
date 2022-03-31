@@ -61,6 +61,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL;
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
@@ -72,6 +74,7 @@ import static org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getCompletedMetadataPartitions;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightAndCompletedMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
 
@@ -90,7 +93,7 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
   // we use this to update the latest instant in data timeline that has been indexed in metadata table
   // this needs to be volatile as it can be updated in the IndexingCheckTask spawned by this executor
   // assumption is that only one indexer can execute at a time
-  private volatile String currentIndexedInstant;
+  private volatile String currentCaughtupInstant;
 
   private final TransactionManager txnManager;
 
@@ -118,9 +121,7 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
         throw new HoodieIndexException(String.format("No partitions to index for instant: %s", instantTime));
       }
       // ensure the metadata partitions for the requested indexes are not already available (or inflight)
-      HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
-      Set<String> indexesInflightOrCompleted = getInflightMetadataPartitions(tableConfig);
-      indexesInflightOrCompleted.addAll(getCompletedMetadataPartitions(tableConfig));
+      Set<String> indexesInflightOrCompleted = getInflightAndCompletedMetadataPartitions(table.getMetaClient().getTableConfig());
       Set<String> requestedPartitions = indexPartitionInfos.stream()
           .map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toSet());
       requestedPartitions.retainAll(indexesInflightOrCompleted);
@@ -149,14 +150,14 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
           .map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
 
       // index catchup for all remaining instants with a timeout
-      currentIndexedInstant = indexUptoInstant;
+      currentCaughtupInstant = indexUptoInstant;
       catchupWithInflightWriters(metadataWriter, instantsToCatchup, metadataMetaClient, metadataCompletedTimestamps);
       // save index commit metadata and update table config
       List<HoodieIndexPartitionInfo> finalIndexPartitionInfos = indexPartitionInfos.stream()
           .map(info -> new HoodieIndexPartitionInfo(
               info.getVersion(),
               info.getMetadataPartitionPath(),
-              currentIndexedInstant))
+              currentCaughtupInstant))
           .collect(Collectors.toList());
       HoodieIndexCommitMetadata indexCommitMetadata = HoodieIndexCommitMetadata.newBuilder()
           .setVersion(LATEST_INDEX_COMMIT_METADATA_VERSION).setIndexPartitionInfos(finalIndexPartitionInfos).build();
@@ -172,19 +173,23 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
   private void abort(HoodieInstant indexInstant, Set<String> requestedPartitions) {
     Set<String> inflightPartitions = getInflightMetadataPartitions(table.getMetaClient().getTableConfig());
     Set<String> completedPartitions = getCompletedMetadataPartitions(table.getMetaClient().getTableConfig());
+    // update table config
+    requestedPartitions.forEach(partition -> {
+      inflightPartitions.remove(partition);
+      completedPartitions.remove(partition);
+    });
+    table.getMetaClient().getTableConfig().setValue(TABLE_METADATA_PARTITIONS_INFLIGHT.key(), String.join(",", inflightPartitions));
+    table.getMetaClient().getTableConfig().setValue(TABLE_METADATA_PARTITIONS.key(), String.join(",", completedPartitions));
+    HoodieTableConfig.update(table.getMetaClient().getFs(), new Path(table.getMetaClient().getMetaPath()), table.getMetaClient().getTableConfig().getProps());
+
     // delete metadata partition
     requestedPartitions.forEach(partition -> {
       MetadataPartitionType partitionType = MetadataPartitionType.valueOf(partition.toUpperCase(Locale.ROOT));
       if (metadataPartitionExists(table.getMetaClient().getBasePath(), context, partitionType)) {
         deleteMetadataPartition(table.getMetaClient().getBasePath(), context, partitionType);
       }
-      inflightPartitions.remove(partition);
-      completedPartitions.remove(partition);
     });
-    // update table config
-    table.getMetaClient().getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT.key(), String.join(",", inflightPartitions));
-    table.getMetaClient().getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS.key(), String.join(",", completedPartitions));
-    HoodieTableConfig.update(table.getMetaClient().getFs(), new Path(table.getMetaClient().getMetaPath()), table.getMetaClient().getTableConfig().getProps());
+
     // delete inflight instant
     table.getMetaClient().reloadActiveTimeline().deleteInstantFileIfExists(HoodieTimeline.getIndexInflightInstant(indexInstant.getTimestamp()));
   }
@@ -193,15 +198,15 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
     // since only write timeline was considered while scheduling index, which gives us the indexUpto instant
     // here we consider other valid actions to pick catchupStart instant
     Set<String> validActions = CollectionUtils.createSet(CLEAN_ACTION, RESTORE_ACTION, ROLLBACK_ACTION);
-    HoodieInstant catchupStartInstant = table.getMetaClient().reloadActiveTimeline()
+    Option<HoodieInstant> catchupStartInstant = table.getMetaClient().reloadActiveTimeline()
         .getTimelineOfActions(validActions)
         .filterInflightsAndRequested()
         .findInstantsBefore(indexUptoInstant)
-        .firstInstant().orElseGet(() -> null);
+        .firstInstant();
     // get all instants since the plan completed (both from active timeline and archived timeline)
     List<HoodieInstant> instantsToIndex;
-    if (catchupStartInstant != null) {
-      instantsToIndex = getRemainingArchivedAndActiveInstantsSince(catchupStartInstant.getTimestamp(), table.getMetaClient());
+    if (catchupStartInstant.isPresent()) {
+      instantsToIndex = getRemainingArchivedAndActiveInstantsSince(catchupStartInstant.get().getTimestamp(), table.getMetaClient());
     } else {
       instantsToIndex = getRemainingArchivedAndActiveInstantsSince(indexUptoInstant, table.getMetaClient());
     }
@@ -248,7 +253,7 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
       indexingCatchupTaskFuture.get(config.getIndexingCheckTimeoutSeconds(), TimeUnit.SECONDS);
     } catch (Exception e) {
       indexingCatchupTaskFuture.cancel(true);
-      throw new HoodieIndexException(String.format("Index catchup failed. Current indexed instant = %s. Aborting!", currentIndexedInstant), e);
+      throw new HoodieIndexException(String.format("Index catchup failed. Current indexed instant = %s. Aborting!", currentCaughtupInstant), e);
     } finally {
       executorService.shutdownNow();
     }
@@ -281,8 +286,8 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
     inflightPartitions.removeAll(metadataPartitions);
     completedPartitions.addAll(metadataPartitions);
     // update table config
-    metaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT.key(), String.join(",", inflightPartitions));
-    metaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS.key(), String.join(",", completedPartitions));
+    metaClient.getTableConfig().setValue(TABLE_METADATA_PARTITIONS_INFLIGHT.key(), String.join(",", inflightPartitions));
+    metaClient.getTableConfig().setValue(TABLE_METADATA_PARTITIONS.key(), String.join(",", completedPartitions));
     HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
   }
 
@@ -316,7 +321,7 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
       for (HoodieInstant instant : instantsToIndex) {
         // metadata index already updated for this instant
         if (!metadataCompletedInstants.isEmpty() && metadataCompletedInstants.contains(instant.getTimestamp())) {
-          currentIndexedInstant = instant.getTimestamp();
+          currentCaughtupInstant = instant.getTimestamp();
           continue;
         }
         while (!instant.isCompleted()) {
@@ -339,7 +344,7 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
           Option<HoodieInstant> metadataInstant = metadataMetaClient.reloadActiveTimeline()
               .filterCompletedInstants().filter(i -> i.getTimestamp().equals(instantTime)).firstInstant();
           if (metadataInstant.isPresent()) {
-            currentIndexedInstant = instantTime;
+            currentCaughtupInstant = instantTime;
             continue;
           }
           try {
@@ -347,6 +352,7 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
             txnManager.beginTransaction(Option.of(instant), Option.empty());
             LOG.info("Updating metadata table for instant: " + instant);
             switch (instant.getAction()) {
+              // TODO: see if this can be moved to metadata writer itself
               case HoodieTimeline.COMMIT_ACTION:
               case HoodieTimeline.DELTA_COMMIT_ACTION:
               case HoodieTimeline.REPLACE_COMMIT_ACTION:

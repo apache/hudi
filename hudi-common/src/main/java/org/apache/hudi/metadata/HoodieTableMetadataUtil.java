@@ -1167,4 +1167,10 @@ public class HoodieTableMetadataUtil {
   public static Set<String> getCompletedMetadataPartitions(HoodieTableConfig tableConfig) {
     return StringUtils.toSet(tableConfig.getMetadataPartitions());
   }
+
+  public static Set<String> getInflightAndCompletedMetadataPartitions(HoodieTableConfig tableConfig) {
+    Set<String> inflightAndCompletedPartitions = getInflightMetadataPartitions(tableConfig);
+    inflightAndCompletedPartitions.addAll(getCompletedMetadataPartitions(tableConfig));
+    return inflightAndCompletedPartitions;
+  }
 }
