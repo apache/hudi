@@ -56,26 +56,18 @@ public class TestManifestFileUtil extends HoodieCommonTestHarness {
   public void testCreateManifestFile() throws Exception {
     // Generate 10 files under each partition
     createTestDataForPartitionedTable(10);
-    ManifestFileUtil mainfestFileUtil = ManifestFileUtil.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).build();
-    try {
-      mainfestFileUtil.writeManifestFile();
-      Assertions.assertTrue(FSUtils.getFileSize(metaClient.getFs(), mainfestFileUtil.getManifestFilePath()) > 0);
-    } catch (IOException e) {
-      e.printStackTrace();
-    }
+    ManifestFileUtil manifestFileUtil = ManifestFileUtil.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).build();
+    manifestFileUtil.writeManifestFile();
+    Assertions.assertTrue(FSUtils.getFileSize(metaClient.getFs(), manifestFileUtil.getManifestFilePath()) > 0);
   }
 
   public void createTestDataForPartitionedTable(int numOfFiles) throws Exception {
     String instant = "100";
     hoodieTestTable = hoodieTestTable.addCommit(instant);
     // Generate 10 files under each partition
-    MULTI_LEVEL_PARTITIONS.forEach(p -> {
-      try {
-        hoodieTestTable = hoodieTestTable.withPartitionMetaFiles(p)
-            .withBaseFilesInPartition(p, IntStream.range(0, numOfFiles).toArray());
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    });
+    for (String partition : MULTI_LEVEL_PARTITIONS) {
+      hoodieTestTable = hoodieTestTable.withPartitionMetaFiles(partition)
+          .withBaseFilesInPartition(partition, IntStream.range(0, numOfFiles).toArray());
+    }
   }
 }
