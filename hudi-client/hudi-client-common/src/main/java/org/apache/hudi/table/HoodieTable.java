@@ -50,6 +50,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -800,6 +801,53 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     // Each engine is expected to override this and
     // provide the actual metadata writer, if enabled.
     return Option.empty();
+  }
+
+  /**
+   * Initialize hoodie.table.metadata.enable in hoodie.proterties;
+   * Check if current metadata table flag in hoodieWriteConfig is the same as recorded in hoodie.proterties:
+   *  1. If the flag in hoodie.proterties is true but it is false in hoodieWriteConfig, It means users turn off MDT and we need to clean up MDT.
+   *  2. Update hoodie.table.metadata.enable in hoodie.proterties based on HoodieWriteConfig if the value is different.
+   */
+  protected void verifyMetadataTableInTableConfig() {
+    // ignore the hoodie.properties in MDT
+    if (metaClient.getBasePath().contains(HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH)) {
+      return;
+    }
+
+    try {
+      if (metaClient.getTableConfig().contains(HoodieTableConfig.METADATA_TABLE_ENABLE)) {
+        Boolean enableMDTInTableConfig = metaClient.getTableConfig().getBoolean(HoodieTableConfig.METADATA_TABLE_ENABLE);
+        Path mdtBasePath = new Path(HoodieTableMetadata.getMetadataTableBasePath(config.getBasePath()));
+        // MDT flag in TableConfig is true;
+        // MDT flag in write config is false;
+        // ===> Users turn off MDT, so that we need to clean up this metadata table in case out-of-sync issue.
+        // the condition order in if(xx) is important.
+        if (enableMDTInTableConfig && !config.isMetadataTableEnabled() && metaClient.getFs().exists(mdtBasePath)) {
+          LOG.info("Deleting metadata table because of disabled in writer.");
+          metaClient.getFs().delete(mdtBasePath, true);
+        }
+
+        // update table config if necessary
+        if (Boolean.compare(enableMDTInTableConfig, config.isMetadataTableEnabled()) != 0) {
+          updateMetadataTableEnableInTableConfig();
+        }
+      } else {
+        // initial METADATA_TABLE_ENABLE.key in table config
+        updateMetadataTableEnableInTableConfig();
+      }
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Failed to delete metadata table.", ioe);
+    }
+  }
+
+  /**
+   * update METADATA_TABLE_ENABLE.key() in hoodie.properties based on HoodieWriteConfig
+   */
+  private void updateMetadataTableEnableInTableConfig() {
+    LOG.info("Update hoodie.table.metadata.enable in hoodie.properties to " + config.isMetadataTableEnabled());
+    metaClient.getTableConfig().setValue(HoodieTableConfig.METADATA_TABLE_ENABLE.key(), Boolean.toString(config.isMetadataTableEnabled()));
+    HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
   }
 
   public HoodieTableMetadata getMetadataTable() {

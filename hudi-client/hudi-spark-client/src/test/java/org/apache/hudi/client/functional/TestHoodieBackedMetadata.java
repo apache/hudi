@@ -198,6 +198,41 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     validateMetadata(testTable, true);
   }
 
+  @Test
+  public void testTurnOffMetadataTableAfterEnable() throws Exception {
+    init(COPY_ON_WRITE, true);
+    String instant1 = "0000001";
+    HoodieCommitMetadata hoodieCommitMetadata = doWriteOperationWithMeta(testTable, instant1, INSERT);
+
+    // sync to metadata table
+    HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
+    Option metadataWriter = table.getMetadataWriter(instant1, Option.of(hoodieCommitMetadata));
+    validateMetadata(testTable, true);
+
+    assertTrue(metadataWriter.isPresent());
+    HoodieTableConfig hoodieTableConfig = new HoodieTableConfig(fs, metaClient.getMetaPath(), writeConfig.getPayloadClass());
+    assertTrue(hoodieTableConfig.getMetadataTableEnable());
+
+    // Turn off  enableMetadata Table
+    HoodieWriteConfig writeConfig2 = HoodieWriteConfig.newBuilder()
+        .withProperties(this.writeConfig.getProps())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .build();
+
+    metaClient.reloadActiveTimeline();
+    HoodieTable table2 = HoodieSparkTable.create(writeConfig2, context, metaClient);
+    String instant2 = "0000002";
+    HoodieCommitMetadata hoodieCommitMetadata2 = doWriteOperationWithMeta(testTable, instant2, INSERT);
+    Option metadataWriter2 = table2.getMetadataWriter(instant2, Option.of(hoodieCommitMetadata2));
+    assertFalse(metadataWriter2.isPresent());
+    HoodieTableConfig hoodieTableConfig2 = new HoodieTableConfig(fs, metaClient.getMetaPath(), writeConfig2.getPayloadClass());
+
+    // assert hoodie.table.metadata.enable=false
+    assertFalse(hoodieTableConfig2.getMetadataTableEnable());
+    // assert MDT is deleted.
+    assertFalse(metaClient.getFs().exists(new Path(HoodieTableMetadata.getMetadataTableBasePath(writeConfig2.getBasePath()))));
+  }
+
   /**
    * Only valid partition directories are added to the metadata.
    */

@@ -107,6 +107,7 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
   @Override
   public <R extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp,
                                                                                             Option<R> actionMetadata) {
+    verifyMetadataTableInTableConfig();
     if (config.isMetadataTableEnabled()) {
       // Create the metadata table writer. First time after the upgrade this creation might trigger
       // metadata table bootstrapping. Bootstrapping process could fail and checking the table
