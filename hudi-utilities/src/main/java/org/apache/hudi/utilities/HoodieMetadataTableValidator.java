@@ -860,16 +860,6 @@ public class HoodieMetadataTableValidator implements Serializable {
                     metaClient.getHadoopConf(),
                     new Path(new Path(metaClient.getBasePath(), partitionPath), filename),
                     allColumnNameList).stream())
-            .map(rangeMetadata -> HoodieColumnRangeMetadata.<Comparable>create(
-                rangeMetadata.getFilePath(),
-                rangeMetadata.getColumnName(),
-                rangeMetadata.getMinValue(),
-                rangeMetadata.getMaxValue(),
-                rangeMetadata.getNullCount(),
-                rangeMetadata.getValueCount(),
-                rangeMetadata.getTotalSize(),
-                rangeMetadata.getTotalUncompressedSize()
-            ))
             .sorted(new HoodieColumnRangeMetadataComparator())
             .collect(Collectors.toList());
       }
