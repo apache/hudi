@@ -78,9 +78,9 @@ public class ManifestFileUtil {
       List<String> partitions = FSUtils.getAllPartitionPaths(engineContext, metadataConfig, basePath);
 
       return partitions.parallelStream().flatMap(p -> {
-        HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(hadoopConf.get());
+        HoodieLocalEngineContext engContext = new HoodieLocalEngineContext(hadoopConf.get());
         HoodieMetadataFileSystemView fsView =
-            new HoodieMetadataFileSystemView(engineContext, metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), metadataConfig);
+            new HoodieMetadataFileSystemView(engContext, metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), metadataConfig);
         return fsView.getLatestBaseFiles(p).map(HoodieBaseFile::getFileName);
       });
     } catch (Exception e) {
