@@ -14,39 +14,45 @@ jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
-      max-parallel: 7
+      max-parallel: 8
       matrix:
         include:
-          # Spark 2.4.4
+          # Spark 2.4.4, scala 2.11
           - scalaProfile: "scala-2.11"
-            sparkProfile: "spark2"
+            sparkProfile: "spark2.4"
+            sparkVersion: "2.4.4"
+
+          # Spark 2.4.4, scala 2.12
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark2.4"
             sparkVersion: "2.4.4"
 
           # Spark 3.1.x
           - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.1.x"
+            sparkProfile: "spark3.1"
             sparkVersion: "3.1.0"
 
           - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.1.x"
+            sparkProfile: "spark3.1"
             sparkVersion: "3.1.1"
 
           - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.1.x"
+            sparkProfile: "spark3.1"
             sparkVersion: "3.1.2"
 
           - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.1.x"
+            sparkProfile: "spark3.1"
             sparkVersion: "3.1.3"
 
           # Spark 3.2.x
           - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.2.0"
+            sparkProfile: "spark3.2"
             sparkVersion: "3.2.0"
 
           - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3"
+            sparkProfile: "spark3.2"
             sparkVersion: "3.2.1"
+
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 8
