@@ -20,7 +20,6 @@ FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:latest
 
 ENV HIVE_HOME /opt/hive
 ENV PATH $HIVE_HOME/bin:$PATH
-ENV TEZ_HOME /opt/tez
 ENV HADOOP_HOME /opt/hadoop-$HADOOP_VERSION
 
 WORKDIR /opt
@@ -37,24 +36,11 @@ RUN echo "Hive URL is: ${HIVE_URL}" && wget ${HIVE_URL} -O hive.tar.gz && \
 	wget https://jdbc.postgresql.org/download/postgresql-9.4.1212.jar -O $HIVE_HOME/lib/postgresql-jdbc.jar && \
 	rm hive.tar.gz && mkdir -p /var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/
 
-ARG TEZ_VERSION=0.10.1
-ARG TEZ_URL=https://archive.apache.org/dist/tez/$TEZ_VERSION/apache-tez-$TEZ_VERSION-bin.tar.gz
-ENV TEZ_VERSION ${TEZ_VERSION}
-ENV TEZ_URL ${TEZ_URL}
-
-# Install Tez (required for Hive 3.x)
-RUN echo "Tez URL is: ${TEZ_URL}" && \
-    wget ${TEZ_URL} -O tez.tar.gz && \
-	tar -xzvf tez.tar.gz && \
-    mv *tez*-bin tez && \
-	rm tez.tar.gz
-
 # Spark should be compiled with Hive to be able to use it
 #hive-site.xml should be copied to $SPARK_HOME/conf folder
 
 # Custom configuration goes here
 ADD conf/hive-site.xml $HADOOP_CONF_DIR
-ADD conf/tez-site.xml $HADOOP_CONF_DIR
 ADD conf/beeline-log4j2.properties $HIVE_HOME/conf
 ADD conf/hive-env.sh $HIVE_HOME/conf
 ADD conf/hive-exec-log4j2.properties $HIVE_HOME/conf
