@@ -394,9 +394,9 @@ public abstract class AbstractHoodieLogRecordReader {
   private Option<Schema> getMergedSchema(HoodieDataBlock dataBlock) {
     Option<Schema> result = Option.empty();
     if (!internalSchema.isEmptySchema()) {
-      Long currentTime = Long.parseLong(dataBlock.getLogBlockHeader().get(INSTANT_TIME));
+      Long currentInstantTime = Long.parseLong(dataBlock.getLogBlockHeader().get(INSTANT_TIME));
       InternalSchema fileSchema = InternalSchemaCache
-          .searchSchemaAndCache(currentTime, hoodieTableMetaClient, false);
+          .searchSchemaAndCache(currentInstantTime, hoodieTableMetaClient, false);
       Schema mergeSchema = AvroInternalSchemaConverter
           .convert(new InternalSchemaMerger(fileSchema, internalSchema, true, false).mergeSchema(), readerSchema.getName());
       result = Option.of(mergeSchema);

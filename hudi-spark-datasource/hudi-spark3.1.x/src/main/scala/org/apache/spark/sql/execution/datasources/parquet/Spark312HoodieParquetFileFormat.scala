@@ -139,10 +139,10 @@ class Spark312HoodieParquetFileFormat extends ParquetFileFormat {
         val querySchemaOption = SerDeHelper.fromJson(internalSchemaString)
         val internalSchemaChangeEnabled = if (internalSchemaString.isEmpty || !querySchemaOption.isPresent) false else true
         val tablePath = sharedConf.get(SparkInternalSchemaConverter.HOODIE_TABLE_PATH)
-        val commitTime = FSUtils.getCommitTime(filePath.getName).toLong;
+        val commitInstantTime = FSUtils.getCommitTime(filePath.getName).toLong;
         val fileSchema = if (internalSchemaChangeEnabled) {
           val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
-          InternalSchemaCache.getInternalSchemaByVersionId(commitTime, tablePath, sharedConf, if (validCommits == null) "" else validCommits)
+          InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, tablePath, sharedConf, if (validCommits == null) "" else validCommits)
         } else {
           // this should not happened, searchSchemaAndCache will deal with correctly.
           null
