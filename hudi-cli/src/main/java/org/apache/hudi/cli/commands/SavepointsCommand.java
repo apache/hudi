@@ -93,7 +93,7 @@ public class SavepointsCommand implements CommandMarker {
       @CliOption(key = {"savepoint"}, help = "Savepoint to rollback") final String instantTime,
       @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath,
       @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
-      @CliOption(key = {"LazyFailedWritesCleanPolicy"}, help = "True if FailedWriteCleanPolicy is lazy",
+      @CliOption(key = {"lazyFailedWritesCleanPolicy"}, help = "True if FailedWriteCleanPolicy is lazy",
           unspecifiedDefaultValue = "false") final String lazyFailedWritesCleanPolicy,
       @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
           help = "Spark executor memory") final String sparkMemory)
