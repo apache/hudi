@@ -40,6 +40,25 @@ public class DateTimeUtils {
       Collections.unmodifiableMap(initMap());
 
   /**
+   * Converts provided {@link Instant} to microseconds
+   */
+  public static long toMicros(Instant instant) {
+    long seconds = instant.getEpochSecond();
+    int nanos = instant.getNano();
+
+    if (seconds < 0 && nanos > 0) {
+      long micros = Math.multiplyExact(seconds + 1, 1_000_000L);
+      long adjustment = (nanos / 1_000L) - 1_000_000;
+
+      return Math.addExact(micros, adjustment);
+    } else {
+      long micros = Math.multiplyExact(seconds, 1_000_000L);
+
+      return Math.addExact(micros, nanos / 1_000L);
+    }
+  }
+
+  /**
    * Parse input String to a {@link java.time.Instant}.
    *
    * @param s Input String should be Epoch time in millisecond or ISO-8601 format.

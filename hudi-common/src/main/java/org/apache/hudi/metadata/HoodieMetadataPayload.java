@@ -58,6 +58,8 @@ import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
@@ -71,6 +73,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.TypeUtils.unsafeCast;
+import static org.apache.hudi.common.util.DateTimeUtils.toMicros;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_LIST;
@@ -631,15 +634,23 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
   private static Object wrapStatisticValue(Comparable<?> statValue) {
     if (statValue instanceof Date) {
-      return DateWrapper.newBuilder().setValue(((Date) statValue).toLocalDate()).build();
+      // NOTE: Due to breaking changes in code-gen b/w Avro 1.8.2 and 1.10, we can't
+      //       rely on logical types to do proper encoding of the native Java types,
+      //       and hereby have to encode statistic manually
+      LocalDate localDate = ((Date) statValue).toLocalDate();
+      return DateWrapper.newBuilder().setValue((int) localDate.toEpochDay()).build();
     } else if (statValue instanceof BigDecimal) {
       Schema valueSchema = DecimalWrapper.SCHEMA$.getField("value").schema();
       return DecimalWrapper.newBuilder()
           .setValue(AVRO_DECIMAL_CONVERSION.toBytes((BigDecimal) statValue, null, valueSchema.getLogicalType()))
           .build();
     } else if (statValue instanceof Timestamp) {
+      // NOTE: Due to breaking changes in code-gen b/w Avro 1.8.2 and 1.10, we can't
+      //       rely on logical types to do proper encoding of the native Java types,
+      //       and hereby have to encode statistic manually
+      Instant instant = ((Timestamp) statValue).toInstant();
       return TimestampMicrosWrapper.newBuilder()
-          .setValue(((Timestamp) statValue).toInstant())
+          .setValue(toMicros(instant))
           .build();
     } else if (statValue instanceof Boolean) {
       return BooleanWrapper.newBuilder().setValue((Boolean) statValue).build();
