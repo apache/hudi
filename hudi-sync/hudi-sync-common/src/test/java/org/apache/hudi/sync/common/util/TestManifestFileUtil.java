@@ -16,28 +16,28 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.metadata;
+package org.apache.hudi.sync.common.util;
 
-import org.apache.hudi.common.table.view.SyncableFileSystemView;
-import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
-import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.fs.FSUtils;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import org.apache.hadoop.fs.Path;
+
 import java.util.Arrays;
 import java.util.List;
-
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestTable;
+
+
 public class TestManifestFileUtil extends HoodieCommonTestHarness {
-  protected SyncableFileSystemView fsView;
+
   private static final List<String> MULTI_LEVEL_PARTITIONS = Arrays.asList("2019/01", "2020/01", "2021/01");
   private static HoodieTestTable hoodieTestTable;
 
@@ -61,16 +61,9 @@ public class TestManifestFileUtil extends HoodieCommonTestHarness {
     // Generate 10 files under each partition
     createTestDataForPartitionedTable(10);
     ManifestFileUtil mainfestFileUtil = ManifestFileUtil.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).build();
-    Path path = Paths.get(mainfestFileUtil.getManifestFilePath());
     try {
-      mainfestFileUtil.writeManifestFile();
-      lines = Files.lines(path).count();
-      Assertions.assertEquals(30, lines);
-      // Generate 2 files under each partition
-      createTestDataForPartitionedTable(5);
-      mainfestFileUtil.writeManifestFile();
-      lines = Files.lines(path).count();
-      Assertions.assertEquals(45, lines);
+    mainfestFileUtil.writeManifestFile();
+    Assertions.assertTrue(FSUtils.getFileSize(metaClient.getFs(), new Path(mainfestFileUtil.getManifestFilePath())) > 0);
     } catch (IOException e) {
       e.printStackTrace();
     }

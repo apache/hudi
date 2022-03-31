@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.metadata;
+package org.apache.hudi.sync.common.util;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
