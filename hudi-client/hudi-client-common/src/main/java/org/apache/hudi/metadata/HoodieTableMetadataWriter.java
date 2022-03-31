@@ -23,7 +23,6 @@ import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.List;
 
@@ -63,11 +62,10 @@ public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
   void update(HoodieRollbackMetadata rollbackMetadata, String instantTime);
 
   /**
-   * Drop the given metadata partitions. This path reuses DELETE_PARTITION operation.
+   * Deletes the given metadata partitions. This path reuses DELETE_PARTITION operation.
    *
    * @param instantTime - instant time when replacecommit corresponding to the drop will be recorded in the metadata timeline
    * @param partitions - list of {@link MetadataPartitionType} to drop
-   * @throws IOException
    */
   void deletePartitions(String instantTime, List<MetadataPartitionType> partitions);
 }

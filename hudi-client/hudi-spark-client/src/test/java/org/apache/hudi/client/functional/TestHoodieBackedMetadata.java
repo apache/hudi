@@ -450,23 +450,18 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   @EnumSource(HoodieTableType.class)
   public void testMetadataTableDeletePartition(HoodieTableType tableType) throws IOException {
     initPath();
-    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
-        .withIndexConfig(HoodieIndexConfig.newBuilder()
-            .bloomIndexBucketizedChecking(false)
-            .build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .enable(true)
-            .withMetadataIndexBloomFilter(true)
-            .withMetadataIndexBloomFilterFileGroups(4)
-            .withMetadataIndexColumnStats(true)
-            .withMetadataIndexBloomFilterFileGroups(2)
-            .withMetadataIndexForAllColumns(true)
-            .build())
+    int maxCommits = 1;
+    HoodieWriteConfig cfg = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(maxCommits).build())
+        .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1).withDeleteParallelism(1)
+        .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
         .build();
-    init(tableType, writeConfig);
+    init(tableType);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, cfg)) {
       // Write 1 (Bulk insert)
       String newCommitTime = "0000001";
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
@@ -491,9 +486,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
       List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, metadataMetaClient.getBasePath(), false, false);
-      // partition should still be physically present
+      // partition should be physically deleted
       assertEquals(metadataWriter.getEnabledPartitionTypes().size(), metadataTablePartitions.size());
-      assertTrue(metadataTablePartitions.contains(MetadataPartitionType.COLUMN_STATS.getPartitionPath()));
+      assertFalse(metadataTablePartitions.contains(MetadataPartitionType.COLUMN_STATS.getPartitionPath()));
 
       Option<HoodieInstant> completedReplaceInstant = metadataMetaClient.reloadActiveTimeline().getCompletedReplaceTimeline().lastInstant();
       assertTrue(completedReplaceInstant.isPresent());
