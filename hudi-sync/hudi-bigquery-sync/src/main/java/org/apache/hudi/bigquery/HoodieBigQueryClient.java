@@ -185,6 +185,12 @@ public class HoodieBigQueryClient extends AbstractSyncHoodieClient {
     throw new UnsupportedOperationException("No support for doesTableExist yet.");
   }
 
+  @Override
+  public boolean tableExists(String tableName) {
+    // bigQuery table exists needs different set of arguments, so do nothing.
+    throw new UnsupportedOperationException("No support for tableExists yet.");
+  }
+
   public boolean doesTableExist(final String projectId, final String datasetName, final String tableName) {
     TableId tableId = TableId.of(projectId, datasetName, tableName);
     return bigquery.getTable(tableId, BigQuery.TableOption.fields()) != null;
@@ -205,6 +211,18 @@ public class HoodieBigQueryClient extends AbstractSyncHoodieClient {
   public void updateLastCommitTimeSynced(final String tableName) {
     // bigQuery doesn't support tblproperties, so do nothing.
     throw new UnsupportedOperationException("No support for updateLastCommitTimeSynced yet.");
+  }
+
+  @Override
+  public Option<String> getLastReplicatedTime(String tableName) {
+    // bigQuery doesn't support tblproperties, so do nothing.
+    throw new UnsupportedOperationException("Not support getLastReplicatedTime yet.");
+  }
+
+  @Override
+  public void updateLastReplicatedTimeStamp(String tableName, String timeStamp) {
+    // bigQuery doesn't support tblproperties, so do nothing.
+    throw new UnsupportedOperationException("No support for updateLastReplicatedTimeStamp yet.");
   }
 
   @Override
