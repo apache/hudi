@@ -278,6 +278,9 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
    * retain 10 commits, and commit batch time is 30 mins, then you have 5 hrs of lookback)
    * <p>
    * This policy is the default.
+   *
+   * @return A {@link Pair} whose left is boolean indicating whether partition itself needs to be deleted,
+   *         and right is a list of {@link CleanFileInfo} about the files in the partition that needs to be deleted.
    */
   private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestCommits(String partitionPath, int commitsRetained, HoodieCleaningPolicy policy) {
     LOG.info("Cleaning " + partitionPath + ", retaining latest " + commitsRetained + " commits. ");

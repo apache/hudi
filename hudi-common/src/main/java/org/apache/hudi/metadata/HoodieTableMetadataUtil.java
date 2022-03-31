@@ -195,7 +195,7 @@ public class HoodieTableMetadataUtil {
     List<HoodieRecord> records = new ArrayList<>(commitMetadata.getPartitionToWriteStats().size());
 
     // Add record bearing added partitions list
-    ArrayList<String> partitionsAdded = new ArrayList<>(commitMetadata.getPartitionToWriteStats().keySet());
+    List<String> partitionsAdded = new ArrayList<>(commitMetadata.getPartitionToWriteStats().keySet());
 
     records.add(HoodieMetadataPayload.createPartitionListRecord(partitionsAdded));
 
@@ -371,7 +371,7 @@ public class HoodieTableMetadataUtil {
       records.add(HoodieMetadataPayload.createPartitionListRecord(deletedPartitions, true));
     }
     LOG.info("Updating at " + instantTime + " from Clean. #partitions_updated=" + records.size()
-        + ", #files_deleted=" + fileDeleteCount[0]);
+        + ", #files_deleted=" + fileDeleteCount[0] + ", #partitions_deleted=" + deletedPartitions.size());
     return records;
   }
 
