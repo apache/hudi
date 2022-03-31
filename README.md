@@ -70,7 +70,7 @@ To build the Javadoc for all Java and Scala classes:
 mvn clean javadoc:aggregate -Pjavadocs
 ```
 
-### Build with Different Spark versions
+### Build with different Spark versions
 
 The default Spark version supported is 2.4.4. To build for different Spark versions and Scala 2.12, use the
 corresponding profile
@@ -100,12 +100,6 @@ mvn clean package -DskipTests -Pspark2.4,scala-2.12
 ### What about "spark-avro" module? 
 
 Starting from versions 0.11, Hudi no longer requires `spark-avro` to be specified using `--packages`
-
-### Usage of hudi-utilities-slim-bundle
-
-Starting from versions 0.11, Hudi provides hudi-utilities-slim-bundle which excludes hudi-spark-datasource modules.
-This new bundle is intended to be used with Hudi Spark bundle together, if using hudi-utilities-bundle solely
-introduces problems for a specific Spark version.
 
 ## Running Tests
 
