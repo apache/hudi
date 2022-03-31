@@ -81,7 +81,7 @@ public class ManifestFileUtil {
 
       List<String> partitions = FSUtils.getAllPartitionPaths(engineContext, metadataConfig, basePath);
 
-      return partitions.parallelStream().flatMap(p -> fsView.getLatestBaseFiles(p).map(HoodieBaseFile::getPath));
+      return partitions.parallelStream().flatMap(p -> fsView.getLatestBaseFiles(p).map(HoodieBaseFile::getFileName));
     } catch (Exception e) {
       String msg = "Error checking path :" + basePath;
       LOG.error(msg, e);
@@ -100,6 +100,10 @@ public class ManifestFileUtil {
    */
   public String getManifestFolder() {
     return metaClient.getMetaPath() + Path.SEPARATOR + MANIFEST_FOLDER_NAME;
+  }
+
+  public String getManifestFilePath() {
+    return metaClient.getMetaPath() + Path.SEPARATOR + MANIFEST_FOLDER_NAME +  Path.SEPARATOR + MANIFEST_FILE_NAME;
   }
 
   public void setBasePath(String basePath) {
