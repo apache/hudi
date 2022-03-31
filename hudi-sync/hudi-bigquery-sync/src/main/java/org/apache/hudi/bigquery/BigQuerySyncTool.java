@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.sync.common.AbstractSyncTool;
+import org.apache.hudi.sync.common.util.ManifestFileUtil;
 
 import com.beust.jcommander.JCommander;
 import org.apache.hadoop.conf.Configuration;
@@ -113,7 +114,12 @@ public class BigQuerySyncTool extends AbstractSyncTool {
     LOG.info("Trying to sync hoodie table " + snapshotViewName + " with base path " + hoodieBigQueryClient.getBasePath()
         + " of type " + hoodieBigQueryClient.getTableType());
 
-    // TODO: Invoke generate manifest routine to refresh the manifest files.
+    ManifestFileUtil manifestFileUtil = ManifestFileUtil.builder()
+        .setConf(conf)
+        .setBasePath(cfg.basePath)
+        .build();
+    manifestFileUtil.writeManifestFile();
+
     if (!hoodieBigQueryClient.doesTableExist(projectId, datasetName, manifestTableName)) {
       hoodieBigQueryClient.createManifestTable(projectId, datasetName, manifestTableName, sourceUri);
       LOG.info("Manifest table creation complete for " + manifestTableName);
