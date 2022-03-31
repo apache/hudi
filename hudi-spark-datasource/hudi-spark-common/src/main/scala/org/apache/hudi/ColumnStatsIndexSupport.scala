@@ -17,15 +17,17 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.ColumnStatsIndexSupport.{genStatValueExtractionExpr, statisticRecordSchema}
+import org.apache.hudi.ColumnStatsIndexSupport.{deserialize, tryUnpackNonNullVal}
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats
-import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper.{getMaxColumnNameFor, getMinColumnNameFor, getNumNullsColumnNameFor}
+import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper.composeIndexSchema
 import org.apache.hudi.metadata.{HoodieMetadataPayload, MetadataPartitionType}
-import org.apache.spark.sql.HoodieSparkTypeUtils.isWiderThan
-import org.apache.spark.sql.HoodieUnsafeRDDUtils.createDataFrame
-import org.apache.spark.sql.{DataFrame, Encoders, HoodieUnsafeRDDUtils, Row, SparkSession}
+import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.functions.col
-import org.apache.spark.sql.types.{BinaryType, ByteType, DataType, DecimalType, IntegerType, ShortType, StructField, StructType}
+import org.apache.spark.sql.types._
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
+
+import scala.collection.immutable.TreeSet
+import scala.collection.JavaConverters._
 
 /**
  * Mixin trait abstracting away heavy-lifting of interactions with Metadata Table's Column Stats Index,
@@ -55,85 +57,102 @@ trait ColumnStatsIndexSupport {
     colStatsDF
   }
 
-  private def findCarryingField(colType: DataType, statisticStructType: StructType): StructField = {
-    statisticStructType.fields
-      .find { wrapperField =>
-        wrapperField.dataType match {
-          case StructType(Array(valueField)) =>
-            (colType, valueField.dataType) match {
-              // NOTE: Due to misalignment type-systems of Parquet, Spark and Avro we have to do up-casts
-              //       while persisting records w/in Column Stats Index: for ex, if in Parquet value is stored as
-              //       [[Short]] (2 bytes) inside the Index it will be persisted as [[Integer]], since Avro's type-system
-              //       simply does not have any 2-byte integral type. Therefore when we deserialize we have to
-              //       do down-cast back into the typ of the Column the data belongs to, therefore such casts could not
-              //       lead to the data loss.
-              case (colDecimalType: DecimalType, valueDecimalType: DecimalType) => isWiderThan(valueDecimalType, colDecimalType)
-              case (ShortType, IntegerType) => true
-              case (ByteType, IntegerType) => true
+  /**
+   * Transposes and converts the raw table format of the Column Stats Index representation,
+   * where each row/record corresponds to individual (column, file) pair, into the table format
+   * where each row corresponds to single file with statistic for individual columns collated
+   * w/in such row:
+   *
+   * Metadata Table Column Stats Index format:
+   *
+   * <pre>
+   *  +---------------------------+------------+------------+------------+-------------+
+   *  |        fileName           | columnName |  minValue  |  maxValue  |  num_nulls  |
+   *  +---------------------------+------------+------------+------------+-------------+
+   *  | one_base_file.parquet     |          A |          1 |         10 |           0 |
+   *  | another_base_file.parquet |          A |        -10 |          0 |           5 |
+   *  +---------------------------+------------+------------+------------+-------------+
+   * </pre>
+   *
+   * Returned table format
+   *
+   * <pre>
+   *  +---------------------------+------------+------------+-------------+
+   *  |          file             | A_minValue | A_maxValue | A_num_nulls |
+   *  +---------------------------+------------+------------+-------------+
+   *  | one_base_file.parquet     |          1 |         10 |           0 |
+   *  | another_base_file.parquet |        -10 |          0 |           5 |
+   *  +---------------------------+------------+------------+-------------+
+   * </pre>
+   *
+   * NOTE: Column Stats Index might potentially contain statistics for many columns (if not all), while
+   *       query at hand might only be referencing a handful of those. As such, we collect all the
+   *       column references from the filtering expressions, and only transpose records corresponding to the
+   *       columns referenced in those
+   *
+   * @param spark Spark session ref
+   * @param colStatsDF [[DataFrame]] bearing raw Column Stats Index table
+   * @param targetColumns target columns to be included into the final table
+   * @param tableSchema schema of the source data table
+   * @return reshaped table according to the format outlined above
+   */
+  def transposeColumnStatsIndex(spark: SparkSession, colStatsDF: DataFrame, targetColumns: Seq[String], tableSchema: StructType): DataFrame = {
+    val colStatsSchema = colStatsDF.schema
+    val colStatsSchemaOrdinalsMap = colStatsSchema.fields.zipWithIndex.map({
+      case (field, ordinal) => (field.name, ordinal)
+    }).toMap
 
-              case (_: StructType, BinaryType) => true
+    val tableSchemaFieldMap = tableSchema.fields.map(f => (f.name, f)).toMap
 
-              case (colType, valueType) => valueType == colType
+    // NOTE: We're sorting the columns to make sure final index schema matches layout
+    //       of the transposed table
+    val sortedColumns = TreeSet(targetColumns: _*)
+
+    val transposedRDD = colStatsDF.rdd
+      .filter(row => sortedColumns.contains(row.getString(colStatsSchemaOrdinalsMap("columnName"))))
+      .map { row =>
+        val (minValue, _) = tryUnpackNonNullVal(row.getAs[Row](colStatsSchemaOrdinalsMap("minValue")))
+        val (maxValue, _) = tryUnpackNonNullVal(row.getAs[Row](colStatsSchemaOrdinalsMap("maxValue")))
+
+        val colName = row.getString(colStatsSchemaOrdinalsMap("columnName"))
+        val colType = tableSchemaFieldMap(colName).dataType
+
+        val rowValsSeq = row.toSeq.toArray
+
+        rowValsSeq(colStatsSchemaOrdinalsMap("minValue")) = deserialize(minValue, colType)
+        rowValsSeq(colStatsSchemaOrdinalsMap("maxValue")) = deserialize(maxValue, colType)
+
+        Row(rowValsSeq:_*)
+      }
+      .groupBy(r => r.getString(colStatsSchemaOrdinalsMap("fileName")))
+      .foldByKey(Seq[Row]()) {
+        case (_, columnRows) =>
+          // Rows seq is always non-empty (otherwise it won't be grouped into)
+          val fileName = columnRows.head.get(colStatsSchemaOrdinalsMap("fileName"))
+          val coalescedRowValuesSeq = columnRows.toSeq
+            // NOTE: It's crucial to maintain appropriate ordering of the columns
+            //       matching table layout
+            .sortBy(_.getString(colStatsSchemaOrdinalsMap("columnName")))
+            .foldLeft(Seq[Any](fileName)) {
+              case (acc, columnRow) =>
+                acc ++ Seq("minValue", "maxValue", "nullCount").map(ord => columnRow.get(colStatsSchemaOrdinalsMap(ord)))
             }
 
-          case _ =>
-            throw new IllegalArgumentException(s"Invalid format of the statistic wrapper (${wrapperField.dataType})")
-        }
+          Seq(Row(coalescedRowValuesSeq:_*))
       }
-      .getOrElse(throw new IllegalArgumentException(s"Unsupported primitive type for the statistic ($colType)"))
-  }
+      .values
+      .flatMap(it => it)
 
-  def transposeColumnStatsIndex(columnStatsDF: DataFrame, targetDataTableColumns: Seq[(String, DataType)]): DataFrame = {
-    //
-    // Metadata Table bears rows in the following format
-    //
-    //  +---------------------------+------------+------------+------------+-------------+
-    //  |        fileName           | columnName |  minValue  |  maxValue  |  num_nulls  |
-    //  +---------------------------+------------+------------+------------+-------------+
-    //  | one_base_file.parquet     |          A |          1 |         10 |           0 |
-    //  | another_base_file.parquet |          A |        -10 |          0 |           5 |
-    //  +---------------------------+------------+------------+------------+-------------+
-    //
-    // While Data Skipping utils are expecting following (transposed) format, where per-column stats are
-    // essentially transposed (from rows to columns):
-    //
-    //  +---------------------------+------------+------------+-------------+
-    //  |          file             | A_minValue | A_maxValue | A_num_nulls |
-    //  +---------------------------+------------+------------+-------------+
-    //  | one_base_file.parquet     |          1 |         10 |           0 |
-    //  | another_base_file.parquet |        -10 |          0 |           5 |
-    //  +---------------------------+------------+------------+-------------+
-    //
-    // NOTE: Column Stats Index might potentially contain statistics for many columns (if not all), while
-    //       query at hand might only be referencing a handful of those. As such, we collect all the
-    //       column references from the filtering expressions, and only transpose records corresponding to the
-    //       columns referenced in those
-    //
-    val transposedColStatsDF = targetDataTableColumns
-      .map {
-        case (colName, colType) =>
-          val carryingField = findCarryingField(colType, statisticRecordSchema)
+    // NOTE: It's crucial to maintain appropriate ordering of the columns
+    //       matching table layout: hence, we cherry-pick individual columns
+    //       instead of simply filtering in the ones we're interested in the schema
+    val indexSchema = composeIndexSchema(
+      sortedColumns.toSeq
+        .map(colName => tableSchema.fields.find(f => f.name == colName).get)
+        .asJava
+    )
 
-          columnStatsDF.filter(col(HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME).equalTo(colName))
-            .withColumn(
-              getMinColumnNameFor(colName),
-              genStatValueExtractionExpr(HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE, carryingField, colType)
-            )
-            .withColumn(
-              getMaxColumnNameFor(colName),
-              genStatValueExtractionExpr(HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE, carryingField, colType)
-            )
-            .withColumn(getNumNullsColumnNameFor(colName), col(HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT))
-            .drop(
-              HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME,
-              HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE,
-              HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE,
-              HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT)
-      }
-      .reduceLeft((left, right) =>
-        left.join(right, usingColumn = HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME))
-
-    transposedColStatsDF
+    spark.createDataFrame(transposedRDD, indexSchema)
   }
 }
 
@@ -142,14 +161,34 @@ object ColumnStatsIndexSupport {
   //
   //  |-- minValue: struct (nullable = true)
   //  |    |-- member0: struct (nullable = true)
-  //  |    |    |-- value: <statistic_type> (nullable = false)
+  //  |    |    |-- value: <type> (nullable = false)
   //
   private val statisticRecordSchema: StructType =
   AvroConversionUtils.convertAvroSchemaToStructType(HoodieMetadataColumnStats.SCHEMA$.getField("minValue").schema())
 
   private val statisticWrapperValueFieldName = "value"
 
-  private def genStatValueExtractionExpr(statColumnName: String, carryingField: StructField, tableColType: DataType) = {
-    col(s"$statColumnName.${carryingField.name}.$statisticWrapperValueFieldName").cast(tableColType)
+  private def tryUnpackNonNullVal(statStruct: Row): (Any, Int) =
+    statStruct.toSeq.zipWithIndex
+      .find(_._1 != null)
+      // NOTE: First non-null value will be a wrapper (converted into Row), bearing a single
+      //       value
+      .map { case (value, ord) => (value.asInstanceOf[Row].get(0), ord)}
+      .getOrElse((null, -1))
+
+  private def deserialize(value: Any, dataType: DataType): Any = {
+    dataType match {
+      // NOTE: Since we can't rely on Avro's "date", and "timestamp-micros" logical-types, we're
+      //       manually encoding corresponding values as int and long w/in the Column Stats Index and
+      //       here we have to decode those back into corresponding logical representation.
+      case TimestampType => DateTimeUtils.toJavaTimestamp(value.asInstanceOf[Long])
+      case DateType => DateTimeUtils.toJavaDate(value.asInstanceOf[Int])
+
+      // NOTE: All integral types of size less than Int are encoded as Ints in MT
+      case ShortType => value.asInstanceOf[Int].toShort
+      case ByteType => value.asInstanceOf[Int].toByte
+
+      case _ => value
+    }
   }
 }
