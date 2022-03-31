@@ -51,6 +51,7 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.utilities.util.BloomFilterData;
 
 import com.beust.jcommander.JCommander;
@@ -848,15 +849,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         return allColumnNameList.stream()
             .flatMap(columnName ->
                 tableMetadata.getColumnStats(partitionFileNameList, columnName).values().stream()
-                    .map(stats -> HoodieColumnRangeMetadata.<Comparable>create(
-                        stats.getFileName(),
-                        columnName,
-                        (Comparable) stats.getMinValue(),
-                        (Comparable) stats.getMaxValue(),
-                        stats.getNullCount(),
-                        stats.getValueCount(),
-                        stats.getTotalSize(),
-                        stats.getTotalUncompressedSize()))
+                    .map(HoodieTableMetadataUtil::convertColumnStatsRecordToColumnRangeMetadata)
                     .collect(Collectors.toList())
                     .stream())
             .sorted(new HoodieColumnRangeMetadataComparator())

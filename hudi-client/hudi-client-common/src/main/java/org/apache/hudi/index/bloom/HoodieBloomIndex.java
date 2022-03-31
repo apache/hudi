@@ -20,6 +20,7 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
+import org.apache.hudi.avro.model.StringWrapper;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
@@ -229,8 +230,8 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
               new BloomIndexFileInfo(
                   FSUtils.getFileId(entry.getKey().getRight()),
                   // NOTE: Here we assume that the type of the primary key field is string
-                  (String) entry.getValue().getMinValue(),
-                  (String) entry.getValue().getMaxValue()
+                  ((StringWrapper) entry.getValue().getMinValue()).getValue(),
+                  ((StringWrapper) entry.getValue().getMaxValue()).getValue()
               )));
         }
         return result.stream();

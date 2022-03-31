@@ -19,6 +19,7 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.bloom.BloomFilter;
@@ -94,6 +95,7 @@ import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.TOTAL
 import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.TOTAL_UNCOMPRESSED_SIZE;
 import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.VALUE_COUNT;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.unwrapStatisticValueWrapper;
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 
@@ -107,6 +109,21 @@ public class HoodieTableMetadataUtil {
   protected static final String PARTITION_NAME_FILES = "files";
   protected static final String PARTITION_NAME_COLUMN_STATS = "column_stats";
   protected static final String PARTITION_NAME_BLOOM_FILTERS = "bloom_filters";
+
+  /**
+   * Converts instance of {@link HoodieMetadataColumnStats} to {@link HoodieColumnRangeMetadata}
+   */
+  public static HoodieColumnRangeMetadata<Comparable> convertColumnStatsRecordToColumnRangeMetadata(HoodieMetadataColumnStats columnStats) {
+    return HoodieColumnRangeMetadata.<Comparable>create(
+        columnStats.getFileName(),
+        columnStats.getColumnName(),
+        unwrapStatisticValueWrapper(columnStats.getMinValue()),
+        unwrapStatisticValueWrapper(columnStats.getMaxValue()),
+        columnStats.getNullCount(),
+        columnStats.getValueCount(),
+        columnStats.getTotalSize(),
+        columnStats.getTotalUncompressedSize());
+  }
 
   /**
    * Delete the metadata table for the dataset. This will be invoked during upgrade/downgrade operation during which

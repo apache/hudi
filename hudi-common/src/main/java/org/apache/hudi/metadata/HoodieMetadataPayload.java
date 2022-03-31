@@ -676,7 +676,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     }
   }
 
-  private static Comparable<?> unwrapStatisticValueWrapper(Object statValueWrapper) {
+  static Comparable<?> unwrapStatisticValueWrapper(Object statValueWrapper) {
     if (statValueWrapper instanceof DateWrapper) {
       return LocalDate.ofEpochDay(((DateWrapper) statValueWrapper).getValue());
     } else if (statValueWrapper instanceof DecimalWrapper) {
