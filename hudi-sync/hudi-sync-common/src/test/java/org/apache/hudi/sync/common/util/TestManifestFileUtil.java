@@ -25,7 +25,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import org.apache.hadoop.fs.Path;
 
 import java.util.Arrays;
 import java.util.List;
@@ -60,7 +59,7 @@ public class TestManifestFileUtil extends HoodieCommonTestHarness {
     ManifestFileUtil mainfestFileUtil = ManifestFileUtil.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).build();
     try {
       mainfestFileUtil.writeManifestFile();
-      Assertions.assertTrue(FSUtils.getFileSize(metaClient.getFs(), new Path(mainfestFileUtil.getManifestFilePath())) > 0);
+      Assertions.assertTrue(FSUtils.getFileSize(metaClient.getFs(), mainfestFileUtil.getManifestFilePath()) > 0);
     } catch (IOException e) {
       e.printStackTrace();
     }

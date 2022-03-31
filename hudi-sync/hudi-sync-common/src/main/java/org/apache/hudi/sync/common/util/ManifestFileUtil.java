@@ -43,24 +43,20 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADAT
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
 
 public class ManifestFileUtil {
-  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(ManifestFileUtil.class);
   private static final String MANIFEST_FOLDER_NAME = "manifest";
   private static final String MANIFEST_FILE_NAME = "latest-snapshot.csv";
   private static final String DELIMITER = "\n";
-  private SerializableConfiguration hadoopConf;
-  private String basePath;
-  private transient HoodieLocalEngineContext engineContext;
-  private HoodieTableMetaClient metaClient;
+  private final SerializableConfiguration hadoopConf;
+  private final String basePath;
+  private final transient HoodieLocalEngineContext engineContext;
+  private final HoodieTableMetaClient metaClient;
 
   private ManifestFileUtil(Configuration conf, String basePath) {
     this.hadoopConf = new SerializableConfiguration(conf);
     this.basePath = basePath;
     this.engineContext = new HoodieLocalEngineContext(conf);
     this.metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
-  }
-
-  public ManifestFileUtil() {
   }
 
   public synchronized void writeManifestFile() {
@@ -78,11 +74,15 @@ public class ManifestFileUtil {
   public Stream<String> fetchLatestBaseFilesForAllPartitions() {
     try {
       HoodieMetadataConfig metadataConfig = buildMetadataConfig(hadoopConf.get());
-      HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(engineContext, metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), metadataConfig);
 
       List<String> partitions = FSUtils.getAllPartitionPaths(engineContext, metadataConfig, basePath);
 
-      return partitions.parallelStream().flatMap(p -> fsView.getLatestBaseFiles(p).map(HoodieBaseFile::getFileName));
+      return partitions.parallelStream().flatMap(p -> {
+        HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(hadoopConf.get());
+        HoodieMetadataFileSystemView fsView =
+            new HoodieMetadataFileSystemView(engineContext, metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), metadataConfig);
+        return fsView.getLatestBaseFiles(p).map(HoodieBaseFile::getFileName);
+      });
     } catch (Exception e) {
       String msg = "Error checking path :" + basePath;
       LOG.error(msg, e);
@@ -99,16 +99,15 @@ public class ManifestFileUtil {
   /**
    * @return Manifest File folder
    */
-  public String getManifestFolder() {
-    return metaClient.getMetaPath() + Path.SEPARATOR + MANIFEST_FOLDER_NAME;
+  public Path getManifestFolder() {
+    return new Path(metaClient.getMetaPath(), MANIFEST_FOLDER_NAME);
   }
 
-  public String getManifestFilePath() {
-    return metaClient.getMetaPath() + Path.SEPARATOR + MANIFEST_FOLDER_NAME +  Path.SEPARATOR + MANIFEST_FILE_NAME;
-  }
-
-  public void setBasePath(String basePath) {
-    this.basePath = basePath;
+  /**
+   * @return Manifest File Full Path
+   */
+  public Path getManifestFilePath() {
+    return new Path(getManifestFolder(), MANIFEST_FILE_NAME);
   }
 
   public static Builder builder() {
