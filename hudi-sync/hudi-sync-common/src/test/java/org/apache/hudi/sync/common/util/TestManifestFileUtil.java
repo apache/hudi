@@ -29,12 +29,10 @@ import org.apache.hadoop.fs.Path;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
-
 
 public class TestManifestFileUtil extends HoodieCommonTestHarness {
 
@@ -51,19 +49,18 @@ public class TestManifestFileUtil extends HoodieCommonTestHarness {
   public void testMultiLevelPartitionedTable() throws Exception {
     // Generate 10 files under each partition
     createTestDataForPartitionedTable(10);
-    ManifestFileUtil mainfestFileUtil = ManifestFileUtil.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).build();
-    Assertions.assertEquals(30, mainfestFileUtil.fetchLatestBaseFilesForAllPartitions().collect(Collectors.toList()).size());
+    ManifestFileUtil manifestFileUtil = ManifestFileUtil.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).build();
+    Assertions.assertEquals(30, manifestFileUtil.fetchLatestBaseFilesForAllPartitions().count());
   }
 
   @Test
   public void testCreateManifestFile() throws Exception {
-    Long lines = 0L;
     // Generate 10 files under each partition
     createTestDataForPartitionedTable(10);
     ManifestFileUtil mainfestFileUtil = ManifestFileUtil.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).build();
     try {
-    mainfestFileUtil.writeManifestFile();
-    Assertions.assertTrue(FSUtils.getFileSize(metaClient.getFs(), new Path(mainfestFileUtil.getManifestFilePath())) > 0);
+      mainfestFileUtil.writeManifestFile();
+      Assertions.assertTrue(FSUtils.getFileSize(metaClient.getFs(), new Path(mainfestFileUtil.getManifestFilePath())) > 0);
     } catch (IOException e) {
       e.printStackTrace();
     }
@@ -73,7 +70,7 @@ public class TestManifestFileUtil extends HoodieCommonTestHarness {
     String instant = "100";
     hoodieTestTable = hoodieTestTable.addCommit(instant);
     // Generate 10 files under each partition
-    MULTI_LEVEL_PARTITIONS.stream().forEach(p -> {
+    MULTI_LEVEL_PARTITIONS.forEach(p -> {
       try {
         hoodieTestTable = hoodieTestTable.withPartitionMetaFiles(p)
             .withBaseFilesInPartition(p, IntStream.range(0, numOfFiles).toArray());
