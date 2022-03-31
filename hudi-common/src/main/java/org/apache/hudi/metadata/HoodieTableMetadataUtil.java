@@ -18,6 +18,13 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.avro.AvroTypeException;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -67,6 +74,8 @@ import org.apache.log4j.Logger;
 import javax.annotation.Nonnull;
 
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1174,6 +1183,39 @@ public class HoodieTableMetadataUtil {
         columnStats.put(NULL_COUNT, Long.parseLong(columnStats.getOrDefault(NULL_COUNT, 0).toString()) + 1);
       }
     });
+  }
+
+  /**
+   * TODO
+   */
+  public static BigDecimal tryUpcastDecimal(BigDecimal value, final LogicalTypes.Decimal decimal) {
+    final int scale = decimal.getScale();
+    final int valueScale = value.scale();
+
+    boolean scaleAdjusted = false;
+    if (valueScale != scale) {
+      try {
+        value = value.setScale(scale, RoundingMode.UNNECESSARY);
+        scaleAdjusted = true;
+      } catch (ArithmeticException aex) {
+        throw new AvroTypeException(
+            "Cannot encode decimal with scale " + valueScale + " as scale " + scale + " without rounding");
+      }
+    }
+
+    int precision = decimal.getPrecision();
+    int valuePrecision = value.precision();
+    if (valuePrecision > precision) {
+      if (scaleAdjusted) {
+        throw new AvroTypeException("Cannot encode decimal with precision " + valuePrecision + " as max precision "
+            + precision + ". This is after safely adjusting scale from " + valueScale + " to required " + scale);
+      } else {
+        throw new AvroTypeException(
+            "Cannot encode decimal with precision " + valuePrecision + " as max precision " + precision);
+      }
+    }
+
+    return value;
   }
 
   private static Option<Schema> tryResolveSchemaForTable(HoodieTableMetaClient dataTableMetaClient) {

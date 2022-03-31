@@ -19,6 +19,7 @@
 package org.apache.hudi.metadata;
 
 import org.apache.avro.Conversions;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -79,6 +80,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_LIST;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartition;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.tryUpcastDecimal;
 
 /**
  * MetadataTable records are persisted with the schema defined in HoodieMetadata.avsc.
@@ -650,8 +652,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       return DateWrapper.newBuilder().setValue((int) localDate.toEpochDay()).build();
     } else if (statValue instanceof BigDecimal) {
       Schema valueSchema = DecimalWrapper.SCHEMA$.getField("value").schema();
+      BigDecimal upcastDecimal = tryUpcastDecimal((BigDecimal) statValue, (LogicalTypes.Decimal) valueSchema.getLogicalType());
       return DecimalWrapper.newBuilder()
-          .setValue(AVRO_DECIMAL_CONVERSION.toBytes((BigDecimal) statValue, valueSchema, valueSchema.getLogicalType()))
+          .setValue(AVRO_DECIMAL_CONVERSION.toBytes(upcastDecimal, valueSchema, valueSchema.getLogicalType()))
           .build();
     } else if (statValue instanceof Timestamp) {
       // NOTE: Due to breaking changes in code-gen b/w Avro 1.8.2 and 1.10, we can't
