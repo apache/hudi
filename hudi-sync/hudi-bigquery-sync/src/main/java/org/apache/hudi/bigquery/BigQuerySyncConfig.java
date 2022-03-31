@@ -32,7 +32,7 @@ import java.util.List;
 public class BigQuerySyncConfig implements Serializable {
 
   @Parameter(names = {"--help", "-h"}, help = true)
-  public final Boolean help = false;
+  public Boolean help = false;
   @Parameter(names = {"--project-id"}, description = "name of the target project in BigQuery", required = true)
   public String projectId;
   @Parameter(names = {"--dataset-name"}, description = "name of the target dataset in BigQuery", required = true)

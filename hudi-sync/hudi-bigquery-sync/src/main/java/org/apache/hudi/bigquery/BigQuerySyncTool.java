@@ -21,7 +21,6 @@ package org.apache.hudi.bigquery;
 import org.apache.hudi.bigquery.util.Utils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.sync.common.AbstractSyncTool;
 
@@ -35,6 +34,8 @@ import java.util.List;
 import java.util.Properties;
 
 /**
+ * @Experimental
+ *
  * Tool to sync a hoodie table with a big query table. Either use it as an api
  * BigQuerySyncTool.syncHoodieTable(BigQuerySyncConfig) or as a command line java -cp hoodie-hive.jar BigQuerySyncTool [args]
  * <p>
@@ -86,7 +87,7 @@ public class BigQuerySyncTool extends AbstractSyncTool {
       System.exit(1);
     }
     FileSystem fs = FSUtils.getFs(cfg.basePath, new Configuration());
-    new BigQuerySyncTool(Utils.configToProperties(cfg), new Configuration(), fs).syncHoodieTable();
+    new BigQuerySyncTool(Utils.configToProperties(cfg), fs.getConf(), fs).syncHoodieTable();
   }
 
   @Override
@@ -103,10 +104,8 @@ public class BigQuerySyncTool extends AbstractSyncTool {
           LOG.error("Unknown table type " + hoodieBigQueryClient.getTableType());
           throw new InvalidTableException(hoodieBigQueryClient.getBasePath());
       }
-    } catch (RuntimeException re) {
-      throw new HoodieException("Got runtime exception when big query syncing " + cfg.tableName, re);
-    } finally {
-      hoodieBigQueryClient.close();
+    } catch (Exception e) {
+      throw new HoodieBigQuerySyncException("Got runtime exception when big query syncing " + cfg.tableName, e);
     }
   }
 

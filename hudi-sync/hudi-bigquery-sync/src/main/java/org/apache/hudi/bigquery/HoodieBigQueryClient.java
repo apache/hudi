@@ -19,7 +19,6 @@
 package org.apache.hudi.bigquery;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
 
 import com.google.cloud.bigquery.BigQuery;
@@ -40,6 +39,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -61,7 +61,7 @@ public class HoodieBigQueryClient extends AbstractSyncHoodieClient {
         bigquery = BigQueryOptions.getDefaultInstance().getService();
         LOG.info("Successfully established BigQuery connection.");
       } catch (BigQueryException e) {
-        throw new HoodieException("Cannot create bigQuery connection ", e);
+        throw new HoodieBigQuerySyncException("Cannot create bigQuery connection ", e);
       }
     }
   }
@@ -79,7 +79,14 @@ public class HoodieBigQueryClient extends AbstractSyncHoodieClient {
       ExternalTableDefinition customTable;
       TableId tableId = TableId.of(projectId, datasetName, tableName);
 
-      if (partitionFields != null) {
+      if (partitionFields.isEmpty()) {
+        customTable =
+            ExternalTableDefinition.newBuilder(sourceUri, FormatOptions.parquet())
+                .setAutodetect(true)
+                .setIgnoreUnknownValues(true)
+                .setMaxBadRecords(0)
+                .build();
+      } else {
         // Configuring partitioning options for partitioned table.
         HivePartitioningOptions hivePartitioningOptions =
             HivePartitioningOptions.newBuilder()
@@ -94,19 +101,12 @@ public class HoodieBigQueryClient extends AbstractSyncHoodieClient {
                 .setIgnoreUnknownValues(true)
                 .setMaxBadRecords(0)
                 .build();
-      } else {
-        customTable =
-            ExternalTableDefinition.newBuilder(sourceUri, FormatOptions.parquet())
-                .setAutodetect(true)
-                .setIgnoreUnknownValues(true)
-                .setMaxBadRecords(0)
-                .build();
       }
 
       bigquery.create(TableInfo.of(tableId, customTable));
       LOG.info("External table created using hivepartitioningoptions");
     } catch (BigQueryException e) {
-      throw new HoodieException("External table was not created ", e);
+      throw new HoodieBigQuerySyncException("External table was not created ", e);
     }
   }
 
@@ -132,7 +132,7 @@ public class HoodieBigQueryClient extends AbstractSyncHoodieClient {
       bigquery.create(TableInfo.of(tableId, customTable));
       LOG.info("Manifest External table created.");
     } catch (BigQueryException e) {
-      throw new HoodieException("Manifest External table was not created ", e);
+      throw new HoodieBigQuerySyncException("Manifest External table was not created ", e);
     }
   }
 
@@ -157,30 +157,32 @@ public class HoodieBigQueryClient extends AbstractSyncHoodieClient {
       bigquery.create(TableInfo.of(tableId, viewDefinition));
       LOG.info("View created successfully");
     } catch (BigQueryException e) {
-      throw new HoodieException("View was not created ", e);
+      throw new HoodieBigQuerySyncException("View was not created ", e);
     }
   }
 
   @Override
   public Map<String, String> getTableSchema(String tableName) {
     // TODO: Implement automatic schema evolution when you add a new column.
-    return null;
+    return Collections.<String, String>emptyMap();
   }
 
   @Override
   public void addPartitionsToTable(final String tableName, final List<String> partitionsToAdd) {
     // bigQuery discovers the new partitions automatically, so do nothing.
+    throw new UnsupportedOperationException("No support for addPartitionsToTable yet.");
   }
 
   @Override
   public void dropPartitionsToTable(final String tableName, final List<String> partitionsToDrop) {
     // bigQuery discovers the new partitions automatically, so do nothing.
+    throw new UnsupportedOperationException("No support for dropPartitionsToTable yet.");
   }
 
   @Override
   public boolean doesTableExist(final String tableName) {
     // bigQuery table exists needs different set of arguments, so do nothing.
-    throw new UnsupportedOperationException("Not support doesTableExist yet.");
+    throw new UnsupportedOperationException("No support for doesTableExist yet.");
   }
 
   public boolean doesTableExist(final String projectId, final String datasetName, final String tableName) {
@@ -202,11 +204,13 @@ public class HoodieBigQueryClient extends AbstractSyncHoodieClient {
   @Override
   public void updateLastCommitTimeSynced(final String tableName) {
     // bigQuery doesn't support tblproperties, so do nothing.
+    throw new UnsupportedOperationException("No support for updateLastCommitTimeSynced yet.");
   }
 
   @Override
   public void updatePartitionsToTable(final String tableName, final List<String> changedPartitions) {
     // bigQuery updates the partitions automatically, so do nothing.
+    throw new UnsupportedOperationException("No support for updatePartitionsToTable yet.");
   }
 
   public void close() {
