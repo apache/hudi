@@ -645,16 +645,14 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     if (initialMetadataTableIfNecessary) {
       try {
         // Delete metadata table directly when users trigger savepoint rollback if mdt existed and beforeTimelineStarts
-        String basePath = config.getBasePath();
-        String metadataTableBase = HoodieTableMetadata.getMetadataTableBasePath(basePath);
-        Path metadataTableBasePath = new Path(metadataTableBase);
-        HoodieTableMetaClient mdtClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBase).build();
+        String metadataTableBasePathStr = HoodieTableMetadata.getMetadataTableBasePath(config.getBasePath());
+        HoodieTableMetaClient mdtClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePathStr).build();
         // Same as HoodieTableMetadataUtil#processRollbackMetadata
         HoodieInstant syncedInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, savepointTime);
         // The instant required to sync rollback to MDT has been archived and the mdt syncing will be failed
         // So that we need to delete the whole MDT here.
         if (mdtClient.getCommitsTimeline().isBeforeTimelineStarts(syncedInstant.getTimestamp())) {
-          mdtClient.getFs().delete(metadataTableBasePath, true);
+          mdtClient.getFs().delete(new Path(metadataTableBasePathStr), true);
           // rollbackToSavepoint action will try to bootstrap MDT at first but sync to MDT will fail at the current scenario.
           // so that we need to disable metadata initialized here.
           initialMetadataTableIfNecessary = false;
