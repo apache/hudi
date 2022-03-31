@@ -60,13 +60,6 @@ public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
   public static <T extends HoodieRecordPayload> HoodieFlinkTable<T> create(HoodieWriteConfig config,
                                                                            HoodieFlinkEngineContext context,
                                                                            HoodieTableMetaClient metaClient) {
-    return HoodieFlinkTable.create(config, context, metaClient, config.isMetadataTableEnabled());
-  }
-
-  public static <T extends HoodieRecordPayload> HoodieFlinkTable<T> create(HoodieWriteConfig config,
-                                                                           HoodieFlinkEngineContext context,
-                                                                           HoodieTableMetaClient metaClient,
-                                                                           boolean refreshTimeline) {
     final HoodieFlinkTable<T> hoodieFlinkTable;
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
@@ -78,7 +71,7 @@ public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
       default:
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
     }
-    if (refreshTimeline) {
+    if (metaClient.getTableConfig().isMetadataTableEnabled()) {
       hoodieFlinkTable.getHoodieView().sync();
     }
     return hoodieFlinkTable;
@@ -102,7 +95,7 @@ public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
   @Override
   public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp,
                                                                                             Option<T> actionMetadata) {
-    if (config.isMetadataTableEnabled()) {
+    if (getMetaClient().getTableConfig().isMetadataTableEnabled() || config.isMetadataTableEnabled()) {
       return Option.of(FlinkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config,
           context, actionMetadata, Option.of(triggeringInstantTimestamp)));
     } else {

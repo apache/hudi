@@ -77,7 +77,7 @@ public class FileSystemViewManager {
 
   /**
    * Drops reference to File-System Views. Future calls to view results in creating a new view
-   * 
+   *
    * @param basePath
    */
   public void clearFileSystemView(String basePath) {
@@ -89,7 +89,7 @@ public class FileSystemViewManager {
 
   /**
    * Main API to get the file-system view for the base-path.
-   * 
+   *
    * @param basePath
    * @return
    */
@@ -125,7 +125,7 @@ public class FileSystemViewManager {
 
   /**
    * Create RocksDB based file System view for a table.
-   * 
+   *
    * @param conf Hadoop Configuration
    * @param viewConf View Storage Configuration
    * @param metaClient HoodieTableMetaClient
@@ -139,7 +139,7 @@ public class FileSystemViewManager {
 
   /**
    * Create a spillable Map based file System view for a table.
-   * 
+   *
    * @param conf Hadoop Configuration
    * @param viewConf View Storage Configuration
    * @param metaClient HoodieTableMetaClient
@@ -160,7 +160,7 @@ public class FileSystemViewManager {
                                                                         HoodieTableMetaClient metaClient, SerializableSupplier<HoodieTableMetadata> metadataSupplier) {
     LOG.info("Creating InMemory based view for basePath " + metaClient.getBasePath());
     HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
-    if (metadataConfig.enabled()) {
+    if (metaClient.getTableConfig().isMetadataTableEnabled()) {
       ValidationUtils.checkArgument(metadataSupplier != null, "Metadata supplier is null. Cannot instantiate metadata file system view");
       return new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
           metadataSupplier.get());
@@ -169,27 +169,27 @@ public class FileSystemViewManager {
   }
 
   public static HoodieTableFileSystemView createInMemoryFileSystemView(HoodieEngineContext engineContext, HoodieTableMetaClient metaClient,
-                                                                       HoodieMetadataConfig metadataConfig) {
-    
-    return createInMemoryFileSystemViewWithTimeline(engineContext, metaClient, metadataConfig,
+                                                                       boolean useMetadataTable) {
+
+    return createInMemoryFileSystemViewWithTimeline(engineContext, metaClient, useMetadataTable,
         metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
-    
+
   }
-  
+
   public static HoodieTableFileSystemView createInMemoryFileSystemViewWithTimeline(HoodieEngineContext engineContext,
                                                                                    HoodieTableMetaClient metaClient,
-                                                                                   HoodieMetadataConfig metadataConfig,
+                                                                                   boolean useMetadataTable,
                                                                                    HoodieTimeline timeline) {
     LOG.info("Creating InMemory based view for basePath " + metaClient.getBasePath());
-    if (metadataConfig.enabled()) {
-      return new HoodieMetadataFileSystemView(engineContext, metaClient, timeline, metadataConfig);
+    if (useMetadataTable) {
+      return new HoodieMetadataFileSystemView(engineContext, metaClient, timeline);
     }
     return new HoodieTableFileSystemView(metaClient, timeline);
   }
 
   /**
    * Create a remote file System view for a table.
-   * 
+   *
    * @param conf Hadoop Configuration
    * @param viewConf View Storage Configuration
    * @param metaClient Hoodie Table MetaClient for the table.
@@ -217,7 +217,7 @@ public class FileSystemViewManager {
                                                         final HoodieCommonConfig commonConfig,
                                                         final String basePath) {
     return createViewManager(context, metadataConfig, config, commonConfig,
-        () -> HoodieTableMetadata.create(context, metadataConfig, basePath, config.getSpillableDir(), true));
+        () -> HoodieTableMetadata.create(context, metadataConfig, basePath));
   }
 
   /**

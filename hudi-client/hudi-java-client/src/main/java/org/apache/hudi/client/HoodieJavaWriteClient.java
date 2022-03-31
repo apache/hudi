@@ -86,13 +86,12 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
                         String commitActionType,
                         Map<String, List<String>> partitionToReplacedFileIds) {
     List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
-    return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds);
+    return commitStats(instantTime, HoodieList.of(writeStatuses), writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds);
   }
 
   @Override
   protected HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> createTable(HoodieWriteConfig config,
-                                                                                                  Configuration hadoopConf,
-                                                                                                  boolean refreshTimeline) {
+                                                                                                  Configuration hadoopConf) {
     return HoodieJavaTable.create(config, context);
   }
 

@@ -79,7 +79,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 
@@ -522,15 +521,19 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
    */
   public void validateMetadata(HoodieTestTable testTable, List<String> inflightCommits, HoodieWriteConfig writeConfig,
                                String metadataTableBasePath, boolean doFullValidation) throws IOException {
+    metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTableMetadata tableMetadata = metadata(writeConfig, context);
     assertNotNull(tableMetadata, "MetadataReader should have been initialized");
-    if (!writeConfig.isMetadataTableEnabled()) {
+    if (tableMetadata instanceof FileSystemBackedTableMetadata) {
+      throw new IllegalStateException("TableMetadata should not be an instance of FileSystemBackedTableMetadata");
+    }
+
+    if (!metaClient.getTableConfig().isMetadataTableEnabled()) {
       return;
     }
 
-    if (!tableMetadata.getSyncedInstantTime().isPresent() || tableMetadata instanceof FileSystemBackedTableMetadata) {
-      throw new IllegalStateException("Metadata should have synced some commits or tableMetadata should not be an instance "
-          + "of FileSystemBackedTableMetadata");
+    if (!tableMetadata.getSyncedInstantTime().isPresent()) {
+      throw new IllegalStateException("Metadata should have synced some commits");
     }
     assertEquals(inflightCommits, testTable.inflightCommits());
 
@@ -553,8 +556,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     assertEquals(fsPartitions, metadataPartitions, "Partitions should match");
 
     // Files within each partition should match
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieSparkTable.create(writeConfig, engineContext, true);
+    HoodieTable table = HoodieSparkTable.create(writeConfig, engineContext);
     TableFileSystemView tableView = table.getHoodieView();
     List<String> fullPartitionPaths = fsPartitions.stream().map(partition -> basePath + "/" + partition).collect(Collectors.toList());
     Map<String, FileStatus[]> partitionToFilesMap = tableMetadata.getAllFilesInPartitions(fullPartitionPaths);
@@ -592,8 +594,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   }
 
   public HoodieTableMetadata metadata(HoodieWriteConfig clientConfig, HoodieEngineContext hoodieEngineContext) {
-    return HoodieTableMetadata.create(hoodieEngineContext, clientConfig.getMetadataConfig(), clientConfig.getBasePath(),
-        clientConfig.getSpillableMapBasePath());
+    return HoodieTableMetadata.create(hoodieEngineContext, clientConfig.getMetadataConfig(), clientConfig.getBasePath());
   }
 
   protected void validateFilesPerPartition(HoodieTestTable testTable, HoodieTableMetadata tableMetadata, TableFileSystemView tableView,
@@ -672,12 +673,15 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     assertEquals(metadataMetaClient.getTableConfig().getBaseFileFormat(), HoodieFileFormat.HFILE,
         "Metadata Table base file format should be HFile");
 
-    // Metadata table has a fixed number of partitions
+    // Metadata table has a fixed number of partitions. files partition is always present. The other partitions are
+    // created when their feature is enabled.
     // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
     // in the .hoodie folder.
     List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, HoodieTableMetadata.getMetadataTableBasePath(basePath),
         false, false);
-    Assertions.assertEquals(MetadataPartitionType.values().length, metadataTablePartitions.size());
+    assertTrue(metadataTablePartitions.size() >= 1);
+    assertTrue(metadataTablePartitions.contains(MetadataPartitionType.FILES.partitionPath()));
+    assertTrue(metadataTablePartitions.size() <= MetadataPartitionType.values().length);
 
     // Metadata table should automatically compact and clean
     // versions are +1 as autoClean / compaction happens end of commits

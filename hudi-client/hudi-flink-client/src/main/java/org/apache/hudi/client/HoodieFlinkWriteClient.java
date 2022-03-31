@@ -19,6 +19,7 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -109,12 +110,11 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   @Override
   public boolean commit(String instantTime, List<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata, String commitActionType, Map<String, List<String>> partitionToReplacedFileIds) {
     List<HoodieWriteStat> writeStats = writeStatuses.parallelStream().map(WriteStatus::getStat).collect(Collectors.toList());
-    return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds);
+    return commitStats(instantTime, HoodieList.of(writeStatuses), writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds);
   }
 
   @Override
-  protected HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> createTable(HoodieWriteConfig config, Configuration hadoopConf,
-                                                                                                  boolean refreshTimeline) {
+  protected HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> createTable(HoodieWriteConfig config, Configuration hadoopConf) {
     return HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) context);
   }
 
@@ -256,10 +256,11 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
+  protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata,
+      HoodieData<WriteStatus> writeStatuses) {
     this.metadataWriterOption.ifPresent(w -> {
       w.initTableMetadata(); // refresh the timeline
-      w.update(metadata, instantTime, getHoodieTable().isTableServiceAction(actionType));
+      w.update(metadata, writeStatuses, instantTime, getHoodieTable().isTableServiceAction(actionType));
     });
   }
 
@@ -371,7 +372,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
       // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
       // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
       table.getMetadataWriter(compactionInstant.getTimestamp()).ifPresent(
-          w -> w.update(metadata, compactionInstant.getTimestamp(), table.isTableServiceAction(compactionInstant.getAction())));
+          w -> w.update(metadata, HoodieList.of(null), compactionInstant.getTimestamp(), table.isTableServiceAction(compactionInstant.getAction())));
       LOG.info("Committing Compaction {} finished with result {}.", compactionCommitTime, metadata);
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
     } finally {

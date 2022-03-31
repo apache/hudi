@@ -24,6 +24,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -56,9 +58,8 @@ public abstract class BaseActionExecutor<T extends HoodieRecordPayload, I, K, O,
    * Writes commits metadata to table metadata.
    * @param metadata commit metadata of interest.
    */
-  protected final void writeTableMetadata(HoodieCommitMetadata metadata, String actionType) {
-    table.getMetadataWriter(instantTime).ifPresent(w -> w.update(
-        metadata, instantTime, table.isTableServiceAction(actionType)));
+  protected final void writeTableMetadata(HoodieCommitMetadata metadata, HoodieData<WriteStatus> writeStatus, String actionType) {
+    table.getMetadataWriter(instantTime).ifPresent(w -> w.update(metadata, writeStatus, instantTime, table.isTableServiceAction(actionType)));
   }
 
   /**

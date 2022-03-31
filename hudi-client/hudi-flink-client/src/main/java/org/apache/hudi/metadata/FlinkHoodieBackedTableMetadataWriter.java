@@ -24,9 +24,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
@@ -41,7 +39,6 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter {
 
@@ -79,7 +76,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   protected void initRegistry() {
     if (metadataWriteConfig.isMetricsOn()) {
       // should support executor metrics
-      Registry registry = Registry.getRegistry("HoodieMetadata");
+      Registry registry = Registry.getRegistry(HoodieTableMetadata.METRIC_REGISTRY_NAME);
       this.metrics = Option.of(new HoodieMetadataMetrics(registry));
     } else {
       this.metrics = Option.empty();
@@ -101,10 +98,9 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void commit(HoodieData<HoodieRecord> hoodieDataRecords, String partitionName, String instantTime, boolean canTriggerTableService) {
+  protected void commit(HoodieData<HoodieRecord> hoodieDataRecords, String instantTime, boolean canTriggerTableService) {
     ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
-    List<HoodieRecord> records = (List<HoodieRecord>) hoodieDataRecords.get();
-    List<HoodieRecord> recordList = prepRecords(records, partitionName, 1);
+    List<HoodieRecord> recordList = (List<HoodieRecord>) hoodieDataRecords.get();
 
     try (HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient(engineContext, metadataWriteConfig)) {
       if (!metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(instantTime)) {
@@ -124,7 +120,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         metadataMetaClient.reloadActiveTimeline();
       }
 
-      List<WriteStatus> statuses = records.size() > 0
+      List<WriteStatus> statuses = recordList.size() > 0
           ? writeClient.upsertPreppedRecords(recordList, instantTime)
           : Collections.emptyList();
       statuses.forEach(writeStatus -> {
@@ -146,22 +142,5 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
     // Update total size of the metadata and count of base/log files
     metrics.ifPresent(m -> m.updateSizeMetrics(metadataMetaClient, metadata));
-  }
-
-  /**
-   * Tag each record with the location in the given partition.
-   *
-   * The record is tagged with respective file slice's location based on its record key.
-   */
-  private List<HoodieRecord> prepRecords(List<HoodieRecord> records, String partitionName, int numFileGroups) {
-    List<FileSlice> fileSlices = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, partitionName);
-    ValidationUtils.checkArgument(fileSlices.size() == numFileGroups, String.format("Invalid number of file groups: found=%d, required=%d", fileSlices.size(), numFileGroups));
-
-    return records.stream().map(r -> {
-      FileSlice slice = fileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(), numFileGroups));
-      final String instantTime = slice.isEmpty() ? "I" : "U";
-      r.setCurrentLocation(new HoodieRecordLocation(instantTime, slice.getFileId()));
-      return r;
-    }).collect(Collectors.toList());
   }
 }

@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -78,6 +79,7 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
       int listingParallelism = Math.min(DEFAULT_LISTING_PARALLELISM, pathsToList.size());
 
       // List all directories in parallel
+      engineContext.setJobStatus(this.getClass().getSimpleName(), "Listing all partitions");
       List<Pair<Path, FileStatus[]>> dirToFileListing = engineContext.map(pathsToList, path -> {
         FileSystem fileSystem = path.getFileSystem(hadoopConf.get());
         return Pair.of(path, fileSystem.listStatus(path));
@@ -116,6 +118,7 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
 
     int parallelism = Math.min(DEFAULT_LISTING_PARALLELISM, partitionPaths.size());
 
+    engineContext.setJobStatus(this.getClass().getSimpleName(), "Listing all files in multiple partitions");
     List<Pair<String, FileStatus[]>> partitionToFiles = engineContext.map(partitionPaths, partitionPathStr -> {
       Path partitionPath = new Path(partitionPathStr);
       FileSystem fs = partitionPath.getFileSystem(hadoopConf.get());
@@ -143,5 +146,9 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
   @Override
   public void reset() {
     // no-op
+  }
+
+  public Map<String, HoodieRecordGlobalLocation> readRecordIndex(List<String> recordKeys) {
+    throw new UnsupportedOperationException();
   }
 }

@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -88,8 +89,10 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
         {IndexType.GLOBAL_BLOOM, true},
         {IndexType.SIMPLE, true},
         {IndexType.GLOBAL_SIMPLE, true},
+        {IndexType.RECORD_INDEX, true},
         {IndexType.SIMPLE, false},
-        {IndexType.GLOBAL_SIMPLE, false}
+        {IndexType.GLOBAL_SIMPLE, false},
+        {IndexType.RECORD_INDEX, false}
     };
     return Stream.of(data).map(Arguments::of);
   }
@@ -112,11 +115,15 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     initFileSystem();
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE, populateMetaFields ? new Properties()
         : getPropertiesForKeyGen());
+    HoodieMetadataConfig.Builder metadataConfigBuilder = HoodieMetadataConfig.newBuilder().enable(enableMetadata);
+    if (indexType == IndexType.RECORD_INDEX) {
+      metadataConfigBuilder.createRecordIndex(true);
+    }
     config = getConfigBuilder()
         .withProperties(populateMetaFields ? new Properties() : getPropertiesForKeyGen())
         .withRollbackUsingMarkers(rollbackUsingMarkers)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType)
-            .build()).withAutoCommit(false).withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata).build()).build();
+            .build()).withAutoCommit(false).withMetadataConfig(metadataConfigBuilder.build()).build();
     writeClient = getHoodieWriteClient(config);
     this.index = writeClient.getIndex();
   }
@@ -130,7 +137,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   @MethodSource("indexTypeParams")
   public void testSimpleTagLocationAndUpdate(IndexType indexType, boolean populateMetaFields) throws Exception {
     setUp(indexType, populateMetaFields);
-    String newCommitTime = "001";
+    String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
     int totalRecords = 10 + random.nextInt(20);
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
@@ -180,7 +187,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   @MethodSource("indexTypeParams")
   public void testTagLocationAndDuplicateUpdate(IndexType indexType, boolean populateMetaFields) throws Exception {
     setUp(indexType, populateMetaFields);
-    String newCommitTime = "001";
+    String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
     int totalRecords = 10 + random.nextInt(20);
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
@@ -195,7 +202,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     // We are trying to approximately imitate the case when the RDD is recomputed. For RDD creating, driver code is not
     // recomputed. This includes the state transitions. We need to delete the inflight instance so that subsequent
     // upsert will not run into conflicts.
-    metaClient.getFs().delete(new Path(metaClient.getMetaPath(), "001.inflight"));
+    metaClient.getFs().delete(new Path(metaClient.getMetaPath(), newCommitTime + ".inflight"));
 
     writeClient.upsert(writeRecords, newCommitTime);
     Assertions.assertNoWriteErrors(writeStatues.collect());

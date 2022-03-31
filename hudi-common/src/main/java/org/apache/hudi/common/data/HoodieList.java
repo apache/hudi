@@ -144,4 +144,9 @@ public class HoodieList<T> extends HoodieData<T> {
   public List<T> collectAsList() {
     return listData;
   }
+
+  @Override
+  public int getNumPartitions() {
+    return 1;
+  }
 }

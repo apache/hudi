@@ -344,4 +344,24 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
       read(position, buffer, offset, length);
     }
   }
+
+  @Override
+  public Iterator<String> getRecordKeyIterator() throws IOException {
+    final HFileScanner scanner = reader.getScanner(false, false);
+    return new Iterator<String>() {
+      @Override
+      public boolean hasNext() {
+        try {
+          return scanner.next();
+        } catch (IOException e) {
+          throw new HoodieException("Error while scanning for keys", e);
+        }
+      }
+
+      @Override
+      public String next() {
+        return scanner.getKeyString();
+      }
+    };
+  }
 }

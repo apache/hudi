@@ -18,7 +18,6 @@
 
 package org.apache.hudi.hadoop.utils;
 
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -433,10 +432,8 @@ public class HoodieInputFormatUtils {
     return grouped;
   }
 
-  public static HoodieMetadataConfig buildMetadataConfig(Configuration conf) {
-    return HoodieMetadataConfig.newBuilder()
-        .enable(conf.getBoolean(ENABLE.key(), DEFAULT_METADATA_ENABLE_FOR_READERS))
-        .build();
+  public static boolean useMetadataTable(Configuration conf) {
+    return conf.getBoolean(ENABLE.key(), DEFAULT_METADATA_ENABLE_FOR_READERS);
   }
 
   public static List<FileStatus> filterFileStatusForSnapshotMode(JobConf job, Map<String, HoodieTableMetaClient> tableMetaClientMap,
@@ -464,7 +461,7 @@ public class HoodieInputFormatUtils {
         HoodieTimeline timeline = HoodieHiveUtils.getTableTimeline(metaClient.getTableConfig().getTableName(), job, metaClient);
 
         HoodieTableFileSystemView fsView = fsViewCache.computeIfAbsent(metaClient, tableMetaClient ->
-            FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext, tableMetaClient, buildMetadataConfig(job), timeline));
+            FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext, tableMetaClient, useMetadataTable(job), timeline));
         List<HoodieBaseFile> filteredBaseFiles = new ArrayList<>();
         Map<FileStatus, List<HoodieLogFile>> filteredLogs = new HashMap<>();
         for (Path p : entry.getValue()) {

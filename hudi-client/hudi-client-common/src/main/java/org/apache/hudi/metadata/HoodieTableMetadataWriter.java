@@ -21,6 +21,8 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 
 import java.io.Serializable;
@@ -33,11 +35,13 @@ public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
   /**
    * Update the metadata table due to a COMMIT operation.
    * @param commitMetadata commit metadata of the operation of interest.
+   * @param writeStatus write status associated with this commit operation.
    * @param instantTime instant time of the commit.
-   * @param isTableServiceAction true if caller is a table service. false otherwise. Only regular write operations can trigger metadata table services and this argument
-   *                       will assist in this.
+   * @param isTableServiceAction true if caller is a table service. false otherwise. Only regular write operations can
+   *                             trigger metadata table services and this argument will assist in this.
    */
-  void update(HoodieCommitMetadata commitMetadata, String instantTime, boolean isTableServiceAction);
+  void update(HoodieCommitMetadata commitMetadata, HoodieData<WriteStatus> writeStatus, String instantTime,
+      boolean isTableServiceAction);
 
   /**
    * Update the metadata table due to a CLEAN operation.

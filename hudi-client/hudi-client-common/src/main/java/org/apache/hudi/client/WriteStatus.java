@@ -193,6 +193,10 @@ public class WriteStatus implements Serializable {
     return totalErrorRecords;
   }
 
+  public boolean isTrackingSuccessRecords() {
+    return trackSuccessRecords;
+  }
+
   public void setTotalErrorRecords(long totalErrorRecords) {
     this.totalErrorRecords = totalErrorRecords;
   }

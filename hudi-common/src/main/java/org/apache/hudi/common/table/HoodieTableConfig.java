@@ -31,10 +31,11 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -166,6 +167,12 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.table.keygenerator.class")
       .noDefaultValue()
       .withDocumentation("Key Generator class property for the hoodie table");
+
+  public static final ConfigProperty<String> METADATA_TABLE_PARTITIONS = ConfigProperty
+      .key("hoodie.metadata.partitions")
+      .defaultValue("")
+      .withDocumentation("The comma-separated list of metadata table (MDT) partitions that have been initialized "
+          + "and are being used for this dataset.");
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
@@ -468,6 +475,45 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public String getUrlEncodePartitioning() {
     return getString(URL_ENCODE_PARTITIONING);
+  }
+
+  /**
+   * @returns true if metadata table has been created and is being used for this dataset, else returns false.
+   */
+  public boolean isMetadataTableEnabled() {
+    return !StringUtils.isNullOrEmpty(getStringOrDefault(METADATA_TABLE_PARTITIONS));
+  }
+
+  /**
+   * Checks if metadata table is enabled and the specified partition has been initialized.
+   *
+   * @param partition The partition to check
+   * @returns true if the specific partition has been initialized, else returns false.
+   */
+  public boolean isMetadataPartitionEnabled(MetadataPartitionType partition) {
+    String[] partitions = getStringOrDefault(METADATA_TABLE_PARTITIONS).split(",");
+    return Arrays.stream(partitions).anyMatch(p -> p.equals(partition.name()));
+  }
+
+  /**
+   * Enables or disables the specified metadata table partition.
+   *
+   * @param partition The partition to save
+   */
+  public void setMetadataPartitionState(MetadataPartitionType partition, boolean enabled) {
+    ValidationUtils.checkArgument(!partition.name().contains(","), "Metadata Table partition name cannot contain a comma: " + partition.name());
+    Set<String> partitions = Arrays.stream(getStringOrDefault(METADATA_TABLE_PARTITIONS).split(","))
+        .filter(p -> !p.isEmpty()).collect(Collectors.toSet());
+    if (enabled) {
+      partitions.add(partition.name());
+    } else if (partition.name().equals(MetadataPartitionType.FILES.name())) {
+      // file listing partition is required for all other partitions to work
+      // Disabling file partition will also disable all partitions
+      partitions.clear();
+    } else {
+      partitions.remove(partition.name());
+    }
+    setValue(METADATA_TABLE_PARTITIONS, partitions.stream().sorted().collect(Collectors.joining(",")));
   }
 
   public Map<String, String> propsMap() {

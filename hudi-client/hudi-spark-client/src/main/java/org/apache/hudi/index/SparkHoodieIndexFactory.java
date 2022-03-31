@@ -63,6 +63,8 @@ public final class SparkHoodieIndexFactory {
         return new HoodieSimpleIndex<>(config, getKeyGeneratorForSimpleIndex(config));
       case GLOBAL_SIMPLE:
         return new HoodieGlobalSimpleIndex<>(config, getKeyGeneratorForSimpleIndex(config));
+      case RECORD_INDEX:
+        return new SparkMetadataTableRecordIndex<>(config);
       default:
         throw new HoodieIndexException("Index type unspecified, set " + config.getIndexType());
     }
@@ -86,6 +88,8 @@ public final class SparkHoodieIndexFactory {
       case SIMPLE:
         return false;
       case GLOBAL_SIMPLE:
+        return true;
+      case RECORD_INDEX:
         return true;
       default:
         return createIndex(config).isGlobal();

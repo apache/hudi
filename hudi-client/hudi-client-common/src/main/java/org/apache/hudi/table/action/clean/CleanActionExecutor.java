@@ -240,8 +240,11 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
             LOG.warn("Failed to perform previous clean operation, instant: " + hoodieInstant, e);
           }
         }
+        table.getMetaClient().reloadActiveTimeline();
+        if (table.getMetaClient().getTableConfig().isMetadataTableEnabled()) {
+          table.getHoodieView().sync();
+        }
       });
-      table.getMetaClient().reloadActiveTimeline();
     }
     // return the last clean metadata for now
     // TODO (NA) : Clean only the earliest pending clean just like how we do for other table services

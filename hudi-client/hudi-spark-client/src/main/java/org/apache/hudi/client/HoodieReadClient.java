@@ -36,9 +36,9 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
+import org.apache.hudi.index.SparkMetadataTableRecordIndex;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -71,6 +71,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload<T>> implements Seria
   private transient Option<SQLContext> sqlContextOpt;
   private final transient HoodieSparkEngineContext context;
   private final transient Configuration hadoopConf;
+  private final transient HoodieWriteConfig clientConfig;
 
   /**
    * @param basePath path to Hoodie table
@@ -96,11 +97,14 @@ public class HoodieReadClient<T extends HoodieRecordPayload<T>> implements Seria
    */
   public HoodieReadClient(HoodieSparkEngineContext context, HoodieWriteConfig clientConfig) {
     this.context = context;
+    this.clientConfig = clientConfig;
     this.hadoopConf = context.getHadoopConf().get();
     final String basePath = clientConfig.getBasePath();
+
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
     this.hoodieTable = HoodieSparkTable.create(clientConfig, context, metaClient);
+
     this.index = SparkHoodieIndexFactory.createIndex(clientConfig);
     this.sqlContextOpt = Option.empty();
   }
@@ -199,8 +203,18 @@ public class HoodieReadClient<T extends HoodieRecordPayload<T>> implements Seria
    * @return Tagged RDD of Hoodie records
    */
   public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> hoodieRecords) throws HoodieIndexException {
-    return HoodieJavaRDD.getJavaRDD(
-        index.tagLocation(HoodieJavaRDD.of(hoodieRecords), context, hoodieTable));
+    return HoodieJavaRDD.getJavaRDD(index.tagLocation(HoodieJavaRDD.of(hoodieRecords), context, hoodieTable));
+  }
+
+  /**
+   * Tag the records with location using metadata table record index (if exists).
+   *
+   * @param hoodieRecords Input RDD of Hoodie records
+   * @return Tagged RDD of Hoodie records
+   */
+  public JavaRDD<HoodieRecord<T>> tagLocationUsingMetadataRecordIndex(JavaRDD<HoodieRecord<T>> hoodieRecords) {
+    HoodieIndex recordIndex = new SparkMetadataTableRecordIndex<>(clientConfig);
+    return HoodieJavaRDD.getJavaRDD(recordIndex.tagLocation(HoodieJavaRDD.of(hoodieRecords), context, hoodieTable));
   }
 
   /**

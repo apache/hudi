@@ -77,6 +77,7 @@ import org.apache.hudi.metadata.HoodieMetadataMetrics;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataKeyGenerator;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -371,7 +372,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // this should have triggered compaction in metadata table
     tableMetadata = metadata(writeConfig, context);
     assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
-    assertEquals(tableMetadata.getLatestCompactionTime().get(), "0000003001");
+    assertEquals(tableMetadata.getLatestCompactionTime().get(), HoodieTableMetadataUtil.createCompactionTimestamp("0000003"));
   }
 
 
@@ -402,7 +403,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     HoodieTableMetadata tableMetadata = metadata(writeConfig, context);
     assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
-    assertEquals(tableMetadata.getLatestCompactionTime().get(), "0000003001");
+    assertEquals(tableMetadata.getLatestCompactionTime().get(), HoodieTableMetadataUtil.createCompactionTimestamp("0000003"));
 
     HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
     HoodieWriteConfig metadataTableWriteConfig = getMetadataWriteConfig(writeConfig);
@@ -450,7 +451,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     doWriteOperation(testTable, "0000003", INSERT);
 
     HoodieTableMetadata tableMetadata = metadata(writeConfig, context);
-    String metadataCompactionInstant = commitInstant + "001";
+    String metadataCompactionInstant = HoodieTableMetadataUtil.createCompactionTimestamp(commitInstant);
     assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
     assertEquals(tableMetadata.getLatestCompactionTime().get(), metadataCompactionInstant);
 
@@ -483,7 +484,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     if (simulateFailedCompaction) {
       //trigger another compaction failure.
-      metadataCompactionInstant = "0000005001";
+      metadataCompactionInstant = HoodieTableMetadataUtil.createCompactionTimestamp("0000005");
       tableMetadata = metadata(writeConfig, context);
       assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
       assertEquals(tableMetadata.getLatestCompactionTime().get(), metadataCompactionInstant);
@@ -805,11 +806,12 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     init(tableType);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
+    String newCommitTime;
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
         getWriteConfigBuilder(true, true, false).withRollbackUsingMarkers(false).build())) {
 
       // Write 1 (Bulk insert)
-      String newCommitTime = "0000001";
+      newCommitTime = "0000001";
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
       client.startCommitWithTime(newCommitTime);
       List<WriteStatus> writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), newCommitTime).collect();
@@ -880,6 +882,23 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       client.restoreToInstant("0000006");
       validateMetadata(client);
     }
+
+    // Once metadata table is enabled, the write config enable flag should not have any effect
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertTrue(metaClient.getTableConfig().isMetadataTableEnabled());
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, false))) {
+      newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
+      client.startCommitWithTime(newCommitTime);
+      List<WriteStatus> writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      //validateMetadata(client);
+
+      // latest commit should have been written to metadata table
+      HoodieTableMetadata tableMetadata = metadata(client);
+      assertTrue(tableMetadata.getSyncedInstantTime().get().equals(newCommitTime));
+    }
+
   }
 
   /**
@@ -1233,7 +1252,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
 
     // Metadata table should have been bootstrapped
+    metaClient = HoodieTableMetaClient.reload(metaClient);
     assertTrue(fs.exists(new Path(metadataTableBasePath)), "Metadata table should exist");
+    assertTrue(metaClient.getTableConfig().isMetadataTableEnabled(), "Metadata table should be enabled in Table Config");
     FileStatus oldStatus = fs.getFileStatus(new Path(metadataTableBasePath));
 
     // set hoodie.table.version to 2 in hoodie.properties file
@@ -1249,6 +1270,10 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), commitTimestamp).collect();
       assertNoWriteErrors(writeStatuses);
     }
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertTrue(metaClient.getTableConfig().isMetadataTableEnabled(), "Metadata table should be enabled in Table Config");
+    assertTrue(metaClient.getTableConfig().isMetadataPartitionEnabled(MetadataPartitionType.FILES),
+        "Metadata table files partition should be present in Table Config");
     assertTrue(fs.exists(new Path(metadataTableBasePath)), "Metadata table should exist");
     FileStatus currentStatus = fs.getFileStatus(new Path(metadataTableBasePath));
     assertTrue(currentStatus.getModificationTime() > prevStatus.getModificationTime());
@@ -1263,8 +1288,12 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     new UpgradeDowngrade(metaClient, writeConfig, context, SparkUpgradeDowngradeHelper.getInstance())
         .run(HoodieTableVersion.TWO, null);
 
+    metaClient = HoodieTableMetaClient.reload(metaClient);
     assertEquals(metaClient.getTableConfig().getTableVersion().versionCode(), HoodieTableVersion.TWO.versionCode());
     assertFalse(fs.exists(new Path(metadataTableBasePath)), "Metadata table should not exist");
+    assertFalse(metaClient.getTableConfig().isMetadataTableEnabled(), "Metadata table should not be enabled in Table Config");
+    assertFalse(metaClient.getTableConfig().isMetadataPartitionEnabled(MetadataPartitionType.FILES),
+        "Metadata table files partition should not be present in Table Config");
   }
 
   /**
@@ -1479,10 +1508,10 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertNoWriteErrors(writeStatuses);
       validateMetadata(client);
 
-      Registry metricsRegistry = Registry.getRegistry("HoodieMetadata");
-      assertTrue(metricsRegistry.getAllCounts().containsKey(HoodieMetadataMetrics.INITIALIZE_STR + ".count"));
-      assertTrue(metricsRegistry.getAllCounts().containsKey(HoodieMetadataMetrics.INITIALIZE_STR + ".totalDuration"));
-      assertTrue(metricsRegistry.getAllCounts().get(HoodieMetadataMetrics.INITIALIZE_STR + ".count") >= 1L);
+      Registry metricsRegistry = Registry.getRegistry(client.getConfig().getTableName() + ".HoodieMetadata");
+      assertTrue(metricsRegistry.getAllCounts().containsKey(HoodieMetadataMetrics.INITIALIZE_FILE_LISTING_TIME_STR));
+      assertTrue(metricsRegistry.getAllCounts().get(HoodieMetadataMetrics.INITIALIZE_FILE_LISTING_TIME_STR) > 0L);
+
       final String prefix = MetadataPartitionType.FILES.partitionPath() + ".";
       assertTrue(metricsRegistry.getAllCounts().containsKey(prefix + HoodieMetadataMetrics.STAT_COUNT_BASE_FILES));
       assertTrue(metricsRegistry.getAllCounts().containsKey(prefix + HoodieMetadataMetrics.STAT_COUNT_LOG_FILES));
@@ -1544,8 +1573,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // RecordKey properties are needed for the metadata table records
     final Properties properties = new Properties();
-    properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY);
-    properties.put("hoodie.datasource.write.recordkey.field", HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY);
+    properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), HoodieMetadataPayload.KEY_FIELD_NAME);
+    properties.put("hoodie.datasource.write.recordkey.field", HoodieMetadataPayload.KEY_FIELD_NAME);
     builder.withProperties(properties);
 
     if (writeConfig.isMetricsOn()) {
@@ -1648,7 +1677,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     HoodieTableMetadata tableMetadata = metadata(client);
     assertNotNull(tableMetadata, "MetadataReader should have been initialized");
-    if (!config.isMetadataTableEnabled()) {
+    if (!metaClient.getTableConfig().isMetadataTableEnabled()) {
       return;
     }
 
@@ -1760,12 +1789,15 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertEquals(metadataMetaClient.getTableConfig().getBaseFileFormat(), HoodieFileFormat.HFILE,
         "Metadata Table base file format should be HFile");
 
-    // Metadata table has a fixed number of partitions
+    // Metadata table has a fixed number of partitions. files partition is always present. The other partitions are
+    // created when their feature is enabled.
     // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
     // in the .hoodie folder.
     List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, HoodieTableMetadata.getMetadataTableBasePath(basePath),
         false, false);
-    assertEquals(MetadataPartitionType.values().length, metadataTablePartitions.size());
+    assertTrue(metadataTablePartitions.size() >= 1);
+    assertTrue(metadataTablePartitions.contains(MetadataPartitionType.FILES.partitionPath()));
+    assertTrue(metadataTablePartitions.size() <= MetadataPartitionType.values().length);
 
     // Metadata table should automatically compact and clean
     // versions are +1 as autoclean / compaction happens end of commits
@@ -1806,8 +1838,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   private HoodieTableMetadata metadata(SparkRDDWriteClient client) {
     HoodieWriteConfig clientConfig = client.getConfig();
-    return HoodieTableMetadata.create(client.getEngineContext(), clientConfig.getMetadataConfig(), clientConfig.getBasePath(),
-        clientConfig.getSpillableMapBasePath());
+    return HoodieTableMetadata.create(client.getEngineContext(), clientConfig.getMetadataConfig(), clientConfig.getBasePath());
   }
 
   private void changeTableVersion(HoodieTableVersion version) throws IOException {

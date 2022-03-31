@@ -37,6 +37,8 @@ public interface HoodieFileReader<R extends IndexedRecord> {
 
   public Iterator<R> getRecordIterator(Schema readerSchema) throws IOException;
 
+  public Iterator<R> getRecordKeyIterator() throws IOException;
+
   default Iterator<R> getRecordIterator() throws IOException {
     return getRecordIterator(getSchema());
   }

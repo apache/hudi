@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
@@ -276,8 +275,7 @@ public class FSUtils {
         .enable(useFileListingFromMetadata)
         .withAssumeDatePartitioning(assumeDatePartitioning)
         .build();
-    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr,
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue())) {
+    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr)) {
       return tableMetadata.getAllPartitionPaths();
     } catch (Exception e) {
       throw new HoodieException("Error fetching partition paths from metadata table", e);
@@ -286,8 +284,7 @@ public class FSUtils {
 
   public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
                                                   String basePathStr) {
-    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr,
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue())) {
+    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr)) {
       return tableMetadata.getAllPartitionPaths();
     } catch (Exception e) {
       throw new HoodieException("Error fetching partition paths from metadata table", e);
@@ -299,8 +296,7 @@ public class FSUtils {
                                                                String basePathStr,
                                                                String[] partitionPaths,
                                                                String spillableMapPath) {
-    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr,
-        spillableMapPath, true)) {
+    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr)) {
       return tableMetadata.getAllFilesInPartitions(Arrays.asList(partitionPaths));
     } catch (Exception ex) {
       throw new HoodieException("Error get files in partitions: " + String.join(",", partitionPaths), ex);

@@ -21,11 +21,13 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
@@ -35,12 +37,12 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieMetadataException;
-
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.FileNotFoundException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -62,20 +64,56 @@ public class HoodieTableMetadataUtil {
 
   private static final Logger LOG = LogManager.getLogger(HoodieTableMetadataUtil.class);
 
+  // Suffix to use for bootstrapping additional indexes. Should be less than other suffixes.
+  private static final String INDEX_BOOTSTRAP_TIMESTAMP_SUFFIX = "001";
+  // Suffix to use for compaction
+  private static final String COMPACTION_TIMESTAMP_SUFFIX = "002";
+  // Suffix to use for clean
+  private static final String CLEAN_TIMESTAMP_SUFFIX = "003";
+
   /**
    * Delete the metadata table for the dataset. This will be invoked during upgrade/downgrade operation during which no other
    * process should be running.
    *
-   * @param basePath base path of the dataset
+   * @param metaClient {@code HoodieTableMetaClient} of the dataset for which metadata table is to be deleted
    * @param context instance of {@link HoodieEngineContext}.
+   * @param backup Whether metadata table should be backed up before deletion. If true, the table is backed up to the
+   *               directory with name metadata_<current_timestamp>.
    */
-  public static void deleteMetadataTable(String basePath, HoodieEngineContext context) {
-    final String metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
-    FileSystem fs = FSUtils.getFs(metadataTablePath, context.getHadoopConf().get());
+  public static void deleteMetadataTable(HoodieTableMetaClient dataMetaClient, HoodieEngineContext context, boolean backup) {
+    final Path metadataTablePath = new Path(HoodieTableMetadata.getMetadataTableBasePath(dataMetaClient.getBasePath()));
+    FileSystem fs = FSUtils.getFs(metadataTablePath.toString(), context.getHadoopConf().get());
+    setMetadataPartitionState(dataMetaClient, MetadataPartitionType.FILES, false);
     try {
-      fs.delete(new Path(metadataTablePath), true);
+      if (!fs.exists(metadataTablePath)) {
+        return;
+      }
+    } catch (FileNotFoundException e) {
+      // Ignoring exception as metadata table already does not exist
+      LOG.debug("Metadata table not found at path " + metadataTablePath);
+      return;
     } catch (Exception e) {
-      throw new HoodieMetadataException("Failed to remove metadata table from path " + metadataTablePath, e);
+      throw new HoodieMetadataException("Failed to check metadata table existence", e);
+    }
+
+    if (backup) {
+      final Path metadataBackupPath = new Path(metadataTablePath.getParent(), "metadata_" + HoodieActiveTimeline.createNewInstantTime());
+      LOG.info("Backing up metadata directory to " + metadataBackupPath + " before deletion");
+      try {
+        if (fs.rename(metadataTablePath, metadataBackupPath)) {
+          return;
+        }
+      } catch (Exception e) {
+        // If rename fails, we will try to delete the table instead
+        LOG.error("Failed to backup metadata table using rename", e);
+      }
+    }
+
+    LOG.info("Deleting metadata table from " + metadataTablePath);
+    try {
+      fs.delete(metadataTablePath, true);
+    } catch (Exception e) {
+      throw new HoodieMetadataException("Failed to delete metadata table from path " + metadataTablePath, e);
     }
   }
 
@@ -89,6 +127,7 @@ public class HoodieTableMetadataUtil {
   public static List<HoodieRecord> convertMetadataToRecords(HoodieCommitMetadata commitMetadata, String instantTime) {
     List<HoodieRecord> records = new LinkedList<>();
     List<String> allPartitions = new LinkedList<>();
+    int[] newFileCount = {0};
     commitMetadata.getPartitionToWriteStats().forEach((partitionStatName, writeStats) -> {
       final String partition = partitionStatName.equals(EMPTY_PARTITION_NAME) ? NON_PARTITIONED_NAME : partitionStatName;
       allPartitions.add(partition);
@@ -113,14 +152,15 @@ public class HoodieTableMetadataUtil {
       HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(
           partition, Option.of(newFiles), Option.empty());
       records.add(record);
+      newFileCount[0] += newFiles.size();
     });
 
     // New partitions created
     HoodieRecord record = HoodieMetadataPayload.createPartitionListRecord(new ArrayList<>(allPartitions));
     records.add(record);
 
-    LOG.info("Updating at " + instantTime + " from Commit/" + commitMetadata.getOperationType()
-        + ". #partitions_updated=" + records.size());
+    LOG.info(String.format("Updating at %s from Commit/%s. #partitions_updated=%d, #files_added=%d", instantTime, commitMetadata.getOperationType(),
+        records.size(), newFileCount[0]));
     return records;
   }
 
@@ -399,4 +439,124 @@ public class HoodieTableMetadataUtil {
     return fileSliceStream.sorted((s1, s2) -> s1.getFileId().compareTo(s2.getFileId())).collect(Collectors.toList());
   }
 
+  /**
+   * Get the file slices for a given partition which have been initialized but dont appear in the timeline yet.
+   *
+   * @param metaClient      - Instance of {@link HoodieTableMetaClient}.
+   * @param partition       - The name of the partition whose file groups are to be loaded.
+   * @return List of latest file slices for all file groups in a given partition.
+   */
+  public static List<FileSlice> getBootstrappedFileSlices(HoodieTableMetaClient metaClient, String partition) {
+    final HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION,
+        HoodieActiveTimeline.createNewInstantTime());
+    HoodieDefaultTimeline timeline = new HoodieDefaultTimeline(Arrays.asList(instant).stream(), metaClient.getActiveTimeline()::getInstantDetails);
+
+    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, timeline);
+    Stream<FileSlice> fileSliceStream;
+    fileSliceStream = fsView.getLatestFileSlices(partition);
+    return fileSliceStream.sorted((s1, s2) -> s1.getFileId().compareTo(s2.getFileId())).collect(Collectors.toList());
+  }
+
+  /**
+   * Returns a {@code HoodieTableMetaClient} for the metadata table.
+   *
+   * @param datasetMetaClient {@code HoodieTableMetaClient} for the dataset.
+   * @return {@code HoodieTableMetaClient} for the metadata table.
+   */
+  public static HoodieTableMetaClient getMetadataTableMetaClient(HoodieTableMetaClient datasetMetaClient) {
+    final String metadataBasePath = HoodieTableMetadata.getMetadataTableBasePath(datasetMetaClient.getBasePath());
+    return HoodieTableMetaClient.builder().setBasePath(metadataBasePath).setConf(datasetMetaClient.getHadoopConf())
+        .build();
+  }
+
+  /**
+   * Create the timestamp for a clean operation on the metadata table.
+   */
+  public static String createCleanTimestamp(String timestamp) {
+    return timestamp + CLEAN_TIMESTAMP_SUFFIX;
+  }
+
+  /**
+   * Create the timestamp for a compaction operation on the metadata table.
+   */
+  public static String createCompactionTimestamp(String timestamp) {
+    return timestamp + COMPACTION_TIMESTAMP_SUFFIX;
+  }
+
+  /**
+   * Create the timestamp for an index initialization operation on the metadata table.
+   */
+  public static String createIndexInitTimestamp(String timestamp) {
+    return timestamp + INDEX_BOOTSTRAP_TIMESTAMP_SUFFIX;
+  }
+
+  /**
+   * Returns true if the given instant represents an index bootstrap operation on the metadata table.
+   *
+   * When an index is bootstrapped on its own, it will use a instant time which has the suffix
+   * INDEX_BOOTSTRAP_TIMESTAMP_SUFFIX. Suppose the last deltacommit on the metadata table had the timestamp t1 then
+   * the index bootstrap operation will have the timstamp t1 + INDEX_BOOTSTRAP_TIMESTAMP_SUFFIX = t1001.
+   *
+   * We have to satisfy the following constraints:
+   * 1. This timestamp t1001 wont be present on the dataset timeline.
+   * 2. The deltacommit t1 may itself have been archived.
+   * 3. Dataset instants have millisecond resolution timestamp so they themselves may have timestamp which is ending in
+   *    INDEX_BOOTSTRAP_TIMESTAMP_SUFFIX. We need to ignore such instants in this method.
+   *
+   * If the HUDI generated timestamps have millisecond resolution and length 17, then due to the suffix of
+   * INDEX_BOOTSTRAP_TIMESTAMP_SUFFIX, the length of index timestamp will be 20. This additional check ensures that
+   * we do not assume any dataset operation's timestamp ending in INDEX_BOOTSTRAP_TIMESTAMP_SUFFIX as a bootstrap index
+   * operation.
+   *
+   */
+  public static boolean isIndexInitInstant(HoodieInstant instant) {
+    final String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    if (!instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)
+        || !instant.getTimestamp().endsWith(INDEX_BOOTSTRAP_TIMESTAMP_SUFFIX)
+        || instant.getTimestamp().length() != (newInstantTime.length() + INDEX_BOOTSTRAP_TIMESTAMP_SUFFIX.length())) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Set the state of the metadata table.
+   * @param dataMetaClient MetaClient for the dataset
+   * @param enabled If true, metadata table is being used for this dataset, false otherwise
+   */
+  public static HoodieTableMetaClient setMetadataPartitionState(HoodieTableMetaClient dataMetaClient, MetadataPartitionType partition,
+      boolean enabled) {
+    dataMetaClient.getTableConfig().setMetadataPartitionState(partition, enabled);
+    HoodieTableConfig.update(dataMetaClient.getFs(), new Path(dataMetaClient.getMetaPath()), dataMetaClient.getTableConfig().getProps());
+    dataMetaClient = HoodieTableMetaClient.reload(dataMetaClient);
+    ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionEnabled(partition) == enabled,
+        "Metadata table state change should be persisted");
+
+    LOG.info(String.format("Metadata table %s partition %s has been %s", dataMetaClient.getBasePath(), partition,
+        enabled ? "enabled" : "disabled"));
+    return dataMetaClient;
+  }
+
+  /**
+   * Returns true if any enabled metadata partition in the given hoodie table requires WriteStatus to track the
+   * written records.
+   * @param config
+   *
+   * @param hoodieTable HoodieTable
+   * @return true if WriteStatus should track the written records else false.
+   */
+  public static boolean needsWriteStatusTracking(HoodieMetadataConfig config, HoodieTableMetaClient metaClient) {
+    // Does any enabled partition need to track the written records
+    if (MetadataPartitionType.needWriteStatusTracking().stream().anyMatch(p -> metaClient.getTableConfig().isMetadataPartitionEnabled(p))) {
+      return true;
+    }
+
+    // Does any enabled partition being enabled need to track the written records
+    if (config.createRecordIndex()) {
+      return true;
+    }
+
+    return false;
+  }
 }

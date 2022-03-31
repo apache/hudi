@@ -23,12 +23,15 @@ import java.util.Iterator;
 import java.util.Set;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.BaseFileUtils;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
@@ -38,6 +41,7 @@ public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileR
   private Path path;
   private Configuration conf;
   private final BaseFileUtils parquetUtils;
+  private Schema schema;
 
   public HoodieParquetReader(Configuration configuration, Path path) {
     this.conf = configuration;
@@ -45,6 +49,7 @@ public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileR
     this.parquetUtils = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET);
   }
 
+  @Override
   public String[] readMinMaxRecordKeys() {
     return parquetUtils.readMinMaxRecordKeys(conf, path);
   }
@@ -62,13 +67,18 @@ public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileR
   @Override
   public Iterator<R> getRecordIterator(Schema schema) throws IOException {
     AvroReadSupport.setAvroReadSchema(conf, schema);
+    AvroReadSupport.setRequestedProjection(conf, schema);
     ParquetReader<IndexedRecord> reader = AvroParquetReader.<IndexedRecord>builder(path).withConf(conf).build();
     return new ParquetReaderIterator(reader);
   }
 
   @Override
   public Schema getSchema() {
-    return parquetUtils.readAvroSchema(conf, path);
+    if (schema == null) {
+      schema = parquetUtils.readAvroSchema(conf, path);
+    }
+
+    return schema;
   }
 
   @Override
@@ -78,5 +88,22 @@ public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileR
   @Override
   public long getTotalRecords() {
     return parquetUtils.getRowCount(conf, path);
+  }
+
+  @Override
+  public Iterator<String> getRecordKeyIterator() throws IOException {
+    Iterator<R> recordIterator = getRecordIterator(HoodieAvroUtils.getRecordKeySchema());
+    return new Iterator<String>() {
+      @Override
+      public boolean hasNext() {
+        return recordIterator.hasNext();
+      }
+
+      @Override
+      public String next() {
+        Object obj = recordIterator.next();
+        return ((GenericRecord) obj).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+      }
+    };
   }
 }

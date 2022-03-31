@@ -434,6 +434,15 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.10.0")
       .withDocumentation("File Id Prefix provider class, that implements `org.apache.hudi.fileid.FileIdPrefixProvider`");
 
+  /**
+   * If a valid location is specified, a copy of the write config is saved before each operation.
+   */
+  public static final ConfigProperty<String> CONFIG_EXPORT_DIR = ConfigProperty
+      .key("hoodie.write.config.save.dir")
+      .defaultValue("/user/hudi/runtime_configs/0.10")
+      .sinceVersion("0.10.0")
+      .withDocumentation("The directory where write configs are saved before each operation.");
+
   private ConsistencyGuardConfig consistencyGuardConfig;
 
   // Hoodie Write Client transparently rewrites File System View config when embedded mode is enabled
@@ -1634,9 +1643,13 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getMetricReporterMetricsNamePrefix() {
-    return getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_PREFIX);
+    String prefix = getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_PREFIX);
+    if (prefix.isEmpty()) {
+      prefix = getTableName();
+    }
+    return prefix;
   }
-  
+
   /**
    * memory configs.
    */
@@ -1837,6 +1850,36 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getFileIdPrefixProviderClassName() {
     return getString(FILEID_PREFIX_PROVIDER_CLASS);
+  }
+
+  /**
+   * Record index configs.
+   */
+  public boolean createRecordIndex() {
+    return metadataConfig.createRecordIndex();
+  }
+
+  public int getRecordIndexMinFileGroupCount() {
+    return metadataConfig.getRecordIndexMinFileGroupCount();
+  }
+
+  public int getRecordIndexMaxFileGroupCount() {
+    return metadataConfig.getRecordIndexMaxFileGroupCount();
+  }
+
+  public float getRecordIndexGrowthFactor() {
+    return metadataConfig.getRecordIndexGrowthFactor();
+  }
+
+  public long getMaxMetadataFileGroupSizeBytes() {
+    return metadataConfig.getMaxFileGroupSizeBytes();
+  }
+
+  /**
+   * Directory where write config should be exported before each operation.
+   */
+  public String getConfigExportDir() {
+    return getString(CONFIG_EXPORT_DIR);
   }
 
   public static class Builder {
@@ -2192,6 +2235,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withProperties(Properties properties) {
       this.writeConfig.getProps().putAll(properties);
+      return this;
+    }
+
+    public Builder withConfigExportDir(String dir) {
+      writeConfig.setValue(CONFIG_EXPORT_DIR, dir);
       return this;
     }
 

@@ -25,12 +25,14 @@ import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -129,42 +131,10 @@ public class MetadataCommand implements CommandMarker {
   }
 
   @CliCommand(value = "metadata delete", help = "Remove the Metadata Table")
-  public String delete() throws Exception {
-    HoodieCLI.getTableMetaClient();
-    Path metadataPath = new Path(getMetadataTableBasePath(HoodieCLI.basePath));
-    try {
-      FileStatus[] statuses = HoodieCLI.fs.listStatus(metadataPath);
-      if (statuses.length > 0) {
-        HoodieCLI.fs.delete(metadataPath, true);
-      }
-    } catch (FileNotFoundException e) {
-      // Metadata directory does not exist
-    }
-
-    return String.format("Removed Metadata Table from %s", metadataPath);
-  }
-
-  @CliCommand(value = "metadata init", help = "Update the metadata table from commits since the creation")
-  public String init(@CliOption(key = {"readonly"}, unspecifiedDefaultValue = "false",
-      help = "Open in read-only mode") final boolean readOnly) throws Exception {
-    HoodieCLI.getTableMetaClient();
-    Path metadataPath = new Path(getMetadataTableBasePath(HoodieCLI.basePath));
-    try {
-      HoodieCLI.fs.listStatus(metadataPath);
-    } catch (FileNotFoundException e) {
-      // Metadata directory does not exist
-      throw new RuntimeException("Metadata directory (" + metadataPath.toString() + ") does not exist.");
-    }
-
-    HoodieTimer timer = new HoodieTimer().startTimer();
-    if (!readOnly) {
-      HoodieWriteConfig writeConfig = getWriteConfig();
-      initJavaSparkContext();
-      SparkHoodieBackedTableMetadataWriter.create(HoodieCLI.conf, writeConfig, new HoodieSparkEngineContext(jsc));
-    }
-
-    String action = readOnly ? "Opened" : "Initialized";
-    return String.format(action + " Metadata Table in %s (duration=%.2fsec)", metadataPath, (timer.endTimer()) / 1000.0);
+  public String delete(@CliOption(key = {"backup"}, help = "Backup the metadata table before delete", mandatory = true) final boolean backup) throws Exception {
+    HoodieTableMetaClient dataMetaClient = HoodieCLI.getTableMetaClient();
+    HoodieTableMetadataUtil.deleteMetadataTable(dataMetaClient, new HoodieSparkEngineContext(jsc), backup);
+    return "Metadata Table has been deleted from " + getMetadataTableBasePath(HoodieCLI.basePath);
   }
 
   @CliCommand(value = "metadata stats", help = "Print stats about the metadata")
@@ -172,7 +142,7 @@ public class MetadataCommand implements CommandMarker {
     HoodieCLI.getTableMetaClient();
     HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().enable(true).build();
     HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(HoodieCLI.conf),
-        config, HoodieCLI.basePath, "/tmp");
+        config, HoodieCLI.basePath);
     Map<String, String> stats = metadata.stats();
 
     final List<Comparable[]> rows = new ArrayList<>();
@@ -196,7 +166,7 @@ public class MetadataCommand implements CommandMarker {
     initJavaSparkContext();
     HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().enable(true).build();
     HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(jsc), config,
-        HoodieCLI.basePath, "/tmp");
+        HoodieCLI.basePath);
 
     if (!metadata.enabled()) {
       return "[ERROR] Metadata Table not enabled/initialized\n\n";
@@ -224,7 +194,7 @@ public class MetadataCommand implements CommandMarker {
     HoodieCLI.getTableMetaClient();
     HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().enable(true).build();
     HoodieBackedTableMetadata metaReader = new HoodieBackedTableMetadata(
-        new HoodieLocalEngineContext(HoodieCLI.conf), config, HoodieCLI.basePath, "/tmp");
+        new HoodieLocalEngineContext(HoodieCLI.conf), config, HoodieCLI.basePath);
 
     if (!metaReader.enabled()) {
       return "[ERROR] Metadata Table not enabled/initialized\n\n";
@@ -252,7 +222,7 @@ public class MetadataCommand implements CommandMarker {
     HoodieCLI.getTableMetaClient();
     HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().enable(true).build();
     HoodieBackedTableMetadata metadataReader = new HoodieBackedTableMetadata(
-        new HoodieLocalEngineContext(HoodieCLI.conf), config, HoodieCLI.basePath, "/tmp");
+        new HoodieLocalEngineContext(HoodieCLI.conf), config, HoodieCLI.basePath);
 
     if (!metadataReader.enabled()) {
       return "[ERROR] Metadata Table not enabled/initialized\n\n";
@@ -260,7 +230,7 @@ public class MetadataCommand implements CommandMarker {
 
     HoodieMetadataConfig fsConfig = HoodieMetadataConfig.newBuilder().enable(false).build();
     HoodieBackedTableMetadata fsMetaReader = new HoodieBackedTableMetadata(
-        new HoodieLocalEngineContext(HoodieCLI.conf), fsConfig, HoodieCLI.basePath, "/tmp");
+        new HoodieLocalEngineContext(HoodieCLI.conf), fsConfig, HoodieCLI.basePath);
 
     HoodieTimer timer = new HoodieTimer().startTimer();
     List<String> metadataPartitions = metadataReader.getAllPartitionPaths();

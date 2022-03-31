@@ -60,7 +60,7 @@ public class TestHoodieIndexConfigs {
   }
 
   @ParameterizedTest
-  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE", "HBASE"})
+  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE", "HBASE", "RECORD_INDEX"})
   public void testCreateIndex(IndexType indexType) throws Exception {
     HoodieWriteConfig config;
     HoodieWriteConfig.Builder clientConfigBuilder = HoodieWriteConfig.newBuilder();
@@ -92,6 +92,13 @@ public class TestHoodieIndexConfigs {
                 .withHBaseIndexConfig(new HoodieHBaseIndexConfig.Builder().build()).build())
             .build();
         assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof SparkHoodieHBaseIndex);
+        break;
+      case RECORD_INDEX:
+        config = clientConfigBuilder.withPath(basePath)
+            .withIndexConfig(indexConfigBuilder.withIndexType(HoodieIndex.IndexType.RECORD_INDEX)
+                .withHBaseIndexConfig(new HoodieHBaseIndexConfig.Builder().build()).build())
+            .build();
+        assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof SparkMetadataTableRecordIndex);
         break;
       default:
         // no -op. just for checkstyle errors

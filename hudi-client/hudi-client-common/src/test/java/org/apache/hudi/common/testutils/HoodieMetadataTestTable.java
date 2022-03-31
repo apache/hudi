@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -33,6 +34,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hadoop.fs.FileSystem;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -77,7 +79,7 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
     HoodieCommitMetadata commitMetadata = super.doWriteOperation(commitTime, operationType, newPartitionsToAdd,
         partitionToFilesNameLengthMap, bootstrap, createInflightCommit);
     if (writer != null && !createInflightCommit) {
-      writer.update(commitMetadata, commitTime, false);
+      writer.update(commitMetadata, HoodieList.of(Collections.EMPTY_LIST), commitTime, false);
     }
     return commitMetadata;
   }
@@ -86,7 +88,7 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
   public HoodieTestTable moveInflightCommitToComplete(String instantTime, HoodieCommitMetadata metadata) throws IOException {
     super.moveInflightCommitToComplete(instantTime, metadata);
     if (writer != null) {
-      writer.update(metadata, instantTime, false);
+      writer.update(metadata, HoodieList.of(Collections.EMPTY_LIST), instantTime, false);
     }
     return this;
   }
@@ -94,7 +96,7 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
   public HoodieTestTable moveInflightCommitToComplete(String instantTime, HoodieCommitMetadata metadata, boolean ignoreWriter) throws IOException {
     super.moveInflightCommitToComplete(instantTime, metadata);
     if (!ignoreWriter && writer != null) {
-      writer.update(metadata, instantTime, false);
+      writer.update(metadata, HoodieList.of(Collections.EMPTY_LIST), instantTime, false);
     }
     return this;
   }
@@ -103,7 +105,7 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
   public HoodieTestTable moveInflightCompactionToComplete(String instantTime, HoodieCommitMetadata metadata) throws IOException {
     super.moveInflightCompactionToComplete(instantTime, metadata);
     if (writer != null) {
-      writer.update(metadata, instantTime, true);
+      writer.update(metadata, HoodieList.of(Collections.EMPTY_LIST), instantTime, true);
     }
     return this;
   }
@@ -120,7 +122,7 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
   public HoodieTestTable addCompaction(String instantTime, HoodieCommitMetadata commitMetadata) throws Exception {
     super.addCompaction(instantTime, commitMetadata);
     if (writer != null) {
-      writer.update(commitMetadata, instantTime, true);
+      writer.update(commitMetadata, HoodieList.of(Collections.EMPTY_LIST), instantTime, true);
     }
     return this;
   }
@@ -151,7 +153,7 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
       HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
     super.addReplaceCommit(instantTime, requestedReplaceMetadata, inflightReplaceMetadata, completeReplaceMetadata);
     if (writer != null) {
-      writer.update(completeReplaceMetadata, instantTime, true);
+      writer.update(completeReplaceMetadata, HoodieList.of(Collections.EMPTY_LIST), instantTime, true);
     }
     return this;
   }

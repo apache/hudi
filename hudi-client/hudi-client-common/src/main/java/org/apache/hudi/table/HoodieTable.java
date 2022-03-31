@@ -49,7 +49,6 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
@@ -105,7 +104,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   protected final HoodieIndex<T, ?, ?, ?> index;
   private SerializableConfiguration hadoopConfiguration;
   protected final TaskContextSupplier taskContextSupplier;
-  private final HoodieTableMetadata metadata;
+  private final HoodieTableMetadata metadataReader;
 
   private transient FileSystemViewManager viewManager;
   protected final transient HoodieEngineContext context;
@@ -117,10 +116,9 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
 
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(config.getMetadataConfig().getProps())
         .build();
-    this.metadata = HoodieTableMetadata.create(context, metadataConfig, config.getBasePath(),
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
+    this.metadataReader = HoodieTableMetadata.create(context, metadataConfig, config.getBasePath());
 
-    this.viewManager = FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadata);
+    this.viewManager = FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadataReader);
     this.metaClient = metaClient;
     this.index = getIndex(config, context);
     this.taskContextSupplier = context.getTaskContextSupplier();
@@ -130,7 +128,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
 
   private synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {
-      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadata);
+      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadataReader);
     }
     return viewManager;
   }
@@ -453,7 +451,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
                                                               String instantTime,
                                                               HoodieInstant instantToRollback,
                                                               boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers);
-  
+
   /**
    * Rollback the (inflight/committed) record changes with the given commit time.
    * <pre>
@@ -742,6 +740,10 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    */
   public final Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp) {
     return getMetadataWriter(triggeringInstantTimestamp, Option.empty());
+  }
+
+  public HoodieTableMetadata getMetadataReader() {
+    return metadataReader;
   }
 
   /**

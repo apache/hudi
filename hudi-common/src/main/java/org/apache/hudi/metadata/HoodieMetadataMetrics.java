@@ -25,9 +25,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
@@ -41,11 +38,23 @@ public class HoodieMetadataMetrics implements Serializable {
   // Metric names
   public static final String LOOKUP_PARTITIONS_STR = "lookup_partitions";
   public static final String LOOKUP_FILES_STR = "lookup_files";
+  public static final String LOOKUP_RECORDINDEX_STR = "lookup_record_index";
+  public static final String LOOKUP_RECORDKEYS_COUNT_STR = "lookup_recordkeys_count";
   public static final String SCAN_STR = "scan";
   public static final String BASEFILE_READ_STR = "basefile_read";
-  public static final String INITIALIZE_STR = "initialize";
+  public static final String LOGFILE_READ_STR = "logfile_read";
+  public static final String INITIALIZE_FILE_LISTING_TIME_STR = "initialize_files_time";
+  public static final String INITIALIZE_RECORD_INDEX_TIME_STR = "initialize_record_index";
   public static final String REBOOTSTRAP_STR = "rebootstrap";
   public static final String BOOTSTRAP_ERR_STR = "bootstrap_error";
+
+  public static final String READ_RECORDKEYS_TIME_STR = "read_recordkeys_time";
+  public static final String READ_RECORDKEYS_COUNT_STR = "read_recordkeys_count";
+  public static final String READ_FILES_COUNT_STR = "read_filelisting_count";
+  public static final String RECORDINDEX_HITS_STR = "record_index_hits";
+  public static final String RECORDINDEX_MISS_STR = "record_index_misses";
+  public static final String COUNT_LOG_BLOCKS = "logBlockCount";
+  public static final String COUNT_LOG_RECORDS = "logRecordsCount";
 
   // Stats names
   public static final String STAT_TOTAL_BASE_FILE_SIZE = "totalBaseFileSizeInBytes";
@@ -53,9 +62,8 @@ public class HoodieMetadataMetrics implements Serializable {
   public static final String STAT_COUNT_BASE_FILES = "baseFileCount";
   public static final String STAT_COUNT_LOG_FILES = "logFileCount";
   public static final String STAT_COUNT_PARTITION = "partitionCount";
+  public static final String STAT_COUNT_FILE_GROUP = "fileGroupCount";
   public static final String STAT_LAST_COMPACTION_TIMESTAMP = "lastCompactionTimestamp";
-
-  private static final Logger LOG = LogManager.getLogger(HoodieMetadataMetrics.class);
 
   private final Registry metricsRegistry;
 
@@ -77,8 +85,8 @@ public class HoodieMetadataMetrics implements Serializable {
     Map<String, String> stats = new HashMap<>();
 
     // Total size of the metadata and count of base/log files
-    for (String metadataPartition : MetadataPartitionType.all()) {
-      List<FileSlice> latestSlices = fsView.getLatestFileSlices(metadataPartition).collect(Collectors.toList());
+    for (MetadataPartitionType metadataPartition : MetadataPartitionType.all()) {
+      List<FileSlice> latestSlices = fsView.getLatestFileSlices(metadataPartition.partitionPath()).collect(Collectors.toList());
 
       // Total size of the metadata and count of base/log files
       long totalBaseFileSizeInBytes = 0;
@@ -93,15 +101,17 @@ public class HoodieMetadataMetrics implements Serializable {
         }
         Iterator<HoodieLogFile> it = slice.getLogFiles().iterator();
         while (it.hasNext()) {
-          totalLogFileSizeInBytes += it.next().getFileSize();
+          HoodieLogFile logFile = it.next();
+          totalLogFileSizeInBytes += logFile.getFileSize();
           ++logFileCount;
         }
       }
 
-      stats.put(metadataPartition + "." + STAT_TOTAL_BASE_FILE_SIZE, String.valueOf(totalBaseFileSizeInBytes));
-      stats.put(metadataPartition + "." + STAT_TOTAL_LOG_FILE_SIZE, String.valueOf(totalLogFileSizeInBytes));
-      stats.put(metadataPartition + "." + STAT_COUNT_BASE_FILES, String.valueOf(baseFileCount));
-      stats.put(metadataPartition + "." + STAT_COUNT_LOG_FILES, String.valueOf(logFileCount));
+      stats.put(metadataPartition.partitionPath() + "." + STAT_TOTAL_BASE_FILE_SIZE, String.valueOf(totalBaseFileSizeInBytes));
+      stats.put(metadataPartition.partitionPath() + "." + STAT_TOTAL_LOG_FILE_SIZE, String.valueOf(totalLogFileSizeInBytes));
+      stats.put(metadataPartition.partitionPath() + "." + STAT_COUNT_BASE_FILES, String.valueOf(baseFileCount));
+      stats.put(metadataPartition.partitionPath() + "." + STAT_COUNT_LOG_FILES, String.valueOf(logFileCount));
+      stats.put(metadataPartition.partitionPath() + "." + STAT_COUNT_FILE_GROUP, String.valueOf(latestSlices.size()));
     }
 
     if (detailed) {
@@ -111,7 +121,7 @@ public class HoodieMetadataMetrics implements Serializable {
     return stats;
   }
 
-  protected void updateMetrics(String action, long durationInMs) {
+  protected void updateDurationMetric(String action, long durationInMs) {
     if (metricsRegistry == null) {
       return;
     }
@@ -126,13 +136,16 @@ public class HoodieMetadataMetrics implements Serializable {
   public void updateSizeMetrics(HoodieTableMetaClient metaClient, HoodieBackedTableMetadata metadata) {
     Map<String, String> stats = getStats(false, metaClient, metadata);
     for (Map.Entry<String, String> e : stats.entrySet()) {
-      incrementMetric(e.getKey(), Long.parseLong(e.getValue()));
+      setMetric(e.getKey(), Long.parseLong(e.getValue()));
     }
   }
 
   protected void incrementMetric(String action, long value) {
-    LOG.info(String.format("Updating metadata metrics (%s=%d) in %s", action, value, metricsRegistry));
     metricsRegistry.add(action, value);
+  }
+
+  protected void setMetric(String action, long value) {
+    metricsRegistry.set(action, value);
   }
 
   public Registry registry() {

@@ -22,7 +22,6 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.exception.HoodieException;
 
@@ -47,11 +46,10 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
 
   public HoodieMetadataFileSystemView(HoodieEngineContext engineContext,
                                       HoodieTableMetaClient metaClient,
-                                      HoodieTimeline visibleActiveTimeline,
-                                      HoodieMetadataConfig metadataConfig) {
+                                      HoodieTimeline visibleActiveTimeline) {
     super(metaClient, visibleActiveTimeline);
-    this.tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, metaClient.getBasePath(),
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
+    this.tableMetadata = HoodieTableMetadata.create(engineContext,
+        HoodieMetadataConfig.newBuilder().enable(true).build(), metaClient.getBasePath());
   }
 
   /**

@@ -23,6 +23,8 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import javax.annotation.concurrent.Immutable;
 
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -41,13 +43,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final String METADATA_PREFIX = "hoodie.metadata";
 
-  // Enable the internal Metadata Table which saves file listings
+  // Create the Metadata Table (MDT) which saves file listings
   public static final ConfigProperty<Boolean> ENABLE = ConfigProperty
       .key(METADATA_PREFIX + ".enable")
       .defaultValue(false)
       .sinceVersion("0.7.0")
-      .withDocumentation("Enable the internal metadata table which serves table metadata like level file listings");
+      .withDocumentation("Create and use the metadata table (MDT) which serves table metadata like file listings "
+          + "and indexes. If set to true, MDT will be created. Once created, this setting only controls if the MDT "
+          + "will be used on reader side. MDT cannot be disabled/removed by setting this to false.");
 
+  // Should readers use metadata table by default
   public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = false;
 
   // Enable metrics for internal Metadata Table
@@ -137,6 +142,62 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("There are cases when extra files are requested to be deleted from metadata table which was never added before. This config"
           + "determines how to handle such spurious deletes");
 
+  public static final ConfigProperty<Long> MAX_FILE_GROUP_SIZE_BYTES_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".max.filegroup.size")
+      .defaultValue(2 * 1024 * 1024 * 1024L)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Maximum size in bytes of a single file group. Large file group takes longer to compact.");
+
+  public static final ConfigProperty<Long> MAX_LOG_FILE_SIZE_BYTES_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".max.logfile.size")
+      .defaultValue(2 * 1024 * 1024 * 1024L)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Maximum size in bytes of a single log file. Larger log files can contain larger log blocks "
+          + "thereby reducing the number of blocks to search for keys");
+
+  public static final ConfigProperty<Boolean> RECORD_INDEX_CREATE_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".record.index.create")
+      .defaultValue(false)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Create the HUDI Record Index within the Metadata Table");
+
+  public static final ConfigProperty<Integer> RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".record.index.min.filegroup.count")
+      .defaultValue(2)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Minimum number of file groups to use for Record Index.");
+
+  public static final ConfigProperty<Integer> RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".record.index.max.filegroup.count")
+      .defaultValue(10000)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Maximum number of file groups to use for Record Index.");
+
+  public static final ConfigProperty<Float> RECORD_INDEX_GROWTH_FACTOR_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".record.index.growth.factor")
+      .defaultValue(2.0f)
+      .sinceVersion("0.11.0")
+      .withDocumentation("The current number of records are multiplied by this number when estimating the number of "
+          + "file groups to create automatically. This helps account for growth in the number of records in the dataset.");
+
+  public static final ConfigProperty<String> SPILLABLE_MAP_DIR_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".spillable.dir")
+      .defaultValue(FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue())
+      .sinceVersion("0.10.0")
+      .withDocumentation("Directory where the spillable maps are saved");
+
+  public static final ConfigProperty<Long> MAX_READER_MEMORY_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".max.reader.memory")
+      .defaultValue(1024 * 1024 * 1024L)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Max memory to use for the reader to read from metadata");
+
+  public static final ConfigProperty<Integer> MAX_READER_BUFFER_SIZE_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".max.reader.buffer.size")
+      .defaultValue(10 * 1024 * 1024)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Max memory to use for the reader buffer while merging log blocks");
+
   private HoodieMetadataConfig() {
     super();
   }
@@ -175,6 +236,42 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean ignoreSpuriousDeletes() {
     return getBoolean(IGNORE_SPURIOUS_DELETES);
+  }
+
+  public boolean createRecordIndex() {
+    return enabled() && getBoolean(RECORD_INDEX_CREATE_PROP);
+  }
+
+  public int getRecordIndexMinFileGroupCount() {
+    return getInt(RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP);
+  }
+
+  public int getRecordIndexMaxFileGroupCount() {
+    return getInt(RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP);
+  }
+
+  public float getRecordIndexGrowthFactor() {
+    return getFloat(RECORD_INDEX_GROWTH_FACTOR_PROP);
+  }
+
+  public long getMaxFileGroupSizeBytes() {
+    return getLong(MAX_FILE_GROUP_SIZE_BYTES_PROP);
+  }
+
+  public String getSplliableMapDir() {
+    return getString(SPILLABLE_MAP_DIR_PROP);
+  }
+
+  public long getMaxReaderMemory() {
+    return getLong(MAX_READER_MEMORY_PROP);
+  }
+
+  public int getMaxReaderBufferSize() {
+    return getInt(MAX_READER_BUFFER_SIZE_PROP);
+  }
+
+  public long getMaxLogFileSize() {
+    return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
 
   public static class Builder {
@@ -262,6 +359,42 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withEngineType(EngineType engineType) {
       this.engineType = engineType;
+      return this;
+    }
+
+    public Builder createRecordIndex(boolean enabled) {
+      metadataConfig.setValue(RECORD_INDEX_CREATE_PROP, String.valueOf(enabled));
+      return this;
+    }
+
+    public Builder withRecordIndexFileGroupCount(int minCount, int maxCount) {
+      metadataConfig.setValue(RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP, String.valueOf(minCount));
+      metadataConfig.setValue(RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP, String.valueOf(maxCount));
+      return this;
+    }
+
+    public Builder withRecordIndexGrowthFactor(float factor) {
+      metadataConfig.setValue(RECORD_INDEX_GROWTH_FACTOR_PROP, String.valueOf(factor));
+      return this;
+    }
+
+    public Builder withMaxFileGroupSizeBytes(long sizeInBytes) {
+      metadataConfig.setValue(MAX_FILE_GROUP_SIZE_BYTES_PROP, String.valueOf(sizeInBytes));
+      return this;
+    }
+
+    public Builder withSpillableMapDir(String dir) {
+      metadataConfig.setValue(SPILLABLE_MAP_DIR_PROP, dir);
+      return this;
+    }
+
+    public Builder withMaxReaderMemory(long mem) {
+      metadataConfig.setValue(MAX_READER_MEMORY_PROP, String.valueOf(mem));
+      return this;
+    }
+
+    public Builder withMaxReaderBufferSize(long mem) {
+      metadataConfig.setValue(MAX_READER_BUFFER_SIZE_PROP, String.valueOf(mem));
       return this;
     }
 

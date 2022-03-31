@@ -24,13 +24,15 @@ import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
 import org.apache.hudi.io.storage.HoodieHFileReader;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -111,6 +113,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     int key = 0;
     int keySize = 0;
     Field keyField = records.get(0).getSchema().getField(this.keyField);
+
     if (keyField == null) {
       // Missing key metadata field so we should use an integer sequence key
       useIntegerKey = true;
@@ -124,9 +127,15 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
       } else {
         recordKey = record.get(keyField.pos()).toString();
       }
-      byte[] recordBytes = HoodieAvroUtils.indexedRecordToBytes(record);
-      ValidationUtils.checkState(!sortedRecordsMap.containsKey(recordKey),
-          "Writing multiple records with same key not supported for " + this.getClass().getName());
+
+      final byte[] recordBytes = serializeRecord(record, Option.ofNullable(keyField));
+      if (sortedRecordsMap.containsKey(recordKey)) {
+        LOG.error("Found duplicate record with recordKey: " + recordKey);
+        printRecord(sortedRecordsMap.get(recordKey), record.getSchema());
+        printRecord(recordBytes, record.getSchema());
+        throw new HoodieException(String.format("Writing multiple records with same key %s not supported for %s",
+            recordKey, this.getClass().getName()));
+      }
       sortedRecordsMap.put(recordKey, recordBytes);
     }
 
@@ -147,6 +156,12 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     return baos.toByteArray();
   }
 
+  private void printRecord(byte[] bs, Schema schema) throws IOException {
+    GenericRecord record = HoodieAvroUtils.bytesToAvro(bs, schema);
+    byte[] json = HoodieAvroUtils.avroToJson(record, true);
+    LOG.error("RECORD: " + new String(json));
+  }
+
   @Override
   protected void createRecordsFromContentBytes() throws IOException {
     if (enableInlineReading) {
@@ -160,6 +175,20 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   public List<IndexedRecord> getRecords(List<String> keys) throws IOException {
     readWithInlineFS(keys);
     return records;
+  }
+
+  /**
+   * Serialize the record to byte buffer.
+   *
+   * @param record         - Record to serialize
+   * @param keyField - Key field in the schema
+   * @return Serialized byte buffer for the record
+   */
+  private byte[] serializeRecord(final IndexedRecord record, final Option<Field> keyField) {
+    if (keyField.isPresent()) {
+      record.put(keyField.get().pos(), StringUtils.EMPTY_STRING);
+    }
+    return HoodieAvroUtils.indexedRecordToBytes(record);
   }
 
   private void readWithInlineFS(List<String> keys) throws IOException {

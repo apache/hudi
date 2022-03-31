@@ -19,9 +19,10 @@
 package org.apache.hudi.metadata;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.apache.avro.Schema;
@@ -32,8 +33,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.SpillableMapUtils;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -49,8 +48,6 @@ import org.apache.hudi.common.util.collection.Pair;
  * useful in limiting memory usage when only a small subset of updates records are to be read.
  */
 public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordScanner {
-
-  private static final Logger LOG = LogManager.getLogger(HoodieMetadataMergedLogRecordReader.class);
 
   // Set of all record keys that are to be read in memory
   private Set<String> mergeKeyFilter;
@@ -111,35 +108,38 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
   }
 
   /**
-   * Retrieve a record given its key.
+   * Retrive records given their keys.
    *
-   * @param key Key of the record to retrieve
-   * @return {@code HoodieRecord} if key was found else {@code Option.empty()}
+   * This function has to be synchronized because we clear the records cache in case full scan is not enabled.
+   * @param keys Keys to retrieve
+   * @return Map of keys to their records. Only the found keys are returned.
    */
-  public List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordByKey(String key) {
-    return Collections.singletonList(Pair.of(key, Option.ofNullable((HoodieRecord) records.get(key))));
-  }
+  public synchronized Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> keys) {
+    if (!this.enableFullScan) {
+      // When full scan is disabled, we need to perform lookups of keys for each call.
+      records.clear();
+      scan(Option.of(keys));
+    }
 
-  public synchronized List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> keys) {
-    // Following operations have to be atomic, otherwise concurrent
-    // readers would race with each other and could crash when
-    // processing log block records as part of scan.
-    records.clear();
-    scan(Option.of(keys));
-    List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> metadataRecords = new ArrayList<>();
-    keys.forEach(entry -> {
-      if (records.containsKey(entry)) {
-        metadataRecords.add(Pair.of(entry, Option.ofNullable((HoodieRecord) records.get(entry))));
-      } else {
-        metadataRecords.add(Pair.of(entry, Option.empty()));
+    Map<String, HoodieRecord<HoodieMetadataPayload>> metadataRecords = new HashMap<>();
+    keys.forEach(key -> {
+      if (records.containsKey(key)) {
+        metadataRecords.put(key, (HoodieRecord) records.get(key));
       }
     });
+
+    if (!this.enableFullScan) {
+      // Clear record cache as we did not scan in full and we dont need to keep the cache of records
+      // for the next lookup
+      records.clear();
+    }
+
     return metadataRecords;
   }
 
   @Override
   protected String getKeyField() {
-    return HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY;
+    return HoodieMetadataPayload.KEY_FIELD_NAME;
   }
 
   /**
@@ -148,7 +148,6 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
   public static class Builder extends HoodieMergedLogRecordScanner.Builder {
     private Set<String> mergeKeyFilter = Collections.emptySet();
     private boolean enableFullScan = HoodieMetadataConfig.ENABLE_FULL_SCAN_LOG_FILES.defaultValue();
-    private boolean enableInlineReading;
 
     @Override
     public Builder withFileSystem(FileSystem fs) {

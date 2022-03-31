@@ -183,7 +183,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
           }
 
           fsView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
-              metaClient, HoodieInputFormatUtils.buildMetadataConfig(getConf()));
+              metaClient, HoodieInputFormatUtils.useMetadataTable(getConf()));
           String partition = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), folder);
           List<HoodieBaseFile> latestFiles = fsView.getLatestBaseFiles(partition).collect(Collectors.toList());
           // populate the cache

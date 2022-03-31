@@ -18,6 +18,12 @@
 
 package org.apache.hudi.table;
 
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import org.apache.hudi.common.fs.FSUtils;
+
 /**
  * Repartition input records into at least expected number of output spark partitions. It should give below guarantees -
  * Output spark partition will have records from only one hoodie partition. - Average records per output spark
@@ -38,4 +44,14 @@ public interface BulkInsertPartitioner<I> {
    * @return {@code true} if the records within a partition are sorted; {@code false} otherwise.
    */
   boolean arePartitionRecordsSorted();
+
+  /**
+   * Returns the fileID prefixes to use when writing records for partitions.
+   *
+   * @param numPartitions  Number of partitions for which the fileID prefix are required
+   * @returns A list of numPartitions fileID prefixes.
+   */
+  default List<String> generateFileIDPfxs(int numPartitions) {
+    return IntStream.range(0, numPartitions).mapToObj(i -> FSUtils.createNewFileIdPfx()).collect(Collectors.toList());
+  }
 }

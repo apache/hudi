@@ -27,7 +27,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
@@ -35,7 +34,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metrics.DistributedRegistry;
-
+import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -90,9 +89,9 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     if (metadataWriteConfig.isMetricsOn()) {
       Registry registry;
       if (metadataWriteConfig.isExecutorMetricsEnabled()) {
-        registry = Registry.getRegistry("HoodieMetadata", DistributedRegistry.class.getName());
+        registry = Registry.getRegistry(HoodieTableMetadata.METRIC_REGISTRY_NAME, DistributedRegistry.class.getName());
       } else {
-        registry = Registry.getRegistry("HoodieMetadata");
+        registry = Registry.getRegistry(HoodieTableMetadata.METRIC_REGISTRY_NAME);
       }
       this.metrics = Option.of(new HoodieMetadataMetrics(registry));
     } else {
@@ -121,11 +120,10 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     }
   }
 
-  protected void commit(HoodieData<HoodieRecord> hoodieDataRecords, String partitionName, String instantTime, boolean canTriggerTableService) {
+  private void commitInternal(HoodieData<HoodieRecord> hoodieDataRecords, String instantTime, boolean canTriggerTableService,
+      Option<BulkInsertPartitioner> partitioner) {
     ValidationUtils.checkState(metadataMetaClient != null, "Metadata table is not fully initialized yet.");
     ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
-    JavaRDD<HoodieRecord> records = (JavaRDD<HoodieRecord>) hoodieDataRecords.get();
-    JavaRDD<HoodieRecord> recordRDD = prepRecords(records, partitionName, 1);
 
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, metadataWriteConfig, true)) {
       if (canTriggerTableService) {
@@ -150,7 +148,9 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         HoodieActiveTimeline.deleteInstantFile(metadataMetaClient.getFs(), metadataMetaClient.getMetaPath(), alreadyCompletedInstant);
         metadataMetaClient.reloadActiveTimeline();
       }
-      List<WriteStatus> statuses = writeClient.upsertPreppedRecords(recordRDD, instantTime).collect();
+      List<WriteStatus> statuses = partitioner.isPresent()
+          ? writeClient.bulkInsertPreppedRecords((JavaRDD<HoodieRecord>) hoodieDataRecords.get(), instantTime, partitioner).collect()
+          : writeClient.upsertPreppedRecords((JavaRDD<HoodieRecord>) hoodieDataRecords.get(), instantTime).collect();
       statuses.forEach(writeStatus -> {
         if (writeStatus.hasErrors()) {
           throw new HoodieMetadataException("Failed to commit metadata table records at instant " + instantTime);
@@ -169,19 +169,23 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     metrics.ifPresent(m -> m.updateSizeMetrics(metadataMetaClient, metadata));
   }
 
-  /**
-   * Tag each record with the location in the given partition.
-   *
-   * The record is tagged with respective file slice's location based on its record key.
-   */
-  private JavaRDD<HoodieRecord> prepRecords(JavaRDD<HoodieRecord> recordsRDD, String partitionName, int numFileGroups) {
-    List<FileSlice> fileSlices = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, partitionName);
-    ValidationUtils.checkArgument(fileSlices.size() == numFileGroups, String.format("Invalid number of file groups: found=%d, required=%d", fileSlices.size(), numFileGroups));
+  @Override
+  protected void commit(HoodieData<HoodieRecord> records, String instantTime, boolean canTriggerTableService) {
+    commitInternal(records, instantTime, canTriggerTableService, Option.empty());
+  }
 
-    return recordsRDD.map(r -> {
-      FileSlice slice = fileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(), numFileGroups));
-      r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
-      return r;
-    });
+  @Override
+  protected void commit(HoodieData<HoodieRecord> records, String instantTime, String partitionName,
+      int fileGroupCount) {
+    LOG.info("Performing bulk insert for partition " + partitionName + " with " + fileGroupCount + " file groups");
+    SparkHoodieMetadataBulkInsertPartitioner partitioner = new SparkHoodieMetadataBulkInsertPartitioner(fileGroupCount);
+    commitInternal(records, instantTime, false, Option.of(partitioner));
+
+    // Ensure the expected number of file groups were created
+    List<FileSlice> fileSlices = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient,
+        partitionName);
+    ValidationUtils.checkState(fileSlices.size() == fileGroupCount,
+        String.format("Wrong number of fileSlices created for partition %s: expected=%d, found=%d", partitionName,
+            fileGroupCount, fileSlices.size()));
   }
 }

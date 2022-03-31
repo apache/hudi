@@ -103,7 +103,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
   public void testLoadInvolvedFiles(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) throws Exception {
     HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
     HoodieBloomIndex index = new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
-    HoodieTable hoodieTable = HoodieFlinkTable.create(config, context, metaClient, false);
+    HoodieTable hoodieTable = HoodieFlinkTable.create(config, context, metaClient);
     HoodieFlinkWriteableTestTable testTable = HoodieFlinkWriteableTestTable.of(hoodieTable, SCHEMA);
 
     // Create some partitions, and put some files

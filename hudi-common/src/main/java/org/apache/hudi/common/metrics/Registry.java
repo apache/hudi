@@ -71,7 +71,10 @@ public interface Registry extends Serializable {
     synchronized (Registry.class) {
       HashMap<String, Long> allMetrics = new HashMap<>();
       REGISTRY_MAP.forEach((registryName, registry) -> {
-        allMetrics.putAll(registry.getAllCounts(prefixWithRegistryName));
+        // Merge the values. This is required as multiple registries of different implementations can have the same name
+        registry.getAllCounts(prefixWithRegistryName).forEach((key, value) -> {
+          allMetrics.merge(registryName + key, value, (value1, value2) -> value1 + value2);
+        });
         if (flush) {
           registry.clear();
         }

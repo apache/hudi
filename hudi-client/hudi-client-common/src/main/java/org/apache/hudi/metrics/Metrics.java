@@ -58,6 +58,7 @@ public class Metrics {
 
   private void reportAndCloseReporter() {
     try {
+      LOG.info("Reporting and closing metrics");
       registerHoodieCommonMetrics();
       reporter.report();
       if (getReporter() != null) {

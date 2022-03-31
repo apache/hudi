@@ -21,9 +21,11 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
@@ -53,6 +55,9 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   // Base path of the Metadata Table relative to the dataset (.hoodie/metadata)
   static final String METADATA_TABLE_REL_PATH = HoodieTableMetaClient.METAFOLDER_NAME + Path.SEPARATOR + "metadata";
 
+  // Name of the metrics registry
+  static final String METRIC_REGISTRY_NAME = "HoodieMetadata";
+
   /**
    * Return the base path of the Metadata Table.
    *
@@ -74,19 +79,26 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
     return basePath.endsWith(METADATA_TABLE_REL_PATH);
   }
 
-  static HoodieTableMetadata create(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String datasetBasePath,
-                                    String spillableMapPath) {
-    return create(engineContext, metadataConfig, datasetBasePath, spillableMapPath, false);
+  /**
+   * This method checks if metadata table is configured on the main table.
+   * @param fs Hadoop FileSystem object
+   * @param tableBasePath Basepath of the main table.
+   * @return true if metadata is configured or else returns false.
+   */
+  public static boolean isMetadataTableConfigured(FileSystem fs, String tableBasePath) throws IOException {
+    Path metadataTableBasePath = new Path(getMetadataTableBasePath(tableBasePath));
+    return fs.exists(metadataTableBasePath);
   }
 
-  static HoodieTableMetadata create(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String datasetBasePath,
-                                    String spillableMapPath, boolean reuse) {
-    if (metadataConfig.enabled()) {
-      return new HoodieBackedTableMetadata(engineContext, metadataConfig, datasetBasePath, spillableMapPath, reuse);
-    } else {
-      return new FileSystemBackedTableMetadata(engineContext, new SerializableConfiguration(engineContext.getHadoopConf()),
-          datasetBasePath, metadataConfig.shouldAssumeDatePartitioning());
+  static HoodieTableMetadata create(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
+                                    String datasetBasePath) {
+    HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(engineContext, metadataConfig, datasetBasePath);
+    if (tableMetadata.enabled()) {
+      return tableMetadata;
     }
+
+    return new FileSystemBackedTableMetadata(engineContext, new SerializableConfiguration(engineContext.getHadoopConf()),
+          datasetBasePath, metadataConfig.shouldAssumeDatePartitioning());
   }
 
   /**
@@ -105,7 +117,12 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   Map<String, FileStatus[]> getAllFilesInPartitions(List<String> partitionPaths) throws IOException;
 
   /**
-   * Get the instant time to which the metadata is synced w.r.t data timeline.
+   * Returns the location of record keys which are found in the record index.
+   */
+  public Map<String, HoodieRecordGlobalLocation> readRecordIndex(List<String> recordKeys);
+
+  /**
+   * Returns the timestamp of the latest synced instant.
    */
   Option<String> getSyncedInstantTime();
 

@@ -26,11 +26,12 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieMetadataException;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -51,32 +52,26 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
   private static final Logger LOG = LogManager.getLogger(BaseTableMetadata.class);
 
-  static final long MAX_MEMORY_SIZE_IN_BYTES = 1024 * 1024 * 1024;
-  static final int BUFFER_SIZE = 10 * 1024 * 1024;
-
   protected final transient HoodieEngineContext engineContext;
   protected final SerializableConfiguration hadoopConf;
   protected final String dataBasePath;
   protected final HoodieTableMetaClient dataMetaClient;
   protected final Option<HoodieMetadataMetrics> metrics;
   protected final HoodieMetadataConfig metadataConfig;
-  // Directory used for Spillable Map when merging records
-  protected final String spillableMapDirectory;
 
   protected boolean enabled;
 
-  protected BaseTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
-                              String dataBasePath, String spillableMapDirectory) {
+  protected BaseTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String dataBasePath) {
     this.engineContext = engineContext;
     this.hadoopConf = new SerializableConfiguration(engineContext.getHadoopConf());
     this.dataBasePath = dataBasePath;
     this.dataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get()).setBasePath(dataBasePath).build();
-    this.spillableMapDirectory = spillableMapDirectory;
     this.metadataConfig = metadataConfig;
 
-    this.enabled = metadataConfig.enabled();
+    this.enabled = dataMetaClient.getTableConfig().isMetadataTableEnabled();
     if (metadataConfig.enableMetrics()) {
-      this.metrics = Option.of(new HoodieMetadataMetrics(Registry.getRegistry("HoodieMetadata")));
+      final Registry registry = Registry.getRegistry(dataMetaClient.getTableConfig().getTableName(), METRIC_REGISTRY_NAME);
+      this.metrics = Option.of(new HoodieMetadataMetrics(registry));
     } else {
       this.metrics = Option.empty();
     }
@@ -152,11 +147,11 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   protected List<String> fetchAllPartitionPaths() throws IOException {
     HoodieTimer timer = new HoodieTimer().startTimer();
     Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getRecordByKey(RECORDKEY_PARTITION_LIST, MetadataPartitionType.FILES.partitionPath());
-    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_PARTITIONS_STR, timer.endTimer()));
+    metrics.ifPresent(m -> m.updateDurationMetric(HoodieMetadataMetrics.LOOKUP_PARTITIONS_STR, timer.endTimer()));
 
     List<String> partitions = Collections.emptyList();
     if (hoodieRecord.isPresent()) {
-      mayBeHandleSpuriousDeletes(hoodieRecord, "\"all partitions\"");
+      mayBeHandleSpuriousDeletes(hoodieRecord.get(), "\"all partitions\"");
       partitions = hoodieRecord.get().getData().getFilenames();
       // Partition-less tables have a single empty partition
       if (partitions.contains(NON_PARTITIONED_NAME)) {
@@ -182,11 +177,11 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
     HoodieTimer timer = new HoodieTimer().startTimer();
     Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getRecordByKey(partitionName, MetadataPartitionType.FILES.partitionPath());
-    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
+    metrics.ifPresent(m -> m.updateDurationMetric(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
 
     FileStatus[] statuses = {};
     if (hoodieRecord.isPresent()) {
-      mayBeHandleSpuriousDeletes(hoodieRecord, partitionName);
+      mayBeHandleSpuriousDeletes(hoodieRecord.get(), partitionName);
       statuses = hoodieRecord.get().getData().getFileStatuses(hadoopConf.get(), partitionPath);
     }
 
@@ -214,16 +209,14 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     }
 
     HoodieTimer timer = new HoodieTimer().startTimer();
-    List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> partitionsFileStatus =
+    Map<String, HoodieRecord<HoodieMetadataPayload>> partitionsFileStatus =
         getRecordsByKeys(new ArrayList<>(partitionInfo.keySet()), MetadataPartitionType.FILES.partitionPath());
-    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
+    metrics.ifPresent(m -> m.updateDurationMetric(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
     Map<String, FileStatus[]> result = new HashMap<>();
 
-    for (Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>> entry: partitionsFileStatus) {
-      if (entry.getValue().isPresent()) {
-        mayBeHandleSpuriousDeletes(entry.getValue(), entry.getKey());
-        result.put(partitionInfo.get(entry.getKey()).toString(), entry.getValue().get().getData().getFileStatuses(hadoopConf.get(), partitionInfo.get(entry.getKey())));
-      }
+    for (Map.Entry<String, HoodieRecord<HoodieMetadataPayload>> entry: partitionsFileStatus.entrySet()) {
+      mayBeHandleSpuriousDeletes(entry.getValue(), entry.getKey());
+      result.put(partitionInfo.get(entry.getKey()).toString(), entry.getValue().getData().getFileStatuses(hadoopConf.get(), partitionInfo.get(entry.getKey())));
     }
 
     LOG.info("Listed files in partitions from metadata: partition list =" + Arrays.toString(partitionPaths.toArray()));
@@ -235,11 +228,11 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
    * @param hoodieRecord instance of {@link HoodieRecord} of interest.
    * @param partitionName partition name of interest.
    */
-  private void mayBeHandleSpuriousDeletes(Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord, String partitionName) {
-    if (!hoodieRecord.get().getData().getDeletions().isEmpty()) {
+  private void mayBeHandleSpuriousDeletes(HoodieRecord<HoodieMetadataPayload> hoodieRecord, String partitionName) {
+    if (!hoodieRecord.getData().getDeletions().isEmpty()) {
       if (!metadataConfig.ignoreSpuriousDeletes()) {
         throw new HoodieMetadataException("Metadata record for " + partitionName + " is inconsistent: "
-            + hoodieRecord.get().getData());
+            + hoodieRecord.getData());
       } else {
         LOG.warn("Metadata record for " + partitionName + " encountered some files to be deleted which was not added before. "
             + "Ignoring the spurious deletes as the `" + HoodieMetadataConfig.IGNORE_SPURIOUS_DELETES.key() + "` config is set to false");
@@ -249,7 +242,36 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
   protected abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName);
 
-  protected abstract List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> key, String partitionName);
+  protected abstract Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> keys, String partitionName);
+
+  /**
+   * Reads record keys from record-level index.
+   *
+   * If the Metadata Table is not enabled, an exception is thrown to distinguish this from the absence of the key.
+   *
+   * @param recordKeys The list of record keys to read
+   */
+  @Override
+  public Map<String, HoodieRecordGlobalLocation> readRecordIndex(List<String> recordKeys) {
+    ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionEnabled(MetadataPartitionType.RECORD_INDEX),
+        "Cannot access record-level index as it is not available in the metadata table");
+
+    HoodieTimer timer = new HoodieTimer().startTimer();
+    Map<String, HoodieRecord<HoodieMetadataPayload>> result = getRecordsByKeys(recordKeys,
+        MetadataPartitionType.RECORD_INDEX.partitionPath());
+
+    Map<String, HoodieRecordGlobalLocation> recordKeyToLocation = new HashMap<>(result.size());
+    result.entrySet().forEach(e -> {
+      recordKeyToLocation.put(e.getKey(), e.getValue().getData().getRecordGlobalLocation());
+    });
+
+    metrics.ifPresent(m -> m.updateDurationMetric(HoodieMetadataMetrics.LOOKUP_RECORDINDEX_STR, timer.endTimer()));
+    metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.LOOKUP_RECORDKEYS_COUNT_STR, recordKeys.size()));
+    metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.RECORDINDEX_HITS_STR, recordKeyToLocation.size()));
+    metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.RECORDINDEX_MISS_STR, recordKeys.size() - recordKeyToLocation.size()));
+
+    return recordKeyToLocation;
+  }
 
   protected HoodieEngineContext getEngineContext() {
     return engineContext != null ? engineContext : new HoodieLocalEngineContext(hadoopConf.get());

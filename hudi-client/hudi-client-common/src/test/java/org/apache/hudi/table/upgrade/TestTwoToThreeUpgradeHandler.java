@@ -19,10 +19,13 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.keygen.KeyGenerator;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TestTwoToThreeUpgradeHandler {
 
   HoodieWriteConfig config;
+  HoodieEngineContext context;
 
   @BeforeEach
   void setUp() {
@@ -47,6 +51,7 @@ class TestTwoToThreeUpgradeHandler {
         .withPath("/foo")
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .build();
+    context = new HoodieLocalEngineContext(new Configuration());
   }
 
   @ParameterizedTest
@@ -54,7 +59,7 @@ class TestTwoToThreeUpgradeHandler {
   void upgradeHandlerShouldRetrieveKeyGeneratorConfig(String keyGenConfigKey) {
     config.setValue(keyGenConfigKey, KeyGenerator.class.getName());
     TwoToThreeUpgradeHandler handler = new TwoToThreeUpgradeHandler();
-    Map<ConfigProperty, String> kv = handler.upgrade(config, null, null, null);
+    Map<ConfigProperty, String> kv = handler.upgrade(config, context, null, null);
     assertEquals(KeyGenerator.class.getName(), kv.get(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME));
   }
 
@@ -62,7 +67,7 @@ class TestTwoToThreeUpgradeHandler {
   void upgradeHandlerShouldThrowWhenKeyGeneratorNotSet() {
     TwoToThreeUpgradeHandler handler = new TwoToThreeUpgradeHandler();
     Throwable t = assertThrows(IllegalStateException.class, () -> handler
-        .upgrade(config, null, null, null));
+        .upgrade(config, context, null, null));
     assertTrue(t.getMessage().startsWith("Missing config:"));
   }
 }

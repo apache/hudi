@@ -36,13 +36,8 @@ import java.util.Map;
 public class TwoToThreeUpgradeHandler implements UpgradeHandler {
   @Override
   public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, BaseUpgradeDowngradeHelper upgradeDowngradeHelper) {
-    if (config.isMetadataTableEnabled()) {
-      // Metadata Table in version 2 is asynchronous and in version 3 is synchronous. Synchronous table will not
-      // sync any instants not already synced. So its simpler to re-bootstrap the table. Also, the schema for the
-      // table has been updated and is not backward compatible.
-      HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
-    }
     Map<ConfigProperty, String> tablePropsToAdd = new Hashtable<>();
+
     tablePropsToAdd.put(HoodieTableConfig.URL_ENCODE_PARTITIONING, config.getStringOrDefault(HoodieTableConfig.URL_ENCODE_PARTITIONING));
     tablePropsToAdd.put(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE, config.getStringOrDefault(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE));
     String keyGenClassName = Option.ofNullable(config.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME))
@@ -50,6 +45,17 @@ public class TwoToThreeUpgradeHandler implements UpgradeHandler {
     ValidationUtils.checkState(keyGenClassName != null, String.format("Missing config: %s or %s",
             HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, HoodieWriteConfig.KEYGENERATOR_CLASS_NAME));
     tablePropsToAdd.put(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, keyGenClassName);
+
+    // Metadata Table in version 2 is asynchronous and in version 3 is synchronous. Synchronous table will not
+    // sync any instants not already synced. So its simpler to re-bootstrap the table. Also, the schema for the
+    // table has been updated and is not backward compatible.
+    if (upgradeDowngradeHelper != null) {
+      HoodieTableMetadataUtil.deleteMetadataTable(upgradeDowngradeHelper.getTable(config, context).getMetaClient(),
+          context, false);
+    }
+    // Clear all the metadata table partitions
+    tablePropsToAdd.put(HoodieTableConfig.METADATA_TABLE_PARTITIONS, "");
+
     return tablePropsToAdd;
   }
 }

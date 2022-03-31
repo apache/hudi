@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
@@ -70,6 +71,10 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
   public HoodieData<HoodieRecord<T>> tagLocation(
       HoodieData<HoodieRecord<T>> records, HoodieEngineContext context,
       HoodieTable hoodieTable) {
+    registry.ifPresent(r -> r.add(TAG_LOC_NUM_PARTITIONS, records.getNumPartitions()));
+
+    HoodieTimer timer = new HoodieTimer().startTimer();
+
     // Step 0: cache the input records if needed
     if (config.getBloomIndexUseCaching()) {
       records.persist(new HoodieConfig(config.getProps())
@@ -100,6 +105,10 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
       records.unpersist();
       keyFilenamePairs.unpersist();
     }
+
+    registry.ifPresent(r -> r.add(TAG_LOC_DURATION, timer.endTimer()));
+    registry.ifPresent(r -> r.add(TAG_LOC_RECORD_COUNT, records.count()));
+    registry.ifPresent(r -> r.add(TAG_LOC_HITS, keyFilenamePairs.count()));
 
     return taggedRecords;
   }

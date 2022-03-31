@@ -22,7 +22,8 @@ import java.util.Arrays;
 import java.util.List;
 
 public enum MetadataPartitionType {
-  FILES("files", "files-");
+  FILES("files", "files-"),
+  RECORD_INDEX("record_index", "record-index-");
 
   // refers to partition path in metadata table.
   private final String partitionPath;
@@ -42,7 +43,16 @@ public enum MetadataPartitionType {
     return fileIdPrefix;
   }
 
-  public static List<String> all() {
-    return Arrays.asList(MetadataPartitionType.FILES.partitionPath());
+  public static List<MetadataPartitionType> all() {
+    return Arrays.asList(MetadataPartitionType.FILES, MetadataPartitionType.RECORD_INDEX);
+  }
+
+  /**
+   * Returns the list of metadata table partitions which require WriteStatus to track written records.
+   *
+   * These partitions need the list of written records so that they can update their metadata.
+   */
+  public static List<MetadataPartitionType> needWriteStatusTracking() {
+    return Arrays.asList(MetadataPartitionType.RECORD_INDEX);
   }
 }

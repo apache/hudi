@@ -95,7 +95,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
         if (!fsCache.containsKey(metaClient)) {
           HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(conf);
           HoodieTableFileSystemView fsView = FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext,
-              metaClient, HoodieInputFormatUtils.buildMetadataConfig(conf), metaClient.getActiveTimeline());
+              metaClient, HoodieInputFormatUtils.useMetadataTable(conf), metaClient.getActiveTimeline());
           fsCache.put(metaClient, fsView);
         }
         HoodieTableFileSystemView fsView = fsCache.get(metaClient);

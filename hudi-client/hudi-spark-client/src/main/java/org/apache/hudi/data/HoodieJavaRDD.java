@@ -139,4 +139,9 @@ public class HoodieJavaRDD<T> extends HoodieData<T> {
   public List<T> collectAsList() {
     return rddData.collect();
   }
+
+  @Override
+  public int getNumPartitions() {
+    return rddData.getNumPartitions();
+  }
 }
