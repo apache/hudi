@@ -120,15 +120,12 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
         checkAnswer(s"select dt from $tableName")(Seq(s"2021/10/02"))
         assertResult(true)(existsPath(s"${tmp.getCanonicalPath}/$tableName/$partitionPath"))
 
-        // TODO (HUDI-3135): These validations are failing. Due to lazy deletion,
-        //  cleaner will delete the partition when it kicks in, however the replacecommit get written in the timeline.
-        //  We should check why FSUtils#getAllPartitionPaths does not exclude replaced filegroups.
         // show partitions
-        /*if (urlencode) {
+        if (urlencode) {
           checkAnswer(s"show partitions $tableName")(Seq(PartitionPathEncodeUtils.escapePathName("2021/10/02")))
         } else {
           checkAnswer(s"show partitions $tableName")(Seq("2021/10/02"))
-        }*/
+        }
       }
     }
   }
@@ -174,15 +171,12 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
         checkAnswer(s"select dt from $tableName")(Seq(s"2021/10/02"))
         assertResult(false)(existsPath(s"${tmp.getCanonicalPath}/$tableName/$partitionPath"))
 
-        // TODO (HUDI-3135): These validations are failing. Due to lazy deletion,
-        //  cleaner will delete the partition when it kicks in, however the replacecommit get written in the timeline.
-        //  We should check why FSUtils#getAllPartitionPaths does not exclude replaced filegroups.
         // show partitions
-        /*if (urlencode) {
+        if (urlencode) {
           checkAnswer(s"show partitions $tableName")(Seq(PartitionPathEncodeUtils.escapePathName("2021/10/02")))
         } else {
           checkAnswer(s"show partitions $tableName")(Seq("2021/10/02"))
-        }*/
+        }
       }
     }
   }
@@ -217,11 +211,8 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
 
     checkAnswer(s"select id, name, ts, dt from $tableName")(Seq(2, "l4", "v1", "2021-10-02"))
 
-    // TODO (HUDI-3135): These validations are failing. Due to lazy deletion,
-    //  cleaner will delete the partition when it kicks in, however the replacecommit get written in the timeline.
-    //  We should check why FSUtils#getAllPartitionPaths does not exclude replaced filegroups.
     // show partitions
-    // checkAnswer(s"show partitions $tableName")(Seq("dt=2021-10-02"))
+    checkAnswer(s"show partitions $tableName")(Seq("dt=2021-10-02"))
   }
 
   Seq(false, true).foreach { hiveStyle =>
@@ -265,15 +256,12 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
           Seq(2, "l4", "v1", "2021", "10", "02")
         )
 
-        // TODO (HUDI-3135): These validations are failing. Due to lazy deletion,
-        //  cleaner will delete the partition when it kicks in, however the replacecommit gets written in the timeline.
-        //  We should check why FSUtils#getAllPartitionPaths does not exclude replaced filegroups.
         // show partitions
-        /*if (hiveStyle) {
+        if (hiveStyle) {
           checkAnswer(s"show partitions $tableName")(Seq("year=2021/month=10/day=02"))
         } else {
           checkAnswer(s"show partitions $tableName")(Seq("2021/10/02"))
-        }*/
+        }
       }
     }
   }
@@ -317,15 +305,12 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
         assertResult(false)(existsPath(
           s"${tmp.getCanonicalPath}/$tableName/year=2021/month=10/day=01"))
 
-        // TODO (HUDI-3135): These validations are failing. Due to lazy deletion,
-        //  cleaner will delete the partition when it kicks in, however the replacecommit get written in the timeline.
-        //  We should check why FSUtils#getAllPartitionPaths does not exclude replaced filegroups.
         // show partitions
-        /*if (hiveStyle) {
+        if (hiveStyle) {
           checkAnswer(s"show partitions $tableName")(Seq("year=2021/month=10/day=02"))
         } else {
           checkAnswer(s"show partitions $tableName")(Seq("2021/10/02"))
-        }*/
+        }
       }
     }
   }
