@@ -1077,12 +1077,15 @@ public class HoodieAvroUtils {
     private static final DecimalConversion DECIMAL_CONVERSION = new DecimalConversion();
     private static final Conversions.UUIDConversion UUID_CONVERSION = new Conversions.UUIDConversion();
     private static final TimeConversions.DateConversion DATE_CONVERSION = new TimeConversions.DateConversion();
-    private static final TimeConversions.TimeMillisConversion TIME_MILLIS_CONVERSION = new TimeConversions.TimeMillisConversion();
     private static final TimeConversions.TimeMicrosConversion TIME_MICROS_CONVERSION = new TimeConversions.TimeMicrosConversion();
-    private static final TimeConversions.TimestampMillisConversion TIMESTAMP_MILLIS_CONVERSION = new TimeConversions.TimestampMillisConversion();
     private static final TimeConversions.TimestampMicrosConversion TIMESTAMP_MICROS_CONVERSION = new TimeConversions.TimestampMicrosConversion();
-    private static final TimeConversions.LocalTimestampMillisConversion LOCAL_TIMESTAMP_MILLIS_CONVERSION = new TimeConversions.LocalTimestampMillisConversion();
-    private static final TimeConversions.LocalTimestampMicrosConversion LOCAL_TIMESTAMP_MICROS_CONVERSION = new TimeConversions.LocalTimestampMicrosConversion();
+
+    // NOTE: Those are not supported in Avro 1.8.2
+    // TODO re-enable upon upgrading to 1.10
+    // private static final TimeConversions.TimestampMillisConversion TIMESTAMP_MILLIS_CONVERSION = new TimeConversions.TimestampMillisConversion();
+    // private static final TimeConversions.TimeMillisConversion TIME_MILLIS_CONVERSION = new TimeConversions.TimeMillisConversion();
+    // private static final TimeConversions.LocalTimestampMillisConversion LOCAL_TIMESTAMP_MILLIS_CONVERSION = new TimeConversions.LocalTimestampMillisConversion();
+    // private static final TimeConversions.LocalTimestampMicrosConversion LOCAL_TIMESTAMP_MICROS_CONVERSION = new TimeConversions.LocalTimestampMicrosConversion();
 
     public static final GenericData INSTANCE = new ConvertingGenericData();
 
@@ -1090,12 +1093,14 @@ public class HoodieAvroUtils {
       addLogicalTypeConversion(DECIMAL_CONVERSION);
       addLogicalTypeConversion(UUID_CONVERSION);
       addLogicalTypeConversion(DATE_CONVERSION);
-      addLogicalTypeConversion(TIME_MILLIS_CONVERSION);
       addLogicalTypeConversion(TIME_MICROS_CONVERSION);
-      addLogicalTypeConversion(TIMESTAMP_MILLIS_CONVERSION);
       addLogicalTypeConversion(TIMESTAMP_MICROS_CONVERSION);
-      addLogicalTypeConversion(LOCAL_TIMESTAMP_MILLIS_CONVERSION);
-      addLogicalTypeConversion(LOCAL_TIMESTAMP_MICROS_CONVERSION);
+      // NOTE: Those are not supported in Avro 1.8.2
+      // TODO re-enable upon upgrading to 1.10
+      // addLogicalTypeConversion(TIME_MILLIS_CONVERSION);
+      // addLogicalTypeConversion(TIMESTAMP_MILLIS_CONVERSION);
+      // addLogicalTypeConversion(LOCAL_TIMESTAMP_MILLIS_CONVERSION);
+      // addLogicalTypeConversion(LOCAL_TIMESTAMP_MICROS_CONVERSION);
     }
 
     @Override
@@ -1156,15 +1161,19 @@ public class HoodieAvroUtils {
               || DECIMAL_CONVERSION.getConvertedType().isInstance(datum);
         case INT:
           return isInteger(datum)
-              || DATE_CONVERSION.getConvertedType().isInstance(datum)
-              || TIME_MILLIS_CONVERSION.getConvertedType().isInstance(datum);
+              || DATE_CONVERSION.getConvertedType().isInstance(datum);
+              // NOTE: Those are not supported in Avro 1.8.2
+              // TODO re-enable upon upgrading to 1.10
+              // || TIME_MILLIS_CONVERSION.getConvertedType().isInstance(datum);
         case LONG:
           return isLong(datum)
               || TIME_MICROS_CONVERSION.getConvertedType().isInstance(datum)
-              || TIMESTAMP_MILLIS_CONVERSION.getConvertedType().isInstance(datum)
-              || TIMESTAMP_MICROS_CONVERSION.getConvertedType().isInstance(datum)
-              || LOCAL_TIMESTAMP_MICROS_CONVERSION.getConvertedType().isInstance(datum)
-              || LOCAL_TIMESTAMP_MILLIS_CONVERSION.getConvertedType().isInstance(datum);
+              || TIMESTAMP_MICROS_CONVERSION.getConvertedType().isInstance(datum);
+              // NOTE: Those are not supported in Avro 1.8.2
+              // TODO re-enable upon upgrading to 1.10
+              // || TIMESTAMP_MILLIS_CONVERSION.getConvertedType().isInstance(datum)
+              // || LOCAL_TIMESTAMP_MICROS_CONVERSION.getConvertedType().isInstance(datum)
+              // || LOCAL_TIMESTAMP_MILLIS_CONVERSION.getConvertedType().isInstance(datum);
         case FLOAT:
           return isFloat(datum);
         case DOUBLE:
