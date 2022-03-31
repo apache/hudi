@@ -208,6 +208,12 @@ public class HoodieBigQueryClient extends AbstractSyncHoodieClient {
   }
 
   @Override
+  public void deleteLastReplicatedTimeStamp(String tableName) {
+    // bigQuery doesn't support tblproperties, so do nothing.
+    throw new UnsupportedOperationException("No support for deleteLastReplicatedTimeStamp yet.");
+  }
+
+  @Override
   public void updatePartitionsToTable(final String tableName, final List<String> changedPartitions) {
     // bigQuery updates the partitions automatically, so do nothing.
     throw new UnsupportedOperationException("No support for updatePartitionsToTable yet.");
