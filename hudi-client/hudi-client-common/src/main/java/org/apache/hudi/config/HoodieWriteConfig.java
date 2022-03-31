@@ -1507,8 +1507,20 @@ public class HoodieWriteConfig extends HoodieConfig {
     return isMetadataTableEnabled() && getMetadataConfig().isBloomFilterIndexEnabled();
   }
 
-  public boolean isMetadataIndexColumnStatsForAllColumnsEnabled() {
-    return isMetadataTableEnabled() && getMetadataConfig().isMetadataColumnStatsIndexForAllColumnsEnabled();
+  public boolean isMetadataColumnStatsIndexEnabled() {
+    return isMetadataTableEnabled() && getMetadataConfig().isColumnStatsIndexEnabled();
+  }
+
+  public String getColumnsEnabledForColumnStatsIndex() {
+    return getMetadataConfig().getColumnsEnabledForColumnStatsIndex();
+  }
+
+  public String getColumnsEnabledForBloomFilterIndex() {
+    return getMetadataConfig().getColumnsEnabledForBloomFilterIndex();
+  }
+
+  public int getIndexingCheckTimeoutSeconds() {
+    return getMetadataConfig().getIndexingCheckTimeoutSeconds();
   }
 
   public int getColumnStatsIndexParallelism() {
@@ -1890,6 +1902,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean isMetadataAsyncClean() {
     return getBoolean(HoodieMetadataConfig.ASYNC_CLEAN_ENABLE);
+  }
+
+  public boolean isMetadataAsyncIndex() {
+    return getBooleanOrDefault(HoodieMetadataConfig.ASYNC_INDEX_ENABLE);
   }
 
   public int getMetadataMaxCommitsToKeep() {

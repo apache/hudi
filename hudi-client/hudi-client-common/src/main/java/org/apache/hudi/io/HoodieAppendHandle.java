@@ -50,12 +50,14 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.SizeEstimator;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
@@ -69,8 +71,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.accumulateColumnRanges;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.aggregateColumnStats;
@@ -343,16 +347,27 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       updateWriteStatus(stat, result);
     }
 
-    if (config.isMetadataIndexColumnStatsForAllColumnsEnabled()) {
+    if (config.isMetadataColumnStatsIndexEnabled()) {
+      final List<Schema.Field> fieldsToIndex;
+      if (!StringUtils.isNullOrEmpty(config.getColumnsEnabledForColumnStatsIndex())) {
+        Set<String> columnsToIndex = Stream.of(config.getColumnsEnabledForColumnStatsIndex().split(","))
+            .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toSet());
+        fieldsToIndex = writeSchemaWithMetaFields.getFields().stream()
+            .filter(field -> columnsToIndex.contains(field.name())).collect(Collectors.toList());
+      } else {
+        // if column stats index is enabled but columns not configured then we assume that all columns should be indexed
+        fieldsToIndex = writeSchemaWithMetaFields.getFields();
+      }
+
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap = stat.getRecordsStats().isPresent()
           ? stat.getRecordsStats().get().getStats() : new HashMap<>();
       final String filePath = stat.getPath();
       // initialize map of column name to map of stats name to stats value
       Map<String, Map<String, Object>> columnToStats = new HashMap<>();
-      writeSchemaWithMetaFields.getFields().forEach(field -> columnToStats.putIfAbsent(field.name(), new HashMap<>()));
+      fieldsToIndex.forEach(field -> columnToStats.putIfAbsent(field.name(), new HashMap<>()));
       // collect stats for columns at once per record and keep iterating through every record to eventually find col stats for all fields.
-      recordList.forEach(record -> aggregateColumnStats(record, writeSchemaWithMetaFields, columnToStats, config.isConsistentLogicalTimestampEnabled()));
-      writeSchemaWithMetaFields.getFields().forEach(field -> accumulateColumnRanges(field, filePath, columnRangeMap, columnToStats));
+      recordList.forEach(record -> aggregateColumnStats(record, fieldsToIndex, columnToStats, config.isConsistentLogicalTimestampEnabled()));
+      fieldsToIndex.forEach(field -> accumulateColumnRanges(field, filePath, columnRangeMap, columnToStats));
       stat.setRecordsStats(new HoodieDeltaWriteStat.RecordsStats<>(columnRangeMap));
     }
 

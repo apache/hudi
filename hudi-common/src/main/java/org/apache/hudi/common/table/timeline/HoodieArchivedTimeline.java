@@ -118,7 +118,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
    *
    * @deprecated
    */
-  public HoodieArchivedTimeline() {}
+  public HoodieArchivedTimeline() {
+  }
 
   /**
    * This method is only used when this object is deserialized in a spark executor.
@@ -207,6 +208,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
         return Option.of("hoodieCompactionPlan");
       case HoodieTimeline.REPLACE_COMMIT_ACTION:
         return Option.of("hoodieReplaceCommitMetadata");
+      case HoodieTimeline.INDEXING_ACTION:
+        return Option.of("hoodieIndexCommitMetadata");
       default:
         LOG.error(String.format("Unknown action in metadata (%s)", action));
         return Option.empty();

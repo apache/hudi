@@ -25,6 +25,8 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
+import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -63,12 +65,14 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
@@ -404,7 +408,6 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    */
   public abstract O bulkInsert(I records, final String instantTime,
                                Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner);
-
 
   /**
    * Loads the given HoodieRecords, as inserts into the table. This is suitable for doing big bulk loads into a Hoodie
@@ -954,6 +957,53 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    */
   public boolean scheduleCompactionAtInstant(String instantTime, Option<Map<String, String>> extraMetadata) throws HoodieIOException {
     return scheduleTableService(instantTime, extraMetadata, TableServiceType.COMPACT).isPresent();
+  }
+
+
+  /**
+   * Schedules INDEX action.
+   *
+   * @param partitionTypes - list of {@link MetadataPartitionType} which needs to be indexed
+   * @return instant time for the requested INDEX action
+   */
+  public Option<String> scheduleIndexing(List<MetadataPartitionType> partitionTypes) {
+    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    Option<HoodieIndexPlan> indexPlan = createTable(config, hadoopConf, config.isMetadataTableEnabled())
+        .scheduleIndexing(context, instantTime, partitionTypes);
+    return indexPlan.isPresent() ? Option.of(instantTime) : Option.empty();
+  }
+
+  /**
+   * Runs INDEX action to build out the metadata partitions as planned for the given instant time.
+   *
+   * @param indexInstantTime - instant time for the requested INDEX action
+   * @return {@link Option<HoodieIndexCommitMetadata>} after successful indexing.
+   */
+  public Option<HoodieIndexCommitMetadata> index(String indexInstantTime) {
+    return createTable(config, hadoopConf, config.isMetadataTableEnabled()).index(context, indexInstantTime);
+  }
+
+  /**
+   * Drops the index and removes the metadata partitions.
+   *
+   * @param partitionTypes - list of {@link MetadataPartitionType} which needs to be indexed
+   */
+  public void dropIndex(List<MetadataPartitionType> partitionTypes) {
+    HoodieTable table = createTable(config, hadoopConf);
+    String dropInstant = HoodieActiveTimeline.createNewInstantTime();
+    this.txnManager.beginTransaction();
+    try {
+      context.setJobStatus(this.getClass().getSimpleName(), "Dropping partitions from metadata table");
+      table.getMetadataWriter(dropInstant).ifPresent(w -> {
+        try {
+          ((HoodieTableMetadataWriter) w).dropMetadataPartitions(partitionTypes);
+        } catch (IOException e) {
+          throw new HoodieIndexException("Failed to drop metadata index. ", e);
+        }
+      });
+    } finally {
+      this.txnManager.endTransaction();
+    }
   }
 
   /**

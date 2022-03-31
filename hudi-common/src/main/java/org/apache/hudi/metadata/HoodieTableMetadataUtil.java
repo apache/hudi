@@ -74,6 +74,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -118,6 +119,39 @@ public class HoodieTableMetadataUtil {
       fs.delete(new Path(metadataTablePath), true);
     } catch (Exception e) {
       throw new HoodieMetadataException("Failed to remove metadata table from path " + metadataTablePath, e);
+    }
+  }
+
+  /**
+   * Deletes the metadata partition from the file system.
+   *
+   * @param basePath      - base path of the dataset
+   * @param context       - instance of {@link HoodieEngineContext}
+   * @param partitionType - {@link MetadataPartitionType} of the partition to delete
+   */
+  public static void deleteMetadataPartition(String basePath, HoodieEngineContext context, MetadataPartitionType partitionType) {
+    final String metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
+    FileSystem fs = FSUtils.getFs(metadataTablePath, context.getHadoopConf().get());
+    try {
+      fs.delete(new Path(metadataTablePath, partitionType.getPartitionPath()), true);
+    } catch (Exception e) {
+      throw new HoodieMetadataException(String.format("Failed to remove metadata partition %s from path %s", partitionType, metadataTablePath), e);
+    }
+  }
+
+  /**
+   * Check if the given metadata partition exists.
+   *
+   * @param basePath base path of the dataset
+   * @param context  instance of {@link HoodieEngineContext}.
+   */
+  public static boolean metadataPartitionExists(String basePath, HoodieEngineContext context, MetadataPartitionType partitionType) {
+    final String metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
+    FileSystem fs = FSUtils.getFs(metadataTablePath, context.getHadoopConf().get());
+    try {
+      return fs.exists(new Path(metadataTablePath, partitionType.getPartitionPath()));
+    } catch (Exception e) {
+      throw new HoodieIOException(String.format("Failed to check metadata partition %s exists.", partitionType.getPartitionPath()));
     }
   }
 
@@ -885,6 +919,24 @@ public class HoodieTableMetadataUtil {
     return fileSliceStream.sorted(Comparator.comparing(FileSlice::getFileId)).collect(Collectors.toList());
   }
 
+  /**
+   * Get the latest file slices for a given partition including the inflight ones.
+   *
+   * @param metaClient     - instance of {@link HoodieTableMetaClient}
+   * @param fileSystemView - hoodie table file system view, which will be fetched from meta client if not already present
+   * @param partition      - name of the partition whose file groups are to be loaded
+   * @return
+   */
+  public static List<FileSlice> getPartitionLatestFileSlicesIncludingInflight(HoodieTableMetaClient metaClient,
+                                                                              Option<HoodieTableFileSystemView> fileSystemView,
+                                                                              String partition) {
+    HoodieTableFileSystemView fsView = fileSystemView.orElse(getFileSystemView(metaClient));
+    Stream<FileSlice> fileSliceStream = fsView.fetchLatestFileSlicesIncludingInflight(partition);
+    return fileSliceStream
+        .sorted(Comparator.comparing(FileSlice::getFileId))
+        .collect(Collectors.toList());
+  }
+
   public static HoodieData<HoodieRecord> convertMetadataToColumnStatsRecords(HoodieCommitMetadata commitMetadata,
                                                                              HoodieEngineContext engineContext,
                                                                              MetadataRecordsGenerationParams recordsGenerationParams) {
@@ -900,8 +952,8 @@ public class HoodieTableMetadataUtil {
           Option.ofNullable(commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY))
               .flatMap(writerSchemaStr ->
                   isNullOrEmpty(writerSchemaStr)
-                    ? Option.empty()
-                    : Option.of(new Schema.Parser().parse(writerSchemaStr)));
+                      ? Option.empty()
+                      : Option.of(new Schema.Parser().parse(writerSchemaStr)));
 
       HoodieTableMetaClient dataTableMetaClient = recordsGenerationParams.getDataMetaClient();
       HoodieTableConfig tableConfig = dataTableMetaClient.getTableConfig();
@@ -1062,18 +1114,18 @@ public class HoodieTableMetadataUtil {
    * Aggregates column stats for each field.
    *
    * @param record                            - current record
-   * @param schema                            - write schema
+   * @param fields                            - fields for which stats will be aggregated
    * @param columnToStats                     - map of column to map of each stat and its value which gets updates in this method
    * @param consistentLogicalTimestampEnabled - flag to deal with logical timestamp type when getting column value
    */
-  public static void aggregateColumnStats(IndexedRecord record, Schema schema,
+  public static void aggregateColumnStats(IndexedRecord record, List<Schema.Field> fields,
                                           Map<String, Map<String, Object>> columnToStats,
                                           boolean consistentLogicalTimestampEnabled) {
     if (!(record instanceof GenericRecord)) {
       throw new HoodieIOException("Record is not a generic type to get column range metadata!");
     }
 
-    schema.getFields().forEach(field -> {
+    fields.forEach(field -> {
       Map<String, Object> columnStats = columnToStats.getOrDefault(field.name(), new HashMap<>());
       final String fieldVal = getNestedFieldValAsString((GenericRecord) record, field.name(), true, consistentLogicalTimestampEnabled);
       // update stats
@@ -1113,5 +1165,19 @@ public class HoodieTableMetadataUtil {
     } catch (Exception e) {
       throw new HoodieException("Failed to get latest columns for " + dataTableMetaClient.getBasePath(), e);
     }
+  }
+
+  public static Set<String> getInflightMetadataPartitions(HoodieTableConfig tableConfig) {
+    return StringUtils.toSet(tableConfig.getMetadataPartitionsInflight());
+  }
+
+  public static Set<String> getCompletedMetadataPartitions(HoodieTableConfig tableConfig) {
+    return StringUtils.toSet(tableConfig.getMetadataPartitions());
+  }
+
+  public static Set<String> getInflightAndCompletedMetadataPartitions(HoodieTableConfig tableConfig) {
+    Set<String> inflightAndCompletedPartitions = getInflightMetadataPartitions(tableConfig);
+    inflightAndCompletedPartitions.addAll(getCompletedMetadataPartitions(tableConfig));
+    return inflightAndCompletedPartitions;
   }
 }

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.cli.DeDupeType;
 import org.apache.hudi.cli.DedupeSparkJob;
@@ -54,9 +53,10 @@ import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.hudi.utilities.HoodieCompactionAdminTool;
 import org.apache.hudi.utilities.HoodieCompactionAdminTool.Operation;
 import org.apache.hudi.utilities.HoodieCompactor;
-import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.deltastreamer.BootstrapExecutor;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
+
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
@@ -66,6 +66,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+
+import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
+import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
+import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
+import static org.apache.hudi.utilities.UtilHelpers.buildProperties;
+import static org.apache.hudi.utilities.UtilHelpers.readConfig;
 
 /**
  * This class deals with initializing spark context based on command entered to hudi-cli.
@@ -194,7 +200,7 @@ public class SparkMain {
             configs.addAll(Arrays.asList(args).subList(9, args.length));
           }
           returnCode = cluster(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]), args[2],
-              Integer.parseInt(args[7]), HoodieClusteringJob.EXECUTE, propsFilePath, configs);
+              Integer.parseInt(args[7]), EXECUTE, propsFilePath, configs);
           break;
         case CLUSTERING_SCHEDULE_AND_EXECUTE:
           assert (args.length >= 8);
@@ -207,7 +213,7 @@ public class SparkMain {
             configs.addAll(Arrays.asList(args).subList(8, args.length));
           }
           returnCode = cluster(jsc, args[3], args[4], null, Integer.parseInt(args[5]), args[2],
-              Integer.parseInt(args[6]), HoodieClusteringJob.SCHEDULE_AND_EXECUTE, propsFilePath, configs);
+              Integer.parseInt(args[6]), SCHEDULE_AND_EXECUTE, propsFilePath, configs);
           break;
         case CLUSTERING_SCHEDULE:
           assert (args.length >= 7);
@@ -220,7 +226,7 @@ public class SparkMain {
             configs.addAll(Arrays.asList(args).subList(7, args.length));
           }
           returnCode = cluster(jsc, args[3], args[4], args[5], 1, args[2],
-              0, HoodieClusteringJob.SCHEDULE, propsFilePath, configs);
+              0, SCHEDULE, propsFilePath, configs);
           break;
         case CLEAN:
           assert (args.length >= 5);
@@ -413,8 +419,8 @@ public class SparkMain {
       String bootstrapIndexClass, String selectorClass, String keyGenerator, String fullBootstrapInputProvider,
       String payloadClassName, String enableHiveSync, String propsFilePath, List<String> configs) throws IOException {
 
-    TypedProperties properties = propsFilePath == null ? UtilHelpers.buildProperties(configs)
-        : UtilHelpers.readConfig(jsc.hadoopConfiguration(), new Path(propsFilePath), configs).getProps(true);
+    TypedProperties properties = propsFilePath == null ? buildProperties(configs)
+        : readConfig(jsc.hadoopConfiguration(), new Path(propsFilePath), configs).getProps(true);
 
     properties.setProperty(HoodieBootstrapConfig.BASE_PATH.key(), sourcePath);
 
