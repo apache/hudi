@@ -124,7 +124,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> ENABLE_FULL_SCAN_LOG_FILES = ConfigProperty
       .key(METADATA_PREFIX + ".enable.full.scan.log.files")
-      .defaultValue(true)
+      .defaultValue(false)
       .sinceVersion("0.10.0")
       .withDocumentation("Enable full scanning of log files while reading log records. If disabled, Hudi does look up of only interested entries.");
 
