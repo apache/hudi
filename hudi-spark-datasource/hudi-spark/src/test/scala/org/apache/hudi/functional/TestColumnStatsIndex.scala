@@ -72,13 +72,6 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
 
   @Test
   def testMetadataColumnStatsIndex(): Unit = {
-    setTableName("hoodie_test")
-    initMetaClient()
-    val sourceJSONTablePath = getClass.getClassLoader.getResource("index/zorder/input-table-json").toString
-    val inputDF = spark.read
-      .schema(sourceTableSchema)
-      .json(sourceJSONTablePath)
-
     val opts = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
@@ -91,12 +84,22 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
     )
 
-    inputDF.repartition(4)
+    setTableName("hoodie_test")
+    initMetaClient()
+
+    val sourceJSONTablePath = getClass.getClassLoader.getResource("index/zorder/input-table-json").toString
+
+    // NOTE: Schema here is provided for validation that the input date is in the appropriate format
+    val inputDF = spark.read.schema(sourceTableSchema).json(sourceJSONTablePath)
+
+    inputDF
+      .sort("c1")
+      .repartition(4, new Column("c1"))
       .write
       .format("hudi")
       .options(opts)
+      .option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key, 10 * 1024)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key, 100 * 1024)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -106,7 +109,8 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
 
     val targetDataTableColumns = sourceTableSchema.fields.map(f => (f.name, f.dataType))
 
-    val transposedColStatsDF = transposeColumnStatsIndex(readColumnStatsIndex(spark, metadataTablePath), targetDataTableColumns)
+    val colStatsDF = readColumnStatsIndex(spark, metadataTablePath)
+    val transposedColStatsDF = transposeColumnStatsIndex(colStatsDF, targetDataTableColumns)
 
     val expectedColStatsSchema = ColumnStatsIndexHelper.composeIndexSchema(sourceTableSchema.fields.toSeq.asJava)
 
@@ -118,6 +122,12 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
 
     assertEquals(expectedColStatsIndexTableDf.schema, transposedColStatsDF.schema)
     assertEquals(asJson(sort(expectedColStatsIndexTableDf)), asJson(sort(replace(transposedColStatsDF))))
+
+    // Collect Column Stats manually (reading individual Parquet files)
+    val manualColStatsTableDF =
+      buildColumnStatsTableManually(basePath, sourceTableSchema.fieldNames, expectedColStatsSchema)
+
+    assertEquals(asJson(sort(manualColStatsTableDF)), asJson(sort(transposedColStatsDF)))
 
     // do an upsert and validate
     val updateJSONTablePath = getClass.getClassLoader.getResource("index/zorder/another-input-table-json").toString
@@ -193,7 +203,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
       while (it.hasNext) {
         seq = seq :+ it.next()
       }
-      seq
+      seq.filter(fs => fs.getPath.getName.endsWith(".parquet"))
     }
 
     spark.createDataFrame(
@@ -244,7 +254,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
     val uuidRegexp = "[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}"
 
     val uuids =
-      ds.selectExpr(s"regexp_extract(file, '(${uuidRegexp})')")
+      ds.selectExpr(s"regexp_extract(fileName, '(${uuidRegexp})')")
         .distinct()
         .collect()
         .map(_.getString(0))
@@ -254,7 +264,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
       fileName.replace(uuid, "xxx")
     })
 
-    ds.withColumn("file", uuidToIdx(ds("file")))
+    ds.withColumn("fileName", uuidToIdx(ds("fileName")))
   }
 
   private def generateRandomDataFrame(spark: SparkSession): DataFrame = {
