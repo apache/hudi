@@ -221,8 +221,11 @@
                                     "fields": [
                                         {
                                             "type": {
-                                                "type": "int",
-                                                "logicalType": "date"
+                                                "type": "int"
+                                                // NOTE: Due to breaking changes in code-gen b/w Avro 1.8.2 and 1.10, we can't
+                                                //       rely on logical types to do proper encoding of the native Java types,
+                                                //       and hereby have to encode statistic manually
+                                                //"logicalType": "date"
                                             },
                                             "name": "value"
                                         }
@@ -271,8 +274,11 @@
                                     "fields": [
                                         {
                                             "type": {
-                                                "type": "long",
-                                                "logicalType": "timestamp-micros"
+                                                "type": "long"
+                                                // NOTE: Due to breaking changes in code-gen b/w Avro 1.8.2 and 1.10, we can't
+                                                //       rely on logical types to do proper encoding of the native Java types,
+                                                //       and hereby have to encode statistic manually
+                                                //"logicalType": "timestamp-micros"
                                             },
                                             "name": "value"
                                         }
