@@ -804,12 +804,12 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   }
 
   /**
-   * Initialize hoodie.table.metadata.enable in hoodie.proterties;
-   * Check if current metadata table flag in hoodieWriteConfig is the same as recorded in hoodie.proterties:
-   *  1. If the flag in hoodie.proterties is true but it is false in hoodieWriteConfig, It means users turn off MDT and we need to clean up MDT.
-   *  2. Update hoodie.table.metadata.enable in hoodie.proterties based on HoodieWriteConfig if the value is different.
+   * Initialize hoodie.table.metadata.enable in hoodie.properties;
+   * Check if current metadata table flag in hoodieWriteConfig is the same as recorded in hoodie.properties:
+   *  1. If the flag in hoodie.properties is true but it is false in hoodieWriteConfig, It means users turn off MDT and we need to clean up MDT.
+   *  2. Update hoodie.table.metadata.enable in hoodie.properties based on HoodieWriteConfig if the value is different.
    */
-  protected void verifyMetadataTableInTableConfig() {
+  public void verifyMetadataTableInTableConfig() {
     // ignore the hoodie.properties in MDT
     if (metaClient.getBasePath().contains(HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH)) {
       return;
