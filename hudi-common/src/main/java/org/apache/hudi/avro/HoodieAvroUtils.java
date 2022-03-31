@@ -1162,18 +1162,10 @@ public class HoodieAvroUtils {
         case INT:
           return isInteger(datum)
               || DATE_CONVERSION.getConvertedType().isInstance(datum);
-              // NOTE: Those are not supported in Avro 1.8.2
-              // TODO re-enable upon upgrading to 1.10
-              // || TIME_MILLIS_CONVERSION.getConvertedType().isInstance(datum);
         case LONG:
           return isLong(datum)
               || TIME_MICROS_CONVERSION.getConvertedType().isInstance(datum)
               || TIMESTAMP_MICROS_CONVERSION.getConvertedType().isInstance(datum);
-              // NOTE: Those are not supported in Avro 1.8.2
-              // TODO re-enable upon upgrading to 1.10
-              // || TIMESTAMP_MILLIS_CONVERSION.getConvertedType().isInstance(datum)
-              // || LOCAL_TIMESTAMP_MICROS_CONVERSION.getConvertedType().isInstance(datum)
-              // || LOCAL_TIMESTAMP_MILLIS_CONVERSION.getConvertedType().isInstance(datum);
         case FLOAT:
           return isFloat(datum);
         case DOUBLE:
