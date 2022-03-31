@@ -1827,7 +1827,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       newCommitTime = HoodieActiveTimeline.createNewInstantTime(5000);
       client.startCommitWithTime(newCommitTime);
       client.deletePartitions(singletonList(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH), newCommitTime);
-      validateMetadata(client);
 
       // add 1 more commit
       newCommitTime = HoodieActiveTimeline.createNewInstantTime(5000);
@@ -1842,7 +1841,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       writeStatuses = client.upsert(jsc.parallelize(upsertRecords, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
 
-      // trigger clean which will actually triggger deletion of the partition
+      // trigger clean which will actually trigger deletion of the partition
       newCommitTime = HoodieActiveTimeline.createNewInstantTime(5000);
       HoodieCleanMetadata cleanMetadata = client.clean(newCommitTime);
       validateMetadata(client);
