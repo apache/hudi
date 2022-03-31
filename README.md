@@ -101,6 +101,12 @@ mvn clean package -DskipTests -Pspark2.4,scala-2.12
 
 Starting from versions 0.11, Hudi no longer requires `spark-avro` to be specified using `--packages`
 
+### Usage of hudi-utilities-slim-bundle
+
+Starting from versions 0.11, Hudi provides hudi-utilities-slim-bundle which excludes hudi-spark-datasource modules.
+This new bundle is intended to be used with Hudi Spark bundle together, if using hudi-utilities-bundle solely
+introduces problems for a specific Spark version.
+
 ## Running Tests
 
 Unit tests can be run with maven profile `unit-tests`.
