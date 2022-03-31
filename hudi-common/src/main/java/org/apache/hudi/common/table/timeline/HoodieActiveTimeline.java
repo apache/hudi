@@ -201,6 +201,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     deleteInstantFile(instant);
   }
 
+  public void deleteCompletedRollback(HoodieInstant instant) {
+    ValidationUtils.checkArgument(instant.isCompleted());
+    deleteInstantFile(instant);
+  }
+
   public static void deleteInstantFile(FileSystem fs, String metaPath, HoodieInstant instant) {
     try {
       fs.delete(new Path(metaPath, instant.getFileName()), false);
