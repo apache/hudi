@@ -206,11 +206,7 @@ case class HoodieFileIndex(spark: SparkSession,
 
       // Persist DF to avoid re-computing column statistics unraveling
       withPersistence(colStatsDF) {
-        val targetDataTableColumns = schema.fields
-          .filter(f => queryReferencedColumns.contains(f.name))
-          .map(f => (f.name, f.dataType))
-
-        val transposedColStatsDF: DataFrame = transposeColumnStatsIndex(colStatsDF, targetDataTableColumns)
+        val transposedColStatsDF: DataFrame = transposeColumnStatsIndex(spark, colStatsDF, queryReferencedColumns, schema)
 
         // Persist DF to avoid re-computing column statistics unraveling
         withPersistence(transposedColStatsDF) {
