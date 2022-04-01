@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -357,6 +358,9 @@ public class HoodieMetadataTableValidator implements Serializable {
     String basePath = metaClient.getBasePath();
     Set<String> baseFilesForCleaning = Collections.emptySet();
 
+    // check metadata table is available to read.
+    checkMetadataTableIsAvailable();
+
     if (cfg.skipDataFilesForCleaning) {
       HoodieTimeline inflightCleaningTimeline = metaClient.getActiveTimeline().getCleanerTimeline().filterInflights();
 
@@ -416,11 +420,45 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   /**
+   * Check metadata is initialized and available to ready.
+   * If not we will log.warn and skip current validation.
+   */
+  private void checkMetadataTableIsAvailable() {
+    try {
+      HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
+          .setConf(jsc.hadoopConfiguration()).setBasePath(new Path(cfg.basePath, HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH).toString())
+          .setLoadActiveTimelineOnLoad(true)
+          .build();
+      int finishedInstants = mdtMetaClient.getActiveTimeline().filterCompletedInstants().countInstants();
+      if (finishedInstants == 0) {
+        throw new HoodieValidationException("There is no completed instant for metadata table.");
+      }
+    } catch (Exception ex) {
+      LOG.warn("Metadata table is not available to ready for now, ", ex);
+    }
+  }
+
+  /**
    * Compare the listing partitions result between metadata table and fileSystem.
    */
   private List<String> validatePartitions(HoodieSparkEngineContext engineContext, String basePath) {
     // compare partitions
     List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(engineContext, basePath, false, cfg.assumeDatePartitioning);
+    HoodieTimeline completedTimeline = metaClient.getActiveTimeline().filterCompletedInstants();
+
+    // ignore partitions created by uncommitted ingestion.
+    allPartitionPathsFromFS = allPartitionPathsFromFS.stream().parallel().filter(part -> {
+      HoodiePartitionMetadata hoodiePartitionMetadata = new HoodiePartitionMetadata(metaClient.getFs(), new Path(basePath, part));
+
+      Option<String> instantOption = hoodiePartitionMetadata.readPartitionCreatedCommitTime();
+      if (instantOption.isPresent()) {
+        String instantTime = instantOption.get();
+        return completedTimeline.containsOrBeforeTimelineStarts(instantTime);
+      } else {
+        return false;
+      }
+    }).collect(Collectors.toList());
+
     List<String> allPartitionPathsMeta = FSUtils.getAllPartitionPaths(engineContext, basePath, true, cfg.assumeDatePartitioning);
 
     Collections.sort(allPartitionPathsFromFS);

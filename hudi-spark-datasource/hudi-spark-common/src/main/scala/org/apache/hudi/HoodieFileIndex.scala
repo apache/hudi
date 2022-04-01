@@ -338,7 +338,7 @@ object HoodieFileIndex extends Logging {
     properties.setProperty(HoodieMetadataConfig.ENABLE.key(),
       sqlConf.getConfString(HoodieMetadataConfig.ENABLE.key(),
         HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS.toString))
-    properties.putAll(options.asJava)
+    properties.putAll(options.filter(p => p._2 != null).asJava)
     properties
   }
 

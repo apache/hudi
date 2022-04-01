@@ -17,25 +17,18 @@
  * under the License.
  */
 
-package org.apache.hudi.index.columnstats;
+package org.apache.hudi.sync.datahub;
 
-import org.junit.jupiter.api.Test;
+import org.apache.hudi.sync.common.HoodieSyncException;
 
-import java.util.Arrays;
+public class HoodieDataHubSyncException extends HoodieSyncException {
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+  public HoodieDataHubSyncException(String message) {
+    super(message);
+  }
 
-public class TestColumnStatsIndexHelper {
-
-  @Test
-  public void testMergeSql() {
-    String q = ColumnStatsIndexHelper.createIndexMergeSql("old", "new", Arrays.asList("file", "a", "b"));
-    assertEquals(
-        "SELECT "
-            + "if (new.file is null, old.file, new.file) AS file, "
-            + "if (new.a is null, old.a, new.a) AS a, "
-            + "if (new.b is null, old.b, new.b) AS b "
-            + "FROM old FULL JOIN new ON old.file = new.file", q);
+  public HoodieDataHubSyncException(String message, Throwable t) {
+    super(message, t);
   }
 
 }
