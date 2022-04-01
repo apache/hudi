@@ -21,6 +21,7 @@ package org.apache.hudi.client;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.async.AsyncArchiveService;
 import org.apache.hudi.async.AsyncCleanerService;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -49,6 +50,7 @@ import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
@@ -71,6 +73,15 @@ import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.Type;
+import org.apache.hudi.internal.schema.action.InternalSchemaChangeApplier;
+import org.apache.hudi.internal.schema.action.TableChange;
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
+import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
+import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
+import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metrics.HoodieMetrics;
@@ -85,6 +96,7 @@ import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 
 import com.codahale.metrics.Timer;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.avro.Schema;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -100,6 +112,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
 
 /**
  * Abstract Write Client providing functionality for performing commit, index updates and rollback
@@ -246,10 +260,40 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     // Finalize write
     finalizeWrite(table, instantTime, stats);
+    // do save internal schema to support Implicitly add columns in write process
+    if (!metadata.getExtraMetadata().containsKey(SerDeHelper.LATEST_SCHEMA)
+        && metadata.getExtraMetadata().containsKey(SCHEMA_KEY) && table.getConfig().getSchemaEvolutionEnable()) {
+      saveInternalSchema(table, instantTime, metadata);
+    }
     // update Metadata table
     writeTableMetadata(table, instantTime, commitActionType, metadata);
     activeTimeline.saveAsComplete(new HoodieInstant(true, commitActionType, instantTime),
         Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+  }
+
+  // Save internal schema
+  private void saveInternalSchema(HoodieTable table, String instantTime, HoodieCommitMetadata metadata) {
+    TableSchemaResolver schemaUtil = new TableSchemaResolver(table.getMetaClient());
+    String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElse("");
+    FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(table.getMetaClient());
+    if (!historySchemaStr.isEmpty()) {
+      InternalSchema internalSchema = InternalSchemaUtils.searchSchema(Long.parseLong(instantTime),
+          SerDeHelper.parseSchemas(historySchemaStr));
+      Schema avroSchema = HoodieAvroUtils.createHoodieWriteSchema(new Schema.Parser().parse(config.getSchema()));
+      InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.evolveSchemaFromNewAvroSchema(avroSchema, internalSchema);
+      if (evolvedSchema.equals(internalSchema)) {
+        metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(evolvedSchema));
+        //TODO save history schema by metaTable
+        schemasManager.persistHistorySchemaStr(instantTime, historySchemaStr);
+      } else {
+        evolvedSchema.setSchemaId(Long.parseLong(instantTime));
+        String newSchemaStr = SerDeHelper.toJson(evolvedSchema);
+        metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, newSchemaStr);
+        schemasManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(evolvedSchema, historySchemaStr));
+      }
+      // update SCHEMA_KEY
+      metadata.addMetadata(SCHEMA_KEY, AvroInternalSchemaConverter.convert(evolvedSchema, avroSchema.getName()).toString());
+    }
   }
 
   protected HoodieTable createTable(HoodieWriteConfig config, Configuration hadoopConf) {
@@ -1442,8 +1486,8 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       if (lastInstant.isPresent()) {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
             activeTimeline.getInstantDetails(lastInstant.get()).get(), HoodieCommitMetadata.class);
-        if (commitMetadata.getExtraMetadata().containsKey(HoodieCommitMetadata.SCHEMA_KEY)) {
-          config.setSchema(commitMetadata.getExtraMetadata().get(HoodieCommitMetadata.SCHEMA_KEY));
+        if (commitMetadata.getExtraMetadata().containsKey(SCHEMA_KEY)) {
+          config.setSchema(commitMetadata.getExtraMetadata().get(SCHEMA_KEY));
         } else {
           throw new HoodieIOException("Latest commit does not have any schema in commit metadata");
         }
@@ -1504,5 +1548,139 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
 
       metaClient.reloadActiveTimeline();
     }
+  }
+
+  /**
+   * add columns to table.
+   *
+   * @param colName col name to be added. if we want to add col to a nested filed, the fullName should be specify
+   * @param schema col type to be added.
+   * @param doc col doc to be added.
+   * @param position col position to be added
+   * @param positionType col position change type. now support three change types: first/after/before
+   */
+  public void addColumn(String colName, Schema schema, String doc, String position, TableChange.ColumnPositionChange.ColumnPositionType positionType) {
+    Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
+    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft())
+        .applyAddChange(colName, AvroInternalSchemaConverter.convertToField(schema), doc, position, positionType);
+    commitTableChange(newSchema, pair.getRight());
+  }
+
+  public void addColumn(String colName, Schema schema) {
+    addColumn(colName, schema, null, "", TableChange.ColumnPositionChange.ColumnPositionType.NO_OPERATION);
+  }
+
+  /**
+   * delete columns to table.
+   *
+   * @param colNames col name to be deleted. if we want to delete col from a nested filed, the fullName should be specify
+   */
+  public void deleteColumns(String... colNames) {
+    Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
+    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft()).applyDeleteChange(colNames);
+    commitTableChange(newSchema, pair.getRight());
+  }
+
+  /**
+   * rename col name for hudi table.
+   *
+   * @param colName col name to be renamed. if we want to rename col from a nested filed, the fullName should be specify
+   * @param newName new name for current col. no need to specify fullName.
+   */
+  public void renameColumn(String colName, String newName) {
+    Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
+    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft()).applyRenameChange(colName, newName);
+    commitTableChange(newSchema, pair.getRight());
+  }
+
+  /**
+   * update col nullable attribute for hudi table.
+   *
+   * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specify
+   * @param nullable .
+   */
+  public void updateColumnNullability(String colName, boolean nullable) {
+    Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
+    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft()).applyColumnNullabilityChange(colName, nullable);
+    commitTableChange(newSchema, pair.getRight());
+  }
+
+  /**
+   * update col Type for hudi table.
+   * only support update primitive type to primitive type.
+   * cannot update nest type to nest type or primitive type eg: RecordType -> MapType, MapType -> LongType.
+   *
+   * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specify
+   * @param newType .
+   */
+  public void updateColumnType(String colName, Type newType) {
+    Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
+    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft()).applyColumnTypeChange(colName, newType);
+    commitTableChange(newSchema, pair.getRight());
+  }
+
+  /**
+   * update col comment for hudi table.
+   *
+   * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specify
+   * @param doc .
+   */
+  public void updateColumnComment(String colName, String doc) {
+    Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
+    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft()).applyColumnCommentChange(colName, doc);
+    commitTableChange(newSchema, pair.getRight());
+  }
+
+  /**
+   * reorder the position of col.
+   *
+   * @param colName column which need to be reordered. if we want to change col from a nested filed, the fullName should be specify.
+   * @param referColName reference position.
+   * @param orderType col position change type. now support three change types: first/after/before
+   */
+  public void reOrderColPosition(String colName, String referColName, TableChange.ColumnPositionChange.ColumnPositionType orderType) {
+    if (colName == null || orderType == null || referColName == null) {
+      return;
+    }
+    //get internalSchema
+    Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
+    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft())
+        .applyReOrderColPositionChange(colName, referColName, orderType);
+    commitTableChange(newSchema, pair.getRight());
+  }
+
+  private Pair<InternalSchema, HoodieTableMetaClient> getInternalSchemaAndMetaClient() {
+    HoodieTableMetaClient metaClient = createMetaClient(true);
+    TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
+    Option<InternalSchema> internalSchemaOption = schemaUtil.getTableInternalSchemaFromCommitMetadata();
+    if (!internalSchemaOption.isPresent()) {
+      throw new HoodieException(String.format("cannot find schema for current table: %s", config.getBasePath()));
+    }
+    return Pair.of(internalSchemaOption.get(), metaClient);
+  }
+
+  private void commitTableChange(InternalSchema newSchema, HoodieTableMetaClient metaClient) {
+    TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
+    String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElse("");
+    Schema schema = AvroInternalSchemaConverter.convert(newSchema, config.getTableName());
+    String commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, metaClient.getTableType());
+    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    startCommitWithTime(instantTime, commitActionType, metaClient);
+    config.setSchema(schema.toString());
+    HoodieActiveTimeline timeLine = metaClient.getActiveTimeline();
+    HoodieInstant requested = new HoodieInstant(State.REQUESTED, commitActionType, instantTime);
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    metadata.setOperationType(WriteOperationType.ALTER_SCHEMA);
+    try {
+      timeLine.transitionRequestedToInflight(requested, Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    } catch (IOException io) {
+      throw new HoodieCommitException("Failed to commit " + instantTime + " unable to save inflight metadata ", io);
+    }
+    Map<String, String> extraMeta = new HashMap<>();
+    extraMeta.put(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(newSchema.setSchemaId(Long.getLong(instantTime))));
+    // try to save history schemas
+    FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(metaClient);
+    schemasManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(newSchema, historySchemaStr));
+    commitStats(instantTime, Collections.EMPTY_LIST, Option.of(extraMeta), commitActionType);
   }
 }

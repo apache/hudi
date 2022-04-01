@@ -36,6 +36,7 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -79,10 +80,10 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
                                          ExternalSpillableMap.DiskMapType diskMapType,
                                          boolean isBitCaskDiskMapCompressionEnabled,
                                          boolean withOperationField, boolean enableFullScan,
-                                         Option<String> partitionName) {
+                                         Option<String> partitionName, InternalSchema internalSchema) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
         instantRange, withOperationField,
-        enableFullScan, partitionName);
+        enableFullScan, partitionName, internalSchema);
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
@@ -197,6 +198,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     protected String basePath;
     protected List<String> logFilePaths;
     protected Schema readerSchema;
+    private InternalSchema internalSchema = InternalSchema.getEmptyInternalSchema();
     protected String latestInstantTime;
     protected boolean readBlocksLazily;
     protected boolean reverseReader;
@@ -293,6 +295,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       return this;
     }
 
+    public Builder withInternalSchema(InternalSchema internalSchema) {
+      this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
+      return this;
+    }
+
     public Builder withOperationField(boolean withOperationField) {
       this.withOperationField = withOperationField;
       return this;
@@ -310,7 +317,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
           latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
           bufferSize, spillableMapBasePath, instantRange, autoScan,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, true,
-          Option.ofNullable(partitionName));
+          Option.ofNullable(partitionName), internalSchema);
     }
   }
 }

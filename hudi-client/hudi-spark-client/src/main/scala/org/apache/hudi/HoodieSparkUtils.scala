@@ -37,8 +37,12 @@ import org.apache.spark.sql.execution.datasources.{FileStatusCache, InMemoryFile
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, SparkSession}
-
 import java.util.Properties
+
+import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
+import org.apache.hudi.internal.schema.utils.InternalSchemaUtils
+
 import scala.collection.JavaConverters._
 
 object HoodieSparkUtils extends SparkAdapterSupport {
@@ -54,6 +58,10 @@ object HoodieSparkUtils extends SparkAdapterSupport {
   def isSpark3_2: Boolean = SPARK_VERSION.startsWith("3.2")
 
   def gteqSpark3_2: Boolean = SPARK_VERSION > "3.2"
+
+  def gteqSpark3_1: Boolean = SPARK_VERSION > "3.1"
+
+  def gteqSpark3_1_3: Boolean = SPARK_VERSION >= "3.1.3"
 
   def getMetaSchema: StructType = {
     StructType(HoodieRecord.HOODIE_META_COLUMNS.asScala.map(col => {
@@ -302,17 +310,25 @@ object HoodieSparkUtils extends SparkAdapterSupport {
     AttributeReference(columnName, field.get.dataType, field.get.nullable)()
   }
 
-  def getRequiredSchema(tableAvroSchema: Schema, requiredColumns: Array[String]): (Schema, StructType) = {
-    // First get the required avro-schema, then convert the avro-schema to spark schema.
-    val name2Fields = tableAvroSchema.getFields.asScala.map(f => f.name() -> f).toMap
-    // Here have to create a new Schema.Field object
-    // to prevent throwing exceptions like "org.apache.avro.AvroRuntimeException: Field already used".
-    val requiredFields = requiredColumns.map(c => name2Fields(c))
-      .map(f => new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal(), f.order())).toList
-    val requiredAvroSchema = Schema.createRecord(tableAvroSchema.getName, tableAvroSchema.getDoc,
-      tableAvroSchema.getNamespace, tableAvroSchema.isError, requiredFields.asJava)
-    val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
-    (requiredAvroSchema, requiredStructSchema)
+  def getRequiredSchema(tableAvroSchema: Schema, requiredColumns: Array[String], internalSchema: InternalSchema = InternalSchema.getEmptyInternalSchema): (Schema, StructType, InternalSchema) = {
+    if (internalSchema.isEmptySchema || requiredColumns.isEmpty) {
+      // First get the required avro-schema, then convert the avro-schema to spark schema.
+      val name2Fields = tableAvroSchema.getFields.asScala.map(f => f.name() -> f).toMap
+      // Here have to create a new Schema.Field object
+      // to prevent throwing exceptions like "org.apache.avro.AvroRuntimeException: Field already used".
+      val requiredFields = requiredColumns.map(c => name2Fields(c))
+        .map(f => new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal(), f.order())).toList
+      val requiredAvroSchema = Schema.createRecord(tableAvroSchema.getName, tableAvroSchema.getDoc,
+        tableAvroSchema.getNamespace, tableAvroSchema.isError, requiredFields.asJava)
+      val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
+      (requiredAvroSchema, requiredStructSchema, internalSchema)
+    } else {
+      // now we support nested project
+      val prunedInternalSchema = InternalSchemaUtils.pruneInternalSchema(internalSchema, requiredColumns.toList.asJava)
+      val requiredAvroSchema = AvroInternalSchemaConverter.convert(prunedInternalSchema, tableAvroSchema.getName)
+      val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
+      (requiredAvroSchema, requiredStructSchema, prunedInternalSchema)
+    }
   }
 
   def toAttribute(tableSchema: StructType): Seq[AttributeReference] = {

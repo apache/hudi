@@ -56,6 +56,8 @@ public interface HoodieTimeline extends Serializable {
   String REQUESTED_EXTENSION = ".requested";
   String RESTORE_ACTION = "restore";
   String INDEXING_ACTION = "indexing";
+  // only for schema save
+  String SCHEMA_COMMIT_ACTION = "schemacommit";
 
   String[] VALID_ACTIONS_IN_TIMELINE = {COMMIT_ACTION, DELTA_COMMIT_ACTION,
       CLEAN_ACTION, SAVEPOINT_ACTION, RESTORE_ACTION, ROLLBACK_ACTION,
@@ -88,6 +90,9 @@ public interface HoodieTimeline extends Serializable {
   String INFLIGHT_INDEX_COMMIT_EXTENSION = "." + INDEXING_ACTION + INFLIGHT_EXTENSION;
   String REQUESTED_INDEX_COMMIT_EXTENSION = "." + INDEXING_ACTION + REQUESTED_EXTENSION;
   String INDEX_COMMIT_EXTENSION = "." + INDEXING_ACTION;
+  String SAVE_SCHEMA_ACTION_EXTENSION = "." + SCHEMA_COMMIT_ACTION;
+  String INFLIGHT_SAVE_SCHEMA_ACTION_EXTENSION = "." + SCHEMA_COMMIT_ACTION + INFLIGHT_EXTENSION;
+  String REQUESTED_SAVE_SCHEMA_ACTION_EXTENSION = "." + SCHEMA_COMMIT_ACTION + REQUESTED_EXTENSION;
 
   String INVALID_INSTANT_TS = "0";
 
@@ -496,5 +501,17 @@ public interface HoodieTimeline extends Serializable {
 
   static String makeRequestedIndexFileName(String instant) {
     return StringUtils.join(instant, HoodieTimeline.REQUESTED_INDEX_COMMIT_EXTENSION);
+  }
+
+  static String makeSchemaFileName(String instantTime) {
+    return StringUtils.join(instantTime, HoodieTimeline.SAVE_SCHEMA_ACTION_EXTENSION);
+  }
+
+  static String makeInflightSchemaFileName(String instantTime) {
+    return StringUtils.join(instantTime, HoodieTimeline.INFLIGHT_SAVE_SCHEMA_ACTION_EXTENSION);
+  }
+
+  static String makeRequestSchemaFileName(String instantTime) {
+    return StringUtils.join(instantTime, HoodieTimeline.REQUESTED_SAVE_SCHEMA_ACTION_EXTENSION);
   }
 }

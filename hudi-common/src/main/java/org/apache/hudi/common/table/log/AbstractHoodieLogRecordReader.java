@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -36,6 +37,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
+import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -46,6 +48,9 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -109,6 +114,10 @@ public abstract class AbstractHoodieLogRecordReader {
   private final FileSystem fs;
   // Total log files read - for metrics
   private AtomicLong totalLogFiles = new AtomicLong(0);
+  // Internal schema, used to support full schema evolution.
+  private InternalSchema internalSchema;
+  // Hoodie table path.
+  private final String path;
   // Total log blocks read - for metrics
   private AtomicLong totalLogBlocks = new AtomicLong(0);
   // Total log records read - for metrics
@@ -135,14 +144,14 @@ public abstract class AbstractHoodieLogRecordReader {
                                           int bufferSize, Option<InstantRange> instantRange,
                                           boolean withOperationField) {
     this(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
-        instantRange, withOperationField, true, Option.empty());
+        instantRange, withOperationField, true, Option.empty(), InternalSchema.getEmptyInternalSchema());
   }
 
   protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
                                           Schema readerSchema, String latestInstantTime, boolean readBlocksLazily,
                                           boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
                                           boolean withOperationField, boolean enableFullScan,
-                                          Option<String> partitionName) {
+                                          Option<String> partitionName, InternalSchema internalSchema) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
     this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
@@ -159,6 +168,8 @@ public abstract class AbstractHoodieLogRecordReader {
     this.instantRange = instantRange;
     this.withOperationField = withOperationField;
     this.enableFullScan = enableFullScan;
+    this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
+    this.path = basePath;
 
     // Key fields when populate meta fields is disabled (that is, virtual keys enabled)
     if (!tableConfig.populateMetaFields()) {
@@ -202,7 +213,7 @@ public abstract class AbstractHoodieLogRecordReader {
       // Iterate over the paths
       logFormatReaderWrapper = new HoodieLogFormatReader(fs,
           logFilePaths.stream().map(logFile -> new HoodieLogFile(new Path(logFile))).collect(Collectors.toList()),
-          readerSchema, readBlocksLazily, reverseReader, bufferSize, !enableFullScan, keyField);
+          readerSchema, readBlocksLazily, reverseReader, bufferSize, !enableFullScan, keyField, internalSchema);
       Set<HoodieLogFile> scannedLogFiles = new HashSet<>();
       while (logFormatReaderWrapper.hasNext()) {
         HoodieLogFile logFile = logFormatReaderWrapper.getLogFile();
@@ -361,13 +372,37 @@ public abstract class AbstractHoodieLogRecordReader {
    */
   private void processDataBlock(HoodieDataBlock dataBlock, Option<List<String>> keys) throws Exception {
     try (ClosableIterator<IndexedRecord> recordItr = dataBlock.getRecordItr(keys.orElse(Collections.emptyList()))) {
+      Option<Schema> schemaOption = getMergedSchema(dataBlock);
       while (recordItr.hasNext()) {
-        IndexedRecord record = recordItr.next();
+        IndexedRecord currentRecord = recordItr.next();
+        IndexedRecord record = schemaOption.isPresent() ? HoodieAvroUtils.rewriteRecordWithNewSchema(currentRecord, schemaOption.get()) : currentRecord;
         processNextRecord(createHoodieRecord(record, this.hoodieTableMetaClient.getTableConfig(), this.payloadClassFQN,
             this.preCombineField, this.withOperationField, this.simpleKeyGenFields, this.partitionName));
         totalLogRecords.incrementAndGet();
       }
     }
+  }
+
+  /**
+   * Get final Read Schema for support evolution.
+   * step1: find the fileSchema for current dataBlock.
+   * step2: determine whether fileSchema is compatible with the final read internalSchema.
+   * step3: merge fileSchema and read internalSchema to produce final read schema.
+   *
+   * @param dataBlock current processed block
+   * @return final read schema.
+   */
+  private Option<Schema> getMergedSchema(HoodieDataBlock dataBlock) {
+    Option<Schema> result = Option.empty();
+    if (!internalSchema.isEmptySchema()) {
+      Long currentInstantTime = Long.parseLong(dataBlock.getLogBlockHeader().get(INSTANT_TIME));
+      InternalSchema fileSchema = InternalSchemaCache
+          .searchSchemaAndCache(currentInstantTime, hoodieTableMetaClient, false);
+      Schema mergeSchema = AvroInternalSchemaConverter
+          .convert(new InternalSchemaMerger(fileSchema, internalSchema, true, false).mergeSchema(), readerSchema.getName());
+      result = Option.of(mergeSchema);
+    }
+    return result;
   }
 
   /**

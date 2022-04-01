@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.internal.schema.InternalSchema;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -65,7 +66,7 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
                                               Option<InstantRange> instantRange, boolean enableFullScan) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, maxMemorySizeInBytes, false, false, bufferSize,
         spillableMapBasePath, instantRange, false, diskMapType, isBitCaskDiskMapCompressionEnabled, false,
-        enableFullScan, Option.of(partitionName));
+        enableFullScan, Option.of(partitionName), InternalSchema.getEmptyInternalSchema());
     this.mergeKeyFilter = mergeKeyFilter;
     if (enableFullScan) {
       performScan();

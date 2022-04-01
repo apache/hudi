@@ -19,6 +19,8 @@
 package org.apache.hudi.avro;
 
 import org.apache.avro.AvroRuntimeException;
+import org.apache.avro.SchemaCompatibility;
+import org.apache.avro.Conversions;
 import org.apache.avro.Conversions.DecimalConversion;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalTypes;
@@ -55,15 +57,25 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.TimeZone;
+import java.util.Iterator;
+
 import java.util.stream.Collectors;
+
+import static org.apache.avro.Schema.Type.UNION;
 
 /**
  * Helper class to do common stuff across Avro.
@@ -73,6 +85,11 @@ public class HoodieAvroUtils {
   private static ThreadLocal<BinaryEncoder> reuseEncoder = ThreadLocal.withInitial(() -> null);
 
   private static ThreadLocal<BinaryDecoder> reuseDecoder = ThreadLocal.withInitial(() -> null);
+
+  private static final long MILLIS_PER_DAY = 86400000L;
+
+  //Export for test
+  public static final Conversions.DecimalConversion DECIMAL_CONVERSION = new Conversions.DecimalConversion();
 
   // As per https://avro.apache.org/docs/current/spec.html#names
   private static String INVALID_AVRO_CHARS_IN_NAMES = "[^A-Za-z0-9_]";
@@ -654,5 +671,272 @@ public class HoodieAvroUtils {
     }
 
     return nonNullType;
+  }
+
+  /**
+   * Given a avro record with a given schema, rewrites it into the new schema while setting fields only from the new schema.
+   * support deep rewrite for nested record.
+   * This particular method does the following things :
+   * a) Create a new empty GenericRecord with the new schema.
+   * b) For GenericRecord, copy over the data from the old schema to the new schema or set default values for all fields of this transformed schema
+   *
+   * @param oldRecord oldRecord to be rewritten
+   * @param newSchema newSchema used to rewrite oldRecord
+   * @return newRecord for new Schema
+   */
+  public static GenericRecord rewriteRecordWithNewSchema(IndexedRecord oldRecord, Schema newSchema) {
+    Object newRecord = rewriteRecordWithNewSchema(oldRecord, oldRecord.getSchema(), newSchema);
+    return (GenericData.Record) newRecord;
+  }
+
+  private static Object rewriteRecordWithNewSchema(Object oldRecord, Schema oldSchema, Schema newSchema) {
+    if (oldRecord == null) {
+      return null;
+    }
+    switch (newSchema.getType()) {
+      case RECORD:
+        if (!(oldRecord instanceof IndexedRecord)) {
+          throw new IllegalArgumentException("cannot rewrite record with different type");
+        }
+        IndexedRecord indexedRecord = (IndexedRecord) oldRecord;
+        List<Schema.Field> fields = newSchema.getFields();
+        Map<Integer, Object> helper = new HashMap<>();
+
+        for (int i = 0; i < fields.size(); i++) {
+          Schema.Field field = fields.get(i);
+          if (oldSchema.getField(field.name()) != null) {
+            Schema.Field oldField = oldSchema.getField(field.name());
+            helper.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema()));
+          }
+        }
+        GenericData.Record newRecord = new GenericData.Record(newSchema);
+        for (int i = 0; i < fields.size(); i++) {
+          if (helper.containsKey(i)) {
+            newRecord.put(i, helper.get(i));
+          } else {
+            if (fields.get(i).defaultVal() instanceof JsonProperties.Null) {
+              newRecord.put(i, null);
+            } else {
+              newRecord.put(i, fields.get(i).defaultVal());
+            }
+          }
+        }
+        return newRecord;
+      case ARRAY:
+        if (!(oldRecord instanceof Collection)) {
+          throw new IllegalArgumentException("cannot rewrite record with different type");
+        }
+        Collection array = (Collection)oldRecord;
+        List<Object> newArray = new ArrayList();
+        for (Object element : array) {
+          newArray.add(rewriteRecordWithNewSchema(element, oldSchema.getElementType(), newSchema.getElementType()));
+        }
+        return newArray;
+      case MAP:
+        if (!(oldRecord instanceof Map)) {
+          throw new IllegalArgumentException("cannot rewrite record with different type");
+        }
+        Map<Object, Object> map = (Map<Object, Object>) oldRecord;
+        Map<Object, Object> newMap = new HashMap<>();
+        for (Map.Entry<Object, Object> entry : map.entrySet()) {
+          newMap.put(entry.getKey(), rewriteRecordWithNewSchema(entry.getValue(), oldSchema.getValueType(), newSchema.getValueType()));
+        }
+        return newMap;
+      case UNION:
+        return rewriteRecordWithNewSchema(oldRecord, getActualSchemaFromUnion(oldSchema, oldRecord), getActualSchemaFromUnion(newSchema, oldRecord));
+      default:
+        return rewritePrimaryType(oldRecord, oldSchema, newSchema);
+    }
+  }
+
+  private static Object rewritePrimaryType(Object oldValue, Schema oldSchema, Schema newSchema) {
+    Schema realOldSchema = oldSchema;
+    if (realOldSchema.getType() == UNION) {
+      realOldSchema = getActualSchemaFromUnion(oldSchema, oldValue);
+    }
+    if (realOldSchema.getType() == newSchema.getType()) {
+      switch (realOldSchema.getType()) {
+        case NULL:
+        case BOOLEAN:
+        case INT:
+        case LONG:
+        case FLOAT:
+        case DOUBLE:
+        case BYTES:
+        case STRING:
+          return oldValue;
+        case FIXED:
+          // fixed size and name must match:
+          if (!SchemaCompatibility.schemaNameEquals(realOldSchema, newSchema) || realOldSchema.getFixedSize() != newSchema.getFixedSize()) {
+            // deal with the precision change for decimalType
+            if (realOldSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
+              final byte[] bytes;
+              bytes = ((GenericFixed) oldValue).bytes();
+              LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) realOldSchema.getLogicalType();
+              BigDecimal bd = new BigDecimal(new BigInteger(bytes), decimal.getScale()).setScale(((LogicalTypes.Decimal) newSchema.getLogicalType()).getScale());
+              return DECIMAL_CONVERSION.toFixed(bd, newSchema, newSchema.getLogicalType());
+            }
+          } else {
+            return oldValue;
+          }
+          return oldValue;
+        default:
+          throw new AvroRuntimeException("Unknown schema type: " + newSchema.getType());
+      }
+    } else {
+      return rewritePrimaryTypeWithDiffSchemaType(oldValue, realOldSchema, newSchema);
+    }
+  }
+
+  private static Object rewritePrimaryTypeWithDiffSchemaType(Object oldValue, Schema oldSchema, Schema newSchema) {
+    switch (newSchema.getType()) {
+      case NULL:
+      case BOOLEAN:
+        break;
+      case INT:
+        if (newSchema.getLogicalType() == LogicalTypes.date() && oldSchema.getType() == Schema.Type.STRING) {
+          return fromJavaDate(java.sql.Date.valueOf(oldValue.toString()));
+        }
+        break;
+      case LONG:
+        if (oldSchema.getType() == Schema.Type.INT) {
+          return ((Integer) oldValue).longValue();
+        }
+        break;
+      case FLOAT:
+        if ((oldSchema.getType() == Schema.Type.INT)
+                || (oldSchema.getType() == Schema.Type.LONG)) {
+          return oldSchema.getType() == Schema.Type.INT ? ((Integer) oldValue).floatValue() : ((Long) oldValue).floatValue();
+        }
+        break;
+      case DOUBLE:
+        if (oldSchema.getType() == Schema.Type.FLOAT) {
+          // java float cannot convert to double directly, deal with float precision change
+          return Double.valueOf(oldValue + "");
+        } else if (oldSchema.getType() == Schema.Type.INT) {
+          return ((Integer) oldValue).doubleValue();
+        } else if (oldSchema.getType() == Schema.Type.LONG) {
+          return ((Long) oldValue).doubleValue();
+        }
+        break;
+      case BYTES:
+        if (oldSchema.getType() == Schema.Type.STRING) {
+          return (oldValue.toString()).getBytes(StandardCharsets.UTF_8);
+        }
+        break;
+      case STRING:
+        if (oldSchema.getType() == Schema.Type.BYTES) {
+          return String.valueOf(((byte[]) oldValue));
+        }
+        if (oldSchema.getLogicalType() == LogicalTypes.date()) {
+          return toJavaDate((Integer) oldValue).toString();
+        }
+        if (oldSchema.getType() == Schema.Type.INT
+                || oldSchema.getType() == Schema.Type.LONG
+                || oldSchema.getType() == Schema.Type.FLOAT
+                || oldSchema.getType() == Schema.Type.DOUBLE) {
+          return oldValue.toString();
+        }
+        if (oldSchema.getType() == Schema.Type.FIXED && oldSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
+          final byte[] bytes;
+          bytes = ((GenericFixed) oldValue).bytes();
+          LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) oldSchema.getLogicalType();
+          BigDecimal bd = new BigDecimal(new BigInteger(bytes), decimal.getScale());
+          return bd.toString();
+        }
+        break;
+      case FIXED:
+        // deal with decimal Type
+        if (newSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
+          // TODO: support more types
+          if (oldSchema.getType() == Schema.Type.STRING
+                  || oldSchema.getType() == Schema.Type.DOUBLE
+                  || oldSchema.getType() == Schema.Type.INT
+                  || oldSchema.getType() == Schema.Type.LONG
+                  || oldSchema.getType() == Schema.Type.FLOAT) {
+            LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) newSchema.getLogicalType();
+            BigDecimal bigDecimal = null;
+            if (oldSchema.getType() == Schema.Type.STRING) {
+              bigDecimal = new java.math.BigDecimal(oldValue.toString())
+                      .setScale(decimal.getScale());
+            } else {
+              // Due to Java, there will be precision problems in direct conversion, we should use string instead of use double
+              bigDecimal = new java.math.BigDecimal(oldValue.toString())
+                      .setScale(decimal.getScale());
+            }
+            return DECIMAL_CONVERSION.toFixed(bigDecimal, newSchema, newSchema.getLogicalType());
+          }
+        }
+        break;
+      default:
+    }
+    throw new AvroRuntimeException(String.format("cannot support rewrite value for schema type: %s since the old schema type is: %s", newSchema, oldSchema));
+  }
+
+  // convert days to Date
+  private static java.sql.Date toJavaDate(int days) {
+    long localMillis = Math.multiplyExact(days, MILLIS_PER_DAY);
+    int timeZoneOffset;
+    TimeZone defaultTimeZone = TimeZone.getDefault();
+    if (defaultTimeZone instanceof sun.util.calendar.ZoneInfo) {
+      timeZoneOffset = ((sun.util.calendar.ZoneInfo) defaultTimeZone).getOffsetsByWall(localMillis, null);
+    } else {
+      timeZoneOffset = defaultTimeZone.getOffset(localMillis - defaultTimeZone.getRawOffset());
+    }
+    return new java.sql.Date(localMillis - timeZoneOffset);
+  }
+
+  // convert Date to days
+  private static int fromJavaDate(Date date) {
+    long millisUtc = date.getTime();
+    long millisLocal = millisUtc + TimeZone.getDefault().getOffset(millisUtc);
+    int julianDays = Math.toIntExact(Math.floorDiv(millisLocal, MILLIS_PER_DAY));
+    return julianDays;
+  }
+
+  private static Schema getActualSchemaFromUnion(Schema schema, Object data) {
+    Schema actualSchema;
+    if (!schema.getType().equals(UNION)) {
+      return schema;
+    }
+    if (schema.getTypes().size() == 2
+            && schema.getTypes().get(0).getType() == Schema.Type.NULL) {
+      actualSchema = schema.getTypes().get(1);
+    } else if (schema.getTypes().size() == 2
+            && schema.getTypes().get(1).getType() == Schema.Type.NULL) {
+      actualSchema = schema.getTypes().get(0);
+    } else if (schema.getTypes().size() == 1) {
+      actualSchema = schema.getTypes().get(0);
+    } else {
+      // deal complex union. this should not happened in hoodie,
+      // since flink/spark do not write this type.
+      int i = GenericData.get().resolveUnion(schema, data);
+      actualSchema = schema.getTypes().get(i);
+    }
+    return actualSchema;
+  }
+
+  /**
+   * Given avro records, rewrites them with new schema.
+   *
+   * @param oldRecords oldRecords to be rewrite
+   * @param newSchema newSchema used to rewrite oldRecord
+   * @return a iterator of rewrote GeneriRcords
+   */
+  public static Iterator<GenericRecord> rewriteRecordWithNewSchema(Iterator<GenericRecord> oldRecords, Schema newSchema) {
+    if (oldRecords == null || newSchema == null) {
+      return Collections.emptyIterator();
+    }
+    return new Iterator<GenericRecord>() {
+      @Override
+      public boolean hasNext() {
+        return oldRecords.hasNext();
+      }
+
+      @Override
+      public GenericRecord next() {
+        return rewriteRecordWithNewSchema(oldRecords.next(), newSchema);
+      }
+    };
   }
 }

@@ -51,6 +51,11 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.internal.StaticSQLConf
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.{SPARK_VERSION, SparkContext}
+import org.apache.spark.SparkContext
+
+import java.util.Properties
+import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.internal.schema.utils.{AvroSchemaEvolutionUtils, SerDeHelper}
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable
@@ -184,9 +189,10 @@ object HoodieSparkSqlWriter {
             }
 
             // Create a HoodieWriteClient & issue the delete.
+            val internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext)
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
               null, path, tblName,
-              mapAsJavaMap(parameters - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)))
+              mapAsJavaMap(addSchemaEvolutionParameters(parameters, internalSchemaOpt) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)))
               .asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
 
             if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
@@ -231,8 +237,17 @@ object HoodieSparkSqlWriter {
               Array(classOf[org.apache.avro.generic.GenericData],
                 classOf[org.apache.avro.Schema]))
             var schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
+            val lastestSchema = getLatestTableSchema(fs, basePath, sparkContext, schema)
+            val internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext)
             if (reconcileSchema) {
-              schema = getLatestTableSchema(fs, basePath, sparkContext, schema)
+              schema = lastestSchema
+            }
+            if (internalSchemaOpt.isDefined) {
+              schema = {
+                val newSparkSchema = AvroConversionUtils.convertAvroSchemaToStructType(AvroSchemaEvolutionUtils.canonicalizeColumnNullability(schema, lastestSchema))
+                AvroConversionUtils.convertStructTypeToAvroSchema(newSparkSchema, structName, nameSpace)
+
+              }
             }
             validateSchemaForHoodieIsDeleted(schema)
             sparkContext.getConf.registerAvroSchemas(schema)
@@ -264,8 +279,9 @@ object HoodieSparkSqlWriter {
 
             val writeSchema = if (dropPartitionColumns) generateSchemaWithoutPartitionColumns(partitionColumns, schema) else schema
             // Create a HoodieWriteClient & issue the write.
+
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc, writeSchema.toString, path,
-              tblName, mapAsJavaMap(parameters - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)
+              tblName, mapAsJavaMap(addSchemaEvolutionParameters(parameters, internalSchemaOpt) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)
             )).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
 
             if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
@@ -313,6 +329,36 @@ object HoodieSparkSqlWriter {
       processedRecord = HoodieAvroUtils.rewriteRecord(record, writeSchema)
     }
     processedRecord
+  }
+
+  def addSchemaEvolutionParameters(parameters: Map[String, String], internalSchemaOpt: Option[InternalSchema]): Map[String, String] = {
+    val schemaEvolutionEnable = if (internalSchemaOpt.isDefined) "true" else "false"
+    parameters ++ Map(HoodieWriteConfig.INTERNAL_SCHEMA_STRING.key() -> SerDeHelper.toJson(internalSchemaOpt.getOrElse(null)),
+      HoodieWriteConfig.SCHEMA_EVOLUTION_ENABLE.key() -> schemaEvolutionEnable)
+  }
+
+  /**
+    * get latest internalSchema from table
+    *
+    * @param fs           instance of FileSystem.
+    * @param basePath     base path.
+    * @param sparkContext instance of spark context.
+    * @param schema       incoming record's schema.
+    * @return Pair of(boolean, table schema), where first entry will be true only if schema conversion is required.
+    */
+  def getLatestTableInternalSchema(fs: FileSystem, basePath: Path, sparkContext: SparkContext): Option[InternalSchema] = {
+    try {
+      if (FSUtils.isTableExists(basePath.toString, fs)) {
+        val tableMetaClient = HoodieTableMetaClient.builder.setConf(sparkContext.hadoopConfiguration).setBasePath(basePath.toString).build()
+        val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
+        val internalSchemaOpt = tableSchemaResolver.getTableInternalSchemaFromCommitMetadata
+        if (internalSchemaOpt.isPresent) Some(internalSchemaOpt.get()) else None
+      } else {
+        None
+      }
+    } catch {
+      case _ => None
+    }
   }
 
   /**

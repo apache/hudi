@@ -90,6 +90,8 @@ public class HoodieTableMetaClient implements Serializable {
   public static final String BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH = BOOTSTRAP_INDEX_ROOT_FOLDER_PATH + Path.SEPARATOR
       + ".fileids";
 
+  public static final String SCHEMA_FOLDER_NAME = ".schema";
+
   public static final String MARKER_EXTN = ".marker";
 
   private String basePath;
@@ -190,6 +192,13 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public String getColumnStatsIndexPath() {
     return new Path(metaPath, COLUMN_STATISTICS_INDEX_NAME).toString();
+  }
+
+  /**
+   * @return schema folder path
+   */
+  public String getSchemaFolderName() {
+    return new Path(metaPath, SCHEMA_FOLDER_NAME).toString();
   }
 
   /**
@@ -391,6 +400,11 @@ public class HoodieTableMetaClient implements Serializable {
     Path metaPathDir = new Path(basePath, METAFOLDER_NAME);
     if (!fs.exists(metaPathDir)) {
       fs.mkdirs(metaPathDir);
+    }
+    // create schema folder
+    Path schemaPathDir = new Path(metaPathDir, SCHEMA_FOLDER_NAME);
+    if (!fs.exists(schemaPathDir)) {
+      fs.mkdirs(schemaPathDir);
     }
 
     // if anything other than default archive log folder is specified, create that too

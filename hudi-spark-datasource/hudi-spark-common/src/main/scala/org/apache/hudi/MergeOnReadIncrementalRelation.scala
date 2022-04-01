@@ -80,7 +80,7 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
-      hadoopConf = new Configuration(conf)
+      hadoopConf = HoodieDataSourceHelper.getConfigurationWithInternalSchema(new Configuration(conf), internalSchema, metaClient.getBasePath, validCommits)
     )
 
     val requiredSchemaParquetReader = createBaseFileReader(
@@ -92,7 +92,7 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
-      hadoopConf = new Configuration(conf)
+      hadoopConf = HoodieDataSourceHelper.getConfigurationWithInternalSchema(new Configuration(conf), requiredSchema.internalSchema, metaClient.getBasePath, validCommits)
     )
 
     val hoodieTableState = getTableState

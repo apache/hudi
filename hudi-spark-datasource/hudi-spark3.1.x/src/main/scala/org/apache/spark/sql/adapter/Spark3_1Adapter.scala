@@ -23,6 +23,11 @@ import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConver
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.types.DataType
 import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieSpark3_1CatalystExpressionUtils}
+import org.apache.spark.SPARK_VERSION
+import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
+import org.apache.spark.sql.catalyst.plans.logical._
+import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieSpark3_1CatalystExpressionUtils, SparkSession}
 
 /**
  * Implementation of [[SparkAdapter]] for Spark 3.1.x
@@ -37,4 +42,27 @@ class Spark3_1Adapter extends BaseSpark3Adapter {
   override def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer =
     new HoodieSpark3_1AvroDeserializer(rootAvroType, rootCatalystType)
 
+  override def createResolveHudiAlterTableCommand(sparkSession: SparkSession): Rule[LogicalPlan] = {
+    if (SPARK_VERSION.startsWith("3.1")) {
+      val loadClassName = "org.apache.spark.sql.hudi.ResolveHudiAlterTableCommand312"
+      val clazz = Class.forName(loadClassName, true, Thread.currentThread().getContextClassLoader)
+      val ctor = clazz.getConstructors.head
+      ctor.newInstance(sparkSession).asInstanceOf[Rule[LogicalPlan]]
+    } else {
+      new Rule[LogicalPlan] {
+        override def apply(plan: LogicalPlan): LogicalPlan = plan
+      }
+    }
+  }
+
+  override def createHoodieParquetFileFormat(): Option[ParquetFileFormat] = {
+    if (SPARK_VERSION.startsWith("3.1")) {
+      val loadClassName = "org.apache.spark.sql.execution.datasources.parquet.Spark312HoodieParquetFileFormat"
+      val clazz = Class.forName(loadClassName, true, Thread.currentThread().getContextClassLoader)
+      val ctor = clazz.getConstructors.head
+      Some(ctor.newInstance().asInstanceOf[ParquetFileFormat])
+    } else {
+      None
+    }
+  }
 }

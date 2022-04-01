@@ -39,6 +39,7 @@ import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
+import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
@@ -165,9 +166,10 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     //       be stored in non-columnar formats like Avro, HFile, etc)
     private val requiredSchemaFieldOrdinals: List[Int] = collectFieldOrdinals(requiredAvroSchema, logFileReaderAvroSchema)
 
+    // TODO: now logScanner with internalSchema support column project, we may no need projectAvroUnsafe
     private var logScanner =
       HoodieMergeOnReadRDD.scanLog(split.logFiles, getPartitionPath(split), logFileReaderAvroSchema, tableState,
-        maxCompactionMemoryInBytes, config)
+        maxCompactionMemoryInBytes, config, tableSchema.internalSchema)
 
     private val logRecords = logScanner.getRecords.asScala
 
@@ -305,7 +307,7 @@ private object HoodieMergeOnReadRDD {
               logSchema: Schema,
               tableState: HoodieTableState,
               maxCompactionMemoryInBytes: Long,
-              hadoopConf: Configuration): HoodieMergedLogRecordScanner = {
+              hadoopConf: Configuration, internalSchema: InternalSchema = InternalSchema.getEmptyInternalSchema): HoodieMergedLogRecordScanner = {
     val tablePath = tableState.tablePath
     val fs = FSUtils.getFs(tablePath, hadoopConf)
 
@@ -333,6 +335,7 @@ private object HoodieMergeOnReadRDD {
             HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED).toBoolean)
             .getOrElse(false))
         .withReverseReader(false)
+        .withInternalSchema(internalSchema)
         .withBufferSize(
           hadoopConf.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP,
             HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE))

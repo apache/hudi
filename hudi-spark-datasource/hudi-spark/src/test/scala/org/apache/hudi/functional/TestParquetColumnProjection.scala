@@ -331,7 +331,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
       }
 
       val readColumns = targetColumns ++ relation.mandatoryColumns
-      val (_, projectedStructType) = HoodieSparkUtils.getRequiredSchema(tableState.schema, readColumns)
+      val (_, projectedStructType, _) = HoodieSparkUtils.getRequiredSchema(tableState.schema, readColumns)
 
       val row: InternalRow = rows.take(1).head
 

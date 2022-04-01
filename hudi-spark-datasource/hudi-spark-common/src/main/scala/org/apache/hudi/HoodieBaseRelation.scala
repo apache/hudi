@@ -33,6 +33,9 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.hadoop.HoodieROTablePathFilter
+import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.io.storage.HoodieHFileReader
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.spark.TaskContext
@@ -54,7 +57,7 @@ import scala.util.Try
 
 trait HoodieFileSplit {}
 
-case class HoodieTableSchema(structTypeSchema: StructType, avroSchemaStr: String)
+case class HoodieTableSchema(structTypeSchema: StructType, avroSchemaStr: String, internalSchema: InternalSchema = InternalSchema.getEmptyInternalSchema)
 
 case class HoodieTableState(tablePath: String,
                             latestCommitTimestamp: String,
@@ -114,9 +117,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     optParams.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key)
       .map(HoodieSqlCommonUtils.formatQueryInstant)
 
-  protected lazy val tableAvroSchema: Schema = {
+  protected lazy val (tableAvroSchema: Schema, internalSchema: InternalSchema) = {
     val schemaUtil = new TableSchemaResolver(metaClient)
-    Try(schemaUtil.getTableAvroSchema).getOrElse(
+    val avroSchema = Try(schemaUtil.getTableAvroSchema).getOrElse(
       // If there is no commit in the table, we can't get the schema
       // t/h [[TableSchemaResolver]], fallback to the provided [[userSchema]] instead.
       userSchema match {
@@ -124,6 +127,13 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
         case _ => throw new IllegalArgumentException("User-provided schema is required in case the table is empty")
       }
     )
+    // try to find internalSchema
+    val internalSchemaFromMeta = try {
+      schemaUtil.getTableInternalSchemaFromCommitMetadata.orElse(InternalSchema.getEmptyInternalSchema)
+    } catch {
+      case _ => InternalSchema.getEmptyInternalSchema
+    }
+    (avroSchema, internalSchemaFromMeta)
   }
 
   protected val tableStructSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
@@ -154,6 +164,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected def timeline: HoodieTimeline =
   // NOTE: We're including compaction here since it's not considering a "commit" operation
     metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants
+
+  protected val validCommits = timeline.getInstants.toArray().map(_.asInstanceOf[HoodieInstant].getFileName).mkString(",")
 
   protected def latestInstant: Option[HoodieInstant] =
     toScalaOption(timeline.lastInstant())
@@ -189,8 +201,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     //       filtered out upstream
     val fetchedColumns: Array[String] = appendMandatoryColumns(requiredColumns)
 
-    val (requiredAvroSchema, requiredStructSchema) =
-      HoodieSparkUtils.getRequiredSchema(tableAvroSchema, fetchedColumns)
+    val (requiredAvroSchema, requiredStructSchema, requiredInternalSchema) =
+      HoodieSparkUtils.getRequiredSchema(tableAvroSchema, fetchedColumns, internalSchema)
 
     val filterExpressions = convertToExpressions(filters)
     val (partitionFilters, dataFilters) = filterExpressions.partition(isPartitionPredicate)
@@ -198,8 +210,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     val fileSplits = collectFileSplits(partitionFilters, dataFilters)
 
     val partitionSchema = StructType(Nil)
-    val tableSchema = HoodieTableSchema(tableStructSchema, tableAvroSchema.toString)
-    val requiredSchema = HoodieTableSchema(requiredStructSchema, requiredAvroSchema.toString)
+    val tableSchema = HoodieTableSchema(tableStructSchema, if (internalSchema.isEmptySchema) tableAvroSchema.toString else AvroInternalSchemaConverter.convert(internalSchema, tableAvroSchema.getName).toString, internalSchema)
+    val requiredSchema = HoodieTableSchema(requiredStructSchema, requiredAvroSchema.toString, requiredInternalSchema)
 
     // Here we rely on a type erasure, to workaround inherited API restriction and pass [[RDD[InternalRow]]] back as [[RDD[Row]]]
     // Please check [[needConversion]] scala-doc for more details
