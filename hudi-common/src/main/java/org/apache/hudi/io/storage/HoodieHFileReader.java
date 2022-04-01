@@ -51,6 +51,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -70,10 +71,11 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
 
   private static final Logger LOG = LogManager.getLogger(HoodieHFileReader.class);
 
-  private Path path;
-  private Configuration conf;
-  private HFile.Reader reader;
-  private FSDataInputStream fsDataInputStream;
+  private final Path path;
+  private final Configuration conf;
+  private final HFile.Reader reader;
+  private final FSDataInputStream fsDataInputStream;
+  // TODO make final
   private Schema schema;
   // Scanner used to read individual keys. This is cached to prevent the overhead of opening the scanner for each
   // key retrieval.
@@ -83,6 +85,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     this.conf = configuration;
     this.path = path;
     this.reader = HoodieHFileUtils.createHFileReader(FSUtils.getFs(path.toString(), configuration), path, cacheConfig, conf);
+    this.fsDataInputStream = null;
   }
 
   public HoodieHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig, FileSystem fs) throws IOException {
@@ -94,6 +97,9 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
 
   public HoodieHFileReader(FileSystem fs, Path dummyPath, byte[] content) throws IOException {
     this.reader = HoodieHFileUtils.createHFileReader(fs, dummyPath, content);
+    this.path = null;
+    this.conf = null;
+    this.fsDataInputStream = null;
   }
 
   @Override
@@ -247,6 +253,44 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
       }
     }
     return records;
+  }
+
+  public ClosableIterator<R> getRecordIteratorByKeyPrefix(List<String> keyPrefixes, Schema schema) throws IOException {
+    this.schema = schema;
+
+    return new ClosableIterator<R>() {
+      private final Iterator<String> keyPrefixesIterator = keyPrefixes.iterator();
+      private Iterator<R> recordsIterator;
+      private R next;
+
+      @Override
+      public boolean hasNext() {
+        try {
+          while (true) {
+            if (recordsIterator != null && recordsIterator.hasNext()) {
+              next = recordsIterator.next();
+              return true;
+            } else if (keyPrefixesIterator.hasNext()) {
+              recordsIterator = getRecordsByKeyPrefix(keyPrefixesIterator.next(), schema)
+                  .orElse(Collections.emptyList())
+                  .iterator();
+            } else {
+              return false;
+            }
+          }
+        } catch (IOException e) {
+          throw new HoodieIOException("Unable to read next record from HFile", e);
+        }
+      }
+
+      @Override
+      public R next() {
+        return next;
+      }
+
+      @Override
+      public void close() {}
+    };
   }
 
   public ClosableIterator<R> getRecordIterator(List<String> keys, Schema schema) throws IOException {
@@ -460,7 +504,6 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   public synchronized void close() {
     try {
       reader.close();
-      reader = null;
       if (fsDataInputStream != null) {
         fsDataInputStream.close();
       }
