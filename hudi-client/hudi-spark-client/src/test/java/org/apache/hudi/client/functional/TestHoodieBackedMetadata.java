@@ -860,7 +860,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       }
 
       Schema writerSchema = new AvroSchemaConverter().convert(writerSchemaMsg);
-
       try (HoodieLogFormat.Reader logFileReader = HoodieLogFormat.newReader(fs, new HoodieLogFile(fsStatus[0].getPath()), writerSchema)) {
         while (logFileReader.hasNext()) {
           HoodieLogBlock logBlock = logFileReader.next();

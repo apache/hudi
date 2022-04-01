@@ -257,7 +257,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
               HoodieAvroDataBlock avroBlock = (HoodieAvroDataBlock) block;
               // TODO If we can store additional metadata in datablock, we can skip parsing records
               // (such as startTime, endTime of records in the block)
-              try (ClosableIterator<IndexedRecord> itr = avroBlock.getRecordItr()) {
+              try (ClosableIterator<IndexedRecord> itr = avroBlock.getRecordIterator()) {
                 StreamSupport.stream(Spliterators.spliteratorUnknownSize(itr, Spliterator.IMMUTABLE), true)
                     // Filter blocks in desired time window
                     .filter(r -> commitsFilter.apply((GenericRecord) r))
