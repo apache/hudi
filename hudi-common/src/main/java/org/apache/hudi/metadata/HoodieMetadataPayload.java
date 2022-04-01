@@ -23,6 +23,7 @@ import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.util.Utf8;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -679,8 +680,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       return DoubleWrapper.newBuilder().setValue((Double) statValue).build();
     } else if (statValue instanceof ByteBuffer) {
       return BytesWrapper.newBuilder().setValue((ByteBuffer) statValue).build();
-    } else if (statValue instanceof String) {
-      return StringWrapper.newBuilder().setValue((String) statValue).build();
+    } else if (statValue instanceof String || statValue instanceof Utf8) {
+      return StringWrapper.newBuilder().setValue(statValue.toString()).build();
     } else {
       throw new UnsupportedOperationException(String.format("Unsupported type of the statistic (%s)", statValue.getClass()));
     }
