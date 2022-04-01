@@ -57,10 +57,13 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Spliterator;
+import java.util.Spliterators;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
@@ -231,6 +234,29 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       assertEquals(expectedIds.get(index), record.get("number"));
       index++;
     }
+  }
+
+  @Test
+  public void testReaderGetRecordIteratorByKeyPrefixes() throws Exception {
+    writeFileWithSimpleSchema();
+    HoodieHFileReader<GenericRecord> hfileReader =
+        (HoodieHFileReader<GenericRecord>) createReader(new Configuration());
+
+    Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
+
+    List<String> keyPrefixes = Collections.singletonList("key");
+    Iterator<GenericRecord> iterator =
+        hfileReader.getRecordIteratorByKeyPrefix(keyPrefixes, avroSchema);
+
+    List<GenericRecord> recordsByPrefix =
+        StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
+            .collect(Collectors.toList());
+
+    List<GenericRecord> allRecords =
+        StreamSupport.stream(Spliterators.spliteratorUnknownSize(hfileReader.getRecordIterator(), Spliterator.ORDERED), false)
+            .collect(Collectors.toList());
+
+    assertEquals(allRecords, recordsByPrefix);
   }
 
   @ParameterizedTest
