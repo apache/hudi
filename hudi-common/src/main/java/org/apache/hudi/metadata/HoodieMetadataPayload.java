@@ -644,11 +644,13 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private static Object wrapStatisticValue(Comparable<?> statValue) {
     if (statValue == null) {
       return null;
-    } else if (statValue instanceof Date) {
+    } else if (statValue instanceof Date || statValue instanceof LocalDate) {
       // NOTE: Due to breaking changes in code-gen b/w Avro 1.8.2 and 1.10, we can't
       //       rely on logical types to do proper encoding of the native Java types,
       //       and hereby have to encode statistic manually
-      LocalDate localDate = ((Date) statValue).toLocalDate();
+      LocalDate localDate = statValue instanceof LocalDate
+          ? (LocalDate) statValue
+          : ((Date) statValue).toLocalDate();
       return DateWrapper.newBuilder().setValue((int) localDate.toEpochDay()).build();
     } else if (statValue instanceof BigDecimal) {
       Schema valueSchema = DecimalWrapper.SCHEMA$.getField("value").schema();

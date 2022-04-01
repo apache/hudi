@@ -144,7 +144,7 @@ public class HoodieTableMetadataUtil {
         final Object fieldVal = convertValueForSpecificDataTypes(field.schema(), genericRecord.get(field.name()), true);
         final Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(genericRecord.getSchema(), field.name());
 
-        if (fieldVal != null) {
+        if (fieldVal != null && canCompare(fieldSchema)) {
           // Set the min value of the field
           if (colStats.minValue == null
               || ConvertingGenericData.INSTANCE.compare(fieldVal, colStats.minValue, fieldSchema) < 0) {
@@ -1282,6 +1282,10 @@ public class HoodieTableMetadataUtil {
       default:
         throw new IllegalStateException("Unexpected type: " + schema.getType());
     }
+  }
+
+  private static boolean canCompare(Schema schema) {
+    return schema.getType() != Schema.Type.MAP;
   }
 
   public static Set<String> getInflightMetadataPartitions(HoodieTableConfig tableConfig) {
