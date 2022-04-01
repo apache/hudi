@@ -346,7 +346,46 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   }
 
   @Override
-  public Option getRecordByKey(String key, Schema readerSchema) throws IOException {
+  public Option<List<R>> getRecordsByKeyPrefix(String keyPrefix, Schema readerSchema) throws IOException {
+    final Option<Schema.Field> keyFieldSchema = Option.ofNullable(readerSchema.getField(KEY_FIELD_NAME));
+    ValidationUtils.checkState(keyFieldSchema != null);
+    KeyValue kv = new KeyValue(keyPrefix.getBytes(), null, null, null);
+
+    List<byte[]> valuesBytes = new ArrayList<>(2);
+    synchronized (this) {
+      if (keyScanner == null) {
+        keyScanner = reader.getScanner(false, false);
+      }
+
+      if (keyScanner.seekTo(kv) == 0) {
+        do {
+          Cell c = keyScanner.getCell();
+
+          byte[] keyBytes = Arrays.copyOfRange(c.getRowArray(), c.getRowOffset(), c.getRowOffset() + c.getRowLength());
+          String key = new String(keyBytes);
+
+          // Check whether we're still reading records corresponding to the key-prefix
+          if (!key.startsWith(keyPrefix)) {
+            break;
+          }
+          // Extract the byte value before releasing the lock since we cannot hold on to the returned cell afterwards
+          valuesBytes.add(
+              Arrays.copyOfRange(c.getValueArray(), c.getValueOffset(), c.getValueOffset() + c.getValueLength())
+          );
+        } while (keyScanner.next());
+      }
+    }
+
+    List<R> values = new ArrayList<>(valuesBytes.size());
+    for (byte[] bs : valuesBytes) {
+      values.add(deserialize(keyPrefix.getBytes(), bs, getSchema(), readerSchema, keyFieldSchema));
+    }
+
+    return Option.of(values);
+  }
+
+  @Override
+  public Option<R> getRecordByKey(String key, Schema readerSchema) throws IOException {
     byte[] value = null;
     final Option<Schema.Field> keyFieldSchema = Option.ofNullable(readerSchema.getField(KEY_FIELD_NAME));
     ValidationUtils.checkState(keyFieldSchema != null);

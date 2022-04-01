@@ -47,6 +47,10 @@ public interface HoodieFileReader<R extends IndexedRecord> extends AutoCloseable
     return getRecordIterator(getSchema());
   }
 
+  default Option<List<R>> getRecordsByKeyPrefix(String keyPrefix, Schema readerSchema) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
   default Option<R> getRecordByKey(String key, Schema readerSchema) throws IOException {
     throw new UnsupportedOperationException();
   }
