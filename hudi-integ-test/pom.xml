@@ -455,7 +455,7 @@
 
   <properties>
     <dockerCompose.envFile>${project.basedir}/compose_env</dockerCompose.envFile>
-    <dockerCompose.file>${project.basedir}/../docker/compose/docker-compose_hadoop310_hive312_spark244.yml</dockerCompose.file>
+    <dockerCompose.file>${project.basedir}/../docker/compose/docker-compose_hadoop310_hive312_spark321.yml</dockerCompose.file>
     <docker.compose.skip>${skipITs}</docker.compose.skip>
     <checkstyle.skip>true</checkstyle.skip>
     <main.basedir>${project.parent.basedir}</main.basedir>
@@ -567,7 +567,6 @@
             </goals>
             <configuration>
               <skip>${docker.compose.skip}</skip>
-              <host>unix:///var/run/docker.sock</host>
               <composeFile>${dockerCompose.file}</composeFile>
               <detachedMode>true</detachedMode>
               <envFile>${dockerCompose.envFile}</envFile>
