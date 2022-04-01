@@ -29,21 +29,33 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.parser.{ParseErrorListener, ParseException, ParserInterface}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.trees.Origin
+import org.apache.spark.sql.execution.SparkSqlParser
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{DataType, StructType}
 
 class HoodieCommonSqlParser(session: SparkSession, delegate: ParserInterface)
   extends ParserInterface with Logging with SparkAdapterSupport {
 
+  private lazy val sparkParser = new SparkSqlParser(new SQLConf)
   private lazy val builder = new HoodieSqlCommonAstBuilder(session, delegate)
   private lazy val sparkExtendedParser = sparkAdapter.createExtendedSparkParser
     .map(_(session, delegate)).getOrElse(delegate)
 
-  override def parsePlan(sqlText: String): LogicalPlan = parse(sqlText) { parser =>
-    builder.visit(parser.singleStatement()) match {
-      case plan: LogicalPlan => plan
-      case _=> sparkExtendedParser.parsePlan(sqlText)
+  override def parsePlan(sqlText: String): LogicalPlan =
+  // parse merge into cmd directly by spark parser
+    if (sqlText.toLowerCase.startsWith("merge")) {
+      sparkParser.parsePlan(sqlText) match {
+        case plan: LogicalPlan => plan
+        case _=> sparkExtendedParser.parsePlan(sqlText)
+      }
+    } else {
+      parse(sqlText) { parser =>
+        builder.visit(parser.singleStatement()) match {
+          case plan: LogicalPlan => plan
+          case _=> sparkExtendedParser.parsePlan(sqlText)
+        }
+      }
     }
-  }
 
   override def parseExpression(sqlText: String): Expression = delegate.parseExpression(sqlText)
 
