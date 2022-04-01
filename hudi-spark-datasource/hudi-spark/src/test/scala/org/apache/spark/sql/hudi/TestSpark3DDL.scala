@@ -66,7 +66,7 @@ class TestSpark3DDL extends TestHoodieSqlBase {
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         if (HoodieSparkUtils.gteqSpark3_1) {
-          spark.sql("set schema.on.read.enable=true")
+          spark.sql("set hoodie.schema.on.read.enable=true")
           createAndPreparePartitionTable(spark, tableName, tablePath, tableType)
           // date -> string -> date
           spark.sql(s"alter table $tableName alter column col6 type String")
@@ -134,7 +134,7 @@ class TestSpark3DDL extends TestHoodieSqlBase {
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         if (HoodieSparkUtils.gteqSpark3_1) {
-          spark.sql("set schema.on.read.enable=true")
+          spark.sql("set hoodie.schema.on.read.enable=true")
           createAndPreparePartitionTable(spark, tableName, tablePath, tableType)
           // float -> double -> decimal -> String
           spark.sql(s"alter table $tableName alter column col2 type double")
@@ -168,7 +168,7 @@ class TestSpark3DDL extends TestHoodieSqlBase {
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         if (HoodieSparkUtils.gteqSpark3_1) {
-          spark.sql("set schema.on.read.enable=true")
+          spark.sql("set hoodie.schema.on.read.enable=true")
           createAndPreparePartitionTable(spark, tableName, tablePath, tableType)
 
           // test set properties
@@ -267,7 +267,7 @@ class TestSpark3DDL extends TestHoodieSqlBase {
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         if (HoodieSparkUtils.gteqSpark3_1) {
-          spark.sql("set schema.on.read.enable=true")
+          spark.sql("set hoodie.schema.on.read.enable=true")
           spark.sql(
             s"""
                |create table $tableName (
@@ -318,7 +318,7 @@ class TestSpark3DDL extends TestHoodieSqlBase {
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         if (HoodieSparkUtils.gteqSpark3_1) {
-          spark.sql("set schema.on.read.enable=true")
+          spark.sql("set hoodie.schema.on.read.enable=true")
           spark.sql(
             s"""
                |create table $tableName (
@@ -379,7 +379,7 @@ class TestSpark3DDL extends TestHoodieSqlBase {
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         if (HoodieSparkUtils.gteqSpark3_1) {
-          spark.sql("set schema.on.read.enable=true")
+          spark.sql("set hoodie.schema.on.read.enable=true")
           spark.sql(
             s"""
                |create table $tableName (
@@ -458,7 +458,7 @@ class TestSpark3DDL extends TestHoodieSqlBase {
       .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key(), "comb")
       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "par")
       .option(HoodieWriteConfig.TBL_NAME.key, tableName)
-      .option("schema.on.read.enable", "true")
+      .option("hoodie.schema.on.read.enable", "true")
       // option for clustering
       .option("hoodie.clustering.inline", "true")
       .option("hoodie.clustering.inline.max.commits", "1")

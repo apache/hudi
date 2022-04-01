@@ -200,7 +200,7 @@ public class InternalSchemaCache {
         }
       } catch (Exception e1) {
         // swallow this exception.
-        LOG.warn(String.format("cannot found internalSchema from commit file %s . Now fallback to parser historical internalSchemas", candidateCommitFile.toString()));
+        LOG.warn(String.format("Cannot find internal schema from commit file %s. Falling back to parsing historical internal schema", candidateCommitFile.toString()));
       }
     }
     // step2:
