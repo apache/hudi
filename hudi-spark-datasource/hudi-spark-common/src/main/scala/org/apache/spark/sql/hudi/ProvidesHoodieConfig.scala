@@ -255,7 +255,10 @@ trait ProvidesHoodieConfig extends Logging {
     val hoodieProps = getHoodieProps(catalogProperties, tableConfig, sparkSession.sqlContext.conf)
     val hiveSyncConfig = buildHiveSyncConfig(hoodieProps, hoodieCatalogTable)
 
-    withSparkConf(sparkSession, hoodieCatalogTable.catalogProperties) {
+    // operation can not be overwrite
+    val options = hoodieCatalogTable.catalogProperties.-(OPERATION.key())
+
+    withSparkConf(sparkSession, options) {
       Map(
         "path" -> path,
         RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
