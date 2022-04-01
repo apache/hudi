@@ -68,7 +68,7 @@ The list of all RFCs can be found here.
 | 42 | [Consistent Hashing Index](./rfc-42/rfc-42.md) | `UNDER REVIEW` |
 | 43 | [Compaction / Clustering Service](./rfc-43/rfc-43.md) | `UNDER REVIEW` |
 | 44 | [Hudi Connector for Presto](./rfc-44/rfc-44.md) | `UNDER REVIEW` |
-| 45 | [Asynchronous Metadata Indexing](./rfc-45/rfc-45.md) | `UNDER REVIEW` |
+| 45 | [Asynchronous Metadata Indexing](./rfc-45/rfc-45.md) | `IN PROGRESS` |
 | 46 | [Optimizing Record Payload Handling](./rfc-46/rfc-46.md) | `UNDER REVIEW` |
 | 47 | [Add Call Produce Command for Spark SQL](./rfc-47/rfc-47.md) | `UNDER REVIEW` |
 | 48 | [LogCompaction for MOR tables](./rfc-48/rfc-48.md) | `UNDER REVIEW` |
