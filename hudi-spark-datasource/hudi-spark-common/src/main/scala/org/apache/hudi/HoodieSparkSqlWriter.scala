@@ -238,13 +238,16 @@ object HoodieSparkSqlWriter {
                 classOf[org.apache.avro.Schema]))
             var schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
             val lastestSchema = getLatestTableSchema(fs, basePath, sparkContext, schema)
+            val internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext)
             if (reconcileSchema) {
               schema = lastestSchema
             }
-            schema = {
-              val newSparkSchema = AvroConversionUtils.convertAvroSchemaToStructType(AvroSchemaEvolutionUtils.canonicalizeColumnNullability(schema, lastestSchema))
-              AvroConversionUtils.convertStructTypeToAvroSchema(newSparkSchema, structName, nameSpace)
+            if (internalSchemaOpt.isDefined) {
+              schema = {
+                val newSparkSchema = AvroConversionUtils.convertAvroSchemaToStructType(AvroSchemaEvolutionUtils.canonicalizeColumnNullability(schema, lastestSchema))
+                AvroConversionUtils.convertStructTypeToAvroSchema(newSparkSchema, structName, nameSpace)
 
+              }
             }
             validateSchemaForHoodieIsDeleted(schema)
             sparkContext.getConf.registerAvroSchemas(schema)
@@ -276,7 +279,6 @@ object HoodieSparkSqlWriter {
 
             val writeSchema = if (dropPartitionColumns) generateSchemaWithoutPartitionColumns(partitionColumns, schema) else schema
             // Create a HoodieWriteClient & issue the write.
-            val internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext)
 
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc, writeSchema.toString, path,
               tblName, mapAsJavaMap(addSchemaEvolutionParameters(parameters, internalSchemaOpt) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)
