@@ -25,6 +25,7 @@ import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
 import org.apache.hadoop.mapreduce.{JobID, TaskAttemptID, TaskID, TaskType}
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.util.InternalSchemaCache
 import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.internal.schema.InternalSchema
@@ -35,7 +36,6 @@ import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
 import org.apache.parquet.hadoop.{ParquetFileReader, ParquetInputFormat, ParquetRecordReader}
 
-import org.apache.spark.SPARK_VERSION
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
@@ -158,7 +158,7 @@ class Spark312HoodieParquetFileFormat extends ParquetFileFormat {
         // Try to push down filters when filter push-down is enabled.
         val pushed = if (enableParquetFilterPushDown) {
           val parquetSchema = footerFileMetaData.getSchema
-          val parquetFilters = if (SPARK_VERSION.startsWith("3.1.3")) {
+          val parquetFilters = if (HoodieSparkUtils.gteqSpark3_1_3) {
             Spark312HoodieParquetFileFormat.createParquetFilters(
               parquetSchema,
               pushDownDate,

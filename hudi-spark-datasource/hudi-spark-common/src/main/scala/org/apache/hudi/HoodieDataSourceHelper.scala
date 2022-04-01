@@ -90,7 +90,7 @@ object HoodieDataSourceHelper extends PredicateHelper with SparkAdapterSupport {
     * @param tablePath hoodie table base path.
     * @param validCommits valid commits, using give validCommits to validate all legal histroy Schema files, and return the latest one.
     */
-  def getConfigurationForInternalSchema(conf: Configuration, internalSchema: InternalSchema, tablePath: String, validCommits: String): Configuration = {
+  def getConfigurationWithInternalSchema(conf: Configuration, internalSchema: InternalSchema, tablePath: String, validCommits: String): Configuration = {
     conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
     conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, tablePath)
     conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)

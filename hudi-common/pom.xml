@@ -117,6 +117,12 @@
       <artifactId>avro</artifactId>
     </dependency>
 
+    <!-- caffeine -->
+    <dependency>
+      <groupId>com.github.ben-manes.caffeine</groupId>
+      <artifactId>caffeine</artifactId>
+    </dependency>
+
     <!-- Parquet -->
     <dependency>
       <groupId>org.apache.parquet</groupId>
