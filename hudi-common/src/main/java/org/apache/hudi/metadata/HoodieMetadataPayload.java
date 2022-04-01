@@ -685,7 +685,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     }
   }
 
-  static Comparable<?> unwrapStatisticValueWrapper(Object statValueWrapper) {
+  public static Comparable<?> unwrapStatisticValueWrapper(Object statValueWrapper) {
     if (statValueWrapper == null) {
       return null;
     } else if (statValueWrapper instanceof DateWrapper) {
@@ -709,6 +709,12 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       return ((BytesWrapper) statValueWrapper).getValue();
     } else if (statValueWrapper instanceof StringWrapper) {
       return ((StringWrapper) statValueWrapper).getValue();
+    } else if (statValueWrapper instanceof GenericRecord) {
+      // NOTE: This branch could be hit b/c Avro records could be reconstructed
+      //       as {@code GenericRecord)
+      // TODO add logical type decoding
+      GenericRecord record = (GenericRecord) statValueWrapper;
+      return (Comparable<?>) record.get("value");
     } else {
       throw new UnsupportedOperationException(String.format("Unsupported type of the statistic (%s)", statValueWrapper.getClass()));
     }

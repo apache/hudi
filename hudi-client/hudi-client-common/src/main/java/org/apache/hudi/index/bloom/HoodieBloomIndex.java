@@ -20,7 +20,6 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
-import org.apache.hudi.avro.model.StringWrapper;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
@@ -41,7 +40,6 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.HoodieRangeInfoHandle;
 import org.apache.hudi.table.HoodieTable;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -56,6 +54,7 @@ import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.apache.hudi.index.HoodieIndexUtils.getLatestBaseFilesForAllPartitions;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.unwrapStatisticValueWrapper;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getCompletedMetadataPartitions;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 
@@ -230,8 +229,8 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
               new BloomIndexFileInfo(
                   FSUtils.getFileId(entry.getKey().getRight()),
                   // NOTE: Here we assume that the type of the primary key field is string
-                  ((StringWrapper) entry.getValue().getMinValue()).getValue(),
-                  ((StringWrapper) entry.getValue().getMaxValue()).getValue()
+                  (String) unwrapStatisticValueWrapper(entry.getValue().getMinValue()),
+                  (String) unwrapStatisticValueWrapper(entry.getValue().getMaxValue())
               )));
         }
         return result.stream();
