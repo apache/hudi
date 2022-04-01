@@ -65,11 +65,6 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
                                     tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
                                     filters: Array[Filter]): HoodieUnsafeRDD = {
-    if (!internalSchema.isEmptySchema) {
-      // it is safe to enable vectorizedReader
-      sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.recordLevelFilter.enabled", "false")
-      sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "true")
-    }
 
     val baseFileReader = createBaseFileReader(
       spark = sparkSession,
