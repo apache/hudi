@@ -1186,7 +1186,8 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
-   * TODO
+   * Does an upcast for {@link BigDecimal} instance to align it with scale/precision expected by
+   * the {@link org.apache.avro.LogicalTypes.Decimal} Avro logical type
    */
   public static BigDecimal tryUpcastDecimal(BigDecimal value, final LogicalTypes.Decimal decimal) {
     final int scale = decimal.getScale();
