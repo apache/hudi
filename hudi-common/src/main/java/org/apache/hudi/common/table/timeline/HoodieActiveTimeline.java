@@ -601,7 +601,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   private Path getInstantFileNamePath(String fileName) {
-    return new Path(fileName.contains(SAVE_SCHEMA_ACTION) ? metaClient.getSchemaFolderName() : metaClient.getMetaPath(), fileName);
+    return new Path(fileName.contains(SCHEMA_COMMIT_ACTION) ? metaClient.getSchemaFolderName() : metaClient.getMetaPath(), fileName);
   }
 
   public void transitionRequestedToInflight(String commitType, String inFlightInstant) {

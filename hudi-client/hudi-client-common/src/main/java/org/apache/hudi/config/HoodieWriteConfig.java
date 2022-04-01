@@ -174,7 +174,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "implementations of evolution of schema");
 
   public static final ConfigProperty<Boolean> SCHEMA_EVOLUTION_ENABLE = ConfigProperty
-      .key("hoodie.schema.evolution.enable")
+      .key("schema.on.read.enable")
       .defaultValue(false)
       .withDocumentation("enable full schema evolution for hoodie");
 

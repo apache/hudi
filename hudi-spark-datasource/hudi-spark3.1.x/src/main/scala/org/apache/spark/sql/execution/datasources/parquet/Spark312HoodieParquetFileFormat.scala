@@ -34,6 +34,8 @@ import org.apache.parquet.filter2.compat.FilterCompat
 import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
 import org.apache.parquet.hadoop.{ParquetFileReader, ParquetInputFormat, ParquetRecordReader}
+
+import org.apache.spark.SPARK_VERSION
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
@@ -156,14 +158,26 @@ class Spark312HoodieParquetFileFormat extends ParquetFileFormat {
         // Try to push down filters when filter push-down is enabled.
         val pushed = if (enableParquetFilterPushDown) {
           val parquetSchema = footerFileMetaData.getSchema
-          val parquetFilters = new ParquetFilters(
-            parquetSchema,
-            pushDownDate,
-            pushDownTimestamp,
-            pushDownDecimal,
-            pushDownStringStartWith,
-            pushDownInFilterThreshold,
-            isCaseSensitive)
+          val parquetFilters = if (SPARK_VERSION.startsWith("3.1.3")) {
+            Spark312HoodieParquetFileFormat.createParquetFilters(
+              parquetSchema,
+              pushDownDate,
+              pushDownTimestamp,
+              pushDownDecimal,
+              pushDownStringStartWith,
+              pushDownInFilterThreshold,
+              isCaseSensitive,
+              datetimeRebaseMode)
+          } else {
+            Spark312HoodieParquetFileFormat.createParquetFilters(
+              parquetSchema,
+              pushDownDate,
+              pushDownTimestamp,
+              pushDownDecimal,
+              pushDownStringStartWith,
+              pushDownInFilterThreshold,
+              isCaseSensitive)
+          }
           filters.map(Spark312HoodieParquetFileFormat.rebuildFilterFromParquet(_, fileSchema, querySchemaOption.get()))
             // Collects all converted Parquet filter predicates. Notice that not all predicates can be
             // converted (`ParquetFilters.createFilter` returns an `Option`). That's why a `flatMap`
@@ -283,6 +297,14 @@ class Spark312HoodieParquetFileFormat extends ParquetFileFormat {
 }
 
 object Spark312HoodieParquetFileFormat {
+
+  val PARQUET_FILTERS_CLASS_NAME = "org.apache.spark.sql.execution.datasources.parquet.ParquetFilters"
+
+  private def createParquetFilters(arg: Any*): ParquetFilters = {
+    val clazz = Class.forName(PARQUET_FILTERS_CLASS_NAME, true, Thread.currentThread().getContextClassLoader)
+    val ctor = clazz.getConstructors.head
+    ctor.newInstance(arg.map(_.asInstanceOf[AnyRef]): _*).asInstanceOf[ParquetFilters]
+  }
 
   private def rebuildFilterFromParquet(oldFilter: Filter, fileSchema: InternalSchema, querySchema: InternalSchema): Filter = {
     if (fileSchema == null || querySchema == null) {

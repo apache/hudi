@@ -176,7 +176,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
       return isInflight() ? HoodieTimeline.makeInflightIndexFileName(timestamp)
           : isRequested() ? HoodieTimeline.makeRequestedIndexFileName(timestamp)
           : HoodieTimeline.makeIndexCommitFileName(timestamp);
-    } else if (HoodieTimeline.SAVE_SCHEMA_ACTION.equals(action)) {
+    } else if (HoodieTimeline.SCHEMA_COMMIT_ACTION.equals(action)) {
       return isInflight() ? HoodieTimeline.makeInflightSchemaFileName(timestamp)
           : isRequested() ? HoodieTimeline.makeRequestSchemaFileName(timestamp)
           : HoodieTimeline.makeSchemaFileName(timestamp);

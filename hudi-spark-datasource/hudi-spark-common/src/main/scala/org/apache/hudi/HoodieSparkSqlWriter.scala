@@ -345,13 +345,17 @@ object HoodieSparkSqlWriter {
     * @return Pair of(boolean, table schema), where first entry will be true only if schema conversion is required.
     */
   def getLatestTableInternalSchema(fs: FileSystem, basePath: Path, sparkContext: SparkContext): Option[InternalSchema] = {
-    if (FSUtils.isTableExists(basePath.toString, fs)) {
-      val tableMetaClient = HoodieTableMetaClient.builder.setConf(sparkContext.hadoopConfiguration).setBasePath(basePath.toString).build()
-      val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
-      val internalSchemaOpt = tableSchemaResolver.getTableInternalSchemaFromCommitMetadata
-      if (internalSchemaOpt.isPresent) Some(internalSchemaOpt.get()) else None
-    } else {
-      None
+    try {
+      if (FSUtils.isTableExists(basePath.toString, fs)) {
+        val tableMetaClient = HoodieTableMetaClient.builder.setConf(sparkContext.hadoopConfiguration).setBasePath(basePath.toString).build()
+        val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
+        val internalSchemaOpt = tableSchemaResolver.getTableInternalSchemaFromCommitMetadata
+        if (internalSchemaOpt.isPresent) Some(internalSchemaOpt.get()) else None
+      } else {
+        None
+      }
+    } catch {
+      case _ => None
     }
   }
 

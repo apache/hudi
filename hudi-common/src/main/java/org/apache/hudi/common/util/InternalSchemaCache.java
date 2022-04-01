@@ -21,10 +21,6 @@ package org.apache.hudi.common.util;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -37,6 +33,13 @@ import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
@@ -45,6 +48,7 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 public class InternalSchemaCache {
+  private static final Logger LOG = LogManager.getLogger(InternalSchemaCache.class);
   // Use segment lock to reduce competition.
   // the lock size should be powers of 2 for better hash.
   private static Object[] lockList = new Object[16];
@@ -196,6 +200,7 @@ public class InternalSchemaCache {
         }
       } catch (Exception e1) {
         // swallow this exception.
+        LOG.warn(String.format("cannot found internalSchema from commit file %s . Now fallback to parser historical internalSchemas", candidateCommitFile.toString()));
       }
     }
     // step2:

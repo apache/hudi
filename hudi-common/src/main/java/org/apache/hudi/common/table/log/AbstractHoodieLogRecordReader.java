@@ -114,8 +114,9 @@ public abstract class AbstractHoodieLogRecordReader {
   private final FileSystem fs;
   // Total log files read - for metrics
   private AtomicLong totalLogFiles = new AtomicLong(0);
-  // Internal schema
+  // Internal schema, used to support full schema evolution.
   private InternalSchema internalSchema;
+  // Hoodie table path.
   private final String path;
   // Total log blocks read - for metrics
   private AtomicLong totalLogBlocks = new AtomicLong(0);

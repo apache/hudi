@@ -263,32 +263,37 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     // do save internal schema to support Implicitly add columns in write process
     if (!metadata.getExtraMetadata().containsKey(SerDeHelper.LATEST_SCHEMA)
         && metadata.getExtraMetadata().containsKey(SCHEMA_KEY) && table.getConfig().getSchemaEvolutionEnable()) {
-      TableSchemaResolver schemaUtil = new TableSchemaResolver(table.getMetaClient());
-      String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElse("");
-      FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(table.getMetaClient());
-      if (!historySchemaStr.isEmpty()) {
-        InternalSchema internalSchema = InternalSchemaUtils.searchSchema(Long.parseLong(instantTime),
-            SerDeHelper.parseSchemas(historySchemaStr));
-        Schema avroSchema = HoodieAvroUtils.createHoodieWriteSchema(new Schema.Parser().parse(config.getSchema()));
-        InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.evolveSchemaFromNewAvroSchema(avroSchema, internalSchema);
-        if (evolvedSchema.equals(internalSchema)) {
-          metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(evolvedSchema));
-          //TODO save history schema by metaTable
-          schemasManager.persistHistorySchemaStr(instantTime, historySchemaStr);
-        } else {
-          evolvedSchema.setSchemaId(Long.parseLong(instantTime));
-          String newSchemaStr = SerDeHelper.toJson(evolvedSchema);
-          metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, newSchemaStr);
-          schemasManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(evolvedSchema, historySchemaStr));
-        }
-        // update SCHEMA_KEY
-        metadata.addMetadata(SCHEMA_KEY, AvroInternalSchemaConverter.convert(evolvedSchema, avroSchema.getName()).toString());
-      }
+      saveInternalSchema(table, instantTime, metadata);
     }
     // update Metadata table
     writeTableMetadata(table, instantTime, commitActionType, metadata);
     activeTimeline.saveAsComplete(new HoodieInstant(true, commitActionType, instantTime),
         Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+  }
+
+  // Save internal schema
+  private void saveInternalSchema(HoodieTable table, String instantTime, HoodieCommitMetadata metadata) {
+    TableSchemaResolver schemaUtil = new TableSchemaResolver(table.getMetaClient());
+    String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElse("");
+    FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(table.getMetaClient());
+    if (!historySchemaStr.isEmpty()) {
+      InternalSchema internalSchema = InternalSchemaUtils.searchSchema(Long.parseLong(instantTime),
+          SerDeHelper.parseSchemas(historySchemaStr));
+      Schema avroSchema = HoodieAvroUtils.createHoodieWriteSchema(new Schema.Parser().parse(config.getSchema()));
+      InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.evolveSchemaFromNewAvroSchema(avroSchema, internalSchema);
+      if (evolvedSchema.equals(internalSchema)) {
+        metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(evolvedSchema));
+        //TODO save history schema by metaTable
+        schemasManager.persistHistorySchemaStr(instantTime, historySchemaStr);
+      } else {
+        evolvedSchema.setSchemaId(Long.parseLong(instantTime));
+        String newSchemaStr = SerDeHelper.toJson(evolvedSchema);
+        metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, newSchemaStr);
+        schemasManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(evolvedSchema, historySchemaStr));
+      }
+      // update SCHEMA_KEY
+      metadata.addMetadata(SCHEMA_KEY, AvroInternalSchemaConverter.convert(evolvedSchema, avroSchema.getName()).toString());
+    }
   }
 
   protected HoodieTable createTable(HoodieWriteConfig config, Configuration hadoopConf) {

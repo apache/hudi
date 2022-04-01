@@ -45,7 +45,7 @@ import java.util.List;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.SAVE_SCHEMA_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.SCHEMA_COMMIT_ACTION;
 
 public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchemaStorageManager {
   private static final Logger LOG = LogManager.getLogger(FileBasedInternalSchemaStorageManager.class);
@@ -80,7 +80,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
   public void persistHistorySchemaStr(String instantTime, String historySchemaStr) {
     cleanResidualFiles();
     HoodieActiveTimeline timeline = getMetaClient().getActiveTimeline();
-    HoodieInstant hoodieInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, SAVE_SCHEMA_ACTION, instantTime);
+    HoodieInstant hoodieInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, SCHEMA_COMMIT_ACTION, instantTime);
     timeline.createNewInstant(hoodieInstant);
     byte[] writeContent = historySchemaStr.getBytes(StandardCharsets.UTF_8);
     timeline.transitionRequestedToInflight(hoodieInstant, Option.empty());
@@ -143,7 +143,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
       FileSystem fs = FSUtils.getFs(baseSchemaPath.toString(), conf);
       if (fs.exists(baseSchemaPath)) {
         List<String> validaSchemaFiles = Arrays.stream(fs.listStatus(baseSchemaPath))
-            .filter(f -> f.isFile() && f.getPath().getName().endsWith(SAVE_SCHEMA_ACTION))
+            .filter(f -> f.isFile() && f.getPath().getName().endsWith(SCHEMA_COMMIT_ACTION))
             .map(file -> file.getPath().getName()).filter(f -> commitList.contains(f.split("\\.")[0])).sorted().collect(Collectors.toList());
         if (!validaSchemaFiles.isEmpty()) {
           Path latestFilePath = new Path(baseSchemaPath, validaSchemaFiles.get(validaSchemaFiles.size() - 1));
