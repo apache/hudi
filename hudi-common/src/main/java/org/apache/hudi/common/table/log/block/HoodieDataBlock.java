@@ -138,7 +138,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   /**
    * Returns all the records iterator contained w/in this block.
    */
-  public final ClosableIterator<IndexedRecord> getRecordItr() {
+  public final ClosableIterator<IndexedRecord> getRecordIterator() {
     if (records.isPresent()) {
       return list2Iterator(records.get());
     }
@@ -162,15 +162,15 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    * @return List of IndexedRecords for the keys of interest.
    * @throws IOException in case of failures encountered when reading/parsing records
    */
-  public final ClosableIterator<IndexedRecord> getRecordItr(List<String> keys) throws IOException {
+  public final ClosableIterator<IndexedRecord> getRecordIterator(List<String> keys, boolean fullKey) throws IOException {
     boolean fullScan = keys.isEmpty();
     if (enablePointLookups && !fullScan) {
-      return lookupRecords(keys);
+      return lookupRecords(keys, fullKey);
     }
 
     // Otherwise, we fetch all the records and filter out all the records, but the
     // ones requested
-    ClosableIterator<IndexedRecord> allRecords = getRecordItr();
+    ClosableIterator<IndexedRecord> allRecords = getRecordIterator();
     if (fullScan) {
       return allRecords;
     }
@@ -193,7 +193,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     }
   }
 
-  protected ClosableIterator<IndexedRecord> lookupRecords(List<String> keys) throws IOException {
+  protected ClosableIterator<IndexedRecord> lookupRecords(List<String> keys, boolean fullKey) throws IOException {
     throw new UnsupportedOperationException(
         String.format("Point lookups are not supported by this Data block type (%s)", getBlockType())
     );

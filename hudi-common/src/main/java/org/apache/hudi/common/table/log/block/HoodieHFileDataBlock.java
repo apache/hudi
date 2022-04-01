@@ -189,7 +189,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
 
   // TODO abstract this w/in HoodieDataBlock
   @Override
-  protected ClosableIterator<IndexedRecord> lookupRecords(List<String> keys) throws IOException {
+  protected ClosableIterator<IndexedRecord> lookupRecords(List<String> keys, boolean fullKey) throws IOException {
     HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
 
     // NOTE: It's important to extend Hadoop configuration here to make sure configuration
@@ -204,13 +204,17 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
 
-    // HFile read will be efficient if keys are sorted, since on storage, records are sorted by key. This will avoid unnecessary seeks.
+    // HFile read will be efficient if keys are sorted, since on storage records are sorted by key.
+    // This will avoid unnecessary seeks.
     Collections.sort(keys);
 
     final HoodieHFileReader<IndexedRecord> reader =
              new HoodieHFileReader<>(inlineConf, inlinePath, new CacheConfig(inlineConf), inlinePath.getFileSystem(inlineConf));
+
     // Get writer's schema from the header
-    final ClosableIterator<IndexedRecord> recordIterator = reader.getRecordIterator(keys, readerSchema);
+    final ClosableIterator<IndexedRecord> recordIterator =
+        fullKey ? reader.getRecordIterator(keys, readerSchema) : reader.getRecordIteratorByKeyPrefix(keys, readerSchema);
+
     return new ClosableIterator<IndexedRecord>() {
       @Override
       public boolean hasNext() {
