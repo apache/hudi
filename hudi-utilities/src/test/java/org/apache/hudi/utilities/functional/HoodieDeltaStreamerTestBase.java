@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.functional;
 
-import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -28,6 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
@@ -129,6 +129,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/uber_config.properties", dfs, dfsBasePath + "/config/uber_config.properties");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/short_trip_uber_config.properties", dfs, dfsBasePath + "/config/short_trip_uber_config.properties");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/clusteringjob.properties", dfs, dfsBasePath + "/clusteringjob.properties");
+    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/indexer.properties", dfs, dfsBasePath + "/indexer.properties");
 
     writeCommonPropsToFile(dfs, dfsBasePath);
 
@@ -137,7 +138,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     TypedProperties downstreamProps = new TypedProperties();
     downstreamProps.setProperty("include", "base.properties");
     downstreamProps.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
-    downstreamProps.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
+    downstreamProps.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
 
     // Source schema is the target schema of upstream table
     downstreamProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/target.avsc");
@@ -149,7 +150,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     invalidProps.setProperty("include", "sql-transformer.properties");
     invalidProps.setProperty("hoodie.datasource.write.keygenerator.class", "invalid");
     invalidProps.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
-    invalidProps.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
+    invalidProps.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
     invalidProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source.avsc");
     invalidProps.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target.avsc");
     UtilitiesTestBase.Helpers.savePropsToDFS(invalidProps, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_INVALID);
@@ -178,11 +179,11 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target.avsc");
 
     // Hive Configs
-    props.setProperty(DataSourceWriteOptions.HIVE_URL().key(), "jdbc:hive2://127.0.0.1:9999/");
-    props.setProperty(DataSourceWriteOptions.HIVE_DATABASE().key(), "testdb1");
-    props.setProperty(DataSourceWriteOptions.HIVE_TABLE().key(), "hive_trips");
-    props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), "datestr");
-    props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS().key(),
+    props.setProperty(HiveSyncConfig.HIVE_URL.key(), "jdbc:hive2://127.0.0.1:9999/");
+    props.setProperty(HiveSyncConfig.META_SYNC_DATABASE_NAME.key(), "testdb1");
+    props.setProperty(HiveSyncConfig.META_SYNC_TABLE_NAME.key(), "hive_trips");
+    props.setProperty(HiveSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "datestr");
+    props.setProperty(HiveSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
         MultiPartKeysValueExtractor.class.getName());
     UtilitiesTestBase.Helpers.savePropsToDFS(props, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE);
   }
@@ -237,11 +238,11 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
   protected static void populateCommonHiveProps(TypedProperties props) {
     // Hive Configs
-    props.setProperty(DataSourceWriteOptions.HIVE_URL().key(), "jdbc:hive2://127.0.0.1:9999/");
-    props.setProperty(DataSourceWriteOptions.HIVE_DATABASE().key(), "testdb2");
-    props.setProperty(DataSourceWriteOptions.HIVE_ASSUME_DATE_PARTITION().key(), "false");
-    props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), "datestr");
-    props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS().key(),
+    props.setProperty(HiveSyncConfig.HIVE_URL.key(), "jdbc:hive2://127.0.0.1:9999/");
+    props.setProperty(HiveSyncConfig.META_SYNC_DATABASE_NAME.key(), "testdb2");
+    props.setProperty(HiveSyncConfig.META_SYNC_ASSUME_DATE_PARTITION.key(), "false");
+    props.setProperty(HiveSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "datestr");
+    props.setProperty(HiveSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
         MultiPartKeysValueExtractor.class.getName());
   }
 

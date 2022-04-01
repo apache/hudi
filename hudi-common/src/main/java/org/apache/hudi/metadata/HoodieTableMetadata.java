@@ -27,6 +27,7 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieMetadataException;
 
@@ -36,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
  * Interface that supports querying various pieces of metadata about a hudi table.
@@ -56,14 +58,11 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   String NON_PARTITIONED_NAME = ".";
   String EMPTY_PARTITION_NAME = "";
 
-  // Base path of the Metadata Table relative to the dataset (.hoodie/metadata)
-  static final String METADATA_TABLE_REL_PATH = HoodieTableMetaClient.METAFOLDER_NAME + Path.SEPARATOR + "metadata";
-
   /**
    * Return the base-path of the Metadata Table for the given Dataset identified by base-path
    */
   static String getMetadataTableBasePath(String dataTableBasePath) {
-    return dataTableBasePath + Path.SEPARATOR + METADATA_TABLE_REL_PATH;
+    return dataTableBasePath + Path.SEPARATOR + HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH;
   }
 
   /**
@@ -72,7 +71,18 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    */
   static String getDataTableBasePathFromMetadataTable(String metadataTableBasePath) {
     checkArgument(isMetadataTable(metadataTableBasePath));
-    return metadataTableBasePath.substring(0, metadataTableBasePath.lastIndexOf(METADATA_TABLE_REL_PATH) - 1);
+    return metadataTableBasePath.substring(0, metadataTableBasePath.lastIndexOf(HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH) - 1);
+  }
+
+  /**
+   * Return the base path of the dataset.
+   *
+   * @param metadataTableBasePath The base path of the metadata table
+   */
+  static String getDatasetBasePath(String metadataTableBasePath) {
+    int endPos = metadataTableBasePath.lastIndexOf(Path.SEPARATOR + HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH);
+    checkState(endPos != -1, metadataTableBasePath + " should be base path of the metadata table");
+    return metadataTableBasePath.substring(0, endPos);
   }
 
   /**
@@ -84,7 +94,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
     if (basePath.endsWith(Path.SEPARATOR)) {
       basePath = basePath.substring(0, basePath.length() - 1);
     }
-    return basePath.endsWith(METADATA_TABLE_REL_PATH);
+    return basePath.endsWith(HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH);
   }
 
   static HoodieTableMetadata create(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String datasetBasePath,

@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi
 
 import org.apache.avro.Schema
 import org.apache.hudi.client.utils.SparkRowSerDe
-import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
+import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
@@ -32,15 +32,20 @@ import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.execution.datasources.{FilePartition, LogicalRelation, PartitionedFile, SparkParsePartitionUtil}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.DataType
-import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.{HoodieCatalystExpressionUtils, Row, SparkSession}
 
 import java.util.Locale
 
 /**
- * An interface to adapter the difference between spark2 and spark3
- * in some spark related class.
+ * Interface adapting discrepancies and incompatibilities between different Spark versions
  */
 trait SparkAdapter extends Serializable {
+
+  /**
+   * Creates instance of [[HoodieCatalystExpressionUtils]] providing for common utils operating
+   * on Catalyst Expressions
+   */
+  def createCatalystExpressionUtils(): HoodieCatalystExpressionUtils
 
   /**
    * Creates instance of [[HoodieAvroSerializer]] providing for ability to serialize
@@ -53,6 +58,11 @@ trait SparkAdapter extends Serializable {
    * Avro payloads into Spark's [[InternalRow]]
    */
   def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer
+
+  /**
+   * Creates instance of [[HoodieAvroSchemaConverters]] allowing to convert b/w Avro and Catalyst schemas
+   */
+  def getAvroSchemaConverters: HoodieAvroSchemaConverters
 
   /**
    * Create the SparkRowSerDe.

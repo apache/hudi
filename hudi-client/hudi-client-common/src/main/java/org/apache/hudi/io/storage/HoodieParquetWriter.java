@@ -97,7 +97,7 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
 
   @Override
   public boolean canWrite() {
-    return fs.getBytesWritten(file) < maxFileSize;
+    return getDataSize() < maxFileSize;
   }
 
   @Override
@@ -106,10 +106,5 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
     if (populateMetaFields) {
       writeSupport.add(key);
     }
-  }
-
-  @Override
-  public long getBytesWritten() {
-    return fs.getBytesWritten(file);
   }
 }

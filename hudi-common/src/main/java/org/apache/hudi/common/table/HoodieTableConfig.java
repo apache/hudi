@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -82,6 +83,8 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
   public static final String HOODIE_PROPERTIES_FILE_BACKUP = "hoodie.properties.backup";
+  public static final String HOODIE_WRITE_TABLE_NAME_KEY = "hoodie.datasource.write.table.name";
+  public static final String HOODIE_TABLE_NAME_KEY = "hoodie.table.name";
 
   public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
       .key("hoodie.database.name")
@@ -90,7 +93,7 @@ public class HoodieTableConfig extends HoodieConfig {
           + "we can set it to limit the table name under a specific database");
 
   public static final ConfigProperty<String> NAME = ConfigProperty
-      .key("hoodie.table.name")
+      .key(HOODIE_TABLE_NAME_KEY)
       .noDefaultValue()
       .withDocumentation("Table name that will be used for registering with Hive. Needs to be same across runs.");
 
@@ -207,12 +210,26 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Table checksum is used to guard against partial writes in HDFS. It is added as the last entry in hoodie.properties and then used to validate while reading table config.");
 
   public static final ConfigProperty<Boolean> ALLOW_TEMP_COMMIT = ConfigProperty
-      .key("hoodie.allow.temp.commit")
-      .defaultValue(true)
+          .key("hoodie.allow.temp.commit")
+          .defaultValue(true)
+          .sinceVersion("0.11.0")
+          .withDocumentation("Allow to create a temp commit first if there are contents to write, "
+                  + "will rename it after write is finished, this can avoid read empty or partial commit in the downstreams, "
+                  + "please be careful if enable this in object storage such as S3, as this will introduce new rename operations");
+
+  public static final ConfigProperty<String> TABLE_METADATA_PARTITIONS_INFLIGHT = ConfigProperty
+      .key("hoodie.table.metadata.partitions.inflight")
+      .noDefaultValue()
       .sinceVersion("0.11.0")
-      .withDocumentation("Allow to create a temp commit first if there are contents to write, "
-          + "will rename it after write is finished, this can avoid read empty or partial commit in the downstreams, "
-          + "please be careful if enable this in object storage such as S3, as this will introduce new rename operations");
+      .withDocumentation("Comma-separated list of metadata partitions whose building is in progress. "
+          + "These partitions are not yet ready for use by the readers.");
+
+  public static final ConfigProperty<String> TABLE_METADATA_PARTITIONS = ConfigProperty
+      .key("hoodie.table.metadata.partitions")
+      .noDefaultValue()
+      .sinceVersion("0.11.0")
+      .withDocumentation("Comma-separated list of metadata partitions that have been completely built and in-sync with data table. "
+          + "These partitions are ready for use by the readers");
 
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
@@ -469,11 +486,9 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public Option<String[]> getRecordKeyFields() {
-    if (contains(RECORDKEY_FIELDS)) {
-      return Option.of(Arrays.stream(getString(RECORDKEY_FIELDS).split(","))
-          .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[] {}));
-    }
-    return Option.empty();
+    String keyFieldsValue = getStringOrDefault(RECORDKEY_FIELDS, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    return Option.of(Arrays.stream(keyFieldsValue.split(","))
+        .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[] {}));
   }
 
   public Option<String[]> getPartitionFields() {
@@ -598,6 +613,14 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   private Long getTableChecksum() {
     return getLong(TABLE_CHECKSUM);
+  }
+
+  public String getMetadataPartitionsInflight() {
+    return getStringOrDefault(TABLE_METADATA_PARTITIONS_INFLIGHT, StringUtils.EMPTY_STRING);
+  }
+
+  public String getMetadataPartitions() {
+    return getStringOrDefault(TABLE_METADATA_PARTITIONS, StringUtils.EMPTY_STRING);
   }
 
   public Map<String, String> propsMap() {

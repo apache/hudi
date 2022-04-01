@@ -19,6 +19,7 @@
 package org.apache.hudi.client.clustering.update.strategy;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -27,7 +28,6 @@ import org.apache.hudi.exception.HoodieClusteringUpdateException;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.api.java.JavaRDD;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -47,7 +47,7 @@ public class SparkRejectUpdateStrategy<T extends HoodieRecordPayload<T>> extends
   }
 
   @Override
-  public Pair<JavaRDD<HoodieRecord<T>>, Set<HoodieFileGroupId>> handleUpdate(JavaRDD<HoodieRecord<T>> taggedRecordsRDD) {
+  public Pair<HoodieData<HoodieRecord<T>>, Set<HoodieFileGroupId>> handleUpdate(HoodieData<HoodieRecord<T>> taggedRecordsRDD) {
     List<HoodieFileGroupId> fileGroupIdsWithRecordUpdate = getGroupIdsWithUpdate(taggedRecordsRDD);
     fileGroupIdsWithRecordUpdate.forEach(fileGroupIdWithRecordUpdate -> {
       if (fileGroupsInPendingClustering.contains(fileGroupIdWithRecordUpdate)) {

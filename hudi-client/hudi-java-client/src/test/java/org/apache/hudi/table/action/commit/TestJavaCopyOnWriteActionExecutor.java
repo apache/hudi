@@ -123,7 +123,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
     // Prepare the AvroParquetIO
     HoodieWriteConfig config = makeHoodieClientConfig();
     int startInstant = 1;
-    String firstCommitTime = makeNewCommitTime(startInstant++);
+    String firstCommitTime = makeNewCommitTime(startInstant++, "%09d");
     HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
     writeClient.startCommitWithTime(firstCommitTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -185,7 +185,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
 
     List<HoodieRecord> updatedRecords = Arrays.asList(updatedRecord1, insertedRecord1);
 
-    String newCommitTime = makeNewCommitTime(startInstant++);
+    String newCommitTime = makeNewCommitTime(startInstant++, "%09d");
     metaClient = HoodieTableMetaClient.reload(metaClient);
     writeClient.startCommitWithTime(newCommitTime);
     List<WriteStatus> statuses = writeClient.upsert(updatedRecords, newCommitTime);
@@ -402,7 +402,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
         counts++;
       }
     }
-    assertEquals(3, counts, "If the number of records are more than 1150, then there should be a new file");
+    assertEquals(5, counts, "If the number of records are more than 1150, then there should be a new file");
   }
 
   @Test

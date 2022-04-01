@@ -61,8 +61,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.hudi.common.model.HoodieRecord.FILENAME_METADATA_FIELD_POS;
-
 @SuppressWarnings("Duplicates")
 /**
  * Handle to merge incoming records to those in storage.
@@ -264,7 +262,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
         isDelete = HoodieOperation.isDelete(hoodieRecord.getOperation());
       }
     }
-    return writeRecord(hoodieRecord, indexedRecord, isDelete, oldRecord);
+    return writeRecord(hoodieRecord, indexedRecord, isDelete);
   }
 
   protected void writeInsertRecord(HoodieRecord<T> hoodieRecord) throws IOException {
@@ -274,16 +272,16 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     if (insertRecord.isPresent() && insertRecord.get().equals(IGNORE_RECORD)) {
       return;
     }
-    if (writeRecord(hoodieRecord, insertRecord, HoodieOperation.isDelete(hoodieRecord.getOperation()), null)) {
+    if (writeRecord(hoodieRecord, insertRecord, HoodieOperation.isDelete(hoodieRecord.getOperation()))) {
       insertRecordsWritten++;
     }
   }
 
   protected boolean writeRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> indexedRecord) {
-    return writeRecord(hoodieRecord, indexedRecord, false, null);
+    return writeRecord(hoodieRecord, indexedRecord, false);
   }
 
-  protected boolean writeRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> indexedRecord, boolean isDelete, GenericRecord oldRecord) {
+  protected boolean writeRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> indexedRecord, boolean isDelete) {
     Option recordMetadata = hoodieRecord.getData().getMetadata();
     if (!partitionPath.equals(hoodieRecord.getPartitionPath())) {
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
@@ -294,13 +292,11 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     try {
       if (indexedRecord.isPresent() && !isDelete) {
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
-        IndexedRecord recordWithMetadataInSchema = rewriteRecord((GenericRecord) indexedRecord.get(), preserveMetadata, oldRecord);
-        if (preserveMetadata && useWriterSchema) { // useWriteSchema will be true only incase of compaction.
-          // do not preserve FILENAME_METADATA_FIELD
-          recordWithMetadataInSchema.put(FILENAME_METADATA_FIELD_POS, newFilePath.getName());
-          fileWriter.writeAvro(hoodieRecord.getRecordKey(), recordWithMetadataInSchema);
+        if (preserveMetadata && useWriterSchema) { // useWriteSchema will be true only in case of compaction.
+          fileWriter.writeAvro(hoodieRecord.getRecordKey(),
+              rewriteRecordWithMetadata((GenericRecord) indexedRecord.get(), newFilePath.getName()));
         } else {
-          fileWriter.writeAvroWithMetadata(recordWithMetadataInSchema, hoodieRecord);
+          fileWriter.writeAvroWithMetadata(rewriteRecord((GenericRecord) indexedRecord.get()), hoodieRecord);
         }
         recordsWritten++;
       } else {

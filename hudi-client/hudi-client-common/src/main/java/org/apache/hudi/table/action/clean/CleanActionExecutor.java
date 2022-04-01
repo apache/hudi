@@ -72,11 +72,12 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
     this.skipLocking = skipLocking;
   }
 
-  static Boolean deleteFileAndGetResult(FileSystem fs, String deletePathStr) throws IOException {
+  private static Boolean deleteFileAndGetResult(FileSystem fs, String deletePathStr) throws IOException {
     Path deletePath = new Path(deletePathStr);
     LOG.debug("Working on delete path :" + deletePath);
     try {
-      boolean deleteResult = fs.delete(deletePath, false);
+      boolean isDirectory = fs.isDirectory(deletePath);
+      boolean deleteResult = fs.delete(deletePath, isDirectory);
       if (deleteResult) {
         LOG.debug("Cleaned file at path :" + deletePath);
       }
@@ -87,7 +88,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
     }
   }
 
-  static Stream<Pair<String, PartitionCleanStat>> deleteFilesFunc(Iterator<Pair<String, CleanFileInfo>> cleanFileInfo, HoodieTable table) {
+  private static Stream<Pair<String, PartitionCleanStat>> deleteFilesFunc(Iterator<Pair<String, CleanFileInfo>> cleanFileInfo, HoodieTable table) {
     Map<String, PartitionCleanStat> partitionCleanStatMap = new HashMap<>();
     FileSystem fs = table.getMetaClient().getFs();
 
@@ -144,6 +145,15 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
     Map<String, PartitionCleanStat> partitionCleanStatsMap = partitionCleanStats
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
+    List<String> partitionsToBeDeleted = cleanerPlan.getPartitionsToBeDeleted() != null ? cleanerPlan.getPartitionsToBeDeleted() : new ArrayList<>();
+    partitionsToBeDeleted.forEach(entry -> {
+      try {
+        deleteFileAndGetResult(table.getMetaClient().getFs(), table.getMetaClient().getBasePath() + "/" + entry);
+      } catch (IOException e) {
+        LOG.warn("Partition deletion failed " + entry);
+      }
+    });
+
     // Return PartitionCleanStat for each partition passed.
     return cleanerPlan.getFilePathsToBeDeletedPerPartition().keySet().stream().map(partitionPath -> {
       PartitionCleanStat partitionCleanStat = partitionCleanStatsMap.containsKey(partitionPath)
@@ -162,6 +172,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
           .withDeleteBootstrapBasePathPatterns(partitionCleanStat.getDeleteBootstrapBasePathPatterns())
           .withSuccessfulDeleteBootstrapBaseFiles(partitionCleanStat.getSuccessfulDeleteBootstrapBaseFiles())
           .withFailedDeleteBootstrapBaseFiles(partitionCleanStat.getFailedDeleteBootstrapBaseFiles())
+          .isPartitionDeleted(partitionsToBeDeleted.contains(partitionPath))
           .build();
     }).collect(Collectors.toList());
   }

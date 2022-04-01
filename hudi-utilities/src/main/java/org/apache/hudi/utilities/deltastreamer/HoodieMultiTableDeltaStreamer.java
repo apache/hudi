@@ -19,7 +19,6 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import com.beust.jcommander.Parameter;
-import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -28,6 +27,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.UtilHelpers;
@@ -131,7 +131,7 @@ public class HoodieMultiTableDeltaStreamer {
       Helpers.deepCopyConfigs(config, cfg);
       String overriddenTargetBasePath = tableProperties.getString(Constants.TARGET_BASE_PATH_PROP, "");
       cfg.targetBasePath = StringUtils.isNullOrEmpty(overriddenTargetBasePath) ? targetBasePath : overriddenTargetBasePath;
-      if (cfg.enableMetaSync && StringUtils.isNullOrEmpty(tableProperties.getString(DataSourceWriteOptions.HIVE_TABLE().key(), ""))) {
+      if (cfg.enableMetaSync && StringUtils.isNullOrEmpty(tableProperties.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME.key(), ""))) {
         throw new HoodieException("Meta sync table field not provided!");
       }
       populateSchemaProviderProps(cfg, tableProperties);
@@ -224,6 +224,8 @@ public class HoodieMultiTableDeltaStreamer {
       tableConfig.compactSchedulingWeight = globalConfig.compactSchedulingWeight;
       tableConfig.deltaSyncSchedulingMinShare = globalConfig.deltaSyncSchedulingMinShare;
       tableConfig.deltaSyncSchedulingWeight = globalConfig.deltaSyncSchedulingWeight;
+      tableConfig.clusterSchedulingWeight = globalConfig.clusterSchedulingWeight;
+      tableConfig.clusterSchedulingMinShare = globalConfig.clusterSchedulingMinShare;
       tableConfig.sparkMaster = globalConfig.sparkMaster;
     }
   }
@@ -376,6 +378,14 @@ public class HoodieMultiTableDeltaStreamer {
      */
     @Parameter(names = {"--checkpoint"}, description = "Resume Delta Streamer from this checkpoint.")
     public String checkpoint = null;
+
+    @Parameter(names = {"--cluster-scheduling-weight"}, description = "Scheduling weight for clustering as defined in "
+        + "https://spark.apache.org/docs/latest/job-scheduling.html")
+    public Integer clusterSchedulingWeight = 1;
+
+    @Parameter(names = {"--cluster-scheduling-minshare"}, description = "Minshare for clustering as defined in "
+        + "https://spark.apache.org/docs/latest/job-scheduling.html")
+    public Integer clusterSchedulingMinShare = 0;
 
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;

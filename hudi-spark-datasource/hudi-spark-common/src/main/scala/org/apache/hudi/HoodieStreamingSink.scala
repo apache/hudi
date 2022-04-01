@@ -205,7 +205,8 @@ class HoodieStreamingSink(sqlContext: SQLContext,
   protected def triggerAsyncClustering(client: SparkRDDWriteClient[HoodieRecordPayload[Nothing]]): Unit = {
     if (null ==  asyncClusteringService) {
       log.info("Triggering async clustering!")
-      asyncClusteringService = new SparkStreamingAsyncClusteringService(client)
+      asyncClusteringService = new SparkStreamingAsyncClusteringService(new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
+        client)
       asyncClusteringService.start(new Function[java.lang.Boolean, java.lang.Boolean] {
         override def apply(errored: lang.Boolean): lang.Boolean = {
           log.info(s"Async clustering service shutdown. Errored ? $errored")

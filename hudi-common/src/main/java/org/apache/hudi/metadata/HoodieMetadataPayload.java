@@ -59,6 +59,7 @@ import static org.apache.hudi.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_LIST;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartition;
 
 /**
  * MetadataTable records are persisted with the schema defined in HoodieMetadata.avsc.
@@ -108,14 +109,15 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private static final String BLOOM_FILTER_FIELD_IS_DELETED = FIELD_IS_DELETED;
 
   // HoodieMetadata column stats payload field ids
-  private static final String COLUMN_STATS_FIELD_MIN_VALUE = "minValue";
-  private static final String COLUMN_STATS_FIELD_MAX_VALUE = "maxValue";
-  private static final String COLUMN_STATS_FIELD_NULL_COUNT = "nullCount";
-  private static final String COLUMN_STATS_FIELD_VALUE_COUNT = "valueCount";
-  private static final String COLUMN_STATS_FIELD_TOTAL_SIZE = "totalSize";
-  private static final String COLUMN_STATS_FIELD_FILE_NAME = "fileName";
-  private static final String COLUMN_STATS_FIELD_TOTAL_UNCOMPRESSED_SIZE = "totalUncompressedSize";
-  private static final String COLUMN_STATS_FIELD_IS_DELETED = FIELD_IS_DELETED;
+  public static final String COLUMN_STATS_FIELD_MIN_VALUE = "minValue";
+  public static final String COLUMN_STATS_FIELD_MAX_VALUE = "maxValue";
+  public static final String COLUMN_STATS_FIELD_NULL_COUNT = "nullCount";
+  public static final String COLUMN_STATS_FIELD_VALUE_COUNT = "valueCount";
+  public static final String COLUMN_STATS_FIELD_TOTAL_SIZE = "totalSize";
+  public static final String COLUMN_STATS_FIELD_FILE_NAME = "fileName";
+  public static final String COLUMN_STATS_FIELD_COLUMN_NAME = "columnName";
+  public static final String COLUMN_STATS_FIELD_TOTAL_UNCOMPRESSED_SIZE = "totalUncompressedSize";
+  public static final String COLUMN_STATS_FIELD_IS_DELETED = FIELD_IS_DELETED;
 
   private String key = null;
   private int type = 0;
@@ -177,6 +179,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         } else {
           columnStatMetadata = HoodieMetadataColumnStats.newBuilder()
               .setFileName((String) columnStatsRecord.get(COLUMN_STATS_FIELD_FILE_NAME))
+              .setColumnName((String) columnStatsRecord.get(COLUMN_STATS_FIELD_COLUMN_NAME))
               .setMinValue((String) columnStatsRecord.get(COLUMN_STATS_FIELD_MIN_VALUE))
               .setMaxValue((String) columnStatsRecord.get(COLUMN_STATS_FIELD_MAX_VALUE))
               .setValueCount((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_VALUE_COUNT))
@@ -219,8 +222,34 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * @param partitions The list of partitions
    */
   public static HoodieRecord<HoodieMetadataPayload> createPartitionListRecord(List<String> partitions) {
+    return createPartitionListRecord(partitions, false);
+  }
+
+  /**
+   * Create and return a {@code HoodieMetadataPayload} to save list of partitions.
+   *
+   * @param partitions The list of partitions
+   */
+  public static HoodieRecord<HoodieMetadataPayload> createPartitionListRecord(List<String> partitions, boolean isDeleted) {
     Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>();
-    partitions.forEach(partition -> fileInfo.put(partition, new HoodieMetadataFileInfo(0L, false)));
+    partitions.forEach(partition -> fileInfo.put(getPartition(partition), new HoodieMetadataFileInfo(0L, isDeleted)));
+
+    HoodieKey key = new HoodieKey(RECORDKEY_PARTITION_LIST, MetadataPartitionType.FILES.getPartitionPath());
+    HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_PARTITION_LIST,
+        fileInfo);
+    return new HoodieAvroRecord<>(key, payload);
+  }
+
+  /**
+   * Create and return a {@code HoodieMetadataPayload} to save list of partitions.
+   *
+   * @param partitionsAdded   The list of added partitions
+   * @param partitionsDeleted The list of deleted partitions
+   */
+  public static HoodieRecord<HoodieMetadataPayload> createPartitionListRecord(List<String> partitionsAdded, List<String> partitionsDeleted) {
+    Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>();
+    partitionsAdded.forEach(partition -> fileInfo.put(partition, new HoodieMetadataFileInfo(0L, false)));
+    partitionsDeleted.forEach(partition -> fileInfo.put(partition, new HoodieMetadataFileInfo(0L, true)));
 
     HoodieKey key = new HoodieKey(RECORDKEY_PARTITION_LIST, MetadataPartitionType.FILES.getPartitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_PARTITION_LIST,
@@ -318,9 +347,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private HoodieMetadataColumnStats combineColumnStatsMetadata(HoodieMetadataPayload previousRecord) {
     checkArgument(previousRecord.getColumnStatMetadata().isPresent());
     checkArgument(getColumnStatMetadata().isPresent());
-    checkArgument(previousRecord.getColumnStatMetadata().get()
-        .getFileName().equals(this.columnStatMetadata.getFileName()));
-    return HoodieTableMetadataUtil.mergeColumnStats(previousRecord.getColumnStatMetadata().get(), this.columnStatMetadata);
+
+    HoodieMetadataColumnStats previousColStatsRecord = previousRecord.getColumnStatMetadata().get();
+    HoodieMetadataColumnStats newColumnStatsRecord = getColumnStatMetadata().get();
+
+    return HoodieTableMetadataUtil.mergeColumnStats(previousColStatsRecord, newColumnStatsRecord);
   }
 
   @Override
@@ -508,6 +539,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(),
           HoodieMetadataColumnStats.newBuilder()
               .setFileName(new Path(columnRangeMetadata.getFilePath()).getName())
+              .setColumnName(columnRangeMetadata.getColumnName())
               .setMinValue(columnRangeMetadata.getMinValue() == null ? null :
                   columnRangeMetadata.getMinValue().toString())
               .setMaxValue(columnRangeMetadata.getMaxValue() == null ? null :

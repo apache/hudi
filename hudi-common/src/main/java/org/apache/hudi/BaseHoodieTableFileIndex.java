@@ -198,7 +198,7 @@ public abstract class BaseHoodieTableFileIndex {
     //       that is under the pending compaction process, new log-file will bear the compaction's instant (on the
     //       timeline) in its name, as opposed to the base-file's commit instant. To make sure we're not filtering
     //       such log-file we have to _always_ include pending compaction instants into consideration
-    // TODO(HUDI-3302) re-evaluate whether we should not filter any commits in here
+    // TODO(HUDI-3302) re-evaluate whether we should filter any commits in here
     HoodieTimeline timeline = metaClient.getCommitsAndCompactionTimeline();
     if (shouldIncludePendingCommits) {
       return timeline;

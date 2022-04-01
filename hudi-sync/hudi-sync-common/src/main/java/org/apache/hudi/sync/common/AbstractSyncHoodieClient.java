@@ -18,8 +18,6 @@
 
 package org.apache.hudi.sync.common;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -31,6 +29,9 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
@@ -43,10 +44,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-public abstract class AbstractSyncHoodieClient {
+public abstract class AbstractSyncHoodieClient implements AutoCloseable {
 
   private static final Logger LOG = LogManager.getLogger(AbstractSyncHoodieClient.class);
 
+  public static final String HOODIE_LAST_COMMIT_TIME_SYNC = "last_commit_time_sync";
   public static final TypeConverter TYPE_CONVERTOR = new TypeConverter() {};
 
   protected final HoodieTableMetaClient metaClient;
@@ -89,11 +91,23 @@ public abstract class AbstractSyncHoodieClient {
                                    String serdeClass, Map<String, String> serdeProperties,
                                    Map<String, String> tableProperties);
 
+  /**
+   * @deprecated Use {@link #tableExists} instead.
+   */
+  @Deprecated
   public abstract boolean doesTableExist(String tableName);
+
+  public abstract boolean tableExists(String tableName);
 
   public abstract Option<String> getLastCommitTimeSynced(String tableName);
 
   public abstract void updateLastCommitTimeSynced(String tableName);
+
+  public abstract Option<String> getLastReplicatedTime(String tableName);
+
+  public abstract void updateLastReplicatedTimeStamp(String tableName, String timeStamp);
+
+  public abstract void deleteLastReplicatedTimeStamp(String tableName);
 
   public abstract void addPartitionsToTable(String tableName, List<String> partitionsToAdd);
 

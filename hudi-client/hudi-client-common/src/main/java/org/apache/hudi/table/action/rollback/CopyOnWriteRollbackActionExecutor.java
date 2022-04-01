@@ -67,7 +67,6 @@ public class CopyOnWriteRollbackActionExecutor<T extends HoodieRecordPayload, I,
 
     List<HoodieRollbackStat> stats = new ArrayList<>();
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-    HoodieInstant resolvedInstant = instantToRollback;
 
     if (instantToRollback.isCompleted()) {
       LOG.info("Unpublishing instant " + instantToRollback);
@@ -86,8 +85,6 @@ public class CopyOnWriteRollbackActionExecutor<T extends HoodieRecordPayload, I,
 
     dropBootstrapIndexIfNeeded(instantToRollback);
 
-    // Delete Inflight instant if enabled
-    deleteInflightAndRequestedInstant(deleteInstants, activeTimeline, resolvedInstant);
     LOG.info("Time(in ms) taken to finish rollback " + rollbackTimer.endTimer());
     return stats;
   }

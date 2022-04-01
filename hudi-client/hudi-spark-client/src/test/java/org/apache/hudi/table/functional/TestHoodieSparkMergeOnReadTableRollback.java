@@ -150,7 +150,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     // NOTE: First writer will have Metadata table DISABLED
     HoodieWriteConfig.Builder cfgBuilder =
         getConfigBuilder(false, rollbackUsingMarkers, HoodieIndex.IndexType.SIMPLE);
-    
+
     addConfigsForPopulateMetaFields(cfgBuilder, true);
     HoodieWriteConfig cfg = cfgBuilder.build();
 
@@ -166,7 +166,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       /*
        * Write 1 (only inserts)
        */
-      String newCommitTime = "001";
+      String newCommitTime = "000000001";
       client.startCommitWithTime(newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
@@ -183,7 +183,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
       Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().firstInstant();
       assertTrue(deltaCommit.isPresent());
-      assertEquals("001", deltaCommit.get().getTimestamp(), "Delta commit should be 001");
+      assertEquals("000000001", deltaCommit.get().getTimestamp(), "Delta commit should be 000000001");
 
       Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitTimeline().firstInstant();
       assertFalse(commit.isPresent());
@@ -201,7 +201,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       /*
        * Write 2 (inserts + updates - testing failed delta commit)
        */
-      final String commitTime1 = "002";
+      final String commitTime1 = "000000002";
       // WriteClient with custom config (disable small file handling)
       // NOTE: Second writer will have Metadata table ENABLED
       try (SparkRDDWriteClient secondClient = getHoodieWriteClient(getHoodieWriteConfigWithSmallFileHandlingOff(true));) {
@@ -480,7 +480,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       copyOfRecords.clear();
 
       // Rollback latest commit first
-      client.restoreToInstant("000");
+      client.restoreToInstant("000", cfg.isMetadataTableEnabled());
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
       allFiles = listAllBaseFilesInPath(hoodieTable);
@@ -530,7 +530,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
       if (!restoreAfterCompaction) {
         // restore to 002 and validate records.
-        client.restoreToInstant("002");
+        client.restoreToInstant("002", cfg.isMetadataTableEnabled());
         validateRecords(cfg, metaClient, updates1);
       } else {
         // trigger compaction and then trigger couple of upserts followed by restore.
@@ -546,7 +546,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         validateRecords(cfg, metaClient, updates5);
 
         // restore to 003 and validate records.
-        client.restoreToInstant("003");
+        client.restoreToInstant("003", cfg.isMetadataTableEnabled());
         validateRecords(cfg, metaClient, updates2);
       }
     }

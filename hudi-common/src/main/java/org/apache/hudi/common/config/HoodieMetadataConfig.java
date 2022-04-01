@@ -71,6 +71,13 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Enable asynchronous cleaning for metadata table");
 
+  // Async index
+  public static final ConfigProperty<Boolean> ASYNC_INDEX_ENABLE = ConfigProperty
+      .key(METADATA_PREFIX + ".index.async")
+      .defaultValue(false)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Enable asynchronous indexing of metadata table.");
+
   // Maximum delta commits before compaction occurs
   public static final ConfigProperty<Integer> COMPACT_NUM_DELTA_COMMITS = ConfigProperty
       .key(METADATA_PREFIX + ".compact.max.delta.commits")
@@ -175,6 +182,25 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           .sinceVersion("0.11.0")
           .withDocumentation("Parallelism to use, when generating column stats index.");
 
+  public static final ConfigProperty<String> COLUMN_STATS_INDEX_FOR_COLUMNS = ConfigProperty
+      .key(METADATA_PREFIX + ".index.column.stats.column.list")
+      .noDefaultValue()
+      .sinceVersion("0.11.0")
+      .withDocumentation("Comma-separated list of columns for which column stats index will be built. If not set, all columns will be indexed");
+
+  public static final ConfigProperty<String> BLOOM_FILTER_INDEX_FOR_COLUMNS = ConfigProperty
+      .key(METADATA_PREFIX + ".index.bloom.filter.column.list")
+      .noDefaultValue()
+      .sinceVersion("0.11.0")
+      .withDocumentation("Comma-separated list of columns for which bloom filter index will be built. If not set, only record key will be indexed.");
+
+  public static final ConfigProperty<Integer> METADATA_INDEX_CHECK_TIMEOUT_SECONDS = ConfigProperty
+      .key(METADATA_PREFIX + ".index.check.timeout.seconds")
+      .defaultValue(900)
+      .sinceVersion("0.11.0")
+      .withDocumentation("After the async indexer has finished indexing upto the base instant, it will ensure that all inflight writers "
+          + "reliably write index updates as well. If this timeout expires, then the indexer will abort itself safely.");
+
   public static final ConfigProperty<Boolean> POPULATE_META_FIELDS = ConfigProperty
       .key(METADATA_PREFIX + ".populate.meta.fields")
       .defaultValue(false)
@@ -221,6 +247,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBooleanOrDefault(ENABLE_METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS);
   }
 
+  public String getColumnsEnabledForColumnStatsIndex() {
+    return getString(COLUMN_STATS_INDEX_FOR_COLUMNS);
+  }
+
+  public String getColumnsEnabledForBloomFilterIndex() {
+    return getString(BLOOM_FILTER_INDEX_FOR_COLUMNS);
+  }
+
   public int getBloomFilterIndexFileGroupCount() {
     return getIntOrDefault(METADATA_INDEX_BLOOM_FILTER_FILE_GROUP_COUNT);
   }
@@ -231,6 +265,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public int getColumnStatsIndexParallelism() {
     return getIntOrDefault(COLUMN_STATS_INDEX_PARALLELISM);
+  }
+
+  public int getIndexingCheckTimeoutSeconds() {
+    return getIntOrDefault(METADATA_INDEX_CHECK_TIMEOUT_SECONDS);
   }
 
   public boolean enableMetrics() {
@@ -305,6 +343,21 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withColumnStatsIndexForColumns(String columns) {
+      metadataConfig.setValue(COLUMN_STATS_INDEX_FOR_COLUMNS, columns);
+      return this;
+    }
+
+    public Builder withBloomFilterIndexForColumns(String columns) {
+      metadataConfig.setValue(BLOOM_FILTER_INDEX_FOR_COLUMNS, columns);
+      return this;
+    }
+
+    public Builder withIndexingCheckTimeout(int timeoutInSeconds) {
+      metadataConfig.setValue(METADATA_INDEX_CHECK_TIMEOUT_SECONDS, String.valueOf(timeoutInSeconds));
+      return this;
+    }
+
     public Builder enableMetrics(boolean enableMetrics) {
       metadataConfig.setValue(METRICS_ENABLE, String.valueOf(enableMetrics));
       return this;
@@ -317,6 +370,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withAsyncClean(boolean asyncClean) {
       metadataConfig.setValue(ASYNC_CLEAN_ENABLE, String.valueOf(asyncClean));
+      return this;
+    }
+
+    public Builder withAsyncIndex(boolean asyncIndex) {
+      metadataConfig.setValue(ASYNC_INDEX_ENABLE, String.valueOf(asyncIndex));
       return this;
     }
 

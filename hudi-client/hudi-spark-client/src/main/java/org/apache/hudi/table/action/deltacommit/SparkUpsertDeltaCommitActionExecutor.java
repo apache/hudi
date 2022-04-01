@@ -18,32 +18,32 @@
 
 package org.apache.hudi.table.action.deltacommit;
 
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.action.commit.SparkWriteHelper;
-
-import org.apache.spark.api.java.JavaRDD;
+import org.apache.hudi.table.action.commit.HoodieWriteHelper;
 
 public class SparkUpsertDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends BaseSparkDeltaCommitActionExecutor<T> {
 
-  private JavaRDD<HoodieRecord<T>> inputRecordsRDD;
+  private final HoodieData<HoodieRecord<T>> inputRecordsRDD;
 
   public SparkUpsertDeltaCommitActionExecutor(HoodieSparkEngineContext context,
                                               HoodieWriteConfig config, HoodieTable table,
-                                              String instantTime, JavaRDD<HoodieRecord<T>> inputRecordsRDD) {
+                                              String instantTime, HoodieData<HoodieRecord<T>> inputRecordsRDD) {
     super(context, config, table, instantTime, WriteOperationType.UPSERT);
     this.inputRecordsRDD = inputRecordsRDD;
   }
 
   @Override
-  public HoodieWriteMetadata execute() {
-    return SparkWriteHelper.newInstance().write(instantTime, inputRecordsRDD, context, table,
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
+    return HoodieWriteHelper.newInstance().write(instantTime, inputRecordsRDD, context, table,
         config.shouldCombineBeforeUpsert(), config.getUpsertShuffleParallelism(),this, operationType);
   }
 }

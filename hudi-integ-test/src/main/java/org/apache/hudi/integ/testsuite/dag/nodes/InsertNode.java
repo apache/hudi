@@ -59,7 +59,7 @@ public class InsertNode extends DagNode<JavaRDD<WriteStatus>> {
   protected void generate(DeltaGenerator deltaGenerator) throws Exception {
     if (!config.isDisableGenerate()) {
       log.info("Generating input data for node {}", this.getName());
-      this.deltaWriteStatsRDD = deltaGenerator.writeRecords(deltaGenerator.generateInserts(config));
+      this.deltaWriteStatsRDD = deltaGenerator.writeRecords(deltaGenerator.generateInserts(config)).getValue();
       this.deltaWriteStatsRDD.cache();
       this.deltaWriteStatsRDD.count();
     }

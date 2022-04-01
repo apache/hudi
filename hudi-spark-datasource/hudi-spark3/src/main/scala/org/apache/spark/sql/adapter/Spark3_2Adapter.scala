@@ -17,16 +17,28 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.spark.sql.SparkSession
+import org.apache.avro.Schema
+import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.parser.HoodieSpark3_2ExtendedSqlParser
+import org.apache.spark.sql.types.DataType
+import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieSpark3_2CatalystExpressionUtils, SparkSession}
 
 /**
- * The adapter for spark3.2.
+ * Implementation of [[SparkAdapter]] for Spark 3.2.x branch
  */
-class Spark3_2Adapter extends Spark3Adapter {
+class Spark3_2Adapter extends BaseSpark3Adapter {
+
+  override def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer =
+    new HoodieSpark3_2AvroSerializer(rootCatalystType, rootAvroType, nullable)
+
+  override def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer =
+    new HoodieSpark3_2AvroDeserializer(rootAvroType, rootCatalystType)
+
+  override def createCatalystExpressionUtils(): HoodieCatalystExpressionUtils = HoodieSpark3_2CatalystExpressionUtils
+
   /**
    * if the logical plan is a TimeTravelRelation LogicalPlan.
    */

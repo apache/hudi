@@ -20,24 +20,19 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieClusteringException;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieSparkTable;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -49,15 +44,15 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
+import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
+import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
+import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
+
 public class HoodieClusteringJob {
 
-  public static final String EXECUTE = "execute";
-  public static final String SCHEDULE = "schedule";
-  public static final String SCHEDULE_AND_EXECUTE = "scheduleandexecute";
   private static final Logger LOG = LogManager.getLogger(HoodieClusteringJob.class);
   private final Config cfg;
-  private transient FileSystem fs;
-  private TypedProperties props;
+  private final TypedProperties props;
   private final JavaSparkContext jsc;
   private final HoodieTableMetaClient metaClient;
 
@@ -83,34 +78,34 @@ public class HoodieClusteringJob {
     @Parameter(names = {"--instant-time", "-it"}, description = "Clustering Instant time, only used when set --mode execute. "
         + "If the instant time is not provided with --mode execute, "
         + "the earliest scheduled clustering instant time is used by default. "
-        + "When set \"--mode scheduleAndExecute\" this instant-time will be ignored.", required = false)
+        + "When set \"--mode scheduleAndExecute\" this instant-time will be ignored.")
     public String clusteringInstantTime = null;
-    @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert", required = false)
+    @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert")
     public int parallelism = 1;
-    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
+    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master")
     public String sparkMaster = null;
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = true)
     public String sparkMemory = null;
-    @Parameter(names = {"--retry", "-rt"}, description = "number of retries", required = false)
+    @Parameter(names = {"--retry", "-rt"}, description = "number of retries")
     public int retry = 0;
 
     @Parameter(names = {"--schedule", "-sc"}, description = "Schedule clustering @desperate soon please use \"--mode schedule\" instead")
     public Boolean runSchedule = false;
 
     @Parameter(names = {"--retry-last-failed-clustering-job", "-rc"}, description = "Take effect when using --mode/-m scheduleAndExecute. Set true means "
-            + "check, rollback and execute last failed clustering plan instead of planing a new clustering job directly.", required = false)
+        + "check, rollback and execute last failed clustering plan instead of planing a new clustering job directly.")
     public Boolean retryLastFailedClusteringJob = false;
 
     @Parameter(names = {"--mode", "-m"}, description = "Set job mode: Set \"schedule\" means make a cluster plan; "
-            + "Set \"execute\" means execute a cluster plan at given instant which means --instant-time is needed here; "
-            + "Set \"scheduleAndExecute\" means make a cluster plan first and execute that plan immediately", required = false)
+        + "Set \"execute\" means execute a cluster plan at given instant which means --instant-time is needed here; "
+        + "Set \"scheduleAndExecute\" means make a cluster plan first and execute that plan immediately")
     public String runningMode = null;
 
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
 
     @Parameter(names = {"--job-max-processing-time-ms", "-jt"}, description = "Take effect when using --mode/-m scheduleAndExecute and --retry-last-failed-clustering-job/-rc true. "
-        + "If maxProcessingTimeMs passed but clustering job is still unfinished, hoodie would consider this job as failed and relaunch.", required = false)
+        + "If maxProcessingTimeMs passed but clustering job is still unfinished, hoodie would consider this job as failed and relaunch.")
     public long maxProcessingTimeMs = 0;
 
     @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
@@ -119,7 +114,7 @@ public class HoodieClusteringJob {
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
         + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
-            splitter = IdentitySplitter.class)
+        splitter = IdentitySplitter.class)
     public List<String> configs = new ArrayList<>();
   }
 
@@ -155,10 +150,9 @@ public class HoodieClusteringJob {
   }
 
   public int cluster(int retry) {
-    this.fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
     // need to do validate in case that users call cluster() directly without setting cfg.runningMode
     validateRunningMode(cfg);
-    int ret = UtilHelpers.retry(retry, () -> {
+    return UtilHelpers.retry(retry, () -> {
       switch (cfg.runningMode.toLowerCase()) {
         case SCHEDULE: {
           LOG.info("Running Mode: [" + SCHEDULE + "]; Do schedule");
@@ -183,20 +177,10 @@ public class HoodieClusteringJob {
         }
       }
     }, "Cluster failed");
-    return ret;
-  }
-
-  private String getSchemaFromLatestInstant() throws Exception {
-    TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
-    if (metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
-      throw new HoodieException("Cannot run clustering without any completed commits");
-    }
-    Schema schema = schemaResolver.getTableAvroSchema(false);
-    return schema.toString();
   }
 
   private int doCluster(JavaSparkContext jsc) throws Exception {
-    String schemaStr = getSchemaFromLatestInstant();
+    String schemaStr = UtilHelpers.getSchemaFromLatestInstant(metaClient);
     try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
       if (StringUtils.isNullOrEmpty(cfg.clusteringInstantTime)) {
         // Instant time is not specified
@@ -224,7 +208,7 @@ public class HoodieClusteringJob {
   }
 
   private Option<String> doSchedule(JavaSparkContext jsc) throws Exception {
-    String schemaStr = getSchemaFromLatestInstant();
+    String schemaStr = UtilHelpers.getSchemaFromLatestInstant(metaClient);
     try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
       return doSchedule(client);
     }
@@ -240,7 +224,7 @@ public class HoodieClusteringJob {
 
   private int doScheduleAndCluster(JavaSparkContext jsc) throws Exception {
     LOG.info("Step 1: Do schedule");
-    String schemaStr = getSchemaFromLatestInstant();
+    String schemaStr = UtilHelpers.getSchemaFromLatestInstant(metaClient);
     try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
       Option<String> instantTime = Option.empty();
 
