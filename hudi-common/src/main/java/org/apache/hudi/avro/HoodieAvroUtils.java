@@ -164,6 +164,18 @@ public class HoodieAvroUtils {
     return reader.read(null, jsonDecoder);
   }
 
+  /**
+   * True if the schema contains this name of field
+   */
+  public static boolean containsFieldInSchema(Schema schema, String fieldName) {
+    try {
+      Field field = schema.getField(fieldName);
+      return field != null;
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
   public static boolean isMetadataField(String fieldName) {
     return HoodieRecord.COMMIT_TIME_METADATA_FIELD.equals(fieldName)
         || HoodieRecord.COMMIT_SEQNO_METADATA_FIELD.equals(fieldName)
@@ -324,13 +336,19 @@ public class HoodieAvroUtils {
    * @param newFieldNames Null Field names to be added
    */
   public static Schema appendNullSchemaFields(Schema schema, List<String> newFieldNames) {
-    List<Field> newFields = schema.getFields().stream()
-        .map(field -> new Field(field.name(), field.schema(), field.doc(), field.defaultVal())).collect(Collectors.toList());
+    List<Field> newFields = new ArrayList<>();
     for (String newField : newFieldNames) {
       newFields.add(new Schema.Field(newField, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE));
     }
+    return createNewSchemaWithExtraFields(schema, newFields);
+  }
+
+  public static Schema createNewSchemaWithExtraFields(Schema schema, List<Field> newFields) {
+    List<Field> fields = schema.getFields().stream()
+        .map(field -> new Field(field.name(), field.schema(), field.doc(), field.defaultVal())).collect(Collectors.toList());
+    fields.addAll(newFields);
     Schema newSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), schema.isError());
-    newSchema.setFields(newFields);
+    newSchema.setFields(fields);
     return newSchema;
   }
 

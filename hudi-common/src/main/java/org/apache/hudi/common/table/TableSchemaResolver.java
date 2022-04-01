@@ -18,6 +18,16 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.avro.JsonProperties;
+import org.apache.avro.Schema;
+import org.apache.avro.Schema.Field;
+import org.apache.avro.SchemaCompatibility;
+import org.apache.avro.generic.IndexedRecord;
+
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -42,15 +52,9 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 
-import org.apache.avro.Schema;
-import org.apache.avro.Schema.Field;
-import org.apache.avro.SchemaCompatibility;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
@@ -58,6 +62,9 @@ import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Helper class to read schema from data files and log files and to convert it between different formats.
@@ -159,23 +166,51 @@ public class TableSchemaResolver {
    * @throws Exception
    */
   public Schema getTableAvroSchema(boolean includeMetadataFields) throws Exception {
+    Schema schema;
     Option<Schema> schemaFromCommitMetadata = getTableSchemaFromCommitMetadata(includeMetadataFields);
     if (schemaFromCommitMetadata.isPresent()) {
-      return schemaFromCommitMetadata.get();
-    }
-    Option<Schema> schemaFromTableConfig = metaClient.getTableConfig().getTableCreateSchema();
-    if (schemaFromTableConfig.isPresent()) {
-      if (includeMetadataFields) {
-        return HoodieAvroUtils.addMetadataFields(schemaFromTableConfig.get(), hasOperationField);
+      schema = schemaFromCommitMetadata.get();
+    } else {
+      Option<Schema> schemaFromTableConfig = metaClient.getTableConfig().getTableCreateSchema();
+      if (schemaFromTableConfig.isPresent()) {
+        if (includeMetadataFields) {
+          schema = HoodieAvroUtils.addMetadataFields(schemaFromTableConfig.get(), hasOperationField);
+        } else {
+          schema = schemaFromTableConfig.get();
+        }
       } else {
-        return schemaFromTableConfig.get();
+        if (includeMetadataFields) {
+          schema = getTableAvroSchemaFromDataFile();
+        } else {
+          schema = HoodieAvroUtils.removeMetadataFields(getTableAvroSchemaFromDataFile());
+        }
       }
     }
-    if (includeMetadataFields) {
-      return getTableAvroSchemaFromDataFile();
-    } else {
-      return HoodieAvroUtils.removeMetadataFields(getTableAvroSchemaFromDataFile());
+
+    if (metaClient.getTableConfig().getDropPartitionColumnsWhenWrite()) {
+      // when hoodie.datasource.write.drop.partition.columns is true, partition columns can't be persisted in data files.
+      // And there are no partition schema if the schema is parsed from data files.
+      // Here we create partition Fields for this case, and use StringType as the data type.
+      Option<String[]> partitionFieldsOpt = metaClient.getTableConfig().getPartitionFields();
+      if (partitionFieldsOpt.isPresent() && partitionFieldsOpt.get().length != 0) {
+        List<String> partitionFields = Arrays.asList(partitionFieldsOpt.get());
+
+        final Schema schema0 = schema;
+        boolean allPartitionColInSchema = partitionFields.stream().allMatch(
+            pt -> HoodieAvroUtils.containsFieldInSchema(schema0, pt)
+        );
+
+        if (!allPartitionColInSchema) {
+          List<Field> newFields = new ArrayList<>();
+          for (String partitionField: partitionFields) {
+            newFields.add(new Schema.Field(
+                partitionField, Schema.create(Schema.Type.STRING), "", JsonProperties.NULL_VALUE));
+          }
+          schema = HoodieAvroUtils.createNewSchemaWithExtraFields(schema, newFields);
+        }
+      }
     }
+    return schema;
   }
 
   /**

@@ -48,7 +48,7 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{Row, SQLContext, SparkSession}
 
 import java.io.Closeable
@@ -199,7 +199,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     //
     //       It's okay to return columns that have not been requested by the caller, as those nevertheless will be
     //       filtered out upstream
-    val fetchedColumns: Array[String] = appendMandatoryColumns(requiredColumns)
+    val fetchedColumns: Array[String] = convertRequiredColumns(requiredColumns)
 
     val (requiredAvroSchema, requiredStructSchema, requiredInternalSchema) =
       HoodieSparkUtils.getRequiredSchema(tableAvroSchema, fetchedColumns, internalSchema)
@@ -209,14 +209,36 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
     val fileSplits = collectFileSplits(partitionFilters, dataFilters)
 
-    val partitionSchema = StructType(Nil)
+    val partitionSchema = if (tableConfig.getDropPartitionColumnsWhenWrite) {
+      // when hoodie.datasource.write.drop.partition.columns is true, partition columns can't be persisted in
+      // data files.
+      StructType(partitionColumns.map(StructField(_, StringType)))
+    } else {
+      StructType(Nil)
+    }
     val tableSchema = HoodieTableSchema(tableStructSchema, if (internalSchema.isEmptySchema) tableAvroSchema.toString else AvroInternalSchemaConverter.convert(internalSchema, tableAvroSchema.getName).toString, internalSchema)
-    val requiredSchema = HoodieTableSchema(requiredStructSchema, requiredAvroSchema.toString, requiredInternalSchema)
-
+    val dataSchema = if (tableConfig.getDropPartitionColumnsWhenWrite) {
+      val dataStructType = StructType(tableStructSchema.filterNot(f => partitionColumns.contains(f.name)))
+      HoodieTableSchema(
+        dataStructType,
+        sparkAdapter.getAvroSchemaConverters.toAvroType(dataStructType, nullable = false, "record").toString()
+      )
+    } else {
+      tableSchema
+    }
+    val requiredSchema = if (tableConfig.getDropPartitionColumnsWhenWrite) {
+      val requiredStructType = StructType(requiredStructSchema.filterNot(f => partitionColumns.contains(f.name)))
+      HoodieTableSchema(
+        requiredStructType,
+        sparkAdapter.getAvroSchemaConverters.toAvroType(requiredStructType, nullable = false, "record").toString()
+      )
+    } else {
+      HoodieTableSchema(requiredStructSchema, requiredAvroSchema.toString, requiredInternalSchema)
+    }
     // Here we rely on a type erasure, to workaround inherited API restriction and pass [[RDD[InternalRow]]] back as [[RDD[Row]]]
     // Please check [[needConversion]] scala-doc for more details
     if (fileSplits.nonEmpty)
-      composeRDD(fileSplits, partitionSchema, tableSchema, requiredSchema, filters).asInstanceOf[RDD[Row]]
+      composeRDD(fileSplits, partitionSchema, dataSchema, requiredSchema, filters).asInstanceOf[RDD[Row]]
     else
       sparkSession.sparkContext.emptyRDD
   }
@@ -285,9 +307,12 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       !SubqueryExpression.hasSubquery(condition)
   }
 
-  protected final def appendMandatoryColumns(requestedColumns: Array[String]): Array[String] = {
-    val missing = mandatoryColumns.filter(col => !requestedColumns.contains(col))
-    requestedColumns ++ missing
+  protected final def convertRequiredColumns(requestedColumns: Array[String]): Array[String] = {
+    if (requestedColumns.isEmpty) {
+      mandatoryColumns.toArray
+    } else {
+      requestedColumns
+    }
   }
 
   protected def getTableState: HoodieTableState = {
