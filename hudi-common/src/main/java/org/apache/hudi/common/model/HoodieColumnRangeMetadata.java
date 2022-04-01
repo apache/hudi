@@ -20,10 +20,7 @@ package org.apache.hudi.common.model;
 
 import javax.annotation.Nullable;
 import java.io.Serializable;
-import java.util.Comparator;
 import java.util.Objects;
-import java.util.function.BiFunction;
-import java.util.stream.Stream;
 
 /**
  * Hoodie metadata for the column range of data stored in columnar format (like Parquet)

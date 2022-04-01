@@ -63,17 +63,10 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import javax.annotation.Nonnull;
-
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -90,6 +83,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -169,21 +163,24 @@ public class HoodieTableMetadataUtil {
       });
     });
 
-    return targetFields.stream()
-        .map(field -> {
-          ColumnStats colStats = allColumnStats.get(field.name());
-          return HoodieColumnRangeMetadata.<Comparable>create(
-              filePath,
-              field.name(),
-              coerceToComparable(field.schema(), colStats.minValue),
-              coerceToComparable(field.schema(), colStats.maxValue),
-              colStats.nullCount,
-              colStats.valueCount,
-              0,
-              0
-          );
-        })
-        .collect(Collectors.toMap(HoodieColumnRangeMetadata::getColumnName, Function.identity()));
+    Collector<HoodieColumnRangeMetadata<Comparable>, ?, Map<String, HoodieColumnRangeMetadata<Comparable>>> collector =
+        Collectors.toMap(colRangeMetadata -> colRangeMetadata.getColumnName(), Function.identity());
+
+    return (Map<String, HoodieColumnRangeMetadata<Comparable>>) targetFields.stream()
+      .map(field -> {
+        ColumnStats colStats = allColumnStats.get(field.name());
+        return HoodieColumnRangeMetadata.<Comparable>create(
+            filePath,
+            field.name(),
+            coerceToComparable(field.schema(), colStats.minValue),
+            coerceToComparable(field.schema(), colStats.maxValue),
+            colStats.nullCount,
+            colStats.valueCount,
+            0,
+            0
+        );
+      })
+      .collect(collector);
   }
 
   /**
