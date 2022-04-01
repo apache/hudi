@@ -41,14 +41,19 @@ public interface HoodieFileReader<R extends IndexedRecord> extends AutoCloseable
     throw new UnsupportedOperationException();
   }
 
+  default Map<String, R> getRecordsByKeyPrefixes(List<String> keyPrefixes, Schema schema) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
+  default Map<String, R> getRecordsByKeyPrefixes(List<String> keyPrefixes) throws IOException {
+    return getRecordsByKeyPrefixes(keyPrefixes, getSchema());
+  }
+
+
   public Iterator<R> getRecordIterator(Schema readerSchema) throws IOException;
 
   default Iterator<R> getRecordIterator() throws IOException {
     return getRecordIterator(getSchema());
-  }
-
-  default Option<List<R>> getRecordsByKeyPrefix(String keyPrefix, Schema readerSchema) throws IOException {
-    throw new UnsupportedOperationException();
   }
 
   default Option<R> getRecordByKey(String key, Schema readerSchema) throws IOException {

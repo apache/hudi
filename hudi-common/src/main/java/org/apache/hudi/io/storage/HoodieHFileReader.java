@@ -271,9 +271,8 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
               next = recordsIterator.next();
               return true;
             } else if (keyPrefixesIterator.hasNext()) {
-              recordsIterator = getRecordsByKeyPrefix(keyPrefixesIterator.next(), schema)
-                  .orElse(Collections.emptyList())
-                  .iterator();
+              recordsIterator = getRecordsByKeyPrefixes(Collections.singletonList(keyPrefixesIterator.next()), schema)
+                  .values().iterator();
             } else {
               return false;
             }
@@ -390,42 +389,52 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   }
 
   @Override
-  public Option<List<R>> getRecordsByKeyPrefix(String keyPrefix, Schema readerSchema) throws IOException {
-    final Option<Schema.Field> keyFieldSchema = Option.ofNullable(readerSchema.getField(KEY_FIELD_NAME));
-    ValidationUtils.checkState(keyFieldSchema != null);
-    KeyValue kv = new KeyValue(keyPrefix.getBytes(), null, null, null);
+  public Map<String, R> getRecordsByKeyPrefixes(List<String> keyPrefixes, Schema schema) throws IOException {
+    Schema readerSchema = getSchema();
+    Option<Schema.Field> keyFieldSchema = Option.ofNullable(readerSchema.getField(KEY_FIELD_NAME));
 
-    List<byte[]> valuesBytes = new ArrayList<>(2);
+    ValidationUtils.checkState(keyFieldSchema != null);
+
+    // NOTE: It's always beneficial to sort keys being sought to by HFile reader
+    //       to avoid seeking back and forth
+    Collections.sort(keyPrefixes);
+
+    List<Pair<byte[], byte[]>> keyRecordsBytes = new ArrayList<>(keyPrefixes.size());
+
     synchronized (this) {
       if (keyScanner == null) {
         keyScanner = reader.getScanner(false, false);
       }
 
-      if (keyScanner.seekTo(kv) == 0) {
-        do {
-          Cell c = keyScanner.getCell();
+      for (String keyPrefix : keyPrefixes) {
+        KeyValue kv = new KeyValue(keyPrefix.getBytes(), null, null, null);
 
-          byte[] keyBytes = Arrays.copyOfRange(c.getRowArray(), c.getRowOffset(), c.getRowOffset() + c.getRowLength());
-          String key = new String(keyBytes);
+        if (keyScanner.seekTo(kv) == 0) {
+          do {
+            Cell c = keyScanner.getCell();
 
-          // Check whether we're still reading records corresponding to the key-prefix
-          if (!key.startsWith(keyPrefix)) {
-            break;
-          }
-          // Extract the byte value before releasing the lock since we cannot hold on to the returned cell afterwards
-          valuesBytes.add(
-              Arrays.copyOfRange(c.getValueArray(), c.getValueOffset(), c.getValueOffset() + c.getValueLength())
-          );
-        } while (keyScanner.next());
+            byte[] keyBytes = Arrays.copyOfRange(c.getRowArray(), c.getRowOffset(), c.getRowOffset() + c.getRowLength());
+            String key = new String(keyBytes);
+            // Check whether we're still reading records corresponding to the key-prefix
+            if (!key.startsWith(keyPrefix)) {
+              break;
+            }
+
+            // Extract the byte value before releasing the lock since we cannot hold on to the returned cell afterwards
+            byte[] valueBytes = Arrays.copyOfRange(c.getValueArray(), c.getValueOffset(), c.getValueOffset() + c.getValueLength());
+            keyRecordsBytes.add(Pair.newPair(keyBytes, valueBytes));
+          } while (keyScanner.next());
+        }
       }
     }
 
-    List<R> values = new ArrayList<>(valuesBytes.size());
-    for (byte[] bs : valuesBytes) {
-      values.add(deserialize(keyPrefix.getBytes(), bs, getSchema(), readerSchema, keyFieldSchema));
+    HashMap<String, R> values = new HashMap<>(keyRecordsBytes.size());
+    for (Pair<byte[], byte[]> kv : keyRecordsBytes) {
+      R record = deserialize(kv.getFirst(), kv.getSecond(), readerSchema, readerSchema, keyFieldSchema);
+      values.put(new String(kv.getFirst()), record);
     }
 
-    return Option.of(values);
+    return values;
   }
 
   @Override
