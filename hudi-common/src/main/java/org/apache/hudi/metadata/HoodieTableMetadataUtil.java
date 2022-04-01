@@ -25,6 +25,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.avro.ConvertingGenericData;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -88,21 +89,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
-import static org.apache.hudi.avro.HoodieAvroUtils.compare;
 import static org.apache.hudi.avro.HoodieAvroUtils.convertToNativeJavaType;
 import static org.apache.hudi.avro.HoodieAvroUtils.convertValueForSpecificDataTypes;
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
-import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.COLUMN_RANGE_MERGE_FUNCTION;
-import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.MAX;
-import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.MIN;
-import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.NULL_COUNT;
-import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.TOTAL_SIZE;
-import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.TOTAL_UNCOMPRESSED_SIZE;
-import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.VALUE_COUNT;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.unwrapStatisticValueWrapper;
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
@@ -118,6 +112,79 @@ public class HoodieTableMetadataUtil {
   protected static final String PARTITION_NAME_FILES = "files";
   protected static final String PARTITION_NAME_COLUMN_STATS = "column_stats";
   protected static final String PARTITION_NAME_BLOOM_FILTERS = "bloom_filters";
+
+  /**
+   * Collects {@link HoodieColumnRangeMetadata} for the provided collection of records, pretending
+   * as if provided records have been persisted w/in given {@code filePath}
+   *
+   * @param records target records to compute column range metadata for
+   * @param targetFields columns (fields) to be collected
+   * @param filePath file path value required for {@link HoodieColumnRangeMetadata}
+   *
+   * @return map of {@link HoodieColumnRangeMetadata} for each of the provided target fields for
+   *         the collection of provided records
+   */
+  public static Map<String, HoodieColumnRangeMetadata<Comparable>> collectColumnRangeMetadata(List<IndexedRecord> records,
+                                                                                              List<Schema.Field> targetFields,
+                                                                                              String filePath) {
+    // Helper class to calculate column stats
+    class ColumnStats {
+      Object minValue;
+      Object maxValue;
+      long nullCount;
+      long valueCount;
+    }
+
+    HashMap<String, ColumnStats> allColumnStats = new HashMap<>();
+
+    // Collect stats for all columns by iterating through records while accounting
+    // corresponding stats
+    records.forEach((record) -> {
+      // For each column (field) we have to index update corresponding column stats
+      // with the values from this record
+      targetFields.forEach(field -> {
+        ColumnStats colStats = allColumnStats.computeIfAbsent(field.name(), (ignored) -> new ColumnStats());
+
+        GenericRecord genericRecord = (GenericRecord) record;
+
+        final Object fieldVal = convertValueForSpecificDataTypes(field.schema(), genericRecord.get(field.name()), true);
+        final Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(genericRecord.getSchema(), field.name());
+
+        if (fieldVal != null) {
+          // Set the min value of the field
+          if (colStats.minValue == null
+              || ConvertingGenericData.INSTANCE.compare(fieldVal, colStats.minValue, fieldSchema) < 0) {
+            colStats.minValue = fieldVal;
+          }
+
+          // Set the max value of the field
+          if (colStats.maxValue == null || ConvertingGenericData.INSTANCE.compare(fieldVal, colStats.maxValue, fieldSchema) > 0) {
+            colStats.maxValue = fieldVal;
+          }
+
+          colStats.valueCount++;
+        } else {
+          colStats.nullCount++;
+        }
+      });
+    });
+
+    return targetFields.stream()
+        .map(field -> {
+          ColumnStats colStats = allColumnStats.get(field.name());
+          return HoodieColumnRangeMetadata.<Comparable>create(
+              filePath,
+              field.name(),
+              convertToNativeJavaType(field.schema(), colStats.minValue),
+              convertToNativeJavaType(field.schema(), colStats.maxValue),
+              colStats.nullCount,
+              colStats.valueCount,
+              0,
+              0
+          );
+        })
+        .collect(Collectors.toMap(HoodieColumnRangeMetadata::getColumnName, Function.identity()));
+  }
 
   /**
    * Converts instance of {@link HoodieMetadataColumnStats} to {@link HoodieColumnRangeMetadata}
@@ -1043,8 +1110,8 @@ public class HoodieTableMetadataUtil {
   private static Stream<HoodieRecord> translateWriteStatToColumnStats(HoodieWriteStat writeStat,
                                                                      HoodieTableMetaClient datasetMetaClient,
                                                                      List<String> columnsToIndex) {
-    if (writeStat instanceof HoodieDeltaWriteStat && ((HoodieDeltaWriteStat) writeStat).getRecordsStats().isPresent()) {
-      Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap = ((HoodieDeltaWriteStat) writeStat).getRecordsStats().get().getStats();
+    if (writeStat instanceof HoodieDeltaWriteStat && ((HoodieDeltaWriteStat) writeStat).getColumnStats().isPresent()) {
+      Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap = ((HoodieDeltaWriteStat) writeStat).getColumnStats().get();
       Collection<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = columnRangeMap.values();
       return HoodieMetadataPayload.createColumnStatsRecords(writeStat.getPartitionPath(), columnRangeMetadataList, false);
     }
@@ -1107,82 +1174,6 @@ public class HoodieTableMetadataUtil {
       default:
         return 1;
     }
-  }
-
-  /**
-   * Accumulates column range metadata for the given field and updates the column range map.
-   *
-   * @param field          - column for which statistics will be computed
-   * @param filePath       - data file path
-   * @param columnRangeMap - old column range statistics, which will be merged in this computation
-   * @param columnToStats  - map of column to map of each stat and its value
-   */
-  public static void accumulateColumnRanges(Schema.Field field, String filePath,
-                                            Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap,
-                                            Map<String, Map<String, Object>> columnToStats) {
-    Map<String, Object> columnStats = columnToStats.get(field.name());
-    HoodieColumnRangeMetadata<Comparable> columnRangeMetadata = HoodieColumnRangeMetadata.<Comparable>create(
-        filePath,
-        field.name(),
-        // TODO fix
-        convertToNativeJavaType(field.schema(), columnStats.get(MIN)),
-        convertToNativeJavaType(field.schema(), columnStats.get(MAX)),
-        Long.parseLong(columnStats.getOrDefault(NULL_COUNT, 0).toString()),
-        Long.parseLong(columnStats.getOrDefault(VALUE_COUNT, 0).toString()),
-        Long.parseLong(columnStats.getOrDefault(TOTAL_SIZE, 0).toString()),
-        Long.parseLong(columnStats.getOrDefault(TOTAL_UNCOMPRESSED_SIZE, 0).toString())
-    );
-    columnRangeMap.merge(field.name(), columnRangeMetadata, COLUMN_RANGE_MERGE_FUNCTION);
-  }
-
-  /**
-   * Aggregates column stats for each field.
-   *
-   * @param record                            - current record
-   * @param fields                            - fields for which stats will be aggregated
-   * @param columnToStats                     - map of column to map of each stat and its value which gets updates in this method
-   * @param consistentLogicalTimestampEnabled - flag to deal with logical timestamp type when getting column value
-   */
-  public static void aggregateColumnStats(IndexedRecord record, List<Schema.Field> fields,
-                                          Map<String, Map<String, Object>> columnToStats,
-                                          boolean consistentLogicalTimestampEnabled) {
-    if (!(record instanceof GenericRecord)) {
-      throw new HoodieIOException("Record is not a generic type to get column range metadata!");
-    }
-
-    fields.forEach(field -> {
-      Map<String, Object> columnStats = columnToStats.get(field.name());
-      GenericRecord genericRecord = (GenericRecord) record;
-      final Object fieldVal = convertValueForSpecificDataTypes(field.schema(), genericRecord.get(field.name()), consistentLogicalTimestampEnabled);
-      final Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(genericRecord.getSchema(), field.name());
-      // update stats
-      // NOTE: Unlike Parquet, Avro does not give the field size.
-      columnStats.put(TOTAL_SIZE, Long.parseLong(columnStats.getOrDefault(TOTAL_SIZE, 0).toString()));
-      columnStats.put(TOTAL_UNCOMPRESSED_SIZE, Long.parseLong(columnStats.getOrDefault(TOTAL_UNCOMPRESSED_SIZE, 0).toString()));
-
-      if (fieldVal != null) {
-        // set the min value of the field
-        if (!columnStats.containsKey(MIN)) {
-          columnStats.put(MIN, fieldVal);
-        }
-        if (compare(fieldVal, columnStats.get(MIN), fieldSchema) < 0) {
-          columnStats.put(MIN, fieldVal);
-        }
-        // set the max value of the field
-        if (!columnStats.containsKey(MAX)) {
-          columnStats.put(MAX, fieldVal);
-        }
-        // set the max value of the field
-        if (compare(fieldVal, columnStats.get(MAX), fieldSchema) > 0) {
-          columnStats.put(MAX, fieldVal);
-        }
-        // increment non-null value count
-        columnStats.put(VALUE_COUNT, Long.parseLong(columnStats.getOrDefault(VALUE_COUNT, 0).toString()) + 1);
-      } else {
-        // increment null value count
-        columnStats.put(NULL_COUNT, Long.parseLong(columnStats.getOrDefault(NULL_COUNT, 0).toString()) + 1);
-      }
-    });
   }
 
   /**
