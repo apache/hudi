@@ -94,9 +94,9 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
-import static org.apache.hudi.avro.HoodieAvroUtils.convertToNativeJavaType;
 import static org.apache.hudi.avro.HoodieAvroUtils.convertValueForSpecificDataTypes;
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
+import static org.apache.hudi.avro.HoodieAvroUtils.resolveNullableSchema;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.unwrapStatisticValueWrapper;
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
@@ -175,8 +175,8 @@ public class HoodieTableMetadataUtil {
           return HoodieColumnRangeMetadata.<Comparable>create(
               filePath,
               field.name(),
-              convertToNativeJavaType(field.schema(), colStats.minValue),
-              convertToNativeJavaType(field.schema(), colStats.maxValue),
+              coerceToComparable(field.schema(), colStats.minValue),
+              coerceToComparable(field.schema(), colStats.maxValue),
               colStats.nullCount,
               colStats.valueCount,
               0,
@@ -1220,6 +1220,70 @@ public class HoodieTableMetadataUtil {
       return Option.of(schemaResolver.getTableAvroSchema());
     } catch (Exception e) {
       throw new HoodieException("Failed to get latest columns for " + dataTableMetaClient.getBasePath(), e);
+    }
+  }
+
+  /**
+   * Given a schema, coerces provided value to instance of {@link Comparable<?>} such that
+   * it could subsequently used in column stats
+   *
+   * NOTE: This method has to stay compatible with the semantic of
+   *      {@link ParquetUtils#readRangeFromParquetMetadata} as they are used in tandem
+   */
+  private static Comparable<?> coerceToComparable(Schema schema, Object val) {
+    if (val == null) {
+      return null;
+    }
+
+    switch (schema.getType()) {
+      case UNION:
+        // TODO we need to handle unions in general case as well
+        return coerceToComparable(resolveNullableSchema(schema), val);
+
+      case FIXED:
+      case BYTES:
+        if (schema.getLogicalType() instanceof LogicalTypes.Decimal) {
+          return (Comparable<?>) val;
+        }
+        return (ByteBuffer) val;
+
+
+      case INT:
+        if (schema.getLogicalType() == LogicalTypes.date()
+            || schema.getLogicalType() == LogicalTypes.timeMillis()) {
+          // NOTE: This type will be either {@code java.sql.Date} or {org.joda.LocalDate}
+          //       depending on the Avro version. Hence, we simply cast it to {@code Comparable<?>}
+          return (Comparable<?>) val;
+        }
+        return (Integer) val;
+
+      case LONG:
+        if (schema.getLogicalType() == LogicalTypes.timeMicros()
+            || schema.getLogicalType() == LogicalTypes.timestampMicros()
+            || schema.getLogicalType() == LogicalTypes.timestampMillis()) {
+          // NOTE: This type will be either {@code java.sql.Date} or {org.joda.LocalDate}
+          //       depending on the Avro version. Hence, we simply cast it to {@code Comparable<?>}
+          return (Comparable<?>) val;
+        }
+        return (Long) val;
+
+      case STRING:
+      case FLOAT:
+      case DOUBLE:
+      case BOOLEAN:
+        return (Comparable<?>) val;
+
+
+      // TODO add support for those types
+      case ENUM:
+      case MAP:
+      case NULL:
+      case RECORD:
+      case ARRAY:
+        return null;
+
+      default:
+        throw new IllegalStateException("Unexpected type: " + schema.getType());
     }
   }
 

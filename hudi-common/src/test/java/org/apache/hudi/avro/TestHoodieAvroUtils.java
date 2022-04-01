@@ -290,8 +290,7 @@ public class TestHoodieAvroUtils {
     rec2.put("name", "val2");
     rec2.put("favorite_number", 12);
     // test comparison of non-string type
-    assertEquals(-1, HoodieAvroUtils.compare(rec.get("favorite_number"), rec2.get("favorite_number"),
-        getNestedFieldSchemaFromWriteSchema(rec.getSchema(), "favorite_number")));
+    assertEquals(-1, GenericData.get().compare(rec.get("favorite_number"), rec2.get("favorite_number"), getNestedFieldSchemaFromWriteSchema(rec.getSchema(), "favorite_number")));
 
     // test nested field schema
     Schema nestedSchema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD);

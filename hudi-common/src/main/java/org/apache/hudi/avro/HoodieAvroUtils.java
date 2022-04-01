@@ -18,20 +18,6 @@
 
 package org.apache.hudi.avro;
 
-import org.apache.avro.Conversions;
-import org.apache.avro.UnresolvedUnionException;
-import org.apache.avro.data.TimeConversions;
-import org.apache.hudi.common.config.SerializableSchema;
-import org.apache.hudi.common.model.HoodieOperation;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.SchemaCompatibilityException;
-
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.Conversions;
@@ -56,6 +42,16 @@ import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.specific.SpecificRecordBase;
+import org.apache.hudi.common.config.SerializableSchema;
+import org.apache.hudi.common.model.HoodieOperation;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.SchemaCompatibilityException;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -577,59 +573,6 @@ public class HoodieAvroUtils {
   }
 
   /**
-   * Given a field schema, convert its value to native Java type.
-   *
-   * @param schema - field schema
-   * @param val    - field value
-   * @return
-   */
-  public static Comparable<?> convertToNativeJavaType(Schema schema, Object val) {
-    if (val == null) {
-      return null;
-    }
-    if (schema.getLogicalType() == LogicalTypes.date()) {
-      return java.sql.Date.valueOf((val.toString()));
-    }
-    switch (schema.getType()) {
-      case UNION:
-        return convertToNativeJavaType(resolveNullableSchema(schema), val);
-      case STRING:
-        return val.toString();
-      case BYTES:
-        return (ByteBuffer) val;
-      case INT:
-        return (Integer) val;
-      case LONG:
-        return (Long) val;
-      case FLOAT:
-        return (Float) val;
-      case DOUBLE:
-        return (Double) val;
-      case BOOLEAN:
-        return (Boolean) val;
-      case ENUM:
-      case MAP:
-      case FIXED:
-      case NULL:
-      case RECORD:
-      case ARRAY:
-        return null;
-      default:
-        throw new IllegalStateException("Unexpected type: " + schema.getType());
-    }
-  }
-
-  /**
-   * Type-aware object comparison. Used to compare two objects for an Avro field.
-   */
-  public static int compare(Object o1, Object o2, Schema schema) {
-    if (Schema.Type.MAP.equals(schema.getType())) {
-      return ((Map) o1).equals(o2) ? 0 : 1;
-    }
-    return GenericData.get().compare(o1, o2, schema);
-  }
-
-  /**
    * Returns the string value of the given record {@code rec} and field {@code fieldName}.
    * The field and value both could be missing.
    *
@@ -784,7 +727,7 @@ public class HoodieAvroUtils {
     return nonNullType;
   }
 
-  private static Schema resolveNullableSchema(Schema schema) {
+  public static Schema resolveNullableSchema(Schema schema) {
     if (schema.getType() != Schema.Type.UNION) {
       return schema;
     }
