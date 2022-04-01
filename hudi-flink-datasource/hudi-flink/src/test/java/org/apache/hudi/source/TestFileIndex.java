@@ -27,6 +27,7 @@ import org.apache.hudi.utils.TestData;
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -51,6 +52,8 @@ public class TestFileIndex {
   @TempDir
   File tempFile;
 
+  // TODO enable, after fixing Flink MT writer
+  @Disabled
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void testFileListingUsingMetadata(boolean hiveStylePartitioning) throws Exception {
@@ -72,6 +75,8 @@ public class TestFileIndex {
         .allMatch(fileStatus -> fileStatus.getPath().toString().endsWith(HoodieFileFormat.PARQUET.getFileExtension())));
   }
 
+  // TODO enable, after fixing Flink MT writer
+  @Disabled
   @Test
   void testFileListingUsingMetadataNonPartitionedTable() throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());

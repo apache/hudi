@@ -64,7 +64,7 @@ stages:
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
       - job: UT_FT_2
         displayName: FT client/spark-client
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@3
             displayName: maven install

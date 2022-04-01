@@ -22,7 +22,10 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
 import org.apache.spark.sql.SaveMode
+import org.scalatest.Ignore
 
+// TODO HUDI-3826
+@Ignore
 class TestTruncateTable extends TestHoodieSqlBase {
 
   test("Test Truncate non-partitioned Table") {

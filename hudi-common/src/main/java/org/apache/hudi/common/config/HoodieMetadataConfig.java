@@ -50,7 +50,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Enable the internal metadata table which serves table metadata like level file listings");
 
-  public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = false;
+  // TODO fix
+  public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = true;
 
   // Enable metrics for internal Metadata Table
   public static final ConfigProperty<Boolean> METRICS_ENABLE = ConfigProperty
@@ -161,7 +162,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_COLUMN_STATS = ConfigProperty
       .key(METADATA_PREFIX + ".index.column.stats.enable")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("0.11.0")
       .withDocumentation("Enable indexing column ranges of user data files under metadata table key lookups. When "
           + "enabled, metadata table will have a partition to store the column ranges and will be "

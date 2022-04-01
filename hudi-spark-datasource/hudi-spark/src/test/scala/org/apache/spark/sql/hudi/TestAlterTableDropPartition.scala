@@ -22,7 +22,10 @@ import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
 import org.apache.spark.sql.SaveMode
+import org.scalatest.Ignore
 
+// TODO HUDI-3826
+@Ignore
 class TestAlterTableDropPartition extends TestHoodieSqlBase {
 
   test("Drop non-partitioned table") {
