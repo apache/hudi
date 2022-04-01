@@ -115,7 +115,8 @@
                             "type": [
                                 "null",
                                 "string"
-                            ]
+                            ],
+                            "default" : null
                         },
                         {
                             "doc": "Minimum value in the range. Based on user data table schema, we can convert this to appropriate type",
