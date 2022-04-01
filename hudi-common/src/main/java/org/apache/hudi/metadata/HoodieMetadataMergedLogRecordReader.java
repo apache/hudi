@@ -44,6 +44,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * A {@code HoodieMergedLogRecordScanner} implementation which only merged records matching providing keys. This is
@@ -119,6 +120,18 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
    */
   public synchronized List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordByKey(String key) {
     return Collections.singletonList(Pair.of(key, Option.ofNullable((HoodieRecord) records.get(key))));
+  }
+
+  public synchronized List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeyPrefixes(List<String> keyPrefixes) {
+    // Following operations have to be atomic, otherwise concurrent
+    // readers would race with each other and could crash when
+    // processing log block records as part of scan.
+    records.clear();
+    scanInternal(Option.of(new KeySpec(keyPrefixes, false)));
+    return records.values().stream()
+        .map(record ->
+            Pair.of(record.getKey().getRecordKey(), Option.ofNullable((HoodieRecord<HoodieMetadataPayload>) record)))
+        .collect(Collectors.toList());
   }
 
   public synchronized List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> keys) {
