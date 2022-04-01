@@ -214,8 +214,8 @@ public class HoodieTableConfig extends HoodieConfig {
           .defaultValue(false)
           .sinceVersion("0.11.0")
           .withDocumentation("Allow to create a temp commit first if there are contents to write, "
-                  + "will rename it after write is finished, this can avoid read empty or partial commit in the downstreams, "
-                  + "please be careful if enable this in object storage such as S3, as this will introduce new rename operations");
+              + "will rename it after write is finished, this can avoid read empty or partial commit in the downstreams, "
+              + "please be careful if enable this in object storage such as S3, as this will introduce new rename operations");
 
   public static final ConfigProperty<String> TABLE_METADATA_PARTITIONS_INFLIGHT = ConfigProperty
       .key("hoodie.table.metadata.partitions.inflight")
