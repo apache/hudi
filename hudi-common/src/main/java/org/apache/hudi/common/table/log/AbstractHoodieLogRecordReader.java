@@ -189,10 +189,10 @@ public abstract class AbstractHoodieLogRecordReader {
   }
 
   public synchronized void scan() {
-    scan(Option.empty());
+    scan(Collections.emptyList());
   }
 
-  public synchronized void scan(Option<List<String>> keys) {
+  public synchronized void scan(List<String> keys) {
     currentInstantLogBlocks = new ArrayDeque<>();
     progress = 0.0f;
     totalLogFiles = new AtomicLong(0);
@@ -370,8 +370,8 @@ public abstract class AbstractHoodieLogRecordReader {
    * Iterate over the GenericRecord in the block, read the hoodie key and partition path and call subclass processors to
    * handle it.
    */
-  private void processDataBlock(HoodieDataBlock dataBlock, Option<List<String>> keys) throws Exception {
-    try (ClosableIterator<IndexedRecord> recordItr = dataBlock.getRecordItr(keys.orElse(Collections.emptyList()))) {
+  private void processDataBlock(HoodieDataBlock dataBlock, List<String> keys) throws Exception {
+    try (ClosableIterator<IndexedRecord> recordItr = dataBlock.getRecordItr(keys)) {
       Option<Schema> schemaOption = getMergedSchema(dataBlock);
       while (recordItr.hasNext()) {
         IndexedRecord currentRecord = recordItr.next();
@@ -449,7 +449,7 @@ public abstract class AbstractHoodieLogRecordReader {
    * Process the set of log blocks belonging to the last instant which is read fully.
    */
   private void processQueuedBlocksForInstant(Deque<HoodieLogBlock> logBlocks, int numLogFilesSeen,
-                                             Option<List<String>> keys) throws Exception {
+                                             List<String> keys) throws Exception {
     while (!logBlocks.isEmpty()) {
       LOG.info("Number of remaining logblocks to merge " + logBlocks.size());
       // poll the element at the bottom of the stack since that's the order it was inserted
@@ -459,9 +459,6 @@ public abstract class AbstractHoodieLogRecordReader {
           processDataBlock((HoodieAvroDataBlock) lastBlock, keys);
           break;
         case HFILE_DATA_BLOCK:
-          if (!keys.isPresent()) {
-            keys = Option.of(Collections.emptyList());
-          }
           processDataBlock((HoodieHFileDataBlock) lastBlock, keys);
           break;
         case PARQUET_DATA_BLOCK:

@@ -126,7 +126,7 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
     // readers would race with each other and could crash when
     // processing log block records as part of scan.
     records.clear();
-    scan(Option.of(keys));
+    scan(keys);
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> metadataRecords = new ArrayList<>();
     keys.forEach(entry -> {
       if (records.containsKey(entry)) {
