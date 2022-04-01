@@ -219,7 +219,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         instant1.getTimestamp()), Option.of(data));
 
     timeline = timeline.reload();
-    // instant8 in not considered in write timeline, so last completed instant in timeline should be instant7
+
     assertTrue(timeline.getContiguousCompletedWriteTimeline().lastInstant().isPresent());
     assertEquals(instant1.getTimestamp(), timeline.getContiguousCompletedWriteTimeline().lastInstant().get().getTimestamp());
   }
