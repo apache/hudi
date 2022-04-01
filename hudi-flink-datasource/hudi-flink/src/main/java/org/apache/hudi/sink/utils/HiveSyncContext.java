@@ -18,10 +18,13 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.aws.sync.AwsGlueCatalogSyncTool;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.hive.HoodieHiveSyncException;
+import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -48,7 +51,15 @@ public class HiveSyncContext {
   }
 
   public HiveSyncTool hiveSyncTool() {
-    return new HiveSyncTool(this.syncConfig, this.hiveConf, this.fs);
+    HiveSyncMode syncMode = HiveSyncMode.of(syncConfig.syncMode);
+    switch (syncMode) {
+      case HMS:
+        return new HiveSyncTool(this.syncConfig, this.hiveConf, this.fs);
+      case GLUE:
+        return new AwsGlueCatalogSyncTool(this.syncConfig, this.hiveConf, this.fs);
+      default:
+        throw new HoodieHiveSyncException("Invalid sync mode given " + syncConfig.syncMode);
+    }
   }
 
   public static HiveSyncContext create(Configuration conf) {
