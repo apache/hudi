@@ -5,10 +5,10 @@ docker build historyserver -t apachehudi/hudi-hadoop_3.1.0-history
 
 docker build hive_base -t apachehudi/hudi-hadoop_3.1.0-hive_3.1.2
 
-docker build spark_base -t apachehudi/hudi-hadoop_3.1.0-hive_3.1.2-sparkbase_2.4.4
-docker build sparkmaster -t apachehudi/hudi-hadoop_3.1.0-hive_3.1.2-sparkmaster_2.4.4
-docker build sparkadhoc -t apachehudi/hudi-hadoop_3.1.0-hive_3.1.2-sparkadhoc_2.4.4
-docker build sparkworker -t apachehudi/hudi-hadoop_3.1.0-hive_3.1.2-sparkworker_2.4.4
+docker build spark_base -t apachehudi/hudi-hadoop_3.1.0-hive_3.1.2-sparkbase_3.2.1
+docker build sparkmaster -t apachehudi/hudi-hadoop_3.1.0-hive_3.1.2-sparkmaster_3.2.1
+docker build sparkadhoc -t apachehudi/hudi-hadoop_3.1.0-hive_3.1.2-sparkadhoc_3.2.1
+docker build sparkworker -t apachehudi/hudi-hadoop_3.1.0-hive_3.1.2-sparkworker_3.2.1
 
 docker build base_java11 -t apachehudi/hudi-hadoop_3.1.0-base-java11
 
