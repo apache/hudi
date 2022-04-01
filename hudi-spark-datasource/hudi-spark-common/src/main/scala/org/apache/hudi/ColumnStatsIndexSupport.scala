@@ -17,9 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.ColumnStatsIndexSupport.{deserialize, tryUnpackNonNullVal}
-import org.apache.hudi.avro.model.HoodieMetadataColumnStats
-import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper.composeIndexSchema
+import org.apache.hudi.ColumnStatsIndexSupport.{composeIndexSchema, deserialize, tryUnpackNonNullVal}
 import org.apache.hudi.metadata.{HoodieMetadataPayload, MetadataPartitionType}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.functions.col
@@ -27,7 +25,6 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 
 import scala.collection.immutable.TreeSet
-import scala.collection.JavaConverters._
 
 /**
  * Mixin trait abstracting away heavy-lifting of interactions with Metadata Table's Column Stats Index,
@@ -146,11 +143,7 @@ trait ColumnStatsIndexSupport {
     // NOTE: It's crucial to maintain appropriate ordering of the columns
     //       matching table layout: hence, we cherry-pick individual columns
     //       instead of simply filtering in the ones we're interested in the schema
-    val indexSchema = composeIndexSchema(
-      sortedColumns.toSeq
-        .map(colName => tableSchema.fields.find(f => f.name == colName).get)
-        .asJava
-    )
+    val indexSchema = composeIndexSchema(sortedColumns.toSeq, tableSchema)
 
     spark.createDataFrame(transposedRDD, indexSchema)
   }
@@ -158,15 +151,44 @@ trait ColumnStatsIndexSupport {
 
 object ColumnStatsIndexSupport {
 
-  //
-  //  |-- minValue: struct (nullable = true)
-  //  |    |-- member0: struct (nullable = true)
-  //  |    |    |-- value: <type> (nullable = false)
-  //
-  private val statisticRecordSchema: StructType =
-  AvroConversionUtils.convertAvroSchemaToStructType(HoodieMetadataColumnStats.SCHEMA$.getField("minValue").schema())
+  private val COLUMN_STATS_INDEX_FILE_COLUMN_NAME = "fileName"
+  private val COLUMN_STATS_INDEX_MIN_VALUE_STAT_NAME = "minValue"
+  private val COLUMN_STATS_INDEX_MAX_VALUE_STAT_NAME = "maxValue"
+  private val COLUMN_STATS_INDEX_NUM_NULLS_STAT_NAME = "num_nulls"
 
-  private val statisticWrapperValueFieldName = "value"
+  /**
+   * @VisibleForTesting
+   */
+  def composeIndexSchema(targetColumnNames: Seq[String], tableSchema: StructType): StructType = {
+    val fileNameField = StructField(COLUMN_STATS_INDEX_FILE_COLUMN_NAME, StringType, nullable = true, Metadata.empty)
+    val targetFields = targetColumnNames.map(colName => tableSchema.fields.find(f => f.name == colName).get)
+
+    StructType(
+      targetFields.foldLeft(Seq(fileNameField)) {
+        case (acc, field) =>
+          acc ++ Seq(
+            composeColumnStatStructType(field.name, COLUMN_STATS_INDEX_MIN_VALUE_STAT_NAME, field.dataType),
+            composeColumnStatStructType(field.name, COLUMN_STATS_INDEX_MAX_VALUE_STAT_NAME, field.dataType),
+            composeColumnStatStructType(field.name, COLUMN_STATS_INDEX_NUM_NULLS_STAT_NAME, LongType))
+      }
+    )
+  }
+
+  @inline def getMinColumnNameFor(colName: String): String =
+    formatColName(colName, COLUMN_STATS_INDEX_MIN_VALUE_STAT_NAME)
+
+  @inline def getMaxColumnNameFor(colName: String): String =
+    formatColName(colName, COLUMN_STATS_INDEX_MAX_VALUE_STAT_NAME)
+
+  @inline def getNumNullsColumnNameFor(colName: String): String =
+    formatColName(colName, COLUMN_STATS_INDEX_NUM_NULLS_STAT_NAME)
+
+  @inline private def formatColName(col: String, statName: String) = { // TODO add escaping for
+    String.format("%s_%s", col, statName)
+  }
+
+  @inline private def composeColumnStatStructType(col: String, statName: String, dataType: DataType) =
+    StructField(formatColName(col, statName), dataType, nullable = true, Metadata.empty)
 
   private def tryUnpackNonNullVal(statStruct: Row): (Any, Int) =
     statStruct.toSeq.zipWithIndex

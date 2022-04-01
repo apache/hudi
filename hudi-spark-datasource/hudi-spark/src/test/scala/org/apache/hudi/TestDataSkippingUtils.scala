@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper
+import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql.catalyst.expressions.{Expression, Not}
 import org.apache.spark.sql.functions.{col, lower}
@@ -77,12 +77,7 @@ class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSuppor
       )
     )
 
-  val indexSchema: StructType =
-    ColumnStatsIndexHelper.composeIndexSchema(
-      sourceTableSchema.fields.toSeq
-        .filter(f => indexedCols.contains(f.name))
-        .asJava
-    )
+  val indexSchema: StructType = composeIndexSchema(indexedCols, sourceTableSchema)
 
   @ParameterizedTest
   @MethodSource(
