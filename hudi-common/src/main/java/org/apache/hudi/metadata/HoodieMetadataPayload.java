@@ -606,6 +606,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
     return HoodieMetadataColumnStats.newBuilder()
         .setFileName(newColumnStats.getFileName())
+        .setColumnName(newColumnStats.getColumnName())
         .setMinValue(wrapStatisticValue(minValue))
         .setMaxValue(wrapStatisticValue(maxValue))
         .setValueCount(prevColumnStats.getValueCount() + newColumnStats.getValueCount())
