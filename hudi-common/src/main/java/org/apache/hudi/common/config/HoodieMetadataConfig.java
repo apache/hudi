@@ -151,6 +151,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "log files and read parallelism in the bloom filter index partition. The recommendation is to size the "
           + "file group count such that the base files are under 1GB.");
 
+  public static final ConfigProperty<Integer> BLOOM_FILTER_INDEX_PARALLELISM = ConfigProperty
+      .key(METADATA_PREFIX + ".index.bloom.filter.parallelism")
+      .defaultValue(200)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Parallelism to use for generating bloom filter index in metadata table.");
+
   public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_COLUMN_STATS = ConfigProperty
       .key(METADATA_PREFIX + ".index.column.stats.enable")
       .defaultValue(false)
@@ -263,6 +269,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getIntOrDefault(METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT);
   }
 
+  public int getBloomFilterIndexParallelism() {
+    return getIntOrDefault(BLOOM_FILTER_INDEX_PARALLELISM);
+  }
+
   public int getColumnStatsIndexParallelism() {
     return getIntOrDefault(COLUMN_STATS_INDEX_PARALLELISM);
   }
@@ -320,6 +330,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withMetadataIndexBloomFilterFileGroups(int fileGroupCount) {
       metadataConfig.setValue(METADATA_INDEX_BLOOM_FILTER_FILE_GROUP_COUNT, String.valueOf(fileGroupCount));
+      return this;
+    }
+
+    public Builder withBloomFilterIndexParallelism(int parallelism) {
+      metadataConfig.setValue(BLOOM_FILTER_INDEX_PARALLELISM, String.valueOf(parallelism));
       return this;
     }
 

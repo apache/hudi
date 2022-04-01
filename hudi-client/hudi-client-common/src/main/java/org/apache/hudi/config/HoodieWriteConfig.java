@@ -1563,6 +1563,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getMetadataConfig().getIndexingCheckTimeoutSeconds();
   }
 
+  public int getMetadataBloomFilterIndexParallelism() {
+    return metadataConfig.getBloomFilterIndexParallelism();
+  }
+
   public int getColumnStatsIndexParallelism() {
     return metadataConfig.getColumnStatsIndexParallelism();
   }
