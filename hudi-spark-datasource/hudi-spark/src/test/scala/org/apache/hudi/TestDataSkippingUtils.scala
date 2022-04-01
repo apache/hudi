@@ -87,6 +87,30 @@ class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSuppor
     )
 
   @ParameterizedTest
+  @MethodSource(
+    Array(
+        "testBasicLookupFilterExpressionsSource",
+        "testAdvancedLookupFilterExpressionsSource",
+        "testCompositeFilterExpressionsSource"
+    ))
+  def testLookupFilterExpressions(sourceExpr: String, input: Seq[IndexRow], output: Seq[String]): Unit = {
+    spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "UTC")
+    val resolvedExpr: Expression = exprUtils.resolveExpr(spark, sourceExpr, sourceTableSchema)
+    val lookupFilter = DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(resolvedExpr, indexSchema)
+
+    val indexDf = spark.createDataFrame(input.map(_.toRow).asJava, indexSchema)
+
+    val rows = indexDf.where(new Column(lookupFilter))
+      .select("file")
+      .collect()
+      .map(_.getString(0))
+      .toSeq
+
+    assertEquals(1, 200)
+    assertEquals(output, rows)
+  }
+
+  @ParameterizedTest
   @MethodSource(Array("testStringsLookupFilterExpressionsSource"))
   def testStringsLookupFilterExpressions(sourceExpr: Expression, input: Seq[IndexRow], output: Seq[String]): Unit = {
     val resolvedExpr = exprUtils.resolveExpr(spark, sourceExpr, sourceTableSchema)
@@ -103,7 +127,6 @@ class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSuppor
       .map(_.getString(0))
       .toSeq
 
-    assertEquals(1,10)
     assertEquals(output, rows)
   }
 }
