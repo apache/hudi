@@ -52,14 +52,10 @@ public class HiveSyncContext {
 
   public HiveSyncTool hiveSyncTool() {
     HiveSyncMode syncMode = HiveSyncMode.of(syncConfig.syncMode);
-    switch (syncMode) {
-      case HMS:
-        return new HiveSyncTool(this.syncConfig, this.hiveConf, this.fs);
-      case GLUE:
-        return new AwsGlueCatalogSyncTool(this.syncConfig, this.hiveConf, this.fs);
-      default:
-        throw new HoodieHiveSyncException("Invalid sync mode given " + syncConfig.syncMode);
+    if (syncMode == HiveSyncMode.GLUE) {
+      return new AwsGlueCatalogSyncTool(this.syncConfig, this.hiveConf, this.fs);
     }
+    return new HiveSyncTool(this.syncConfig, this.hiveConf, this.fs);
   }
 
   public static HiveSyncContext create(Configuration conf) {
