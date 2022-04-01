@@ -76,14 +76,16 @@ its scalability limits as we add more partitions to the MDT.
 
 ## Implementation
 
-### A new Hudi action: INDEX
+### High Level Design
+
+#### A new Hudi action: INDEXING
 
 We introduce a new action `index` which will denote the index building process,
 the mechanics of which is as follows:
 
-1. From an external process, users can issue a CREATE INDEX or similar statement
-   to trigger indexing for an existing table.
-    1. This will schedule INDEX action and add
+1. From an external process, users can issue a CREATE INDEX or run a job to
+   trigger indexing for an existing table.
+    1. This will schedule INDEXING action and add
        a `<instant_time>.index.requested` to the timeline, which contains the
        indexing plan. Index scheduling will also initialize the filegroup for
        the partitions for which indexing is planned. The creation of filegroups
@@ -113,14 +115,14 @@ the mechanics of which is as follows:
    instant `t` is done but before completing indexing commit), it will check for
    all completed commit instants after `t` to ensure each of them added entries
    per its indexing plan, otherwise simply abort after a configurable timeout.
-   Let's call this the **indexing check**. So, the indexer will not only write
+   Let's call this the **indexing catchup**. So, the indexer will not only write
    base files but also ensure that log entries due to instants after `t` are in
    the same filegroup i.e. no new filegroup is initialized by writers while
    indexing is in progress.
-    1. The corner case here would be that the indexing check does not factor in
-       the inflight writer just about to commit. But given indexing would take
-       some finite amount of time to go from requested to completion (or we can
-       add some, configurable artificial delays here say 60 seconds), an
+    1. The corner case here would be that the indexing catchup does not factor
+       in the inflight writer just about to commit. But given indexing would
+       take some finite amount of time to go from requested to completion (or we
+       can add some, configurable artificial delays here say 60 seconds), an
        inflight writer, that is just about to commit concurrently, has a very
        high chance of seeing the indexing plan and aborting itself.
 
@@ -129,7 +131,7 @@ would vanish completely, still providing great scalability and asynchrony for
 these processes. The indexer will error out if there is no lock provider
 configured.
 
-### Multi-writer scenario
+#### Multi-writer scenario
 
 ![](./async_metadata_index.png)
 
@@ -165,6 +167,77 @@ however, this time indexer will check for available partitions in table config
 and skip those partitions. This design ensures that the regular writers do not
 fail due to indexing.
 
+### Low Level Design
+
+#### Schedule Indexing
+
+The scheduling initializes the file groups for metadata partitions in a lock. It
+does not update any table config.
+
+```
+1 Run pre-scheduling validation (valid index requested, lock provider configured, idempotent checks)
+2 Begin transaction
+  2.a  Get the base instant
+  2.b  Start initializing file groups for each partition
+  2.c  Create index plan and save indexing.requested instant to the timeline
+3 End transaction 
+```
+
+If there is failure in any of the above steps, then we abort gracefully i.e.
+delete the metadata partition if it was initialized.
+
+#### Run Indexing
+
+This is a separate executor, which reads the plan and builds the index.
+
+```
+1 Run pre-indexing checks (lock provider configured, indexing.requested exists, idempotent checks)
+2 Read the indexing plan and if any of the requested partition is inflight or already completed then error out and return early
+3 Transition indexing.requested to inflight
+4 Build metadata partitions
+  4.a  Build the base file in the metadata partition to index upto instant as per the plan
+  4.b  Update inflight partitions config in hoodie.properties
+5 Determine the catchup start instant based on write and non-write timeline
+6 Start indexing catchup in a separate thread (that can be interrupted upon timeout)
+  6.a  For each instant to catchup
+    6.a.i  if instant is completed and has corresponding deltacommit in metadata timeline then continue
+    6.a.ii  if instant is inflight, then reload active timeline periodically until completed or timed out
+    6.a.iii update metadata table, if needed, within a lock
+7 Build indexing commit metadata with the partition info and caught upto instant
+8 Begin transaction
+  8.a  update completed metadata partitions in table config
+  8.b  save indexing commit metadata to the timeline transition indexing.inflight to completed.
+9 End transaction
+```
+
+If there is failure in any of the above steps, then we abort gracefully i.e.
+delete the metadata partition if it exists and revert the table config updates.
+
+#### Configs
+
+```
+# enable metadata
+hoodie.metadata.enable=true
+# enable asynchronous metadata indexing
+hoodie.metadata.index.async=true
+# enable column stats index
+hoodie.metadata.index.column.stats.enable=true
+# set indexing catchup timeout
+hoodie.metadata.index.check.timeout.seconds=60
+# set OCC concurrency mode
+hoodie.write.concurrency.mode=optimistic_concurrency_control
+# set lock provider
+hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.InProcessLockProvider
+```
+
+#### Table upgrade/downgrade
+
+While upgrading from a previous version to the current version, if metadata is
+enabled and `files` partition exists then completed partitions in
+hoodie.paroperties will be updated to `files` partition. While downgrading to a
+previous version, if metadata table exists then it is deleted because metadata
+table in current version has a schema that is not forward compatible.
+
 ### Error Handling
 
 **Case 1: Writer fails while indexer is inflight**
@@ -188,11 +261,11 @@ not yet started executing.
 
 In this case, writer will continue to log updates in metadata partition. At the
 time of execution, indexer will see there are already some log files and ensure
-that the indexing check passes.
+that the indexing catchup passes.
 
 b) Inflight writer about to commit, but indexing completed just before that.
 
-Ideally, the indexing check in the indexer should have failed. But this could
+Ideally, the indexing catchup in the indexer should have failed. But this could
 happen in the following sequence of events:
 
 1. No pending data commit. Indexing check passed, indexing commit not
@@ -233,19 +306,41 @@ partition for which indexing is inflight.
 **Case 5: Data timeline with holes**
 
 Let's say the data timeline when indexer is started looks
-like: `C1, C2,.... C5 (inflight), C6, C7, C8`. In this case the latest completed
-instant without any hole is `C4`. So, indexer will continue to index upto `C4`.
-Instants `C5-C8` will go through the indexing check. If `C5` does not complete
-before the timeout, then indexer will abort. The indexer will run through the
-same process again when re-triggered.
+like: `C1, C2,.... C5 (inflight), C6, C7, C8`, where `C1` is a commit at
+instant `1`. In this case the latest completed instant without any hole is `C4`.
+So, indexer will continue to index upto `C4`. Instants `C5-C8` will go through
+the indexing catchup. If `C5` does not complete before the timeout, then indexer
+will abort. The indexer will run through the same process again when
+re-triggered.
+
+The above example contained only write commits however the indexer will consider
+non-write commits (such as clean/restore/rollback) as well. Let's take such an
+example:
+
+|  DC  |  DC  | DC | CLEAN | DC | DC | COMPACT | DC | INDEXING |  DC  |
+| ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
+|  1   |  2   |  3   |  4   |  5   |  6   |  7   |  8   |  9   |  10  |
+|  C   |  C   |  C   |  I   |  C   |  C   |  R   |  C   |  R   |  I   |
+
+Here, DC indicates a deltacommit, second row is the instant time, and the last
+row is whether the action is completed (C), inflight (I) or requested(R). In
+this case, the base instant upto which there are no holes in write timeline
+is `DC6`. The indexer will also check the earliest pending instant in non-write
+timeline before this base instant, which is `CLEAN4`. While the indexing is done
+upto base instant, the remaining instants (CLEAN4, COMPACT7, DC8) are checked
+during indexing catchup whether they logged updated to corresponding filegroup
+as per the index plan. Note that during catchup, indexer won't move beyond
+unless the instants to catch up actually get into completed state. For instance,
+if the CLEAN4 was inflight till the configured timeout, then indexer will abort.
 
 ## Summary of key proposals
 
-- New INDEX action on data timeline.
+- New INDEXING action on data timeline.
 - Async indexer to handle state change for the new action.
-- Concept of "indexing check" to reconcile instants that went inflight after
+- Concept of "indexing catchup" to reconcile instants that went inflight after
   indexer started.
-- Table config to be the source of truth for available MDT partitions.
+- Table config to be the source of truth for inflight and completed MDT
+  partitions.
 - Indexer will error out if lock provider not configured.
 
 ## Rollout/Adoption Plan
