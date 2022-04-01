@@ -99,8 +99,6 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     // Smoke test
     colStatsDF.show()
-
-    assertEquals(126, colStatsDF.count())
   }
 
   private def parseRecords(records: Seq[String]) = {
