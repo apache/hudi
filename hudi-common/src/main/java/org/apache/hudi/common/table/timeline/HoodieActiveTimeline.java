@@ -76,6 +76,10 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       REQUESTED_REPLACE_COMMIT_EXTENSION, INFLIGHT_REPLACE_COMMIT_EXTENSION, REPLACE_COMMIT_EXTENSION,
       REQUESTED_INDEX_COMMIT_EXTENSION, INFLIGHT_INDEX_COMMIT_EXTENSION, INDEX_COMMIT_EXTENSION));
   private static final Logger LOG = LogManager.getLogger(HoodieActiveTimeline.class);
+
+  // This is used when enable ALLOW_TEMP_COMMIT
+  private static final String TMP_PATH_POSTFIX = ".tmp";
+
   protected HoodieTableMetaClient metaClient;
 
   /**
@@ -740,7 +744,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
       if (content.isPresent() && metaClient.getTableConfig().allowTempCommit()) {
         Path parent = fullPath.getParent();
-        tmpPath = new Path(parent, fullPath.getName() + ".tmp");
+        tmpPath = new Path(parent, fullPath.getName() + TMP_PATH_POSTFIX);
         fsout = metaClient.getFs().create(tmpPath, false);
         fsout.write(content.get());
       }

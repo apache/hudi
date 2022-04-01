@@ -211,7 +211,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> ALLOW_TEMP_COMMIT = ConfigProperty
           .key("hoodie.allow.temp.commit")
-          .defaultValue(true)
+          .defaultValue(false)
           .sinceVersion("0.11.0")
           .withDocumentation("Allow to create a temp commit first if there are contents to write, "
                   + "will rename it after write is finished, this can avoid read empty or partial commit in the downstreams, "
