@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.clean;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CleanFileInfo;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
@@ -45,7 +44,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieSavepointException;
+import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.table.HoodieTable;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -202,11 +203,18 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
   /**
    * Scan and list all partitions for cleaning.
    * @return all partitions paths for the dataset.
-   * @throws IOException
    */
   private List<String> getPartitionPathsForFullCleaning() {
     // Go to brute force mode of scanning all partitions
-    return FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), config.getBasePath());
+    try {
+      // Because the partition of BaseTableMetadata has been deleted,
+      // all partition information can only be obtained from FileSystemBackedTableMetadata.
+      FileSystemBackedTableMetadata fsBackedTableMetadata = new FileSystemBackedTableMetadata(context,
+          context.getHadoopConf(), config.getBasePath(), config.shouldAssumeDatePartitioning());
+      return fsBackedTableMetadata.getAllPartitionPaths();
+    } catch (IOException e) {
+      return Collections.emptyList();
+    }
   }
 
   /**
@@ -278,6 +286,9 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
    * retain 10 commits, and commit batch time is 30 mins, then you have 5 hrs of lookback)
    * <p>
    * This policy is the default.
+   *
+   * @return A {@link Pair} whose left is boolean indicating whether partition itself needs to be deleted,
+   *         and right is a list of {@link CleanFileInfo} about the files in the partition that needs to be deleted.
    */
   private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestCommits(String partitionPath, int commitsRetained, HoodieCleaningPolicy policy) {
     LOG.info("Cleaning " + partitionPath + ", retaining latest " + commitsRetained + " commits. ");
@@ -466,7 +477,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
 
   /**
    * Determine if file slice needed to be preserved for pending compaction.
-   * 
+   *
    * @param fileSlice File Slice
    * @return true if file slice needs to be preserved, false otherwise.
    */

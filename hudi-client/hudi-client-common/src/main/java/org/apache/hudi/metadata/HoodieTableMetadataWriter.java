@@ -94,4 +94,12 @@ public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
    * @param instantTime      instant time of the commit.
    */
   void update(HoodieRollbackMetadata rollbackMetadata, String instantTime);
+
+  /**
+   * Deletes the given metadata partitions. This path reuses DELETE_PARTITION operation.
+   *
+   * @param instantTime - instant time when replacecommit corresponding to the drop will be recorded in the metadata timeline
+   * @param partitions - list of {@link MetadataPartitionType} to drop
+   */
+  void deletePartitions(String instantTime, List<MetadataPartitionType> partitions);
 }
