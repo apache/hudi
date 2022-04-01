@@ -28,7 +28,7 @@ import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-public class TestGlobalDeleteKeyGenerator extends KeyGeneratorTestUtilities {
+public class TestGlobalDeleteRecordGenerator extends KeyGeneratorTestUtilities {
 
   private TypedProperties getCommonProps(boolean getComplexRecordKey) {
     TypedProperties properties = new TypedProperties();

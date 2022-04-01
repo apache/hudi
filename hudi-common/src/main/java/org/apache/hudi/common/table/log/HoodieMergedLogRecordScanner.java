@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
@@ -28,6 +29,7 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.exception.HoodieIOException;
@@ -135,7 +137,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     String key = hoodieRecord.getRecordKey();
     if (records.containsKey(key)) {
       // Merge and store the merged record. The HoodieRecordPayload implementation is free to decide what should be
-      // done when a delete (empty payload) is encountered before or after an insert/update.
+      // done when a DELETE (empty payload) is encountered before or after an insert/update.
 
       HoodieRecord<? extends HoodieRecordPayload> oldRecord = records.get(key);
       HoodieRecordPayload oldValue = oldRecord.getData();
@@ -152,9 +154,29 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   }
 
   @Override
-  protected void processNextDeletedKey(HoodieKey hoodieKey) {
-    records.put(hoodieKey.getRecordKey(), SpillableMapUtils.generateEmptyPayload(hoodieKey.getRecordKey(),
-        hoodieKey.getPartitionPath(), getPayloadClassFQN()));
+  protected void processNextDeletedRecord(DeleteRecord deleteRecord) {
+    String key = deleteRecord.getRecordKey();
+    HoodieRecord<? extends HoodieRecordPayload> oldRecord = records.get(key);
+    if (oldRecord != null) {
+      // Merge and store the merged record. The ordering val is taken to decide whether the same key record
+      // should be deleted or be kept. The old record is kept only if the DELETE record has smaller ordering val.
+      // For same ordering values, uses the natural order(arrival time semantics).
+
+      Comparable curOrderingVal = oldRecord.getData().getOrderingValue();
+      Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
+      // Checks the ordering value does not equal to 0
+      // because we use 0 as the default value which means natural order
+      boolean choosePrev = !deleteOrderingVal.equals(0)
+          && ReflectionUtils.isSameClass(curOrderingVal, deleteOrderingVal)
+          && curOrderingVal.compareTo(deleteOrderingVal) > 0;
+      if (choosePrev) {
+        // The DELETE message is obsolete if the old message has greater orderingVal.
+        return;
+      }
+    }
+    // Put the DELETE record
+    records.put(key, SpillableMapUtils.generateEmptyPayload(key,
+        deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue(), getPayloadClassFQN()));
   }
 
   public long getTotalTimeTakenToReadAndMergeBlocks() {

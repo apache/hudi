@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -404,11 +404,11 @@ public abstract class AbstractHoodieLogRecordReader {
   protected abstract void processNextRecord(HoodieRecord<? extends HoodieRecordPayload> hoodieRecord) throws Exception;
 
   /**
-   * Process next deleted key.
+   * Process next deleted record.
    *
-   * @param key Deleted record key
+   * @param deleteRecord Deleted record(hoodie key and ordering value)
    */
-  protected abstract void processNextDeletedKey(HoodieKey key);
+  protected abstract void processNextDeletedRecord(DeleteRecord deleteRecord);
 
   /**
    * Process the set of log blocks belonging to the last instant which is read fully.
@@ -433,7 +433,7 @@ public abstract class AbstractHoodieLogRecordReader {
           processDataBlock((HoodieParquetDataBlock) lastBlock, keys);
           break;
         case DELETE_BLOCK:
-          Arrays.stream(((HoodieDeleteBlock) lastBlock).getKeysToDelete()).forEach(this::processNextDeletedKey);
+          Arrays.stream(((HoodieDeleteBlock) lastBlock).getRecordsToDelete()).forEach(this::processNextDeletedRecord);
           break;
         case CORRUPT_BLOCK:
           LOG.warn("Found a corrupt block which was not rolled back");
