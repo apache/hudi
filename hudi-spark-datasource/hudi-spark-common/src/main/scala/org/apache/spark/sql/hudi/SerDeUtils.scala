@@ -21,16 +21,23 @@ import java.io.ByteArrayOutputStream
 
 import com.esotericsoftware.kryo.Kryo
 import com.esotericsoftware.kryo.io.{Input, Output}
+import org.apache.log4j.{LogManager, Logger}
 import org.apache.spark.SparkConf
 import org.apache.spark.serializer.KryoSerializer
 
 
 object SerDeUtils {
+  private val log = LogManager.getLogger(getClass)
 
   private val kryoLocal = new ThreadLocal[Kryo] {
-
     override protected def initialValue: Kryo = {
-      val serializer = new KryoSerializer(new SparkConf(true))
+      val conf = new SparkConf(true)
+      if (conf.get("spark.thriftserver.proxy.enabled", "").equals("true")) {
+        // Check whether JdbcServer is in multi-tenant mode.
+        log.warn("If ArrayIndexOutOfBoundsException occurs in JdbcServer multi-tenant mode, set spark.kryo.referenceTracking to true and " +
+          "spark.kryo.classesToRegister to scala.collection.immutable.Nil.")
+      }
+      val serializer = new KryoSerializer(conf)
       serializer.newKryo()
     }
   }
