@@ -213,14 +213,15 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     metaForP1.createNewFile();
     metaForP2.createNewFile();
 
-    // sync to metadata table
+    // Sync to metadata table
     metaClient.reloadActiveTimeline();
     HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
     Option metadataWriter = table.getMetadataWriter(instant1, Option.of(hoodieCommitMetadata));
     validateMetadata(testTable, true);
 
     assertTrue(metadataWriter.isPresent());
-    HoodieTableConfig hoodieTableConfig = new HoodieTableConfig(this.fs, metaClient.getMetaPath(), writeConfig.getPayloadClass());
+    HoodieTableConfig hoodieTableConfig =
+        new HoodieTableConfig(this.fs, metaClient.getMetaPath(), writeConfig.getPayloadClass());
     assertFalse(hoodieTableConfig.getMetadataPartitions().isEmpty());
 
     // Turn off metadata table
@@ -236,12 +237,15 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     Option metadataWriter2 = table2.getMetadataWriter(instant2, Option.of(hoodieCommitMetadata2));
     assertFalse(metadataWriter2.isPresent());
 
-    HoodieTableConfig hoodieTableConfig2 = new HoodieTableConfig(this.fs, metaClient.getMetaPath(), writeConfig2.getPayloadClass());
+    HoodieTableConfig hoodieTableConfig2 =
+        new HoodieTableConfig(this.fs, metaClient.getMetaPath(), writeConfig2.getPayloadClass());
     assertEquals(StringUtils.EMPTY_STRING, hoodieTableConfig2.getMetadataPartitions());
-    // assert MDT is deleted.
-    assertFalse(metaClient.getFs().exists(new Path(HoodieTableMetadata.getMetadataTableBasePath(writeConfig2.getBasePath()))));
+    // Assert metadata table folder is deleted
+    assertFalse(metaClient.getFs().exists(
+        new Path(HoodieTableMetadata.getMetadataTableBasePath(writeConfig2.getBasePath()))));
 
-    // enable MDT again and initial MDT through HoodieTable.getMetadataWriter() function
+    // Enable metadata table again and initialize metadata table through
+    // HoodieTable.getMetadataWriter() function
     HoodieWriteConfig writeConfig3 = HoodieWriteConfig.newBuilder()
         .withProperties(this.writeConfig.getProps())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
@@ -255,7 +259,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     Option metadataWriter3 = table3.getMetadataWriter(instant3, Option.of(hoodieCommitMetadata3));
     validateMetadata(testTable, true);
     assertTrue(metadataWriter3.isPresent());
-    HoodieTableConfig hoodieTableConfig3 = new HoodieTableConfig(this.fs, metaClient.getMetaPath(), writeConfig.getPayloadClass());
+    HoodieTableConfig hoodieTableConfig3 =
+        new HoodieTableConfig(this.fs, metaClient.getMetaPath(), writeConfig.getPayloadClass());
     assertFalse(hoodieTableConfig3.getMetadataPartitions().isEmpty());
   }
 

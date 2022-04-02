@@ -806,10 +806,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   }
 
   /**
-   * Initialize hoodie.table.metadata.enable in hoodie.properties;
-   * Check if current metadata table flag in hoodieWriteConfig is the same as recorded in hoodie.properties:
-   * 1. If the flag in hoodie.properties is true but it is false in hoodieWriteConfig, It means users turn off MDT and we need to clean up MDT.
-   * 2. Update hoodie.table.metadata.enable in hoodie.properties based on HoodieWriteConfig if the value is different.
+   * Deletes the metadata table if the writer disables metadata table with hoodie.metadata.enable=false
    */
   public void maybeDeleteMetadataTable() {
     if (shouldExecuteMetadataTableDeletion()) {
@@ -820,7 +817,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
           LOG.info("Deleting metadata table because it is disabled in writer.");
           fileSystem.delete(mdtBasePath, true);
         }
-        updateMetadataTableConfig();
+        clearMetadataTablePartitionsConfig();
       } catch (IOException ioe) {
         throw new HoodieIOException("Failed to delete metadata table.", ioe);
       }
@@ -841,10 +838,10 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   }
 
   /**
-   * update METADATA_TABLE_ENABLE.key() in hoodie.properties based on HoodieWriteConfig
+   * Clears hoodie.table.metadata.partitions in hoodie.properties
    */
-  private void updateMetadataTableConfig() {
-    LOG.info("Update hoodie.table.metadata.enable in hoodie.properties to " + config.isMetadataTableEnabled());
+  private void clearMetadataTablePartitionsConfig() {
+    LOG.info("Clear hoodie.table.metadata.partitions in hoodie.properties");
     metaClient.getTableConfig().setValue(
         HoodieTableConfig.TABLE_METADATA_PARTITIONS.key(), StringUtils.EMPTY_STRING);
     HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
