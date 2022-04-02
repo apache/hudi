@@ -24,7 +24,6 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.OrderedProperties;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -223,11 +222,6 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("Comma-separated list of metadata partitions that have been completely built and in-sync with data table. "
           + "These partitions are ready for use by the readers");
-
-  public static final ConfigProperty<Boolean> METADATA_TABLE_ENABLE = ConfigProperty
-      .key("hoodie.table.metadata.enable")
-      .defaultValue(HoodieMetadataConfig.ENABLE.defaultValue())
-      .withDocumentation("Enable the internal metadata table which serves table metadata like level file listings.");
 
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
@@ -613,11 +607,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public String getMetadataPartitions() {
     return getStringOrDefault(TABLE_METADATA_PARTITIONS, StringUtils.EMPTY_STRING);
   }
-
-  public Boolean getMetadataTableEnable() {
-    return getBooleanOrDefault(METADATA_TABLE_ENABLE);
-  }
-
+  
   public Map<String, String> propsMap() {
     return props.entrySet().stream()
         .collect(Collectors.toMap(e -> String.valueOf(e.getKey()), e -> String.valueOf(e.getValue())));

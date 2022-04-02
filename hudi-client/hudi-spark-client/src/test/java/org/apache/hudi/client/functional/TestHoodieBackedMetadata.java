@@ -18,19 +18,6 @@
 
 package org.apache.hudi.client.functional;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
-import org.apache.hadoop.hbase.util.Pair;
-import org.apache.hadoop.util.Time;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
@@ -80,6 +67,7 @@ import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -104,6 +92,16 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.upgrade.SparkUpgradeDowngradeHelper;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+import org.apache.hadoop.hbase.util.Pair;
+import org.apache.hadoop.util.Time;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -223,10 +221,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     assertTrue(metadataWriter.isPresent());
     HoodieTableConfig hoodieTableConfig = new HoodieTableConfig(this.fs, metaClient.getMetaPath(), writeConfig.getPayloadClass());
-    // assert hoodie.table.metadata.enable=true
-    assertTrue(hoodieTableConfig.getMetadataTableEnable());
+    assertFalse(hoodieTableConfig.getMetadataPartitions().isEmpty());
 
-    // Turn off  enableMetadata Table
+    // Turn off metadata table
     HoodieWriteConfig writeConfig2 = HoodieWriteConfig.newBuilder()
         .withProperties(this.writeConfig.getProps())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
@@ -238,14 +235,13 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieTable table2 = HoodieSparkTable.create(writeConfig2, context, metaClient);
     Option metadataWriter2 = table2.getMetadataWriter(instant2, Option.of(hoodieCommitMetadata2));
     assertFalse(metadataWriter2.isPresent());
-    HoodieTableConfig hoodieTableConfig2 = new HoodieTableConfig(this.fs, metaClient.getMetaPath(), writeConfig2.getPayloadClass());
 
-    // assert hoodie.table.metadata.enable=false
-    assertFalse(hoodieTableConfig2.getMetadataTableEnable());
+    HoodieTableConfig hoodieTableConfig2 = new HoodieTableConfig(this.fs, metaClient.getMetaPath(), writeConfig2.getPayloadClass());
+    assertEquals(StringUtils.EMPTY_STRING, hoodieTableConfig2.getMetadataPartitions());
     // assert MDT is deleted.
     assertFalse(metaClient.getFs().exists(new Path(HoodieTableMetadata.getMetadataTableBasePath(writeConfig2.getBasePath()))));
 
-    // enbale MDT again and initial MDT through HoodieTable.getMetadataWriter() function
+    // enable MDT again and initial MDT through HoodieTable.getMetadataWriter() function
     HoodieWriteConfig writeConfig3 = HoodieWriteConfig.newBuilder()
         .withProperties(this.writeConfig.getProps())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
@@ -260,8 +256,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     validateMetadata(testTable, true);
     assertTrue(metadataWriter3.isPresent());
     HoodieTableConfig hoodieTableConfig3 = new HoodieTableConfig(this.fs, metaClient.getMetaPath(), writeConfig.getPayloadClass());
-    // assert hoodie.table.metadata.enable=true
-    assertTrue(hoodieTableConfig3.getMetadataTableEnable());
+    assertFalse(hoodieTableConfig3.getMetadataPartitions().isEmpty());
   }
 
   /**

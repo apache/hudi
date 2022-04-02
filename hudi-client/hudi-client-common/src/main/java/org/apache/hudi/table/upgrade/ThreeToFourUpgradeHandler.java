@@ -23,7 +23,6 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 
 import java.util.Hashtable;
@@ -46,11 +45,6 @@ public class ThreeToFourUpgradeHandler implements UpgradeHandler {
     // schema for the files partition is same between the two versions
     if (config.isMetadataTableEnabled() && metadataPartitionExists(config.getBasePath(), context, MetadataPartitionType.FILES)) {
       tablePropsToAdd.put(TABLE_METADATA_PARTITIONS, MetadataPartitionType.FILES.getPartitionPath());
-    }
-    tablePropsToAdd.put(HoodieTableConfig.METADATA_TABLE_ENABLE, Boolean.toString(config.isMetadataTableEnabled()));
-    // trying to clean up MDT during upgrade when users disable metadata table.
-    if (!config.isMetadataTableEnabled()) {
-      HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
     }
     return tablePropsToAdd;
   }
