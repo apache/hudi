@@ -1548,7 +1548,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean isMetadataColumnStatsIndexEnabled() {
-    return isMetadataTableEnabled() && getMetadataConfig().isColumnStatsIndexEnabled() && getMetadataConfig().isColumnStatsIndexEnabled();
+    return isMetadataTableEnabled() && getMetadataConfig().isColumnStatsIndexEnabled();
   }
 
   public String getColumnsEnabledForColumnStatsIndex() {
