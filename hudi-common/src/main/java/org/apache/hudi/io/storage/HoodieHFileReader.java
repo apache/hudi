@@ -58,6 +58,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
@@ -246,7 +247,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   public List<Pair<String, R>> readRecords(List<String> keys, Schema schema) throws IOException {
     this.schema = schema;
     List<Pair<String, R>> records = new ArrayList<>();
-    for (String key: keys) {
+    for (String key : keys) {
       Option<R> value = getRecordByKey(key, schema);
       if (value.isPresent()) {
         records.add(new Pair(key, value.get()));
@@ -257,39 +258,51 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
 
   public ClosableIterator<R> getRecordIteratorByKeyPrefix(List<String> keyPrefixes, Schema schema) throws IOException {
     this.schema = schema;
+    return new InternalClosableIterator(keyPrefixes);
+  }
 
-    return new ClosableIterator<R>() {
-      private final Iterator<String> keyPrefixesIterator = keyPrefixes.iterator();
-      private Iterator<R> recordsIterator;
-      private R next;
+  class InternalClosableIterator implements ClosableIterator<R> {
 
-      @Override
-      public boolean hasNext() {
-        try {
-          while (true) {
-            if (recordsIterator != null && recordsIterator.hasNext()) {
-              next = recordsIterator.next();
-              return true;
-            } else if (keyPrefixesIterator.hasNext()) {
-              recordsIterator = getRecordsByKeyPrefixes(Collections.singletonList(keyPrefixesIterator.next()), schema)
-                  .values().iterator();
-            } else {
-              return false;
-            }
+    private Iterator<String> keyPrefixesIterator;
+    private Iterator<R> recordsIterator;
+    private R next;
+    private HFileScanner hFileScanner;
+
+    InternalClosableIterator(List<String> keyPrefixes) throws IOException {
+      keyPrefixesIterator = keyPrefixes.iterator();
+      // Instantiate a KeyScanner locally and use it for the lifecycle of this interator and not re-use the class instance variable.
+      hFileScanner = reader.getScanner(false, false);
+      hFileScanner.seekTo();
+    }
+
+    @Override
+    public boolean hasNext() {
+      try {
+        while (true) {
+          if (recordsIterator != null && recordsIterator.hasNext()) {
+            next = recordsIterator.next();
+            return true;
+          } else if (keyPrefixesIterator.hasNext()) {
+            recordsIterator = getRecordsByKeyPrefixes(Collections.singletonList(keyPrefixesIterator.next()), schema, Option.of(hFileScanner))
+                .values().iterator();
+          } else {
+            return false;
           }
-        } catch (IOException e) {
-          throw new HoodieIOException("Unable to read next record from HFile", e);
         }
+      } catch (IOException e) {
+        throw new HoodieIOException("Unable to read next record from HFile", e);
       }
+    }
 
-      @Override
-      public R next() {
-        return next;
-      }
+    @Override
+    public R next() {
+      return next;
+    }
 
-      @Override
-      public void close() {}
-    };
+    @Override
+    public void close() {
+      hFileScanner.close();
+    }
   }
 
   public ClosableIterator<R> getRecordIterator(List<String> keys, Schema schema) throws IOException {
@@ -297,6 +310,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     Iterator<String> iterator = keys.iterator();
     return new ClosableIterator<R>() {
       private R next;
+
       @Override
       public void close() {
       }
@@ -389,46 +403,59 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   }
 
   @Override
-  public Map<String, R> getRecordsByKeyPrefixes(List<String> keyPrefixes, Schema schema) throws IOException {
+  public Map<String, R> getRecordsByKeyPrefixes(List<String> keyPrefixes, Schema schema, Option<HFileScanner> hFileScanner) throws IOException {
     Schema readerSchema = getSchema();
     Option<Schema.Field> keyFieldSchema = Option.ofNullable(readerSchema.getField(KEY_FIELD_NAME));
-
     ValidationUtils.checkState(keyFieldSchema != null);
-
     // NOTE: It's always beneficial to sort keys being sought to by HFile reader
     //       to avoid seeking back and forth
     Collections.sort(keyPrefixes);
 
     List<Pair<byte[], byte[]>> keyRecordsBytes = new ArrayList<>(keyPrefixes.size());
-
     synchronized (this) {
-      if (keyScanner == null) {
-        keyScanner = reader.getScanner(false, false);
+      HFileScanner hFileScannerToUse = hFileScanner.isPresent() ? hFileScanner.get() : keyScanner;
+      if (hFileScannerToUse == null) {
+        hFileScannerToUse = reader.getScanner(false, false);
+      } else if (!hFileScanner.isPresent()) {
+        // if re-using the same class instance, seekTo file beginning
+        hFileScannerToUse.seekTo();
       }
 
       for (String keyPrefix : keyPrefixes) {
         KeyValue kv = new KeyValue(keyPrefix.getBytes(), null, null, null);
 
-        if (keyScanner.seekTo(kv) == 0) {
-          do {
-            Cell c = keyScanner.getCell();
+        int val = hFileScannerToUse.seekTo(kv);
+        // what does seekTo() does: 
+        // eg entries in file. [key01, key02, key03, key04,..., key20]
+        // when keyPrefix is "key", seekTo will return -1 and place the cursor just before key01. getCel() will return key01 entry
+        // when keyPrefix is ""key03", seekTo will return 0 and place the cursor just before key01. getCell() will return key03 entry
+        // when keyPrefix is ""key1", seekTo will return 1 and place the cursor just before key10(i.e. key09). call next() and then call getCell() to see key10 entry
+        // when keyPrefix is "key99", seekTo will return 1 and place the cursor just before last entry, ie. key04. getCell() will return key04 entry.
 
-            byte[] keyBytes = Arrays.copyOfRange(c.getRowArray(), c.getRowOffset(), c.getRowOffset() + c.getRowLength());
-            String key = new String(keyBytes);
-            // Check whether we're still reading records corresponding to the key-prefix
-            if (!key.startsWith(keyPrefix)) {
-              break;
-            }
-
-            // Extract the byte value before releasing the lock since we cannot hold on to the returned cell afterwards
-            byte[] valueBytes = Arrays.copyOfRange(c.getValueArray(), c.getValueOffset(), c.getValueOffset() + c.getValueLength());
-            keyRecordsBytes.add(Pair.newPair(keyBytes, valueBytes));
-          } while (keyScanner.next());
+        if (val == 1) { // move to next entry if return value is 1
+          if (!hFileScannerToUse.next()) {
+            // we have reached the end of file. we can skip proceeding further
+            break;
+          }
         }
+        do {
+          Cell c = hFileScannerToUse.getCell();
+          byte[] keyBytes = Arrays.copyOfRange(c.getRowArray(), c.getRowOffset(), c.getRowOffset() + c.getRowLength());
+          String key = new String(keyBytes);
+          // Check whether we're still reading records corresponding to the key-prefix
+          if (!key.startsWith(keyPrefix)) {
+            break;
+          }
+
+          // Extract the byte value before releasing the lock since we cannot hold on to the returned cell afterwards
+          byte[] valueBytes = Arrays.copyOfRange(c.getValueArray(), c.getValueOffset(), c.getValueOffset() + c.getValueLength());
+          keyRecordsBytes.add(Pair.newPair(keyBytes, valueBytes));
+        } while (hFileScannerToUse.next());
       }
     }
 
-    HashMap<String, R> values = new HashMap<>(keyRecordsBytes.size());
+    // Use  tree map so that entries are in sorted in the map being returned.
+    Map<String, R> values = new TreeMap<String, R>();
     for (Pair<byte[], byte[]> kv : keyRecordsBytes) {
       R record = deserialize(kv.getFirst(), kv.getSecond(), readerSchema, readerSchema, keyFieldSchema);
       values.put(new String(kv.getFirst()), record);

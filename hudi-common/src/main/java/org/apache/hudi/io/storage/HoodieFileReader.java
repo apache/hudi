@@ -26,6 +26,8 @@ import java.util.Set;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.hbase.io.hfile.HFileScanner;
+
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.util.Option;
 
@@ -41,12 +43,12 @@ public interface HoodieFileReader<R extends IndexedRecord> extends AutoCloseable
     throw new UnsupportedOperationException();
   }
 
-  default Map<String, R> getRecordsByKeyPrefixes(List<String> keyPrefixes, Schema schema) throws IOException {
+  default Map<String, R> getRecordsByKeyPrefixes(List<String> keyPrefixes, Schema schema, Option<HFileScanner> hFileScanner) throws IOException {
     throw new UnsupportedOperationException();
   }
 
   default Map<String, R> getRecordsByKeyPrefixes(List<String> keyPrefixes) throws IOException {
-    return getRecordsByKeyPrefixes(keyPrefixes, getSchema());
+    return getRecordsByKeyPrefixes(keyPrefixes, getSchema(), Option.empty());
   }
 
   Iterator<R> getRecordIterator(Schema readerSchema) throws IOException;

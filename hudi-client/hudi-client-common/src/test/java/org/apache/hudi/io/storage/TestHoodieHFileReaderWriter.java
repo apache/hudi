@@ -257,6 +257,40 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
             .collect(Collectors.toList());
 
     assertEquals(allRecords, recordsByPrefix);
+
+    // filter for "key1" : entries from key10 to key19 should be matched
+    List<GenericRecord> expectedKey1s = allRecords.stream().filter(entry -> (entry.get("_row_key").toString()).contains("key1")).collect(Collectors.toList());
+    iterator =
+        hfileReader.getRecordIteratorByKeyPrefix(Collections.singletonList("key1"), avroSchema);
+    recordsByPrefix =
+        StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
+            .collect(Collectors.toList());
+    assertEquals(expectedKey1s, recordsByPrefix);
+
+    // exact match
+    List<GenericRecord> expectedKey25 = allRecords.stream().filter(entry -> (entry.get("_row_key").toString()).contains("key25")).collect(Collectors.toList());
+    iterator =
+        hfileReader.getRecordIteratorByKeyPrefix(Collections.singletonList("key25"), avroSchema);
+    recordsByPrefix =
+        StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
+            .collect(Collectors.toList());
+    assertEquals(expectedKey25, recordsByPrefix);
+
+    // no match. key prefix is beyond entries in file.
+    iterator =
+        hfileReader.getRecordIteratorByKeyPrefix(Collections.singletonList("key99"), avroSchema);
+    recordsByPrefix =
+        StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
+            .collect(Collectors.toList());
+    assertEquals(Collections.emptyList(), recordsByPrefix);
+
+    // no match. but keyPrefix is in between the entries found in file.
+    iterator =
+        hfileReader.getRecordIteratorByKeyPrefix(Collections.singletonList("key1234"), avroSchema);
+    recordsByPrefix =
+        StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
+            .collect(Collectors.toList());
+    assertEquals(Collections.emptyList(), recordsByPrefix);
   }
 
   @ParameterizedTest
