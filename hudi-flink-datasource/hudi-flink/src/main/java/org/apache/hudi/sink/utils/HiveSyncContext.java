@@ -23,7 +23,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
-import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.util.StreamerUtil;
