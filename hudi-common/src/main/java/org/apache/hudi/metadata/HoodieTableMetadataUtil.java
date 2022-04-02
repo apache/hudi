@@ -550,8 +550,11 @@ public class HoodieTableMetadataUtil {
     int parallelism = Math.max(Math.min(deleteFileList.size(), recordsGenerationParams.getColumnStatsIndexParallelism()), 1);
     return engineContext.parallelize(deleteFileList, parallelism)
         .flatMap(deleteFileInfoPair -> {
-          if (deleteFileInfoPair.getRight().endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
-            return getColumnStats(deleteFileInfoPair.getLeft(), deleteFileInfoPair.getRight(), dataTableMetaClient, columnsToIndex, true).iterator();
+          String partitionPath = deleteFileInfoPair.getLeft();
+          String filePath = deleteFileInfoPair.getRight();
+
+          if (filePath.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
+            return getColumnStatsRecords(partitionPath, filePath, dataTableMetaClient, columnsToIndex, true).iterator();
           }
           return Collections.emptyListIterator();
         });
@@ -908,7 +911,7 @@ public class HoodieTableMetadataUtil {
 
       return deletedFileList.stream().flatMap(deletedFile -> {
         final String filePathWithPartition = partitionName + "/" + deletedFile;
-        return getColumnStats(partition, filePathWithPartition, dataTableMetaClient, columnsToIndex, true);
+        return getColumnStatsRecords(partition, filePathWithPartition, dataTableMetaClient, columnsToIndex, true);
       }).iterator();
     });
     allRecordsRDD = allRecordsRDD.union(deletedFilesRecordsRDD);
@@ -929,7 +932,7 @@ public class HoodieTableMetadataUtil {
           return Stream.empty();
         }
         final String filePathWithPartition = partitionName + "/" + appendedFileNameLengthEntry.getKey();
-        return getColumnStats(partition, filePathWithPartition, dataTableMetaClient, columnsToIndex, false);
+        return getColumnStatsRecords(partition, filePathWithPartition, dataTableMetaClient, columnsToIndex, false);
       }).iterator();
 
     });
@@ -1116,34 +1119,55 @@ public class HoodieTableMetadataUtil {
       return HoodieMetadataPayload.createColumnStatsRecords(writeStat.getPartitionPath(), columnRangeMetadataList, false);
     }
 
-    return getColumnStats(writeStat.getPartitionPath(), writeStat.getPath(), datasetMetaClient, columnsToIndex, false);
+    return getColumnStatsRecords(writeStat.getPartitionPath(), writeStat.getPath(), datasetMetaClient, columnsToIndex, false);
   }
 
-  private static Stream<HoodieRecord> getColumnStats(final String partitionPath, final String filePathWithPartition,
-                                                     HoodieTableMetaClient datasetMetaClient,
-                                                     List<String> columnsToIndex,
-                                                     boolean isDeleted) {
-    final String partition = getPartition(partitionPath);
-    final int offset = partition.equals(NON_PARTITIONED_NAME) ? (filePathWithPartition.startsWith("/") ? 1 : 0)
-        : partition.length() + 1;
-    final String fileName = filePathWithPartition.substring(offset);
+  private static Stream<HoodieRecord> getColumnStatsRecords(final String partitionPath,
+                                                            final String filePath,
+                                                            HoodieTableMetaClient datasetMetaClient,
+                                                            List<String> columnsToIndex,
+                                                            boolean isDeleted) {
+    final String partitionName = getPartition(partitionPath);
 
-    if (filePathWithPartition.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
-      final Path fullFilePath = new Path(datasetMetaClient.getBasePath(), filePathWithPartition);
-      List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList;
-      if (!isDeleted) {
-        columnRangeMetadataList = new ParquetUtils().readRangeFromParquetMetadata(
-            datasetMetaClient.getHadoopConf(), fullFilePath, columnsToIndex);
-      } else {
-        // TODO we should delete records instead of stubbing them
-        columnRangeMetadataList =
-            columnsToIndex.stream().map(entry -> HoodieColumnRangeMetadata.stub(fileName, entry))
-                .collect(Collectors.toList());
+    final int offset = partitionName.equals(NON_PARTITIONED_NAME)
+        ? (filePath.startsWith("/") ? 1 : 0)
+        : partitionName.length() + 1;
+    final String fileName = filePath.substring(offset);
+
+    if (isDeleted) {
+      // TODO we should delete records instead of stubbing them
+      List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = columnsToIndex.stream()
+          .map(entry -> HoodieColumnRangeMetadata.stub(fileName, entry))
+          .collect(Collectors.toList());
+
+      return HoodieMetadataPayload.createColumnStatsRecords(partitionPath, columnRangeMetadataList, true);
+    }
+
+    List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadata =
+        readColumnRangeMetadataFrom(filePath, datasetMetaClient, columnsToIndex);
+
+    return HoodieMetadataPayload.createColumnStatsRecords(partitionPath, columnRangeMetadata, false);
+  }
+
+  private static List<HoodieColumnRangeMetadata<Comparable>> readColumnRangeMetadataFrom(String filePath,
+                                                                                         HoodieTableMetaClient datasetMetaClient,
+                                                                                         List<String> columnsToIndex) {
+    try {
+      if (filePath.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
+        Path fullFilePath = new Path(datasetMetaClient.getBasePath(), filePath);
+        List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList =
+            new ParquetUtils().readRangeFromParquetMetadata(datasetMetaClient.getHadoopConf(), fullFilePath, columnsToIndex);
+
+        return columnRangeMetadataList;
       }
-      return HoodieMetadataPayload.createColumnStatsRecords(partitionPath, columnRangeMetadataList, isDeleted);
-    } else {
-      LOG.warn("Column range index not supported for: " + fileName);
-      return Stream.empty();
+
+      LOG.warn("Column range index not supported for: " + filePath);
+      return Collections.emptyList();
+    } catch (Exception e) {
+      // NOTE: In case reading column range metadata from individual file failed,
+      //       we simply fall back, in lieu of failing the whole task
+      LOG.error("Failed to fetch column range metadata for: " + filePath);
+      return Collections.emptyList();
     }
   }
 
