@@ -25,6 +25,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 
@@ -158,6 +159,9 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    */
   Map<Pair<String, String>, HoodieMetadataColumnStats> getColumnStats(final List<Pair<String, String>> partitionNameFileNameList, final String columnName)
       throws HoodieMetadataException;
+
+  List<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes,
+                                                                              String partitionName);
 
   /**
    * Get the instant time to which the metadata is synced w.r.t data timeline.

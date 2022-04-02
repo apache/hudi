@@ -425,7 +425,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
         KeyValue kv = new KeyValue(keyPrefix.getBytes(), null, null, null);
 
         int val = hFileScannerToUse.seekTo(kv);
-        // what does seekTo() does: 
+        // what does seekTo() does:
         // eg entries in file. [key01, key02, key03, key04,..., key20]
         // when keyPrefix is "key", seekTo will return -1 and place the cursor just before key01. getCel() will return key01 entry
         // when keyPrefix is ""key03", seekTo will return 0 and place the cursor just before key01. getCell() will return key03 entry

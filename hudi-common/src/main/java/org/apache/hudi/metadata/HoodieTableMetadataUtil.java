@@ -815,7 +815,7 @@ public class HoodieTableMetadataUtil {
    * @param path
    * @return
    */
-  static String getPartition(@Nonnull String path) {
+  public static String getPartition(@Nonnull String path) {
     return EMPTY_PARTITION_NAME.equals(path) ? NON_PARTITIONED_NAME : path;
   }
 
