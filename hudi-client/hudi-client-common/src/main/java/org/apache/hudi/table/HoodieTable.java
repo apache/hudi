@@ -18,11 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.avro.Schema;
-import org.apache.avro.specific.SpecificRecordBase;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
@@ -50,6 +45,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -64,6 +60,7 @@ import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -80,6 +77,12 @@ import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.storage.HoodieLayoutFactory;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
+
+import org.apache.avro.Schema;
+import org.apache.avro.specific.SpecificRecordBase;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -800,6 +803,48 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     // Each engine is expected to override this and
     // provide the actual metadata writer, if enabled.
     return Option.empty();
+  }
+
+  /**
+   * Deletes the metadata table if the writer disables metadata table with hoodie.metadata.enable=false
+   */
+  public void maybeDeleteMetadataTable() {
+    if (shouldExecuteMetadataTableDeletion()) {
+      try {
+        Path mdtBasePath = new Path(HoodieTableMetadata.getMetadataTableBasePath(config.getBasePath()));
+        FileSystem fileSystem = metaClient.getFs();
+        if (fileSystem.exists(mdtBasePath)) {
+          LOG.info("Deleting metadata table because it is disabled in writer.");
+          fileSystem.delete(mdtBasePath, true);
+        }
+        clearMetadataTablePartitionsConfig();
+      } catch (IOException ioe) {
+        throw new HoodieIOException("Failed to delete metadata table.", ioe);
+      }
+    }
+  }
+
+  private boolean shouldExecuteMetadataTableDeletion() {
+    // Only execute metadata table deletion when all the following conditions are met
+    // (1) This is data table
+    // (2) Metadata table is disabled in HoodieWriteConfig for the writer
+    // (3) Check `HoodieTableConfig.TABLE_METADATA_PARTITIONS`.  Either the table config
+    // does not exist, or the table config is non-empty indicating that metadata table
+    // partitions are ready to use
+    return !HoodieTableMetadata.isMetadataTable(metaClient.getBasePath())
+        && !config.isMetadataTableEnabled()
+        && (!metaClient.getTableConfig().contains(HoodieTableConfig.TABLE_METADATA_PARTITIONS)
+        || !StringUtils.isNullOrEmpty(metaClient.getTableConfig().getMetadataPartitions()));
+  }
+
+  /**
+   * Clears hoodie.table.metadata.partitions in hoodie.properties
+   */
+  private void clearMetadataTablePartitionsConfig() {
+    LOG.info("Clear hoodie.table.metadata.partitions in hoodie.properties");
+    metaClient.getTableConfig().setValue(
+        HoodieTableConfig.TABLE_METADATA_PARTITIONS.key(), StringUtils.EMPTY_STRING);
+    HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
   }
 
   public HoodieTableMetadata getMetadataTable() {

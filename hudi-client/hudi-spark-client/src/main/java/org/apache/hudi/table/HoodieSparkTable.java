@@ -122,6 +122,8 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
       } catch (IOException e) {
         throw new HoodieMetadataException("Checking existence of metadata table failed", e);
       }
+    } else {
+      maybeDeleteMetadataTable();
     }
 
     return Option.empty();

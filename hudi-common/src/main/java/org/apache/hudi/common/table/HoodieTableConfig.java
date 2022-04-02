@@ -607,7 +607,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public String getMetadataPartitions() {
     return getStringOrDefault(TABLE_METADATA_PARTITIONS, StringUtils.EMPTY_STRING);
   }
-
+  
   public Map<String, String> propsMap() {
     return props.entrySet().stream()
         .collect(Collectors.toMap(e -> String.valueOf(e.getKey()), e -> String.valueOf(e.getValue())));
