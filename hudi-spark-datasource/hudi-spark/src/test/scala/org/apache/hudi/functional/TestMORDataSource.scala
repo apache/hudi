@@ -138,6 +138,18 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     assertEquals(1, hudiIncDF1.select("_hoodie_commit_time").distinct().count())
     assertEquals(commit1Time, hudiIncDF1.select("_hoodie_commit_time").head().get(0).toString)
     hudiIncDF1.show(1)
+
+    // base file only with enableVectorizedReader
+    val hudiIncDF1Vectorized = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
+      .option(DataSourceReadOptions.END_INSTANTTIME.key, commit1Time)
+      .option(DataSourceReadOptions.INCREMENTAL_VECTORIZED_READER_ENABLE.key, "true")
+      .load(basePath)
+    assertEquals(100, hudiIncDF1Vectorized.count())
+    assertEquals(1, hudiIncDF1Vectorized.select("_hoodie_commit_time").distinct().count())
+    assertEquals(commit1Time, hudiIncDF1Vectorized.select("_hoodie_commit_time").head().get(0).toString)
+    hudiIncDF1Vectorized.show(1)
     // log file only
     val hudiIncDF2 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
@@ -148,6 +160,17 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     assertEquals(1, hudiIncDF2.select("_hoodie_commit_time").distinct().count())
     assertEquals(commit2Time, hudiIncDF2.select("_hoodie_commit_time").head().get(0).toString)
     hudiIncDF2.show(1)
+    // log file only with enableVectorizedReader
+    val hudiIncDF2Vectorized = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commit1Time)
+      .option(DataSourceReadOptions.END_INSTANTTIME.key, commit2Time)
+      .option(DataSourceReadOptions.INCREMENTAL_VECTORIZED_READER_ENABLE.key, "true")
+      .load(basePath)
+    assertEquals(100, hudiIncDF2Vectorized.count())
+    assertEquals(1, hudiIncDF2Vectorized.select("_hoodie_commit_time").distinct().count())
+    assertEquals(commit2Time, hudiIncDF2Vectorized.select("_hoodie_commit_time").head().get(0).toString)
+    hudiIncDF2Vectorized.show(1)
 
     // base file + log file
     val hudiIncDF3 = spark.read.format("org.apache.hudi")
@@ -159,6 +182,17 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     // log file being load
     assertEquals(1, hudiIncDF3.select("_hoodie_commit_time").distinct().count())
     assertEquals(commit2Time, hudiIncDF3.select("_hoodie_commit_time").head().get(0).toString)
+    // base file + log file with enableVectorizedReader
+    val hudiIncDF3Vectorized = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
+      .option(DataSourceReadOptions.END_INSTANTTIME.key, commit2Time)
+      .option(DataSourceReadOptions.INCREMENTAL_VECTORIZED_READER_ENABLE.key, "true")
+      .load(basePath)
+    assertEquals(100, hudiIncDF3Vectorized.count())
+    // log file being load
+    assertEquals(1, hudiIncDF3Vectorized.select("_hoodie_commit_time").distinct().count())
+    assertEquals(commit2Time, hudiIncDF3Vectorized.select("_hoodie_commit_time").head().get(0).toString)
 
     // Test incremental query has no instant in range
     val emptyIncDF = spark.read.format("org.apache.hudi")
@@ -167,6 +201,14 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
       .option(DataSourceReadOptions.END_INSTANTTIME.key, "001")
       .load(basePath)
     assertEquals(0, emptyIncDF.count())
+    // Test incremental query has no instant in range with enableVectorizedReader
+    val emptyIncDFVectorized = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
+      .option(DataSourceReadOptions.END_INSTANTTIME.key, "001")
+      .option(DataSourceReadOptions.INCREMENTAL_VECTORIZED_READER_ENABLE.key, "true")
+      .load(basePath)
+    assertEquals(0, emptyIncDFVectorized.count())
 
     // Unmerge
     val hudiSnapshotSkipMergeDF2 = spark.read.format("org.apache.hudi")

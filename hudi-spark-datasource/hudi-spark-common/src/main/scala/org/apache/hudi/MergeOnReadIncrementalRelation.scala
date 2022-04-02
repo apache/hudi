@@ -48,9 +48,17 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
 
   override type FileSplit = HoodieMergeOnReadFileSplit
 
+  def enableVectorizedReader(): Boolean = {
+    optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_VECTORIZED_READER_ENABLE.key(), "false").toBoolean
+  }
+
   override def imbueConfigs(sqlContext: SQLContext): Unit = {
     super.imbueConfigs(sqlContext)
-    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "false")
+    if (enableVectorizedReader()) {
+      sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "true")
+    } else {
+      sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "false")
+    }
   }
 
   override protected def timeline: HoodieTimeline = {
@@ -61,14 +69,17 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
     }
   }
 
-  override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
-    val rawRdd = super.buildScan(requiredColumns, filters).asInstanceOf[RDD[InternalRow]]
-    val filterParams = setUpFilterParams()
-    rawRdd.mapPartitions {f =>
-      // apply filter for incremental query
-      val filterPreds = GeneratePredicate.generate(filterParams.filter, filterParams.attributes)
-      f.filter(filterPreds.eval(_))
-    }.asInstanceOf[RDD[Row]]
+  protected override def postOperationOnComposeRDD(rdd: RDD[InternalRow], requiredSchema: HoodieTableSchema): RDD[Row] = {
+    if (enableVectorizedReader()) {
+      val filterParams = setUpFilterParams(requiredSchema: HoodieTableSchema)
+      rdd.mapPartitions {f =>
+        // apply filter for incremental query
+        val filterPreds = GeneratePredicate.generate(filterParams.filter, filterParams.attributes)
+        f.filter(filterPreds.eval(_))
+      }.asInstanceOf[RDD[Row]]
+    } else {
+      super.postOperationOnComposeRDD(rdd, requiredSchema)
+    }
   }
 
   protected override def composeRDD(fileSplits: Seq[HoodieMergeOnReadFileSplit],
@@ -81,9 +92,6 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
     val requiredFilters = incrementalSpanRecordFilters
     val optionalFilters = filters
     val readers = createBaseFileReaders(tableSchema, requiredSchema, requestedColumns, requiredFilters, optionalFilters)
-
-    // setUp tableRequiredSchema
-    tableRequiredSchema = requiredSchema.structTypeSchema
 
     val hoodieTableState = getTableState
     // TODO(HUDI-3639) implement incremental span record filtering w/in RDD to make sure returned iterator is appropriately
@@ -136,8 +144,8 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
     filteredFileSlices
   }
 
-  private def setUpFilterParams(): FilterParams = {
-    val attrs = HoodieSparkUtils.toAttribute(tableRequiredSchema)
+  private def setUpFilterParams(requiredSchema: HoodieTableSchema): FilterParams = {
+    val attrs = HoodieSparkUtils.toAttribute(requiredSchema.structTypeSchema)
     val filterExpression = convertToExpressions(incrementalSpanRecordFilters.toArray).map { e =>
       e transform {
         case a: AttributeReference =>
@@ -185,8 +193,6 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   protected lazy val affectedFilesInCommits: Array[FileStatus] = {
     listAffectedFilesForCommits(conf, new Path(metaClient.getBasePath), commitsMetadata)
   }
-
-  protected var tableRequiredSchema: StructType = _
 
   // Record filters making sure that only records w/in the requested bounds are being fetched as part of the
   // scan collected by this relation
