@@ -53,7 +53,10 @@ import java.util.stream.Stream;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toList;
+import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.apache.hudi.index.HoodieIndexUtils.getLatestBaseFilesForAllPartitions;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getCompletedMetadataPartitions;
+import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 
 /**
  * Indexing mechanism based on bloom filter. Each parquet file includes its row_key bloom filter in its metadata.
@@ -118,14 +121,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
     List<String> affectedPartitionPathList = new ArrayList<>(recordsPerPartition.keySet());
 
     // Step 2: Load all involved files as <Partition, filename> pairs
-    List<Pair<String, BloomIndexFileInfo>> fileInfoList;
-    if (config.getBloomIndexPruneByRanges()) {
-      fileInfoList = (config.isMetadataColumnStatsIndexEnabled()
-          ? loadColumnRangesFromMetaIndex(affectedPartitionPathList, context, hoodieTable)
-          : loadColumnRangesFromFiles(affectedPartitionPathList, context, hoodieTable));
-    } else {
-      fileInfoList = getFileInfoForLatestBaseFiles(affectedPartitionPathList, context, hoodieTable);
-    }
+    List<Pair<String, BloomIndexFileInfo>> fileInfoList = getBloomIndexFileInfoForPartitions(context, hoodieTable, affectedPartitionPathList);
     final Map<String, List<BloomIndexFileInfo>> partitionToFileInfo =
         fileInfoList.stream().collect(groupingBy(Pair::getLeft, mapping(Pair::getRight, toList())));
 
@@ -136,6 +132,28 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
 
     return bloomIndexHelper.findMatchingFilesForRecordKeys(config, context, hoodieTable,
         partitionRecordKeyPairs, fileComparisonPairs, partitionToFileInfo, recordsPerPartition);
+  }
+
+  private List<Pair<String, BloomIndexFileInfo>> getBloomIndexFileInfoForPartitions(HoodieEngineContext context,
+                                                                                    HoodieTable hoodieTable,
+                                                                                    List<String> affectedPartitionPathList) {
+    List<Pair<String, BloomIndexFileInfo>> fileInfoList = new ArrayList<>();
+
+    if (config.getBloomIndexPruneByRanges()) {
+      // load column ranges from metadata index if column stats index is enabled and column_stats metadata partition is available
+      if (config.isMetadataColumnStatsIndexEnabled()
+          && getCompletedMetadataPartitions(hoodieTable.getMetaClient().getTableConfig()).contains(COLUMN_STATS.getPartitionPath())) {
+        fileInfoList = loadColumnRangesFromMetaIndex(affectedPartitionPathList, context, hoodieTable);
+      }
+      // fallback to loading column ranges from files
+      if (isNullOrEmpty(fileInfoList)) {
+        fileInfoList = loadColumnRangesFromFiles(affectedPartitionPathList, context, hoodieTable);
+      }
+    } else {
+      fileInfoList = getFileInfoForLatestBaseFiles(affectedPartitionPathList, context, hoodieTable);
+    }
+
+    return fileInfoList;
   }
 
   /**
