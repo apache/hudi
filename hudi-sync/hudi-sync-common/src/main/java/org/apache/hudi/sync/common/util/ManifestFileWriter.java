@@ -40,17 +40,17 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class ManifestFileUtil {
+public class ManifestFileWriter {
 
   public static final String MANIFEST_FOLDER_NAME = "manifest";
   public static final String MANIFEST_FILE_NAME = "latest-snapshot.csv";
-  private static final Logger LOG = LogManager.getLogger(ManifestFileUtil.class);
+  private static final Logger LOG = LogManager.getLogger(ManifestFileWriter.class);
 
   private final HoodieTableMetaClient metaClient;
   private final boolean useFileListingFromMetadata;
   private final boolean assumeDatePartitioning;
 
-  private ManifestFileUtil(Configuration hadoopConf, String basePath, boolean useFileListingFromMetadata, boolean assumeDatePartitioning) {
+  private ManifestFileWriter(Configuration hadoopConf, String basePath, boolean useFileListingFromMetadata, boolean assumeDatePartitioning) {
     this.metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
     this.useFileListingFromMetadata = useFileListingFromMetadata;
     this.assumeDatePartitioning = assumeDatePartitioning;
@@ -118,7 +118,7 @@ public class ManifestFileUtil {
   }
 
   /**
-   * Builder for {@link ManifestFileUtil}.
+   * Builder for {@link ManifestFileWriter}.
    */
   public static class Builder {
 
@@ -147,10 +147,10 @@ public class ManifestFileUtil {
       return this;
     }
 
-    public ManifestFileUtil build() {
+    public ManifestFileWriter build() {
       ValidationUtils.checkArgument(conf != null, "Configuration needs to be set to init ManifestFileGenerator");
       ValidationUtils.checkArgument(basePath != null, "basePath needs to be set to init ManifestFileGenerator");
-      return new ManifestFileUtil(conf, basePath, useFileListingFromMetadata, assumeDatePartitioning);
+      return new ManifestFileWriter(conf, basePath, useFileListingFromMetadata, assumeDatePartitioning);
     }
   }
 }

@@ -24,7 +24,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.sync.common.AbstractSyncTool;
-import org.apache.hudi.sync.common.util.ManifestFileUtil;
+import org.apache.hudi.sync.common.util.ManifestFileWriter;
 
 import com.beust.jcommander.JCommander;
 import org.apache.hadoop.conf.Configuration;
@@ -81,16 +81,16 @@ public class BigQuerySyncTool extends AbstractSyncTool {
       throw new HoodieBigQuerySyncException("Dataset not found: " + cfg);
     }
 
-    ManifestFileUtil manifestFileUtil = ManifestFileUtil.builder()
+    ManifestFileWriter manifestFileWriter = ManifestFileWriter.builder()
         .setConf(conf)
         .setBasePath(cfg.basePath)
         .setUseFileListingFromMetadata(cfg.useFileListingFromMetadata)
         .setAssumeDatePartitioning(cfg.assumeDatePartitioning)
         .build();
-    manifestFileUtil.writeManifestFile();
+    manifestFileWriter.writeManifestFile();
 
     if (!bqSyncClient.tableExists(manifestTableName)) {
-      bqSyncClient.createManifestTable(manifestTableName, manifestFileUtil.getManifestSourceUri());
+      bqSyncClient.createManifestTable(manifestTableName, manifestFileWriter.getManifestSourceUri());
       LOG.info("Manifest table creation complete for " + manifestTableName);
     }
     if (!bqSyncClient.tableExists(versionsTableName)) {
