@@ -31,11 +31,11 @@ import org.apache.hudi.common.util.Option;
 
 public interface HoodieFileReader<R extends IndexedRecord> extends AutoCloseable {
 
-  public String[] readMinMaxRecordKeys();
+  String[] readMinMaxRecordKeys();
 
-  public BloomFilter readBloomFilter();
+  BloomFilter readBloomFilter();
 
-  public Set<String> filterRowKeys(Set<String> candidateRowKeys);
+  Set<String> filterRowKeys(Set<String> candidateRowKeys);
 
   default Map<String, R> getRecordsByKeys(List<String> rowKeys) throws IOException {
     throw new UnsupportedOperationException();
@@ -49,8 +49,7 @@ public interface HoodieFileReader<R extends IndexedRecord> extends AutoCloseable
     return getRecordsByKeyPrefixes(keyPrefixes, getSchema());
   }
 
-
-  public Iterator<R> getRecordIterator(Schema readerSchema) throws IOException;
+  Iterator<R> getRecordIterator(Schema readerSchema) throws IOException;
 
   default Iterator<R> getRecordIterator() throws IOException {
     return getRecordIterator(getSchema());
