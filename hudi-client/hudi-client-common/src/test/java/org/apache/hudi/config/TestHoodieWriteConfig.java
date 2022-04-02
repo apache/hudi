@@ -192,13 +192,15 @@ public class TestHoodieWriteConfig {
         HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
   }
 
-  @Test
-  public void testAutoAdjustLockConfigs() {
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testAutoAdjustLockConfigs(HoodieTableType tableType) {
     TypedProperties properties = new TypedProperties();
-    properties.setProperty(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
+    properties.setProperty(HoodieTableConfig.TYPE.key(), tableType.name());
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath("/tmp")
         .withAutoAdjustLockConfigs(false)
+        .withClusteringConfig(new HoodieClusteringConfig.Builder().withAsyncClustering(true).build())
         .withProperties(properties)
         .build();
 

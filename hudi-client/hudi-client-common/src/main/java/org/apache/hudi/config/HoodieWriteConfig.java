@@ -484,7 +484,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.auto.adjust.lock.configs")
       .defaultValue(false)
       .sinceVersion("0.11.0")
-      .withDocumentation("Auto adjust lock configurations when metadata is enabled and for async table services.");
+      .withDocumentation("Auto adjust lock configurations when metadata table is enabled and for async table services.");
 
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
@@ -1975,7 +1975,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    * @return
    */
   public boolean isAutoAdjustLockConfigs() {
-    return getBoolean(AUTO_ADJUST_LOCK_CONFIGS);
+    return getBooleanOrDefault(AUTO_ADJUST_LOCK_CONFIGS);
   }
 
   public String getLockProviderClass() {
