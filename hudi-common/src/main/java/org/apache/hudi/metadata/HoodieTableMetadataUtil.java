@@ -1122,17 +1122,18 @@ public class HoodieTableMetadataUtil {
     return getColumnStatsRecords(writeStat.getPartitionPath(), writeStat.getPath(), datasetMetaClient, columnsToIndex, false);
   }
 
-  private static Stream<HoodieRecord> getColumnStatsRecords(final String partitionPath,
-                                                            final String filePath,
+  private static Stream<HoodieRecord> getColumnStatsRecords(String partitionPath,
+                                                            String filePath,
                                                             HoodieTableMetaClient datasetMetaClient,
                                                             List<String> columnsToIndex,
                                                             boolean isDeleted) {
-    final String partitionName = getPartition(partitionPath);
-
-    final int offset = partitionName.equals(NON_PARTITIONED_NAME)
-        ? (filePath.startsWith("/") ? 1 : 0)
-        : partitionName.length() + 1;
-    final String fileName = filePath.substring(offset);
+    String partitionName = getPartition(partitionPath);
+    // NOTE: We have to chop leading "/" to make sure Hadoop does not treat it like
+    //       absolute path
+    String filePartitionPath = filePath.startsWith("/") ? filePath.substring(1) : filePath;
+    String fileName = partitionName.equals(NON_PARTITIONED_NAME)
+        ? filePartitionPath
+        : filePartitionPath.substring(partitionName.length() + 1);
 
     if (isDeleted) {
       // TODO we should delete records instead of stubbing them
@@ -1144,7 +1145,7 @@ public class HoodieTableMetadataUtil {
     }
 
     List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadata =
-        readColumnRangeMetadataFrom(filePath, datasetMetaClient, columnsToIndex);
+        readColumnRangeMetadataFrom(filePartitionPath, datasetMetaClient, columnsToIndex);
 
     return HoodieMetadataPayload.createColumnStatsRecords(partitionPath, columnRangeMetadata, false);
   }
