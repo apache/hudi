@@ -117,11 +117,11 @@ import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
 public class HoodieTestTable {
 
+  public static final String PHONY_TABLE_SCHEMA =
+      "{\"namespace\": \"org.apache.hudi.avro.model\", \"type\": \"record\", \"name\": \"PhonyRecord\", \"fields\": []}";
+
   private static final Logger LOG = LogManager.getLogger(HoodieTestTable.class);
   private static final Random RANDOM = new Random();
-
-  private static final String PHONY_TABLE_SCHEMA =
-      "{\"namespace\": \"org.apache.hudi.avro.model\", \"type\": \"record\", \"name\": \"PhonyRecord\", \"fields\": []}";
 
   protected static HoodieTestTableState testTableState;
   private final List<String> inflightCommits = new ArrayList<>();

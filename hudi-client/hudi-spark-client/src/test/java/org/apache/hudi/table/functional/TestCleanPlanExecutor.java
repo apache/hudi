@@ -111,7 +111,10 @@ public class TestCleanPlanExecutor extends TestCleaner {
       boolean simulateFailureRetry, boolean simulateMetadataFailure,
       boolean enableIncrementalClean, boolean enableBootstrapSourceClean) throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+        .withMetadataConfig(
+            HoodieMetadataConfig.newBuilder()
+                .withAssumeDatePartitioning(true)
+                .build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withIncrementalCleaningMode(enableIncrementalClean)
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
