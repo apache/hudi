@@ -35,6 +35,5 @@
     <module>hudi-dla-sync</module>
     <module>hudi-hive-sync</module>
     <module>hudi-sync-common</module>
-    <module>hudi-bigquery-sync</module>
   </modules>
 </project>

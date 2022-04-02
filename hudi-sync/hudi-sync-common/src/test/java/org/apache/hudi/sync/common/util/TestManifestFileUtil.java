@@ -18,56 +18,63 @@
 
 package org.apache.hudi.sync.common.util;
 
-import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.FileIOUtils;
 
-import org.junit.jupiter.api.Assertions;
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-
-import java.util.Arrays;
-import java.util.List;
+import java.io.InputStream;
 import java.util.stream.IntStream;
 
-import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
-import org.apache.hudi.common.testutils.HoodieTestTable;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS;
+import static org.apache.hudi.sync.common.util.ManifestFileUtil.fetchLatestBaseFilesForAllPartitions;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestManifestFileUtil extends HoodieCommonTestHarness {
-
-  private static final List<String> MULTI_LEVEL_PARTITIONS = Arrays.asList("2019/01", "2020/01", "2021/01");
-  private static HoodieTestTable hoodieTestTable;
 
   @BeforeEach
   public void setUp() throws IOException {
     initMetaClient();
-    hoodieTestTable = HoodieTestTable.of(metaClient);
   }
 
   @Test
   public void testMultiLevelPartitionedTable() throws Exception {
     // Generate 10 files under each partition
-    createTestDataForPartitionedTable(10);
+    createTestDataForPartitionedTable(metaClient, 10);
     ManifestFileUtil manifestFileUtil = ManifestFileUtil.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).build();
-    Assertions.assertEquals(30, manifestFileUtil.fetchLatestBaseFilesForAllPartitions().count());
+    assertEquals(30, fetchLatestBaseFilesForAllPartitions(metaClient, false, false).count());
   }
 
   @Test
   public void testCreateManifestFile() throws Exception {
     // Generate 10 files under each partition
-    createTestDataForPartitionedTable(10);
+    createTestDataForPartitionedTable(metaClient, 3);
     ManifestFileUtil manifestFileUtil = ManifestFileUtil.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).build();
     manifestFileUtil.writeManifestFile();
-    Assertions.assertTrue(FSUtils.getFileSize(metaClient.getFs(), manifestFileUtil.getManifestFilePath()) > 0);
+    Path manifestFilePath = manifestFileUtil.getManifestFilePath();
+    try (InputStream is = metaClient.getFs().open(manifestFilePath)) {
+      assertEquals(9, FileIOUtils.readAsUTFStringLines(is).size(), "there should be 9 base files in total; 3 per partition.");
+    }
   }
 
-  public void createTestDataForPartitionedTable(int numOfFiles) throws Exception {
-    String instant = "100";
-    hoodieTestTable = hoodieTestTable.addCommit(instant);
-    // Generate 10 files under each partition
-    for (String partition : MULTI_LEVEL_PARTITIONS) {
-      hoodieTestTable = hoodieTestTable.withPartitionMetaFiles(partition)
-          .withBaseFilesInPartition(partition, IntStream.range(0, numOfFiles).toArray());
+  private static void createTestDataForPartitionedTable(HoodieTableMetaClient metaClient, int numFilesPerPartition) throws Exception {
+    final String instantTime = "100";
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient).addCommit(instantTime);
+    for (String partition : DEFAULT_PARTITION_PATHS) {
+      testTable.withPartitionMetaFiles(partition)
+          .withBaseFilesInPartition(partition, IntStream.range(0, numFilesPerPartition).toArray());
     }
+  }
+
+  @Test
+  public void getManifestSourceUri() {
+    ManifestFileUtil manifestFileUtil = ManifestFileUtil.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).build();
+    String sourceUri = manifestFileUtil.getManifestSourceUri();
+    assertEquals(new Path(basePath, ".hoodie/manifest/*").toUri().toString(), sourceUri);
   }
 }
