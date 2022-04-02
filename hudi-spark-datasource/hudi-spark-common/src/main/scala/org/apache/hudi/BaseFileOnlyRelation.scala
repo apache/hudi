@@ -19,22 +19,16 @@
 package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileStatus, Path}
+import org.apache.hadoop.fs.Path
 
 import org.apache.hudi.HoodieBaseRelation.createBaseFileReader
 import org.apache.hudi.common.table.HoodieTableMetaClient
 
 import org.apache.spark.sql.SQLContext
-import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.unsafe.types.UTF8String
-
-import java.net.URI
-
-import scala.util.control.NonFatal
 
 /**
  * [[BaseRelation]] implementation only reading Base files of Hudi tables, essentially supporting following querying
@@ -106,30 +100,5 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
     val maxSplitBytes = sparkSession.sessionState.conf.filesMaxPartitionBytes
 
     sparkAdapter.getFilePartitions(sparkSession, fileSplits, maxSplitBytes).map(HoodieBaseFileSplit.apply)
-  }
-
-  /**
-   * For enable hoodie.datasource.write.drop.partition.columns, need to create an InternalRow on partition values
-   * and pass this reader on parquet file. So that, we can query the partition columns.
-   */
-  private def createPartitionInternalRow(file: FileStatus): InternalRow = {
-    try {
-      if (metaClient.getTableConfig.getDropPartitionColumnsWhenWrite && partitionColumns.nonEmpty) {
-        val relativePath = new URI(metaClient.getBasePath).relativize(new URI(file.getPath.getParent.toString)).toString
-        val hiveStylePartitioningEnabled = metaClient.getTableConfig.getHiveStylePartitioningEnable.toBoolean
-        if (hiveStylePartitioningEnabled) {
-          val partitionSpec = PartitioningUtils.parsePathFragment(relativePath)
-          InternalRow.fromSeq(partitionColumns.map(partitionSpec(_)).map(UTF8String.fromString))
-        } else {
-          InternalRow.fromSeq(relativePath.split("/").map(UTF8String.fromString))
-        }
-      } else {
-        InternalRow.empty
-      }
-    } catch {
-      case NonFatal(e) =>
-        logWarning(s"Failed to get the right partition InternalRow for file : ${file.toString}")
-        InternalRow.empty
-    }
   }
 }
