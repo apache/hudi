@@ -387,7 +387,13 @@ public class TestCleanPlanExecutor extends TestCleaner {
 
     HoodieWriteConfig config =
                 HoodieWriteConfig.newBuilder().withPath(basePath)
-                        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+                        .withMetadataConfig(
+                            HoodieMetadataConfig.newBuilder()
+                                .withAssumeDatePartitioning(true)
+                                // Column Stats Index is disabled, since these tests construct tables which are
+                                // not valid (empty commit metadata, invalid parquet files)
+                                .withMetadataIndexColumnStats(false)
+                                .build())
                         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
                                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(1).build())
                         .build();
@@ -425,7 +431,13 @@ public class TestCleanPlanExecutor extends TestCleaner {
 
     HoodieWriteConfig config =
             HoodieWriteConfig.newBuilder().withPath(basePath)
-                    .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+                    .withMetadataConfig(
+                        HoodieMetadataConfig.newBuilder()
+                            .withAssumeDatePartitioning(true)
+                            // Column Stats Index is disabled, since these tests construct tables which are
+                            // not valid (empty commit metadata, invalid parquet files)
+                            .withMetadataIndexColumnStats(false)
+                            .build())
                     .withCompactionConfig(HoodieCompactionConfig.newBuilder()
                             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1).build())
                     .build();

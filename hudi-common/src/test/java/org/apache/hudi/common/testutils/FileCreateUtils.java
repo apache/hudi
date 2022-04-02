@@ -99,15 +99,6 @@ public class FileCreateUtils {
     return String.format("%s_%s_%s%s%s.%s", fileId, WRITE_TOKEN, instantTime, fileExtension, HoodieTableMetaClient.MARKER_EXTN, ioType);
   }
 
-  private static void createMetaFile(String basePath, String instantTime, String suffix) throws IOException {
-    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
-    Files.createDirectories(parentPath);
-    Path metaFilePath = parentPath.resolve(instantTime + suffix);
-    if (Files.notExists(metaFilePath)) {
-      Files.createFile(metaFilePath);
-    }
-  }
-
   private static void createMetaFile(String basePath, String instantTime, String suffix, FileSystem fs) throws IOException {
     org.apache.hadoop.fs.Path parentPath = new org.apache.hadoop.fs.Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     if (!fs.exists(parentPath)) {
@@ -119,12 +110,20 @@ public class FileCreateUtils {
     }
   }
 
+  private static void createMetaFile(String basePath, String instantTime, String suffix) throws IOException {
+    createMetaFile(basePath, instantTime, suffix, "".getBytes());
+  }
+
   private static void createMetaFile(String basePath, String instantTime, String suffix, byte[] content) throws IOException {
     Path parentPath = Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     Files.createDirectories(parentPath);
     Path metaFilePath = parentPath.resolve(instantTime + suffix);
     if (Files.notExists(metaFilePath)) {
-      Files.write(metaFilePath, content);
+      if (content.length == 0) {
+        Files.createFile(metaFilePath);
+      } else {
+        Files.write(metaFilePath, content);
+      }
     }
   }
 
