@@ -172,10 +172,13 @@ public class HoodieTableMetadataUtil {
         return HoodieColumnRangeMetadata.<Comparable>create(
             filePath,
             field.name(),
-            coerceToComparable(field.schema(), colStats.minValue),
-            coerceToComparable(field.schema(), colStats.maxValue),
-            colStats.nullCount,
-            colStats.valueCount,
+            colStats == null ? null : coerceToComparable(field.schema(), colStats.minValue),
+            colStats == null ? null : coerceToComparable(field.schema(), colStats.maxValue),
+            colStats == null ? 0 : colStats.nullCount,
+            colStats == null ? 0 : colStats.valueCount,
+            // NOTE: Size and compressed size statistics are set to 0 to make sure we're not
+            //       mixing up those provided by Parquet with the ones from other encodings,
+            //       since those are not directly comparable
             0,
             0
         );
@@ -1139,7 +1142,8 @@ public class HoodieTableMetadataUtil {
       }
       return HoodieMetadataPayload.createColumnStatsRecords(partitionPath, columnRangeMetadataList, isDeleted);
     } else {
-      throw new HoodieException("Column range index not supported for filePathWithPartition " + fileName);
+      LOG.warn("Column range index not supported for: " + fileName);
+      return Stream.empty();
     }
   }
 
