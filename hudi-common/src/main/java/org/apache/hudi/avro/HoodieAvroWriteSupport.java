@@ -44,7 +44,7 @@ public class HoodieAvroWriteSupport extends AvroWriteSupport {
   public static final String HOODIE_BLOOM_FILTER_TYPE_CODE = "hoodie_bloom_filter_type_code";
 
   public HoodieAvroWriteSupport(MessageType schema, Schema avroSchema, Option<BloomFilter> bloomFilterOpt) {
-    super(schema, avroSchema);
+    super(schema, avroSchema, ConvertingGenericData.INSTANCE);
     this.bloomFilterOpt = bloomFilterOpt;
   }
 

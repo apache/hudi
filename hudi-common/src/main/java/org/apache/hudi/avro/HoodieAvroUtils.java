@@ -69,6 +69,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.HashMap;
 import java.util.TimeZone;
 import java.util.Iterator;
@@ -82,9 +83,8 @@ import static org.apache.avro.Schema.Type.UNION;
  */
 public class HoodieAvroUtils {
 
-  private static ThreadLocal<BinaryEncoder> reuseEncoder = ThreadLocal.withInitial(() -> null);
-
-  private static ThreadLocal<BinaryDecoder> reuseDecoder = ThreadLocal.withInitial(() -> null);
+  private static final ThreadLocal<BinaryEncoder> BINARY_ENCODER = ThreadLocal.withInitial(() -> null);
+  private static final ThreadLocal<BinaryDecoder> BINARY_DECODER = ThreadLocal.withInitial(() -> null);
 
   private static final long MILLIS_PER_DAY = 86400000L;
 
@@ -92,9 +92,9 @@ public class HoodieAvroUtils {
   public static final Conversions.DecimalConversion DECIMAL_CONVERSION = new Conversions.DecimalConversion();
 
   // As per https://avro.apache.org/docs/current/spec.html#names
-  private static String INVALID_AVRO_CHARS_IN_NAMES = "[^A-Za-z0-9_]";
-  private static String INVALID_AVRO_FIRST_CHAR_IN_NAMES = "[^A-Za-z_]";
-  private static String MASK_FOR_INVALID_CHARS_IN_NAMES = "__";
+  private static final String INVALID_AVRO_CHARS_IN_NAMES = "[^A-Za-z0-9_]";
+  private static final String INVALID_AVRO_FIRST_CHAR_IN_NAMES = "[^A-Za-z_]";
+  private static final String MASK_FOR_INVALID_CHARS_IN_NAMES = "__";
 
   // All metadata fields are optional strings.
   public static final Schema METADATA_FIELD_SCHEMA =
@@ -110,10 +110,10 @@ public class HoodieAvroUtils {
   }
 
   public static <T extends IndexedRecord> byte[] indexedRecordToBytes(T record) {
-    GenericDatumWriter<T> writer = new GenericDatumWriter<>(record.getSchema());
+    GenericDatumWriter<T> writer = new GenericDatumWriter<>(record.getSchema(), ConvertingGenericData.INSTANCE);
     try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-      BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, reuseEncoder.get());
-      reuseEncoder.set(encoder);
+      BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, BINARY_ENCODER.get());
+      BINARY_ENCODER.set(encoder);
       writer.write(record, encoder);
       encoder.flush();
       return out.toByteArray();
@@ -148,8 +148,8 @@ public class HoodieAvroUtils {
    * Convert serialized bytes back into avro record.
    */
   public static GenericRecord bytesToAvro(byte[] bytes, Schema writerSchema, Schema readerSchema) throws IOException {
-    BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(bytes, reuseDecoder.get());
-    reuseDecoder.set(decoder);
+    BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(bytes, BINARY_DECODER.get());
+    BINARY_DECODER.set(decoder);
     GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(writerSchema, readerSchema);
     return reader.read(null, decoder);
   }
@@ -391,7 +391,7 @@ public class HoodieAvroUtils {
       }
     }
 
-    if (!GenericData.get().validate(newSchema, newRecord)) {
+    if (!ConvertingGenericData.INSTANCE.validate(newSchema, newRecord)) {
       throw new SchemaCompatibilityException(
           "Unable to validate the rewritten record " + oldRecord + " against schema " + newSchema);
     }
@@ -429,9 +429,13 @@ public class HoodieAvroUtils {
 
     if (fieldValue != null) {
       // In case field's value is a nested record, we have to rewrite it as well
-      Object newFieldValue = fieldValue instanceof GenericRecord
-          ? rewriteRecord((GenericRecord) fieldValue, resolveNullableSchema(field.schema()))
-          : fieldValue;
+      Object newFieldValue;
+      if (fieldValue instanceof GenericRecord) {
+        GenericRecord record = (GenericRecord) fieldValue;
+        newFieldValue = rewriteRecord(record, resolveUnionSchema(field.schema(), record.getSchema().getFullName()));
+      } else {
+        newFieldValue = fieldValue;
+      }
       newRecord.put(field.name(), newFieldValue);
     } else if (field.defaultVal() instanceof JsonProperties.Null) {
       newRecord.put(field.name(), null);
@@ -516,6 +520,56 @@ public class HoodieAvroUtils {
     } else {
       throw new HoodieException("The value of " + parts[i] + " can not be null");
     }
+  }
+
+  /**
+   * Get schema for the given field and record. Field can be nested, denoted by dot notation. e.g: a.b.c
+   *
+   * @param record    - record containing the value of the given field
+   * @param fieldName - name of the field
+   * @return
+   */
+  public static Schema getNestedFieldSchemaFromRecord(GenericRecord record, String fieldName) {
+    String[] parts = fieldName.split("\\.");
+    GenericRecord valueNode = record;
+    int i = 0;
+    for (; i < parts.length; i++) {
+      String part = parts[i];
+      Object val = valueNode.get(part);
+
+      if (i == parts.length - 1) {
+        return resolveNullableSchema(valueNode.getSchema().getField(part).schema());
+      } else {
+        if (!(val instanceof GenericRecord)) {
+          throw new HoodieException("Cannot find a record at part value :" + part);
+        }
+        valueNode = (GenericRecord) val;
+      }
+    }
+    throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
+  }
+
+
+  /**
+   * Get schema for the given field and write schema. Field can be nested, denoted by dot notation. e.g: a.b.c
+   * Use this method when record is not available. Otherwise, prefer to use {@link #getNestedFieldSchemaFromRecord(GenericRecord, String)}
+   *
+   * @param writeSchema - write schema of the record
+   * @param fieldName   -  name of the field
+   * @return
+   */
+  public static Schema getNestedFieldSchemaFromWriteSchema(Schema writeSchema, String fieldName) {
+    String[] parts = fieldName.split("\\.");
+    int i = 0;
+    for (; i < parts.length; i++) {
+      String part = parts[i];
+      Schema schema = writeSchema.getField(part).schema();
+
+      if (i == parts.length - 1) {
+        return resolveNullableSchema(schema);
+      }
+    }
+    throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
   }
 
   /**
@@ -653,7 +707,27 @@ public class HoodieAvroUtils {
     return getRecordColumnValues(record, columns, schema.get(), consistentLogicalTimestampEnabled);
   }
 
-  private static Schema resolveNullableSchema(Schema schema) {
+  private static Schema resolveUnionSchema(Schema schema, String fieldSchemaFullName) {
+    if (schema.getType() != Schema.Type.UNION) {
+      return schema;
+    }
+
+    List<Schema> innerTypes = schema.getTypes();
+    Schema nonNullType =
+        innerTypes.stream()
+            .filter(it -> it.getType() != Schema.Type.NULL && Objects.equals(it.getFullName(), fieldSchemaFullName))
+            .findFirst()
+            .orElse(null);
+
+    if (nonNullType == null) {
+      throw new AvroRuntimeException(
+          String.format("Unsupported Avro UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
+    }
+
+    return nonNullType;
+  }
+
+  public static Schema resolveNullableSchema(Schema schema) {
     if (schema.getType() != Schema.Type.UNION) {
       return schema;
     }

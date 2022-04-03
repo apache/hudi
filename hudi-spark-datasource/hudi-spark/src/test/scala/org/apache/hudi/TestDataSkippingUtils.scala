@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper
+import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql.catalyst.expressions.{Expression, Not}
 import org.apache.spark.sql.functions.{col, lower}
@@ -35,24 +35,22 @@ import java.sql.Timestamp
 import scala.collection.JavaConverters._
 
 // NOTE: Only A, B columns are indexed
-case class IndexRow(
-  file: String,
+case class IndexRow(fileName: String,
 
-  // Corresponding A column is LongType
-  A_minValue: Long = -1,
-  A_maxValue: Long = -1,
-  A_num_nulls: Long = -1,
+                    // Corresponding A column is LongType
+                    A_minValue: Long = -1,
+                    A_maxValue: Long = -1,
+                    A_num_nulls: Long = -1,
 
-  // Corresponding B column is StringType
-  B_minValue: String = null,
-  B_maxValue: String = null,
-  B_num_nulls: Long = -1,
+                    // Corresponding B column is StringType
+                    B_minValue: String = null,
+                    B_maxValue: String = null,
+                    B_num_nulls: Long = -1,
 
-  // Corresponding B column is TimestampType
-  C_minValue: Timestamp = null,
-  C_maxValue: Timestamp = null,
-  C_num_nulls: Long = -1
-) {
+                    // Corresponding B column is TimestampType
+                    C_minValue: Timestamp = null,
+                    C_maxValue: Timestamp = null,
+                    C_num_nulls: Long = -1) {
   def toRow: Row = Row(productIterator.toSeq: _*)
 }
 
@@ -79,29 +77,27 @@ class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSuppor
       )
     )
 
-  val indexSchema: StructType =
-    ColumnStatsIndexHelper.composeIndexSchema(
-      sourceTableSchema.fields.toSeq
-        .filter(f => indexedCols.contains(f.name))
-        .asJava
-    )
+  val indexSchema: StructType = composeIndexSchema(indexedCols, sourceTableSchema)
 
   @ParameterizedTest
   @MethodSource(
     Array(
-        "testBasicLookupFilterExpressionsSource",
-        "testAdvancedLookupFilterExpressionsSource",
-        "testCompositeFilterExpressionsSource"
+      "testBasicLookupFilterExpressionsSource",
+      "testAdvancedLookupFilterExpressionsSource",
+      "testCompositeFilterExpressionsSource"
     ))
   def testLookupFilterExpressions(sourceExpr: String, input: Seq[IndexRow], output: Seq[String]): Unit = {
+    // We have to fix the timezone to make sure all date-bound utilities output
+    // is consistent with the fixtures
     spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "UTC")
+
     val resolvedExpr: Expression = exprUtils.resolveExpr(spark, sourceExpr, sourceTableSchema)
     val lookupFilter = DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(resolvedExpr, indexSchema)
 
     val indexDf = spark.createDataFrame(input.map(_.toRow).asJava, indexSchema)
 
     val rows = indexDf.where(new Column(lookupFilter))
-      .select("file")
+      .select("fileName")
       .collect()
       .map(_.getString(0))
       .toSeq
@@ -121,7 +117,7 @@ class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSuppor
     val indexDf = spark.createDataset(input)
 
     val rows = indexDf.where(new Column(lookupFilter))
-      .select("file")
+      .select("fileName")
       .collect()
       .map(_.getString(0))
       .toSeq
@@ -340,7 +336,7 @@ object TestDataSkippingUtils {
 
       arguments(
         // Filter out all rows that contain A = 0 AND B = 'abc'
-      "A != 0 OR B != 'abc'",
+        "A != 0 OR B != 'abc'",
         Seq(
           IndexRow("file_1", 1, 2, 0),
           IndexRow("file_2", -1, 1, 0),

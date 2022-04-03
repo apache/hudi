@@ -15,12 +15,19 @@
  * limitations under the License.
  */
 
-package org.apache.spark
+package org.apache.spark.sql
 
-import org.apache.spark.sql.types.{DataType, NumericType, StringType}
+import org.apache.spark.sql.types.{DataType, DecimalType, NumericType, StringType}
 
 // TODO unify w/ DataTypeUtils
 object HoodieSparkTypeUtils {
+
+  /**
+   * Returns whether this DecimalType is wider than `other`. If yes, it means `other`
+   * can be casted into `this` safely without losing any precision or range.
+   */
+  def isWiderThan(one: DecimalType, another: DecimalType) =
+    one.isWiderThan(another)
 
   /**
    * Checks whether casting expression of [[from]] [[DataType]] to [[to]] [[DataType]] will

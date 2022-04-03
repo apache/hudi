@@ -1749,40 +1749,39 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     FileCreateUtils.createDeltaCommit(basePath, "100", fs);
 
-    HoodieLogFileReader reader = new HoodieLogFileReader(fs, new HoodieLogFile(writer.getLogFile().getPath(),
-        fs.getFileStatus(writer.getLogFile().getPath()).getLen()), SchemaTestUtil.getSimpleSchema(),
-        bufferSize, readBlocksLazily, true);
+    HoodieLogFile logFile = new HoodieLogFile(writer.getLogFile().getPath(), fs.getFileStatus(writer.getLogFile().getPath()).getLen());
+    try (HoodieLogFileReader reader = new HoodieLogFileReader(fs, logFile, SchemaTestUtil.getSimpleSchema(), bufferSize, readBlocksLazily, true)) {
 
-    assertTrue(reader.hasPrev(), "Last block should be available");
-    HoodieLogBlock prevBlock = reader.prev();
-    HoodieDataBlock dataBlockRead = (HoodieDataBlock) prevBlock;
+      assertTrue(reader.hasPrev(), "Last block should be available");
+      HoodieLogBlock prevBlock = reader.prev();
+      HoodieDataBlock dataBlockRead = (HoodieDataBlock) prevBlock;
 
-    List<IndexedRecord> recordsRead1 = getRecords(dataBlockRead);
-    assertEquals(copyOfRecords3.size(), recordsRead1.size(),
-        "Third records size should be equal to the written records size");
-    assertEquals(copyOfRecords3, recordsRead1,
-        "Both records lists should be the same. (ordering guaranteed)");
+      List<IndexedRecord> recordsRead1 = getRecords(dataBlockRead);
+      assertEquals(copyOfRecords3.size(), recordsRead1.size(),
+          "Third records size should be equal to the written records size");
+      assertEquals(copyOfRecords3, recordsRead1,
+          "Both records lists should be the same. (ordering guaranteed)");
 
-    assertTrue(reader.hasPrev(), "Second block should be available");
-    prevBlock = reader.prev();
-    dataBlockRead = (HoodieDataBlock) prevBlock;
-    List<IndexedRecord> recordsRead2 = getRecords(dataBlockRead);
-    assertEquals(copyOfRecords2.size(), recordsRead2.size(),
-        "Read records size should be equal to the written records size");
-    assertEquals(copyOfRecords2, recordsRead2,
-        "Both records lists should be the same. (ordering guaranteed)");
+      assertTrue(reader.hasPrev(), "Second block should be available");
+      prevBlock = reader.prev();
+      dataBlockRead = (HoodieDataBlock) prevBlock;
+      List<IndexedRecord> recordsRead2 = getRecords(dataBlockRead);
+      assertEquals(copyOfRecords2.size(), recordsRead2.size(),
+          "Read records size should be equal to the written records size");
+      assertEquals(copyOfRecords2, recordsRead2,
+          "Both records lists should be the same. (ordering guaranteed)");
 
-    assertTrue(reader.hasPrev(), "First block should be available");
-    prevBlock = reader.prev();
-    dataBlockRead = (HoodieDataBlock) prevBlock;
-    List<IndexedRecord> recordsRead3 = getRecords(dataBlockRead);
-    assertEquals(copyOfRecords1.size(), recordsRead3.size(),
-        "Read records size should be equal to the written records size");
-    assertEquals(copyOfRecords1, recordsRead3,
-        "Both records lists should be the same. (ordering guaranteed)");
+      assertTrue(reader.hasPrev(), "First block should be available");
+      prevBlock = reader.prev();
+      dataBlockRead = (HoodieDataBlock) prevBlock;
+      List<IndexedRecord> recordsRead3 = getRecords(dataBlockRead);
+      assertEquals(copyOfRecords1.size(), recordsRead3.size(),
+          "Read records size should be equal to the written records size");
+      assertEquals(copyOfRecords1, recordsRead3,
+          "Both records lists should be the same. (ordering guaranteed)");
 
-    assertFalse(reader.hasPrev());
-    reader.close();
+      assertFalse(reader.hasPrev());
+    }
   }
 
   @ParameterizedTest
@@ -1830,19 +1829,20 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.close();
 
     // First round of reads - we should be able to read the first block and then EOF
-    HoodieLogFileReader reader =
-        new HoodieLogFileReader(fs, new HoodieLogFile(writer.getLogFile().getPath(),
-            fs.getFileStatus(writer.getLogFile().getPath()).getLen()), schema, bufferSize, readBlocksLazily, true);
+    HoodieLogFile logFile = new HoodieLogFile(writer.getLogFile().getPath(), fs.getFileStatus(writer.getLogFile().getPath()).getLen());
 
-    assertTrue(reader.hasPrev(), "Last block should be available");
-    HoodieLogBlock block = reader.prev();
-    assertTrue(block instanceof HoodieDataBlock, "Last block should be datablock");
+    try (HoodieLogFileReader reader =
+        new HoodieLogFileReader(fs, logFile, schema, bufferSize, readBlocksLazily, true)) {
 
-    assertTrue(reader.hasPrev(), "Last block should be available");
-    assertThrows(CorruptedLogFileException.class, () -> {
-      reader.prev();
-    });
-    reader.close();
+      assertTrue(reader.hasPrev(), "Last block should be available");
+      HoodieLogBlock block = reader.prev();
+      assertTrue(block instanceof HoodieDataBlock, "Last block should be datablock");
+
+      assertTrue(reader.hasPrev(), "Last block should be available");
+      assertThrows(CorruptedLogFileException.class, () -> {
+        reader.prev();
+      });
+    }
   }
 
   @ParameterizedTest
@@ -1882,28 +1882,28 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     FileCreateUtils.createDeltaCommit(basePath, "100", fs);
 
-    HoodieLogFileReader reader = new HoodieLogFileReader(fs, new HoodieLogFile(writer.getLogFile().getPath(),
-        fs.getFileStatus(writer.getLogFile().getPath()).getLen()), SchemaTestUtil.getSimpleSchema(),
-        bufferSize, readBlocksLazily, true);
+    HoodieLogFile logFile = new HoodieLogFile(writer.getLogFile().getPath(), fs.getFileStatus(writer.getLogFile().getPath()).getLen());
+    try (HoodieLogFileReader reader =
+             new HoodieLogFileReader(fs, logFile, SchemaTestUtil.getSimpleSchema(), bufferSize, readBlocksLazily, true)) {
 
-    assertTrue(reader.hasPrev(), "Third block should be available");
-    reader.moveToPrev();
+      assertTrue(reader.hasPrev(), "Third block should be available");
+      reader.moveToPrev();
 
-    assertTrue(reader.hasPrev(), "Second block should be available");
-    reader.moveToPrev();
+      assertTrue(reader.hasPrev(), "Second block should be available");
+      reader.moveToPrev();
 
-    // After moving twice, this last reader.prev() should read the First block written
-    assertTrue(reader.hasPrev(), "First block should be available");
-    HoodieLogBlock prevBlock = reader.prev();
-    HoodieDataBlock dataBlockRead = (HoodieDataBlock) prevBlock;
-    List<IndexedRecord> recordsRead = getRecords(dataBlockRead);
-    assertEquals(copyOfRecords1.size(), recordsRead.size(),
-        "Read records size should be equal to the written records size");
-    assertEquals(copyOfRecords1, recordsRead,
-        "Both records lists should be the same. (ordering guaranteed)");
+      // After moving twice, this last reader.prev() should read the First block written
+      assertTrue(reader.hasPrev(), "First block should be available");
+      HoodieLogBlock prevBlock = reader.prev();
+      HoodieDataBlock dataBlockRead = (HoodieDataBlock) prevBlock;
+      List<IndexedRecord> recordsRead = getRecords(dataBlockRead);
+      assertEquals(copyOfRecords1.size(), recordsRead.size(),
+          "Read records size should be equal to the written records size");
+      assertEquals(copyOfRecords1, recordsRead,
+          "Both records lists should be the same. (ordering guaranteed)");
 
-    assertFalse(reader.hasPrev());
-    reader.close();
+      assertFalse(reader.hasPrev());
+    }
   }
 
   @Test

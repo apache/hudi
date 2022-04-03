@@ -18,6 +18,14 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.avro.AvroTypeException;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hudi.avro.ConvertingGenericData;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -55,18 +63,13 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import javax.annotation.Nonnull;
-
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -77,23 +80,19 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
-import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldValAsString;
-import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.COLUMN_RANGE_MERGE_FUNCTION;
-import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.MAX;
-import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.MIN;
-import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.NULL_COUNT;
-import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.TOTAL_SIZE;
-import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.TOTAL_UNCOMPRESSED_SIZE;
-import static org.apache.hudi.common.model.HoodieColumnRangeMetadata.Stats.VALUE_COUNT;
+import static org.apache.hudi.avro.HoodieAvroUtils.convertValueForSpecificDataTypes;
+import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
+import static org.apache.hudi.avro.HoodieAvroUtils.resolveNullableSchema;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
-import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.unwrapStatisticValueWrapper;
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 
@@ -107,6 +106,100 @@ public class HoodieTableMetadataUtil {
   protected static final String PARTITION_NAME_FILES = "files";
   protected static final String PARTITION_NAME_COLUMN_STATS = "column_stats";
   protected static final String PARTITION_NAME_BLOOM_FILTERS = "bloom_filters";
+
+  /**
+   * Collects {@link HoodieColumnRangeMetadata} for the provided collection of records, pretending
+   * as if provided records have been persisted w/in given {@code filePath}
+   *
+   * @param records target records to compute column range metadata for
+   * @param targetFields columns (fields) to be collected
+   * @param filePath file path value required for {@link HoodieColumnRangeMetadata}
+   *
+   * @return map of {@link HoodieColumnRangeMetadata} for each of the provided target fields for
+   *         the collection of provided records
+   */
+  public static Map<String, HoodieColumnRangeMetadata<Comparable>> collectColumnRangeMetadata(List<IndexedRecord> records,
+                                                                                              List<Schema.Field> targetFields,
+                                                                                              String filePath) {
+    // Helper class to calculate column stats
+    class ColumnStats {
+      Object minValue;
+      Object maxValue;
+      long nullCount;
+      long valueCount;
+    }
+
+    HashMap<String, ColumnStats> allColumnStats = new HashMap<>();
+
+    // Collect stats for all columns by iterating through records while accounting
+    // corresponding stats
+    records.forEach((record) -> {
+      // For each column (field) we have to index update corresponding column stats
+      // with the values from this record
+      targetFields.forEach(field -> {
+        ColumnStats colStats = allColumnStats.computeIfAbsent(field.name(), (ignored) -> new ColumnStats());
+
+        GenericRecord genericRecord = (GenericRecord) record;
+
+        final Object fieldVal = convertValueForSpecificDataTypes(field.schema(), genericRecord.get(field.name()), true);
+        final Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(genericRecord.getSchema(), field.name());
+
+        if (fieldVal != null && canCompare(fieldSchema)) {
+          // Set the min value of the field
+          if (colStats.minValue == null
+              || ConvertingGenericData.INSTANCE.compare(fieldVal, colStats.minValue, fieldSchema) < 0) {
+            colStats.minValue = fieldVal;
+          }
+
+          // Set the max value of the field
+          if (colStats.maxValue == null || ConvertingGenericData.INSTANCE.compare(fieldVal, colStats.maxValue, fieldSchema) > 0) {
+            colStats.maxValue = fieldVal;
+          }
+
+          colStats.valueCount++;
+        } else {
+          colStats.nullCount++;
+        }
+      });
+    });
+
+    Collector<HoodieColumnRangeMetadata<Comparable>, ?, Map<String, HoodieColumnRangeMetadata<Comparable>>> collector =
+        Collectors.toMap(colRangeMetadata -> colRangeMetadata.getColumnName(), Function.identity());
+
+    return (Map<String, HoodieColumnRangeMetadata<Comparable>>) targetFields.stream()
+      .map(field -> {
+        ColumnStats colStats = allColumnStats.get(field.name());
+        return HoodieColumnRangeMetadata.<Comparable>create(
+            filePath,
+            field.name(),
+            colStats == null ? null : coerceToComparable(field.schema(), colStats.minValue),
+            colStats == null ? null : coerceToComparable(field.schema(), colStats.maxValue),
+            colStats == null ? 0 : colStats.nullCount,
+            colStats == null ? 0 : colStats.valueCount,
+            // NOTE: Size and compressed size statistics are set to 0 to make sure we're not
+            //       mixing up those provided by Parquet with the ones from other encodings,
+            //       since those are not directly comparable
+            0,
+            0
+        );
+      })
+      .collect(collector);
+  }
+
+  /**
+   * Converts instance of {@link HoodieMetadataColumnStats} to {@link HoodieColumnRangeMetadata}
+   */
+  public static HoodieColumnRangeMetadata<Comparable> convertColumnStatsRecordToColumnRangeMetadata(HoodieMetadataColumnStats columnStats) {
+    return HoodieColumnRangeMetadata.<Comparable>create(
+        columnStats.getFileName(),
+        columnStats.getColumnName(),
+        unwrapStatisticValueWrapper(columnStats.getMinValue()),
+        unwrapStatisticValueWrapper(columnStats.getMaxValue()),
+        columnStats.getNullCount(),
+        columnStats.getValueCount(),
+        columnStats.getTotalSize(),
+        columnStats.getTotalUncompressedSize());
+  }
 
   /**
    * Delete the metadata table for the dataset. This will be invoked during upgrade/downgrade operation during which
@@ -457,8 +550,11 @@ public class HoodieTableMetadataUtil {
     int parallelism = Math.max(Math.min(deleteFileList.size(), recordsGenerationParams.getColumnStatsIndexParallelism()), 1);
     return engineContext.parallelize(deleteFileList, parallelism)
         .flatMap(deleteFileInfoPair -> {
-          if (deleteFileInfoPair.getRight().endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
-            return getColumnStats(deleteFileInfoPair.getLeft(), deleteFileInfoPair.getRight(), dataTableMetaClient, columnsToIndex, true).iterator();
+          String partitionPath = deleteFileInfoPair.getLeft();
+          String filePath = deleteFileInfoPair.getRight();
+
+          if (filePath.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
+            return getColumnStatsRecords(partitionPath, filePath, dataTableMetaClient, columnsToIndex, true).iterator();
           }
           return Collections.emptyListIterator();
         });
@@ -531,7 +627,8 @@ public class HoodieTableMetadataUtil {
     }
 
     if (recordsGenerationParams.getEnabledPartitionTypes().contains(MetadataPartitionType.COLUMN_STATS)) {
-      final HoodieData<HoodieRecord> metadataColumnStatsRDD = convertFilesToColumnStatsRecords(engineContext, partitionToDeletedFiles, partitionToAppendedFiles, recordsGenerationParams);
+      final HoodieData<HoodieRecord> metadataColumnStatsRDD =
+          convertFilesToColumnStatsRecords(engineContext, partitionToDeletedFiles, partitionToAppendedFiles, recordsGenerationParams);
       partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS, metadataColumnStatsRDD);
     }
 
@@ -815,7 +912,7 @@ public class HoodieTableMetadataUtil {
 
       return deletedFileList.stream().flatMap(deletedFile -> {
         final String filePathWithPartition = partitionName + "/" + deletedFile;
-        return getColumnStats(partition, filePathWithPartition, dataTableMetaClient, columnsToIndex, true);
+        return getColumnStatsRecords(partition, filePathWithPartition, dataTableMetaClient, columnsToIndex, true);
       }).iterator();
     });
     allRecordsRDD = allRecordsRDD.union(deletedFilesRecordsRDD);
@@ -836,7 +933,7 @@ public class HoodieTableMetadataUtil {
           return Stream.empty();
         }
         final String filePathWithPartition = partitionName + "/" + appendedFileNameLengthEntry.getKey();
-        return getColumnStats(partition, filePathWithPartition, dataTableMetaClient, columnsToIndex, false);
+        return getColumnStatsRecords(partition, filePathWithPartition, dataTableMetaClient, columnsToIndex, false);
       }).iterator();
 
     });
@@ -1014,63 +1111,65 @@ public class HoodieTableMetadataUtil {
     return Arrays.asList(tableConfig.getRecordKeyFields().get());
   }
 
-  public static HoodieMetadataColumnStats mergeColumnStats(HoodieMetadataColumnStats prevColumnStatsRecord,
-                                                           HoodieMetadataColumnStats newColumnStatsRecord) {
-    checkArgument(prevColumnStatsRecord.getFileName().equals(newColumnStatsRecord.getFileName()));
-    checkArgument(prevColumnStatsRecord.getColumnName().equals(newColumnStatsRecord.getColumnName()));
-
-    if (newColumnStatsRecord.getIsDeleted()) {
-      return newColumnStatsRecord;
-    }
-
-    return HoodieMetadataColumnStats.newBuilder()
-        .setFileName(newColumnStatsRecord.getFileName())
-        .setColumnName(newColumnStatsRecord.getColumnName())
-        .setMinValue(Stream.of(prevColumnStatsRecord.getMinValue(), newColumnStatsRecord.getMinValue()).filter(Objects::nonNull).min(Comparator.naturalOrder()).orElse(null))
-        .setMaxValue(Stream.of(prevColumnStatsRecord.getMinValue(), newColumnStatsRecord.getMinValue()).filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null))
-        .setValueCount(prevColumnStatsRecord.getValueCount() + newColumnStatsRecord.getValueCount())
-        .setNullCount(prevColumnStatsRecord.getNullCount() + newColumnStatsRecord.getNullCount())
-        .setTotalSize(prevColumnStatsRecord.getTotalSize() + newColumnStatsRecord.getTotalSize())
-        .setTotalUncompressedSize(prevColumnStatsRecord.getTotalUncompressedSize() + newColumnStatsRecord.getTotalUncompressedSize())
-        .setIsDeleted(newColumnStatsRecord.getIsDeleted())
-        .build();
-  }
-
-  public static Stream<HoodieRecord> translateWriteStatToColumnStats(HoodieWriteStat writeStat,
+  private static Stream<HoodieRecord> translateWriteStatToColumnStats(HoodieWriteStat writeStat,
                                                                      HoodieTableMetaClient datasetMetaClient,
                                                                      List<String> columnsToIndex) {
-    if (writeStat instanceof HoodieDeltaWriteStat && ((HoodieDeltaWriteStat) writeStat).getRecordsStats().isPresent()) {
-      Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap = ((HoodieDeltaWriteStat) writeStat).getRecordsStats().get().getStats();
-      List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = new ArrayList<>(columnRangeMap.values());
+    if (writeStat instanceof HoodieDeltaWriteStat && ((HoodieDeltaWriteStat) writeStat).getColumnStats().isPresent()) {
+      Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap = ((HoodieDeltaWriteStat) writeStat).getColumnStats().get();
+      Collection<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = columnRangeMap.values();
       return HoodieMetadataPayload.createColumnStatsRecords(writeStat.getPartitionPath(), columnRangeMetadataList, false);
     }
-    return getColumnStats(writeStat.getPartitionPath(), writeStat.getPath(), datasetMetaClient, columnsToIndex, false);
+
+    return getColumnStatsRecords(writeStat.getPartitionPath(), writeStat.getPath(), datasetMetaClient, columnsToIndex, false);
   }
 
-  private static Stream<HoodieRecord> getColumnStats(final String partitionPath, final String filePathWithPartition,
-                                                     HoodieTableMetaClient datasetMetaClient,
-                                                     List<String> columnsToIndex,
-                                                     boolean isDeleted) {
-    final String partition = getPartition(partitionPath);
-    final int offset = partition.equals(NON_PARTITIONED_NAME) ? (filePathWithPartition.startsWith("/") ? 1 : 0)
-        : partition.length() + 1;
-    final String fileName = filePathWithPartition.substring(offset);
+  private static Stream<HoodieRecord> getColumnStatsRecords(String partitionPath,
+                                                            String filePath,
+                                                            HoodieTableMetaClient datasetMetaClient,
+                                                            List<String> columnsToIndex,
+                                                            boolean isDeleted) {
+    String partitionName = getPartition(partitionPath);
+    // NOTE: We have to chop leading "/" to make sure Hadoop does not treat it like
+    //       absolute path
+    String filePartitionPath = filePath.startsWith("/") ? filePath.substring(1) : filePath;
+    String fileName = partitionName.equals(NON_PARTITIONED_NAME)
+        ? filePartitionPath
+        : filePartitionPath.substring(partitionName.length() + 1);
 
-    if (filePathWithPartition.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
-      final Path fullFilePath = new Path(datasetMetaClient.getBasePath(), filePathWithPartition);
-      List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList;
-      if (!isDeleted) {
-        columnRangeMetadataList = new ParquetUtils().readRangeFromParquetMetadata(
-            datasetMetaClient.getHadoopConf(), fullFilePath, columnsToIndex);
-      } else {
-        // TODO we should delete records instead of stubbing them
-        columnRangeMetadataList =
-            columnsToIndex.stream().map(entry -> HoodieColumnRangeMetadata.stub(fileName, entry))
-                .collect(Collectors.toList());
+    if (isDeleted) {
+      // TODO we should delete records instead of stubbing them
+      List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = columnsToIndex.stream()
+          .map(entry -> HoodieColumnRangeMetadata.stub(fileName, entry))
+          .collect(Collectors.toList());
+
+      return HoodieMetadataPayload.createColumnStatsRecords(partitionPath, columnRangeMetadataList, true);
+    }
+
+    List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadata =
+        readColumnRangeMetadataFrom(filePartitionPath, datasetMetaClient, columnsToIndex);
+
+    return HoodieMetadataPayload.createColumnStatsRecords(partitionPath, columnRangeMetadata, false);
+  }
+
+  private static List<HoodieColumnRangeMetadata<Comparable>> readColumnRangeMetadataFrom(String filePath,
+                                                                                         HoodieTableMetaClient datasetMetaClient,
+                                                                                         List<String> columnsToIndex) {
+    try {
+      if (filePath.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
+        Path fullFilePath = new Path(datasetMetaClient.getBasePath(), filePath);
+        List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList =
+            new ParquetUtils().readRangeFromParquetMetadata(datasetMetaClient.getHadoopConf(), fullFilePath, columnsToIndex);
+
+        return columnRangeMetadataList;
       }
-      return HoodieMetadataPayload.createColumnStatsRecords(partitionPath, columnRangeMetadataList, isDeleted);
-    } else {
-      throw new HoodieException("Column range index not supported for filePathWithPartition " + fileName);
+
+      LOG.warn("Column range index not supported for: " + filePath);
+      return Collections.emptyList();
+    } catch (Exception e) {
+      // NOTE: In case reading column range metadata from individual file failed,
+      //       we simply fall back, in lieu of failing the whole task
+      LOG.error("Failed to fetch column range metadata for: " + filePath);
+      return Collections.emptyList();
     }
   }
 
@@ -1105,72 +1204,37 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
-   * Accumulates column range metadata for the given field and updates the column range map.
-   *
-   * @param field          - column for which statistics will be computed
-   * @param filePath       - data file path
-   * @param columnRangeMap - old column range statistics, which will be merged in this computation
-   * @param columnToStats  - map of column to map of each stat and its value
+   * Does an upcast for {@link BigDecimal} instance to align it with scale/precision expected by
+   * the {@link org.apache.avro.LogicalTypes.Decimal} Avro logical type
    */
-  public static void accumulateColumnRanges(Schema.Field field, String filePath,
-                                            Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap,
-                                            Map<String, Map<String, Object>> columnToStats) {
-    Map<String, Object> columnStats = columnToStats.get(field.name());
-    HoodieColumnRangeMetadata<Comparable> columnRangeMetadata = HoodieColumnRangeMetadata.create(
-        filePath,
-        field.name(),
-        (Comparable) String.valueOf(columnStats.get(MIN)),
-        (Comparable) String.valueOf(columnStats.get(MAX)),
-        Long.parseLong(columnStats.getOrDefault(NULL_COUNT, 0).toString()),
-        Long.parseLong(columnStats.getOrDefault(VALUE_COUNT, 0).toString()),
-        Long.parseLong(columnStats.getOrDefault(TOTAL_SIZE, 0).toString()),
-        Long.parseLong(columnStats.getOrDefault(TOTAL_UNCOMPRESSED_SIZE, 0).toString())
-    );
-    columnRangeMap.merge(field.name(), columnRangeMetadata, COLUMN_RANGE_MERGE_FUNCTION);
-  }
+  public static BigDecimal tryUpcastDecimal(BigDecimal value, final LogicalTypes.Decimal decimal) {
+    final int scale = decimal.getScale();
+    final int valueScale = value.scale();
 
-  /**
-   * Aggregates column stats for each field.
-   *
-   * @param record                            - current record
-   * @param fields                            - fields for which stats will be aggregated
-   * @param columnToStats                     - map of column to map of each stat and its value which gets updates in this method
-   * @param consistentLogicalTimestampEnabled - flag to deal with logical timestamp type when getting column value
-   */
-  public static void aggregateColumnStats(IndexedRecord record, List<Schema.Field> fields,
-                                          Map<String, Map<String, Object>> columnToStats,
-                                          boolean consistentLogicalTimestampEnabled) {
-    if (!(record instanceof GenericRecord)) {
-      throw new HoodieIOException("Record is not a generic type to get column range metadata!");
+    boolean scaleAdjusted = false;
+    if (valueScale != scale) {
+      try {
+        value = value.setScale(scale, RoundingMode.UNNECESSARY);
+        scaleAdjusted = true;
+      } catch (ArithmeticException aex) {
+        throw new AvroTypeException(
+            "Cannot encode decimal with scale " + valueScale + " as scale " + scale + " without rounding");
+      }
     }
 
-    fields.forEach(field -> {
-      Map<String, Object> columnStats = columnToStats.getOrDefault(field.name(), new HashMap<>());
-      final String fieldVal = getNestedFieldValAsString((GenericRecord) record, field.name(), true, consistentLogicalTimestampEnabled);
-      // update stats
-      final int fieldSize = fieldVal == null ? 0 : fieldVal.length();
-      columnStats.put(TOTAL_SIZE, Long.parseLong(columnStats.getOrDefault(TOTAL_SIZE, 0).toString()) + fieldSize);
-      columnStats.put(TOTAL_UNCOMPRESSED_SIZE, Long.parseLong(columnStats.getOrDefault(TOTAL_UNCOMPRESSED_SIZE, 0).toString()) + fieldSize);
-
-      if (!isNullOrEmpty(fieldVal)) {
-        // set the min value of the field
-        if (!columnStats.containsKey(MIN)) {
-          columnStats.put(MIN, fieldVal);
-        }
-        if (fieldVal.compareTo(String.valueOf(columnStats.get(MIN))) < 0) {
-          columnStats.put(MIN, fieldVal);
-        }
-        // set the max value of the field
-        if (fieldVal.compareTo(String.valueOf(columnStats.getOrDefault(MAX, ""))) > 0) {
-          columnStats.put(MAX, fieldVal);
-        }
-        // increment non-null value count
-        columnStats.put(VALUE_COUNT, Long.parseLong(columnStats.getOrDefault(VALUE_COUNT, 0).toString()) + 1);
+    int precision = decimal.getPrecision();
+    int valuePrecision = value.precision();
+    if (valuePrecision > precision) {
+      if (scaleAdjusted) {
+        throw new AvroTypeException("Cannot encode decimal with precision " + valuePrecision + " as max precision "
+            + precision + ". This is after safely adjusting scale from " + valueScale + " to required " + scale);
       } else {
-        // increment null value count
-        columnStats.put(NULL_COUNT, Long.parseLong(columnStats.getOrDefault(NULL_COUNT, 0).toString()) + 1);
+        throw new AvroTypeException(
+            "Cannot encode decimal with precision " + valuePrecision + " as max precision " + precision);
       }
-    });
+    }
+
+    return value;
   }
 
   private static Option<Schema> tryResolveSchemaForTable(HoodieTableMetaClient dataTableMetaClient) {
@@ -1178,12 +1242,80 @@ public class HoodieTableMetadataUtil {
       return Option.empty();
     }
 
-    TableSchemaResolver schemaResolver = new TableSchemaResolver(dataTableMetaClient);
     try {
+      TableSchemaResolver schemaResolver = new TableSchemaResolver(dataTableMetaClient);
       return Option.of(schemaResolver.getTableAvroSchema());
     } catch (Exception e) {
       throw new HoodieException("Failed to get latest columns for " + dataTableMetaClient.getBasePath(), e);
     }
+  }
+
+  /**
+   * Given a schema, coerces provided value to instance of {@link Comparable<?>} such that
+   * it could subsequently used in column stats
+   *
+   * NOTE: This method has to stay compatible with the semantic of
+   *      {@link ParquetUtils#readRangeFromParquetMetadata} as they are used in tandem
+   */
+  private static Comparable<?> coerceToComparable(Schema schema, Object val) {
+    if (val == null) {
+      return null;
+    }
+
+    switch (schema.getType()) {
+      case UNION:
+        // TODO we need to handle unions in general case as well
+        return coerceToComparable(resolveNullableSchema(schema), val);
+
+      case FIXED:
+      case BYTES:
+        if (schema.getLogicalType() instanceof LogicalTypes.Decimal) {
+          return (Comparable<?>) val;
+        }
+        return (ByteBuffer) val;
+
+
+      case INT:
+        if (schema.getLogicalType() == LogicalTypes.date()
+            || schema.getLogicalType() == LogicalTypes.timeMillis()) {
+          // NOTE: This type will be either {@code java.sql.Date} or {org.joda.LocalDate}
+          //       depending on the Avro version. Hence, we simply cast it to {@code Comparable<?>}
+          return (Comparable<?>) val;
+        }
+        return (Integer) val;
+
+      case LONG:
+        if (schema.getLogicalType() == LogicalTypes.timeMicros()
+            || schema.getLogicalType() == LogicalTypes.timestampMicros()
+            || schema.getLogicalType() == LogicalTypes.timestampMillis()) {
+          // NOTE: This type will be either {@code java.sql.Date} or {org.joda.LocalDate}
+          //       depending on the Avro version. Hence, we simply cast it to {@code Comparable<?>}
+          return (Comparable<?>) val;
+        }
+        return (Long) val;
+
+      case STRING:
+      case FLOAT:
+      case DOUBLE:
+      case BOOLEAN:
+        return (Comparable<?>) val;
+
+
+      // TODO add support for those types
+      case ENUM:
+      case MAP:
+      case NULL:
+      case RECORD:
+      case ARRAY:
+        return null;
+
+      default:
+        throw new IllegalStateException("Unexpected type: " + schema.getType());
+    }
+  }
+
+  private static boolean canCompare(Schema schema) {
+    return schema.getType() != Schema.Type.MAP;
   }
 
   public static Set<String> getInflightMetadataPartitions(HoodieTableConfig tableConfig) {

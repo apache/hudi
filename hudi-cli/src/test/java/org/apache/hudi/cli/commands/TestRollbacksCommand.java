@@ -26,6 +26,7 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -83,6 +84,13 @@ public class TestRollbacksCommand extends CLIFunctionalTestHarness {
     };
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(tablePath)
+        .withMetadataConfig(
+            // Column Stats Index is disabled, since these tests construct tables which are
+            // not valid (empty commit metadata, etc)
+            HoodieMetadataConfig.newBuilder()
+                .withMetadataIndexColumnStats(false)
+                .build()
+        )
         .withRollbackUsingMarkers(false)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
     HoodieMetadataTestTable.of(metaClient, SparkHoodieBackedTableMetadataWriter.create(

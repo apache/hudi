@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.index.columnstats;
+package org.apache.hudi;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
@@ -41,17 +41,15 @@ import org.apache.spark.sql.types.DoubleType;
 import org.apache.spark.sql.types.FloatType;
 import org.apache.spark.sql.types.IntegerType;
 import org.apache.spark.sql.types.LongType;
-import org.apache.spark.sql.types.LongType$;
-import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.ShortType;
 import org.apache.spark.sql.types.StringType;
-import org.apache.spark.sql.types.StringType$;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.types.StructType$;
 import org.apache.spark.sql.types.TimestampType;
 import org.apache.spark.util.SerializableConfiguration;
 import scala.collection.JavaConversions;
+import scala.collection.JavaConverters$;
 
 import javax.annotation.Nonnull;
 import java.math.BigDecimal;
@@ -63,48 +61,8 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+// TODO merge w/ ColumnStatsIndexSupport
 public class ColumnStatsIndexHelper {
-
-  private static final String COLUMN_STATS_INDEX_FILE_COLUMN_NAME = "file";
-  private static final String COLUMN_STATS_INDEX_MIN_VALUE_STAT_NAME = "minValue";
-  private static final String COLUMN_STATS_INDEX_MAX_VALUE_STAT_NAME = "maxValue";
-  private static final String COLUMN_STATS_INDEX_NUM_NULLS_STAT_NAME = "num_nulls";
-
-  public static String getMinColumnNameFor(String colName) {
-    return composeZIndexColName(colName, COLUMN_STATS_INDEX_MIN_VALUE_STAT_NAME);
-  }
-
-  public static String getMaxColumnNameFor(String colName) {
-    return composeZIndexColName(colName, COLUMN_STATS_INDEX_MAX_VALUE_STAT_NAME);
-  }
-
-  public static String getNumNullsColumnNameFor(String colName) {
-    return composeZIndexColName(colName, COLUMN_STATS_INDEX_NUM_NULLS_STAT_NAME);
-  }
-
-  /**
-   * @VisibleForTesting
-   */
-  @Nonnull
-  public static StructType composeIndexSchema(@Nonnull List<StructField> zorderedColumnsSchemas) {
-    List<StructField> schema = new ArrayList<>();
-    schema.add(new StructField(COLUMN_STATS_INDEX_FILE_COLUMN_NAME, StringType$.MODULE$, true, Metadata.empty()));
-    zorderedColumnsSchemas.forEach(colSchema -> {
-      schema.add(composeColumnStatStructType(colSchema.name(), COLUMN_STATS_INDEX_MIN_VALUE_STAT_NAME, colSchema.dataType()));
-      schema.add(composeColumnStatStructType(colSchema.name(), COLUMN_STATS_INDEX_MAX_VALUE_STAT_NAME, colSchema.dataType()));
-      schema.add(composeColumnStatStructType(colSchema.name(), COLUMN_STATS_INDEX_NUM_NULLS_STAT_NAME, LongType$.MODULE$));
-    });
-    return StructType$.MODULE$.apply(schema);
-  }
-
-  private static StructField composeColumnStatStructType(String col, String statName, DataType dataType) {
-    return new StructField(composeZIndexColName(col, statName), dataType, true, Metadata.empty());
-  }
-
-  private static String composeZIndexColName(String col, String statName) {
-    // TODO add escaping for
-    return String.format("%s_%s", col, statName);
-  }
 
   public static Pair<Object, Object>
       fetchMinMaxValues(
@@ -199,10 +157,16 @@ public class ColumnStatsIndexHelper {
     SparkContext sc = sparkSession.sparkContext();
     JavaSparkContext jsc = new JavaSparkContext(sc);
 
+    List<String> columnNames = orderedColumnSchemas.stream()
+        .map(StructField::name)
+        .collect(Collectors.toList());
+
     SerializableConfiguration serializableConfiguration = new SerializableConfiguration(sc.hadoopConfiguration());
     int numParallelism = (baseFilesPaths.size() / 3 + 1);
-    List<HoodieColumnRangeMetadata<Comparable>> colMinMaxInfos;
+
     String previousJobDescription = sc.getLocalProperty("spark.job.description");
+
+    List<HoodieColumnRangeMetadata<Comparable>> colMinMaxInfos;
     try {
       jsc.setJobDescription("Listing parquet column statistics");
       colMinMaxInfos =
@@ -215,9 +179,7 @@ public class ColumnStatsIndexHelper {
                         utils.readRangeFromParquetMetadata(
                                 serializableConfiguration.value(),
                                 new Path(path),
-                                orderedColumnSchemas.stream()
-                                    .map(StructField::name)
-                                    .collect(Collectors.toList())
+                                columnNames
                             )
                             .stream()
                     )
@@ -274,7 +236,10 @@ public class ColumnStatsIndexHelper {
             })
             .filter(Objects::nonNull);
 
-    StructType indexSchema = composeIndexSchema(orderedColumnSchemas);
+    StructType indexSchema = ColumnStatsIndexSupport$.MODULE$.composeIndexSchema(
+        JavaConverters$.MODULE$.collectionAsScalaIterableConverter(columnNames).asScala().toSeq(),
+        StructType$.MODULE$.apply(orderedColumnSchemas)
+    );
 
     return sparkSession.createDataFrame(allMetaDataRDD, indexSchema);
   }

@@ -20,10 +20,7 @@ package org.apache.hudi.common.model;
 
 import javax.annotation.Nullable;
 import java.io.Serializable;
-import java.util.Comparator;
 import java.util.Objects;
-import java.util.function.BiFunction;
-import java.util.stream.Stream;
 
 /**
  * Hoodie metadata for the column range of data stored in columnar format (like Parquet)
@@ -44,23 +41,6 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
   private final long valueCount;
   private final long totalSize;
   private final long totalUncompressedSize;
-
-  public static final BiFunction<HoodieColumnRangeMetadata<Comparable>, HoodieColumnRangeMetadata<Comparable>, HoodieColumnRangeMetadata<Comparable>> COLUMN_RANGE_MERGE_FUNCTION =
-      (oldColumnRange, newColumnRange) -> new HoodieColumnRangeMetadata<Comparable>(
-          newColumnRange.getFilePath(),
-          newColumnRange.getColumnName(),
-          (Comparable) Stream.of(oldColumnRange.getMinValue(), newColumnRange.getMinValue())
-              .filter(Objects::nonNull)
-              .min(Comparator.naturalOrder())
-              .orElse(null),
-          (Comparable) Stream.of(oldColumnRange.getMinValue(), newColumnRange.getMinValue())
-              .filter(Objects::nonNull)
-              .max(Comparator.naturalOrder()).orElse(null),
-          oldColumnRange.getNullCount() + newColumnRange.getNullCount(),
-          oldColumnRange.getValueCount() + newColumnRange.getValueCount(),
-          oldColumnRange.getTotalSize() + newColumnRange.getTotalSize(),
-          oldColumnRange.getTotalUncompressedSize() + newColumnRange.getTotalUncompressedSize()
-      );
 
   private HoodieColumnRangeMetadata(String filePath,
                                     String columnName,
@@ -167,19 +147,5 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
   public static HoodieColumnRangeMetadata<Comparable> stub(String filePath,
                                                            String columnName) {
     return new HoodieColumnRangeMetadata<>(filePath, columnName, null, null, -1, -1, -1, -1);
-  }
-
-  /**
-   * Statistics that is collected in {@link org.apache.hudi.metadata.MetadataPartitionType#COLUMN_STATS} index.
-   */
-  public static final class Stats {
-    public static final String VALUE_COUNT = "value_count";
-    public static final String NULL_COUNT = "null_count";
-    public static final String MIN = "min";
-    public static final String MAX = "max";
-    public static final String TOTAL_SIZE = "total_size";
-    public static final String TOTAL_UNCOMPRESSED_SIZE = "total_uncompressed_size";
-
-    private Stats() {}
   }
 }
