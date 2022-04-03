@@ -105,9 +105,9 @@ public class HoodieTableMetadataUtil {
 
   private static final Logger LOG = LogManager.getLogger(HoodieTableMetadataUtil.class);
 
-  protected static final String PARTITION_NAME_FILES = "files";
-  protected static final String PARTITION_NAME_COLUMN_STATS = "column_stats";
-  protected static final String PARTITION_NAME_BLOOM_FILTERS = "bloom_filters";
+  public static final String PARTITION_NAME_FILES = "files";
+  public static final String PARTITION_NAME_COLUMN_STATS = "column_stats";
+  public static final String PARTITION_NAME_BLOOM_FILTERS = "bloom_filters";
 
   /**
    * Collects {@link HoodieColumnRangeMetadata} for the provided collection of records, pretending
