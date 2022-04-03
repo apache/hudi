@@ -2494,20 +2494,20 @@ public class HoodieWriteConfig extends HoodieConfig {
           HoodieLayoutConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultValue(TIMELINE_LAYOUT_VERSION_NUM, String.valueOf(TimelineLayoutVersion.CURR_VERSION));
 
-      autoAdjustConfigsForConcurrencyMode();
+      // isLockProviderPropertySet must be fetched before setting defaults of HoodieLockConfig
+      final TypedProperties writeConfigProperties = writeConfig.getProps();
+      final boolean isLockProviderPropertySet = writeConfigProperties.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME)
+          || writeConfigProperties.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_PROP);
+      writeConfig.setDefaultOnCondition(!isLockConfigSet,
+          HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
+
+      autoAdjustConfigsForConcurrencyMode(isLockProviderPropertySet);
     }
 
-    private void autoAdjustConfigsForConcurrencyMode() {
-      if (writeConfig.isAutoAdjustLockConfigs()) { // auto adjustment is required only for deltastreamer and spark streaming where async table services can be executed in the same JVM.
+    private void autoAdjustConfigsForConcurrencyMode(boolean isLockProviderPropertySet) {
+      if (writeConfig.isAutoAdjustLockConfigs()) {
+        // auto adjustment is required only for deltastreamer and spark streaming where async table services can be executed in the same JVM.
         boolean isMetadataTableEnabled = writeConfig.getBoolean(HoodieMetadataConfig.ENABLE);
-        final TypedProperties writeConfigProperties = writeConfig.getProps();
-        final boolean isLockProviderPropertySet = writeConfigProperties.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME)
-            || writeConfigProperties.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_PROP);
-
-        if (!isLockConfigSet) {
-          HoodieLockConfig.Builder lockConfigBuilder = HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps());
-          writeConfig.setDefault(lockConfigBuilder.build());
-        }
 
         if (isMetadataTableEnabled) {
           // When metadata table is enabled, optimistic concurrency control must be used for
@@ -2525,25 +2525,25 @@ public class HoodieWriteConfig extends HoodieConfig {
                 WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
             writeConfig.setValue(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
                 InProcessLockProvider.class.getName());
-            LOG.info(String.format("XXX Automatically set %s=%s and %s=%s since user has not set the "
+            LOG.info(String.format("Automatically set %s=%s and %s=%s since user has not set the "
                     + "lock provider for single writer with async table services",
                 WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value(),
                 HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName()));
           }
         }
+      }
 
-        // We check if "hoodie.cleaner.policy.failed.writes"
-        // is properly set to LAZY for optimistic concurrency control
-        String writeConcurrencyMode = writeConfig.getString(WRITE_CONCURRENCY_MODE);
-        if (WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value()
-            .equalsIgnoreCase(writeConcurrencyMode)) {
-          // In this case, we assume that the user takes care of setting the lock provider used
-          writeConfig.setValue(HoodieCompactionConfig.FAILED_WRITES_CLEANER_POLICY.key(),
-              HoodieFailedWritesCleaningPolicy.LAZY.name());
-          LOG.info(String.format("XXX Automatically set %s=%s since optimistic concurrency control is used",
-              HoodieCompactionConfig.FAILED_WRITES_CLEANER_POLICY.key(),
-              HoodieFailedWritesCleaningPolicy.LAZY.name()));
-        }
+      // We check if "hoodie.cleaner.policy.failed.writes"
+      // is properly set to LAZY for optimistic concurrency control
+      String writeConcurrencyMode = writeConfig.getString(WRITE_CONCURRENCY_MODE);
+      if (WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value()
+          .equalsIgnoreCase(writeConcurrencyMode)) {
+        // In this case, we assume that the user takes care of setting the lock provider used
+        writeConfig.setValue(HoodieCompactionConfig.FAILED_WRITES_CLEANER_POLICY.key(),
+            HoodieFailedWritesCleaningPolicy.LAZY.name());
+        LOG.info(String.format("Automatically set %s=%s since optimistic concurrency control is used",
+            HoodieCompactionConfig.FAILED_WRITES_CLEANER_POLICY.key(),
+            HoodieFailedWritesCleaningPolicy.LAZY.name()));
       }
     }
 
