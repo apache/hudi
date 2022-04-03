@@ -64,13 +64,13 @@ public class TestJavaBulkInsertInternalPartitioner extends HoodieJavaClientTestB
 
     List<HoodieRecord> records = generateTestRecordsForBulkInsert(1000);
     testBulkInsertInternalPartitioner(
-        new JavaCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA),
+        new JavaCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA, false),
         records, true, generatePartitionNumRecords(records), Option.of(columnComparator));
   }
 
   private Comparator<HoodieRecord> getCustomColumnComparator(Schema schema, String[] sortColumns) {
     return Comparator.comparing(
-        record -> HoodieAvroUtils.getRecordColumnValues(record, sortColumns, schema).toString());
+        record -> HoodieAvroUtils.getRecordColumnValues(record, sortColumns, schema, false).toString());
   }
 
   private void verifyRecordAscendingOrder(List<HoodieRecord> records,

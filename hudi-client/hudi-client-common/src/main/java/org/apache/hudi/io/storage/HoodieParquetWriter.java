@@ -51,13 +51,23 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
 
-  public HoodieParquetWriter(String instantTime, Path file, HoodieAvroParquetConfig parquetConfig,
-      Schema schema, TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
+  public HoodieParquetWriter(String instantTime,
+                             Path file,
+                             HoodieAvroParquetConfig parquetConfig,
+                             Schema schema,
+                             TaskContextSupplier taskContextSupplier,
+                             boolean populateMetaFields) throws IOException {
     super(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf()),
-        ParquetFileWriter.Mode.CREATE, parquetConfig.getWriteSupport(), parquetConfig.getCompressionCodecName(),
-        parquetConfig.getBlockSize(), parquetConfig.getPageSize(), parquetConfig.getPageSize(),
-        parquetConfig.dictionaryEnabled(), DEFAULT_IS_VALIDATING_ENABLED,
-        DEFAULT_WRITER_VERSION, FSUtils.registerFileSystem(file, parquetConfig.getHadoopConf()));
+        ParquetFileWriter.Mode.CREATE,
+        parquetConfig.getWriteSupport(),
+        parquetConfig.getCompressionCodecName(),
+        parquetConfig.getBlockSize(),
+        parquetConfig.getPageSize(),
+        parquetConfig.getPageSize(),
+        parquetConfig.dictionaryEnabled(),
+        DEFAULT_IS_VALIDATING_ENABLED,
+        DEFAULT_WRITER_VERSION,
+        FSUtils.registerFileSystem(file, parquetConfig.getHadoopConf()));
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf());
     this.fs =
         (HoodieWrapperFileSystem) this.file.getFileSystem(FSUtils.registerFileSystem(file, parquetConfig.getHadoopConf()));
@@ -87,7 +97,7 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
 
   @Override
   public boolean canWrite() {
-    return fs.getBytesWritten(file) < maxFileSize;
+    return getDataSize() < maxFileSize;
   }
 
   @Override
@@ -96,10 +106,5 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
     if (populateMetaFields) {
       writeSupport.add(key);
     }
-  }
-
-  @Override
-  public long getBytesWritten() {
-    return fs.getBytesWritten(file);
   }
 }

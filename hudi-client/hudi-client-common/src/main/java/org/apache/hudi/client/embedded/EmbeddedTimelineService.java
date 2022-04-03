@@ -78,7 +78,8 @@ public class EmbeddedTimelineService {
         .serverPort(writeConfig.getEmbeddedTimelineServerPort())
         .numThreads(writeConfig.getEmbeddedTimelineServerThreads())
         .compress(writeConfig.getEmbeddedTimelineServerCompressOutput())
-        .async(writeConfig.getEmbeddedTimelineServerUseAsync());
+        .async(writeConfig.getEmbeddedTimelineServerUseAsync())
+        .refreshTimelineBasedOnLatestCommit(writeConfig.isRefreshTimelineServerBasedOnLatestCommit());
     // Only passing marker-related write configs to timeline server
     // if timeline-server-based markers are used.
     if (writeConfig.getMarkersType() == MarkerType.TIMELINE_SERVER_BASED) {
@@ -112,8 +113,12 @@ public class EmbeddedTimelineService {
     FileSystemViewStorageType viewStorageType = writeConfig.getClientSpecifiedViewStorageConfig()
         .shouldEnableBackupForRemoteFileSystemView()
         ? FileSystemViewStorageType.REMOTE_FIRST : FileSystemViewStorageType.REMOTE_ONLY;
-    return FileSystemViewStorageConfig.newBuilder().withStorageType(viewStorageType)
-        .withRemoteServerHost(hostAddr).withRemoteServerPort(serverPort).build();
+    return FileSystemViewStorageConfig.newBuilder()
+        .withStorageType(viewStorageType)
+        .withRemoteServerHost(hostAddr)
+        .withRemoteServerPort(serverPort)
+        .withRemoteTimelineClientTimeoutSecs(writeConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientTimeoutSecs())
+        .build();
   }
 
   public FileSystemViewManager getViewManager() {

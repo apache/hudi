@@ -93,20 +93,28 @@ public final class TestTablePathUtils {
 
   @Test
   void getTablePathFromMetadataFolderPath() throws IOException {
-    Path metadataFolder = new Path(tablePath, HoodieTableMetaClient.METAFOLDER_NAME);
-    Option<Path> inferredTablePath = TablePathUtils.getTablePath(fs, metadataFolder);
+    Path metaFolder = new Path(tablePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    Option<Path> inferredTablePath = TablePathUtils.getTablePath(fs, metaFolder);
     assertEquals(tablePath, inferredTablePath.get());
   }
 
   @Test
   void getTablePathFromMetadataSubFolderPath() throws IOException {
     Path auxFolder = new Path(tablePath, HoodieTableMetaClient.AUXILIARYFOLDER_NAME);
-    Option<Path> inferredTablePath = TablePathUtils.getTablePath(fs, auxFolder);
-    assertEquals(tablePath, inferredTablePath.get());
+    assertEquals(tablePath, TablePathUtils.getTablePath(fs, auxFolder).get());
 
     Path bootstrapIndexFolder = new Path(tablePath, HoodieTableMetaClient.BOOTSTRAP_INDEX_ROOT_FOLDER_PATH);
-    inferredTablePath = TablePathUtils.getTablePath(fs, bootstrapIndexFolder);
-    assertEquals(tablePath, inferredTablePath.get());
+    assertEquals(tablePath, TablePathUtils.getTablePath(fs, bootstrapIndexFolder).get());
+
+    Path metadataTableFolder = new Path(tablePath, HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH);
+    Path metadataTableMetaFolder = new Path(metadataTableFolder, HoodieTableMetaClient.METAFOLDER_NAME);
+    assertTrue(new File(metadataTableMetaFolder.toUri()).mkdirs());
+
+    assertEquals(metadataTableFolder, TablePathUtils.getTablePath(fs, metadataTableFolder).get());
+
+    Path metadataTablePartitionFolder = new Path(metadataTableFolder, "column_stats");
+    assertTrue(new File(metadataTablePartitionFolder.toUri()).mkdir());
+    assertEquals(metadataTableFolder, TablePathUtils.getTablePath(fs, metadataTablePartitionFolder).get());
   }
 
   @Test

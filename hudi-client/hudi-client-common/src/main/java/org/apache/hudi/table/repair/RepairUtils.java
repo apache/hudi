@@ -56,17 +56,15 @@ public final class RepairUtils {
    * Tags the instant time of each base or log file from the input file paths.
    *
    * @param basePath          Base path of the table.
-   * @param baseFileExtension Base file extension, e.g., ".parquet".
    * @param allPaths          A {@link List} of file paths to tag.
    * @return A {@link Map} of instant time in {@link String} to a {@link List} of relative file paths.
    */
   public static Map<String, List<String>> tagInstantsOfBaseAndLogFiles(
-      String basePath, String baseFileExtension, List<Path> allPaths) {
+      String basePath, List<Path> allPaths) {
     // Instant time -> Set of base and log file paths
     Map<String, List<String>> instantToFilesMap = new HashMap<>();
     allPaths.forEach(path -> {
-      String instantTime = path.toString().endsWith(baseFileExtension)
-          ? FSUtils.getCommitTime(path.getName()) : FSUtils.getBaseCommitTimeFromLogPath(path);
+      String instantTime = FSUtils.getCommitTime(path.getName());
       instantToFilesMap.computeIfAbsent(instantTime, k -> new ArrayList<>());
       instantToFilesMap.get(instantTime).add(
           FSUtils.getRelativePartitionPath(new Path(basePath), path));

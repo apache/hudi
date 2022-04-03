@@ -17,8 +17,14 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.DataSourceWriteOptions.{KEYGENERATOR_CLASS_NAME, MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieDuplicateKeyException
+import org.apache.hudi.keygen.ComplexKeyGenerator
+import org.apache.spark.sql.SaveMode
+
+import java.io.File
 
 class TestInsertTable extends TestHoodieSqlBase {
 
@@ -238,27 +244,44 @@ class TestInsertTable extends TestHoodieSqlBase {
       )
       typeAndValue.foreach { case (partitionType, partitionValue) =>
         val tableName = generateTableName
-        // Create table
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  dt $partitionType
-             |) using hudi
-             | tblproperties (primaryKey = 'id')
-             | partitioned by (dt)
-             | location '${tmp.getCanonicalPath}/$tableName'
-       """.stripMargin)
-        spark.sql(s"insert into $tableName partition(dt = $partitionValue) select 1, 'a1', 10")
-        spark.sql(s"insert into $tableName select 2, 'a2', 10, $partitionValue")
-        checkAnswer(s"select id, name, price, cast(dt as string) from $tableName order by id")(
-          Seq(1, "a1", 10, removeQuotes(partitionValue).toString),
-          Seq(2, "a2", 10, removeQuotes(partitionValue).toString)
-        )
+        validateDifferentTypesOfPartitionColumn(tmp, partitionType, partitionValue, tableName)
       }
     }
+  }
+
+  test("Test TimestampType Partition Column With Consistent Logical Timestamp Enabled") {
+    withTempDir { tmp =>
+      val typeAndValue = Seq(
+        ("timestamp", "'2021-05-20 00:00:00'"),
+        ("date", "'2021-05-20'")
+      )
+      typeAndValue.foreach { case (partitionType, partitionValue) =>
+        val tableName = generateTableName
+        spark.sql(s"set hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled=true")
+        validateDifferentTypesOfPartitionColumn(tmp, partitionType, partitionValue, tableName)
+      }
+    }
+  }
+
+  private def validateDifferentTypesOfPartitionColumn(tmp: File, partitionType: String, partitionValue: Any, tableName: String) = {
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  dt $partitionType
+         |) using hudi
+         | tblproperties (primaryKey = 'id')
+         | partitioned by (dt)
+         | location '${tmp.getCanonicalPath}/$tableName'
+       """.stripMargin)
+    spark.sql(s"insert into $tableName partition(dt = $partitionValue) select 1, 'a1', 10")
+    spark.sql(s"insert into $tableName select 2, 'a2', 10, $partitionValue")
+    checkAnswer(s"select id, name, price, cast(dt as string) from $tableName order by id")(
+      Seq(1, "a1", 10, removeQuotes(partitionValue).toString),
+      Seq(2, "a2", 10, removeQuotes(partitionValue).toString)
+    )
   }
 
   test("Test insert for uppercase table name") {
@@ -349,6 +372,38 @@ class TestInsertTable extends TestHoodieSqlBase {
     )
     spark.sql("set hoodie.sql.bulk.insert.enable = false")
     spark.sql("set hoodie.sql.insert.mode = upsert")
+  }
+
+
+  test("Test Insert timestamp when 'spark.sql.datetime.java8API.enabled' enables") {
+    try {
+      // enable spark.sql.datetime.java8API.enabled
+      // and use java.time.Instant to replace java.sql.Timestamp to represent TimestampType.
+      spark.conf.set("spark.sql.datetime.java8API.enabled", value = true)
+
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  dt timestamp
+           |)
+           |using hudi
+           |partitioned by(dt)
+           |options(type = 'cow', primaryKey = 'id')
+           |""".stripMargin
+      )
+
+      spark.sql(s"insert into $tableName values (1, 'a1', 10, cast('2021-05-07 00:00:00' as timestamp))")
+      checkAnswer(s"select id, name, price, cast(dt as string) from $tableName")(
+        Seq(1, "a1", 10, "2021-05-07 00:00:00")
+      )
+
+    } finally {
+      spark.conf.set("spark.sql.datetime.java8API.enabled", value = false)
+    }
   }
 
   test("Test bulk insert") {
@@ -531,8 +586,48 @@ class TestInsertTable extends TestHoodieSqlBase {
       checkAnswer(s"select id, name, price, ts from $tableName")(
         Seq(1, "a1", 11.0, 1000)
       )
-
     }
   }
 
+  test("Test For read operation's field") {
+      withTempDir { tmp => {
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        import spark.implicits._
+        val day = "2021-08-02"
+        val df = Seq((1, "a1", 10, 1000, day, 12)).toDF("id", "name", "value", "ts", "day", "hh")
+        // Write a table by spark dataframe.
+        df.write.format("hudi")
+          .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+          .option(TABLE_TYPE.key, MOR_TABLE_TYPE_OPT_VAL)
+          .option(RECORDKEY_FIELD.key, "id")
+          .option(PRECOMBINE_FIELD.key, "ts")
+          .option(PARTITIONPATH_FIELD.key, "day,hh")
+          .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
+          .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+          .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
+          .option(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key, "true")
+          .mode(SaveMode.Overwrite)
+          .save(tablePath)
+
+        val metaClient = HoodieTableMetaClient.builder()
+          .setBasePath(tablePath)
+          .setConf(spark.sessionState.newHadoopConf())
+          .build()
+
+        assertResult(true)(new TableSchemaResolver(metaClient).isHasOperationField)
+
+        spark.sql(
+          s"""
+             |create table $tableName using hudi
+             |location '${tablePath}'
+             |""".stripMargin)
+
+        // Note: spark sql batch write currently does not write actual content to the operation field
+        checkAnswer(s"select id, _hoodie_operation from $tableName")(
+          Seq(1, null)
+        )
+      }
+    }
+  }
 }

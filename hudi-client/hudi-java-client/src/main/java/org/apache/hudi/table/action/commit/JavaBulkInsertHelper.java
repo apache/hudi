@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -39,12 +40,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A java implementation of {@link AbstractBulkInsertHelper}.
+ * A java implementation of {@link BaseBulkInsertHelper}.
  *
  * @param <T>
  */
 @SuppressWarnings("checkstyle:LineLength")
-public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends AbstractBulkInsertHelper<T, List<HoodieRecord<T>>,
+public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends BaseBulkInsertHelper<T, List<HoodieRecord<T>>,
     List<HoodieKey>, List<WriteStatus>, R> {
 
   private JavaBulkInsertHelper() {
@@ -65,7 +66,7 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Abst
                                                            final HoodieWriteConfig config,
                                                            final BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, R> executor,
                                                            final boolean performDedupe,
-                                                           final Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner) {
+                                                           final Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     HoodieWriteMetadata result = new HoodieWriteMetadata();
 
     // It's possible the transition to inflight could have already happened.
@@ -89,7 +90,7 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Abst
                                       HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
                                       HoodieWriteConfig config,
                                       boolean performDedupe,
-                                      Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner,
+                                      Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner,
                                       boolean useWriterSchema,
                                       int parallelism,
                                       WriteHandleFactory writeHandleFactory) {
@@ -106,11 +107,12 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Abst
     BulkInsertPartitioner partitioner = userDefinedBulkInsertPartitioner.isPresent()
         ? userDefinedBulkInsertPartitioner.get()
         : JavaBulkInsertInternalPartitionerFactory.get(config.getBulkInsertSortMode());
+    // only List is supported for Java partitioner, but it is not enforced by BulkInsertPartitioner API. To improve this, TODO HUDI-3463
     repartitionedRecords = (List<HoodieRecord<T>>) partitioner.repartitionRecords(dedupedRecords, parallelism);
 
     FileIdPrefixProvider fileIdPrefixProvider = (FileIdPrefixProvider) ReflectionUtils.loadClass(
         config.getFileIdPrefixProviderClassName(),
-        config.getProps());
+        new TypedProperties(config.getProps()));
 
     List<WriteStatus> writeStatuses = new ArrayList<>();
 

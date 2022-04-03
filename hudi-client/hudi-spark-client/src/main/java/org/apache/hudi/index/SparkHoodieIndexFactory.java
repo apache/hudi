@@ -53,19 +53,19 @@ public final class SparkHoodieIndexFactory {
     }
     switch (config.getIndexType()) {
       case HBASE:
-        return new SparkHoodieHBaseIndex<>(config);
+        return new SparkHoodieHBaseIndex(config);
       case INMEMORY:
-        return new HoodieInMemoryHashIndex<>(config);
+        return new HoodieInMemoryHashIndex(config);
       case BUCKET:
         return new HoodieBucketIndex(config);
       case BLOOM:
-        return new HoodieBloomIndex<>(config, SparkHoodieBloomIndexHelper.getInstance());
+        return new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
       case GLOBAL_BLOOM:
-        return new HoodieGlobalBloomIndex<>(config, SparkHoodieBloomIndexHelper.getInstance());
+        return new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
       case SIMPLE:
-        return new HoodieSimpleIndex<>(config, getKeyGeneratorForSimpleIndex(config));
+        return new HoodieSimpleIndex(config, getKeyGeneratorForSimpleIndex(config));
       case GLOBAL_SIMPLE:
-        return new HoodieGlobalSimpleIndex<>(config, getKeyGeneratorForSimpleIndex(config));
+        return new HoodieGlobalSimpleIndex(config, getKeyGeneratorForSimpleIndex(config));
       default:
         throw new HoodieIndexException("Index type unspecified, set " + config.getIndexType());
     }

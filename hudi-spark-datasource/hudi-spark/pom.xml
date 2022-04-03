@@ -242,6 +242,18 @@
       </exclusions>
     </dependency>
 
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>${hudi.spark.common.module}</artifactId>
+      <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.hudi</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
     <!-- Logging -->
     <dependency>
       <groupId>log4j</groupId>
@@ -315,13 +327,6 @@
       <artifactId>spark-catalyst_${scala.binary.version}</artifactId>
       <classifier>tests</classifier>
       <scope>test</scope>
-    </dependency>
-
-    <!-- Spark (Packages) -->
-    <dependency>
-      <groupId>org.apache.spark</groupId>
-      <artifactId>spark-avro_${scala.binary.version}</artifactId>
-      <scope>provided</scope>
     </dependency>
 
     <!-- Hadoop -->
@@ -452,6 +457,12 @@
       <version>${project.version}</version>
       <classifier>tests</classifier>
       <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-java-client</artifactId>
+      <version>${project.version}</version>
       <scope>test</scope>
     </dependency>
 

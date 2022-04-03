@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilter;
@@ -34,7 +35,9 @@ import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -70,6 +73,8 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
     HoodieWriteConfig config = getWriteConfig();
     List<String> partitionPaths = FSUtils.getAllPartitionPaths(getEngineContext(), config.getMetadataConfig(), metaClient.getBasePath());
 
+    // get matched partitions if set
+    partitionPaths = getMatchedPartitions(config, partitionPaths);
     // filter the partition paths if needed to reduce list status
     partitionPaths = filterPartitionPaths(partitionPaths);
 
@@ -105,7 +110,26 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
         .setInputGroups(clusteringGroups)
         .setExtraMetadata(getExtraMetadata())
         .setVersion(getPlanVersion())
-        .setPreserveHoodieMetadata(getWriteConfig().isPreserveHoodieCommitMetadata())
+        .setPreserveHoodieMetadata(getWriteConfig().isPreserveHoodieCommitMetadataForClustering())
         .build());
+  }
+
+  public List<String> getMatchedPartitions(HoodieWriteConfig config, List<String> partitionPaths) {
+    String partitionSelected = config.getClusteringPartitionSelected();
+    if (!StringUtils.isNullOrEmpty(partitionSelected)) {
+      return Arrays.asList(partitionSelected.split(","));
+    } else {
+      return getRegexPatternMatchedPartitions(config, partitionPaths);
+    }
+  }
+
+  public List<String> getRegexPatternMatchedPartitions(HoodieWriteConfig config, List<String> partitionPaths) {
+    String pattern = config.getClusteringPartitionFilterRegexPattern();
+    if (!StringUtils.isNullOrEmpty(pattern)) {
+      partitionPaths = partitionPaths.stream()
+          .filter(partition -> Pattern.matches(pattern, partition))
+          .collect(Collectors.toList());
+    }
+    return partitionPaths;
   }
 }

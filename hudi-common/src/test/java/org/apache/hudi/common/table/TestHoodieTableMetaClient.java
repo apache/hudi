@@ -54,6 +54,8 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     assertEquals(basePath, metaClient.getBasePath(), "Basepath should be the one assigned");
     assertEquals(basePath + "/.hoodie", metaClient.getMetaPath(),
         "Metapath should be ${basepath}/.hoodie");
+    assertTrue(metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.TABLE_CHECKSUM.key()));
+    assertTrue(HoodieTableConfig.validateChecksum(metaClient.getTableConfig().getProps()));
   }
 
   @Test

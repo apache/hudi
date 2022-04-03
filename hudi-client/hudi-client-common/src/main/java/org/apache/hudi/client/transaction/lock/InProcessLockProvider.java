@@ -19,17 +19,19 @@
 
 package org.apache.hudi.client.transaction.lock;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.lock.LockState;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieLockException;
+
+import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.Serializable;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -42,9 +44,9 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * HoodieLockException. Threads other than the current lock owner, will
  * block on lock() and return false on tryLock().
  */
-public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLock> {
+public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLock>, Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(ZookeeperBasedLockProvider.class);
+  private static final Logger LOG = LogManager.getLogger(InProcessLockProvider.class);
   private static final ReentrantReadWriteLock LOCK = new ReentrantReadWriteLock();
   private final long maxWaitTimeMillis;
 
@@ -91,7 +93,11 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
   public void unlock() {
     LOG.info(getLogMessage(LockState.RELEASING));
     try {
-      LOCK.writeLock().unlock();
+      if (LOCK.isWriteLockedByCurrentThread()) {
+        LOCK.writeLock().unlock();
+      } else {
+        LOG.warn("Cannot unlock because the current thread does not hold the lock.");
+      }
     } catch (Exception e) {
       throw new HoodieLockException(getLogMessage(LockState.FAILED_TO_RELEASE), e);
     }

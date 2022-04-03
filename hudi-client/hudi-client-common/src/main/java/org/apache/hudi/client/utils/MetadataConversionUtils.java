@@ -21,7 +21,6 @@ package org.apache.hudi.client.utils;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
-
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
@@ -34,6 +33,7 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieRollingStatMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -134,7 +134,7 @@ public class MetadataConversionUtils {
     return Option.of(HoodieCommitMetadata.fromBytes(inflightContent.get(), HoodieCommitMetadata.class));
   }
 
-  public static Option<HoodieRequestedReplaceMetadata> getRequestedReplaceMetadata(HoodieTableMetaClient metaClient, HoodieInstant instant) throws IOException {
+  private static Option<HoodieRequestedReplaceMetadata> getRequestedReplaceMetadata(HoodieTableMetaClient metaClient, HoodieInstant instant) throws IOException {
     Option<byte[]> requestedContent = metaClient.getActiveTimeline().getInstantDetails(instant);
     if (!requestedContent.isPresent() || requestedContent.get().length == 0) {
       // requested commit files can be empty in some certain cases, e.g. insert_overwrite or insert_overwrite_table.
@@ -144,6 +144,19 @@ public class MetadataConversionUtils {
       return Option.empty();
     }
     return Option.of(TimelineMetadataUtils.deserializeRequestedReplaceMetadata(requestedContent.get()));
+  }
+
+  public static Option<HoodieCommitMetadata> getHoodieCommitMetadata(HoodieTableMetaClient metaClient, HoodieInstant hoodieInstant) throws IOException {
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
+
+    if (hoodieInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+      return Option.of(HoodieReplaceCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant).get(),
+          HoodieReplaceCommitMetadata.class));
+    }
+    return Option.of(HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant).get(),
+        HoodieCommitMetadata.class));
+
   }
 
   public static org.apache.hudi.avro.model.HoodieCommitMetadata convertCommitMetadata(

@@ -19,7 +19,6 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.directory.api.util.Strings;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
@@ -73,6 +72,8 @@ public class FileCreateUtils {
 
   private static final String WRITE_TOKEN = "1-0-1";
   private static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
+  /** An empty byte array */
+  public static final byte[] EMPTY_BYTES = new byte[0];
 
   public static String baseFileName(String instantTime, String fileId) {
     return baseFileName(instantTime, fileId, BASE_FILE_EXTENSION);
@@ -98,15 +99,6 @@ public class FileCreateUtils {
     return String.format("%s_%s_%s%s%s.%s", fileId, WRITE_TOKEN, instantTime, fileExtension, HoodieTableMetaClient.MARKER_EXTN, ioType);
   }
 
-  private static void createMetaFile(String basePath, String instantTime, String suffix) throws IOException {
-    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
-    Files.createDirectories(parentPath);
-    Path metaFilePath = parentPath.resolve(instantTime + suffix);
-    if (Files.notExists(metaFilePath)) {
-      Files.createFile(metaFilePath);
-    }
-  }
-
   private static void createMetaFile(String basePath, String instantTime, String suffix, FileSystem fs) throws IOException {
     org.apache.hadoop.fs.Path parentPath = new org.apache.hadoop.fs.Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     if (!fs.exists(parentPath)) {
@@ -118,12 +110,20 @@ public class FileCreateUtils {
     }
   }
 
+  private static void createMetaFile(String basePath, String instantTime, String suffix) throws IOException {
+    createMetaFile(basePath, instantTime, suffix, "".getBytes());
+  }
+
   private static void createMetaFile(String basePath, String instantTime, String suffix, byte[] content) throws IOException {
     Path parentPath = Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     Files.createDirectories(parentPath);
     Path metaFilePath = parentPath.resolve(instantTime + suffix);
     if (Files.notExists(metaFilePath)) {
-      Files.write(metaFilePath, content);
+      if (content.length == 0) {
+        Files.createFile(metaFilePath);
+      } else {
+        Files.write(metaFilePath, content);
+      }
     }
   }
 
@@ -221,7 +221,7 @@ public class FileCreateUtils {
   }
 
   public static void createCleanFile(String basePath, String instantTime, HoodieCleanMetadata metadata, boolean isEmpty) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.CLEAN_EXTENSION, isEmpty ? Strings.EMPTY_BYTES : serializeCleanMetadata(metadata).get());
+    createMetaFile(basePath, instantTime, HoodieTimeline.CLEAN_EXTENSION, isEmpty ? EMPTY_BYTES : serializeCleanMetadata(metadata).get());
   }
 
   public static void createRequestedCleanFile(String basePath, String instantTime, HoodieCleanerPlan cleanerPlan) throws IOException {
@@ -229,7 +229,7 @@ public class FileCreateUtils {
   }
 
   public static void createRequestedCleanFile(String basePath, String instantTime, HoodieCleanerPlan cleanerPlan, boolean isEmpty) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_CLEAN_EXTENSION, isEmpty ? Strings.EMPTY_BYTES : serializeCleanerPlan(cleanerPlan).get());
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_CLEAN_EXTENSION, isEmpty ? EMPTY_BYTES : serializeCleanerPlan(cleanerPlan).get());
   }
 
   public static void createInflightCleanFile(String basePath, String instantTime, HoodieCleanerPlan cleanerPlan) throws IOException {
@@ -237,7 +237,7 @@ public class FileCreateUtils {
   }
 
   public static void createInflightCleanFile(String basePath, String instantTime, HoodieCleanerPlan cleanerPlan, boolean isEmpty) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_CLEAN_EXTENSION, isEmpty ? Strings.EMPTY_BYTES : serializeCleanerPlan(cleanerPlan).get());
+    createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_CLEAN_EXTENSION, isEmpty ? EMPTY_BYTES : serializeCleanerPlan(cleanerPlan).get());
   }
 
   public static void createRequestedRollbackFile(String basePath, String instantTime, HoodieRollbackPlan plan) throws IOException {
@@ -249,7 +249,7 @@ public class FileCreateUtils {
   }
 
   public static void createRollbackFile(String basePath, String instantTime, HoodieRollbackMetadata hoodieRollbackMetadata, boolean isEmpty) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.ROLLBACK_EXTENSION, isEmpty ? Strings.EMPTY_BYTES : serializeRollbackMetadata(hoodieRollbackMetadata).get());
+    createMetaFile(basePath, instantTime, HoodieTimeline.ROLLBACK_EXTENSION, isEmpty ? EMPTY_BYTES : serializeRollbackMetadata(hoodieRollbackMetadata).get());
   }
 
   public static void createRestoreFile(String basePath, String instantTime, HoodieRestoreMetadata hoodieRestoreMetadata) throws IOException {
@@ -273,6 +273,10 @@ public class FileCreateUtils {
     createAuxiliaryMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_COMPACTION_EXTENSION);
   }
 
+  public static void createPendingInflightCompaction(String basePath, String instantTime) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_COMPACTION_EXTENSION);
+  }
+
   public static void createPartitionMetaFile(String basePath, String partitionPath) throws IOException {
     Path parentPath = Paths.get(basePath, partitionPath);
     Files.createDirectories(parentPath);
@@ -284,7 +288,7 @@ public class FileCreateUtils {
 
   public static void createBaseFile(String basePath, String partitionPath, String instantTime, String fileId)
       throws Exception {
-    createBaseFile(basePath, partitionPath, instantTime, fileId, 0);
+    createBaseFile(basePath, partitionPath, instantTime, fileId, 1);
   }
 
   public static void createBaseFile(String basePath, String partitionPath, String instantTime, String fileId, long length)
@@ -302,6 +306,11 @@ public class FileCreateUtils {
     }
     new RandomAccessFile(baseFilePath.toFile(), "rw").setLength(length);
     Files.setLastModifiedTime(baseFilePath, FileTime.fromMillis(lastModificationTimeMilli));
+  }
+
+  public static Path getBaseFilePath(String basePath, String partitionPath, String instantTime, String fileId) {
+    Path parentPath = Paths.get(basePath, partitionPath);
+    return parentPath.resolve(baseFileName(instantTime, fileId));
   }
 
   public static void createLogFile(String basePath, String partitionPath, String instantTime, String fileId, int version)

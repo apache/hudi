@@ -21,6 +21,9 @@ package org.apache.hudi.common.util;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
@@ -35,6 +38,35 @@ import java.util.stream.Collectors;
 public class DateTimeUtils {
   private static final Map<String, ChronoUnit> LABEL_TO_UNIT_MAP =
       Collections.unmodifiableMap(initMap());
+
+  /**
+   * Converts provided microseconds (from epoch) to {@link Instant}
+   */
+  public static Instant microsToInstant(long microsFromEpoch) {
+    long epochSeconds = microsFromEpoch / (1_000_000L);
+    long nanoAdjustment = (microsFromEpoch % (1_000_000L)) * 1_000L;
+
+    return Instant.ofEpochSecond(epochSeconds, nanoAdjustment);
+  }
+
+  /**
+   * Converts provided {@link Instant} to microseconds (from epoch)
+   */
+  public static long instantToMicros(Instant instant) {
+    long seconds = instant.getEpochSecond();
+    int nanos = instant.getNano();
+
+    if (seconds < 0 && nanos > 0) {
+      long micros = Math.multiplyExact(seconds + 1, 1_000_000L);
+      long adjustment = (nanos / 1_000L) - 1_000_000;
+
+      return Math.addExact(micros, adjustment);
+    } else {
+      long micros = Math.multiplyExact(seconds, 1_000_000L);
+
+      return Math.addExact(micros, nanos / 1_000L);
+    }
+  }
 
   /**
    * Parse input String to a {@link java.time.Instant}.
@@ -124,6 +156,20 @@ public class DateTimeUtils {
       }
     }
     return labelToUnit;
+  }
+
+  /**
+   * Convert UNIX_TIMESTAMP to string in given format.
+   *
+   * @param unixTimestamp UNIX_TIMESTAMP
+   * @param timeFormat string time format
+   */
+  public static String formatUnixTimestamp(long unixTimestamp, String timeFormat) {
+    ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(timeFormat));
+    DateTimeFormatter dtf = DateTimeFormatter.ofPattern(timeFormat);
+    return LocalDateTime
+        .ofInstant(Instant.ofEpochSecond(unixTimestamp), ZoneId.systemDefault())
+        .format(dtf);
   }
 
   /**

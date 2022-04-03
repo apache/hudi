@@ -18,8 +18,10 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.log4j.Level
+import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.util.Utils
@@ -49,9 +51,19 @@ class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
     .config("hoodie.delete.shuffle.parallelism", "4")
     .config("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
     .config("spark.sql.session.timeZone", "CTT")
+    .config(sparkConf())
     .getOrCreate()
 
   private var tableId = 0
+
+  def sparkConf(): SparkConf = {
+    val sparkConf = new SparkConf()
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      sparkConf.set("spark.sql.catalog.spark_catalog",
+        "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
+    }
+    sparkConf
+  }
 
   protected def withTempDir(f: File => Unit): Unit = {
     val tempDir = Utils.createTempDir()
@@ -88,6 +100,22 @@ class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
 
   protected def checkAnswer(sql: String)(expects: Seq[Any]*): Unit = {
     assertResult(expects.map(row => Row(row: _*)).toArray.sortBy(_.toString()))(spark.sql(sql).collect().sortBy(_.toString()))
+  }
+
+  protected def checkAnswer(array: Array[Row])(expects: Seq[Any]*): Unit = {
+    assertResult(expects.map(row => Row(row: _*)).toArray)(array)
+  }
+
+  protected def checkExceptions(sql: String)(errorMsgs: Seq[String]): Unit = {
+    var hasException = false
+    try {
+      spark.sql(sql)
+    } catch {
+      case e: Throwable =>
+        assertResult(errorMsgs.contains(e.getMessage.split("\n")(0)))(true)
+        hasException = true
+    }
+    assertResult(true)(hasException)
   }
 
   protected def checkException(sql: String)(errorMsg: String): Unit = {

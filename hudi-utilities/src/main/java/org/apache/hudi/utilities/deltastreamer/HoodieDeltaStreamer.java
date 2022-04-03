@@ -35,6 +35,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
@@ -127,7 +128,6 @@ public class HoodieDeltaStreamer implements Serializable {
   public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                              Option<TypedProperties> propsOverride) throws IOException {
     this.properties = combineProperties(cfg, propsOverride, jssc.hadoopConfiguration());
-
     if (cfg.initialCheckpointProvider != null && cfg.checkpoint == null) {
       InitialCheckPointProvider checkPointProvider =
           UtilHelpers.createInitialCheckpointProvider(cfg.initialCheckpointProvider, this.properties);
@@ -156,7 +156,14 @@ public class HoodieDeltaStreamer implements Serializable {
       hoodieConfig.setAll(UtilHelpers.readConfig(hadoopConf, new Path(cfg.propsFilePath), cfg.configs).getProps());
     }
 
+    // set any configs that Deltastreamer has to override explicitly
     hoodieConfig.setDefaultValue(DataSourceWriteOptions.RECONCILE_SCHEMA());
+    // we need auto adjustment enabled for deltastreamer since async table services are feasible within the same JVM.
+    hoodieConfig.setValue(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
+    if (cfg.tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
+      // Explicitly set the table type
+      hoodieConfig.setValue(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
+    }
 
     return hoodieConfig.getProps(true);
   }
@@ -363,11 +370,38 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--run-bootstrap"}, description = "Run bootstrap if bootstrap index is not found")
     public Boolean runBootstrap = false;
 
+    @Parameter(names = {"--bootstrap-overwrite"}, description = "Overwrite existing target table, default false")
+    public Boolean bootstrapOverwrite = false;
+
     @Parameter(names = {"--bootstrap-index-class"}, description = "subclass of BootstrapIndex")
     public String bootstrapIndexClass = HFileBootstrapIndex.class.getName();
 
+    @Parameter(names = {"--retry-on-source-failures"}, description = "Retry on any source failures")
+    public Boolean retryOnSourceFailures = false;
+
+    @Parameter(names = {"--retry-interval-seconds"}, description = "the retry interval for source failures if --retry-on-source-failures is enabled")
+    public Integer retryIntervalSecs = 30;
+
+    @Parameter(names = {"--max-retry-count"}, description = "the max retry count if --retry-on-source-failures is enabled")
+    public Integer maxRetryCount = 3;
+
+    @Parameter(names = {"--allow-commit-on-no-checkpoint-change"}, description = "allow commits even if checkpoint has not changed before and after fetch data"
+        + "from souce. This might be useful in sources like SqlSource where there is not checkpoint. And is not recommended to enable in continuous mode.")
+    public Boolean allowCommitOnNoCheckpointChange = false;
+
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
+
+    @Parameter(names = {"--retry-last-pending-inline-clustering", "-rc"}, description = "Retry last pending inline clustering plan before writing to sink.")
+    public Boolean retryLastPendingInlineClusteringJob = false;
+
+    @Parameter(names = {"--cluster-scheduling-weight"}, description = "Scheduling weight for clustering as defined in "
+        + "https://spark.apache.org/docs/latest/job-scheduling.html")
+    public Integer clusterSchedulingWeight = 1;
+
+    @Parameter(names = {"--cluster-scheduling-minshare"}, description = "Minshare for clustering as defined in "
+        + "https://spark.apache.org/docs/latest/job-scheduling.html")
+    public Integer clusterSchedulingMinShare = 0;
 
     public boolean isAsyncCompactionEnabled() {
       return continuousMode && !forceDisableCompaction
@@ -412,8 +446,10 @@ public class HoodieDeltaStreamer implements Serializable {
               && Objects.equals(commitOnErrors, config.commitOnErrors)
               && Objects.equals(deltaSyncSchedulingWeight, config.deltaSyncSchedulingWeight)
               && Objects.equals(compactSchedulingWeight, config.compactSchedulingWeight)
+              && Objects.equals(clusterSchedulingWeight, config.clusterSchedulingWeight)
               && Objects.equals(deltaSyncSchedulingMinShare, config.deltaSyncSchedulingMinShare)
               && Objects.equals(compactSchedulingMinShare, config.compactSchedulingMinShare)
+              && Objects.equals(clusterSchedulingMinShare, config.clusterSchedulingMinShare)
               && Objects.equals(forceDisableCompaction, config.forceDisableCompaction)
               && Objects.equals(checkpoint, config.checkpoint)
               && Objects.equals(initialCheckpointProvider, config.initialCheckpointProvider)
@@ -428,8 +464,8 @@ public class HoodieDeltaStreamer implements Serializable {
               transformerClassNames, sourceLimit, operation, filterDupes,
               enableHiveSync, maxPendingCompactions, maxPendingClustering, continuousMode,
               minSyncIntervalSeconds, sparkMaster, commitOnErrors,
-              deltaSyncSchedulingWeight, compactSchedulingWeight, deltaSyncSchedulingMinShare,
-              compactSchedulingMinShare, forceDisableCompaction, checkpoint,
+              deltaSyncSchedulingWeight, compactSchedulingWeight, clusterSchedulingWeight, deltaSyncSchedulingMinShare,
+              compactSchedulingMinShare, clusterSchedulingMinShare, forceDisableCompaction, checkpoint,
               initialCheckpointProvider, help);
     }
   
@@ -459,8 +495,10 @@ public class HoodieDeltaStreamer implements Serializable {
               + ", commitOnErrors=" + commitOnErrors
               + ", deltaSyncSchedulingWeight=" + deltaSyncSchedulingWeight
               + ", compactSchedulingWeight=" + compactSchedulingWeight
+              + ", clusterSchedulingWeight=" + clusterSchedulingWeight
               + ", deltaSyncSchedulingMinShare=" + deltaSyncSchedulingMinShare
               + ", compactSchedulingMinShare=" + compactSchedulingMinShare
+              + ", clusterSchedulingMinShare=" + clusterSchedulingMinShare
               + ", forceDisableCompaction=" + forceDisableCompaction
               + ", checkpoint='" + checkpoint + '\''
               + ", initialCheckpointProvider='" + initialCheckpointProvider + '\''
@@ -640,6 +678,10 @@ public class HoodieDeltaStreamer implements Serializable {
                 asyncCompactService.get().enqueuePendingAsyncServiceInstant(new HoodieInstant(State.REQUESTED,
                     HoodieTimeline.COMPACTION_ACTION, scheduledCompactionInstantAndRDD.get().getLeft().get()));
                 asyncCompactService.get().waitTillPendingAsyncServiceInstantsReducesTo(cfg.maxPendingCompactions);
+                if (asyncCompactService.get().hasError()) {
+                  error = true;
+                  throw new HoodieException("Async compaction failed.  Shutting down Delta Sync...");
+                }
               }
               if (clusteringConfig.isAsyncClusteringEnabled()) {
                 Option<String> clusteringInstant = deltaSync.getClusteringInstantOpt();
@@ -647,6 +689,10 @@ public class HoodieDeltaStreamer implements Serializable {
                   LOG.info("Scheduled async clustering for instant: " + clusteringInstant.get());
                   asyncClusteringService.get().enqueuePendingAsyncServiceInstant(new HoodieInstant(State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringInstant.get()));
                   asyncClusteringService.get().waitTillPendingAsyncServiceInstantsReducesTo(cfg.maxPendingClustering);
+                  if (asyncClusteringService.get().hasError()) {
+                    error = true;
+                    throw new HoodieException("Async clustering failed.  Shutting down Delta Sync...");
+                  }
                 }
               }
               long toSleepMs = cfg.minSyncIntervalSeconds * 1000 - (System.currentTimeMillis() - start);
@@ -665,6 +711,7 @@ public class HoodieDeltaStreamer implements Serializable {
           }
         } finally {
           shutdownAsyncServices(error);
+          executor.shutdownNow();
         }
         return true;
       }, executor), executor);
@@ -718,13 +765,12 @@ public class HoodieDeltaStreamer implements Serializable {
               HoodieTableMetaClient.builder().setConf(new Configuration(jssc.hadoopConfiguration())).setBasePath(cfg.targetBasePath).setLoadActiveTimelineOnLoad(true).build();
           List<HoodieInstant> pending = CompactionUtils.getPendingCompactionInstantTimes(meta);
           pending.forEach(hoodieInstant -> asyncCompactService.get().enqueuePendingAsyncServiceInstant(hoodieInstant));
-          asyncCompactService.get().start((error) -> {
-            // Shutdown DeltaSync
-            shutdown(false);
-            return true;
-          });
+          asyncCompactService.get().start(error -> true);
           try {
             asyncCompactService.get().waitTillPendingAsyncServiceInstantsReducesTo(cfg.maxPendingCompactions);
+            if (asyncCompactService.get().hasError()) {
+              throw new HoodieException("Async compaction failed during write client initialization.");
+            }
           } catch (InterruptedException ie) {
             throw new HoodieException(ie);
           }
@@ -735,7 +781,7 @@ public class HoodieDeltaStreamer implements Serializable {
         if (asyncClusteringService.isPresent()) {
           asyncClusteringService.get().updateWriteClient(writeClient);
         } else {
-          asyncClusteringService = Option.ofNullable(new SparkAsyncClusteringService(writeClient));
+          asyncClusteringService = Option.ofNullable(new SparkAsyncClusteringService(new HoodieSparkEngineContext(jssc), writeClient));
           HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
               .setConf(new Configuration(jssc.hadoopConfiguration()))
               .setBasePath(cfg.targetBasePath)
@@ -743,12 +789,12 @@ public class HoodieDeltaStreamer implements Serializable {
           List<HoodieInstant> pending = ClusteringUtils.getPendingClusteringInstantTimes(meta);
           LOG.info(String.format("Found %d pending clustering instants ", pending.size()));
           pending.forEach(hoodieInstant -> asyncClusteringService.get().enqueuePendingAsyncServiceInstant(hoodieInstant));
-          asyncClusteringService.get().start((error) -> {
-            shutdown(false);
-            return true;
-          });
+          asyncClusteringService.get().start(error -> true);
           try {
             asyncClusteringService.get().waitTillPendingAsyncServiceInstantsReducesTo(cfg.maxPendingClustering);
+            if (asyncClusteringService.get().hasError()) {
+              throw new HoodieException("Async clustering failed during write client initialization.");
+            }
           } catch (InterruptedException e) {
             throw new HoodieException(e);
           }

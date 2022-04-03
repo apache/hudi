@@ -19,16 +19,10 @@
 
 package org.apache.hudi.index;
 
-import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
 import org.apache.hudi.index.bloom.HoodieGlobalBloomIndex;
@@ -36,9 +30,7 @@ import org.apache.hudi.index.bucket.HoodieBucketIndex;
 import org.apache.hudi.index.hbase.SparkHoodieHBaseIndex;
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex;
 import org.apache.hudi.index.simple.HoodieSimpleIndex;
-import org.apache.hudi.table.HoodieTable;
 
-import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -62,7 +54,7 @@ public class TestHoodieIndexConfigs {
 
   @ParameterizedTest
   @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE", "HBASE", "BUCKET"})
-  public void testCreateIndex(IndexType indexType) throws Exception {
+  public void testCreateIndex(IndexType indexType) {
     HoodieWriteConfig config;
     HoodieWriteConfig.Builder clientConfigBuilder = HoodieWriteConfig.newBuilder();
     HoodieIndexConfig.Builder indexConfigBuilder = HoodieIndexConfig.newBuilder();
@@ -105,15 +97,6 @@ public class TestHoodieIndexConfigs {
   }
 
   @Test
-  public void testCreateDummyIndex() {
-    HoodieWriteConfig.Builder clientConfigBuilder = HoodieWriteConfig.newBuilder();
-    HoodieIndexConfig.Builder indexConfigBuilder = HoodieIndexConfig.newBuilder();
-    HoodieWriteConfig config = clientConfigBuilder.withPath(basePath)
-        .withIndexConfig(indexConfigBuilder.withIndexClass(DummyHoodieIndex.class.getName()).build()).build();
-    assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof DummyHoodieIndex);
-  }
-
-  @Test
   public void testCreateIndexWithException() {
     HoodieWriteConfig.Builder clientConfigBuilder = HoodieWriteConfig.newBuilder();
     HoodieIndexConfig.Builder indexConfigBuilder = HoodieIndexConfig.newBuilder();
@@ -130,47 +113,6 @@ public class TestHoodieIndexConfigs {
       SparkHoodieIndexFactory.createIndex(config2);
     }, "exception is expected");
     assertTrue(thrown2.getMessage().contains("Unable to instantiate class"));
-  }
-
-  public static class DummyHoodieIndex<T extends HoodieRecordPayload<T>> extends SparkHoodieIndex<T> {
-
-    public DummyHoodieIndex(HoodieWriteConfig config) {
-      super(config);
-    }
-
-    @Override
-    public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD,
-                                               HoodieEngineContext context,
-                                               HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable) throws HoodieIndexException {
-      return null;
-    }
-
-    @Override
-    public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> records,
-                                                HoodieEngineContext context,
-                                                HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable) throws HoodieIndexException {
-      return null;
-    }
-
-    @Override
-    public boolean rollbackCommit(String instantTime) {
-      return false;
-    }
-
-    @Override
-    public boolean isGlobal() {
-      return false;
-    }
-
-    @Override
-    public boolean canIndexLogFiles() {
-      return false;
-    }
-
-    @Override
-    public boolean isImplicitWithStorage() {
-      return false;
-    }
   }
 
   public static class IndexWithConstructor {

@@ -22,10 +22,13 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
+import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
@@ -77,10 +80,8 @@ public class TimelineMetadataUtils {
     for (HoodieRollbackStat stat : rollbackStats) {
       Map<String, Long> rollbackLogFiles = stat.getCommandBlocksCount().keySet().stream()
           .collect(Collectors.toMap(f -> f.getPath().toString(), FileStatus::getLen));
-      Map<String, Long> probableLogFiles = stat.getWrittenLogFileSizeMap().keySet().stream()
-          .collect(Collectors.toMap(f -> f.getPath().toString(), FileStatus::getLen));
       HoodieRollbackPartitionMetadata metadata = new HoodieRollbackPartitionMetadata(stat.getPartitionPath(),
-          stat.getSuccessDeleteFiles(), stat.getFailedDeleteFiles(), rollbackLogFiles, probableLogFiles);
+          stat.getSuccessDeleteFiles(), stat.getFailedDeleteFiles(), rollbackLogFiles);
       partitionMetadataBuilder.put(stat.getPartitionPath(), metadata);
       totalDeleted += stat.getSuccessDeleteFiles().size();
     }
@@ -114,6 +115,10 @@ public class TimelineMetadataUtils {
     return serializeAvroMetadata(rollbackPlan, HoodieRollbackPlan.class);
   }
 
+  public static Option<byte[]> serializeRestorePlan(HoodieRestorePlan restorePlan) throws IOException {
+    return serializeAvroMetadata(restorePlan, HoodieRestorePlan.class);
+  }
+
   public static Option<byte[]> serializeCleanMetadata(HoodieCleanMetadata metadata) throws IOException {
     return serializeAvroMetadata(metadata, HoodieCleanMetadata.class);
   }
@@ -132,6 +137,14 @@ public class TimelineMetadataUtils {
 
   public static Option<byte[]> serializeRequestedReplaceMetadata(HoodieRequestedReplaceMetadata clusteringPlan) throws IOException {
     return serializeAvroMetadata(clusteringPlan, HoodieRequestedReplaceMetadata.class);
+  }
+
+  public static Option<byte[]> serializeIndexPlan(HoodieIndexPlan indexPlan) throws IOException {
+    return serializeAvroMetadata(indexPlan, HoodieIndexPlan.class);
+  }
+
+  public static Option<byte[]> serializeIndexCommitMetadata(HoodieIndexCommitMetadata indexCommitMetadata) throws IOException {
+    return serializeAvroMetadata(indexCommitMetadata, HoodieIndexCommitMetadata.class);
   }
 
   public static <T extends SpecificRecordBase> Option<byte[]> serializeAvroMetadata(T metadata, Class<T> clazz)
@@ -175,6 +188,14 @@ public class TimelineMetadataUtils {
 
   public static HoodieReplaceCommitMetadata deserializeHoodieReplaceMetadata(byte[] bytes) throws IOException {
     return deserializeAvroMetadata(bytes, HoodieReplaceCommitMetadata.class);
+  }
+
+  public static HoodieIndexPlan deserializeIndexPlan(byte[] bytes) throws IOException {
+    return deserializeAvroMetadata(bytes, HoodieIndexPlan.class);
+  }
+
+  public static HoodieIndexCommitMetadata deserializeIndexCommitMetadata(byte[] bytes) throws IOException {
+    return deserializeAvroMetadata(bytes, HoodieIndexCommitMetadata.class);
   }
 
   public static <T extends SpecificRecordBase> T deserializeAvroMetadata(byte[] bytes, Class<T> clazz)

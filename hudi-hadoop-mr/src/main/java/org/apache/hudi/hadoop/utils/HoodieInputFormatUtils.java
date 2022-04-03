@@ -18,33 +18,6 @@
 
 package org.apache.hudi.hadoop.utils;
 
-import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodiePartitionMetadata;
-import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.FileSystemViewManager;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.table.view.TableFileSystemView;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.HoodieHFileInputFormat;
-import org.apache.hudi.hadoop.HoodieParquetInputFormat;
-import org.apache.hudi.hadoop.RealtimeFileStatus;
-import org.apache.hudi.hadoop.LocatedFileStatusWithBootstrapBaseFile;
-import org.apache.hudi.hadoop.FileStatusWithBootstrapBaseFile;
-import org.apache.hudi.hadoop.realtime.HoodieHFileRealtimeInputFormat;
-import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -56,8 +29,29 @@ import org.apache.hadoop.hive.ql.io.orc.OrcSerde;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
 import org.apache.hadoop.mapred.FileInputFormat;
-import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.JobContext;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.table.view.TableFileSystemView;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.FileStatusWithBootstrapBaseFile;
+import org.apache.hudi.hadoop.HoodieHFileInputFormat;
+import org.apache.hudi.hadoop.HoodieParquetInputFormat;
+import org.apache.hudi.hadoop.LocatedFileStatusWithBootstrapBaseFile;
+import org.apache.hudi.hadoop.realtime.HoodieHFileRealtimeInputFormat;
+import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -268,7 +262,7 @@ public class HoodieInputFormatUtils {
    * @param tableMetaClient
    * @return
    */
-  public static Option<HoodieTimeline> getFilteredCommitsTimeline(Job job, HoodieTableMetaClient tableMetaClient) {
+  public static Option<HoodieTimeline> getFilteredCommitsTimeline(JobContext job, HoodieTableMetaClient tableMetaClient) {
     String tableName = tableMetaClient.getTableConfig().getTableName();
     HoodieDefaultTimeline baseTimeline;
     if (HoodieHiveUtils.stopAtCompaction(job, tableName)) {
@@ -299,7 +293,7 @@ public class HoodieInputFormatUtils {
    * @param timeline
    * @return
    */
-  public static HoodieTimeline getHoodieTimelineForIncrementalQuery(Job job, String tableName, HoodieTimeline timeline) {
+  public static HoodieTimeline getHoodieTimelineForIncrementalQuery(JobContext job, String tableName, HoodieTimeline timeline) {
     String lastIncrementalTs = HoodieHiveUtils.readStartCommitTime(job, tableName);
     // Total number of commits to return in this batch. Set this to -1 to get all the commits.
     Integer maxCommits = HoodieHiveUtils.readMaxCommits(job, tableName);
@@ -317,7 +311,7 @@ public class HoodieInputFormatUtils {
     Map<Path, HoodieTableMetaClient> metaClientMap = new HashMap<>();
     return partitions.stream().collect(Collectors.toMap(Function.identity(), p -> {
       try {
-        HoodieTableMetaClient metaClient = getTableMetaClientForBasePath(p.getFileSystem(conf), p);
+        HoodieTableMetaClient metaClient = getTableMetaClientForBasePathUnchecked(conf, p);
         metaClientMap.put(p, metaClient);
         return metaClient;
       } catch (IOException e) {
@@ -327,20 +321,17 @@ public class HoodieInputFormatUtils {
   }
 
   /**
-   * Extract HoodieTableMetaClient from a partition path(not base path).
-   * @param fs
-   * @param dataPath
-   * @return
-   * @throws IOException
+   * Extract HoodieTableMetaClient from a partition path (not base path)
    */
-  public static HoodieTableMetaClient getTableMetaClientForBasePath(FileSystem fs, Path dataPath) throws IOException {
+  public static HoodieTableMetaClient getTableMetaClientForBasePathUnchecked(Configuration conf, Path partitionPath) throws IOException {
+    FileSystem fs = partitionPath.getFileSystem(conf);
     int levels = HoodieHiveUtils.DEFAULT_LEVELS_TO_BASEPATH;
-    if (HoodiePartitionMetadata.hasPartitionMetadata(fs, dataPath)) {
-      HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(fs, dataPath);
+    if (HoodiePartitionMetadata.hasPartitionMetadata(fs, partitionPath)) {
+      HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(fs, partitionPath);
       metadata.readFromFS();
       levels = metadata.getPartitionDepth();
     }
-    Path baseDir = HoodieHiveUtils.getNthParent(dataPath, levels);
+    Path baseDir = HoodieHiveUtils.getNthParent(partitionPath, levels);
     LOG.info("Reading hoodie metadata from path " + baseDir.toString());
     return HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(baseDir.toString()).build();
   }
@@ -420,8 +411,8 @@ public class HoodieInputFormatUtils {
   }
 
   public static Map<HoodieTableMetaClient, List<Path>> groupSnapshotPathsByMetaClient(
-          Collection<HoodieTableMetaClient> metaClientList,
-          List<Path> snapshotPaths
+      Collection<HoodieTableMetaClient> metaClientList,
+      List<Path> snapshotPaths
   ) {
     Map<HoodieTableMetaClient, List<Path>> grouped = new HashMap<>();
     metaClientList.forEach(metaClient -> grouped.put(metaClient, new ArrayList<>()));
@@ -437,70 +428,6 @@ public class HoodieInputFormatUtils {
     return HoodieMetadataConfig.newBuilder()
         .enable(conf.getBoolean(ENABLE.key(), DEFAULT_METADATA_ENABLE_FOR_READERS))
         .build();
-  }
-
-  public static List<FileStatus> filterFileStatusForSnapshotMode(JobConf job, Map<String, HoodieTableMetaClient> tableMetaClientMap,
-                                                                 List<Path> snapshotPaths) throws IOException {
-    return filterFileStatusForSnapshotMode(job, tableMetaClientMap, snapshotPaths, false);
-  }
-
-  public static List<FileStatus> filterFileStatusForSnapshotMode(JobConf job, Map<String, HoodieTableMetaClient> tableMetaClientMap,
-                                                                 List<Path> snapshotPaths, boolean includeLogFiles) throws IOException {
-    HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(job);
-    List<FileStatus> returns = new ArrayList<>();
-
-    Map<HoodieTableMetaClient, List<Path>> groupedPaths = HoodieInputFormatUtils
-        .groupSnapshotPathsByMetaClient(tableMetaClientMap.values(), snapshotPaths);
-    Map<HoodieTableMetaClient, HoodieTableFileSystemView> fsViewCache = new HashMap<>();
-    LOG.info("Found a total of " + groupedPaths.size() + " groups");
-
-    try {
-      for (Map.Entry<HoodieTableMetaClient, List<Path>> entry : groupedPaths.entrySet()) {
-        HoodieTableMetaClient metaClient = entry.getKey();
-        if (LOG.isDebugEnabled()) {
-          LOG.debug("Hoodie Metadata initialized with completed commit instant as :" + metaClient);
-        }
-
-        HoodieTimeline timeline = HoodieHiveUtils.getTableTimeline(metaClient.getTableConfig().getTableName(), job, metaClient);
-
-        HoodieTableFileSystemView fsView = fsViewCache.computeIfAbsent(metaClient, tableMetaClient ->
-            FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext, tableMetaClient, buildMetadataConfig(job), timeline));
-        List<HoodieBaseFile> filteredBaseFiles = new ArrayList<>();
-        Map<FileStatus, List<HoodieLogFile>> filteredLogs = new HashMap<>();
-        for (Path p : entry.getValue()) {
-          String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), p);
-          List<HoodieBaseFile> matched = fsView.getLatestBaseFiles(relativePartitionPath).collect(Collectors.toList());
-          filteredBaseFiles.addAll(matched);
-          if (includeLogFiles) {
-            List<FileSlice> logMatched = fsView.getLatestFileSlices(relativePartitionPath)
-                .filter(f -> !f.getBaseFile().isPresent() && f.getLatestLogFile().isPresent())
-                .collect(Collectors.toList());
-            logMatched.forEach(f -> {
-              List<HoodieLogFile> logPathSizePairs = f.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
-              filteredLogs.put(f.getLatestLogFile().get().getFileStatus(), logPathSizePairs);
-            });
-          }
-        }
-
-        LOG.info("Total paths to process after hoodie filter " + filteredBaseFiles.size());
-        for (HoodieBaseFile filteredFile : filteredBaseFiles) {
-          if (LOG.isDebugEnabled()) {
-            LOG.debug("Processing latest hoodie file - " + filteredFile.getPath());
-          }
-          filteredFile = refreshFileStatus(job, filteredFile);
-          returns.add(getFileStatus(filteredFile));
-        }
-
-        for (Map.Entry<FileStatus, List<HoodieLogFile>> filterLogEntry : filteredLogs.entrySet()) {
-          RealtimeFileStatus rs = new RealtimeFileStatus(filterLogEntry.getKey());
-          rs.setDeltaLogFiles(filterLogEntry.getValue());
-          returns.add(rs);
-        }
-      }
-    } finally {
-      fsViewCache.forEach(((metaClient, fsView) -> fsView.close()));
-    }
-    return returns;
   }
 
   /**
@@ -536,12 +463,12 @@ public class HoodieInputFormatUtils {
    *
    * @return the affected file status array
    */
-  public static FileStatus[] listAffectedFilesForCommits(Path basePath, List<HoodieCommitMetadata> metadataList) {
+  public static FileStatus[] listAffectedFilesForCommits(Configuration hadoopConf, Path basePath, List<HoodieCommitMetadata> metadataList) {
     // TODO: Use HoodieMetaTable to extract affected file directly.
     HashMap<String, FileStatus> fullPathToFileStatus = new HashMap<>();
     // Iterate through the given commits.
     for (HoodieCommitMetadata metadata: metadataList) {
-      fullPathToFileStatus.putAll(metadata.getFullPathToFileStatus(basePath.toString()));
+      fullPathToFileStatus.putAll(metadata.getFullPathToFileStatus(hadoopConf, basePath.toString()));
     }
     return fullPathToFileStatus.values().toArray(new FileStatus[0]);
   }

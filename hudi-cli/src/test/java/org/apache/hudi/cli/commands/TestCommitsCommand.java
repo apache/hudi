@@ -40,7 +40,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.hudi.table.HoodieTimelineArchiveLog;
+import org.apache.hudi.client.HoodieTimelineArchiver;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +48,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.shell.core.CommandResult;
 
 import java.io.IOException;
@@ -60,6 +61,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createCompactionCommitInMetadataTable;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -204,15 +206,16 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
   /**
    * Test case of 'commits showarchived' command.
    */
-  @Test
-  public void testShowArchivedCommits() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testShowArchivedCommits(boolean enableMetadataTable) throws Exception {
     // Generate archive
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath1)
         .withSchema(HoodieTestCommitMetadataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
         .forTable("test-trip-table").build();
 
     // generate data and metadata
@@ -229,11 +232,17 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
           Option.of(value[0]), Option.of(value[1]));
     }
 
+    if (enableMetadataTable) {
+      // Simulate a compaction commit in metadata table timeline
+      // so the archival in data table can happen
+      createCompactionCommitInMetadataTable(hadoopConf(), metaClient.getFs(), tablePath1, "104");
+    }
+
     // archive
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
     HoodieSparkTable table = HoodieSparkTable.create(cfg, context(), metaClient);
-    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, table);
-    archiveLog.archiveIfRequired(context());
+    HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(cfg, table);
+    archiver.archiveIfRequired(context());
 
     CommandResult cr = shell().executeCommand(String.format("commits showarchived --startTs %s --endTs %s", "100", "104"));
     assertTrue(cr.isSuccess());
@@ -246,6 +255,60 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     data.remove("103");
     data.remove("104");
     String expected = generateExpectData(1, data);
+    expected = removeNonWordAndStripSpace(expected);
+    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    assertEquals(expected, got);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testShowArchivedCommitsWithMultiCommitsFile(boolean enableMetadataTable) throws Exception {
+    // Generate archive
+    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath1)
+        .withSchema(HoodieTestCommitMetadataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withRemoteServerPort(timelineServicePort).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
+        .forTable("test-trip-table").build();
+
+    // generate data and metadata
+    Map<String, Integer[]> data = new LinkedHashMap<>();
+
+    for (int i = 194; i >= 154; i--) {
+      data.put(String.valueOf(i), new Integer[] {i, i});
+    }
+
+    if (enableMetadataTable) {
+      // Simulate a compaction commit in metadata table timeline
+      // so the archival in data table can happen
+      createCompactionCommitInMetadataTable(hadoopConf(), metaClient.getFs(), tablePath1, "194");
+    }
+
+    for (Map.Entry<String, Integer[]> entry : data.entrySet()) {
+      String key = entry.getKey();
+      Integer[] value = entry.getValue();
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath1, key, hadoopConf(),
+          Option.of(value[0]), Option.of(value[1]));
+      // archive
+      metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
+      HoodieSparkTable table = HoodieSparkTable.create(cfg, context(), metaClient);
+
+      // need to create multi archive files
+      HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(cfg, table);
+      archiver.archiveIfRequired(context());
+    }
+
+    CommandResult cr = shell().executeCommand(String.format("commits showarchived --startTs %s --endTs %s", "160", "174"));
+    assertTrue(cr.isSuccess());
+    assertEquals(3, metaClient.reloadActiveTimeline().getCommitsTimeline().countInstants(),
+        "There should 3 instants not be archived!");
+
+    Map<String, Integer[]> data2 = new LinkedHashMap<>();
+    for (int i = 174; i >= 161; i--) {
+      data2.put(String.valueOf(i), new Integer[] {i, i});
+    }
+    String expected = generateExpectData(1, data2);
     expected = removeNonWordAndStripSpace(expected);
     String got = removeNonWordAndStripSpace(cr.getResult().toString());
     assertEquals(expected, got);

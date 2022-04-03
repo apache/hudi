@@ -20,28 +20,28 @@ package org.apache.hudi.table.action.deltacommit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.spark.api.java.JavaRDD;
 
 public class SparkInsertPreppedDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>>
-    extends AbstractSparkDeltaCommitActionExecutor<T> {
+    extends BaseSparkDeltaCommitActionExecutor<T> {
 
-  private final JavaRDD<HoodieRecord<T>> preppedRecords;
+  private final HoodieData<HoodieRecord<T>> preppedRecords;
 
   public SparkInsertPreppedDeltaCommitActionExecutor(HoodieSparkEngineContext context,
                                                      HoodieWriteConfig config, HoodieTable table,
-                                                     String instantTime, JavaRDD<HoodieRecord<T>> preppedRecords) {
+                                                     String instantTime, HoodieData<HoodieRecord<T>> preppedRecords) {
     super(context, config, table, instantTime, WriteOperationType.INSERT_PREPPED);
     this.preppedRecords = preppedRecords;
   }
 
   @Override
-  public HoodieWriteMetadata<JavaRDD<WriteStatus>> execute() {
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
     return super.execute(preppedRecords);
   }
 }

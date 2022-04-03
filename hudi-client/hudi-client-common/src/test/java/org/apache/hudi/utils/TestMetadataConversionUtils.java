@@ -188,7 +188,6 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     rollbackPartitionMetadata.setPartitionPath("p1");
     rollbackPartitionMetadata.setSuccessDeleteFiles(Arrays.asList("f1"));
     rollbackPartitionMetadata.setFailedDeleteFiles(new ArrayList<>());
-    rollbackPartitionMetadata.setWrittenLogFiles(new HashMap<>());
     rollbackPartitionMetadata.setRollbackLogFiles(new HashMap<>());
     Map<String, HoodieRollbackPartitionMetadata> partitionMetadataMap = new HashMap<>();
     partitionMetadataMap.put("p1", rollbackPartitionMetadata);
@@ -260,7 +259,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
 
   private void createCleanMetadata(String instantTime) throws IOException {
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant("", "", ""), "", new HashMap<>(),
-        CleanPlanV2MigrationHandler.VERSION, new HashMap<>());
+        CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>());
     HoodieCleanStat cleanStats = new HoodieCleanStat(
         HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
         HoodieTestUtils.DEFAULT_PARTITION_PATHS[new Random().nextInt(HoodieTestUtils.DEFAULT_PARTITION_PATHS.length)],

@@ -21,14 +21,14 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.common.bloom.BloomFilter;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.CellComparator;
 import org.apache.hadoop.hbase.HColumnDescriptor;
-import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 
 public class HoodieHFileConfig {
 
-  public static final KeyValue.KVComparator HFILE_COMPARATOR = new HoodieHBaseKVComparator();
+  public static final CellComparator HFILE_COMPARATOR = new HoodieHBaseKVComparator();
   public static final boolean PREFETCH_ON_OPEN = CacheConfig.DEFAULT_PREFETCH_ON_OPEN;
   public static final boolean CACHE_DATA_IN_L1 = HColumnDescriptor.DEFAULT_CACHE_DATA_IN_L1;
   // This is private in CacheConfig so have been copied here.
@@ -42,11 +42,12 @@ public class HoodieHFileConfig {
   private final boolean dropBehindCacheCompaction;
   private final Configuration hadoopConf;
   private final BloomFilter bloomFilter;
-  private final KeyValue.KVComparator hfileComparator;
+  private final CellComparator hfileComparator;
+  private final String keyFieldName;
 
   public HoodieHFileConfig(Configuration hadoopConf, Compression.Algorithm compressionAlgorithm, int blockSize,
-                           long maxFileSize, boolean prefetchBlocksOnOpen, boolean cacheDataInL1,
-                           boolean dropBehindCacheCompaction, BloomFilter bloomFilter, KeyValue.KVComparator hfileComparator) {
+                           long maxFileSize, String keyFieldName, boolean prefetchBlocksOnOpen, boolean cacheDataInL1,
+                           boolean dropBehindCacheCompaction, BloomFilter bloomFilter, CellComparator hfileComparator) {
     this.hadoopConf = hadoopConf;
     this.compressionAlgorithm = compressionAlgorithm;
     this.blockSize = blockSize;
@@ -56,6 +57,7 @@ public class HoodieHFileConfig {
     this.dropBehindCacheCompaction = dropBehindCacheCompaction;
     this.bloomFilter = bloomFilter;
     this.hfileComparator = hfileComparator;
+    this.keyFieldName = keyFieldName;
   }
 
   public Configuration getHadoopConf() {
@@ -94,7 +96,11 @@ public class HoodieHFileConfig {
     return bloomFilter;
   }
 
-  public KeyValue.KVComparator getHfileComparator() {
+  public CellComparator getHFileComparator() {
     return hfileComparator;
+  }
+
+  public String getKeyFieldName() {
+    return keyFieldName;
   }
 }

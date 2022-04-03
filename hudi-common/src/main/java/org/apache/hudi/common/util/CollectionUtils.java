@@ -20,7 +20,9 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.util.collection.Pair;
 
+import java.lang.reflect.Array;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -31,18 +33,64 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 public class CollectionUtils {
 
   public static final Properties EMPTY_PROPERTIES = new Properties();
 
+  public static boolean isNullOrEmpty(Collection<?> c) {
+    return Objects.isNull(c) || c.isEmpty();
+  }
+
+  public static boolean nonEmpty(Collection<?> c) {
+    return !isNullOrEmpty(c);
+  }
+
   /**
-   * Combines provided {@link List}s into one
+   * Combines provided arrays into one
+   */
+  @SuppressWarnings("unchecked")
+  public static <T> T[] combine(T[] one, T[] another) {
+    T[] combined = (T[]) Array.newInstance(one.getClass().getComponentType(), one.length + another.length);
+    System.arraycopy(one, 0, combined, 0, one.length);
+    System.arraycopy(another, 0, combined, one.length, another.length);
+    return combined;
+  }
+
+  /**
+   * Combines provided array and an element into a new array
+   */
+  @SuppressWarnings("unchecked")
+  public static <T> T[] append(T[] array, T elem) {
+    T[] combined = (T[]) Array.newInstance(array.getClass().getComponentType(), array.length + 1);
+    System.arraycopy(array, 0, combined, 0, array.length);
+    combined[array.length] = elem;
+    return combined;
+  }
+
+
+  /**
+   * Combines provided {@link List}s into one, returning new instance of {@link ArrayList}
    */
   public static <E> List<E> combine(List<E> one, List<E> another) {
-    ArrayList<E> combined = new ArrayList<>(one);
+    ArrayList<E> combined = new ArrayList<>(one.size() + another.size());
+    combined.addAll(one);
     combined.addAll(another);
+    return combined;
+  }
+
+  /**
+   * Combines provided {@link Map}s into one, returning new instance of {@link HashMap}.
+   *
+   * NOTE: That values associated with overlapping keys from the second map, will override
+   *       values from the first one
+   */
+  public static <K, V> HashMap<K, V> combine(Map<K, V> one, Map<K, V> another) {
+    HashMap<K, V> combined = new HashMap<>(one.size() + another.size());
+    combined.putAll(one);
+    combined.putAll(another);
     return combined;
   }
 
@@ -65,6 +113,21 @@ public class CollectionUtils {
     List<E> diff = new ArrayList<>(one);
     diff.removeAll(another);
     return diff;
+  }
+
+  public static <E> Stream<List<E>> batchesAsStream(List<E> list, int batchSize) {
+    ValidationUtils.checkArgument(batchSize > 0, "batch size must be positive.");
+    int total = list.size();
+    if (total <= 0) {
+      return Stream.empty();
+    }
+    int numFullBatches = (total - 1) / batchSize;
+    return IntStream.range(0, numFullBatches + 1).mapToObj(
+        n -> list.subList(n * batchSize, n == numFullBatches ? total : (n + 1) * batchSize));
+  }
+
+  public static <E> List<List<E>> batches(List<E> list, int batchSize) {
+    return batchesAsStream(list, batchSize).collect(Collectors.toList());
   }
 
   /**

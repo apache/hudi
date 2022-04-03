@@ -24,6 +24,7 @@ import org.apache.hudi.client.utils.SparkMemoryUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -85,8 +86,7 @@ import scala.Tuple2;
 /**
  * Hoodie Index implementation backed by HBase.
  */
-public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload<T>>
-    extends HoodieIndex<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
+public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
 
   public static final String DEFAULT_SPARK_EXECUTOR_INSTANCES_CONFIG_NAME = "spark.executor.instances";
   public static final String DEFAULT_SPARK_DYNAMIC_ALLOCATION_ENABLED_CONFIG_NAME = "spark.dynamicAllocation.enabled";
@@ -203,15 +203,13 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload<T>>
   /**
    * Function that tags each HoodieRecord with an existing location, if known.
    */
-  private Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<HoodieRecord<T>>> locationTagFunction(
+  private <R> Function2<Integer, Iterator<HoodieRecord<R>>, Iterator<HoodieRecord<R>>> locationTagFunction(
       HoodieTableMetaClient metaClient) {
 
     // `multiGetBatchSize` is intended to be a batch per 100ms. To create a rate limiter that measures
     // operations per second, we need to multiply `multiGetBatchSize` by 10.
     Integer multiGetBatchSize = config.getHbaseIndexGetBatchSize();
-    return (Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<HoodieRecord<T>>>) (partitionNum,
-        hoodieRecordIterator) -> {
-
+    return (partitionNum, hoodieRecordIterator) -> {
       boolean updatePartitionPath = config.getHbaseIndexUpdatePartitionPath();
       RateLimiter limiter = RateLimiter.create(multiGetBatchSize * 10, TimeUnit.SECONDS);
       // Grab the global HBase connection
@@ -220,7 +218,7 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload<T>>
           hbaseConnection = getHBaseConnection();
         }
       }
-      List<HoodieRecord<T>> taggedRecords = new ArrayList<>();
+      List<HoodieRecord<R>> taggedRecords = new ArrayList<>();
       try (HTable hTable = (HTable) hbaseConnection.getTable(TableName.valueOf(tableName))) {
         List<Get> statements = new ArrayList<>();
         List<HoodieRecord> currentBatchOfRecords = new LinkedList<>();
@@ -256,19 +254,19 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload<T>>
             // check whether to do partition change processing
             if (updatePartitionPath && !partitionPath.equals(currentRecord.getPartitionPath())) {
               // delete partition old data record
-              HoodieRecord emptyRecord = new HoodieRecord(new HoodieKey(currentRecord.getRecordKey(), partitionPath),
+              HoodieRecord emptyRecord = new HoodieAvroRecord(new HoodieKey(currentRecord.getRecordKey(), partitionPath),
                   new EmptyHoodieRecordPayload());
               emptyRecord.unseal();
               emptyRecord.setCurrentLocation(new HoodieRecordLocation(commitTs, fileId));
               emptyRecord.seal();
               // insert partition new data record
-              currentRecord = new HoodieRecord(new HoodieKey(currentRecord.getRecordKey(), currentRecord.getPartitionPath()),
-                  currentRecord.getData());
+              currentRecord = new HoodieAvroRecord(new HoodieKey(currentRecord.getRecordKey(), currentRecord.getPartitionPath()),
+                  (HoodieRecordPayload) currentRecord.getData());
               taggedRecords.add(emptyRecord);
               taggedRecords.add(currentRecord);
             } else {
-              currentRecord = new HoodieRecord(new HoodieKey(currentRecord.getRecordKey(), partitionPath),
-                  currentRecord.getData());
+              currentRecord = new HoodieAvroRecord(new HoodieKey(currentRecord.getRecordKey(), partitionPath),
+                  (HoodieRecordPayload) currentRecord.getData());
               currentRecord.unseal();
               currentRecord.setCurrentLocation(new HoodieRecordLocation(commitTs, fileId));
               currentRecord.seal();
@@ -294,8 +292,8 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload<T>>
   }
 
   @Override
-  public HoodieData<HoodieRecord<T>> tagLocation(
-      HoodieData<HoodieRecord<T>> records, HoodieEngineContext context,
+  public <R> HoodieData<HoodieRecord<R>> tagLocation(
+      HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
       HoodieTable hoodieTable) {
     return HoodieJavaRDD.of(HoodieJavaRDD.getJavaRDD(records)
         .mapPartitionsWithIndex(locationTagFunction(hoodieTable.getMetaClient()), true));
@@ -303,7 +301,7 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload<T>>
 
   private Function2<Integer, Iterator<WriteStatus>, Iterator<WriteStatus>> updateLocationFunction() {
 
-    return (Function2<Integer, Iterator<WriteStatus>, Iterator<WriteStatus>>) (partition, statusIterator) -> {
+    return (partition, statusIterator) -> {
 
       List<WriteStatus> writeStatusList = new ArrayList<>();
       // Grab the global HBase connection
@@ -385,7 +383,7 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload<T>>
     mutations.clear();
   }
 
-  public Map<String, Integer> mapFileWithInsertsToUniquePartition(JavaRDD<WriteStatus> writeStatusRDD) {
+  Map<String, Integer> mapFileWithInsertsToUniquePartition(JavaRDD<WriteStatus> writeStatusRDD) {
     final Map<String, Integer> fileIdPartitionMap = new HashMap<>();
     int partitionIndex = 0;
     // Map each fileId that has inserts to a unique partition Id. This will be used while
@@ -466,7 +464,7 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload<T>>
     }
   }
 
-  public Tuple2<Long, Integer> getHBasePutAccessParallelism(final JavaRDD<WriteStatus> writeStatusRDD) {
+  Tuple2<Long, Integer> getHBasePutAccessParallelism(final JavaRDD<WriteStatus> writeStatusRDD) {
     final JavaPairRDD<Long, Integer> insertOnlyWriteStatusRDD = writeStatusRDD
         .filter(w -> w.getStat().getNumInserts() > 0).mapToPair(w -> new Tuple2<>(w.getStat().getNumInserts(), 1));
     return insertOnlyWriteStatusRDD.fold(new Tuple2<>(0L, 0), (w, c) -> new Tuple2<>(w._1 + c._1, w._2 + c._2));

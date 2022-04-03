@@ -44,9 +44,12 @@ import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
@@ -111,14 +114,16 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
     table.getMetaClient().reloadActiveTimeline();
 
     HoodieTableMetaClient metaClient = table.getMetaClient();
-    TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
+    TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
 
     // Here we firstly use the table schema as the reader schema to read
     // log file.That is because in the case of MergeInto, the config.getSchema may not
     // the same with the table schema.
     try {
-      Schema readerSchema = schemaUtil.getTableAvroSchema(false);
-      config.setSchema(readerSchema.toString());
+      if (StringUtils.isNullOrEmpty(config.getInternalSchema())) {
+        Schema readerSchema = schemaResolver.getTableAvroSchema(false);
+        config.setSchema(readerSchema.toString());
+      }
     } catch (Exception e) {
       // If there is no commit in the table, just ignore the exception.
     }
@@ -145,9 +150,17 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
                                    String instantTime,
                                    TaskContextSupplier taskContextSupplier) throws IOException {
     FileSystem fs = metaClient.getFs();
-
-    Schema readerSchema = HoodieAvroUtils.addMetadataFields(
-        new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
+    Schema readerSchema;
+    Option<InternalSchema> internalSchemaOption = Option.empty();
+    if (!StringUtils.isNullOrEmpty(config.getInternalSchema())) {
+      readerSchema = new Schema.Parser().parse(config.getSchema());
+      internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
+      // its safe to modify config here, since we running in task side.
+      ((HoodieTable) compactionHandler).getConfig().setDefault(config);
+    } else {
+      readerSchema = HoodieAvroUtils.addMetadataFields(
+          new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
+    }
     LOG.info("Compacting base " + operation.getDataFileName() + " with delta files " + operation.getDeltaFileNames()
         + " for commit " + instantTime);
     // TODO - FIX THIS
@@ -172,6 +185,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         .withLogFilePaths(logFiles)
         .withReaderSchema(readerSchema)
         .withLatestInstantTime(maxInstantTime)
+        .withInternalSchema(internalSchemaOption.orElse(InternalSchema.getEmptyInternalSchema()))
         .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
         .withReadBlocksLazily(config.getCompactionLazyBlockReadEnabled())
         .withReverseReader(config.getCompactionReverseLogReadEnabled())
@@ -182,13 +196,29 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         .withOperationField(config.allowOperationMetadataField())
         .withPartition(operation.getPartitionPath())
         .build();
-    if (!scanner.iterator().hasNext()) {
-      scanner.close();
-      return new ArrayList<>();
-    }
 
     Option<HoodieBaseFile> oldDataFileOpt =
         operation.getBaseFile(metaClient.getBasePath(), operation.getPartitionPath());
+
+    // Considering following scenario: if all log blocks in this fileSlice is rollback, it returns an empty scanner.
+    // But in this case, we need to give it a base file. Otherwise, it will lose base file in following fileSlice.
+    if (!scanner.iterator().hasNext()) {
+      if (!oldDataFileOpt.isPresent()) {
+        scanner.close();
+        return new ArrayList<>();
+      } else {
+        // TODO: we may directly rename original parquet file if there is not evolution/devolution of schema
+        /*
+        TaskContextSupplier taskContextSupplier = hoodieCopyOnWriteTable.getTaskContextSupplier();
+        String newFileName = FSUtils.makeDataFileName(instantTime,
+            FSUtils.makeWriteToken(taskContextSupplier.getPartitionIdSupplier().get(), taskContextSupplier.getStageIdSupplier().get(), taskContextSupplier.getAttemptIdSupplier().get()),
+            operation.getFileId(), hoodieCopyOnWriteTable.getBaseFileExtension());
+        Path oldFilePath = new Path(oldDataFileOpt.get().getPath());
+        Path newFilePath = new Path(oldFilePath.getParent(), newFileName);
+        FileUtil.copy(fs,oldFilePath, fs, newFilePath, false, fs.getConf());
+        */
+      }
+    }
 
     // Compacting is very similar to applying updates to existing file
     Iterator<List<WriteStatus>> result;

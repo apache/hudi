@@ -18,21 +18,21 @@
 
 package org.apache.hudi.common.model;
 
-import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
-import org.apache.hudi.common.util.collection.Pair;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * A Single Record managed by Hoodie.
  */
-public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable {
+public abstract class HoodieRecord<T> implements Serializable {
 
   public static final String COMMIT_TIME_METADATA_FIELD = "_hoodie_commit_time";
   public static final String COMMIT_SEQNO_METADATA_FIELD = "_hoodie_commit_seqno";
@@ -40,6 +40,9 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
   public static final String PARTITION_PATH_METADATA_FIELD = "_hoodie_partition_path";
   public static final String FILENAME_METADATA_FIELD = "_hoodie_file_name";
   public static final String OPERATION_METADATA_FIELD = "_hoodie_operation";
+  public static final String HOODIE_IS_DELETED = "_hoodie_is_deleted";
+
+  public static int FILENAME_METADATA_FIELD_POS = 4;
 
   public static final List<String> HOODIE_META_COLUMNS =
       CollectionUtils.createImmutableList(COMMIT_TIME_METADATA_FIELD, COMMIT_SEQNO_METADATA_FIELD,
@@ -64,7 +67,7 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
   /**
    * Actual payload of the record.
    */
-  private T data;
+  protected T data;
 
   /**
    * Current location of record on storage. Filled in by looking up index
@@ -109,6 +112,8 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
 
   public HoodieRecord() {
   }
+
+  public abstract HoodieRecord<T> newInstance();
 
   public HoodieKey getKey() {
     return key;

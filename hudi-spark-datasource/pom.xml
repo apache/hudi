@@ -33,7 +33,6 @@
   <modules>
     <module>hudi-spark-common</module>
     <module>hudi-spark</module>
-    <module>hudi-spark2</module>
-    <module>hudi-spark3</module>
   </modules>
+
 </project>
