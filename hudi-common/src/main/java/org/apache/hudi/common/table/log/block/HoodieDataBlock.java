@@ -176,7 +176,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     }
 
     HashSet<String> keySet = new HashSet<>(keys);
-    return FilteringIterator.getInstance(allRecords, keySet, this::getRecordKey);
+    return FilteringIterator.getInstance(allRecords, keySet, fullKey, this::getRecordKey);
   }
 
   protected ClosableIterator<IndexedRecord> readRecordsFromBlockPayload() throws IOException {
@@ -252,21 +252,25 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     private final ClosableIterator<T> nested; // nested iterator
 
     private final Set<String> keys; // the filtering keys
+    private final boolean fullKey;
+
     private final Function<T, Option<String>> keyExtract; // function to extract the key
 
     private T next;
 
-    private FilteringIterator(ClosableIterator<T> nested, Set<String> keys, Function<T, Option<String>> keyExtract) {
+    private FilteringIterator(ClosableIterator<T> nested, Set<String> keys, boolean fullKey, Function<T, Option<String>> keyExtract) {
       this.nested = nested;
       this.keys = keys;
+      this.fullKey = fullKey;
       this.keyExtract = keyExtract;
     }
 
     public static <T extends IndexedRecord> FilteringIterator<T> getInstance(
         ClosableIterator<T> nested,
         Set<String> keys,
+        boolean fullKey,
         Function<T, Option<String>> keyExtract) {
-      return new FilteringIterator<>(nested, keys, keyExtract);
+      return new FilteringIterator<>(nested, keys, fullKey, keyExtract);
     }
 
     @Override
@@ -278,8 +282,15 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     public boolean hasNext() {
       while (this.nested.hasNext()) {
         this.next = this.nested.next();
-        if (keys.contains(keyExtract.apply(this.next).orElse(null))) {
-          return true;
+        String key = keyExtract.apply(this.next)
+            .orElseGet(() -> {
+              throw new IllegalStateException(String.format("Record without a key (%s)", this.next));
+            });
+
+        if (fullKey) {
+          return keys.contains(key);
+        } else {
+          return keys.stream().anyMatch(key::startsWith);
         }
       }
       return false;
