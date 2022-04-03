@@ -390,8 +390,12 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return combineAndGetUpdateValue(oldRecord, schema, new Properties());
   }
 
+  public Option<IndexedRecord> getInsertValue() throws IOException {
+    return getInsertValue(null, null);
+  }
+
   @Override
-  public Option<IndexedRecord> getInsertValue(Schema schema, Properties properties) throws IOException {
+  public Option<IndexedRecord> getInsertValue(Schema schemaIgnored, Properties propertiesIgnored) throws IOException {
     if (key == null) {
       return Option.empty();
     }

@@ -138,7 +138,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @Override
   public HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes,
-                                                                                 String partitionName) {
+                                                                           String partitionName) {
     // NOTE: Since we partition records to a particular file-group by full key, we will have
     //       to scan all file-groups for all key-prefixes as each of these might contain some
     //       records matching the key-prefix
