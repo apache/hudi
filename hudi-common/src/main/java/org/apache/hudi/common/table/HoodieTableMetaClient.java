@@ -699,7 +699,7 @@ public class HoodieTableMetaClient implements Serializable {
     private Boolean hiveStylePartitioningEnable;
     private Boolean urlEncodePartitioning;
     private HoodieTimelineTimeZone commitTimeZone;
-    private Boolean partitionMetafileUseDataFormat;
+    private Boolean partitionMetafileUseBaseFormat;
 
     /**
      * Persist the configs that is written at the first time, and should not be changed.
@@ -814,8 +814,8 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public PropertyBuilder setPartitionMetafileUseDataFormat(Boolean useDataFormat) {
-      this.partitionMetafileUseDataFormat = useDataFormat;
+    public PropertyBuilder setPartitionMetafileUseBaseFormat(Boolean useBaseFormat) {
+      this.partitionMetafileUseBaseFormat = useBaseFormat;
       return this;
     }
 
@@ -914,8 +914,8 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.URL_ENCODE_PARTITIONING)) {
         setUrlEncodePartitioning(hoodieConfig.getBoolean(HoodieTableConfig.URL_ENCODE_PARTITIONING));
       }
-      if (hoodieConfig.contains(HoodieTableConfig.PARTITION_METAFILE_USE_DATA_FORMAT)) {
-        setPartitionMetafileUseDataFormat(hoodieConfig.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_DATA_FORMAT));
+      if (hoodieConfig.contains(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT)) {
+        setPartitionMetafileUseBaseFormat(hoodieConfig.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT));
       }
       return this;
     }
@@ -995,8 +995,8 @@ public class HoodieTableMetaClient implements Serializable {
       if (null != commitTimeZone) {
         tableConfig.setValue(HoodieTableConfig.TIMELINE_TIMEZONE, commitTimeZone.toString());
       }
-      if (null != partitionMetafileUseDataFormat) {
-        tableConfig.setValue(HoodieTableConfig.PARTITION_METAFILE_USE_DATA_FORMAT, partitionMetafileUseDataFormat.toString());
+      if (null != partitionMetafileUseBaseFormat) {
+        tableConfig.setValue(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT, partitionMetafileUseBaseFormat.toString());
       }
       return tableConfig.getProps();
     }

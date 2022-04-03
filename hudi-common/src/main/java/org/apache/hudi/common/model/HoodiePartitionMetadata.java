@@ -23,8 +23,10 @@ import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
+
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -37,14 +39,16 @@ import org.apache.orc.Writer;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.schema.MessageType;
-import org.apache.parquet.schema.Types;
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName;
+import org.apache.parquet.schema.Types;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * The metadata that goes into the meta file in each partition.
@@ -52,8 +56,9 @@ import java.util.Properties;
 public class HoodiePartitionMetadata {
 
   public static final String HOODIE_PARTITION_METAFILE_PREFIX = ".hoodie_partition_metadata";
-  private static final String PARTITION_DEPTH_KEY = "partitionDepth";
   public static final String COMMIT_TIME_KEY = "commitTime";
+  private static final String PARTITION_DEPTH_KEY = "partitionDepth";
+  private static final Logger LOG = LogManager.getLogger(HoodiePartitionMetadata.class);
 
   /**
    * Contents of the metadata.
@@ -66,8 +71,6 @@ public class HoodiePartitionMetadata {
   private final Path partitionPath;
 
   private final FileSystem fs;
-
-  private static final Logger LOG = LogManager.getLogger(HoodiePartitionMetadata.class);
 
   // The format in which to write the partition metadata
   private Option<HoodieFileFormat> format;
@@ -113,7 +116,6 @@ public class HoodiePartitionMetadata {
       if (!metafileExists) {
         // write to temporary file
         writeMetafile(tmpMetaPath);
-
         // move to actual path
         fs.rename(tmpMetaPath, metaPath);
       }
@@ -136,7 +138,7 @@ public class HoodiePartitionMetadata {
 
   private String getMetafileExtension() {
     // To be backwards compatible, there is no extension to the properties file base partition metafile
-    return format.isPresent() ? format.get().getFileExtension() : "";
+    return format.isPresent() ? format.get().getFileExtension() : StringUtils.EMPTY_STRING;
   }
 
   /**
@@ -189,40 +191,46 @@ public class HoodiePartitionMetadata {
    * Read out the metadata for this partition.
    */
   public void readFromFS() throws IOException {
-    Option<Path> metafilePathOption = getPartitionMetafilePath(fs, partitionPath);
-    if (!metafilePathOption.isPresent()) {
-      throw new HoodieException("Partition metafile not found in path " + partitionPath);
+    // first try reading the text format (legacy, currently widespread)
+    boolean readFile = readTextFormatMetaFile();
+    if (!readFile) {
+      // now try reading the base file formats.
+      readFile = readBaseFormatMetaFile();
     }
 
-    final Path metafilePath = metafilePathOption.get();
-    BaseFileUtils reader = null;
-    try {
-      reader = BaseFileUtils.getInstance(metafilePath.toString());
-    } catch (UnsupportedOperationException e) {
-      // This exception implies the metafile was not in a data file format
-      ValidationUtils.checkArgument(metafilePath.toString().endsWith(HOODIE_PARTITION_METAFILE_PREFIX),
-          "Partition metafile is not in properties file format: " + metafilePath);
+    // throw exception.
+    if (!readFile) {
+      throw new HoodieException("Unable to read any partition meta file to locate the table timeline.");
     }
+  }
 
-    if (reader != null) {
-      // Data file format
-      Map<String, String> metadata = reader.readFooter(fs.getConf(), true, metafilePath, PARTITION_DEPTH_KEY, COMMIT_TIME_KEY);
-      props.clear();
-      metadata.forEach((k, v) -> props.put(k, v));
-    } else {
-      // Properties file format
-      FSDataInputStream is = null;
+  private boolean readTextFormatMetaFile() {
+    // Properties file format
+    Path metafilePath = textFormatMetaFilePath(partitionPath);
+    try (FSDataInputStream is = fs.open(metafilePath)) {
+      props.load(is);
+      return true;
+    } catch (Throwable t) {
+      LOG.warn("Unable to read partition meta properties file for partition " + partitionPath, t);
+      return false;
+    }
+  }
+
+  private boolean readBaseFormatMetaFile() {
+    for (Path metafilePath : baseFormatMetaFilePaths(partitionPath)) {
       try {
-        is = fs.open(metafilePath);
-        props.load(is);
-      } catch (IOException ioe) {
-        throw new HoodieException("Error reading Hoodie partition metadata from " + metafilePath, ioe);
-      } finally {
-        if (is != null) {
-          is.close();
-        }
+        BaseFileUtils reader = BaseFileUtils.getInstance(metafilePath.toString());
+        // Data file format
+        Map<String, String> metadata = reader.readFooter(fs.getConf(), true, metafilePath, PARTITION_DEPTH_KEY, COMMIT_TIME_KEY);
+        props.clear();
+        metadata.forEach(props::put);
+        return true;
+      } catch (Throwable t) {
+        // any error, log, check the next base format
+        LOG.warn("Unable to read partition metadata " + metafilePath.getName() + " for partition " + partitionPath, t);
       }
     }
+    return false;
   }
 
   /**
@@ -230,12 +238,10 @@ public class HoodiePartitionMetadata {
    */
   public Option<String> readPartitionCreatedCommitTime() {
     try {
-      if (props.containsKey(COMMIT_TIME_KEY)) {
-        return Option.of(props.getProperty(COMMIT_TIME_KEY));
-      } else {
+      if (!props.containsKey(COMMIT_TIME_KEY)) {
         readFromFS();
-        return Option.of(props.getProperty(COMMIT_TIME_KEY));
       }
+      return Option.of(props.getProperty(COMMIT_TIME_KEY));
     } catch (IOException ioe) {
       LOG.warn("Error fetch Hoodie partition metadata for " + partitionPath, ioe);
       return Option.empty();
@@ -244,36 +250,56 @@ public class HoodiePartitionMetadata {
 
   // methods related to partition meta data
   public static boolean hasPartitionMetadata(FileSystem fs, Path partitionPath) {
-    return getPartitionMetafilePath(fs, partitionPath).isPresent();
+    try {
+      return textFormatMetaPathIfExists(fs, partitionPath).isPresent()
+          || baseFormatMetaPathIfExists(fs, partitionPath).isPresent();
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Error checking presence of partition meta file for " + partitionPath, ioe);
+    }
   }
 
   /**
    * Returns the name of the partition metadata.
    *
-   * @param fs
-   * @param partitionPath
    * @return Name of the partition metafile or empty option
    */
   public static Option<Path> getPartitionMetafilePath(FileSystem fs, Path partitionPath) {
     // The partition listing is a costly operation so instead we are searching for existence of the files instead.
     // This is in expected order as properties file based partition metafiles should be the most common.
     try {
-      Path metafilePath = new Path(partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX);
-      if (fs.exists(metafilePath)) {
-        return Option.of(metafilePath);
-      }
-      // Parquet should be more common than ORC so check it first
-      for (String extension : Arrays.asList(HoodieFileFormat.PARQUET.getFileExtension(),
-          HoodieFileFormat.ORC.getFileExtension())) {
-        metafilePath = new Path(partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX + extension);
-        if (fs.exists(metafilePath)) {
-          return Option.of(metafilePath);
-        }
+      Option<Path> textFormatPath = textFormatMetaPathIfExists(fs, partitionPath);
+      if (textFormatPath.isPresent()) {
+        return textFormatPath;
+      } else {
+        return baseFormatMetaPathIfExists(fs, partitionPath);
       }
     } catch (IOException ioe) {
       throw new HoodieException("Error checking Hoodie partition metadata for " + partitionPath, ioe);
     }
+  }
 
+  public static Option<Path> baseFormatMetaPathIfExists(FileSystem fs, Path partitionPath) throws IOException {
+    // Parquet should be more common than ORC so check it first
+    for (Path metafilePath : baseFormatMetaFilePaths(partitionPath)) {
+      if (fs.exists(metafilePath)) {
+        return Option.of(metafilePath);
+      }
+    }
     return Option.empty();
+  }
+
+  public static Option<Path> textFormatMetaPathIfExists(FileSystem fs, Path partitionPath) throws IOException {
+    Path path = textFormatMetaFilePath(partitionPath);
+    return Option.ofNullable(fs.exists(path) ? path : null);
+  }
+
+  static Path textFormatMetaFilePath(Path partitionPath) {
+    return new Path(partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX);
+  }
+
+  static List<Path> baseFormatMetaFilePaths(Path partitionPath) {
+    return Stream.of(HoodieFileFormat.PARQUET.getFileExtension(), HoodieFileFormat.ORC.getFileExtension())
+        .map(ext -> new Path(partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX + ext))
+        .collect(Collectors.toList());
   }
 }

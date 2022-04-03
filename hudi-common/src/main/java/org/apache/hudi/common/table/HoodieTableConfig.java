@@ -190,8 +190,8 @@ public class HoodieTableConfig extends HoodieConfig {
       .defaultValue(HoodieTimelineTimeZone.LOCAL)
       .withDocumentation("User can set hoodie commit timeline timezone, such as utc, local and so on. local is default");
 
-  public static final ConfigProperty<Boolean> PARTITION_METAFILE_USE_DATA_FORMAT = ConfigProperty
-      .key("hoodie.partition.metafile.use.data.format")
+  public static final ConfigProperty<Boolean> PARTITION_METAFILE_USE_BASE_FORMAT = ConfigProperty
+      .key("hoodie.partition.metafile.use.base.format")
       .defaultValue(false)
       .withDocumentation("If true, partition metafiles are saved in the same format as basefiles for this dataset (e.g. Parquet / ORC). "
           + "If false (default) partition metafiles are saved as properties files.");
@@ -618,10 +618,9 @@ public class HoodieTableConfig extends HoodieConfig {
    * Returns the format to use for partition meta files.
    */
   public Option<HoodieFileFormat> getPartitionMetafileFormat() {
-    if (Boolean.parseBoolean(getStringOrDefault(PARTITION_METAFILE_USE_DATA_FORMAT))) {
+    if (Boolean.parseBoolean(getStringOrDefault(PARTITION_METAFILE_USE_BASE_FORMAT))) {
       return Option.of(getBaseFileFormat());
     }
-
     return Option.empty();
   }
 

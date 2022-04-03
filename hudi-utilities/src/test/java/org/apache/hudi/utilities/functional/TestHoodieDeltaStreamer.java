@@ -1989,16 +1989,16 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  public void testPartitionMetafileFormat(boolean partitionMetafileUseDataFormat) throws Exception {
-    String tableBasePath = dfsBasePath + "/test_partition_metafile_" + String.valueOf(partitionMetafileUseDataFormat);
+  public void testPartitionMetafileFormat(boolean partitionMetafileUseBaseFormat) throws Exception {
+    String tableBasePath = dfsBasePath + "/test_partition_metafile_" + String.valueOf(partitionMetafileUseBaseFormat);
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
-    cfg.partitionMetafileUseDataFormat = partitionMetafileUseDataFormat;
+    cfg.partitionMetafileUseBaseFormat = partitionMetafileUseBaseFormat;
     new HoodieDeltaStreamer(cfg, jsc).sync();
     TestHelpers.assertRecordCount(1000, tableBasePath, sqlContext);
 
     Option<Path> metafilePath = HoodiePartitionMetadata.getPartitionMetafilePath(dfs,
         new Path(tableBasePath.toString(), HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH));
-    if (partitionMetafileUseDataFormat) {
+    if (partitionMetafileUseBaseFormat) {
       // Extension should be the same as the data file format of the table
       assertTrue(metafilePath.get().toString().endsWith(HoodieFileFormat.valueOf(cfg.baseFileFormat).getFileExtension()));
     } else {

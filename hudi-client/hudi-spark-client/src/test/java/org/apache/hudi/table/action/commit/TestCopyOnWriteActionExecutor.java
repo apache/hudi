@@ -505,17 +505,17 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  public void testPartitionMetafileFormat(boolean partitionMetafileUseDataFormat) throws Exception {
+  public void testPartitionMetafileFormat(boolean partitionMetafileUseBaseFormat) throws Exception {
     // By default there is no format specified for partition metafile
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA).build();
     HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
     assertFalse(table.getPartitionMetafileFormat().isPresent());
 
-    if (partitionMetafileUseDataFormat) {
+    if (partitionMetafileUseBaseFormat) {
       // Add the setting to use datafile format
       Properties properties = new Properties();
-      properties.setProperty(HoodieTableConfig.PARTITION_METAFILE_USE_DATA_FORMAT.key(), "true");
+      properties.setProperty(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(), "true");
       initMetaClient(HoodieTableType.COPY_ON_WRITE, properties);
       metaClient = HoodieTableMetaClient.reload(metaClient);
       assertTrue(metaClient.getTableConfig().getPartitionMetafileFormat().isPresent());
@@ -535,7 +535,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     Path partitionPath = new Path(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
     assertTrue(HoodiePartitionMetadata.hasPartitionMetadata(fs, partitionPath));
     Option<Path> metafilePath = HoodiePartitionMetadata.getPartitionMetafilePath(fs, partitionPath);
-    if (partitionMetafileUseDataFormat) {
+    if (partitionMetafileUseBaseFormat) {
       // Extension should be the same as the data file format of the table
       assertTrue(metafilePath.get().toString().endsWith(table.getBaseFileFormat().getFileExtension()));
     } else {

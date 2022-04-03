@@ -469,7 +469,7 @@ public class InputFormatTestUtil {
             "0",
             new Path(basePath.toAbsolutePath().toString()),
             new Path(partitionPath.toAbsolutePath().toString()),
-            Option.empty());
+            Option.of(HoodieFileFormat.PARQUET));
 
     partitionMetadata.trySave((int) (Math.random() * 1000));
   }
