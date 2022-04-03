@@ -2859,13 +2859,13 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String firstCommit = HoodieActiveTimeline.createNewInstantTime();
     String partitionStr = HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[]{partitionStr});
-    JavaRDD<WriteStatus> ingestionResult = writeBatch(client, firstCommit, "000", Option.of(Arrays.asList("000")), "000",
+    writeBatch(client, firstCommit, "000", Option.of(Arrays.asList("000")), "000",
         numRecords, dataGenerator::generateInserts, SparkRDDWriteClient::insert, true, numRecords, numRecords,
         1, true);
 
     // Create and temporarily block a lower timestamp for ingestion.
     String inflightCommit = HoodieActiveTimeline.createNewInstantTime();
-    writeBatch(client, inflightCommit, firstCommit, Option.of(Arrays.asList("000")), "000",
+    JavaRDD<WriteStatus> ingestionResult = writeBatch(client, inflightCommit, firstCommit, Option.of(Arrays.asList("000")), "000",
         100, dataGenerator::generateUniqueUpdates, SparkRDDWriteClient::upsert, false, 0, 200,
         2, false);
 
