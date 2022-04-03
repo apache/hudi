@@ -18,13 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.avro.AvroTypeException;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.ConvertingGenericData;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
@@ -63,10 +56,19 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+
+import org.apache.avro.AvroTypeException;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import javax.annotation.Nonnull;
+
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -210,12 +212,15 @@ public class HoodieTableMetadataUtil {
    * @param context  instance of {@link HoodieEngineContext}.
    */
   public static void deleteMetadataTable(String basePath, HoodieEngineContext context) {
-    final String metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
-    FileSystem fs = FSUtils.getFs(metadataTablePath, context.getHadoopConf().get());
+    final String metadataTablePathStr = HoodieTableMetadata.getMetadataTableBasePath(basePath);
+    FileSystem fs = FSUtils.getFs(metadataTablePathStr, context.getHadoopConf().get());
     try {
-      fs.delete(new Path(metadataTablePath), true);
+      Path metadataTablePath = new Path(metadataTablePathStr);
+      if (fs.exists(metadataTablePath)) {
+        fs.delete(metadataTablePath, true);
+      }
     } catch (Exception e) {
-      throw new HoodieMetadataException("Failed to remove metadata table from path " + metadataTablePath, e);
+      throw new HoodieMetadataException("Failed to remove metadata table from path " + metadataTablePathStr, e);
     }
   }
 

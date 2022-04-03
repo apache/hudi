@@ -66,9 +66,11 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -811,15 +813,11 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   public void maybeDeleteMetadataTable() {
     if (shouldExecuteMetadataTableDeletion()) {
       try {
-        Path mdtBasePath = new Path(HoodieTableMetadata.getMetadataTableBasePath(config.getBasePath()));
-        FileSystem fileSystem = metaClient.getFs();
-        if (fileSystem.exists(mdtBasePath)) {
-          LOG.info("Deleting metadata table because it is disabled in writer.");
-          fileSystem.delete(mdtBasePath, true);
-        }
+        LOG.info("Deleting metadata table because it is disabled in writer.");
+        HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
         clearMetadataTablePartitionsConfig();
-      } catch (IOException ioe) {
-        throw new HoodieIOException("Failed to delete metadata table.", ioe);
+      } catch (HoodieMetadataException e) {
+        throw new HoodieException("Failed to delete metadata table.", e);
       }
     }
   }
