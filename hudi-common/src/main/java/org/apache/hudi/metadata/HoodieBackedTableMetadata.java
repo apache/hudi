@@ -257,21 +257,25 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                                                                                                List<String> keys,
                                                                                                List<Long> timings) {
     HoodieTimer timer = new HoodieTimer().startTimer();
-    Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords = new HashMap<>();
-    // Retrieve records from log file
     timer.startTimer();
-    if (logRecordScanner != null) {
-      // This path will do seeks pertaining to the keys passed in
-      List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> logRecordsList = logRecordScanner.getRecordsByKeyPrefixes(keys);
-      // with prefix look up, return entry count could be more than input size. Also, input keys may not match the keys after look up.
-      // after look up, keys are fully formed as it seen in the stoage. where as input is a key prefix.
-      for (Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>> entry : logRecordsList) {
-        logRecords.put(entry.getKey(), entry.getValue());
-      }
-    } else {
-      // incase of prefix search, do not return anything if there is no log record scanner
+    if (logRecordScanner == null) {
+      timings.add(timer.endTimer());
+      return Collections.emptyMap();
     }
+
+    // Retrieve records from log file
+    Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords = new HashMap<>();
+
+    // This path will do seeks pertaining to the keys passed in
+    List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> logRecordsList = logRecordScanner.getRecordsByKeyPrefixes(keys);
+    // with prefix look up, return entry count could be more than input size. Also, input keys may not match the keys after look up.
+    // after look up, keys are fully formed as it seen in the stoage. where as input is a key prefix.
+    for (Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>> entry : logRecordsList) {
+      logRecords.put(entry.getKey(), entry.getValue());
+    }
+
     timings.add(timer.endTimer());
+
     return logRecords;
   }
 
