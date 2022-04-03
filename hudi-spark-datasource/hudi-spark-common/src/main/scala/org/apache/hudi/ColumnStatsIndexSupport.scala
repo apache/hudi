@@ -109,7 +109,7 @@ trait ColumnStatsIndexSupport extends SparkAdapterSupport {
 
       // TODO getRecords have to return RDD
       val recordsRDD = spark.sparkContext.parallelize(
-        metadataTable.getRecordsByKeyPrefixes(targetColumns.asJava, HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS).asScala, 2)
+        metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames.asJava, HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS).asScala, 2)
 
       val catalystRowsRDD: RDD[InternalRow] = recordsRDD.mapPartitions { it =>
         val metadataRecordSchema = new Parser().parse(metadataRecordSchemaString)

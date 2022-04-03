@@ -195,15 +195,13 @@ case class HoodieFileIndex(spark: SparkSession,
    * @return list of pruned (data-skipped) candidate base-files' names
    */
   private def lookupCandidateFilesInMetadataTable(queryFilters: Seq[Expression]): Try[Option[Set[String]]] = Try {
-    val fs = metaClient.getFs
-    val metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(basePath)
-
-    if (!isDataSkippingEnabled || !HoodieTableMetadataUtil.getCompletedMetadataPartitions(metaClient.getTableConfig)
-      .contains(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS) || queryFilters.isEmpty) {
+    if (!isDataSkippingEnabled || queryFilters.isEmpty || !HoodieTableMetadataUtil.getCompletedMetadataPartitions(metaClient.getTableConfig)
+      .contains(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)) {
       Option.empty
     } else {
-      val colStatsDF: DataFrame = readColumnStatsIndex(spark, metadataTablePath)
       val queryReferencedColumns = collectReferencedColumns(spark, queryFilters, schema)
+
+      val colStatsDF: DataFrame = readColumnStatsIndex(spark, queryReferencedColumns, metadataConfig, basePath)
 
       // Persist DF to avoid re-computing column statistics unraveling
       withPersistence(colStatsDF) {
