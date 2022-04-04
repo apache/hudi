@@ -249,7 +249,6 @@
           <suppressionsLocation>style/checkstyle-suppressions.xml</suppressionsLocation>
           <suppressionsFileExpression>checkstyle.suppressions.file</suppressionsFileExpression>
           <failOnViolation>true</failOnViolation>
-          <failsOnError>true</failsOnError>
           <violationSeverity>warning</violationSeverity>
           <includeTestSourceDirectory>true</includeTestSourceDirectory>
           <sourceDirectories>
@@ -258,7 +257,6 @@
           <!-- NOTE: This property is only available in Maven >= 3.3.1 -->
           <propertyExpansion>basedir=${maven.multiModuleProjectDirectory}</propertyExpansion>
           <excludes>**\/generated-sources\/</excludes>
-          <linkXRef>false</linkXRef>
         </configuration>
         <executions>
           <execution>
