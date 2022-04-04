@@ -84,6 +84,7 @@ import org.apache.hudi.metadata.HoodieMetadataMergedLogRecordReader;
 import org.apache.hudi.metadata.HoodieMetadataMetrics;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -200,6 +201,73 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     doWriteOperation(testTable, "0000007");
     doCleanAndValidate(testTable, "0000008", Arrays.asList("0000007"));
     validateMetadata(testTable, true);
+  }
+
+  @Test
+  public void testTurnOffMetadataIndexAfterEnable() throws Exception {
+    init(COPY_ON_WRITE, true);
+    String instant1 = "0000001";
+    HoodieCommitMetadata hoodieCommitMetadata = doWriteOperationWithMeta(testTable, instant1, INSERT);
+
+    // Simulate the complete data directory including ".hoodie_partition_metadata" file
+    File metaForP1 = new File(metaClient.getBasePath() + "/p1", ".hoodie_partition_metadata");
+    File metaForP2 = new File(metaClient.getBasePath() + "/p2", ".hoodie_partition_metadata");
+    metaForP1.createNewFile();
+    metaForP2.createNewFile();
+
+    // Sync to metadata table
+    metaClient.reloadActiveTimeline();
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .withProperties(writeConfig.getMetadataConfig().getProps())
+        .withMetadataIndexColumnStats(true)
+        .build();
+    HoodieWriteConfig writeConfigWithColStatsEnabled = HoodieWriteConfig.newBuilder()
+        .withProperties(this.writeConfig.getProps())
+        .withMetadataConfig(metadataConfig)
+        .build();
+    HoodieTable table = HoodieSparkTable.create(writeConfigWithColStatsEnabled, context, metaClient);
+    Option metadataWriter = table.getMetadataWriter(instant1, Option.of(hoodieCommitMetadata));
+    validateMetadata(testTable, true);
+
+    assertTrue(metadataWriter.isPresent());
+    HoodieTableConfig tableConfig =
+        new HoodieTableConfig(this.fs, metaClient.getMetaPath(), writeConfig.getPayloadClass());
+    assertFalse(tableConfig.getMetadataPartitions().isEmpty());
+    assertTrue(HoodieTableMetadataUtil.getCompletedMetadataPartitions(tableConfig).contains(MetadataPartitionType.COLUMN_STATS.getPartitionPath()));
+
+    // Turn off column stats index
+    metadataConfig = HoodieMetadataConfig.newBuilder()
+        .withProperties(writeConfig.getMetadataConfig().getProps())
+        .withMetadataIndexColumnStats(false)
+        .build();
+    HoodieWriteConfig writeConfigWithColStatsDisabled = HoodieWriteConfig.newBuilder()
+        .withProperties(this.writeConfig.getProps())
+        .withMetadataConfig(metadataConfig)
+        .build();
+    testTable = HoodieTestTable.of(metaClient);
+    String instant2 = "0000002";
+    HoodieCommitMetadata hoodieCommitMetadata2 = doWriteOperationWithMeta(testTable, instant2, INSERT);
+    metaClient.reloadActiveTimeline();
+    HoodieTable table2 = HoodieSparkTable.create(writeConfigWithColStatsDisabled, context, metaClient);
+    Option metadataWriter2 = table2.getMetadataWriter(instant2, Option.of(hoodieCommitMetadata2));
+    assertTrue(metadataWriter2.isPresent());
+    tableConfig = HoodieTableMetaClient.reload(metaClient).getTableConfig();
+    assertFalse(tableConfig.getMetadataPartitions().isEmpty());
+    assertFalse(HoodieTableMetadataUtil.getCompletedMetadataPartitions(tableConfig).contains(MetadataPartitionType.COLUMN_STATS.getPartitionPath()));
+
+    // re-enable column stats
+    testTable = HoodieTestTable.of(metaClient);
+    metaClient.reloadActiveTimeline();
+    String instant3 = "0000003";
+    HoodieCommitMetadata hoodieCommitMetadata3 = doWriteOperationWithMeta(testTable, instant3, INSERT);
+    HoodieTableMetaClient.reload(metaClient);
+    metaClient.reloadActiveTimeline();
+    HoodieTable table3 = HoodieSparkTable.create(writeConfigWithColStatsEnabled, context, metaClient);
+    Option metadataWriter3 = table3.getMetadataWriter(instant3, Option.of(hoodieCommitMetadata3));
+    assertTrue(metadataWriter3.isPresent());
+    tableConfig = HoodieTableMetaClient.reload(metaClient).getTableConfig();
+    assertFalse(tableConfig.getMetadataPartitions().isEmpty());
+    assertTrue(HoodieTableMetadataUtil.getCompletedMetadataPartitions(tableConfig).contains(MetadataPartitionType.COLUMN_STATS.getPartitionPath()));
   }
 
   @Test

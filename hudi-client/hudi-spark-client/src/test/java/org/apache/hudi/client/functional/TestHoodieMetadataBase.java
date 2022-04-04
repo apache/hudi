@@ -95,6 +95,10 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
     init(tableType, enableMetadataTable, true, false, false);
   }
 
+  public void init(HoodieTableType tableType, boolean enableMetadataTable, boolean enableColumnStats) throws IOException {
+    init(tableType, enableMetadataTable, true, false, false);
+  }
+
   public void init(HoodieTableType tableType, boolean enableMetadataTable, boolean enableFullScan, boolean enableMetrics, boolean
       validateMetadataPayloadStateConsistency) throws IOException {
     init(tableType, Option.empty(), enableMetadataTable, enableFullScan, enableMetrics,

@@ -444,6 +444,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withProperties(Properties properties) {
+      this.metadataConfig.getProps().putAll(properties);
+      return this;
+    }
+
     public HoodieMetadataConfig build() {
       metadataConfig.setDefaultValue(ENABLE, getDefaultMetadataEnable(engineType));
       metadataConfig.setDefaults(HoodieMetadataConfig.class.getName());
