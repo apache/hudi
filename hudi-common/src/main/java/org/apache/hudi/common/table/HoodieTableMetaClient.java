@@ -699,6 +699,7 @@ public class HoodieTableMetaClient implements Serializable {
     private Boolean hiveStylePartitioningEnable;
     private Boolean urlEncodePartitioning;
     private HoodieTimelineTimeZone commitTimeZone;
+    private Boolean partitionMetafileUseBaseFormat;
 
     /**
      * Persist the configs that is written at the first time, and should not be changed.
@@ -813,6 +814,11 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public PropertyBuilder setPartitionMetafileUseBaseFormat(Boolean useBaseFormat) {
+      this.partitionMetafileUseBaseFormat = useBaseFormat;
+      return this;
+    }
+
     public PropertyBuilder set(String key, Object value) {
       if (HoodieTableConfig.PERSISTED_CONFIG_LIST.contains(key)) {
         this.others.put(key, value);
@@ -908,6 +914,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.URL_ENCODE_PARTITIONING)) {
         setUrlEncodePartitioning(hoodieConfig.getBoolean(HoodieTableConfig.URL_ENCODE_PARTITIONING));
       }
+      if (hoodieConfig.contains(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT)) {
+        setPartitionMetafileUseBaseFormat(hoodieConfig.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT));
+      }
       return this;
     }
 
@@ -985,6 +994,9 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (null != commitTimeZone) {
         tableConfig.setValue(HoodieTableConfig.TIMELINE_TIMEZONE, commitTimeZone.toString());
+      }
+      if (null != partitionMetafileUseBaseFormat) {
+        tableConfig.setValue(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT, partitionMetafileUseBaseFormat.toString());
       }
       return tableConfig.getProps();
     }

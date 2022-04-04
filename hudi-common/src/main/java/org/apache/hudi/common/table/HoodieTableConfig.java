@@ -190,6 +190,12 @@ public class HoodieTableConfig extends HoodieConfig {
       .defaultValue(HoodieTimelineTimeZone.LOCAL)
       .withDocumentation("User can set hoodie commit timeline timezone, such as utc, local and so on. local is default");
 
+  public static final ConfigProperty<Boolean> PARTITION_METAFILE_USE_BASE_FORMAT = ConfigProperty
+      .key("hoodie.partition.metafile.use.base.format")
+      .defaultValue(false)
+      .withDocumentation("If true, partition metafiles are saved in the same format as basefiles for this dataset (e.g. Parquet / ORC). "
+          + "If false (default) partition metafiles are saved as properties files.");
+
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
 
@@ -608,6 +614,16 @@ public class HoodieTableConfig extends HoodieConfig {
     return getStringOrDefault(TABLE_METADATA_PARTITIONS, StringUtils.EMPTY_STRING);
   }
   
+  /**
+   * Returns the format to use for partition meta files.
+   */
+  public Option<HoodieFileFormat> getPartitionMetafileFormat() {
+    if (getBooleanOrDefault(PARTITION_METAFILE_USE_BASE_FORMAT)) {
+      return Option.of(getBaseFileFormat());
+    }
+    return Option.empty();
+  }
+
   public Map<String, String> propsMap() {
     return props.entrySet().stream()
         .collect(Collectors.toMap(e -> String.valueOf(e.getKey()), e -> String.valueOf(e.getValue())));

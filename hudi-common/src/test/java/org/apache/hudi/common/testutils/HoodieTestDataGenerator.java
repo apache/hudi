@@ -205,7 +205,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    */
   public void writePartitionMetadata(FileSystem fs, String[] partitionPaths, String basePath) {
     for (String partitionPath : partitionPaths) {
-      new HoodiePartitionMetadata(fs, "000", new Path(basePath), new Path(basePath, partitionPath)).trySave(0);
+      new HoodiePartitionMetadata(fs, "000", new Path(basePath), new Path(basePath, partitionPath), Option.empty()).trySave(0);
     }
   }
 

@@ -21,6 +21,7 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.HoodieIOException;
@@ -226,6 +227,11 @@ public class ParquetUtils extends BaseFileUtils {
   public Schema readAvroSchema(Configuration configuration, Path parquetFilePath) {
     MessageType parquetSchema = readSchema(configuration, parquetFilePath);
     return new AvroSchemaConverter(configuration).convert(parquetSchema);
+  }
+
+  @Override
+  public HoodieFileFormat getFormat() {
+    return HoodieFileFormat.PARQUET;
   }
 
   /**

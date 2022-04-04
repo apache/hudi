@@ -280,7 +280,7 @@ public class FileCreateUtils {
   public static void createPartitionMetaFile(String basePath, String partitionPath) throws IOException {
     Path parentPath = Paths.get(basePath, partitionPath);
     Files.createDirectories(parentPath);
-    Path metaFilePath = parentPath.resolve(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE);
+    Path metaFilePath = parentPath.resolve(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX);
     if (Files.notExists(metaFilePath)) {
       Files.createFile(metaFilePath);
     }
@@ -397,7 +397,7 @@ public class FileCreateUtils {
     }
     return Files.list(basePath).filter(entry -> (!entry.getFileName().toString().equals(HoodieTableMetaClient.METAFOLDER_NAME)
         && !entry.getFileName().toString().contains("parquet") && !entry.getFileName().toString().contains("log"))
-        && !entry.getFileName().toString().endsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE)).collect(Collectors.toList());
+        && !entry.getFileName().toString().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)).collect(Collectors.toList());
   }
 
   /**

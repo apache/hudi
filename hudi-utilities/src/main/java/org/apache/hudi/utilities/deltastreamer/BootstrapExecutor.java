@@ -185,6 +185,7 @@ public class BootstrapExecutor implements Serializable {
       }
     }
     HoodieTableMetaClient.withPropertyBuilder()
+        .fromProperties(props)
         .setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
         .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())

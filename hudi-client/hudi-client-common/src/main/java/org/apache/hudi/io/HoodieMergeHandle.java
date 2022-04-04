@@ -166,7 +166,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       writeStatus.getStat().setPrevCommit(FSUtils.getCommitTime(latestValidFilePath));
 
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
-          new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath));
+          new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
+          hoodieTable.getPartitionMetafileFormat());
       partitionMetadata.trySave(getPartitionId());
 
       String newFileName = FSUtils.makeDataFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension());

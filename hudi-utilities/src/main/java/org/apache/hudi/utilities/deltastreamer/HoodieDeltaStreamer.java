@@ -468,7 +468,7 @@ public class HoodieDeltaStreamer implements Serializable {
               compactSchedulingMinShare, clusterSchedulingMinShare, forceDisableCompaction, checkpoint,
               initialCheckpointProvider, help);
     }
-  
+
     @Override
     public String toString() {
       return "Config{"
