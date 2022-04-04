@@ -64,14 +64,10 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
                                               String spillableMapBasePath, Set<String> mergeKeyFilter,
                                               ExternalSpillableMap.DiskMapType diskMapType,
                                               boolean isBitCaskDiskMapCompressionEnabled,
-                                              Option<InstantRange> instantRange, boolean enableFullScan) {
+                                              Option<InstantRange> instantRange, boolean allowFullScan) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, maxMemorySizeInBytes, false, false, bufferSize,
-        spillableMapBasePath, instantRange, false, diskMapType, isBitCaskDiskMapCompressionEnabled, false,
-        enableFullScan, Option.of(partitionName), InternalSchema.getEmptyInternalSchema());
+        spillableMapBasePath, instantRange, diskMapType, isBitCaskDiskMapCompressionEnabled, false, allowFullScan, Option.of(partitionName), InternalSchema.getEmptyInternalSchema());
     this.mergeKeyFilter = mergeKeyFilter;
-    if (enableFullScan) {
-      performScan();
-    }
   }
 
   @Override
@@ -161,7 +157,7 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
    */
   public static class Builder extends HoodieMergedLogRecordScanner.Builder {
     private Set<String> mergeKeyFilter = Collections.emptySet();
-    private boolean enableFullScan = HoodieMetadataConfig.ENABLE_FULL_SCAN_LOG_FILES.defaultValue();
+    private boolean allowFullScan = HoodieMetadataConfig.ENABLE_FULL_SCAN_LOG_FILES.defaultValue();
     private boolean enableInlineReading;
 
     @Override
@@ -250,8 +246,8 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
       return this;
     }
 
-    public Builder enableFullScan(boolean enableFullScan) {
-      this.enableFullScan = enableFullScan;
+    public Builder allowFullScan(boolean enableFullScan) {
+      this.allowFullScan = enableFullScan;
       return this;
     }
 
@@ -259,7 +255,7 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
     public HoodieMetadataMergedLogRecordReader build() {
       return new HoodieMetadataMergedLogRecordReader(fs, basePath, partitionName, logFilePaths, readerSchema,
           latestInstantTime, maxMemorySizeInBytes, bufferSize, spillableMapBasePath, mergeKeyFilter,
-          diskMapType, isBitCaskDiskMapCompressionEnabled, instantRange, enableFullScan);
+          diskMapType, isBitCaskDiskMapCompressionEnabled, instantRange, allowFullScan);
     }
   }
 

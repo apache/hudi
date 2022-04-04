@@ -237,7 +237,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Retrieve records from log file
     timer.startTimer();
     if (logRecordScanner != null) {
-      if (metadataConfig.enableFullScan()) {
+      if (metadataConfig.allowFullScan()) {
         checkArgument(fullKey, "If full-scan is required, only full keys could be used!");
         // Path which does full scan of log files
         for (String key : keys) {
@@ -531,7 +531,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .withDiskMapType(commonConfig.getSpillableDiskMapType())
         .withBitCaskDiskMapCompressionEnabled(commonConfig.isBitCaskDiskMapCompressionEnabled())
         .withLogBlockTimestamps(validInstantTimestamps)
-        .enableFullScan(metadataConfig.enableFullScan())
+        .allowFullScan(metadataConfig.allowFullScan())
         .withPartition(partitionName)
         .build();
 

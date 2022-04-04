@@ -289,7 +289,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getString(DIR_FILTER_REGEX);
   }
 
-  public boolean enableFullScan() {
+  public boolean allowFullScan() {
     return getBoolean(ENABLE_FULL_SCAN_LOG_FILES);
   }
 
