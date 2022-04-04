@@ -20,6 +20,8 @@ package org.apache.hudi.io.storage;
 
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -56,6 +58,11 @@ public class HoodieOrcReader<R extends IndexedRecord> implements HoodieFileReade
   @Override
   public BloomFilter readBloomFilter() {
     return orcUtils.readBloomFilterFromMetadata(conf, path);
+  }
+
+  @Override
+  public Map getRecordsByKeyPrefixes(List keyPrefixes) throws IOException {
+    throw new UnsupportedOperationException("GetRecords by key prefixes not supported for OrcReader");
   }
 
   @Override

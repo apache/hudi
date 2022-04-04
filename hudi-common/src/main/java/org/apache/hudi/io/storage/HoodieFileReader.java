@@ -43,13 +43,11 @@ public interface HoodieFileReader<R extends IndexedRecord> extends AutoCloseable
     throw new UnsupportedOperationException();
   }
 
-  default Map<String, R> getRecordsByKeyPrefixes(List<String> keyPrefixes, Schema schema, Option<HFileScanner> hFileScanner) throws IOException {
+  default Map<String, R> getRecordsByKeyPrefixes(List<String> keyPrefixes, HFileScanner hFileScanner, Schema readerSchema, Option<Schema.Field> keyFieldSchema) throws IOException {
     throw new UnsupportedOperationException();
   }
 
-  default Map<String, R> getRecordsByKeyPrefixes(List<String> keyPrefixes) throws IOException {
-    return getRecordsByKeyPrefixes(keyPrefixes, getSchema(), Option.empty());
-  }
+  Map<String, R> getRecordsByKeyPrefixes(List<String> keyPrefixes) throws IOException;
 
   Iterator<R> getRecordIterator(Schema readerSchema) throws IOException;
 
@@ -57,12 +55,12 @@ public interface HoodieFileReader<R extends IndexedRecord> extends AutoCloseable
     return getRecordIterator(getSchema());
   }
 
-  default Option<R> getRecordByKey(String key, Schema readerSchema) throws IOException {
+  default Option<R> getRecordByKey(String key, Schema readerSchema, HFileScanner hFileScanner, Option<Schema.Field> keyFieldSchema) throws IOException {
     throw new UnsupportedOperationException();
   }
 
-  default Option<R> getRecordByKey(String key) throws IOException {
-    return getRecordByKey(key, getSchema());
+  default Option<R> getRecordByKey(String key, HFileScanner hFileScanner, Option<Schema.Field> keyFieldSchema) throws IOException {
+    return getRecordByKey(key, getSchema(), hFileScanner, keyFieldSchema);
   }
 
   Schema getSchema();

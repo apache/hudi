@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.FileSlice;
@@ -136,8 +137,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  public List<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes,
-                                                                              String partitionName) {
+  public HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes,
+                                                                                 String partitionName) {
     // NOTE: Since we partition records to a particular file-group by full key, we will have
     //       to scan all file-groups for all key-prefixes as each of these might contain some
     //       records matching the key-prefix
@@ -175,7 +176,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
             close(Pair.of(partitionName, fileSlice.getFileId()));
           }
         }).filter(entry -> entry.getValue().isPresent()).map(
-        (SerializableFunction<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>, HoodieRecord<HoodieMetadataPayload>>) v1 -> v1.getValue().get()).collectAsList();
+        (SerializableFunction<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>, HoodieRecord<HoodieMetadataPayload>>) v1 -> v1.getValue().get());
   }
 
   @Override
@@ -230,7 +231,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     if (logRecordScanner != null) {
       if (metadataConfig.enableFullScan()) {
         checkArgument(fullKey, "If full-scan is required, only full keys could be used!");
-
         // Path which does full scan of log files
         for (String key : keys) {
           logRecords.put(key, logRecordScanner.getRecordByKey(key).get(0).getValue());
@@ -261,29 +261,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Retrieve records from log file
     timer.startTimer();
     if (logRecordScanner != null) {
-      if (metadataConfig.enableFullScan()) {
-        // Path which does full scan of log files
-        // incoming keys are key prefixes. and so we can't look up in logRecordScanner.getRecords() directly.
-        // we have to iterate through every record and then do prefix match which is N*M. Hence key prefix search w/o enabling point ish lookup is not
-        // recommended
-        LOG.warn("Not recommended path to do key prefix search but with full scan enabled ");
-        logRecordScanner.getRecords().forEach((keyFromLogRecord, v) -> {
-          HoodieRecord<HoodieMetadataPayload> hoodieRecord = (HoodieRecord<HoodieMetadataPayload>) v;
-          if (keys.stream().anyMatch(entry -> {
-            // substring match
-            return keyFromLogRecord.contains(entry);
-          })) {
-            logRecords.put(keyFromLogRecord, Option.of(hoodieRecord));
-          }
-        });
-      } else {
-        // This path will do seeks pertaining to the keys passed in
-        List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> logRecordsList = logRecordScanner.getRecordsByKeyPrefixes(keys);
-        // with prefix look up, return entry count could be more than input size. Also, input keys may not match the keys after look up.
-        // after look up, keys are fully formed as it seen in the stoage. where as input is a key prefix.
-        for (Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>> entry : logRecordsList) {
-          logRecords.put(entry.getKey(), entry.getValue());
-        }
+      // This path will do seeks pertaining to the keys passed in
+      List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> logRecordsList = logRecordScanner.getRecordsByKeyPrefixes(keys);
+      // with prefix look up, return entry count could be more than input size. Also, input keys may not match the keys after look up.
+      // after look up, keys are fully formed as it seen in the stoage. where as input is a key prefix.
+      for (Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>> entry : logRecordsList) {
+        logRecords.put(entry.getKey(), entry.getValue());
       }
     } else {
       // incase of prefix search, do not return anything if there is no log record scanner
@@ -348,7 +331,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // merge with base records
     HoodieTimer timer = new HoodieTimer().startTimer();
     timer.startTimer();
-
     // Retrieve record from base file
     if (baseFileReader != null) {
       Map<String, GenericRecord> baseFileRecords = baseFileReader.getRecordsByKeyPrefixes(keys);
@@ -366,10 +348,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         }
       });
     }
-
     // iterate over pending entries in log records map and add them to result. these are not present in base file.
     // we have already removed the entries in log records map which had corresponding entry in base file. So, we can
-    // add all remaining entries to result
+    // add all remaining entries to result.
     logRecords.forEach((key, v) -> {
       result.add(Pair.of(key, v));
     });

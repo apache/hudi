@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.apache.avro.Schema;
@@ -63,6 +64,11 @@ public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileR
   @Override
   public Set<String> filterRowKeys(Set<String> candidateRowKeys) {
     return parquetUtils.filterRowKeys(conf, path, candidateRowKeys);
+  }
+
+  @Override
+  public Map<String, R> getRecordsByKeyPrefixes(List<String> keyPrefixes) throws IOException {
+    throw new UnsupportedOperationException("GetRecords by key prefixes not supported for parquet reader");
   }
 
   @Override
