@@ -149,6 +149,8 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
       }
     });
 
+    writer.appendFileInfo(HoodieHFileReader.KEY_SCHEMA.getBytes(), getSchema().toString().getBytes());
+
     writer.close();
     ostream.flush();
     ostream.close();
