@@ -381,22 +381,26 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   class RecordByKeyPrefixIterator implements ClosableIterator<R> {
     private final Iterator<String> keyPrefixesIterator;
     private Iterator<R> recordsIterator;
-    private R next;
+    private R next = null;
 
     private final HFileScanner hFileScanner;
     private final Schema readerSchema;
 
     RecordByKeyPrefixIterator(List<String> keyPrefixes, Schema readerSchema) throws IOException {
       this.keyPrefixesIterator = keyPrefixes.iterator();
-      this.hFileScanner = getHFileScanner();
       this.readerSchema = readerSchema;
+      this.hFileScanner = reader.getScanner(false, false);
+      this.hFileScanner.seekTo(); // position at the beginning of the file
     }
 
     @Override
     public boolean hasNext() {
       try {
         while (true) {
-          if (recordsIterator != null && recordsIterator.hasNext()) {
+          // NOTE: This is required for idempotency
+          if (next != null) {
+            return true;
+          } else if (recordsIterator != null && recordsIterator.hasNext()) {
             next = recordsIterator.next();
             return true;
           } else if (keyPrefixesIterator.hasNext()) {
@@ -413,6 +417,8 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
 
     @Override
     public R next() {
+      R next = this.next;
+      this.next = null;
       return next;
     }
 
@@ -427,12 +433,13 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     private final HFileScanner hFileScanner;
     private final Schema schema;
 
-    private R next;
+    private R next = null;
 
     RecordByKeyIterator(List<String> keys, Schema schema) throws IOException {
       this.keyIterator = keys.iterator();
       this.schema = schema;
-      this.hFileScanner = getHFileScanner();
+      this.hFileScanner = reader.getScanner(false, false);
+      this.hFileScanner.seekTo(); // position at the beginning of the file
     }
 
     @Override
@@ -443,6 +450,11 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     @Override
     public boolean hasNext() {
       try {
+        // NOTE: This is required for idempotency
+        if (next != null) {
+          return true;
+        }
+
         while (keyIterator.hasNext()) {
           Option<R> value = getRecordByKeyInternal(keyIterator.next(), schema, hFileScanner);
           if (value.isPresent()) {
@@ -458,6 +470,8 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
 
     @Override
     public R next() {
+      R next = this.next;
+      this.next = null;
       return next;
     }
   }
@@ -467,24 +481,34 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     private final Schema readerSchema;
 
     private R next = null;
-    private boolean eof = false;
 
-    RecordIterator(Schema readerSchema) throws IOException {
-      this.hFileScanner = getHFileScanner();
+    RecordIterator(Schema readerSchema) {
+      this.hFileScanner = reader.getScanner(false, false);
       this.readerSchema = readerSchema;
     }
 
     @Override
     public boolean hasNext() {
       try {
-        // To handle when hasNext() is called multiple times for idempotency and/or the first time
-        if (this.next == null && !this.eof) {
-          if (!hFileScanner.isSeeked() && hFileScanner.seekTo()) {
-            final Pair<String, R> keyAndRecordPair = getRecordFromCell(hFileScanner.getCell(), getSchema(), readerSchema);
-            this.next = keyAndRecordPair.getSecond();
-          }
+        // NOTE: This is required for idempotency
+        if (next != null) {
+          return true;
         }
-        return this.next != null;
+
+        boolean hasRecords;
+        if (!hFileScanner.isSeeked()) {
+          hasRecords = hFileScanner.seekTo();
+        } else {
+          hasRecords = hFileScanner.next();
+        }
+
+        if (!hasRecords) {
+          return false;
+        }
+
+        Pair<String, R> keyRecordPair = getRecordFromCell(hFileScanner.getCell(), getSchema(), readerSchema);
+        this.next = keyRecordPair.getSecond();
+        return true;
       } catch (IOException io) {
         throw new HoodieIOException("unable to read next record from hfile ", io);
       }
@@ -492,25 +516,9 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
 
     @Override
     public R next() {
-      try {
-        // To handle case when next() is called before hasNext()
-        if (this.next == null) {
-          if (!hasNext()) {
-            throw new HoodieIOException("No more records left to read from hfile");
-          }
-        }
-        R retVal = this.next;
-        if (hFileScanner.next()) {
-          final Pair<String, R> keyRecordPair = getRecordFromCell(hFileScanner.getCell(), getSchema(), readerSchema);
-          this.next = keyRecordPair.getSecond();
-        } else {
-          this.next = null;
-          this.eof = true;
-        }
-        return retVal;
-      } catch (IOException io) {
-        throw new HoodieIOException("unable to read next record from parquet file ", io);
-      }
+      R next = this.next;
+      this.next = null;
+      return next;
     }
 
     @Override
