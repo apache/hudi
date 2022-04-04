@@ -62,10 +62,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -138,50 +138,54 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @Override
   public HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes,
-                                                                           String partitionName) {
+                                                                                 String partitionName) {
     // NOTE: Since we partition records to a particular file-group by full key, we will have
     //       to scan all file-groups for all key-prefixes as each of these might contain some
     //       records matching the key-prefix
     List<FileSlice> partitionFileSlices =
         HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, partitionName);
 
-    return engineContext.parallelize(partitionFileSlices).flatMap(
-        (SerializableFunction<FileSlice, Iterator<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>>>) fileSlice -> {
-          // we are moving the readers to executors in this code path. So, reusing readers may not make sense.
-          Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> readers =
-              openReadersIfNeeded(partitionName, fileSlice, false);
-          try {
-            List<Long> timings = new ArrayList<>();
-            HoodieFileReader baseFileReader = readers.getKey();
-            HoodieMetadataMergedLogRecordReader logRecordScanner = readers.getRight();
+    return engineContext.parallelize(partitionFileSlices)
+        .flatMap(
+            SerializableFunction.from(fileSlice -> {
+              // we are moving the readers to executors in this code path. So, reusing readers may not make sense.
+              Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> readers =
+                  openReadersIfNeeded(partitionName, fileSlice, false);
+              try {
+                List<Long> timings = new ArrayList<>();
 
-            if (baseFileReader != null || logRecordScanner != null) {
-              Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords =
-                  readLogRecordsWithKeyPrefix(logRecordScanner, keyPrefixes, timings);
-              // keys in above map are not same as passed in keys. input keys are just prefixes.
+                HoodieFileReader baseFileReader = readers.getKey();
+                HoodieMetadataMergedLogRecordReader logRecordScanner = readers.getRight();
 
-              List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> mergedRecords =
-                  readFromBaseAndMergeWithLogRecordsForKeyPrefixes(baseFileReader, keyPrefixes, logRecords, timings, partitionName);
+                if (baseFileReader == null && logRecordScanner == null) {
+                  // TODO: what do we do if both does not exist? should we throw an exception and let caller do the fallback ?
+                  return Collections.emptyIterator();
+                }
 
-              LOG.debug(String.format("Metadata read for %s keys took [baseFileRead, logMerge] %s ms",
-                  keyPrefixes.size(), timings));
-              return mergedRecords.iterator();
-            } else {
-              // TODO: what do we do if both does not exist? should we throw an exception and let caller do the fallback ?
-              return Collections.EMPTY_LIST.iterator();
-            }
-          } catch (IOException ioe) {
-            throw new HoodieIOException("Error merging records from metadata table for  " + keyPrefixes.size() + " key : ", ioe);
-          } finally {
-            close(Pair.of(partitionName, fileSlice.getFileId()));
-          }
-        }).filter(entry -> entry.getValue().isPresent()).map(
-        (SerializableFunction<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>, HoodieRecord<HoodieMetadataPayload>>) v1 -> v1.getValue().get());
+                Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords =
+                    readLogRecordsWithKeyPrefix(logRecordScanner, keyPrefixes, timings);
+
+                List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> mergedRecords =
+                    readFromBaseAndMergeWithLogRecordsForKeyPrefixes(baseFileReader, keyPrefixes, logRecords, timings, partitionName);
+
+                LOG.debug(String.format("Metadata read for %s keys took [baseFileRead, logMerge] %s ms",
+                    keyPrefixes.size(), timings));
+
+                return mergedRecords.iterator();
+              } catch (IOException ioe) {
+                throw new HoodieIOException("Error merging records from metadata table for  " + keyPrefixes.size() + " key : ", ioe);
+              } finally {
+                close(Pair.of(partitionName, fileSlice.getFileId()));
+              }
+            })
+        )
+        .map(keyRecordPair -> keyRecordPair.getValue().orElse(null))
+        .filter(Objects::nonNull);
   }
 
   @Override
   public List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> keys,
-                                                                                             String partitionName) {
+                                                                                          String partitionName) {
     Map<Pair<String, FileSlice>, List<String>> partitionFileSliceToKeysMap = getPartitionFileSliceToKeysMapping(partitionName, keys);
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> result = new ArrayList<>();
     AtomicInteger fileSlicesKeysCount = new AtomicInteger();
@@ -198,7 +202,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         }
 
         boolean fullKeys = true;
-        // local map to assist in merging with base file records
+
         Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords =
             readLogRecords(logRecordScanner, fileSliceKeys, fullKeys, timings);
 
@@ -280,11 +284,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   private List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> readFromBaseAndMergeWithLogRecords(HoodieFileReader baseFileReader,
-                                     List<String> keys,
-                                     boolean fullKeys,
-                                     Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords,
-                                     List<Long> timings,
-                                     String partitionName) throws IOException {
+                                                                                                             List<String> keys,
+                                                                                                             boolean fullKeys,
+                                                                                                             Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords,
+                                                                                                             List<Long> timings,
+                                                                                                             String partitionName) throws IOException {
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> result = new ArrayList<>();
     // merge with base records
     HoodieTimer timer = new HoodieTimer().startTimer();
@@ -326,13 +330,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return result;
   }
 
-  private List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> readFromBaseAndMergeWithLogRecordsForKeyPrefixes(HoodieFileReader baseFileReader,
-                                                   List<String> keys,
-                                                   Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords,
-                                                   List<Long> timings,
-                                                   String partitionName) throws IOException {
+  private List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> readFromBaseAndMergeWithLogRecordsForKeyPrefixes(
+      HoodieFileReader baseFileReader,
+      List<String> keys,
+      Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords,
+      List<Long> timings,
+      String partitionName
+  ) throws IOException {
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> result = new ArrayList<>();
-    // merge with base records
     HoodieTimer timer = new HoodieTimer().startTimer();
     timer.startTimer();
     // Retrieve record from base file
@@ -403,8 +408,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * Create a file reader and the record scanner for a given partition and file slice
    * if readers are not already available.
    *
-   * @param partitionName - Partition name
-   * @param slice         - The file slice to open readers for
+   * @param partitionName    - Partition name
+   * @param slice            - The file slice to open readers for
    * @param useCachedReaders true if cached readers can be used. false otherwise.
    * @return File reader and the record scanner pair for the requested file slice
    */
