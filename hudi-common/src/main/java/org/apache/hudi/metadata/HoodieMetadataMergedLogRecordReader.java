@@ -46,6 +46,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
 /**
  * A {@code HoodieMergedLogRecordScanner} implementation which only merged records matching providing keys. This is
  * useful in limiting memory usage when only a small subset of updates records are to be read.
@@ -115,6 +117,7 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
    * @return {@code HoodieRecord} if key was found else {@code Option.empty()}
    */
   public synchronized List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordByKey(String key) {
+    checkState(forceFullScan, "Record reader has to be in full-scan mode to use this API");
     return Collections.singletonList(Pair.of(key, Option.ofNullable((HoodieRecord) records.get(key))));
   }
 

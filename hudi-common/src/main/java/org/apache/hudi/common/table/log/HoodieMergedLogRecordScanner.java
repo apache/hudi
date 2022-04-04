@@ -45,6 +45,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
 /**
  * Scans through all the blocks in a list of HoodieLogFile and builds up a compacted/merged list of records which will
  * be used as a lookup table when merging the base columnar file with the redo log file.
@@ -115,10 +117,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
   @Override
   public Iterator<HoodieRecord<? extends HoodieRecordPayload>> iterator() {
+    checkState(forceFullScan, "Record reader has to be in full-scan mode to use this API");
     return records.iterator();
   }
 
   public Map<String, HoodieRecord<? extends HoodieRecordPayload>> getRecords() {
+    checkState(forceFullScan, "Record reader has to be in full-scan mode to use this API");
     return records;
   }
 
