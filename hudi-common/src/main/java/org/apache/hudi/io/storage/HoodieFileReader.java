@@ -21,13 +21,12 @@ package org.apache.hudi.io.storage;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 public interface HoodieFileReader<R extends IndexedRecord> extends AutoCloseable {
@@ -38,17 +37,17 @@ public interface HoodieFileReader<R extends IndexedRecord> extends AutoCloseable
 
   Set<String> filterRowKeys(Set<String> candidateRowKeys);
 
-  default Map<String, R> getRecordsByKeys(List<String> rowKeys) throws IOException {
+  default ClosableIterator<R> getRecordsByKeysIterator(List<String> rowKeys, Schema schema) throws IOException {
     throw new UnsupportedOperationException();
   }
 
-  default Map<String, R> getRecordsByKeyPrefixes(List<String> keyPrefixes) throws IOException {
+  default ClosableIterator<R> getRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema schema) throws IOException {
     throw new UnsupportedEncodingException();
   }
 
-  Iterator<R> getRecordIterator(Schema readerSchema) throws IOException;
+  ClosableIterator<R> getRecordIterator(Schema readerSchema) throws IOException;
 
-  default Iterator<R> getRecordIterator() throws IOException {
+  default ClosableIterator<R> getRecordIterator() throws IOException {
     return getRecordIterator(getSchema());
   }
 

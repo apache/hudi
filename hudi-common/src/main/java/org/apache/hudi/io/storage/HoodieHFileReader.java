@@ -18,16 +18,6 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.bloom.BloomFilterFactory;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.util.ClosableIterator;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
-
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -44,6 +34,15 @@ import org.apache.hadoop.hbase.io.hfile.HFileInfo;
 import org.apache.hadoop.hbase.io.hfile.HFileScanner;
 import org.apache.hadoop.hbase.nio.ByteBuff;
 import org.apache.hadoop.hbase.util.Pair;
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.bloom.BloomFilterFactory;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -52,18 +51,14 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.Spliterator;
-import java.util.Spliterators;
 import java.util.TreeMap;
-import java.util.TreeSet;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
+import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileReader<R> {
@@ -166,39 +161,19 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   }
 
   @Override
-  public Map<String, R> getRecordsByKeys(List<String> rowKeys) throws IOException {
-    HFileScanner hFileScanner = getHFileScanner();
-    Schema readerSchema = getSchema();
-    HashMap<String, R> filteredRecords = new HashMap<>();
-    // NOTE: We're sorting the keys to provide for sequential access to the HFile
-    for (String key : new TreeSet<>(rowKeys)) {
-      Option<R> record = getRecordByKeyInternal(key, readerSchema, hFileScanner);
-      if (record.isPresent()) {
-        filteredRecords.put(key, record.get());
-      }
-    }
-    return filteredRecords;
-  }
-
   public ClosableIterator<R> getRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema readerSchema) throws IOException {
     this.schema = readerSchema;
     return new RecordByKeyPrefixIterator(keyPrefixes, readerSchema);
   }
 
+  @Override
   public ClosableIterator<R> getRecordsByKeysIterator(List<String> keys, Schema schema) throws IOException {
     return new RecordByKeyIterator(keys, schema);
   }
 
   @Override
-  public Iterator<R> getRecordIterator(Schema readerSchema) throws IOException {
+  public ClosableIterator<R> getRecordIterator(Schema readerSchema) throws IOException {
     return new RecordIterator(readerSchema);
-  }
-
-  @Override
-  public Map<String, R> getRecordsByKeyPrefixes(List<String> keyPrefixes) throws IOException {
-    Schema readerSchema = getSchema();
-    HFileScanner hFileScanner = getHFileScanner();
-    return getRecordsByKeyPrefixesInternal(keyPrefixes, hFileScanner, readerSchema);
   }
 
   @Override
@@ -349,10 +324,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     Schema schema = reader.getSchema();
     Option<Schema.Field> keyFieldSchema = getKeySchema(schema);
     checkState(keyFieldSchema.isPresent());
-    return StreamSupport.stream(
-            Spliterators.spliteratorUnknownSize(reader.getRecordIterator(schema), Spliterator.ORDERED),
-            false
-        )
+    return toStream(reader.getRecordIterator(schema))
         .map(record -> Pair.newPair(getRecordKey(record, keyFieldSchema.get()), record))
         .collect(Collectors.toList());
   }
@@ -377,10 +349,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
                                                                             Schema schema) throws IOException {
     Option<Schema.Field> keyFieldSchema = getKeySchema(schema);
     checkState(keyFieldSchema.isPresent());
-    return StreamSupport.stream(
-            Spliterators.spliteratorUnknownSize(reader.getRecordsByKeysIterator(keys, schema), Spliterator.ORDERED),
-            false
-        )
+    return toStream(reader.getRecordsByKeysIterator(keys, schema))
         .map(record -> Pair.newPair(getRecordKey(record, keyFieldSchema.get()), record))
         .collect(Collectors.toList());
   }

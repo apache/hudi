@@ -72,6 +72,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
+import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 /**
@@ -80,6 +81,8 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   private static final Logger LOG = LogManager.getLogger(HoodieBackedTableMetadata.class);
+
+  private static final Schema METADATA_RECORD_SCHEMA = HoodieMetadataRecord.getClassSchema();
 
   private String metadataBasePath;
   // Metadata table's timeline and metaclient
@@ -300,7 +303,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     if (baseFileReader != null) {
       HoodieTimer readTimer = new HoodieTimer();
       Map<String, GenericRecord> baseFileRecords =
-          fullKeys ? baseFileReader.getRecordsByKeys(keys) : baseFileReader.getRecordsByKeyPrefixes(keys);
+          fullKeys ? getRecordsByKeys(baseFileReader, keys) : getRecordsByKeyPrefixes(baseFileReader, keys);
       for (String key : keys) {
         readTimer.startTimer();
         if (baseFileRecords.containsKey(key)) {
@@ -330,6 +333,18 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return result;
   }
 
+  private Map<String, GenericRecord> getRecordsByKeyPrefixes(HoodieFileReader<GenericRecord> baseFileReader, List<String> keyPrefixes) throws IOException {
+    return toStream(baseFileReader.getRecordsByKeyPrefixIterator(keyPrefixes, METADATA_RECORD_SCHEMA))
+        .map(record -> Pair.of((String) record.get(HoodieMetadataPayload.KEY_FIELD_NAME), record))
+        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+  }
+
+  private Map<String, GenericRecord> getRecordsByKeys(HoodieFileReader<GenericRecord> baseFileReader, List<String> keys) throws IOException {
+    return toStream(baseFileReader.getRecordsByKeysIterator(keys, METADATA_RECORD_SCHEMA))
+        .map(record -> Pair.of((String) record.get(HoodieMetadataPayload.KEY_FIELD_NAME), record))
+        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+  }
+
   private List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> readFromBaseAndMergeWithLogRecordsForKeyPrefixes(
       HoodieFileReader baseFileReader,
       List<String> keys,
@@ -342,7 +357,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     timer.startTimer();
     // Retrieve record from base file
     if (baseFileReader != null) {
-      Map<String, GenericRecord> baseFileRecords = baseFileReader.getRecordsByKeyPrefixes(keys);
+      Map<String, GenericRecord> baseFileRecords = getRecordsByKeyPrefixes(baseFileReader, keys);
       // keys in above map are not same as passed in keys. input keys are just prefixes.
       // So we have to iterate over keys from the base file reader look up and ignore input keys
       baseFileRecords.forEach((key, v) -> {
