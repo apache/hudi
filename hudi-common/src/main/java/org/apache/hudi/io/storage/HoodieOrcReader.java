@@ -26,6 +26,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.BaseFileUtils;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.OrcReaderIterator;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.orc.OrcFile;
@@ -35,7 +36,6 @@ import org.apache.orc.RecordReader;
 import org.apache.orc.TypeDescription;
 
 import java.io.IOException;
-import java.util.Iterator;
 import java.util.Set;
 
 public class HoodieOrcReader<R extends IndexedRecord> implements HoodieFileReader {
@@ -65,12 +65,12 @@ public class HoodieOrcReader<R extends IndexedRecord> implements HoodieFileReade
   }
 
   @Override
-  public Iterator<R> getRecordIterator(Schema schema) throws IOException {
+  public ClosableIterator<R> getRecordIterator(Schema schema) throws IOException {
     try {
       Reader reader = OrcFile.createReader(path, OrcFile.readerOptions(conf));
       TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(schema);
       RecordReader recordReader = reader.rows(new Options(conf).schema(orcSchema));
-      return new OrcReaderIterator(recordReader, schema, orcSchema);
+      return new OrcReaderIterator<>(recordReader, schema, orcSchema);
     } catch (IOException io) {
       throw new HoodieIOException("Unable to create an ORC reader.", io);
     }

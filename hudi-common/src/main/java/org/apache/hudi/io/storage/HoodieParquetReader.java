@@ -25,6 +25,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.BaseFileUtils;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
@@ -32,7 +33,6 @@ import org.apache.parquet.hadoop.ParquetReader;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
@@ -65,10 +65,10 @@ public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileR
   }
 
   @Override
-  public Iterator<R> getRecordIterator(Schema schema) throws IOException {
+  public ClosableIterator<R> getRecordIterator(Schema schema) throws IOException {
     AvroReadSupport.setAvroReadSchema(conf, schema);
     ParquetReader<R> reader = AvroParquetReader.<R>builder(path).withConf(conf).build();
-    ParquetReaderIterator parquetReaderIterator = new ParquetReaderIterator<>(reader);
+    ParquetReaderIterator<R> parquetReaderIterator = new ParquetReaderIterator<>(reader);
     readerIterators.add(parquetReaderIterator);
     return parquetReaderIterator;
   }
@@ -80,7 +80,7 @@ public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileR
 
   @Override
   public void close() {
-    readerIterators.forEach(entry -> entry.close());
+    readerIterators.forEach(ParquetReaderIterator::close);
   }
 
   @Override
