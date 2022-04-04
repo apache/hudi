@@ -625,12 +625,12 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
     HoodieHFileReader hoodieHFileReader = new HoodieHFileReader(context.getHadoopConf().get(), new Path(baseFile.getPath()),
         new CacheConfig(context.getHadoopConf().get()));
-    List<Pair<String, IndexedRecord>> records = HoodieHFileReader.readAllRecords(hoodieHFileReader);
+    List<IndexedRecord> records = HoodieHFileReader.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
       if (populateMetaFields) {
-        assertNotNull(((GenericRecord) entry.getSecond()).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+        assertNotNull(((GenericRecord) entry).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
       } else {
-        assertNull(((GenericRecord) entry.getSecond()).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+        assertNull(((GenericRecord) entry).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
       }
     });
   }
@@ -956,15 +956,15 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieHFileReader hoodieHFileReader = new HoodieHFileReader(context.getHadoopConf().get(),
         new Path(baseFile.getPath()),
         new CacheConfig(context.getHadoopConf().get()));
-    List<Pair<String, IndexedRecord>> records = HoodieHFileReader.readAllRecords(hoodieHFileReader);
+    List<IndexedRecord> records = HoodieHFileReader.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
       if (enableMetaFields) {
-        assertNotNull(((GenericRecord) entry.getSecond()).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+        assertNotNull(((GenericRecord) entry).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
       } else {
-        assertNull(((GenericRecord) entry.getSecond()).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+        assertNull(((GenericRecord) entry).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
       }
 
-      final String keyInPayload = (String) ((GenericRecord) entry.getSecond())
+      final String keyInPayload = (String) ((GenericRecord) entry)
           .get(HoodieMetadataPayload.KEY_FIELD_NAME);
       assertFalse(keyInPayload.isEmpty());
     });

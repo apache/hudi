@@ -361,10 +361,10 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     HoodieHFileReader hoodieHFileReader = new HoodieHFileReader(context.getHadoopConf().get(),
         new Path(baseFile.getPath()),
         new CacheConfig(context.getHadoopConf().get()));
-    List<Pair<String, IndexedRecord>> records = HoodieHFileReader.readAllRecords(hoodieHFileReader);
+    List<IndexedRecord> records = HoodieHFileReader.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
-      assertNull(((GenericRecord) entry.getSecond()).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
-      final String keyInPayload = (String) ((GenericRecord) entry.getSecond())
+      assertNull(((GenericRecord) entry).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+      final String keyInPayload = (String) ((GenericRecord) entry)
           .get(HoodieMetadataPayload.KEY_FIELD_NAME);
       assertFalse(keyInPayload.isEmpty());
     });

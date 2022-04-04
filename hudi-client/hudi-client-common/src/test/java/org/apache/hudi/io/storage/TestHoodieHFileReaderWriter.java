@@ -18,17 +18,6 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
-import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.FileIOUtils;
-import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodieWriteConfig;
-
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -39,7 +28,16 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.CellComparatorImpl;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
-import org.apache.hadoop.hbase.util.Pair;
+import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
+import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -68,7 +66,7 @@ import java.util.stream.StreamSupport;
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.io.storage.HoodieHFileConfig.HFILE_COMPARATOR;
-import static org.apache.hudi.io.storage.HoodieHFileReader.KEY_SCHEMA;
+import static org.apache.hudi.io.storage.HoodieHFileReader.SCHEMA_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -127,7 +125,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     FileSystem fs = getFilePath().getFileSystem(conf);
     HFile.Reader hfileReader = HoodieHFileUtils.createHFileReader(fs, getFilePath(), new CacheConfig(conf), conf);
     assertEquals(getSchemaFromResource(TestHoodieHFileReaderWriter.class, schemaPath),
-        new Schema.Parser().parse(new String(hfileReader.getHFileInfo().get(KEY_SCHEMA.getBytes()))));
+        new Schema.Parser().parse(new String(hfileReader.getHFileInfo().get(SCHEMA_KEY.getBytes()))));
   }
 
   private static Stream<Arguments> populateMetaFieldsAndTestAvroWithMeta() {
@@ -166,8 +164,9 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
 
     Configuration conf = new Configuration();
     HoodieHFileReader hoodieHFileReader = (HoodieHFileReader) createReader(conf);
-    List<Pair<String, IndexedRecord>> records = HoodieHFileReader.readAllRecords(hoodieHFileReader);
-    records.forEach(entry -> assertEquals(entry.getSecond(), recordMap.get(entry.getFirst())));
+    List<IndexedRecord> records = HoodieHFileReader.readAllRecords(hoodieHFileReader);
+    assertEquals(recordMap.values(), records);
+
     hoodieHFileReader.close();
 
     for (int i = 0; i < 2; i++) {
@@ -176,14 +175,13 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       List<String> rowsList = new ArrayList<>(rowsToFetch);
       Collections.sort(rowsList);
       hoodieHFileReader = (HoodieHFileReader<GenericRecord>) createReader(conf);
-      List<Pair<String, GenericRecord>> result = HoodieHFileReader.readRecords(hoodieHFileReader, rowsList);
-      assertEquals(result.size(), randomRowstoFetch);
+      List<GenericRecord> result = HoodieHFileReader.readRecords(hoodieHFileReader, rowsList);
+      assertEquals(recordMap.values(), result);
       result.forEach(entry -> {
-        assertEquals(entry.getSecond(), recordMap.get(entry.getFirst()));
         if (populateMetaFields && testAvroWithMeta) {
-          assertNotNull(entry.getSecond().get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+          assertNotNull(entry.get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
         } else {
-          assertNull(entry.getSecond().get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+          assertNull(entry.get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
         }
       });
       hoodieHFileReader.close();

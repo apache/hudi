@@ -59,12 +59,12 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
-import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileReader<R> {
+  public static final String SCHEMA_KEY = "schema";
+
   // TODO HoodieHFileReader right now tightly coupled to MT, we should break that coupling
   public static final String KEY_FIELD_NAME = "key";
-  public static final String KEY_SCHEMA = "schema";
   public static final String KEY_BLOOM_FILTER_META_BLOCK = "bloomFilter";
   public static final String KEY_BLOOM_FILTER_TYPE_CODE = "bloomFilterTypeCode";
   public static final String KEY_MIN_RECORD = "minRecordKey";
@@ -111,7 +111,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   public Schema getSchema() {
     if (schema == null) {
       HFileInfo fileInfo = reader.getHFileInfo();
-      schema = new Schema.Parser().parse(new String(fileInfo.get(KEY_SCHEMA.getBytes())));
+      schema = new Schema.Parser().parse(new String(fileInfo.get(SCHEMA_KEY.getBytes())));
     }
 
     return schema;
@@ -320,12 +320,9 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
    *
    * Reads all the records with given schema
    */
-  public static <R extends IndexedRecord> List<Pair<String, R>> readAllRecords(HoodieHFileReader<R> reader) throws IOException {
+  public static <R extends IndexedRecord> List<R> readAllRecords(HoodieHFileReader<R> reader) throws IOException {
     Schema schema = reader.getSchema();
-    Option<Schema.Field> keyFieldSchema = getKeySchema(schema);
-    checkState(keyFieldSchema.isPresent());
     return toStream(reader.getRecordIterator(schema))
-        .map(record -> Pair.newPair(getRecordKey(record, keyFieldSchema.get()), record))
         .collect(Collectors.toList());
   }
 
@@ -334,8 +331,8 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
    *
    * Reads all the records with given schema and filtering keys.
    */
-  public static <R extends IndexedRecord> List<Pair<String, R>> readRecords(HoodieHFileReader<R> reader, 
-                                                                            List<String> keys) throws IOException {
+  public static <R extends IndexedRecord> List<R> readRecords(HoodieHFileReader<R> reader,
+                                                              List<String> keys) throws IOException {
     return readRecords(reader, keys, reader.getSchema());
   }
 
@@ -344,13 +341,10 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
    *
    * Reads all the records with given schema and filtering keys.
    */
-  public static <R extends IndexedRecord> List<Pair<String, R>> readRecords(HoodieHFileReader<R> reader,
-                                                                            List<String> keys,
-                                                                            Schema schema) throws IOException {
-    Option<Schema.Field> keyFieldSchema = getKeySchema(schema);
-    checkState(keyFieldSchema.isPresent());
+  public static <R extends IndexedRecord> List<R> readRecords(HoodieHFileReader<R> reader,
+                                                              List<String> keys,
+                                                              Schema schema) throws IOException {
     return toStream(reader.getRecordsByKeysIterator(keys, schema))
-        .map(record -> Pair.newPair(getRecordKey(record, keyFieldSchema.get()), record))
         .collect(Collectors.toList());
   }
 
