@@ -1,6 +1,6 @@
 ## Testing dbt project: `hudi_examples_dbt`
 
-This dbt project transforms demonstrates hudi integration with dbt, it has few models to demonstrate the different ways in which you can create hudi datasets using dbt.
+This dbt project transforms demonstrates hudi integration with dbt, it has a few models to demonstrate the different ways in which you can create hudi datasets using dbt.
 
 ### What is this repo?
 What this repo _is_:
