@@ -76,7 +76,7 @@ public class SqlFileBasedTransformer implements Transformer {
     // tmp table name doesn't like dashes
     final String tmpTable = TMP_TABLE.concat(UUID.randomUUID().toString().replace("-", "_"));
     LOG.info("Registering tmp table : " + tmpTable);
-    rowDataset.registerTempTable(tmpTable);
+    rowDataset.createOrReplaceTempView(tmpTable);
 
     try (final Scanner scanner = new Scanner(fs.open(new Path(sqlFile)), "UTF-8")) {
       Dataset<Row> rows = null;
@@ -95,6 +95,8 @@ public class SqlFileBasedTransformer implements Transformer {
       return rows;
     } catch (final IOException ioe) {
       throw new HoodieIOException("Error reading transformer SQL file.", ioe);
+    } finally {
+      sparkSession.catalog().dropTempView(tmpTable);
     }
   }
 
