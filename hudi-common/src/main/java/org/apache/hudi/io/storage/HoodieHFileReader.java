@@ -197,15 +197,14 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   @Override
   public Map<String, R> getRecordsByKeyPrefixes(List<String> keyPrefixes) throws IOException {
     Schema readerSchema = getSchema();
-    synchronized (this) {
-      HFileScanner hFileScanner = getHFileScanner();
-      return getRecordsByKeyPrefixesInternal(keyPrefixes, hFileScanner, readerSchema);
-    }
+    HFileScanner hFileScanner = getHFileScanner();
+    return getRecordsByKeyPrefixesInternal(keyPrefixes, hFileScanner, readerSchema);
   }
 
   @Override
   public Option<R> getRecordByKey(String key, Schema readerSchema) throws IOException {
-    return getRecordByKeyInternal(key, readerSchema, );
+    HFileScanner hFileScanner = getHFileScanner();
+    return getRecordByKeyInternal(key, readerSchema, hFileScanner);
   }
 
   private Map<String, R> getRecordsByKeyPrefixesInternal(List<String> keyPrefixes, HFileScanner hFileScanner, Schema readerSchema) throws IOException {
