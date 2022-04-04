@@ -618,7 +618,7 @@ public class HoodieTableConfig extends HoodieConfig {
    * Returns the format to use for partition meta files.
    */
   public Option<HoodieFileFormat> getPartitionMetafileFormat() {
-    if (Boolean.parseBoolean(getStringOrDefault(PARTITION_METAFILE_USE_BASE_FORMAT))) {
+    if (getBooleanOrDefault(PARTITION_METAFILE_USE_BASE_FORMAT)) {
       return Option.of(getBaseFileFormat());
     }
     return Option.empty();

@@ -82,6 +82,7 @@ public class HoodiePartitionMetadata {
     this.fs = fs;
     this.props = new Properties();
     this.partitionPath = partitionPath;
+    this.format = Option.empty();
   }
 
   /**
@@ -209,6 +210,7 @@ public class HoodiePartitionMetadata {
     Path metafilePath = textFormatMetaFilePath(partitionPath);
     try (FSDataInputStream is = fs.open(metafilePath)) {
       props.load(is);
+      format = Option.empty();
       return true;
     } catch (Throwable t) {
       LOG.warn("Unable to read partition meta properties file for partition " + partitionPath, t);
@@ -223,7 +225,8 @@ public class HoodiePartitionMetadata {
         // Data file format
         Map<String, String> metadata = reader.readFooter(fs.getConf(), true, metafilePath, PARTITION_DEPTH_KEY, COMMIT_TIME_KEY);
         props.clear();
-        metadata.forEach(props::put);
+        props.putAll(metadata);
+        format = Option.of(reader.getFormat());
         return true;
       } catch (Throwable t) {
         // any error, log, check the next base format
