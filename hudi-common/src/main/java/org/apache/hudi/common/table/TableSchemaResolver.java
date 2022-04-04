@@ -45,6 +45,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIncompatibleSchemaException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.io.storage.HoodieHFileReader;
 import org.apache.hudi.io.storage.HoodieOrcReader;
@@ -187,27 +188,43 @@ public class TableSchemaResolver {
       }
     }
 
-    if (metaClient.getTableConfig().getDropPartitionColumnsWhenWrite()) {
-      // when hoodie.datasource.write.drop.partition.columns is true, partition columns can't be persisted in data files.
-      // And there are no partition schema if the schema is parsed from data files.
-      // Here we create partition Fields for this case, and use StringType as the data type.
-      Option<String[]> partitionFieldsOpt = metaClient.getTableConfig().getPartitionFields();
-      if (partitionFieldsOpt.isPresent() && partitionFieldsOpt.get().length != 0) {
-        List<String> partitionFields = Arrays.asList(partitionFieldsOpt.get());
+    Option<String[]> partitionFieldsOpt = metaClient.getTableConfig().getPartitionFields();
+    if (metaClient.getTableConfig().isDropPartitionColumns()) {
+      schema = recreateSchemaWhenDropPartitionColumns(partitionFieldsOpt, schema);
+    }
+    return schema;
+  }
 
-        final Schema schema0 = schema;
-        boolean allPartitionColInSchema = partitionFields.stream().allMatch(
-            pt -> HoodieAvroUtils.containsFieldInSchema(schema0, pt)
-        );
+  public static Schema recreateSchemaWhenDropPartitionColumns(Option<String[]> partitionFieldsOpt, Schema originSchema) {
+    // when hoodie.datasource.write.drop.partition.columns is true, partition columns can't be persisted in data files.
+    // And there are no partition schema if the schema is parsed from data files.
+    // Here we create partition Fields for this case, and use StringType as the data type.
+    Schema schema = originSchema;
+    if (partitionFieldsOpt.isPresent() && partitionFieldsOpt.get().length != 0) {
+      List<String> partitionFields = Arrays.asList(partitionFieldsOpt.get());
 
-        if (!allPartitionColInSchema) {
-          List<Field> newFields = new ArrayList<>();
-          for (String partitionField: partitionFields) {
-            newFields.add(new Schema.Field(
-                partitionField, Schema.create(Schema.Type.STRING), "", JsonProperties.NULL_VALUE));
-          }
-          schema = HoodieAvroUtils.createNewSchemaWithExtraFields(schema, newFields);
+      final Schema schema0 = originSchema;
+      boolean hasPartitionColNotInSchema = partitionFields.stream().anyMatch(
+          pt -> !HoodieAvroUtils.containsFieldInSchema(schema0, pt)
+      );
+      boolean hasPartitionColInSchema = partitionFields.stream().anyMatch(
+          pt -> HoodieAvroUtils.containsFieldInSchema(schema0, pt)
+      );
+      if (hasPartitionColNotInSchema && hasPartitionColInSchema) {
+        throw new HoodieIncompatibleSchemaException(
+            "Not support: Partial partition fields are still in the schema " +
+                "when enable hoodie.datasource.write.drop.partition.columns");
+      }
+
+      if (hasPartitionColNotInSchema) {
+        // when hasPartitionColNotInSchema is true and hasPartitionColInSchema is false, all partition columns
+        // are not in originSchema. So we create and add them.
+        List<Field> newFields = new ArrayList<>();
+        for (String partitionField: partitionFields) {
+          newFields.add(new Schema.Field(
+              partitionField, Schema.create(Schema.Type.STRING), "", JsonProperties.NULL_VALUE));
         }
+        schema = HoodieAvroUtils.createNewSchemaWithExtraFields(schema, newFields);
       }
     }
     return schema;

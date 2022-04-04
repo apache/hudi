@@ -92,7 +92,7 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
           sparkSession = sparkSession,
           file = file,
           // TODO clarify why this is required
-          partitionValues = createPartitionInternalRow(file)
+          partitionValues = getPartitionColumnsAsInternalRow(file)
         )
       }
     }

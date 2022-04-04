@@ -148,7 +148,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    * if true, need to deal with schema for creating file reader.
    */
   protected val dropPartitionColumnsWhenWrite: Boolean =
-    metaClient.getTableConfig.getDropPartitionColumnsWhenWrite && partitionColumns.nonEmpty
+    metaClient.getTableConfig.isDropPartitionColumns && partitionColumns.nonEmpty
 
   /**
    * NOTE: PLEASE READ THIS CAREFULLY
@@ -354,7 +354,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    * For enable hoodie.datasource.write.drop.partition.columns, need to create an InternalRow on partition values
    * and pass this reader on parquet file. So that, we can query the partition columns.
    */
-  protected def createPartitionInternalRow(file: FileStatus): InternalRow = {
+  protected def getPartitionColumnsAsInternalRow(file: FileStatus): InternalRow = {
     try {
       val tableConfig = metaClient.getTableConfig
       if (dropPartitionColumnsWhenWrite) {
