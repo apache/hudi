@@ -67,11 +67,6 @@ public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileR
   }
 
   @Override
-  public Map<String, R> getRecordsByKeyPrefixes(List<String> keyPrefixes) throws IOException {
-    throw new UnsupportedOperationException("GetRecords by key prefixes not supported for parquet reader");
-  }
-
-  @Override
   public Iterator<R> getRecordIterator(Schema schema) throws IOException {
     AvroReadSupport.setAvroReadSchema(conf, schema);
     ParquetReader<R> reader = AvroParquetReader.<R>builder(path).withConf(conf).build();

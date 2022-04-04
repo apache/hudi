@@ -18,18 +18,17 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.util.Option;
+
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.hbase.io.hfile.HFileScanner;
-
-import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.util.Option;
 
 public interface HoodieFileReader<R extends IndexedRecord> extends AutoCloseable {
 
@@ -43,7 +42,9 @@ public interface HoodieFileReader<R extends IndexedRecord> extends AutoCloseable
     throw new UnsupportedOperationException();
   }
 
-  Map<String, R> getRecordsByKeyPrefixes(List<String> keyPrefixes) throws IOException;
+  default Map<String, R> getRecordsByKeyPrefixes(List<String> keyPrefixes) throws IOException {
+    throw new UnsupportedEncodingException();
+  }
 
   Iterator<R> getRecordIterator(Schema readerSchema) throws IOException;
 

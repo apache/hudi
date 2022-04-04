@@ -61,11 +61,6 @@ public class HoodieOrcReader<R extends IndexedRecord> implements HoodieFileReade
   }
 
   @Override
-  public Map getRecordsByKeyPrefixes(List keyPrefixes) throws IOException {
-    throw new UnsupportedOperationException("GetRecords by key prefixes not supported for OrcReader");
-  }
-
-  @Override
   public Set<String> filterRowKeys(Set candidateRowKeys) {
     return orcUtils.filterRowKeys(conf, path, candidateRowKeys);
   }
