@@ -24,7 +24,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
@@ -35,6 +34,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
@@ -53,6 +53,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -195,32 +196,72 @@ public class HoodieDropPartitionsTool implements Serializable {
     public List<String> configs = new ArrayList<>();
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
-  }
 
-  private String getConfigDetails() {
-    return "HoodieDropPartitionsToolConfig {\n"
-        + "   --base-path " + cfg.basePath + ", \n"
-        + "   --mode " + cfg.runningMode + ", \n"
-        + "   --table-name " + cfg.tableName + ", \n"
-        + "   --partitions " + cfg.partitions + ", \n"
-        + "   --parallelism " + cfg.parallelism + ", \n"
-        + "   --instantTime " + cfg.instantTime + ", \n"
-        + "   --sync-hive-meta " + cfg.syncToHive + ", \n"
-        + "   --hive-database " + cfg.hiveDataBase + ", \n"
-        + "   --hive-table-name " + cfg.hiveTableName + ", \n"
-        + "   --hive-user-name " + "Masked" + ", \n"
-        + "   --hive-pass-word " + "Masked" + ", \n"
-        + "   --hive-jdbc-url " + cfg.hiveURL + ", \n"
-        + "   --hive-partition-field " + cfg.hivePartitionsField + ", \n"
-        + "   --hive-sync-use-jdbc " + cfg.hiveUseJdbc + ", \n"
-        + "   --hive-metastore-uris " + cfg.hiveHMSUris + ", \n"
-        + "   --hive-sync-ignore-exception " + cfg.hiveSyncIgnoreException + ", \n"
-        + "   --hive-partition-value-extractor-class " + cfg.partitionValueExtractorClass + ", \n"
-        + "   --spark-master " + cfg.sparkMaster + ", \n"
-        + "   --spark-memory " + cfg.sparkMemory + ", \n"
-        + "   --props " + cfg.propsFilePath + ", \n"
-        + "   --hoodie-conf " + cfg.configs
-        + "\n}";
+    @Override
+    public String toString() {
+      return "HoodieDropPartitionsToolConfig {\n"
+          + "   --base-path " + basePath + ", \n"
+          + "   --mode " + runningMode + ", \n"
+          + "   --table-name " + tableName + ", \n"
+          + "   --partitions " + partitions + ", \n"
+          + "   --parallelism " + parallelism + ", \n"
+          + "   --instantTime " + instantTime + ", \n"
+          + "   --sync-hive-meta " + syncToHive + ", \n"
+          + "   --hive-database " + hiveDataBase + ", \n"
+          + "   --hive-table-name " + hiveTableName + ", \n"
+          + "   --hive-user-name " + "Masked" + ", \n"
+          + "   --hive-pass-word " + "Masked" + ", \n"
+          + "   --hive-jdbc-url " + hiveURL + ", \n"
+          + "   --hive-partition-field " + hivePartitionsField + ", \n"
+          + "   --hive-sync-use-jdbc " + hiveUseJdbc + ", \n"
+          + "   --hive-metastore-uris " + hiveHMSUris + ", \n"
+          + "   --hive-sync-ignore-exception " + hiveSyncIgnoreException + ", \n"
+          + "   --hive-partition-value-extractor-class " + partitionValueExtractorClass + ", \n"
+          + "   --spark-master " + sparkMaster + ", \n"
+          + "   --spark-memory " + sparkMemory + ", \n"
+          + "   --props " + propsFilePath + ", \n"
+          + "   --hoodie-conf " + configs
+          + "\n}";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      Config config = (Config) o;
+      return basePath.equals(config.basePath)
+          && Objects.equals(runningMode, config.runningMode)
+          && Objects.equals(tableName, config.tableName)
+          && Objects.equals(partitions, config.partitions)
+          && Objects.equals(instantTime, config.instantTime)
+          && Objects.equals(syncToHive, config.syncToHive)
+          && Objects.equals(hiveDataBase, config.hiveDataBase)
+          && Objects.equals(hiveTableName, config.hiveTableName)
+          && Objects.equals(hiveUserName, config.hiveUserName)
+          && Objects.equals(hivePassWord, config.hivePassWord)
+          && Objects.equals(hiveURL, config.hiveURL)
+          && Objects.equals(hivePartitionsField, config.hivePartitionsField)
+          && Objects.equals(hiveUseJdbc, config.hiveUseJdbc)
+          && Objects.equals(hiveHMSUris, config.hiveHMSUris)
+          && Objects.equals(partitionValueExtractorClass, config.partitionValueExtractorClass)
+          && Objects.equals(sparkMaster, config.sparkMaster)
+          && Objects.equals(sparkMemory, config.sparkMemory)
+          && Objects.equals(propsFilePath, config.propsFilePath)
+          && Objects.equals(configs, config.configs)
+          && Objects.equals(hiveSyncIgnoreException, config.hiveSyncIgnoreException);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(basePath, runningMode, tableName, partitions, instantTime,
+          syncToHive, hiveDataBase, hiveTableName, hiveUserName, hivePassWord, hiveURL,
+          hivePartitionsField, hiveUseJdbc, hiveHMSUris, partitionValueExtractorClass,
+          sparkMaster, sparkMemory, propsFilePath, configs, hiveSyncIgnoreException, help);
+    }
   }
 
   public static void main(String[] args) {
@@ -237,7 +278,7 @@ public class HoodieDropPartitionsTool implements Serializable {
     try {
       tool.run();
     } catch (Throwable throwable) {
-      LOG.error("Fail to run deleting table partitions for " + tool.getConfigDetails(), throwable);
+      LOG.error("Fail to run deleting table partitions for " + cfg.toString(), throwable);
     } finally {
       jsc.stop();
     }
@@ -248,17 +289,17 @@ public class HoodieDropPartitionsTool implements Serializable {
       if (StringUtils.isNullOrEmpty(cfg.instantTime)) {
         cfg.instantTime = HoodieActiveTimeline.createNewInstantTime();
       }
-      LOG.info(getConfigDetails());
+      LOG.info(cfg.toString());
 
       Mode mode = Mode.valueOf(cfg.runningMode.toUpperCase());
       switch (mode) {
         case DELETE:
-          LOG.info(" ****** The Hoodie Drop Partitions Tool is in delete mode ******");
+          LOG.info(" ****** The Hoodie Drop Partitions Tool is in delete mode ****** ");
           doDeleteTablePartitions();
           syncToHiveIfNecessary();
           break;
         case DRY_RUN:
-          LOG.info(" ****** The Hoodie Drop Partitions Tool is in dry-run mode ******");
+          LOG.info(" ****** The Hoodie Drop Partitions Tool is in dry-run mode ****** ");
           dryRun();
           break;
         default:
@@ -289,11 +330,12 @@ public class HoodieDropPartitionsTool implements Serializable {
 
   private void doDeleteTablePartitions() {
 
+    // need to do commit in SparkDeletePartitionCommitActionExecutor#execute
+    this.props.put(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), "true");
     try (SparkRDDWriteClient<HoodieRecordPayload> client =  UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.empty(), props)) {
       List<String> partitionsToDelete = Arrays.asList(cfg.partitions.split(","));
       client.startCommitWithTime(cfg.instantTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
-      HoodieWriteResult hoodieWriteResult = client.deletePartitions(partitionsToDelete, cfg.instantTime);
-      client.commit(cfg.instantTime, hoodieWriteResult.getWriteStatuses(), Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION, hoodieWriteResult.getPartitionToReplaceFileIds());
+      client.deletePartitions(partitionsToDelete, cfg.instantTime);
     }
   }
 
@@ -348,7 +390,7 @@ public class HoodieDropPartitionsTool implements Serializable {
   private void printDeleteFilesInfo(Map<String, List<String>> partitionToReplaceFileIds) {
     LOG.info("Data files and partitions to delete : ");
     for (Map.Entry<String, List<String>> entry  : partitionToReplaceFileIds.entrySet()) {
-      LOG.info(String.format("Partitions : %s, corresponding data file IDs : $%s", entry.getKey(), entry.getValue()));
+      LOG.info(String.format("Partitions : %s, corresponding data file IDs : %s", entry.getKey(), entry.getValue()));
     }
   }
 }
