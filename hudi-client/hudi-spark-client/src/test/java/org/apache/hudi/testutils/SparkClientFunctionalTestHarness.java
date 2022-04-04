@@ -19,6 +19,13 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -28,6 +35,7 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -42,6 +50,7 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -50,14 +59,11 @@ import org.apache.hudi.testutils.providers.HoodieMetaClientProvider;
 import org.apache.hudi.testutils.providers.HoodieWriteClientProvider;
 import org.apache.hudi.testutils.providers.SparkProvider;
 import org.apache.hudi.timeline.service.TimelineService;
-
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.AfterAll;
@@ -69,6 +75,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
@@ -214,12 +221,22 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   }
 
   protected Stream<HoodieBaseFile> insertRecordsToMORTable(HoodieTableMetaClient metaClient, List<HoodieRecord> records,
-                                                 SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {
+                                                           SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {
+    return insertRecordsToMORTable(metaClient, records, client, cfg, commitTime, false);
+  }
+
+  protected Stream<HoodieBaseFile> insertRecordsToMORTable(HoodieTableMetaClient metaClient, List<HoodieRecord> records,
+                                                 SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime,
+                                                           boolean doExplicitCommit) throws IOException {
     HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
 
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
-    List<WriteStatus> statuses = client.insert(writeRecords, commitTime).collect();
+    JavaRDD<WriteStatus> statusesRdd = client.insert(writeRecords, commitTime);
+    List<WriteStatus> statuses = statusesRdd.collect();
     assertNoWriteErrors(statuses);
+    if (doExplicitCommit) {
+      client.commit(commitTime, statusesRdd);
+    }
     assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(reloadedMetaClient.getFs(), new Path(reloadedMetaClient.getBasePath(), status.getStat().getPath())));
 
     HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), reloadedMetaClient);
@@ -243,6 +260,11 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   }
 
   protected void updateRecordsInMORTable(HoodieTableMetaClient metaClient, List<HoodieRecord> records, SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {
+    updateRecordsInMORTable(metaClient, records, client, cfg, commitTime, true);
+  }
+
+  protected void updateRecordsInMORTable(HoodieTableMetaClient metaClient, List<HoodieRecord> records, SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime,
+                                         boolean doExplicitCommit) throws IOException {
     HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
 
     Map<HoodieKey, HoodieRecord> recordsMap = new HashMap<>();
@@ -252,9 +274,13 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
       }
     }
 
-    List<WriteStatus> statuses = client.upsert(jsc().parallelize(records, 1), commitTime).collect();
+    JavaRDD<WriteStatus> statusesRdd = client.upsert(jsc().parallelize(records, 1), commitTime);
+    List<WriteStatus> statuses = statusesRdd.collect();
     // Verify there are no errors
     assertNoWriteErrors(statuses);
+    if (doExplicitCommit) {
+      client.commit(commitTime, statusesRdd);
+    }
     assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(reloadedMetaClient.getFs(), new Path(reloadedMetaClient.getBasePath(), status.getStat().getPath())));
 
     Option<HoodieInstant> deltaCommit = reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
@@ -327,6 +353,21 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
         .withClusteringConfig(clusteringConfig)
         .withRollbackUsingMarkers(rollbackUsingMarkers);
+  }
+
+  protected Dataset<Row> toDataset(List<HoodieRecord> records, Schema schema) {
+    List<GenericRecord> avroRecords = records.stream()
+        .map(r -> {
+          HoodieRecordPayload payload = (HoodieRecordPayload) r.getData();
+          try {
+            return (GenericRecord) payload.getInsertValue(schema).get();
+          } catch (IOException e) {
+            throw new HoodieIOException("Failed to extract Avro payload", e);
+          }
+        })
+        .collect(Collectors.toList());
+    JavaRDD<GenericRecord> jrdd = jsc.parallelize(avroRecords, 2);
+    return AvroConversionUtils.createDataFrame(jrdd.rdd(), schema.toString(), spark);
   }
 
   protected int incrementTimelineServicePortToUse() {

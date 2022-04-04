@@ -24,6 +24,7 @@ import org.apache.hudi.exception.HoodieClusteringException;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Partition filter utilities. Currently, we support three mode:
@@ -58,11 +59,18 @@ public class ClusteringPlanPartitionFilter {
   }
 
   private static List<String> selectedPartitionsFilter(List<String> partitions, HoodieWriteConfig config) {
+    Stream<String> filteredPartitions = partitions.stream();
+
     String beginPartition = config.getBeginPartitionForClustering();
+    if (beginPartition != null) {
+      filteredPartitions = filteredPartitions.filter(path -> path.compareTo(beginPartition) >= 0);
+    }
+
     String endPartition = config.getEndPartitionForClustering();
-    List<String> filteredPartitions = partitions.stream()
-        .filter(path -> path.compareTo(beginPartition) >= 0 && path.compareTo(endPartition) <= 0)
-        .collect(Collectors.toList());
-    return filteredPartitions;
+    if (endPartition != null) {
+      filteredPartitions = filteredPartitions.filter(path -> path.compareTo(endPartition) <= 0);
+    }
+
+    return filteredPartitions.collect(Collectors.toList());
   }
 }

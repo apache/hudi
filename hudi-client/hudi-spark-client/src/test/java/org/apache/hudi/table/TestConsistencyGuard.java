@@ -169,9 +169,9 @@ public class TestConsistencyGuard extends HoodieClientTestHarness {
     return getConsistencyGuardConfig(3, 10, 10);
   }
 
-  private ConsistencyGuardConfig getConsistencyGuardConfig(int maxChecks, int initalSleep, int maxSleep) {
+  private ConsistencyGuardConfig getConsistencyGuardConfig(int maxChecks, int initialSleep, int maxSleep) {
     return ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true)
-        .withInitialConsistencyCheckIntervalMs(initalSleep).withMaxConsistencyCheckIntervalMs(maxSleep)
+        .withInitialConsistencyCheckIntervalMs(initialSleep).withMaxConsistencyCheckIntervalMs(maxSleep)
         .withMaxConsistencyChecks(maxChecks).build();
   }
 }

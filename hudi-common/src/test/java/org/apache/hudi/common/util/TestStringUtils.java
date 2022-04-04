@@ -20,6 +20,12 @@ package org.apache.hudi.common.util;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -60,5 +66,21 @@ public class TestStringUtils {
     assertTrue(StringUtils.isNullOrEmpty(""));
     assertNotEquals(null, StringUtils.isNullOrEmpty("this is not empty"));
     assertTrue(StringUtils.isNullOrEmpty(""));
+  }
+
+  @Test
+  public void testStringToSet() {
+    assertEquals(new HashSet<>(), StringUtils.toSet(null));
+    assertEquals(new HashSet<>(), StringUtils.toSet(""));
+    Set<String> expected = new HashSet<>(Arrays.asList("a", "b", "c"));
+    assertEquals(expected, StringUtils.toSet("a,b, c"));
+  }
+
+  @Test
+  public void testStringToList() {
+    assertEquals(new ArrayList<>(), StringUtils.toList(null));
+    assertEquals(new ArrayList<>(), StringUtils.toList(""));
+    List<String> expected = Arrays.asList("a", "b", "c");
+    assertEquals(expected, StringUtils.toList("a,b, c"));
   }
 }

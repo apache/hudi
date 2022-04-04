@@ -41,6 +41,8 @@ public class HoodieMetadataMetrics implements Serializable {
   // Metric names
   public static final String LOOKUP_PARTITIONS_STR = "lookup_partitions";
   public static final String LOOKUP_FILES_STR = "lookup_files";
+  public static final String LOOKUP_BLOOM_FILTERS_METADATA_STR = "lookup_meta_index_bloom_filters";
+  public static final String LOOKUP_COLUMN_STATS_METADATA_STR = "lookup_meta_index_column_ranges";
   public static final String SCAN_STR = "scan";
   public static final String BASEFILE_READ_STR = "basefile_read";
   public static final String INITIALIZE_STR = "initialize";
@@ -77,7 +79,7 @@ public class HoodieMetadataMetrics implements Serializable {
     Map<String, String> stats = new HashMap<>();
 
     // Total size of the metadata and count of base/log files
-    for (String metadataPartition : MetadataPartitionType.all()) {
+    for (String metadataPartition : MetadataPartitionType.allPaths()) {
       List<FileSlice> latestSlices = fsView.getLatestFileSlices(metadataPartition).collect(Collectors.toList());
 
       // Total size of the metadata and count of base/log files

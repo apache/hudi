@@ -22,7 +22,10 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
+import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
@@ -33,7 +36,6 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -44,11 +46,12 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieSortedMergeHandle;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.clean.CleanActionExecutor;
 import org.apache.hudi.table.action.clean.CleanPlanActionExecutor;
-import org.apache.hudi.table.action.cluster.JavaClusteringPlanActionExecutor;
+import org.apache.hudi.table.action.cluster.ClusteringPlanActionExecutor;
 import org.apache.hudi.table.action.cluster.JavaExecuteClusteringCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaBulkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaBulkInsertPreppedCommitActionExecutor;
@@ -60,18 +63,19 @@ import org.apache.hudi.table.action.commit.JavaInsertPreppedCommitActionExecutor
 import org.apache.hudi.table.action.commit.JavaMergeHelper;
 import org.apache.hudi.table.action.commit.JavaUpsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaUpsertPreppedCommitActionExecutor;
+import org.apache.hudi.table.action.index.RunIndexActionExecutor;
+import org.apache.hudi.table.action.index.ScheduleIndexActionExecutor;
 import org.apache.hudi.table.action.restore.CopyOnWriteRestoreActionExecutor;
 import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
+import org.apache.hudi.table.action.rollback.RestorePlanActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
-import javax.annotation.Nonnull;
 import java.util.List;
 import java.util.Map;
 
@@ -111,7 +115,7 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
   public HoodieWriteMetadata<List<WriteStatus>> bulkInsert(HoodieEngineContext context,
                                                            String instantTime,
                                                            List<HoodieRecord<T>> records,
-                                                           Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> bulkInsertPartitioner) {
+                                                           Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     return new JavaBulkInsertCommitActionExecutor((HoodieJavaEngineContext) context, config,
         this, instantTime, records, bulkInsertPartitioner).execute();
   }
@@ -149,7 +153,7 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
   public HoodieWriteMetadata<List<WriteStatus>> bulkInsertPrepped(HoodieEngineContext context,
                                                                   String instantTime,
                                                                   List<HoodieRecord<T>> preppedRecords,
-                                                                  Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> bulkInsertPartitioner) {
+                                                                  Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     return new JavaBulkInsertPreppedCommitActionExecutor((HoodieJavaEngineContext) context, config,
         this, instantTime, preppedRecords, bulkInsertPartitioner).execute();
   }
@@ -171,11 +175,6 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
   }
 
   @Override
-  public void updateMetadataIndexes(@Nonnull HoodieEngineContext context, @Nonnull List<HoodieWriteStat> stats, @Nonnull String instantTime) {
-    throw new HoodieNotSupportedException("update statistics is not supported yet");
-  }
-
-  @Override
   public Option<HoodieCompactionPlan> scheduleCompaction(HoodieEngineContext context,
                                                          String instantTime,
                                                          Option<Map<String, String>> extraMetadata) {
@@ -190,7 +189,7 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
 
   @Override
   public Option<HoodieClusteringPlan> scheduleClustering(final HoodieEngineContext context, final String instantTime, final Option<Map<String, String>> extraMetadata) {
-    return new JavaClusteringPlanActionExecutor<>(context, config, this, instantTime, extraMetadata).execute();
+    return new ClusteringPlanActionExecutor<>(context, config, this, instantTime, extraMetadata).execute();
   }
 
   @Override
@@ -239,12 +238,27 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
   }
 
   @Override
+  public Option<HoodieIndexPlan> scheduleIndexing(HoodieEngineContext context, String indexInstantTime, List<MetadataPartitionType> partitionsToIndex) {
+    return new ScheduleIndexActionExecutor<>(context, config, this, indexInstantTime, partitionsToIndex).execute();
+  }
+
+  @Override
+  public Option<HoodieIndexCommitMetadata> index(HoodieEngineContext context, String indexInstantTime) {
+    return new RunIndexActionExecutor<>(context, config, this, indexInstantTime).execute();
+  }
+
+  @Override
   public HoodieSavepointMetadata savepoint(HoodieEngineContext context,
                                            String instantToSavepoint,
                                            String user,
                                            String comment) {
     return new SavepointActionExecutor(
         context, config, this, instantToSavepoint, user, comment).execute();
+  }
+
+  @Override
+  public Option<HoodieRestorePlan> scheduleRestore(HoodieEngineContext context, String restoreInstantTime, String instantToRestore) {
+    return new RestorePlanActionExecutor(context, config, this, restoreInstantTime, instantToRestore).execute();
   }
 
   @Override

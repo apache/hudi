@@ -25,6 +25,8 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -63,6 +65,8 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
+  private final Schema schema;
+  private final Option<Schema.Field> keyFieldSchema;
   private HFile.Writer writer;
   private String minRecordKey;
   private String maxRecordKey;
@@ -77,6 +81,8 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
     this.fs = (HoodieWrapperFileSystem) this.file.getFileSystem(conf);
     this.hfileConfig = hfileConfig;
+    this.schema = schema;
+    this.keyFieldSchema = Option.ofNullable(schema.getField(hfileConfig.getKeyFieldName()));
 
     // TODO - compute this compression ratio dynamically by looking at the bytes written to the
     // stream and the actual file size reported by HDFS
@@ -89,6 +95,7 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
 
     HFileContext context = new HFileContextBuilder().withBlockSize(hfileConfig.getBlockSize())
         .withCompression(hfileConfig.getCompressionAlgorithm())
+        .withCellComparator(hfileConfig.getHFileComparator())
         .build();
 
     conf.set(CacheConfig.PREFETCH_BLOCKS_ON_OPEN_KEY, String.valueOf(hfileConfig.shouldPrefetchBlocksOnOpen()));
@@ -98,7 +105,6 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
     this.writer = HFile.getWriterFactory(conf, cacheConfig)
         .withPath(this.fs, this.file)
         .withFileContext(context)
-        .withComparator(hfileConfig.getHfileComparator())
         .create();
 
     writer.appendFileInfo(HoodieHFileReader.KEY_SCHEMA.getBytes(), schema.toString().getBytes());
@@ -121,8 +127,25 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   }
 
   @Override
-  public void writeAvro(String recordKey, IndexedRecord object) throws IOException {
-    byte[] value = HoodieAvroUtils.avroToBytes((GenericRecord)object);
+  public void writeAvro(String recordKey, IndexedRecord record) throws IOException {
+    byte[] value = null;
+    boolean isRecordSerialized = false;
+    if (keyFieldSchema.isPresent()) {
+      GenericRecord keyExcludedRecord = (GenericRecord) record;
+      int keyFieldPos = this.keyFieldSchema.get().pos();
+      boolean isKeyAvailable = (record.get(keyFieldPos) != null && !(record.get(keyFieldPos).toString().isEmpty()));
+      if (isKeyAvailable) {
+        Object originalKey = keyExcludedRecord.get(keyFieldPos);
+        keyExcludedRecord.put(keyFieldPos, StringUtils.EMPTY_STRING);
+        value = HoodieAvroUtils.avroToBytes(keyExcludedRecord);
+        keyExcludedRecord.put(keyFieldPos, originalKey);
+        isRecordSerialized = true;
+      }
+    }
+    if (!isRecordSerialized) {
+      value = HoodieAvroUtils.avroToBytes((GenericRecord) record);
+    }
+
     KeyValue kv = new KeyValue(recordKey.getBytes(), null, null, value);
     writer.append(kv);
 
@@ -163,10 +186,5 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
 
     writer.close();
     writer = null;
-  }
-
-  @Override
-  public long getBytesWritten() {
-    return fs.getBytesWritten(file);
   }
 }

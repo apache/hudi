@@ -18,6 +18,8 @@
 
 package org.apache.hudi.hive.ddl;
 
+import org.apache.hudi.common.util.collection.ImmutablePair;
+
 import org.apache.parquet.schema.MessageType;
 
 import java.util.List;
@@ -28,11 +30,12 @@ import java.util.Map;
  * There are two main implementations one is QueryBased other is based on HiveMetaStore
  * QueryBasedDDLExecutor also has two implementations namely HiveQL based and other JDBC based.
  */
-public interface DDLExecutor {
+public interface DDLExecutor extends AutoCloseable {
+
   /**
    * @param databaseName name of database to be created.
    */
-  public void createDatabase(String databaseName);
+  void createDatabase(String databaseName);
 
   /**
    * Creates a table with the following properties.
@@ -45,9 +48,9 @@ public interface DDLExecutor {
    * @param serdeProperties
    * @param tableProperties
    */
-  public void createTable(String tableName, MessageType storageSchema, String inputFormatClass,
-                          String outputFormatClass, String serdeClass,
-                          Map<String, String> serdeProperties, Map<String, String> tableProperties);
+  void createTable(String tableName, MessageType storageSchema, String inputFormatClass,
+                   String outputFormatClass, String serdeClass,
+                   Map<String, String> serdeProperties, Map<String, String> tableProperties);
 
   /**
    * Updates the table with the newSchema.
@@ -55,7 +58,7 @@ public interface DDLExecutor {
    * @param tableName
    * @param newSchema
    */
-  public void updateTableDefinition(String tableName, MessageType newSchema);
+  void updateTableDefinition(String tableName, MessageType newSchema);
 
   /**
    * Fetches tableSchema for a table.
@@ -63,7 +66,7 @@ public interface DDLExecutor {
    * @param tableName
    * @return
    */
-  public Map<String, String> getTableSchema(String tableName);
+  Map<String, String> getTableSchema(String tableName);
 
   /**
    * Adds partition to table.
@@ -71,7 +74,7 @@ public interface DDLExecutor {
    * @param tableName
    * @param partitionsToAdd
    */
-  public void addPartitionsToTable(String tableName, List<String> partitionsToAdd);
+  void addPartitionsToTable(String tableName, List<String> partitionsToAdd);
 
   /**
    * Updates partitions for a given table.
@@ -79,7 +82,7 @@ public interface DDLExecutor {
    * @param tableName
    * @param changedPartitions
    */
-  public void updatePartitionsToTable(String tableName, List<String> changedPartitions);
+  void updatePartitionsToTable(String tableName, List<String> changedPartitions);
 
   /**
    * Drop partitions for a given table.
@@ -87,7 +90,13 @@ public interface DDLExecutor {
    * @param tableName
    * @param partitionsToDrop
    */
-  public void dropPartitionsToTable(String tableName, List<String> partitionsToDrop);
+  void dropPartitionsToTable(String tableName, List<String> partitionsToDrop);
 
-  public void close();
+  /**
+   * update table comments
+   *
+   * @param tableName
+   * @param newSchema Map key: field name, Map value: [field type, field comment]
+   */
+  void updateTableComments(String tableName, Map<String, ImmutablePair<String, String>> newSchema);
 }

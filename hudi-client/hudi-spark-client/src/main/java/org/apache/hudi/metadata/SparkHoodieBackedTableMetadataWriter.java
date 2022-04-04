@@ -18,24 +18,26 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metrics.DistributedRegistry;
 
+import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -43,6 +45,8 @@ import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter {
 
@@ -51,8 +55,8 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   /**
    * Return a Spark based implementation of {@code HoodieTableMetadataWriter} which can be used to
    * write to the metadata table.
-   *
-   * If the metadata table does not exist, an attempt is made to bootstrap it but there is no guarantted that
+   * <p>
+   * If the metadata table does not exist, an attempt is made to bootstrap it but there is no guaranteed that
    * table will end up bootstrapping at this time.
    *
    * @param conf
@@ -113,7 +117,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       });
 
       if (enabled) {
-        bootstrapIfNeeded(engineContext, dataMetaClient, actionMetadata, inflightInstantTimestamp);
+        initializeIfNeeded(dataMetaClient, actionMetadata, inflightInstantTimestamp);
       }
     } catch (IOException e) {
       LOG.error("Failed to initialize metadata table. Disabling the writer.", e);
@@ -121,11 +125,12 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     }
   }
 
-  protected void commit(HoodieData<HoodieRecord> hoodieDataRecords, String partitionName, String instantTime, boolean canTriggerTableService) {
+  @Override
+  protected void commit(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap, boolean canTriggerTableService) {
     ValidationUtils.checkState(metadataMetaClient != null, "Metadata table is not fully initialized yet.");
     ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
-    JavaRDD<HoodieRecord> records = (JavaRDD<HoodieRecord>) hoodieDataRecords.get();
-    JavaRDD<HoodieRecord> recordRDD = prepRecords(records, partitionName, 1);
+    HoodieData<HoodieRecord> preppedRecords = prepRecords(partitionRecordsMap);
+    JavaRDD<HoodieRecord> preppedRecordRDD = HoodieJavaRDD.getJavaRDD(preppedRecords);
 
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, metadataWriteConfig, true)) {
       if (canTriggerTableService) {
@@ -135,22 +140,30 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         compactIfNecessary(writeClient, instantTime);
       }
 
-      if (!metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(instantTime)) {
+      if (!metadataMetaClient.getActiveTimeline().containsInstant(instantTime)) {
         // if this is a new commit being applied to metadata for the first time
         writeClient.startCommitWithTime(instantTime);
       } else {
-        // this code path refers to a re-attempted commit that got committed to metadata table, but failed in datatable.
-        // for eg, lets say compaction c1 on 1st attempt succeeded in metadata table and failed before committing to datatable.
-        // when retried again, data table will first rollback pending compaction. these will be applied to metadata table, but all changes
-        // are upserts to metadata table and so only a new delta commit will be created.
-        // once rollback is complete, compaction will be retried again, which will eventually hit this code block where the respective commit is
-        // already part of completed commit. So, we have to manually remove the completed instant and proceed.
-        // and it is for the same reason we enabled withAllowMultiWriteOnSameInstant for metadata table.
-        HoodieInstant alreadyCompletedInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.getTimestamp().equals(instantTime)).lastInstant().get();
-        HoodieActiveTimeline.deleteInstantFile(metadataMetaClient.getFs(), metadataMetaClient.getMetaPath(), alreadyCompletedInstant);
-        metadataMetaClient.reloadActiveTimeline();
+        Option<HoodieInstant> alreadyCompletedInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.getTimestamp().equals(instantTime)).lastInstant();
+        if (alreadyCompletedInstant.isPresent()) {
+          // this code path refers to a re-attempted commit that got committed to metadata table, but failed in datatable.
+          // for eg, lets say compaction c1 on 1st attempt succeeded in metadata table and failed before committing to datatable.
+          // when retried again, data table will first rollback pending compaction. these will be applied to metadata table, but all changes
+          // are upserts to metadata table and so only a new delta commit will be created.
+          // once rollback is complete, compaction will be retried again, which will eventually hit this code block where the respective commit is
+          // already part of completed commit. So, we have to manually remove the completed instant and proceed.
+          // and it is for the same reason we enabled withAllowMultiWriteOnSameInstant for metadata table.
+          HoodieActiveTimeline.deleteInstantFile(metadataMetaClient.getFs(), metadataMetaClient.getMetaPath(), alreadyCompletedInstant.get());
+          metadataMetaClient.reloadActiveTimeline();
+        }
+        // If the alreadyCompletedInstant is empty, that means there is a requested or inflight
+        // instant with the same instant time.  This happens for data table clean action which
+        // reuses the same instant time without rollback first.  It is a no-op here as the
+        // clean plan is the same, so we don't need to delete the requested and inflight instant
+        // files in the active timeline.
       }
-      List<WriteStatus> statuses = writeClient.upsertPreppedRecords(recordRDD, instantTime).collect();
+      
+      List<WriteStatus> statuses = writeClient.upsertPreppedRecords(preppedRecordRDD, instantTime).collect();
       statuses.forEach(writeStatus -> {
         if (writeStatus.hasErrors()) {
           throw new HoodieMetadataException("Failed to commit metadata table records at instant " + instantTime);
@@ -169,19 +182,15 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     metrics.ifPresent(m -> m.updateSizeMetrics(metadataMetaClient, metadata));
   }
 
-  /**
-   * Tag each record with the location in the given partition.
-   *
-   * The record is tagged with respective file slice's location based on its record key.
-   */
-  private JavaRDD<HoodieRecord> prepRecords(JavaRDD<HoodieRecord> recordsRDD, String partitionName, int numFileGroups) {
-    List<FileSlice> fileSlices = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, partitionName);
-    ValidationUtils.checkArgument(fileSlices.size() == numFileGroups, String.format("Invalid number of file groups: found=%d, required=%d", fileSlices.size(), numFileGroups));
+  @Override
+  public void deletePartitions(String instantTime, List<MetadataPartitionType> partitions) {
+    List<String> partitionsToDrop = partitions.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toList());
+    LOG.info("Deleting Metadata Table partitions: " + partitionsToDrop);
 
-    return recordsRDD.map(r -> {
-      FileSlice slice = fileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(), numFileGroups));
-      r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
-      return r;
-    });
+    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, metadataWriteConfig, true)) {
+      String actionType = CommitUtils.getCommitActionType(WriteOperationType.DELETE_PARTITION, HoodieTableType.MERGE_ON_READ);
+      writeClient.startCommitWithTime(instantTime, actionType);
+      writeClient.deletePartitions(partitionsToDrop, instantTime);
+    }
   }
 }

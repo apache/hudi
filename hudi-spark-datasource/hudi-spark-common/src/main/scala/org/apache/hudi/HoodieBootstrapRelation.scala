@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieBaseFile
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.exception.HoodieException
+import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
@@ -52,8 +53,8 @@ import scala.collection.JavaConverters._
   * @param optParams DataSource options passed by the user
   */
 class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
-                              val userSchema: StructType,
-                              val globPaths: Option[Seq[Path]],
+                              val userSchema: Option[StructType],
+                              val globPaths: Seq[Path],
                               val metaClient: HoodieTableMetaClient,
                               val optParams: Map[String, String]) extends BaseRelation
   with PrunedFilteredScan with Logging {
@@ -107,37 +108,35 @@ class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
     })
 
     // Prepare readers for reading data file and skeleton files
-    val dataReadFunction = new ParquetFileFormat()
-        .buildReaderWithPartitionValues(
-          sparkSession = _sqlContext.sparkSession,
-          dataSchema = dataSchema,
-          partitionSchema = StructType(Seq.empty),
-          requiredSchema = requiredDataSchema,
-          filters = if (requiredSkeletonSchema.isEmpty) filters else Seq() ,
-          options = Map.empty,
-          hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf()
-        )
+    val dataReadFunction = HoodieDataSourceHelper.buildHoodieParquetReader(
+      sparkSession = _sqlContext.sparkSession,
+      dataSchema = dataSchema,
+      partitionSchema = StructType(Seq.empty),
+      requiredSchema = requiredDataSchema,
+      filters = if (requiredSkeletonSchema.isEmpty) filters else Seq() ,
+      options = optParams,
+      hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf()
+    )
 
-    val skeletonReadFunction = new ParquetFileFormat()
-      .buildReaderWithPartitionValues(
-        sparkSession = _sqlContext.sparkSession,
-        dataSchema = skeletonSchema,
-        partitionSchema = StructType(Seq.empty),
-        requiredSchema = requiredSkeletonSchema,
-        filters = if (requiredDataSchema.isEmpty) filters else Seq(),
-        options = Map.empty,
-        hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf()
-      )
+    val skeletonReadFunction = HoodieDataSourceHelper.buildHoodieParquetReader(
+      sparkSession = _sqlContext.sparkSession,
+      dataSchema = skeletonSchema,
+      partitionSchema = StructType(Seq.empty),
+      requiredSchema = requiredSkeletonSchema,
+      filters = if (requiredDataSchema.isEmpty) filters else Seq(),
+      options = optParams,
+      hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf()
+    )
 
-    val regularReadFunction = new ParquetFileFormat()
-      .buildReaderWithPartitionValues(
-        sparkSession = _sqlContext.sparkSession,
-        dataSchema = fullSchema,
-        partitionSchema = StructType(Seq.empty),
-        requiredSchema = requiredColsSchema,
-        filters = filters,
-        options = Map.empty,
-        hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf())
+    val regularReadFunction = HoodieDataSourceHelper.buildHoodieParquetReader(
+      sparkSession = _sqlContext.sparkSession,
+      dataSchema = fullSchema,
+      partitionSchema = StructType(Seq.empty),
+      requiredSchema = requiredColsSchema,
+      filters = filters,
+      options = optParams,
+      hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf()
+    )
 
     val rdd = new HoodieBootstrapRDD(_sqlContext.sparkSession, dataReadFunction, skeletonReadFunction,
       regularReadFunction, requiredDataSchema, requiredSkeletonSchema, requiredColumns, tableState)
@@ -157,9 +156,9 @@ class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
 
   def buildFileIndex(): HoodieBootstrapFileIndex = {
     logInfo("Building file index..")
-    val fileStatuses  = if (globPaths.isDefined) {
+    val fileStatuses  = if (globPaths.nonEmpty) {
       // Load files from the global paths if it has defined to be compatible with the original mode
-      val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(_sqlContext.sparkSession, globPaths.get)
+      val inMemoryFileIndex = HoodieInMemoryFileIndex.create(_sqlContext.sparkSession, globPaths)
       inMemoryFileIndex.allFiles()
     } else { // Load files by the HoodieFileIndex.
         HoodieFileIndex(sqlContext.sparkSession, metaClient, Some(schema), optParams,

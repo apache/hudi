@@ -26,6 +26,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.types.{StructField, StructType}
 
 import scala.util.control.NonFatal
@@ -40,16 +41,26 @@ case class AlterHoodieTableChangeColumnCommand(
   extends HoodieLeafRunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
+    val resolver = sparkSession.sessionState.conf.resolver
     val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableIdentifier)
 
-    val resolver = sparkSession.sessionState.conf.resolver
-    if (!resolver(columnName, newColumn.name)) {
-      throw new AnalysisException(s"Can not support change column name for hudi table currently.")
+    // Find the origin column from dataSchema by column name.
+    val originColumn = findColumnByName(hoodieCatalogTable.dataSchema, columnName, resolver).getOrElse(
+      throw new AnalysisException(s"Can't find column `$columnName` given table data columns " +
+        s"${hoodieCatalogTable.dataSchema.fieldNames.mkString("[`", "`, `", "`]")}")
+    )
+    // Throw an AnalysisException if the column name/dataType is changed.
+    if (!columnEqual(originColumn, newColumn, resolver)) {
+      throw new AnalysisException(
+        "ALTER TABLE CHANGE COLUMN is not supported for changing column " +
+          s"'${originColumn.name}' with type '${originColumn.dataType}' to " +
+          s"'${newColumn.name}' with type '${newColumn.dataType}'")
     }
+
     // Get the new schema
     val newTableSchema = StructType(
       hoodieCatalogTable.tableSchema.fields.map { field =>
-      if (resolver(field.name, columnName)) {
+      if (field.name == originColumn.name) {
         newColumn
       } else {
         field
@@ -57,7 +68,7 @@ case class AlterHoodieTableChangeColumnCommand(
     })
     val newDataSchema = StructType(
       hoodieCatalogTable.dataSchema.fields.map { field =>
-        if (resolver(field.name, columnName)) {
+        if (field.name == columnName) {
           newColumn
         } else {
           field

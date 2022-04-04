@@ -23,6 +23,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
+
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.Option;
@@ -41,7 +43,6 @@ import org.apache.parquet.schema.MessageType;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.stream.Collectors;
 
 /**
@@ -63,8 +64,8 @@ public class DLASyncTool extends AbstractSyncTool {
   private final String snapshotTableName;
   private final Option<String> roTableTableName;
 
-  public DLASyncTool(Properties properties, FileSystem fs) {
-    super(properties, fs);
+  public DLASyncTool(TypedProperties properties, Configuration conf, FileSystem fs) {
+    super(properties, conf, fs);
     this.hoodieDLAClient = new HoodieDLAClient(Utils.propertiesToConfig(properties), fs);
     this.cfg = Utils.propertiesToConfig(properties);
     switch (hoodieDLAClient.getTableType()) {
@@ -113,7 +114,7 @@ public class DLASyncTool extends AbstractSyncTool {
     LOG.info("Trying to sync hoodie table " + tableName + " with base path " + hoodieDLAClient.getBasePath()
         + " of type " + hoodieDLAClient.getTableType());
     // Check if the necessary table exists
-    boolean tableExists = hoodieDLAClient.doesTableExist(tableName);
+    boolean tableExists = hoodieDLAClient.tableExists(tableName);
     // Get the parquet schema for this table looking at the latest commit
     MessageType schema = hoodieDLAClient.getDataSchema();
     // Sync schema if needed
@@ -205,7 +206,8 @@ public class DLASyncTool extends AbstractSyncTool {
       cmd.usage();
       System.exit(1);
     }
-    FileSystem fs = FSUtils.getFs(cfg.basePath, new Configuration());
-    new DLASyncTool(Utils.configToProperties(cfg), fs).syncHoodieTable();
+    Configuration hadoopConf = new Configuration();
+    FileSystem fs = FSUtils.getFs(cfg.basePath, hadoopConf);
+    new DLASyncTool(Utils.configToProperties(cfg), hadoopConf, fs).syncHoodieTable();
   }
 }

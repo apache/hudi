@@ -24,6 +24,8 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.OrderedProperties;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -31,11 +33,14 @@ import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -46,13 +51,16 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.Arrays;
-import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * Configurations on the Hoodie Table like type of ingestion, storage formats, hive table name etc Configurations are loaded from hoodie.properties, these properties are usually set during
@@ -75,9 +83,17 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
   public static final String HOODIE_PROPERTIES_FILE_BACKUP = "hoodie.properties.backup";
+  public static final String HOODIE_WRITE_TABLE_NAME_KEY = "hoodie.datasource.write.table.name";
+  public static final String HOODIE_TABLE_NAME_KEY = "hoodie.table.name";
+
+  public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
+      .key("hoodie.database.name")
+      .noDefaultValue()
+      .withDocumentation("Database name that will be used for incremental query.If different databases have the same table name during incremental query, "
+          + "we can set it to limit the table name under a specific database");
 
   public static final ConfigProperty<String> NAME = ConfigProperty
-      .key("hoodie.table.name")
+      .key(HOODIE_TABLE_NAME_KEY)
       .noDefaultValue()
       .withDocumentation("Table name that will be used for registering with Hive. Needs to be same across runs.");
 
@@ -158,9 +174,9 @@ public class HoodieTableConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("Base path of the dataset that needs to be bootstrapped as a Hudi table");
 
-  public static final ConfigProperty<String> POPULATE_META_FIELDS = ConfigProperty
+  public static final ConfigProperty<Boolean> POPULATE_META_FIELDS = ConfigProperty
       .key("hoodie.populate.meta.fields")
-      .defaultValue("true")
+      .defaultValue(true)
       .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated "
           + "and incremental queries will not be functional. This is only meant to be used for append only/immutable data for batch processing");
 
@@ -177,7 +193,37 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
 
+  public static final List<String> PERSISTED_CONFIG_LIST = Arrays.asList(
+      Config.DATE_TIME_PARSER_PROP,
+      Config.INPUT_TIME_UNIT, Config.TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX_PROP,
+      Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, Config.TIMESTAMP_INPUT_TIMEZONE_FORMAT_PROP,
+      Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, Config.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT_PROP,
+      Config.TIMESTAMP_TIMEZONE_FORMAT_PROP, Config.DATE_TIME_PARSER_PROP
+  );
+
   public static final String NO_OP_BOOTSTRAP_INDEX_CLASS = NoOpBootstrapIndex.class.getName();
+
+  public static final ConfigProperty<String> TABLE_CHECKSUM = ConfigProperty
+      .key("hoodie.table.checksum")
+      .noDefaultValue()
+      .sinceVersion("0.11.0")
+      .withDocumentation("Table checksum is used to guard against partial writes in HDFS. It is added as the last entry in hoodie.properties and then used to validate while reading table config.");
+
+  public static final ConfigProperty<String> TABLE_METADATA_PARTITIONS_INFLIGHT = ConfigProperty
+      .key("hoodie.table.metadata.partitions.inflight")
+      .noDefaultValue()
+      .sinceVersion("0.11.0")
+      .withDocumentation("Comma-separated list of metadata partitions whose building is in progress. "
+          + "These partitions are not yet ready for use by the readers.");
+
+  public static final ConfigProperty<String> TABLE_METADATA_PARTITIONS = ConfigProperty
+      .key("hoodie.table.metadata.partitions")
+      .noDefaultValue()
+      .sinceVersion("0.11.0")
+      .withDocumentation("Comma-separated list of metadata partitions that have been completely built and in-sync with data table. "
+          + "These partitions are ready for use by the readers");
+
+  private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
   public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName) {
     super();
@@ -190,7 +236,7 @@ public class HoodieTableConfig extends HoodieConfig {
         setValue(PAYLOAD_CLASS_NAME, payloadClassName);
         // FIXME(vc): wonder if this can be removed. Need to look into history.
         try (FSDataOutputStream outputStream = fs.create(propertyPath)) {
-          props.store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
+          storeProperties(props, outputStream);
         }
       }
     } catch (IOException e) {
@@ -198,6 +244,38 @@ public class HoodieTableConfig extends HoodieConfig {
     }
     ValidationUtils.checkArgument(contains(TYPE) && contains(NAME),
         "hoodie.properties file seems invalid. Please check for left over `.updated` files if any, manually copy it to hoodie.properties and retry");
+  }
+
+  private static Properties getOrderedPropertiesWithTableChecksum(Properties props) {
+    Properties orderedProps = new OrderedProperties(props);
+    orderedProps.put(TABLE_CHECKSUM.key(), String.valueOf(generateChecksum(props)));
+    return orderedProps;
+  }
+
+  /**
+   * Write the properties to the given output stream and return the table checksum.
+   *
+   * @param props        - properties to be written
+   * @param outputStream - output stream to which properties will be written
+   * @return return the table checksum
+   * @throws IOException
+   */
+  private static String storeProperties(Properties props, FSDataOutputStream outputStream) throws IOException {
+    String checksum;
+    if (props.containsKey(TABLE_CHECKSUM.key()) && validateChecksum(props)) {
+      checksum = props.getProperty(TABLE_CHECKSUM.key());
+      props.store(outputStream, "Updated at " + Instant.now());
+    } else {
+      Properties propsWithChecksum = getOrderedPropertiesWithTableChecksum(props);
+      propsWithChecksum.store(outputStream, "Properties saved on " + Instant.now());
+      checksum = propsWithChecksum.getProperty(TABLE_CHECKSUM.key());
+      props.setProperty(TABLE_CHECKSUM.key(), checksum);
+    }
+    return checksum;
+  }
+
+  private boolean isValidChecksum() {
+    return contains(TABLE_CHECKSUM) && validateChecksum(props);
   }
 
   /**
@@ -209,13 +287,20 @@ public class HoodieTableConfig extends HoodieConfig {
 
   private void fetchConfigs(FileSystem fs, String metaPath) throws IOException {
     Path cfgPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
+    Path backupCfgPath = new Path(metaPath, HOODIE_PROPERTIES_FILE_BACKUP);
     try (FSDataInputStream is = fs.open(cfgPath)) {
       props.load(is);
+      // validate checksum for latest table version
+      if (getTableVersion().versionCode() >= HoodieTableVersion.FOUR.versionCode() && !isValidChecksum()) {
+        LOG.warn("Checksum validation failed. Falling back to backed up configs.");
+        try (FSDataInputStream fsDataInputStream = fs.open(backupCfgPath)) {
+          props.load(fsDataInputStream);
+        }
+      }
     } catch (IOException ioe) {
       if (!fs.exists(cfgPath)) {
         LOG.warn("Run `table recover-configs` if config update/delete failed midway. Falling back to backed up configs.");
         // try the backup. this way no query ever fails if update fails midway.
-        Path backupCfgPath = new Path(metaPath, HOODIE_PROPERTIES_FILE_BACKUP);
         try (FSDataInputStream is = fs.open(backupCfgPath)) {
           props.load(is);
         }
@@ -266,15 +351,25 @@ public class HoodieTableConfig extends HoodieConfig {
       /// 2. delete the properties file, reads will go to the backup, until we are done.
       fs.delete(cfgPath, false);
       // 3. read current props, upsert and save back.
+      String checksum;
       try (FSDataInputStream in = fs.open(backupCfgPath);
            FSDataOutputStream out = fs.create(cfgPath, true)) {
-        Properties props = new Properties();
+        Properties props = new TypedProperties();
         props.load(in);
         modifyFn.accept(props, modifyProps);
-        props.store(out, "Updated at " + System.currentTimeMillis());
+        checksum = storeProperties(props, out);
       }
       // 4. verify and remove backup.
-      // FIXME(vc): generate a hash for verification.
+      try (FSDataInputStream in = fs.open(cfgPath)) {
+        Properties props = new TypedProperties();
+        props.load(in);
+        if (!props.containsKey(TABLE_CHECKSUM.key()) || !props.getProperty(TABLE_CHECKSUM.key()).equals(checksum)) {
+          // delete the properties file and throw exception indicating update failure
+          // subsequent writes will recover and update, reads will go to the backup until then
+          fs.delete(cfgPath, false);
+          throw new HoodieIOException("Checksum property missing or does not match.");
+        }
+      }
       fs.delete(backupCfgPath, false);
     } catch (IOException e) {
       throw new HoodieIOException("Error updating table configs.", e);
@@ -325,8 +420,21 @@ public class HoodieTableConfig extends HoodieConfig {
       if (hoodieConfig.contains(TIMELINE_TIMEZONE)) {
         HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getString(TIMELINE_TIMEZONE)));
       }
-      hoodieConfig.getProps().store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
+      storeProperties(hoodieConfig.getProps(), outputStream);
     }
+  }
+
+  public static long generateChecksum(Properties props) {
+    if (!props.containsKey(NAME.key())) {
+      throw new IllegalArgumentException(NAME.key() + " property needs to be specified");
+    }
+    String table = props.getProperty(NAME.key());
+    String database = props.getProperty(DATABASE_NAME.key(), "");
+    return BinaryUtil.generateChecksum(String.format(TABLE_CHECKSUM_FORMAT, database, table).getBytes(UTF_8));
+  }
+
+  public static boolean validateChecksum(Properties props) {
+    return Long.parseLong(props.getProperty(TABLE_CHECKSUM.key())) == generateChecksum(props);
   }
 
   /**
@@ -370,11 +478,9 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public Option<String[]> getRecordKeyFields() {
-    if (contains(RECORDKEY_FIELDS)) {
-      return Option.of(Arrays.stream(getString(RECORDKEY_FIELDS).split(","))
-          .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[] {}));
-    }
-    return Option.empty();
+    String keyFieldsValue = getStringOrDefault(RECORDKEY_FIELDS, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    return Option.of(Arrays.stream(keyFieldsValue.split(","))
+        .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[] {}));
   }
 
   public Option<String[]> getPartitionFields() {
@@ -420,6 +526,13 @@ public class HoodieTableConfig extends HoodieConfig {
     } else {
       return Option.empty();
     }
+  }
+
+  /**
+   * Read the database name.
+   */
+  public String getDatabaseName() {
+    return getString(DATABASE_NAME);
   }
 
   /**
@@ -480,6 +593,21 @@ public class HoodieTableConfig extends HoodieConfig {
     return getString(URL_ENCODE_PARTITIONING);
   }
 
+  /**
+   * Read the table checksum.
+   */
+  private Long getTableChecksum() {
+    return getLong(TABLE_CHECKSUM);
+  }
+
+  public String getMetadataPartitionsInflight() {
+    return getStringOrDefault(TABLE_METADATA_PARTITIONS_INFLIGHT, StringUtils.EMPTY_STRING);
+  }
+
+  public String getMetadataPartitions() {
+    return getStringOrDefault(TABLE_METADATA_PARTITIONS, StringUtils.EMPTY_STRING);
+  }
+  
   public Map<String, String> propsMap() {
     return props.entrySet().stream()
         .collect(Collectors.toMap(e -> String.valueOf(e.getKey()), e -> String.valueOf(e.getValue())));

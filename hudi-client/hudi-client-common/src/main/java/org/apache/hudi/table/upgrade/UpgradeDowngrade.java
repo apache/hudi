@@ -42,7 +42,7 @@ public class UpgradeDowngrade {
   private static final Logger LOG = LogManager.getLogger(UpgradeDowngrade.class);
   public static final String HOODIE_UPDATED_PROPERTY_FILE = "hoodie.properties.updated";
 
-  private final BaseUpgradeDowngradeHelper upgradeDowngradeHelper;
+  private final SupportsUpgradeDowngrade upgradeDowngradeHelper;
   private HoodieTableMetaClient metaClient;
   protected HoodieWriteConfig config;
   protected HoodieEngineContext context;
@@ -52,7 +52,7 @@ public class UpgradeDowngrade {
 
   public UpgradeDowngrade(
       HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieEngineContext context,
-      BaseUpgradeDowngradeHelper upgradeDowngradeHelper) {
+      SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     this.metaClient = metaClient;
     this.config = config;
     this.context = context;
@@ -143,6 +143,8 @@ public class UpgradeDowngrade {
       return new OneToTwoUpgradeHandler().upgrade(config, context, instantTime, upgradeDowngradeHelper);
     } else if (fromVersion == HoodieTableVersion.TWO && toVersion == HoodieTableVersion.THREE) {
       return new TwoToThreeUpgradeHandler().upgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else if (fromVersion == HoodieTableVersion.THREE && toVersion == HoodieTableVersion.FOUR) {
+      return new ThreeToFourUpgradeHandler().upgrade(config, context, instantTime, upgradeDowngradeHelper);
     } else {
       throw new HoodieUpgradeDowngradeException(fromVersion.versionCode(), toVersion.versionCode(), true);
     }
@@ -155,6 +157,8 @@ public class UpgradeDowngrade {
       return new TwoToOneDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
     } else if (fromVersion == HoodieTableVersion.THREE && toVersion == HoodieTableVersion.TWO) {
       return new ThreeToTwoDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else if (fromVersion == HoodieTableVersion.FOUR && toVersion == HoodieTableVersion.THREE) {
+      return new FourToThreeDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
     } else {
       throw new HoodieUpgradeDowngradeException(fromVersion.versionCode(), toVersion.versionCode(), false);
     }

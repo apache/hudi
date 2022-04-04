@@ -329,13 +329,6 @@
       <scope>test</scope>
     </dependency>
 
-    <!-- Spark (Packages) -->
-    <dependency>
-      <groupId>org.apache.spark</groupId>
-      <artifactId>spark-avro_${scala.binary.version}</artifactId>
-      <scope>provided</scope>
-    </dependency>
-
     <!-- Hadoop -->
     <dependency>
       <groupId>org.apache.hadoop</groupId>
@@ -464,6 +457,12 @@
       <version>${project.version}</version>
       <classifier>tests</classifier>
       <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-java-client</artifactId>
+      <version>${project.version}</version>
       <scope>test</scope>
     </dependency>
 

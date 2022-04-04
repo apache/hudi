@@ -19,7 +19,6 @@ package org.apache.hudi.utilities;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -29,8 +28,6 @@ import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -38,8 +35,6 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
@@ -53,7 +48,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 
 import scala.Tuple2;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -62,9 +56,10 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * A tool with spark-submit to drop Hudi table partitions
+ * A tool with spark-submit to drop Hudi table partitions.
+ *
  * <p>
- * You can dry run this tool with the following command:
+ * You can dry run this tool with the following command to look and print for the table partitions and corresponding data files which will be deleted.
  * ```
  * spark-submit \
  * --class org.apache.hudi.utilities.HoodieDropPartitionsTool \
@@ -80,9 +75,10 @@ import java.util.stream.Collectors;
  * ```
  *
  * <p>
- * You can specify the running mode of the tool through `--mode`.
- * There are four modes of the {@link HoodieDropPartitionsTool}:
- * - DELETE_PARTITIONS_LAZY ("delete_partitions_lazy"): This tool will mask/tombstone these partitions and corresponding data files and let cleaner delete these files later.
+ *
+ * You can delete the table partitions with '--mode delete'
+ *
+ * - DELETE ("delete"): This tool will mask/tombstone these partitions and corresponding data files and let cleaner delete these files later.
  * - Also you can set --sync-hive-meta to sync current drop partition into hive
  * <p>
  * Example command:
@@ -96,44 +92,7 @@ import java.util.stream.Collectors;
  * $HUDI_DIR/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
  * --base-path basePath \
  * --table-name tableName \
- * --mode delete_partitions_lazy \
- * --partitions partition1,partition2
- * ```
- *
- * <p>
- * - DELETE_PARTITIONS_EAGER ("delete_partitions_eager"): This tool will mask/tombstone these partitions and corresponding data files. Also request a clean action eagerly.
- * - Also you can set --sync-hive-meta to sync current drop partition into hive
- * <p>
- * Example command:
- * ```
- * spark-submit \
- * --class org.apache.hudi.utilities.HoodieDropPartitionsTool \
- * --packages org.apache.spark:spark-avro_2.11:2.4.4 \
- * --master local[*]
- * --driver-memory 1g \
- * --executor-memory 1g \
- * $HUDI_DIR/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
- * --base-path basePath \
- * --table-name tableName \
- * --mode delete_partitions_eager \
- * --partitions partition1,partition2
- * ```
- *
- * <p>
- * - DRY_RUN ("dry_run"): look and print for the table partitions and corresponding data files which will be deleted.
- * <p>
- * Example command:
- * ```
- * spark-submit \
- * --class org.apache.hudi.utilities.HoodieDropPartitionsTool \
- * --packages org.apache.spark:spark-avro_2.11:2.4.4 \
- * --master local[*]
- * --driver-memory 1g \
- * --executor-memory 1g \
- * $HUDI_DIR/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
- * --base-path basePath \
- * --table-name tableName \
- * --mode dry_run \
+ * --mode delete \
  * --partitions partition1,partition2
  * ```
  *
@@ -178,9 +137,7 @@ public class HoodieDropPartitionsTool implements Serializable {
 
   public enum Mode {
     // Mask/Tombstone these partitions and corresponding data files and let cleaner delete these files later.
-    DELETE_PARTITIONS_LAZY,
-    // Mask/Tombstone these partitions and corresponding data files. Also request a clean action eagerly.
-    DELETE_PARTITIONS_EAGER,
+    DELETE,
     // Dry run by looking for the table partitions and corresponding data files which will be deleted.
     DRY_RUN
   }
@@ -189,8 +146,7 @@ public class HoodieDropPartitionsTool implements Serializable {
     @Parameter(names = {"--base-path", "-sp"}, description = "Base path for the table", required = true)
     public String basePath = null;
     @Parameter(names = {"--mode", "-m"}, description = "Set job mode: "
-        + "Set \"delete_partitions_lazy\" means mask/tombstone these partitions and corresponding data files table partitions and let cleaner delete these files later;"
-        + "Set \"delete_partitions_eager\" means mask/Tombstone these partitions and corresponding data files. Also request a clean action eagerly;"
+        + "Set \"delete\" means mask/tombstone these partitions and corresponding data files table partitions and let cleaner delete these files later;"
         + "Set \"dry_run\" means only looking for the table partitions will be deleted and corresponding data files.", required = true)
     public String runningMode = null;
     @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)
@@ -201,8 +157,6 @@ public class HoodieDropPartitionsTool implements Serializable {
     public int parallelism = 1500;
     @Parameter(names = {"--instant-time", "-it"}, description = "instant time for delete table partitions operation.", required = false)
     public String instantTime = null;
-    @Parameter(names = {"--clean-up-empty-directory"}, description = "Delete all the empty data directory.", required = false)
-    public boolean cleanUpEmptyDirectory = false;
     @Parameter(names = {"--sync-hive-meta", "-sync"}, description = "Sync information to HMS.", required = false)
     public boolean syncToHive = false;
     @Parameter(names = {"--hive-database", "-db"}, description = "Database to sync to.", required = false)
@@ -244,14 +198,13 @@ public class HoodieDropPartitionsTool implements Serializable {
   }
 
   private String getConfigDetails() {
-    String sb = "HoodieDropPartitionsToolConfig {\n"
+    return "HoodieDropPartitionsToolConfig {\n"
         + "   --base-path " + cfg.basePath + ", \n"
         + "   --mode " + cfg.runningMode + ", \n"
         + "   --table-name " + cfg.tableName + ", \n"
         + "   --partitions " + cfg.partitions + ", \n"
         + "   --parallelism " + cfg.parallelism + ", \n"
         + "   --instantTime " + cfg.instantTime + ", \n"
-        + "   --clean-up-empty-directory " + cfg.cleanUpEmptyDirectory + ", \n"
         + "   --sync-hive-meta " + cfg.syncToHive + ", \n"
         + "   --hive-database " + cfg.hiveDataBase + ", \n"
         + "   --hive-table-name " + cfg.hiveTableName + ", \n"
@@ -268,7 +221,6 @@ public class HoodieDropPartitionsTool implements Serializable {
         + "   --props " + cfg.propsFilePath + ", \n"
         + "   --hoodie-conf " + cfg.configs
         + "\n}";
-    return sb;
   }
 
   public static void main(String[] args) {
@@ -300,13 +252,10 @@ public class HoodieDropPartitionsTool implements Serializable {
 
       Mode mode = Mode.valueOf(cfg.runningMode.toUpperCase());
       switch (mode) {
-        case DELETE_PARTITIONS_LAZY:
-          LOG.info(" ****** The Hoodie Drop Partitions Tool is in delete_partition_lazy mode ******");
-          doDeleteTablePartitionsLazy();
-          break;
-        case DELETE_PARTITIONS_EAGER:
-          LOG.info(" ****** The Hoodie Drop Partitions Tool is in delete_partition_eager mode ******");
-          doDeleteTablePartitionsEager();
+        case DELETE:
+          LOG.info(" ****** The Hoodie Drop Partitions Tool is in delete mode ******");
+          doDeleteTablePartitions();
+          syncToHiveIfNecessary();
           break;
         case DRY_RUN:
           LOG.info(" ****** The Hoodie Drop Partitions Tool is in dry-run mode ******");
@@ -318,17 +267,6 @@ public class HoodieDropPartitionsTool implements Serializable {
     } catch (Exception e) {
       throw new HoodieException("Unable to delete table partitions in " + cfg.basePath, e);
     }
-  }
-
-  public void doDeleteTablePartitionsLazy() {
-    doDeleteTablePartitions(false);
-    syncToHiveIfNecessary();
-  }
-
-  public void doDeleteTablePartitionsEager() {
-    doDeleteTablePartitions(true);
-    deleteEmptyDirIfNecessary();
-    syncToHiveIfNecessary();
   }
 
   public void dryRun() {
@@ -349,74 +287,13 @@ public class HoodieDropPartitionsTool implements Serializable {
     }
   }
 
-  private void doDeleteTablePartitions(Boolean runInlineCleaner) {
-    if (runInlineCleaner) {
-      this.props.put(HoodieCompactionConfig.AUTO_CLEAN.key(), "true");
-    } else {
-      this.props.put(HoodieCompactionConfig.AUTO_CLEAN.key(), "false");
-    }
-    this.props.put(DataSourceWriteOptions.INLINE_CLUSTERING_ENABLE().key(), "false");
-    this.props.put(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "false");
-    this.props.put(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), "false");
+  private void doDeleteTablePartitions() {
 
     try (SparkRDDWriteClient<HoodieRecordPayload> client =  UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.empty(), props)) {
       List<String> partitionsToDelete = Arrays.asList(cfg.partitions.split(","));
       client.startCommitWithTime(cfg.instantTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
       HoodieWriteResult hoodieWriteResult = client.deletePartitions(partitionsToDelete, cfg.instantTime);
       client.commit(cfg.instantTime, hoodieWriteResult.getWriteStatuses(), Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION, hoodieWriteResult.getPartitionToReplaceFileIds());
-    }
-  }
-
-  private void deleteEmptyDirIfNecessary() {
-    if (cfg.cleanUpEmptyDirectory) {
-      LOG.info("Starting to clean any empty dictionary.");
-      String[] parts = cfg.partitions.split(",");
-      List<String> roots = Arrays.stream(parts).map(partition -> partition.split("/")[0]).collect(Collectors.toList());
-      roots.forEach(rootDir -> {
-        try {
-          recursiveDeleteDir(new Path(metaClient.getBasePath(), rootDir));
-        } catch (IOException e) {
-          // ignore exception here
-          LOG.warn("Failed to delete empty dir.", e);
-        }
-      });
-    }
-  }
-
-  /**
-   * Delete empty dir or dir only contain .hoodie_partition_metadata
-   * @param path
-   * @throws IOException
-   */
-  private void recursiveDeleteDir(Path path) throws IOException {
-    HoodieWrapperFileSystem fs = metaClient.getFs();
-    if (fs.isDirectory(path)) {
-      FileStatus[] fileStatuses = fs.listStatus(path);
-      if (fileStatuses.length >= 1) {
-        Path flag = new Path(path, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE);
-        // directory only contain .hoodie_partition_metadata
-        if (fs.exists(flag) && fileStatuses.length == 1) {
-          deletePath(flag, metaClient);
-          deletePath(path, metaClient);
-        } else {
-          for (FileStatus fileStatus : fileStatuses) {
-            recursiveDeleteDir(fileStatus.getPath());
-          }
-        }
-      } else {
-        deletePath(path, metaClient);
-      }
-    }
-  }
-
-  private static boolean deletePath(Path path, HoodieTableMetaClient metaClient) {
-    try {
-      LOG.info("Deleting " + path);
-      metaClient.getFs().delete(path);
-      return true;
-    } catch (IOException e) {
-      LOG.warn("unable to delete file groups that are replaced", e);
-      return false;
     }
   }
 

@@ -23,6 +23,7 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.getTableLocation
 import org.apache.spark.sql.types.{IntegerType, StringType}
 import org.apache.spark.sql.{Row, SparkSession}
 
+@Deprecated
 case class CompactionShowHoodieTableCommand(table: CatalogTable, limit: Int)
   extends HoodieLeafRunnableCommand {
 

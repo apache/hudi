@@ -152,7 +152,7 @@ public class HoodieIndexConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> SIMPLE_INDEX_PARALLELISM = ConfigProperty
       .key("hoodie.simple.index.parallelism")
-      .defaultValue("50")
+      .defaultValue("100")
       .withDocumentation("Only applies if index type is SIMPLE. "
           + "This is the amount of parallelism for index lookup, which involves a Spark Shuffle");
 
@@ -568,7 +568,7 @@ public class HoodieIndexConfig extends HoodieConfig {
     private String getDefaultIndexType(EngineType engineType) {
       switch (engineType) {
         case SPARK:
-          return HoodieIndex.IndexType.BLOOM.name();
+          return HoodieIndex.IndexType.SIMPLE.name();
         case FLINK:
         case JAVA:
           return HoodieIndex.IndexType.INMEMORY.name();

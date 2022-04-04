@@ -81,7 +81,7 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
     });
 
     transactionManager.endTransaction();
-    assertThrows(HoodieLockException.class, () -> {
+    assertDoesNotThrow(() -> {
       transactionManager.endTransaction();
     });
   }

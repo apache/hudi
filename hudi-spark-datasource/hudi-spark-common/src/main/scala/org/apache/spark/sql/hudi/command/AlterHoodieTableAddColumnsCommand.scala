@@ -57,7 +57,8 @@ case class AlterHoodieTableAddColumnsCommand(
           s" table columns is: [${hoodieCatalogTable.tableSchemaWithoutMetaFields.fieldNames.mkString(",")}]")
       }
       // Get the new schema
-      val newSqlSchema = StructType(tableSchema.fields ++ colsToAdd)
+      val rearrangedSchema = hoodieCatalogTable.dataSchema ++ colsToAdd ++ hoodieCatalogTable.partitionSchema
+      val newSqlSchema = StructType(rearrangedSchema)
       val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableId.table)
       val newSchema = AvroConversionUtils.convertStructTypeToAvroSchema(newSqlSchema, structName, nameSpace)
 
@@ -109,7 +110,7 @@ object AlterHoodieTableAddColumnsCommand {
       HoodieWriterUtils.parametersWithWriteDefaults(hoodieCatalogTable.catalogProperties).asJava
     )
 
-    val commitActionType = CommitUtils.getCommitActionType(WriteOperationType.INSERT, hoodieCatalogTable.tableType)
+    val commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, hoodieCatalogTable.tableType)
     val instantTime = HoodieActiveTimeline.createNewInstantTime
     client.startCommitWithTime(instantTime, commitActionType)
 
@@ -117,7 +118,7 @@ object AlterHoodieTableAddColumnsCommand {
     val timeLine = hoodieTable.getActiveTimeline
     val requested = new HoodieInstant(State.REQUESTED, commitActionType, instantTime)
     val metadata = new HoodieCommitMetadata
-    metadata.setOperationType(WriteOperationType.INSERT)
+    metadata.setOperationType(WriteOperationType.ALTER_SCHEMA)
     timeLine.transitionRequestedToInflight(requested, Option.of(metadata.toJsonString.getBytes(StandardCharsets.UTF_8)))
 
     client.commit(instantTime, jsc.emptyRDD)

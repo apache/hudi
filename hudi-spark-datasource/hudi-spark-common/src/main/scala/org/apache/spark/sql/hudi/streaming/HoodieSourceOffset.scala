@@ -26,7 +26,7 @@ import org.apache.spark.sql.execution.streaming.{Offset, SerializedOffset}
 
 case class HoodieSourceOffset(commitTime: String) extends Offset {
 
-  override def json(): String = {
+  override val json: String = {
     HoodieSourceOffset.toJson(this)
   }
 
@@ -45,17 +45,21 @@ case class HoodieSourceOffset(commitTime: String) extends Offset {
 
 
 object HoodieSourceOffset {
-  val mapper = new ObjectMapper with ScalaObjectMapper
-  mapper.setSerializationInclusion(Include.NON_ABSENT)
-  mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-  mapper.registerModule(DefaultScalaModule)
+
+  lazy val mapper: ObjectMapper = {
+    val _mapper = new ObjectMapper
+    _mapper.setSerializationInclusion(Include.NON_ABSENT)
+    _mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+    _mapper.registerModule(DefaultScalaModule)
+    _mapper
+  }
 
   def toJson(offset: HoodieSourceOffset): String = {
     mapper.writeValueAsString(offset)
   }
 
   def fromJson(json: String): HoodieSourceOffset = {
-    mapper.readValue[HoodieSourceOffset](json)
+    mapper.readValue(json, classOf[HoodieSourceOffset])
   }
 
   def apply(offset: Offset): HoodieSourceOffset = {

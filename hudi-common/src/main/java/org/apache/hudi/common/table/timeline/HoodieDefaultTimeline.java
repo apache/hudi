@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -77,7 +75,8 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
    *
    * @deprecated
    */
-  public HoodieDefaultTimeline() {}
+  public HoodieDefaultTimeline() {
+  }
 
   @Override
   public HoodieTimeline filterInflights() {
@@ -103,12 +102,6 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
-  public HoodieTimeline filterCompletedInstantsWithCommitMetadata() {
-    return new HoodieDefaultTimeline(instants.stream().filter(HoodieInstant::isCompleted)
-            .filter(i -> !isDeletePartitionType(i)), details);
-  }
-
-  @Override
   public HoodieTimeline filterCompletedAndCompactionInstants() {
     return new HoodieDefaultTimeline(instants.stream().filter(s -> s.isCompleted()
             || s.getAction().equals(HoodieTimeline.COMPACTION_ACTION)), details);
@@ -118,6 +111,16 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   public HoodieDefaultTimeline getWriteTimeline() {
     Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
     return new HoodieDefaultTimeline(instants.stream().filter(s -> validActions.contains(s.getAction())), details);
+  }
+
+  @Override
+  public HoodieTimeline getContiguousCompletedWriteTimeline() {
+    Option<HoodieInstant> earliestPending = getWriteTimeline().filterInflightsAndRequested().firstInstant();
+    if (earliestPending.isPresent()) {
+      return getWriteTimeline().filterCompletedInstants()
+          .filter(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), LESSER_THAN, earliestPending.get().getTimestamp()));
+    }
+    return getWriteTimeline().filterCompletedInstants();
   }
 
   @Override
@@ -189,6 +192,16 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
     return new HoodieDefaultTimeline(instants.stream().filter(filter), details);
   }
 
+  @Override
+  public HoodieTimeline filterPendingIndexTimeline() {
+    return new HoodieDefaultTimeline(instants.stream().filter(s -> s.getAction().equals(INDEXING_ACTION) && !s.isCompleted()), details);
+  }
+
+  @Override
+  public HoodieTimeline filterCompletedIndexTimeline() {
+    return new HoodieDefaultTimeline(instants.stream().filter(s -> s.getAction().equals(INDEXING_ACTION) && s.isCompleted()), details);
+  }
+
   /**
    * Get all instants (commits, delta commits) that produce new data, in the active timeline.
    */
@@ -197,12 +210,12 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   /**
-   * Get all instants (commits, delta commits, compaction, clean, savepoint, rollback) that result in actions,
+   * Get all instants (commits, delta commits, compaction, clean, savepoint, rollback, replace commits, index) that result in actions,
    * in the active timeline.
    */
   public HoodieTimeline getAllCommitsTimeline() {
     return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION,
-            CLEAN_ACTION, COMPACTION_ACTION, SAVEPOINT_ACTION, ROLLBACK_ACTION, REPLACE_COMMIT_ACTION));
+            CLEAN_ACTION, COMPACTION_ACTION, SAVEPOINT_ACTION, ROLLBACK_ACTION, REPLACE_COMMIT_ACTION, INDEXING_ACTION));
   }
 
   /**
@@ -357,21 +370,6 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     return details.apply(instant);
-  }
-
-  @Override
-  public boolean isDeletePartitionType(HoodieInstant instant) {
-    Option<WriteOperationType> operationType;
-
-    try {
-      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-              .fromBytes(getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-      operationType = Option.of(commitMetadata.getOperationType());
-    } catch (Exception e) {
-      operationType = Option.empty();
-    }
-
-    return operationType.isPresent() && WriteOperationType.DELETE_PARTITION.equals(operationType.get());
   }
 
   @Override

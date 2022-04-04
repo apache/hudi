@@ -80,7 +80,7 @@ public class TestKeyRangeLookupTree {
    * Tests for many duplicate entries in the tree.
    */
   @Test
-  public void testFileGroupLookUpManyDulicateEntries() {
+  public void testFileGroupLookUpManyDuplicateEntries() {
     KeyRangeNode toInsert = new KeyRangeNode(Long.toString(1200), Long.toString(2000), UUID.randomUUID().toString());
     updateExpectedMatchesToTest(toInsert);
     keyRangeLookupTree.insert(toInsert);

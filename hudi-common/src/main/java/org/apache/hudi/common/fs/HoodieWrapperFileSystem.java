@@ -136,7 +136,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
     }
   }
 
-  private static Path convertPathWithScheme(Path oldPath, String newScheme) {
+  public static Path convertPathWithScheme(Path oldPath, String newScheme) {
     URI oldURI = oldPath.toUri();
     URI newURI;
     try {

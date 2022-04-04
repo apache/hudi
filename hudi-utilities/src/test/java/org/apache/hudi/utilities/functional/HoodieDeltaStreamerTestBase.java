@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.functional;
 
-import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -28,6 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
@@ -61,6 +61,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   static final String PROPS_FILENAME_TEST_PARQUET = "test-parquet-dfs-source.properties";
   static final String PROPS_FILENAME_TEST_ORC = "test-orc-dfs-source.properties";
   static final String PROPS_FILENAME_TEST_JSON_KAFKA = "test-json-kafka-dfs-source.properties";
+  static final String PROPS_FILENAME_TEST_SQL_SOURCE = "test-sql-source-source.properties";
   static final String PROPS_FILENAME_TEST_MULTI_WRITER = "test-multi-writer.properties";
   static final String FIRST_PARQUET_FILE_NAME = "1.parquet";
   static final String FIRST_ORC_FILE_NAME = "1.orc";
@@ -71,6 +72,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   static final int ORC_NUM_RECORDS = 5;
   static final int CSV_NUM_RECORDS = 3;
   static final int JSON_KAFKA_NUM_RECORDS = 5;
+  static final int SQL_SOURCE_NUM_RECORDS = 1000;
   String kafkaCheckpointType = "string";
   // Required fields
   static final String TGT_BASE_PATH_PARAM = "--target-base-path";
@@ -127,6 +129,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/uber_config.properties", dfs, dfsBasePath + "/config/uber_config.properties");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/short_trip_uber_config.properties", dfs, dfsBasePath + "/config/short_trip_uber_config.properties");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/clusteringjob.properties", dfs, dfsBasePath + "/clusteringjob.properties");
+    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/indexer.properties", dfs, dfsBasePath + "/indexer.properties");
 
     writeCommonPropsToFile(dfs, dfsBasePath);
 
@@ -135,7 +138,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     TypedProperties downstreamProps = new TypedProperties();
     downstreamProps.setProperty("include", "base.properties");
     downstreamProps.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
-    downstreamProps.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
+    downstreamProps.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
 
     // Source schema is the target schema of upstream table
     downstreamProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/target.avsc");
@@ -147,7 +150,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     invalidProps.setProperty("include", "sql-transformer.properties");
     invalidProps.setProperty("hoodie.datasource.write.keygenerator.class", "invalid");
     invalidProps.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
-    invalidProps.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
+    invalidProps.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
     invalidProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source.avsc");
     invalidProps.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target.avsc");
     UtilitiesTestBase.Helpers.savePropsToDFS(invalidProps, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_INVALID);
@@ -171,16 +174,16 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     props.setProperty("include", "sql-transformer.properties");
     props.setProperty("hoodie.datasource.write.keygenerator.class", TestHoodieDeltaStreamer.TestGenerator.class.getName());
     props.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
-    props.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
+    props.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
     props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source.avsc");
     props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target.avsc");
 
     // Hive Configs
-    props.setProperty(DataSourceWriteOptions.HIVE_URL().key(), "jdbc:hive2://127.0.0.1:9999/");
-    props.setProperty(DataSourceWriteOptions.HIVE_DATABASE().key(), "testdb1");
-    props.setProperty(DataSourceWriteOptions.HIVE_TABLE().key(), "hive_trips");
-    props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), "datestr");
-    props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS().key(),
+    props.setProperty(HiveSyncConfig.HIVE_URL.key(), "jdbc:hive2://127.0.0.1:9999/");
+    props.setProperty(HiveSyncConfig.META_SYNC_DATABASE_NAME.key(), "testdb1");
+    props.setProperty(HiveSyncConfig.META_SYNC_TABLE_NAME.key(), "hive_trips");
+    props.setProperty(HiveSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "datestr");
+    props.setProperty(HiveSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
         MultiPartKeysValueExtractor.class.getName());
     UtilitiesTestBase.Helpers.savePropsToDFS(props, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE);
   }
@@ -235,11 +238,11 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
   protected static void populateCommonHiveProps(TypedProperties props) {
     // Hive Configs
-    props.setProperty(DataSourceWriteOptions.HIVE_URL().key(), "jdbc:hive2://127.0.0.1:9999/");
-    props.setProperty(DataSourceWriteOptions.HIVE_DATABASE().key(), "testdb2");
-    props.setProperty(DataSourceWriteOptions.HIVE_ASSUME_DATE_PARTITION().key(), "false");
-    props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), "datestr");
-    props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS().key(),
+    props.setProperty(HiveSyncConfig.HIVE_URL.key(), "jdbc:hive2://127.0.0.1:9999/");
+    props.setProperty(HiveSyncConfig.META_SYNC_DATABASE_NAME.key(), "testdb2");
+    props.setProperty(HiveSyncConfig.META_SYNC_ASSUME_DATE_PARTITION.key(), "false");
+    props.setProperty(HiveSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "datestr");
+    props.setProperty(HiveSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
         MultiPartKeysValueExtractor.class.getName());
   }
 
@@ -279,35 +282,35 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     if (useCustomSchema) {
       Helpers.saveORCToDFS(Helpers.toGenericRecords(
-              dataGenerator.generateInsertsAsPerSchema("000", numRecords, schemaStr),
-              schema), new Path(path), HoodieTestDataGenerator.ORC_TRIP_SCHEMA);
+          dataGenerator.generateInsertsAsPerSchema("000", numRecords, schemaStr),
+          schema), new Path(path), HoodieTestDataGenerator.ORC_TRIP_SCHEMA);
     } else {
       Helpers.saveORCToDFS(Helpers.toGenericRecords(
-              dataGenerator.generateInserts("000", numRecords)), new Path(path));
+          dataGenerator.generateInserts("000", numRecords)), new Path(path));
     }
   }
 
-  static void addCommitToTimeline(HoodieTableMetaClient metaCient) throws IOException {
-    addCommitToTimeline(metaCient, Collections.emptyMap());
+  static void addCommitToTimeline(HoodieTableMetaClient metaClient) throws IOException {
+    addCommitToTimeline(metaClient, Collections.emptyMap());
   }
 
-  static void addCommitToTimeline(HoodieTableMetaClient metaCient, Map<String, String> extraMetadata) throws IOException {
-    addCommitToTimeline(metaCient, WriteOperationType.UPSERT, HoodieTimeline.COMMIT_ACTION, extraMetadata);
+  static void addCommitToTimeline(HoodieTableMetaClient metaClient, Map<String, String> extraMetadata) throws IOException {
+    addCommitToTimeline(metaClient, WriteOperationType.UPSERT, HoodieTimeline.COMMIT_ACTION, extraMetadata);
   }
 
-  static void addReplaceCommitToTimeline(HoodieTableMetaClient metaCient, Map<String, String> extraMetadata) throws IOException {
-    addCommitToTimeline(metaCient, WriteOperationType.CLUSTER, HoodieTimeline.REPLACE_COMMIT_ACTION, extraMetadata);
+  static void addReplaceCommitToTimeline(HoodieTableMetaClient metaClient, Map<String, String> extraMetadata) throws IOException {
+    addCommitToTimeline(metaClient, WriteOperationType.CLUSTER, HoodieTimeline.REPLACE_COMMIT_ACTION, extraMetadata);
   }
 
-  static void addCommitToTimeline(HoodieTableMetaClient metaCient, WriteOperationType writeOperationType, String commitActiontype,
+  static void addCommitToTimeline(HoodieTableMetaClient metaClient, WriteOperationType writeOperationType, String commitActiontype,
                                   Map<String, String> extraMetadata) throws IOException {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     commitMetadata.setOperationType(writeOperationType);
-    extraMetadata.forEach((k,v) -> commitMetadata.getExtraMetadata().put(k, v));
+    extraMetadata.forEach((k, v) -> commitMetadata.getExtraMetadata().put(k, v));
     String commitTime = HoodieActiveTimeline.createNewInstantTime();
-    metaCient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.REQUESTED, commitActiontype, commitTime));
-    metaCient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime));
-    metaCient.getActiveTimeline().saveAsComplete(
+    metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.REQUESTED, commitActiontype, commitTime));
+    metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime));
+    metaClient.getActiveTimeline().saveAsComplete(
         new HoodieInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime),
         Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
   }

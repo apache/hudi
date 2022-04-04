@@ -108,7 +108,9 @@ public class MetadataCommand implements CommandMarker {
   }
 
   @CliCommand(value = "metadata create", help = "Create the Metadata Table if it does not exist")
-  public String create() throws IOException {
+  public String create(
+      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = SparkUtil.DEFAULT_SPARK_MASTER, help = "Spark master") final String master
+  ) throws IOException {
     HoodieCLI.getTableMetaClient();
     Path metadataPath = new Path(getMetadataTableBasePath(HoodieCLI.basePath));
     try {
@@ -123,7 +125,7 @@ public class MetadataCommand implements CommandMarker {
 
     HoodieTimer timer = new HoodieTimer().startTimer();
     HoodieWriteConfig writeConfig = getWriteConfig();
-    initJavaSparkContext();
+    initJavaSparkContext(Option.of(master));
     SparkHoodieBackedTableMetadataWriter.create(HoodieCLI.conf, writeConfig, new HoodieSparkEngineContext(jsc));
     return String.format("Created Metadata Table in %s (duration=%.2f secs)", metadataPath, timer.endTimer() / 1000.0);
   }
@@ -145,7 +147,8 @@ public class MetadataCommand implements CommandMarker {
   }
 
   @CliCommand(value = "metadata init", help = "Update the metadata table from commits since the creation")
-  public String init(@CliOption(key = {"readonly"}, unspecifiedDefaultValue = "false",
+  public String init(@CliOption(key = "sparkMaster", unspecifiedDefaultValue = SparkUtil.DEFAULT_SPARK_MASTER, help = "Spark master") final String master,
+                     @CliOption(key = {"readonly"}, unspecifiedDefaultValue = "false",
       help = "Open in read-only mode") final boolean readOnly) throws Exception {
     HoodieCLI.getTableMetaClient();
     Path metadataPath = new Path(getMetadataTableBasePath(HoodieCLI.basePath));
@@ -159,7 +162,7 @@ public class MetadataCommand implements CommandMarker {
     HoodieTimer timer = new HoodieTimer().startTimer();
     if (!readOnly) {
       HoodieWriteConfig writeConfig = getWriteConfig();
-      initJavaSparkContext();
+      initJavaSparkContext(Option.of(master));
       SparkHoodieBackedTableMetadataWriter.create(HoodieCLI.conf, writeConfig, new HoodieSparkEngineContext(jsc));
     }
 
@@ -191,9 +194,11 @@ public class MetadataCommand implements CommandMarker {
   }
 
   @CliCommand(value = "metadata list-partitions", help = "List all partitions from metadata")
-  public String listPartitions() throws IOException {
+  public String listPartitions(
+      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = SparkUtil.DEFAULT_SPARK_MASTER, help = "Spark master") final String master
+  ) throws IOException {
     HoodieCLI.getTableMetaClient();
-    initJavaSparkContext();
+    initJavaSparkContext(Option.of(master));
     HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().enable(true).build();
     HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(jsc), config,
         HoodieCLI.basePath, "/tmp");
@@ -357,9 +362,9 @@ public class MetadataCommand implements CommandMarker {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build()).build();
   }
 
-  private void initJavaSparkContext() {
+  private void initJavaSparkContext(Option<String> userDefinedMaster) {
     if (jsc == null) {
-      jsc = SparkUtil.initJavaSparkConf(SparkUtil.getDefaultConf("HoodieCLI", Option.empty()));
+      jsc = SparkUtil.initJavaSparkConf(SparkUtil.getDefaultConf("HoodieCLI", userDefinedMaster));
     }
   }
 }

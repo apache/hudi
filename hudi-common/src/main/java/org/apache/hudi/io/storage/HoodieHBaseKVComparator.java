@@ -19,11 +19,11 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hadoop.hbase.KeyValue;
+import org.apache.hadoop.hbase.CellComparatorImpl;
 
 /**
  * This class is explicitly used as Key Comparator to work around the hard coded
  * legacy format class names inside HBase. Otherwise, we will face issues with shading.
  */
-public class HoodieHBaseKVComparator extends KeyValue.KVComparator {
+public class HoodieHBaseKVComparator extends CellComparatorImpl {
 }

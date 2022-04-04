@@ -71,6 +71,13 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Enable asynchronous cleaning for metadata table");
 
+  // Async index
+  public static final ConfigProperty<Boolean> ASYNC_INDEX_ENABLE = ConfigProperty
+      .key(METADATA_PREFIX + ".index.async")
+      .defaultValue(false)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Enable asynchronous indexing of metadata table.");
+
   // Maximum delta commits before compaction occurs
   public static final ConfigProperty<Integer> COMPACT_NUM_DELTA_COMMITS = ConfigProperty
       .key(METADATA_PREFIX + ".compact.max.delta.commits")
@@ -83,20 +90,24 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".keep.min.commits")
       .defaultValue(20)
       .sinceVersion("0.7.0")
-      .withDocumentation("Controls the archival of the metadata table’s timeline.");
+      .withDocumentation("Archiving service moves older entries from metadata table’s timeline "
+          + "into an archived log after each write, to keep the overhead constant, even as the "
+          + "metadata table size grows.  This config controls the minimum number of instants "
+          + "to retain in the active timeline.");
 
   public static final ConfigProperty<Integer> MAX_COMMITS_TO_KEEP = ConfigProperty
       .key(METADATA_PREFIX + ".keep.max.commits")
       .defaultValue(30)
       .sinceVersion("0.7.0")
-      .withDocumentation("Controls the archival of the metadata table’s timeline.");
+      .withDocumentation("Similar to " + MIN_COMMITS_TO_KEEP.key() + ", this config controls "
+          + "the maximum number of instants to retain in the active timeline.");
 
   // Cleaner commits retained
   public static final ConfigProperty<Integer> CLEANER_COMMITS_RETAINED = ConfigProperty
       .key(METADATA_PREFIX + ".cleaner.commits.retained")
       .defaultValue(3)
       .sinceVersion("0.7.0")
-      .withDocumentation("Controls retention/history for metadata table.");
+      .withDocumentation("Number of commits to retain, without cleaning, on metadata table.");
 
   // Regex to filter out matching directories during bootstrap
   public static final ConfigProperty<String> DIR_FILTER_REGEX = ConfigProperty
@@ -122,20 +133,93 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".enable.full.scan.log.files")
       .defaultValue(true)
       .sinceVersion("0.10.0")
-      .withDocumentation("Enable full scanning of log files while reading log records. If disabled, hudi does look up of only interested entries.");
+      .withDocumentation("Enable full scanning of log files while reading log records. If disabled, Hudi does look up of only interested entries.");
+
+  public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_BLOOM_FILTER = ConfigProperty
+      .key(METADATA_PREFIX + ".index.bloom.filter.enable")
+      .defaultValue(false)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Enable indexing bloom filters of user data files under metadata table. When enabled, "
+          + "metadata table will have a partition to store the bloom filter index and will be "
+          + "used during the index lookups.");
+
+  public static final ConfigProperty<Integer> METADATA_INDEX_BLOOM_FILTER_FILE_GROUP_COUNT = ConfigProperty
+      .key(METADATA_PREFIX + ".index.bloom.filter.file.group.count")
+      .defaultValue(4)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Metadata bloom filter index partition file group count. This controls the size of the base and "
+          + "log files and read parallelism in the bloom filter index partition. The recommendation is to size the "
+          + "file group count such that the base files are under 1GB.");
+
+  public static final ConfigProperty<Integer> BLOOM_FILTER_INDEX_PARALLELISM = ConfigProperty
+      .key(METADATA_PREFIX + ".index.bloom.filter.parallelism")
+      .defaultValue(200)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Parallelism to use for generating bloom filter index in metadata table.");
+
+  public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_COLUMN_STATS = ConfigProperty
+      .key(METADATA_PREFIX + ".index.column.stats.enable")
+      .defaultValue(false)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Enable indexing column ranges of user data files under metadata table key lookups. When "
+          + "enabled, metadata table will have a partition to store the column ranges and will be "
+          + "used for pruning files during the index lookups.");
+
+  public static final ConfigProperty<Integer> METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT = ConfigProperty
+      .key(METADATA_PREFIX + ".index.column.stats.file.group.count")
+      .defaultValue(2)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Metadata column stats partition file group count. This controls the size of the base and "
+          + "log files and read parallelism in the column stats index partition. The recommendation is to size the "
+          + "file group count such that the base files are under 1GB.");
+
+  public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS = ConfigProperty
+      .key(METADATA_PREFIX + ".index.column.stats.all_columns.enable")
+      .defaultValue(true)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Enable indexing column ranges of user data files for all columns under "
+          + "metadata table key lookups. When enabled, metadata table will have a partition to "
+          + "store the column ranges and will be used for pruning files during the index lookups. "
+          + "Only applies if " + ENABLE_METADATA_INDEX_COLUMN_STATS.key() + " is enabled.");
+
+  public static final ConfigProperty<Integer> COLUMN_STATS_INDEX_PARALLELISM = ConfigProperty
+          .key(METADATA_PREFIX + ".index.column.stats.parallelism")
+          .defaultValue(10)
+          .sinceVersion("0.11.0")
+          .withDocumentation("Parallelism to use, when generating column stats index.");
+
+  public static final ConfigProperty<String> COLUMN_STATS_INDEX_FOR_COLUMNS = ConfigProperty
+      .key(METADATA_PREFIX + ".index.column.stats.column.list")
+      .noDefaultValue()
+      .sinceVersion("0.11.0")
+      .withDocumentation("Comma-separated list of columns for which column stats index will be built. If not set, all columns will be indexed");
+
+  public static final ConfigProperty<String> BLOOM_FILTER_INDEX_FOR_COLUMNS = ConfigProperty
+      .key(METADATA_PREFIX + ".index.bloom.filter.column.list")
+      .noDefaultValue()
+      .sinceVersion("0.11.0")
+      .withDocumentation("Comma-separated list of columns for which bloom filter index will be built. If not set, only record key will be indexed.");
+
+  public static final ConfigProperty<Integer> METADATA_INDEX_CHECK_TIMEOUT_SECONDS = ConfigProperty
+      .key(METADATA_PREFIX + ".index.check.timeout.seconds")
+      .defaultValue(900)
+      .sinceVersion("0.11.0")
+      .withDocumentation("After the async indexer has finished indexing upto the base instant, it will ensure that all inflight writers "
+          + "reliably write index updates as well. If this timeout expires, then the indexer will abort itself safely.");
 
   public static final ConfigProperty<Boolean> POPULATE_META_FIELDS = ConfigProperty
       .key(METADATA_PREFIX + ".populate.meta.fields")
-      .defaultValue(true)
+      .defaultValue(false)
       .sinceVersion("0.10.0")
       .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated.");
 
   public static final ConfigProperty<Boolean> IGNORE_SPURIOUS_DELETES = ConfigProperty
       .key("_" + METADATA_PREFIX + ".ignore.spurious.deletes")
       .defaultValue(true)
-      .sinceVersion("0.10.10")
-      .withDocumentation("There are cases when extra files are requested to be deleted from metadata table which was never added before. This config"
-          + "determines how to handle such spurious deletes");
+      .sinceVersion("0.10.0")
+      .withDocumentation("There are cases when extra files are requested to be deleted from "
+          + "metadata table which are never added before. This config determines how to handle "
+          + "such spurious deletes");
 
   private HoodieMetadataConfig() {
     super();
@@ -155,6 +239,46 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean enabled() {
     return getBoolean(ENABLE);
+  }
+
+  public boolean isBloomFilterIndexEnabled() {
+    return getBooleanOrDefault(ENABLE_METADATA_INDEX_BLOOM_FILTER);
+  }
+
+  public boolean isColumnStatsIndexEnabled() {
+    return getBooleanOrDefault(ENABLE_METADATA_INDEX_COLUMN_STATS);
+  }
+
+  public boolean isMetadataColumnStatsIndexForAllColumnsEnabled() {
+    return getBooleanOrDefault(ENABLE_METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS);
+  }
+
+  public String getColumnsEnabledForColumnStatsIndex() {
+    return getString(COLUMN_STATS_INDEX_FOR_COLUMNS);
+  }
+
+  public String getColumnsEnabledForBloomFilterIndex() {
+    return getString(BLOOM_FILTER_INDEX_FOR_COLUMNS);
+  }
+
+  public int getBloomFilterIndexFileGroupCount() {
+    return getIntOrDefault(METADATA_INDEX_BLOOM_FILTER_FILE_GROUP_COUNT);
+  }
+
+  public int getColumnStatsIndexFileGroupCount() {
+    return getIntOrDefault(METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT);
+  }
+
+  public int getBloomFilterIndexParallelism() {
+    return getIntOrDefault(BLOOM_FILTER_INDEX_PARALLELISM);
+  }
+
+  public int getColumnStatsIndexParallelism() {
+    return getIntOrDefault(COLUMN_STATS_INDEX_PARALLELISM);
+  }
+
+  public int getIndexingCheckTimeoutSeconds() {
+    return getIntOrDefault(METADATA_INDEX_CHECK_TIMEOUT_SECONDS);
   }
 
   public boolean enableMetrics() {
@@ -199,6 +323,56 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withMetadataIndexBloomFilter(boolean enable) {
+      metadataConfig.setValue(ENABLE_METADATA_INDEX_BLOOM_FILTER, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withMetadataIndexBloomFilterFileGroups(int fileGroupCount) {
+      metadataConfig.setValue(METADATA_INDEX_BLOOM_FILTER_FILE_GROUP_COUNT, String.valueOf(fileGroupCount));
+      return this;
+    }
+
+    public Builder withBloomFilterIndexParallelism(int parallelism) {
+      metadataConfig.setValue(BLOOM_FILTER_INDEX_PARALLELISM, String.valueOf(parallelism));
+      return this;
+    }
+
+    public Builder withMetadataIndexColumnStats(boolean enable) {
+      metadataConfig.setValue(ENABLE_METADATA_INDEX_COLUMN_STATS, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withMetadataIndexColumnStatsFileGroupCount(int fileGroupCount) {
+      metadataConfig.setValue(METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT, String.valueOf(fileGroupCount));
+      return this;
+    }
+
+    public Builder withColumnStatsIndexParallelism(int parallelism) {
+      metadataConfig.setValue(COLUMN_STATS_INDEX_PARALLELISM, String.valueOf(parallelism));
+      return this;
+    }
+
+    public Builder withMetadataIndexForAllColumns(boolean enable) {
+      metadataConfig.setValue(ENABLE_METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withColumnStatsIndexForColumns(String columns) {
+      metadataConfig.setValue(COLUMN_STATS_INDEX_FOR_COLUMNS, columns);
+      return this;
+    }
+
+    public Builder withBloomFilterIndexForColumns(String columns) {
+      metadataConfig.setValue(BLOOM_FILTER_INDEX_FOR_COLUMNS, columns);
+      return this;
+    }
+
+    public Builder withIndexingCheckTimeout(int timeoutInSeconds) {
+      metadataConfig.setValue(METADATA_INDEX_CHECK_TIMEOUT_SECONDS, String.valueOf(timeoutInSeconds));
+      return this;
+    }
+
     public Builder enableMetrics(boolean enableMetrics) {
       metadataConfig.setValue(METRICS_ENABLE, String.valueOf(enableMetrics));
       return this;
@@ -211,6 +385,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withAsyncClean(boolean asyncClean) {
       metadataConfig.setValue(ASYNC_CLEAN_ENABLE, String.valueOf(asyncClean));
+      return this;
+    }
+
+    public Builder withAsyncIndex(boolean asyncIndex) {
+      metadataConfig.setValue(ASYNC_INDEX_ENABLE, String.valueOf(asyncIndex));
       return this;
     }
 

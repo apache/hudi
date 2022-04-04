@@ -24,8 +24,11 @@ import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.JavaTaskContextSupplier;
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ClusteringOperation;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -70,7 +73,7 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
  * Clustering strategy for Java engine.
  */
 public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
-    extends ClusteringExecutionStrategy<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
+    extends ClusteringExecutionStrategy<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
 
   private static final Logger LOG = LogManager.getLogger(JavaExecutionStrategy.class);
 
@@ -80,7 +83,7 @@ public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> performClustering(
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> performClustering(
       HoodieClusteringPlan clusteringPlan, Schema schema, String instantTime) {
     // execute clustering for each group and collect WriteStatus
     List<WriteStatus> writeStatusList = new ArrayList<>();
@@ -89,8 +92,8 @@ public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
             inputGroup, clusteringPlan.getStrategy().getStrategyParams(),
             Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(false),
             instantTime)));
-    HoodieWriteMetadata<List<WriteStatus>> writeMetadata = new HoodieWriteMetadata<>();
-    writeMetadata.setWriteStatuses(writeStatusList);
+    HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = new HoodieWriteMetadata<>();
+    writeMetadata.setWriteStatuses(HoodieList.of(writeStatusList));
     return writeMetadata;
   }
 
@@ -120,7 +123,7 @@ public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
    * @param schema         Schema of the data including metadata fields.
    * @return empty for now.
    */
-  protected Option<BulkInsertPartitioner<T>> getPartitioner(Map<String, String> strategyParams, Schema schema) {
+  protected Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> getPartitioner(Map<String, String> strategyParams, Schema schema) {
     if (strategyParams.containsKey(PLAN_STRATEGY_SORT_COLUMNS.key())) {
       return Option.of(new JavaCustomColumnsSortPartitioner(
           strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()).split(","),
@@ -237,7 +240,7 @@ public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
     HoodieKey hoodieKey = new HoodieKey(key, partition);
 
     HoodieRecordPayload avroPayload = new RewriteAvroPayload(record);
-    HoodieRecord hoodieRecord = new HoodieRecord(hoodieKey, avroPayload);
+    HoodieRecord hoodieRecord = new HoodieAvroRecord(hoodieKey, avroPayload);
     return hoodieRecord;
   }
 }

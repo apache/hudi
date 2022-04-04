@@ -44,10 +44,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-public abstract class AbstractSyncHoodieClient {
+public abstract class AbstractSyncHoodieClient implements AutoCloseable {
 
   private static final Logger LOG = LogManager.getLogger(AbstractSyncHoodieClient.class);
 
+  public static final String HOODIE_LAST_COMMIT_TIME_SYNC = "last_commit_time_sync";
   public static final TypeConverter TYPE_CONVERTOR = new TypeConverter() {};
 
   protected final HoodieTableMetaClient metaClient;
@@ -90,11 +91,23 @@ public abstract class AbstractSyncHoodieClient {
                                    String serdeClass, Map<String, String> serdeProperties,
                                    Map<String, String> tableProperties);
 
+  /**
+   * @deprecated Use {@link #tableExists} instead.
+   */
+  @Deprecated
   public abstract boolean doesTableExist(String tableName);
+
+  public abstract boolean tableExists(String tableName);
 
   public abstract Option<String> getLastCommitTimeSynced(String tableName);
 
   public abstract void updateLastCommitTimeSynced(String tableName);
+
+  public abstract Option<String> getLastReplicatedTime(String tableName);
+
+  public abstract void updateLastReplicatedTimeStamp(String tableName, String timeStamp);
+
+  public abstract void deleteLastReplicatedTimeStamp(String tableName);
 
   public abstract void addPartitionsToTable(String tableName, List<String> partitionsToAdd);
 
@@ -149,11 +162,7 @@ public abstract class AbstractSyncHoodieClient {
    */
   public MessageType getDataSchema() {
     try {
-      if (withOperationField) {
-        return new TableSchemaResolver(metaClient, true).getTableParquetSchema();
-      } else {
-        return new TableSchemaResolver(metaClient).getTableParquetSchema();
-      }
+      return new TableSchemaResolver(metaClient).getTableParquetSchema();
     } catch (Exception e) {
       throw new HoodieSyncException("Failed to read data schema", e);
     }
@@ -162,11 +171,7 @@ public abstract class AbstractSyncHoodieClient {
   public boolean isDropPartition() {
     try {
       Option<HoodieCommitMetadata> hoodieCommitMetadata;
-      if (withOperationField) {
-        hoodieCommitMetadata = new TableSchemaResolver(metaClient, true).getLatestCommitMetadata();
-      } else {
-        hoodieCommitMetadata = new TableSchemaResolver(metaClient).getLatestCommitMetadata();
-      }
+      hoodieCommitMetadata = new TableSchemaResolver(metaClient).getLatestCommitMetadata();
 
       if (hoodieCommitMetadata.isPresent()
           && WriteOperationType.DELETE_PARTITION.equals(hoodieCommitMetadata.get().getOperationType())) {

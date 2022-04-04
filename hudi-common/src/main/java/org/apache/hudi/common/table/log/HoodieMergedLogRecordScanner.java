@@ -19,6 +19,8 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -27,12 +29,14 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -58,18 +62,15 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     implements Iterable<HoodieRecord<? extends HoodieRecordPayload>> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieMergedLogRecordScanner.class);
-
+  // A timer for calculating elapsed time in millis
+  public final HoodieTimer timer = new HoodieTimer();
   // Final map of compacted/merged records
   protected final ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records;
-
   // count of merged records in log
   private long numMergedRecordsInLog;
   private long maxMemorySizeInBytes;
-
   // Stores the total time taken to perform reading and merging of log blocks
   private long totalTimeTakenToReadAndMergeBlocks;
-  // A timer for calculating elapsed time in millis
-  public final HoodieTimer timer = new HoodieTimer();
 
   @SuppressWarnings("unchecked")
   protected HoodieMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
@@ -79,10 +80,10 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
                                          ExternalSpillableMap.DiskMapType diskMapType,
                                          boolean isBitCaskDiskMapCompressionEnabled,
                                          boolean withOperationField, boolean enableFullScan,
-                                         Option<String> partitionName) {
+                                         Option<String> partitionName, InternalSchema internalSchema) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
         instantRange, withOperationField,
-        enableFullScan, partitionName);
+        enableFullScan, partitionName, internalSchema);
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
@@ -137,14 +138,16 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     String key = hoodieRecord.getRecordKey();
     if (records.containsKey(key)) {
       // Merge and store the merged record. The HoodieRecordPayload implementation is free to decide what should be
-      // done when a delete (empty payload) is encountered before or after an insert/update.
+      // done when a DELETE (empty payload) is encountered before or after an insert/update.
 
       HoodieRecord<? extends HoodieRecordPayload> oldRecord = records.get(key);
       HoodieRecordPayload oldValue = oldRecord.getData();
       HoodieRecordPayload combinedValue = hoodieRecord.getData().preCombine(oldValue);
-      boolean choosePrev = combinedValue.equals(oldValue);
-      HoodieOperation operation = choosePrev ? oldRecord.getOperation() : hoodieRecord.getOperation();
-      records.put(key, new HoodieRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()), combinedValue, operation));
+      // If combinedValue is oldValue, no need rePut oldRecord
+      if (combinedValue != oldValue) {
+        HoodieOperation operation = hoodieRecord.getOperation();
+        records.put(key, new HoodieAvroRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()), combinedValue, operation));
+      }
     } else {
       // Put the record as is
       records.put(key, hoodieRecord);
@@ -152,9 +155,29 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   }
 
   @Override
-  protected void processNextDeletedKey(HoodieKey hoodieKey) {
-    records.put(hoodieKey.getRecordKey(), SpillableMapUtils.generateEmptyPayload(hoodieKey.getRecordKey(),
-        hoodieKey.getPartitionPath(), getPayloadClassFQN()));
+  protected void processNextDeletedRecord(DeleteRecord deleteRecord) {
+    String key = deleteRecord.getRecordKey();
+    HoodieRecord<? extends HoodieRecordPayload> oldRecord = records.get(key);
+    if (oldRecord != null) {
+      // Merge and store the merged record. The ordering val is taken to decide whether the same key record
+      // should be deleted or be kept. The old record is kept only if the DELETE record has smaller ordering val.
+      // For same ordering values, uses the natural order(arrival time semantics).
+
+      Comparable curOrderingVal = oldRecord.getData().getOrderingValue();
+      Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
+      // Checks the ordering value does not equal to 0
+      // because we use 0 as the default value which means natural order
+      boolean choosePrev = !deleteOrderingVal.equals(0)
+          && ReflectionUtils.isSameClass(curOrderingVal, deleteOrderingVal)
+          && curOrderingVal.compareTo(deleteOrderingVal) > 0;
+      if (choosePrev) {
+        // The DELETE message is obsolete if the old message has greater orderingVal.
+        return;
+      }
+    }
+    // Put the DELETE record
+    records.put(key, SpillableMapUtils.generateEmptyPayload(key,
+        deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue(), getPayloadClassFQN()));
   }
 
   public long getTotalTimeTakenToReadAndMergeBlocks() {
@@ -175,6 +198,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     protected String basePath;
     protected List<String> logFilePaths;
     protected Schema readerSchema;
+    private InternalSchema internalSchema = InternalSchema.getEmptyInternalSchema();
     protected String latestInstantTime;
     protected boolean readBlocksLazily;
     protected boolean reverseReader;
@@ -186,11 +210,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     protected boolean isBitCaskDiskMapCompressionEnabled = HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue();
     // incremental filtering
     protected Option<InstantRange> instantRange = Option.empty();
+    protected String partitionName;
     // auto scan default true
     private boolean autoScan = true;
     // operation field default false
     private boolean withOperationField = false;
-    protected String partitionName;
 
     @Override
     public Builder withFileSystem(FileSystem fs) {
@@ -271,6 +295,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       return this;
     }
 
+    public Builder withInternalSchema(InternalSchema internalSchema) {
+      this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
+      return this;
+    }
+
     public Builder withOperationField(boolean withOperationField) {
       this.withOperationField = withOperationField;
       return this;
@@ -288,7 +317,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
           latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
           bufferSize, spillableMapBasePath, instantRange, autoScan,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, true,
-          Option.ofNullable(partitionName));
+          Option.ofNullable(partitionName), internalSchema);
     }
   }
 }

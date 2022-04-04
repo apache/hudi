@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.timeline.versioning.clean;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -61,6 +62,6 @@ public class CleanPlanV1MigrationHandler extends AbstractMigratorBase<HoodieClea
             .collect(Collectors.toList()));
         }).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
     return new HoodieCleanerPlan(plan.getEarliestInstantToRetain(), plan.getPolicy(), filesPerPartition, VERSION,
-        new HashMap<>());
+        new HashMap<>(), new ArrayList<>());
   }
 }

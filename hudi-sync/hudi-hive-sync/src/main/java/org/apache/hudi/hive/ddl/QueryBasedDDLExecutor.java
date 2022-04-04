@@ -22,6 +22,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.PartitionValueExtractor;
@@ -125,6 +126,24 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     List<String> sqls = constructChangePartitions(tableName, changedPartitions);
     for (String sql : sqls) {
       runSQL(sql);
+    }
+  }
+
+  @Override
+  public void updateTableComments(String tableName, Map<String, ImmutablePair<String,String>>  newSchema) {
+    for (Map.Entry<String, ImmutablePair<String,String>> field : newSchema.entrySet()) {
+      String name = field.getKey();
+      StringBuilder sql = new StringBuilder();
+      String type = field.getValue().getLeft();
+      String comment = field.getValue().getRight();
+      comment = comment.replace("'","");
+      sql.append("ALTER TABLE ").append(HIVE_ESCAPE_CHARACTER)
+              .append(config.databaseName).append(HIVE_ESCAPE_CHARACTER).append(".")
+              .append(HIVE_ESCAPE_CHARACTER).append(tableName)
+              .append(HIVE_ESCAPE_CHARACTER)
+              .append(" CHANGE COLUMN `").append(name).append("` `").append(name)
+              .append("` ").append(type).append(" comment '").append(comment).append("' ");
+      runSQL(sql.toString());
     }
   }
 

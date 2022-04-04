@@ -30,22 +30,17 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.connect.transaction.TransactionCoordinator;
 import org.apache.hudi.connect.utils.KafkaConnectUtils;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hive.HiveSyncConfig;
-import org.apache.hudi.hive.HiveSyncTool;
-import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
-import org.apache.hudi.sync.common.AbstractSyncTool;
+import org.apache.hudi.sync.common.HoodieSyncConfig;
+import org.apache.hudi.sync.common.util.SyncUtilHelpers;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -54,7 +49,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 
 /**
@@ -167,43 +161,12 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
     if (connectConfigs.isMetaSyncEnabled()) {
       Set<String> syncClientToolClasses = new HashSet<>(
           Arrays.asList(connectConfigs.getMetaSyncClasses().split(",")));
+      FileSystem fs = FSUtils.getFs(tableBasePath, new Configuration());
       for (String impl : syncClientToolClasses) {
-        impl = impl.trim();
-        switch (impl) {
-          case "org.apache.hudi.hive.HiveSyncTool":
-            syncHive();
-            break;
-          default:
-            FileSystem fs = FSUtils.getFs(tableBasePath, new Configuration());
-            Properties properties = new Properties();
-            properties.putAll(connectConfigs.getProps());
-            properties.put("basePath", tableBasePath);
-            AbstractSyncTool syncTool = (AbstractSyncTool) ReflectionUtils.loadClass(impl, new Class[] {Properties.class, FileSystem.class}, properties, fs);
-            syncTool.syncHoodieTable();
-        }
+        // TODO kafka connect config needs to support setting base file format
+        String baseFileFormat = connectConfigs.getStringOrDefault(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT);
+        SyncUtilHelpers.runHoodieMetaSync(impl.trim(), connectConfigs.getProps(), hadoopConf, fs, tableBasePath, baseFileFormat);
       }
     }
-  }
-
-  private void syncHive() {
-    HiveSyncConfig hiveSyncConfig = KafkaConnectUtils.buildSyncConfig(new TypedProperties(connectConfigs.getProps()), tableBasePath);
-    String url;
-    if (!StringUtils.isNullOrEmpty(hiveSyncConfig.syncMode) && HiveSyncMode.of(hiveSyncConfig.syncMode) == HiveSyncMode.HMS) {
-      url = hadoopConf.get(KafkaConnectConfigs.HIVE_METASTORE_URIS);
-    } else {
-      url = hiveSyncConfig.jdbcUrl;
-    }
-
-    LOG.info("Syncing target hoodie table with hive table("
-        + hiveSyncConfig.tableName
-        + "). Hive URL :"
-        + url
-        + ", basePath :" + tableBasePath);
-    LOG.info("Hive Sync Conf => " + hiveSyncConfig);
-    FileSystem fs = FSUtils.getFs(tableBasePath, hadoopConf);
-    HiveConf hiveConf = new HiveConf();
-    hiveConf.addResource(fs.getConf());
-    LOG.info("Hive Conf => " + hiveConf.getAllProperties().toString());
-    new HiveSyncTool(hiveSyncConfig, hiveConf, fs).syncHoodieTable();
   }
 }

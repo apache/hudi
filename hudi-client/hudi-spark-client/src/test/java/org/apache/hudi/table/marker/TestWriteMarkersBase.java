@@ -103,7 +103,7 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testDataPathsWhenCreatingOrMerging(boolean isTablePartitioned) throws IOException {
-    // add markfiles
+    // add marker files
     createSomeMarkers(isTablePartitioned);
     // add invalid file
     createInvalidFile(isTablePartitioned ? "2020/06/01" : "", "invalid_file3");

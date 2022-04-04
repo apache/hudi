@@ -25,17 +25,18 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.{AvroConversionUtils, SparkAdapterSupport}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
-import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
-import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Expression}
+import org.apache.spark.sql.catalyst.analysis.{Resolver, UnresolvedRelation}
+import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HoodieCatalogTable}
+import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Cast, Expression, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
-import org.apache.spark.sql.internal.StaticSQLConf
-import org.apache.spark.sql.types.{StringType, StructField, StructType}
-import org.apache.spark.sql.{Column, DataFrame, SparkSession}
+import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
+import org.apache.spark.sql.types.{DataType, NullType, StringType, StructField, StructType}
+import org.apache.spark.sql.{AnalysisException, Column, DataFrame, SparkSession}
 
 import java.net.URI
 import java.text.SimpleDateFormat
@@ -50,24 +51,6 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   ThreadLocal.withInitial(new java.util.function.Supplier[SimpleDateFormat] {
     override def get() = new SimpleDateFormat("yyyy-MM-dd")
   })
-
-  def isHoodieTable(table: CatalogTable): Boolean = {
-    table.provider.map(_.toLowerCase(Locale.ROOT)).orNull == "hudi"
-  }
-
-  def isHoodieTable(tableId: TableIdentifier, spark: SparkSession): Boolean = {
-    val table = spark.sessionState.catalog.getTableMetadata(tableId)
-    isHoodieTable(table)
-  }
-
-  def isHoodieTable(table: LogicalPlan, spark: SparkSession): Boolean = {
-    tripAlias(table) match {
-      case LogicalRelation(_, _, Some(tbl), _) => isHoodieTable(tbl)
-      case relation: UnresolvedRelation =>
-        isHoodieTable(sparkAdapter.toTableIdentifier(relation), spark)
-      case _=> false
-    }
-  }
 
   def getTableIdentifier(table: LogicalPlan): TableIdentifier = {
     table match {
@@ -197,16 +180,29 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     getTableLocation(table, spark)
   }
 
-  def getTableLocation(table: CatalogTable, sparkSession: SparkSession): String = {
-    val uri = if (table.tableType == CatalogTableType.MANAGED && isHoodieTable(table)) {
-      Some(sparkSession.sessionState.catalog.defaultTablePath(table.identifier))
+  def getTableLocation(properties: Map[String, String], identifier: TableIdentifier, sparkSession: SparkSession): String = {
+    val location: Option[String] = Some(properties.getOrElse("location", ""))
+    val isManaged = location.isEmpty || location.get.isEmpty
+    val uri = if (isManaged) {
+      Some(sparkSession.sessionState.catalog.defaultTablePath(identifier))
     } else {
-      table.storage.locationUri
+      Some(new Path(location.get).toUri)
     }
+    getTableLocation(uri, identifier, sparkSession)
+  }
+
+  def getTableLocation(table: CatalogTable, sparkSession: SparkSession): String = {
+    val uri = table.storage.locationUri.orElse {
+      Some(sparkSession.sessionState.catalog.defaultTablePath(table.identifier))
+    }
+    getTableLocation(uri, table.identifier, sparkSession)
+  }
+
+  def getTableLocation(uri: Option[URI], identifier: TableIdentifier, sparkSession: SparkSession): String = {
     val conf = sparkSession.sessionState.newHadoopConf()
     uri.map(makePathQualified(_, conf))
       .map(removePlaceHolder)
-      .getOrElse(throw new IllegalArgumentException(s"Missing location for ${table.identifier}"))
+      .getOrElse(throw new IllegalArgumentException(s"Missing location for ${identifier}"))
   }
 
   private def removePlaceHolder(path: String): String = {
@@ -300,5 +296,80 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     } else {
       true
     }
+  }
+
+  // Find the origin column from schema by column name, throw an AnalysisException if the column
+  // reference is invalid.
+  def findColumnByName(schema: StructType, name: String, resolver: Resolver):Option[StructField] = {
+    schema.fields.collectFirst {
+      case field if resolver(field.name, name) => field
+    }
+  }
+
+  // Compare a [[StructField]] to another, return true if they have the same column
+  // name(by resolver) and dataType.
+  def columnEqual(field: StructField, other: StructField, resolver: Resolver): Boolean = {
+    resolver(field.name, other.name) && field.dataType == other.dataType
+  }
+
+  def castIfNeeded(child: Expression, dataType: DataType, conf: SQLConf): Expression = {
+    child match {
+      case Literal(nul, NullType) => Literal(nul, dataType)
+      case _ => if (child.dataType != dataType)
+        Cast(child, dataType, Option(conf.sessionLocalTimeZone)) else child
+    }
+  }
+
+  def normalizePartitionSpec[T](
+                                 partitionSpec: Map[String, T],
+                                 partColNames: Seq[String],
+                                 tblName: String,
+                                 resolver: Resolver): Map[String, T] = {
+    val normalizedPartSpec = partitionSpec.toSeq.map { case (key, value) =>
+      val normalizedKey = partColNames.find(resolver(_, key)).getOrElse {
+        throw new AnalysisException(s"$key is not a valid partition column in table $tblName.")
+      }
+      normalizedKey -> value
+    }
+
+    if (normalizedPartSpec.size < partColNames.size) {
+      throw new AnalysisException(
+        "All partition columns need to be specified for Hoodie's partition")
+    }
+
+    val lowerPartColNames = partColNames.map(_.toLowerCase)
+    if (lowerPartColNames.distinct.length != lowerPartColNames.length) {
+      val duplicateColumns = lowerPartColNames.groupBy(identity).collect {
+        case (x, ys) if ys.length > 1 => s"`$x`"
+      }
+      throw new AnalysisException(
+        s"Found duplicate column(s) in the partition schema: ${duplicateColumns.mkString(", ")}")
+    }
+
+    normalizedPartSpec.toMap
+  }
+
+  def getPartitionPathToDrop(
+                              hoodieCatalogTable: HoodieCatalogTable,
+                              normalizedSpecs: Seq[Map[String, String]]): String = {
+    val table = hoodieCatalogTable.table
+    val allPartitionPaths = hoodieCatalogTable.getPartitionPaths
+    val enableHiveStylePartitioning = isHiveStyledPartitioning(allPartitionPaths, table)
+    val enableEncodeUrl = isUrlEncodeEnabled(allPartitionPaths, table)
+    val partitionsToDrop = normalizedSpecs.map { spec =>
+      hoodieCatalogTable.partitionFields.map { partitionColumn =>
+        val encodedPartitionValue = if (enableEncodeUrl) {
+          PartitionPathEncodeUtils.escapePathName(spec(partitionColumn))
+        } else {
+          spec(partitionColumn)
+        }
+        if (enableHiveStylePartitioning) {
+          partitionColumn + "=" + encodedPartitionValue
+        } else {
+          encodedPartitionValue
+        }
+      }.mkString("/")
+    }.mkString(",")
+    partitionsToDrop
   }
 }

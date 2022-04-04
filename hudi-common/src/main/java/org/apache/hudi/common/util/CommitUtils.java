@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.exception.HoodieException;
 
+import org.apache.avro.Schema;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -40,6 +41,7 @@ import java.util.Map;
 public class CommitUtils {
 
   private static final Logger LOG = LogManager.getLogger(CommitUtils.class);
+  private static final String NULL_SCHEMA_STR = Schema.create(Schema.Type.NULL).toString();
 
   /**
    * Gets the commit action type for given write operation and table type.
@@ -84,7 +86,8 @@ public class CommitUtils {
     if (extraMetadata.isPresent()) {
       extraMetadata.get().forEach(commitMetadata::addMetadata);
     }
-    commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaToStoreInCommit == null ? "" : schemaToStoreInCommit);
+    commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, (schemaToStoreInCommit == null || schemaToStoreInCommit.equals(NULL_SCHEMA_STR))
+        ? "" : schemaToStoreInCommit);
     commitMetadata.setOperationType(operationType);
     return commitMetadata;
   }
@@ -94,7 +97,7 @@ public class CommitUtils {
                                                              String commitActionType,
                                                              WriteOperationType operationType) {
     final HoodieCommitMetadata commitMetadata;
-    if (commitActionType == HoodieTimeline.REPLACE_COMMIT_ACTION) {
+    if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(commitActionType)) {
       HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
       replaceMetadata.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
       commitMetadata = replaceMetadata;

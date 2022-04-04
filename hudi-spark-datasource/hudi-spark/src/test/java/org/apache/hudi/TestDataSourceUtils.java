@@ -25,6 +25,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ImmutablePair;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
@@ -191,7 +193,7 @@ public class TestDataSourceUtils {
 
   @Test
   public void testCreateUserDefinedBulkInsertPartitionerRowsWithInValidPartitioner() throws HoodieException {
-    config = HoodieWriteConfig.newBuilder().withPath("/").withUserDefinedBulkInsertPartitionerClass("NonExistantUserDefinedClass").build();
+    config = HoodieWriteConfig.newBuilder().withPath("/").withUserDefinedBulkInsertPartitionerClass("NonExistentUserDefinedClass").build();
 
     Exception exception = assertThrows(HoodieException.class, () -> {
       DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(config);
@@ -220,6 +222,30 @@ public class TestDataSourceUtils {
 
     Option<BulkInsertPartitioner<Dataset<Row>>> partitioner = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(config);
     assertThat(partitioner.isPresent(), is(true));
+  }
+
+  @Test
+  public void testCreateHoodieConfigWithAsyncClustering() {
+    ArrayList<ImmutablePair<String, Boolean>> asyncClusteringKeyValues = new ArrayList<>(4);
+    asyncClusteringKeyValues.add(new ImmutablePair(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), true));
+    asyncClusteringKeyValues.add(new ImmutablePair(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE.key(), true));
+    asyncClusteringKeyValues.add(new ImmutablePair("hoodie.datasource.clustering.async.enable", true));
+    asyncClusteringKeyValues.add(new ImmutablePair("hoodie.clustering.async.enabled", true));
+
+    asyncClusteringKeyValues.stream().forEach(pair -> {
+      HashMap<String, String> params = new HashMap<>(3);
+      params.put(DataSourceWriteOptions.TABLE_TYPE().key(), DataSourceWriteOptions.TABLE_TYPE().defaultValue());
+      params.put(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key(),
+              DataSourceWriteOptions.PAYLOAD_CLASS_NAME().defaultValue());
+      params.put(pair.left, pair.right.toString());
+      HoodieWriteConfig hoodieConfig = DataSourceUtils
+              .createHoodieConfig(avroSchemaString, config.getBasePath(), "test", params);
+      assertEquals(pair.right, hoodieConfig.isAsyncClusteringEnabled());
+
+      TypedProperties prop = new TypedProperties();
+      prop.putAll(params);
+      assertEquals(pair.right, HoodieClusteringConfig.from(prop).isAsyncClusteringEnabled());
+    });
   }
 
   @ParameterizedTest
@@ -299,18 +325,18 @@ public class TestDataSourceUtils {
     StructType structType = StructType$.MODULE$.apply(structFields);
     // create write options
     Map<String, String> options = new HashMap<>();
-    options.put("hoodie.parquet.writeLegacyFormat.enabled", String.valueOf(defaultWriteValue));
+    options.put("hoodie.parquet.writelegacyformat.enabled", String.valueOf(defaultWriteValue));
 
     // start test
     mayBeOverwriteParquetWriteLegacyFormatProp(options, structType);
 
     // check result
-    boolean res = Boolean.parseBoolean(options.get("hoodie.parquet.writeLegacyFormat.enabled"));
+    boolean res = Boolean.parseBoolean(options.get("hoodie.parquet.writelegacyformat.enabled"));
     if (smallDecimal) {
-      // should auto modify "hoodie.parquet.writeLegacyFormat.enabled" = "true".
+      // should auto modify "hoodie.parquet.writelegacyformat.enabled" = "true".
       assertEquals(true, res);
     } else {
-      // should not modify the value of "hoodie.parquet.writeLegacyFormat.enabled".
+      // should not modify the value of "hoodie.parquet.writelegacyformat.enabled".
       assertEquals(defaultWriteValue, res);
     }
   }

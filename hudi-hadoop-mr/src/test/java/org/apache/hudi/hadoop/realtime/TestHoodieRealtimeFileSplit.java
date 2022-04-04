@@ -34,7 +34,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.stubbing.Answer;
 
 import java.io.DataInput;
+import java.io.DataInputStream;
 import java.io.DataOutput;
+import java.io.DataOutputStream;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
@@ -72,7 +76,7 @@ public class TestHoodieRealtimeFileSplit {
     baseFileSplit = new FileSplit(new Path(fileSplitName), 0, 100, new String[] {});
     maxCommitTime = "10001";
 
-    split = new HoodieRealtimeFileSplit(baseFileSplit, basePath, deltaLogFiles, maxCommitTime, Option.empty());
+    split = new HoodieRealtimeFileSplit(baseFileSplit, basePath, deltaLogFiles, maxCommitTime, false, Option.empty());
   }
 
   @Test
@@ -156,5 +160,19 @@ public class TestHoodieRealtimeFileSplit {
     assertEquals(maxCommitTime, read.getMaxCommitTime());
     assertEquals(deltaLogPaths, read.getDeltaLogPaths());
     assertEquals(split.toString(), read.toString());
+  }
+
+  @Test
+  public void testSerDe(@TempDir java.nio.file.Path tempDir) throws IOException {
+    final HoodieRealtimeFileSplit original = split;
+    java.nio.file.Path tempFilePath = tempDir.resolve("tmp.txt");
+    try (DataOutputStream out = new DataOutputStream(new FileOutputStream(tempFilePath.toFile()))) {
+      original.write(out);
+    }
+    HoodieRealtimeFileSplit deserialized = new HoodieRealtimeFileSplit();
+    try (DataInputStream in = new DataInputStream(new FileInputStream(tempFilePath.toFile()))) {
+      deserialized.readFields(in);
+    }
+    assertEquals(original.toString(), deserialized.toString());
   }
 }

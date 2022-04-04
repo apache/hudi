@@ -21,6 +21,7 @@ package org.apache.hudi.data;
 
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
+import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
@@ -101,6 +102,11 @@ public class HoodieJavaPairRDD<K, V> extends HoodiePairData<K, V> {
   @Override
   public Map<K, Long> countByKey() {
     return pairRDDData.countByKey();
+  }
+
+  @Override
+  public HoodiePairData<K, V> reduceByKey(SerializableBiFunction<V, V, V> func, int parallelism) {
+    return HoodieJavaPairRDD.of(pairRDDData.reduceByKey(func::apply, parallelism));
   }
 
   @Override

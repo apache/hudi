@@ -22,7 +22,10 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
+import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
@@ -33,7 +36,6 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -48,6 +50,7 @@ import org.apache.hudi.io.HoodieSortedMergeHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.clean.CleanActionExecutor;
@@ -62,11 +65,9 @@ import org.apache.hudi.table.action.commit.FlinkUpsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkUpsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
@@ -230,7 +231,7 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
   public HoodieWriteMetadata<List<WriteStatus>> bulkInsert(HoodieEngineContext context,
                                                            String instantTime,
                                                            List<HoodieRecord<T>> records,
-                                                           Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> bulkInsertPartitioner) {
+                                                           Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     throw new HoodieNotSupportedException("BulkInsert is not supported yet");
   }
 
@@ -242,11 +243,6 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
   @Override
   public HoodieWriteMetadata deletePartitions(HoodieEngineContext context, String instantTime, List<String> partitions) {
     throw new HoodieNotSupportedException("DeletePartitions is not supported yet");
-  }
-
-  @Override
-  public void updateMetadataIndexes(@Nonnull HoodieEngineContext context, @Nonnull List<HoodieWriteStat> stats, @Nonnull String instantTime) {
-    throw new HoodieNotSupportedException("update statistics is not supported yet");
   }
 
   @Override
@@ -263,7 +259,7 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
   public HoodieWriteMetadata<List<WriteStatus>> bulkInsertPrepped(HoodieEngineContext context,
                                                                   String instantTime,
                                                                   List<HoodieRecord<T>> preppedRecords,
-                                                                  Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> bulkInsertPartitioner) {
+                                                                  Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     throw new HoodieNotSupportedException("BulkInsertPrepped is not supported yet");
   }
 
@@ -338,8 +334,23 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
   }
 
   @Override
+  public Option<HoodieIndexPlan> scheduleIndexing(HoodieEngineContext context, String indexInstantTime, List<MetadataPartitionType> partitionsToIndex) {
+    throw new HoodieNotSupportedException("Metadata indexing is not supported for a Flink table yet.");
+  }
+
+  @Override
+  public Option<HoodieIndexCommitMetadata> index(HoodieEngineContext context, String indexInstantTime) {
+    throw new HoodieNotSupportedException("Metadata indexing is not supported for a Flink table yet.");
+  }
+
+  @Override
   public HoodieSavepointMetadata savepoint(HoodieEngineContext context, String instantToSavepoint, String user, String comment) {
     throw new HoodieNotSupportedException("Savepoint is not supported yet");
+  }
+
+  @Override
+  public Option<HoodieRestorePlan> scheduleRestore(HoodieEngineContext context, String restoreInstantTime, String instantToRestore) {
+    throw new HoodieNotSupportedException("Restore is not supported yet");
   }
 
   @Override

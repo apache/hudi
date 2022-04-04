@@ -66,7 +66,7 @@
             <plugin>
                 <groupId>com.github.os72</groupId>
                 <artifactId>protoc-jar-maven-plugin</artifactId>
-                <version>3.1.0.1</version>
+                <version>3.11.4</version>
                 <executions>
                     <execution>
                         <phase>generate-sources</phase>
@@ -142,7 +142,7 @@
         <!-- NOTE: This is temp (SchemaProvide dep) until PR3162 lands -->
         <dependency>
             <groupId>org.apache.hudi</groupId>
-            <artifactId>hudi-flink_${scala.binary.version}</artifactId>
+            <artifactId>hudi-flink</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
