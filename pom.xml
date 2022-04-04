@@ -1592,6 +1592,8 @@
                     <bannedDependencies>
                       <excludes combine.children="append">
                         <exclude>*:*_2.11</exclude>
+                        <exclude>org.apache.hudi:hudi-examples-flink</exclude>
+                        <exclude>org.apache.hudi:*flink*</exclude>
                       </excludes>
                     </bannedDependencies>
                   </rules>
