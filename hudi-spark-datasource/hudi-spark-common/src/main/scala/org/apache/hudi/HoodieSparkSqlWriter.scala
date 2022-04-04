@@ -361,7 +361,7 @@ object HoodieSparkSqlWriter {
         None
       }
     } catch {
-      case _ => None
+      case _: Exception => None
     }
   }
 

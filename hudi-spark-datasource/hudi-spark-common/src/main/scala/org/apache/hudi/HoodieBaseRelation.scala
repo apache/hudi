@@ -135,7 +135,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     val internalSchemaFromMeta = try {
       schemaUtil.getTableInternalSchemaFromCommitMetadata.orElse(InternalSchema.getEmptyInternalSchema)
     } catch {
-      case _ => InternalSchema.getEmptyInternalSchema
+      case _: Exception => InternalSchema.getEmptyInternalSchema
     }
     (avroSchema, internalSchemaFromMeta)
   }

@@ -25,7 +25,9 @@ import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.model.HoodieMetadataRecord
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig
+import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
@@ -107,9 +109,10 @@ trait ColumnStatsIndexSupport extends SparkAdapterSupport {
       val encodedTargetColumnNames = targetColumns.map(colName =>
         Base64.getEncoder.encodeToString(colName.getBytes(StandardCharset.UTF_8)))
 
-      // TODO getRecords have to return RDD
-      val recordsRDD = spark.sparkContext.parallelize(
-        metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames.asJava, HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS).asScala, 2)
+      val recordsRDD: RDD[HoodieRecord[HoodieMetadataPayload]] =
+        HoodieJavaRDD.getJavaRDD(
+          metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames.asJava, HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
+        )
 
       val catalystRowsRDD: RDD[InternalRow] = recordsRDD.mapPartitions { it =>
         val metadataRecordSchema = new Parser().parse(metadataRecordSchemaString)
