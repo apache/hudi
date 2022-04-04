@@ -344,6 +344,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   public static <R extends IndexedRecord> List<R> readRecords(HoodieHFileReader<R> reader,
                                                               List<String> keys,
                                                               Schema schema) throws IOException {
+    Collections.sort(keys);
     return toStream(reader.getRecordsByKeysIterator(keys, schema))
         .collect(Collectors.toList());
   }

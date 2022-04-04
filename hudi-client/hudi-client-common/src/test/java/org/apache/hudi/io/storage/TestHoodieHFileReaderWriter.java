@@ -172,11 +172,17 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     for (int i = 0; i < 2; i++) {
       int randomRowstoFetch = 5 + RANDOM.nextInt(10);
       Set<String> rowsToFetch = getRandomKeys(randomRowstoFetch, keys);
+
       List<String> rowsList = new ArrayList<>(rowsToFetch);
       Collections.sort(rowsList);
+
+      List<GenericRecord> expectedRecords = rowsList.stream().map(recordMap::get).collect(Collectors.toList());
+
       hoodieHFileReader = (HoodieHFileReader<GenericRecord>) createReader(conf);
       List<GenericRecord> result = HoodieHFileReader.readRecords(hoodieHFileReader, rowsList);
-      assertEquals(recordMap.values(), result);
+
+      assertEquals(expectedRecords, result);
+
       result.forEach(entry -> {
         if (populateMetaFields && testAvroWithMeta) {
           assertNotNull(entry.get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
