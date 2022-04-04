@@ -19,7 +19,6 @@
 package org.apache.hudi.common.function;
 
 import java.io.Serializable;
-import java.util.function.Function;
 
 /**
  * A wrapped {@link java.util.function.Function} which can be serialized.
@@ -30,8 +29,4 @@ import java.util.function.Function;
 @FunctionalInterface
 public interface SerializableFunction<I, O> extends Serializable {
   O apply(I v1) throws Exception;
-
-  static <I, O> SerializableFunction<I, O> from(Function<I, O> f) {
-    return f::apply;
-  }
 }

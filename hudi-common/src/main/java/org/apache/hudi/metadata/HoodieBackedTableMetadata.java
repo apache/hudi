@@ -62,6 +62,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -150,7 +151,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
     return engineContext.parallelize(partitionFileSlices)
         .flatMap(
-            SerializableFunction.from(fileSlice -> {
+            (SerializableFunction<FileSlice, Iterator<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>>>) fileSlice -> {
               // we are moving the readers to executors in this code path. So, reusing readers may not make sense.
               Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> readers =
                   openReadersIfNeeded(partitionName, fileSlice, false);
@@ -180,7 +181,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
               } finally {
                 close(Pair.of(partitionName, fileSlice.getFileId()));
               }
-            })
+            }
         )
         .map(keyRecordPair -> keyRecordPair.getValue().orElse(null))
         .filter(Objects::nonNull);
