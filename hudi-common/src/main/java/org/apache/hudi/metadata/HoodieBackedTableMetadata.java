@@ -401,10 +401,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    *
    * @param partitionName - Partition name
    * @param slice         - The file slice to open readers for
+   * @param useCachedReaders true if cached readers can be used. false otherwise.
    * @return File reader and the record scanner pair for the requested file slice
    */
-  private Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> openReadersIfNeeded(String partitionName, FileSlice slice, boolean reuse) {
-    if (reuse) {
+  private Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> openReadersIfNeeded(String partitionName, FileSlice slice, boolean useCachedReaders) {
+    if (useCachedReaders) {
       return partitionReaders.computeIfAbsent(Pair.of(partitionName, slice.getFileId()), k -> openReaders(partitionName, slice));
     } else {
       // col stats look up deletegate the reading of file slices to executors. So, reusing readers may not make sense.
