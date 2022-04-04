@@ -215,7 +215,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
 
     // Get writer's schema from the header
     final ClosableIterator<IndexedRecord> recordIterator =
-        fullKey ? reader.getRecordIterator(keys, readerSchema) : reader.getRecordIteratorByKeyPrefix(keys, readerSchema);
+        fullKey ? reader.getRecordsByKeysIterator(keys, readerSchema) : reader.getRecordsByKeyPrefixIterator(keys, readerSchema);
 
     return new ClosableIterator<IndexedRecord>() {
       @Override

@@ -625,7 +625,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
     HoodieHFileReader hoodieHFileReader = new HoodieHFileReader(context.getHadoopConf().get(), new Path(baseFile.getPath()),
         new CacheConfig(context.getHadoopConf().get()));
-    List<Pair<String, IndexedRecord>> records = hoodieHFileReader.readAllRecords();
+    List<Pair<String, IndexedRecord>> records = HoodieHFileReader.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
       if (populateMetaFields) {
         assertNotNull(((GenericRecord) entry.getSecond()).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
@@ -956,7 +956,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieHFileReader hoodieHFileReader = new HoodieHFileReader(context.getHadoopConf().get(),
         new Path(baseFile.getPath()),
         new CacheConfig(context.getHadoopConf().get()));
-    List<Pair<String, IndexedRecord>> records = hoodieHFileReader.readAllRecords();
+    List<Pair<String, IndexedRecord>> records = HoodieHFileReader.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
       if (enableMetaFields) {
         assertNotNull(((GenericRecord) entry.getSecond()).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
