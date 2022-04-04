@@ -49,7 +49,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -57,6 +56,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
+import java.util.TreeMap;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -143,7 +143,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     Schema avroSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchemaWithMetaFields.avsc");
     HoodieFileWriter<GenericRecord> writer = createWriter(avroSchema, populateMetaFields);
     List<String> keys = new ArrayList<>();
-    Map<String, GenericRecord> recordMap = new HashMap<>();
+    Map<String, GenericRecord> recordMap = new TreeMap<>();
     for (int i = 0; i < 100; i++) {
       GenericRecord record = new GenericData.Record(avroSchema);
       String key = String.format("%s%04d", "key", i);
@@ -165,7 +165,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     Configuration conf = new Configuration();
     HoodieHFileReader hoodieHFileReader = (HoodieHFileReader) createReader(conf);
     List<IndexedRecord> records = HoodieHFileReader.readAllRecords(hoodieHFileReader);
-    assertEquals(recordMap.values(), records);
+    assertEquals(new ArrayList<>(recordMap.values()), records);
 
     hoodieHFileReader.close();
 
