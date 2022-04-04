@@ -212,8 +212,8 @@ public class TableSchemaResolver {
       );
       if (hasPartitionColNotInSchema && hasPartitionColInSchema) {
         throw new HoodieIncompatibleSchemaException(
-            "Not support: Partial partition fields are still in the schema " +
-                "when enable hoodie.datasource.write.drop.partition.columns");
+            "Not support: Partial partition fields are still in the schema "
+                + "when enable hoodie.datasource.write.drop.partition.columns");
       }
 
       if (hasPartitionColNotInSchema) {
