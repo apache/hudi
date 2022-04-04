@@ -1593,7 +1593,7 @@
                       <excludes combine.children="append">
                         <exclude>*:*_2.11</exclude>
                         <exclude>org.apache.hudi:hudi-examples-flink</exclude>
-                        <exclude>org.apache.hudi:hudi-flink*</exclude>
+                        <exclude>org.apache.hudi:hudi-flin*</exclude>
                       </excludes>
                     </bannedDependencies>
                   </rules>
