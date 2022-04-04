@@ -17,7 +17,6 @@
 
 package org.apache.hudi
 
-import com.nimbusds.jose.util.StandardCharset
 import org.apache.avro.Schema.Parser
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.ColumnStatsIndexSupport.{composeIndexSchema, deserialize, tryUnpackNonNullVal}
@@ -27,6 +26,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig
+import org.apache.hudi.common.util.hash.ColumnIndexID
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.spark.api.java.JavaSparkContext
@@ -37,7 +37,6 @@ import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, HoodieUnsafeRDDUtils, Row, SparkSession}
 
-import java.util.Base64
 import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeSet
 
@@ -106,8 +105,7 @@ trait ColumnStatsIndexSupport extends SparkAdapterSupport {
       val metadataTable = HoodieTableMetadata.create(ctx, metadataConfig, tableBasePath, FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue)
 
       // TODO encoding should be done internally w/in HoodieBackedTableMetadata
-      val encodedTargetColumnNames = targetColumns.map(colName =>
-        Base64.getEncoder.encodeToString(colName.getBytes(StandardCharset.UTF_8)))
+      val encodedTargetColumnNames = targetColumns.map(colName => new ColumnIndexID(colName).asBase64EncodedString())
 
       val recordsRDD: RDD[HoodieRecord[HoodieMetadataPayload]] =
         HoodieJavaRDD.getJavaRDD(
