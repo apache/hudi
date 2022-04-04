@@ -385,7 +385,6 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
         .collect(Collectors.toList());
   }
 
-
   @Nonnull
   private HFileScanner getHFileScanner() throws IOException {
     HFileScanner hFileScanner = reader.getScanner(false, false);
