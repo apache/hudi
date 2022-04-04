@@ -183,6 +183,13 @@
       <version>${zk-curator.version}</version>
     </dependency>
 
+    <!-- Lock -->
+    <dependency>
+      <groupId>redis.clients</groupId>
+      <artifactId>jedis</artifactId>
+      <version>${jedis.version}</version>
+    </dependency>
+
     <!-- Test -->
     <dependency>
       <groupId>org.junit.jupiter</groupId>
@@ -231,6 +238,12 @@
       <scope>test</scope>
     </dependency>
 
+    <dependency>
+      <groupId>it.ozimov</groupId>
+      <artifactId>embedded-redis</artifactId>
+      <version>0.7.1</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>

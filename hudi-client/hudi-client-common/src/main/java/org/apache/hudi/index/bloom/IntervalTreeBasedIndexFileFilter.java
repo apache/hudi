@@ -31,7 +31,7 @@ import java.util.Set;
  * Interval Tree based index look up. Builds an {@link KeyRangeLookupTree} for every partition and uses it to search for
  * matching index files for any given recordKey that needs to be looked up.
  */
-class IntervalTreeBasedIndexFileFilter implements IndexFileFilter {
+public class IntervalTreeBasedIndexFileFilter implements IndexFileFilter {
 
   private final Map<String, KeyRangeLookupTree> partitionToFileIndexLookUpTree = new HashMap<>();
   private final Map<String, Set<String>> partitionToFilesWithNoRanges = new HashMap<>();
@@ -41,7 +41,7 @@ class IntervalTreeBasedIndexFileFilter implements IndexFileFilter {
    *
    * @param partitionToFileIndexInfo Map of partition to List of {@link BloomIndexFileInfo}s
    */
-  IntervalTreeBasedIndexFileFilter(final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo) {
+  public IntervalTreeBasedIndexFileFilter(final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo) {
     partitionToFileIndexInfo.forEach((partition, bloomIndexFiles) -> {
       // Note that the interval tree implementation doesn't have auto-balancing to ensure logN search time.
       // So, we are shuffling the input here hoping the tree will not have any skewness. If not, the tree could be

@@ -31,6 +31,7 @@ import org.apache.hudi.index.bloom.SparkHoodieBloomIndexHelper;
 import org.apache.hudi.index.bucket.HoodieBucketIndex;
 import org.apache.hudi.index.hbase.SparkHoodieHBaseIndex;
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex;
+import org.apache.hudi.index.redis.HoodieRedisIndex;
 import org.apache.hudi.index.simple.HoodieGlobalSimpleIndex;
 import org.apache.hudi.index.simple.HoodieSimpleIndex;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -66,6 +67,8 @@ public final class SparkHoodieIndexFactory {
         return new HoodieSimpleIndex(config, getKeyGeneratorForSimpleIndex(config));
       case GLOBAL_SIMPLE:
         return new HoodieGlobalSimpleIndex(config, getKeyGeneratorForSimpleIndex(config));
+      case REDIS:
+        return new HoodieRedisIndex(config);
       default:
         throw new HoodieIndexException("Index type unspecified, set " + config.getIndexType());
     }
@@ -79,17 +82,14 @@ public final class SparkHoodieIndexFactory {
   public static boolean isGlobalIndex(HoodieWriteConfig config) {
     switch (config.getIndexType()) {
       case HBASE:
-        return true;
       case INMEMORY:
+      case GLOBAL_BLOOM:
+      case GLOBAL_SIMPLE:
+      case REDIS:
         return true;
       case BLOOM:
-        return false;
-      case GLOBAL_BLOOM:
-        return true;
       case SIMPLE:
         return false;
-      case GLOBAL_SIMPLE:
-        return true;
       default:
         return createIndex(config).isGlobal();
     }
