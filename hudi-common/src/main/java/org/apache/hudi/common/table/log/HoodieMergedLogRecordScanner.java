@@ -79,11 +79,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
                                          Option<InstantRange> instantRange, boolean autoScan,
                                          ExternalSpillableMap.DiskMapType diskMapType,
                                          boolean isBitCaskDiskMapCompressionEnabled,
-                                         boolean withOperationField, boolean enableFullScan,
+                                         boolean withOperationField, boolean forceFullScan,
                                          Option<String> partitionName, InternalSchema internalSchema) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
         instantRange, withOperationField,
-        enableFullScan, partitionName, internalSchema);
+        forceFullScan, partitionName, internalSchema);
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),

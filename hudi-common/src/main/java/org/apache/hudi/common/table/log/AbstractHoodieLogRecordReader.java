@@ -128,7 +128,7 @@ public abstract class AbstractHoodieLogRecordReader {
   // Store the last instant log blocks (needed to implement rollback)
   private Deque<HoodieLogBlock> currentInstantLogBlocks = new ArrayDeque<>();
   // Enables full scan of log records
-  protected final boolean enableFullScan;
+  protected final boolean forceFullScan;
   private int totalScannedLogFiles;
   // Progress
   private float progress = 0.0f;
@@ -149,7 +149,7 @@ public abstract class AbstractHoodieLogRecordReader {
   protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
                                           Schema readerSchema, String latestInstantTime, boolean readBlocksLazily,
                                           boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
-                                          boolean withOperationField, boolean enableFullScan,
+                                          boolean withOperationField, boolean forceFullScan,
                                           Option<String> partitionName, InternalSchema internalSchema) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
@@ -166,7 +166,7 @@ public abstract class AbstractHoodieLogRecordReader {
     this.bufferSize = bufferSize;
     this.instantRange = instantRange;
     this.withOperationField = withOperationField;
-    this.enableFullScan = enableFullScan;
+    this.forceFullScan = forceFullScan;
     this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
     this.path = basePath;
 
@@ -213,9 +213,11 @@ public abstract class AbstractHoodieLogRecordReader {
       final String keyField = getKeyField();
 
       // Iterate over the paths
+      boolean enableRecordLookups = !forceFullScan;
       logFormatReaderWrapper = new HoodieLogFormatReader(fs,
           logFilePaths.stream().map(logFile -> new HoodieLogFile(new Path(logFile))).collect(Collectors.toList()),
-          readerSchema, readBlocksLazily, reverseReader, bufferSize, !enableFullScan, keyField, internalSchema);
+          readerSchema, readBlocksLazily, reverseReader, bufferSize, enableRecordLookups, keyField, internalSchema);
+
       Set<HoodieLogFile> scannedLogFiles = new HashSet<>();
       while (logFormatReaderWrapper.hasNext()) {
         HoodieLogFile logFile = logFormatReaderWrapper.getLogFile();
