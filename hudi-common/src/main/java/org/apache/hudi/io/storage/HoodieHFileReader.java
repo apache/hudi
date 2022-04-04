@@ -47,6 +47,7 @@ import org.apache.hadoop.hbase.util.Pair;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -62,6 +63,7 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileReader<R> {
+  // TODO HoodieHFileReader right now tightly coupled to MT, we should break that coupling
   public static final String KEY_FIELD_NAME = "key";
   public static final String KEY_SCHEMA = "schema";
   public static final String KEY_BLOOM_FILTER_META_BLOCK = "bloomFilter";
@@ -180,13 +182,11 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
    * @throws IOException When the deserialization of records fail
    */
   private synchronized Map<String, R> filterRecordsImpl(TreeSet<String> sortedCandidateRowKeys) throws IOException {
-    HFileScanner hFileScanner = reader.getScanner(false, false);
-    hFileScanner.seekTo();
+    HFileScanner hFileScanner = getHFileScanner();
     Schema readerSchema = getSchema();
-    Option<Schema.Field> keyFieldSchema = Option.ofNullable(readerSchema.getField(KEY_FIELD_NAME));
     HashMap<String, R> filteredRecords = new HashMap<>();
     for (String key : sortedCandidateRowKeys) {
-      Option<R> record = getRecordByKey(key, readerSchema, hFileScanner, keyFieldSchema);
+      Option<R> record = getRecordByKeyInternal(key, readerSchema, hFileScanner);
       if (record.isPresent()) {
         filteredRecords.put(key, record.get());
       }
@@ -202,14 +202,13 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
    * use {@code getRecordIterator} where possible.
    */
   private List<Pair<String, R>> readAllRecords(Schema writerSchema, Schema readerSchema) {
-    final Option<Schema.Field> keyFieldSchema = Option.ofNullable(readerSchema.getField(KEY_FIELD_NAME));
     List<Pair<String, R>> recordList = new LinkedList<>();
     try {
       final HFileScanner scanner = reader.getScanner(false, false);
       if (scanner.seekTo()) {
         do {
           Cell c = scanner.getCell();
-          final Pair<String, R> keyAndRecordPair = getRecordFromCell(c, writerSchema, readerSchema, keyFieldSchema);
+          final Pair<String, R> keyAndRecordPair = getRecordFromCell(c, writerSchema, readerSchema);
           recordList.add(keyAndRecordPair);
         } while (scanner.next());
       }
@@ -252,12 +251,10 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
    */
   public List<Pair<String, R>> readRecords(List<String> keys, Schema schema) throws IOException {
     this.schema = schema;
-    HFileScanner hFileScanner = reader.getScanner(false, false);
-    hFileScanner.seekTo();
-    Option<Schema.Field> keyFieldSchema = Option.ofNullable(schema.getField(KEY_FIELD_NAME));
+    HFileScanner hFileScanner = getHFileScanner();
     List<Pair<String, R>> records = new ArrayList<>();
     for (String key : keys) {
-      Option<R> value = getRecordByKey(key, schema, hFileScanner, keyFieldSchema);
+      Option<R> value = getRecordByKeyInternal(key, schema, hFileScanner);
       if (value.isPresent()) {
         records.add(new Pair(key, value.get()));
       }
@@ -265,27 +262,23 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     return records;
   }
 
-  public ClosableIterator<R> getRecordIteratorByKeyPrefix(List<String> keyPrefixes, Schema schema) throws IOException {
-    this.schema = schema;
-    return new InternalClosableKeyPrefixIterator(keyPrefixes);
+  public ClosableIterator<R> getRecordIteratorByKeyPrefix(List<String> keyPrefixes, Schema readerSchema) throws IOException {
+    this.schema = readerSchema;
+    return new InternalClosableKeyPrefixIterator(keyPrefixes, readerSchema);
   }
 
   class InternalClosableKeyPrefixIterator implements ClosableIterator<R> {
-
-    private Iterator<String> keyPrefixesIterator;
+    private final Iterator<String> keyPrefixesIterator;
     private Iterator<R> recordsIterator;
     private R next;
+
     private final HFileScanner hFileScanner;
     private final Schema readerSchema;
-    private final Option<Schema.Field> keyFieldSchema;
 
-    InternalClosableKeyPrefixIterator(List<String> keyPrefixes) throws IOException {
-      keyPrefixesIterator = keyPrefixes.iterator();
-      // Instantiate a KeyScanner locally and use it for the lifecycle of this interator and not re-use the class instance variable.
-      hFileScanner = reader.getScanner(false, false);
-      hFileScanner.seekTo();
-      readerSchema = getSchema();
-      keyFieldSchema = Option.ofNullable(readerSchema.getField(KEY_FIELD_NAME));
+    InternalClosableKeyPrefixIterator(List<String> keyPrefixes, Schema readerSchema) throws IOException {
+      this.keyPrefixesIterator = keyPrefixes.iterator();
+      this.hFileScanner = getHFileScanner();
+      this.readerSchema = readerSchema;
     }
 
     @Override
@@ -296,7 +289,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
             next = recordsIterator.next();
             return true;
           } else if (keyPrefixesIterator.hasNext()) {
-            recordsIterator = getRecordsByKeyPrefixes(Collections.singletonList(keyPrefixesIterator.next()), hFileScanner, readerSchema, keyFieldSchema)
+            recordsIterator = getRecordsByKeyPrefixesInternal(Collections.singletonList(keyPrefixesIterator.next()), hFileScanner, readerSchema)
                 .values().iterator();
           } else {
             return false;
@@ -323,18 +316,16 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   }
 
   public class InternalClosableIterator implements ClosableIterator<R> {
-    private Schema schema;
-    private Iterator<String> iterator;
-    private HFileScanner hFileScanner;
+    private final Iterator<String> iterator;
+    private final HFileScanner hFileScanner;
+    private final Schema schema;
+
     private R next;
-    private Option<Schema.Field> keyFieldSchema;
 
     InternalClosableIterator(List<String> keys, Schema schema) throws IOException {
       this.iterator = keys.iterator();
       this.schema = schema;
-      this.hFileScanner = reader.getScanner(false, false);
-      hFileScanner.seekTo();
-      keyFieldSchema = Option.ofNullable(schema.getField(KEY_FIELD_NAME));
+      this.hFileScanner = getHFileScanner();
     }
 
     @Override
@@ -346,7 +337,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     public boolean hasNext() {
       try {
         while (iterator.hasNext()) {
-          Option<R> value = getRecordByKey(iterator.next(), schema, hFileScanner, keyFieldSchema);
+          Option<R> value = getRecordByKeyInternal(iterator.next(), schema, hFileScanner);
           if (value.isPresent()) {
             next = value.get();
             return true;
@@ -365,10 +356,9 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   }
 
   @Override
-  public Iterator getRecordIterator(Schema readerSchema) throws IOException {
-    final HFileScanner hFileScanner = reader.getScanner(false, false);
-    final Option<Schema.Field> keyFieldSchema = Option.ofNullable(readerSchema.getField(KEY_FIELD_NAME));
-    return new ClosableIterator() {
+  public Iterator<R> getRecordIterator(Schema readerSchema) throws IOException {
+    final HFileScanner hFileScanner = getHFileScanner();
+    return new ClosableIterator<R>() {
       private R next = null;
       private boolean eof = false;
 
@@ -378,7 +368,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
           // To handle when hasNext() is called multiple times for idempotency and/or the first time
           if (this.next == null && !this.eof) {
             if (!hFileScanner.isSeeked() && hFileScanner.seekTo()) {
-              final Pair<String, R> keyAndRecordPair = getRecordFromCell(hFileScanner.getCell(), getSchema(), readerSchema, keyFieldSchema);
+              final Pair<String, R> keyAndRecordPair = getRecordFromCell(hFileScanner.getCell(), getSchema(), readerSchema);
               this.next = keyAndRecordPair.getSecond();
             }
           }
@@ -399,8 +389,8 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
           }
           R retVal = this.next;
           if (hFileScanner.next()) {
-            final Pair<String, R> keyAndRecordPair = getRecordFromCell(hFileScanner.getCell(), getSchema(), readerSchema, keyFieldSchema);
-            this.next = keyAndRecordPair.getSecond();
+            final Pair<String, R> keyRecordPair = getRecordFromCell(hFileScanner.getCell(), getSchema(), readerSchema);
+            this.next = keyRecordPair.getSecond();
           } else {
             this.next = null;
             this.eof = true;
@@ -418,44 +408,56 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     };
   }
 
-  private boolean isKeyAvailable(String key, HFileScanner keyScanner) throws IOException {
-    final KeyValue kv = new KeyValue(key.getBytes(), null, null, null);
-    return keyScanner.seekTo(kv) == 0;
-  }
-
   @Override
   public Map<String, R> getRecordsByKeyPrefixes(List<String> keyPrefixes) throws IOException {
     Schema readerSchema = getSchema();
-    Option<Schema.Field> keyFieldSchema = Option.ofNullable(readerSchema.getField(KEY_FIELD_NAME));
     synchronized (this) {
-      HFileScanner hFileScanner = reader.getScanner(false, false);
-      hFileScanner.seekTo(); // seek to beginning of file.
-      return getRecordsByKeyPrefixes(keyPrefixes, hFileScanner, readerSchema, keyFieldSchema);
+      HFileScanner hFileScanner = getHFileScanner();
+      return getRecordsByKeyPrefixesInternal(keyPrefixes, hFileScanner, readerSchema);
     }
   }
 
   @Override
-  public Map<String, R> getRecordsByKeyPrefixes(List<String> keyPrefixes, HFileScanner hFileScanner, Schema readerSchema, Option<Schema.Field> keyFieldSchema) throws IOException {
+  public Option<R> getRecordByKey(String key, Schema readerSchema) throws IOException {
+    return getRecordByKeyInternal(key, readerSchema, );
+  }
+
+  private Map<String, R> getRecordsByKeyPrefixesInternal(List<String> keyPrefixes, HFileScanner hFileScanner, Schema readerSchema) throws IOException {
     // NOTE: It's always beneficial to sort keys being sought to by HFile reader
     //       to avoid seeking back and forth
     Collections.sort(keyPrefixes);
+
     List<Pair<byte[], byte[]>> keyRecordsBytes = new ArrayList<>(keyPrefixes.size());
     for (String keyPrefix : keyPrefixes) {
       KeyValue kv = new KeyValue(keyPrefix.getBytes(), null, null, null);
-      int val = hFileScanner.seekTo(kv);
-      // what does seekTo() does:
-      // eg entries in file. [key01, key02, key03, key04,..., key20]
-      // when keyPrefix is "key", seekTo will return -1 and place the cursor just before key01. getCel() will return key01 entry
-      // when keyPrefix is ""key03", seekTo will return 0 and place the cursor just before key01. getCell() will return key03 entry
-      // when keyPrefix is ""key1", seekTo will return 1 and place the cursor just before key10(i.e. key09). call next() and then call getCell() to see key10 entry
-      // when keyPrefix is "key99", seekTo will return 1 and place the cursor just before last entry, ie. key04. getCell() will return key04 entry.
 
-      if (val == 1) { // move to next entry if return value is 1
+      // NOTE: HFile persists both keys/values as bytes, therefore lexicographical sorted is
+      //       essentially employed
+      //
+      // For the HFile containing list of cells c[0], c[1], ..., c[N], `seekTo(cell)` would return
+      // following:
+      //    a) -1, if cell < c[0], no position;
+      //    b) 0, such that c[i] = cell and scanner is left in position i;
+      //    c) and 1, such that c[i] < cell, and scanner is left in position i.
+      //
+      // Consider entries w/ the following keys in HFile: [key01, key02, key03, key04,..., key20];
+      // In case looked up key-prefix is
+      //    - "key", `seekTo()` will return -1 and place the cursor just before "key01",
+      //    `getCell()` will return "key01" entry
+      //    - "key03", `seekTo()` will return 0 (exact match) and place the cursor just before "key03",
+      //    `getCell()` will return "key03" entry
+      //    - "key1", `seekTo()` will return 1 (first not lower than) and place the cursor just before
+      //    "key10" (i.e. on "key09");
+      //
+      int val = hFileScanner.seekTo(kv);
+      if (val == 1) {
+        // Try moving to next entry, matching the prefix key; if we're at the EOF,
+        // `next()` will return false
         if (!hFileScanner.next()) {
-          // we have reached the end of file. we can skip proceeding further
           break;
         }
       }
+
       do {
         Cell c = hFileScanner.getCell();
         byte[] keyBytes = Arrays.copyOfRange(c.getRowArray(), c.getRowOffset(), c.getRowOffset() + c.getRowLength());
@@ -471,38 +473,38 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
       } while (hFileScanner.next());
     }
 
-    // Use  tree map so that entries are in sorted in the map being returned.
-    Map<String, R> values = new TreeMap<String, R>();
+    // Use `TreeMap` so that returned entries are sorted
+    Map<String, R> values = new TreeMap<>();
     for (Pair<byte[], byte[]> kv : keyRecordsBytes) {
-      R record = deserialize(kv.getFirst(), kv.getSecond(), readerSchema, readerSchema, keyFieldSchema);
+      R record = deserialize(kv.getFirst(), kv.getSecond(), getSchema(), readerSchema);
       values.put(new String(kv.getFirst()), record);
     }
+
     return values;
   }
 
-  @Override
-  public Option<R> getRecordByKey(String key, Schema readerSchema, HFileScanner hFileScanner, Option<Schema.Field> keyFieldSchema) throws IOException {
-    byte[] value = null;
-    KeyValue kv = new KeyValue(key.getBytes(), null, null, null);
-
-    if (hFileScanner.seekTo(kv) == 0) {
-      Cell c = hFileScanner.getCell();
-      // Extract the byte value before releasing the lock since we cannot hold on to the returned cell afterwards
-      value = Arrays.copyOfRange(c.getValueArray(), c.getValueOffset(), c.getValueOffset() + c.getValueLength());
-    }
-
-    if (value != null) {
-      R record = deserialize(key.getBytes(), value, getSchema(), readerSchema, keyFieldSchema);
-      return Option.of(record);
-    }
-
-    return Option.empty();
+  private boolean isKeyAvailable(String key, HFileScanner keyScanner) throws IOException {
+    final KeyValue kv = new KeyValue(key.getBytes(), null, null, null);
+    return keyScanner.seekTo(kv) == 0;
   }
 
-  private Pair<String, R> getRecordFromCell(Cell cell, Schema writerSchema, Schema readerSchema, Option<Schema.Field> keyFieldSchema) throws IOException {
+  private Option<R> getRecordByKeyInternal(String key, Schema readerSchema, HFileScanner hFileScanner) throws IOException {
+    KeyValue kv = new KeyValue(key.getBytes(), null, null, null);
+    if (hFileScanner.seekTo(kv) != 0) {
+      return Option.empty();
+    }
+
+    Cell c = hFileScanner.getCell();
+    byte[] valueBytes = Arrays.copyOfRange(c.getValueArray(), c.getValueOffset(), c.getValueOffset() + c.getValueLength());
+    R record = deserialize(key.getBytes(), valueBytes, getSchema(), readerSchema);
+
+    return Option.of(record);
+  }
+
+  private Pair<String, R> getRecordFromCell(Cell cell, Schema writerSchema, Schema readerSchema) throws IOException {
     final byte[] keyBytes = Arrays.copyOfRange(cell.getRowArray(), cell.getRowOffset(), cell.getRowOffset() + cell.getRowLength());
     final byte[] valueBytes = Arrays.copyOfRange(cell.getValueArray(), cell.getValueOffset(), cell.getValueOffset() + cell.getValueLength());
-    R record = deserialize(keyBytes, valueBytes, writerSchema, readerSchema, keyFieldSchema);
+    R record = deserialize(keyBytes, valueBytes, writerSchema, readerSchema);
     return new Pair<>(new String(keyBytes), record);
   }
 
@@ -513,30 +515,19 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
    * @param valueBytes     - Record content as byte array
    * @param writerSchema   - Writer schema
    * @param readerSchema   - Reader schema
-   * @param keyFieldSchema - Key field id in the schema
    * @return Deserialized record object
    */
-  private R deserialize(final byte[] keyBytes, final byte[] valueBytes, Schema writerSchema, Schema readerSchema,
-                        Option<Schema.Field> keyFieldSchema) throws IOException {
+  private R deserialize(final byte[] keyBytes, final byte[] valueBytes, Schema writerSchema, Schema readerSchema) throws IOException {
     R record = (R) HoodieAvroUtils.bytesToAvro(valueBytes, writerSchema, readerSchema);
-    materializeRecordIfNeeded(keyBytes, record, keyFieldSchema);
-    return record;
-  }
 
-  /**
-   * Materialize the record for any missing fields, if needed.
-   *
-   * @param keyBytes       - Key byte array
-   * @param record         - Record object to materialize
-   * @param keyFieldSchema - Key field id in the schema
-   */
-  private void materializeRecordIfNeeded(final byte[] keyBytes, R record, Option<Schema.Field> keyFieldSchema) {
-    if (keyFieldSchema.isPresent()) {
-      final Object keyObject = record.get(keyFieldSchema.get().pos());
+    getKeySchema(writerSchema).ifPresent(keyFieldSchema -> {
+      final Object keyObject = record.get(keyFieldSchema.pos());
       if (keyObject != null && keyObject.toString().isEmpty()) {
-        record.put(keyFieldSchema.get().pos(), new String(keyBytes));
+        record.put(keyFieldSchema.pos(), new String(keyBytes));
       }
-    }
+    });
+
+    return record;
   }
 
   @Override
@@ -554,6 +545,17 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     } catch (IOException e) {
       throw new HoodieIOException("Error closing the hfile reader", e);
     }
+  }
+
+  @Nonnull
+  private HFileScanner getHFileScanner() throws IOException {
+    HFileScanner hFileScanner = reader.getScanner(false, false);
+    hFileScanner.seekTo(); // seek to beginning of file.
+    return hFileScanner;
+  }
+
+  private static Option<Schema.Field> getKeySchema(Schema schema) {
+    return Option.ofNullable(schema.getField(KEY_FIELD_NAME));
   }
 
   static class SeekableByteArrayInputStream extends ByteBufferBackedInputStream implements Seekable, PositionedReadable {
