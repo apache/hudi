@@ -833,42 +833,44 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    */
   public void deleteMetadataIndexIfNecessary() {
     Stream.of(MetadataPartitionType.values()).forEach(partitionType -> {
-      if (shouldDeleteMetadataIndex(partitionType)) {
+      if (shouldDeleteMetadataPartition(partitionType)) {
         try {
-          LOG.info("Deleting metadata partition because it is disabled in writer.");
+          LOG.info("Deleting metadata partition because it is disabled in writer: " + partitionType.name());
           if (metadataPartitionExists(metaClient.getBasePath(), context, partitionType)) {
             deleteMetadataPartition(metaClient.getBasePath(), context, partitionType);
           }
           clearMetadataTablePartitionsConfig(Option.of(partitionType), false);
         } catch (HoodieMetadataException e) {
-          throw new HoodieException("Failed to delete metadata table.", e);
+          throw new HoodieException("Failed to delete metadata partition: " + partitionType.name(), e);
         }
       }
     });
   }
 
-  private boolean shouldDeleteMetadataIndex(MetadataPartitionType partitionType) {
+  private boolean shouldDeleteMetadataPartition(MetadataPartitionType partitionType) {
     // Only delete metadata table partition when all the following conditions are met:
     // (1) This is data table.
     // (2) Index corresponding to this metadata partition is disabled in HoodieWriteConfig.
     // (3) The completed metadata partitions in table config contains this partition.
     // NOTE: Inflight metadata partitions are not considered as they could have been inflight due to async indexer.
+    if (HoodieTableMetadata.isMetadataTable(metaClient.getBasePath()) || !config.isMetadataTableEnabled()) {
+      return false;
+    }
     boolean metadataIndexDisabled;
     switch (partitionType) {
       // NOTE: FILES partition type is always considered in sync with hoodie.metadata.enable.
       //       It cannot be the case that metadata is enabled but FILES is disabled.
       case COLUMN_STATS:
-        metadataIndexDisabled = config.isMetadataTableEnabled() && !config.isMetadataColumnStatsIndexEnabled();
+        metadataIndexDisabled = !config.isMetadataColumnStatsIndexEnabled();
         break;
       case BLOOM_FILTERS:
-        metadataIndexDisabled = config.isMetadataTableEnabled() && !config.isMetadataBloomFilterIndexEnabled();
+        metadataIndexDisabled = !config.isMetadataBloomFilterIndexEnabled();
         break;
       default:
-        LOG.warn("Not a valid metadata partition type: " + partitionType);
+        LOG.debug("Not a valid metadata partition type: " + partitionType.name());
         return false;
     }
-    return !HoodieTableMetadata.isMetadataTable(metaClient.getBasePath())
-        && metadataIndexDisabled
+    return metadataIndexDisabled
         && getCompletedMetadataPartitions(metaClient.getTableConfig()).contains(partitionType.getPartitionPath());
   }
 
