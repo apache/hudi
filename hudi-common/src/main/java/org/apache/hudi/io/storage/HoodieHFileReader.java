@@ -391,7 +391,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
         .collect(Collectors.toList());
   }
 
-  private static HFileScanner getHFileScanner(HFile.Reader reader, boolean cacheBlocks) throws IOException {
+  private static HFileScanner getHFileScanner(HFile.Reader reader, boolean cacheBlocks) {
     // NOTE: Only scanners created in Positional Read ("pread") mode could share the same reader,
     //       since scanners in default mode will be seeking w/in the underlying stream
     return reader.getScanner(cacheBlocks, true);
