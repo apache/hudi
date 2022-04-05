@@ -37,14 +37,6 @@ public interface HoodieFileReader<R extends IndexedRecord> extends AutoCloseable
 
   Set<String> filterRowKeys(Set<String> candidateRowKeys);
 
-  default ClosableIterator<R> getRecordsByKeysIterator(List<String> rowKeys, Schema schema) throws IOException {
-    throw new UnsupportedOperationException();
-  }
-
-  default ClosableIterator<R> getRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema schema) throws IOException {
-    throw new UnsupportedEncodingException();
-  }
-
   ClosableIterator<R> getRecordIterator(Schema readerSchema) throws IOException;
 
   default ClosableIterator<R> getRecordIterator() throws IOException {
@@ -57,6 +49,22 @@ public interface HoodieFileReader<R extends IndexedRecord> extends AutoCloseable
 
   default Option<R> getRecordByKey(String key) throws IOException {
     return getRecordByKey(key, getSchema());
+  }
+
+  default ClosableIterator<R> getRecordsByKeysIterator(List<String> keys, Schema schema) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
+  default ClosableIterator<R> getRecordsByKeysIterator(List<String> keys) throws IOException {
+    return getRecordsByKeysIterator(keys, getSchema());
+  }
+
+  default ClosableIterator<R> getRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema schema) throws IOException {
+    throw new UnsupportedEncodingException();
+  }
+
+  default ClosableIterator<R> getRecordsByKeyPrefixIterator(List<String> keyPrefixes) throws IOException {
+    return getRecordsByKeyPrefixIterator(keyPrefixes, getSchema());
   }
 
   Schema getSchema();

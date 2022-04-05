@@ -294,7 +294,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                                                                                                              List<Long> timings,
                                                                                                              String partitionName) throws IOException {
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> result = new ArrayList<>();
-    // merge with base records
     HoodieTimer timer = new HoodieTimer().startTimer();
     timer.startTimer();
 
@@ -335,13 +334,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   private Map<String, GenericRecord> getRecordsByKeyPrefixes(HoodieFileReader<GenericRecord> baseFileReader, List<String> keyPrefixes) throws IOException {
-    return toStream(baseFileReader.getRecordsByKeyPrefixIterator(keyPrefixes, METADATA_RECORD_SCHEMA))
+    return toStream(baseFileReader.getRecordsByKeyPrefixIterator(keyPrefixes))
         .map(record -> Pair.of((String) record.get(HoodieMetadataPayload.KEY_FIELD_NAME), record))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
   }
 
   private Map<String, GenericRecord> getRecordsByKeys(HoodieFileReader<GenericRecord> baseFileReader, List<String> keys) throws IOException {
-    return toStream(baseFileReader.getRecordsByKeysIterator(keys, METADATA_RECORD_SCHEMA))
+    return toStream(baseFileReader.getRecordsByKeysIterator(keys))
         .map(record -> Pair.of((String) record.get(HoodieMetadataPayload.KEY_FIELD_NAME), record))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
   }
