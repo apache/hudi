@@ -19,6 +19,7 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -61,6 +62,11 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
+/**
+ * NOTE: PLEASE READ DOCS & COMMENTS CAREFULLY BEFORE MAKING CHANGES
+ *
+ * {@link HoodieFileReader} implementation allowing to read from {@link HFile}.
+ */
 public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileReader<R> {
 
   // TODO HoodieHFileReader right now tightly coupled to MT, we should break that coupling
@@ -78,8 +84,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
 
   private final LazyRef<Schema> schema;
 
-  // NOTE: PLEASE READ THIS CAREFULLY
-  //       Reader is ONLY THREAD-SAFE for {@code Scanner} operating in Positional Read ("pread")
+  // NOTE: Reader is ONLY THREAD-SAFE for {@code Scanner} operating in Positional Read ("pread")
   //       mode (ie created w/ "pread = true")
   private final HFile.Reader reader;
   // NOTE: Scanner caches read blocks, therefore it's important to re-use scanner
@@ -105,21 +110,19 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   public HoodieHFileReader(Path path, HFile.Reader reader, Option<Schema> schemaOpt) throws IOException {
     this.path = path;
     this.reader = reader;
-    this.sharedScanner = getHFileScanner(reader);
+    // For shared scanner, which is primarily used for point-lookups, we're caching blocks
+    // by default, to minimize amount of traffic to the underlying storage
+    this.sharedScanner = getHFileScanner(reader, true);
     this.schema = schemaOpt.map(LazyRef::eager)
         .orElseGet(() -> LazyRef.lazy(() -> fetchSchema(reader)));
   }
 
   @Override
   public String[] readMinMaxRecordKeys() {
+    // NOTE: This access to reader is thread-safe
     HFileInfo fileInfo = reader.getHFileInfo();
     return new String[] {new String(fileInfo.get(KEY_MIN_RECORD.getBytes())),
         new String(fileInfo.get(KEY_MAX_RECORD.getBytes()))};
-  }
-
-  @Override
-  public Schema getSchema() {
-    return schema.get();
   }
 
   @Override
@@ -137,6 +140,11 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     } catch (IOException e) {
       throw new HoodieException("Could not read bloom filter from " + path, e);
     }
+  }
+
+  @Override
+  public Schema getSchema() {
+    return schema.get();
   }
 
   /**
@@ -164,30 +172,39 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     }
   }
 
+  @SuppressWarnings("unchecked")
+  @Override
+  public Option<R> getRecordByKey(String key, Schema readerSchema) throws IOException {
+    synchronized (sharedScannerLock) {
+      return (Option<R>) fetchRecordByKeyInternal(sharedScanner, key, getSchema(), readerSchema);
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  @Override
+  public ClosableIterator<R> getRecordIterator(Schema readerSchema) throws IOException {
+    // TODO eval whether seeking scanner would be faster than pread
+    HFileScanner scanner = getHFileScanner(reader, false);
+    return (ClosableIterator<R>) new RecordIterator(scanner, getSchema(), readerSchema);
+  }
+
+  @SuppressWarnings("unchecked")
+  @Override
+  public ClosableIterator<R> getRecordsByKeysIterator(List<String> keys, Schema readerSchema) throws IOException {
+    // NOTE: pread-based scanner will be most-likely on par w/ seeking scanner here,
+    //       due to sparsity of the looked up keys
+    HFileScanner scanner = getHFileScanner(reader, false);
+    return (ClosableIterator<R>) new RecordByKeyIterator(scanner, keys, getSchema(), readerSchema);
+  }
+
   @Override
   public ClosableIterator<R> getRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema readerSchema) throws IOException {
     return new RecordByKeyPrefixIterator(keyPrefixes, readerSchema);
   }
 
   @Override
-  public ClosableIterator<R> getRecordsByKeysIterator(List<String> keys, Schema schema) throws IOException {
-    return new RecordByKeyIterator(keys, schema);
-  }
-
-  @Override
-  public ClosableIterator<R> getRecordIterator(Schema readerSchema) throws IOException {
-    return new RecordIterator(readerSchema);
-  }
-
-  @Override
-  public Option<R> getRecordByKey(String key, Schema readerSchema) throws IOException {
-    synchronized (sharedScannerLock) {
-      return getRecordByKeyInternal(key, readerSchema, sharedScanner);
-    }
-  }
-
-  @Override
   public long getTotalRecords() {
+    // NOTE: This access to reader is thread-safe
     return reader.getEntries();
   }
 
@@ -254,8 +271,8 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     // Use `TreeMap` so that returned entries are sorted
     Map<String, R> values = new TreeMap<>();
     for (Pair<byte[], byte[]> kv : keyRecordsBytes) {
-      R record = deserialize(kv.getFirst(), kv.getSecond(), getSchema(), readerSchema);
-      values.put(new String(kv.getFirst()), record);
+      GenericRecord record = deserialize(kv.getFirst(), kv.getSecond(), getSchema(), readerSchema);
+      values.put(new String(kv.getFirst()), (R) record);
     }
 
     return values;
@@ -266,37 +283,30 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     return keyScanner.seekTo(kv) == 0;
   }
 
-  private Option<R> getRecordByKeyInternal(String key, Schema readerSchema, HFileScanner hFileScanner) throws IOException {
+  private static Option<GenericRecord> fetchRecordByKeyInternal(HFileScanner scanner, String key, Schema writerSchema, Schema readerSchema) throws IOException {
     KeyValue kv = new KeyValue(key.getBytes(), null, null, null);
-    if (hFileScanner.seekTo(kv) != 0) {
+    if (scanner.seekTo(kv) != 0) {
       return Option.empty();
     }
 
-    Cell c = hFileScanner.getCell();
+    Cell c = scanner.getCell();
     byte[] valueBytes = copyValueFromCell(c);
-    R record = deserialize(key.getBytes(), valueBytes, getSchema(), readerSchema);
+    GenericRecord record = deserialize(key.getBytes(), valueBytes, writerSchema, readerSchema);
 
     return Option.of(record);
   }
 
-  private Pair<String, R> getRecordFromCell(Cell cell, Schema writerSchema, Schema readerSchema) throws IOException {
+  private static GenericRecord getRecordFromCell(Cell cell, Schema writerSchema, Schema readerSchema) throws IOException {
     final byte[] keyBytes = copyKeyFromCell(cell);
     final byte[] valueBytes = copyValueFromCell(cell);
-    R record = deserialize(keyBytes, valueBytes, writerSchema, readerSchema);
-    return new Pair<>(new String(keyBytes), record);
+    return deserialize(keyBytes, valueBytes, writerSchema, readerSchema);
   }
 
-  /**
-   * Deserialize the record byte array contents to record object.
-   *
-   * @param keyBytes       - Record key as byte array
-   * @param valueBytes     - Record content as byte array
-   * @param writerSchema   - Writer schema
-   * @param readerSchema   - Reader schema
-   * @return Deserialized record object
-   */
-  private R deserialize(final byte[] keyBytes, final byte[] valueBytes, Schema writerSchema, Schema readerSchema) throws IOException {
-    R record = (R) HoodieAvroUtils.bytesToAvro(valueBytes, writerSchema, readerSchema);
+  private static GenericRecord deserialize(final byte[] keyBytes,
+                                           final byte[] valueBytes,
+                                           Schema writerSchema,
+                                           Schema readerSchema) throws IOException {
+    GenericRecord record = HoodieAvroUtils.bytesToAvro(valueBytes, writerSchema, readerSchema);
 
     getKeySchema(readerSchema).ifPresent(keyFieldSchema -> {
       final Object keyObject = record.get(keyFieldSchema.pos());
@@ -355,10 +365,10 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
         .collect(Collectors.toList());
   }
 
-  private static HFileScanner getHFileScanner(HFile.Reader reader) throws IOException {
+  private static HFileScanner getHFileScanner(HFile.Reader reader, boolean cacheBlocks) throws IOException {
     // NOTE: Only scanners created in Positional Read ("pread") mode could share the same reader,
     //       since scanners in default mode will be seeking w/in the underlying stream
-    return reader.getScanner(false, true);
+    return reader.getScanner(cacheBlocks, true);
   }
 
   private static Option<Schema.Field> getKeySchema(Schema schema) {
@@ -415,23 +425,24 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     }
   }
 
-  public class RecordByKeyIterator implements ClosableIterator<R> {
+  private static class RecordByKeyIterator implements ClosableIterator<GenericRecord> {
     private final Iterator<String> keyIterator;
-    private final HFileScanner hFileScanner;
-    private final Schema schema;
 
-    private R next = null;
+    private final HFileScanner scanner;
 
-    RecordByKeyIterator(List<String> keys, Schema schema) throws IOException {
+    private final Schema readerSchema;
+    private final Schema writerSchema;
+
+    private GenericRecord next = null;
+
+    RecordByKeyIterator(HFileScanner scanner, List<String> keys, Schema writerSchema, Schema readerSchema) throws IOException {
       this.keyIterator = keys.iterator();
-      this.schema = schema;
-      this.hFileScanner = reader.getScanner(false, false);
-      this.hFileScanner.seekTo(); // position at the beginning of the file
-    }
 
-    @Override
-    public void close() {
-      hFileScanner.close();
+      this.scanner = scanner;
+      this.scanner.seekTo(); // position at the beginning of the file
+
+      this.writerSchema = writerSchema;
+      this.readerSchema = readerSchema;
     }
 
     @Override
@@ -443,7 +454,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
         }
 
         while (keyIterator.hasNext()) {
-          Option<R> value = getRecordByKeyInternal(keyIterator.next(), schema, hFileScanner);
+          Option<GenericRecord> value = fetchRecordByKeyInternal(scanner, keyIterator.next(), writerSchema, readerSchema);
           if (value.isPresent()) {
             next = value.get();
             return true;
@@ -456,21 +467,29 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     }
 
     @Override
-    public R next() {
-      R next = this.next;
+    public GenericRecord next() {
+      GenericRecord next = this.next;
       this.next = null;
       return next;
     }
+
+    @Override
+    public void close() {
+      scanner.close();
+    }
   }
 
-  class RecordIterator implements ClosableIterator<R> {
-    private final HFileScanner hFileScanner;
+  private static class RecordIterator implements ClosableIterator<GenericRecord> {
+    private final HFileScanner scanner;
+    
+    private final Schema writerSchema;
     private final Schema readerSchema;
 
-    private R next = null;
+    private GenericRecord next = null;
 
-    RecordIterator(Schema readerSchema) {
-      this.hFileScanner = reader.getScanner(false, false);
+    RecordIterator(HFileScanner scanner, Schema writerSchema, Schema readerSchema) {
+      this.scanner = scanner;
+      this.writerSchema = writerSchema;
       this.readerSchema = readerSchema;
     }
 
@@ -483,18 +502,17 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
         }
 
         boolean hasRecords;
-        if (!hFileScanner.isSeeked()) {
-          hasRecords = hFileScanner.seekTo();
+        if (!scanner.isSeeked()) {
+          hasRecords = scanner.seekTo();
         } else {
-          hasRecords = hFileScanner.next();
+          hasRecords = scanner.next();
         }
 
         if (!hasRecords) {
           return false;
         }
 
-        Pair<String, R> keyRecordPair = getRecordFromCell(hFileScanner.getCell(), getSchema(), readerSchema);
-        this.next = keyRecordPair.getSecond();
+        this.next = getRecordFromCell(scanner.getCell(), writerSchema, readerSchema);
         return true;
       } catch (IOException io) {
         throw new HoodieIOException("unable to read next record from hfile ", io);
@@ -502,15 +520,15 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     }
 
     @Override
-    public R next() {
-      R next = this.next;
+    public GenericRecord next() {
+      GenericRecord next = this.next;
       this.next = null;
       return next;
     }
 
     @Override
     public void close() {
-      hFileScanner.close();
+      scanner.close();
     }
   }
 
