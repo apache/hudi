@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.avro.Schema.Parser
 import org.apache.avro.generic.GenericRecord
-import org.apache.hudi.ColumnStatsIndexSupport.{composeIndexSchema, deserialize, tryUnpackNonNullVal}
+import org.apache.hudi.ColumnStatsIndexSupport.{composeIndexSchema, deserialize, metadataRecordSchemaString, metadataRecordStructType, tryUnpackNonNullVal}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.model.HoodieMetadataRecord
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -78,13 +78,10 @@ trait ColumnStatsIndexSupport extends SparkAdapterSupport {
       .select(requiredMetadataIndexColumns.map(col): _*)
   }
 
-  private val metadataRecordSchemaString: String = HoodieMetadataRecord.SCHEMA$.toString
-  private val metadataRecordStructType: StructType = AvroConversionUtils.convertAvroSchemaToStructType(HoodieMetadataRecord.SCHEMA$)
-
   private def readColumnStatsIndexForColumns(spark: SparkSession,
-                                     targetColumns: Seq[String],
-                                     metadataConfig: HoodieMetadataConfig,
-                                     tableBasePath: String): DataFrame = {
+                                             targetColumns: Seq[String],
+                                             metadataConfig: HoodieMetadataConfig,
+                                             tableBasePath: String): DataFrame = {
     val targetColStatsIndexColumns = Seq(
       HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME,
       HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE,
@@ -184,34 +181,40 @@ trait ColumnStatsIndexSupport extends SparkAdapterSupport {
     //       of the transposed table
     val sortedColumns = TreeSet(targetColumns: _*)
 
-    val transposedRDD = colStatsDF.rdd
-      .filter(row => sortedColumns.contains(row.getString(colStatsSchemaOrdinalsMap("columnName"))))
-      .map { row =>
-        val (minValue, _) = tryUnpackNonNullVal(row.getAs[Row](colStatsSchemaOrdinalsMap("minValue")))
-        val (maxValue, _) = tryUnpackNonNullVal(row.getAs[Row](colStatsSchemaOrdinalsMap("maxValue")))
+    val colNameOrdinal = colStatsSchemaOrdinalsMap(HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME)
+    val minValueOrdinal = colStatsSchemaOrdinalsMap(HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE)
+    val maxValueOrdinal = colStatsSchemaOrdinalsMap(HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE)
+    val fileNameOrdinal = colStatsSchemaOrdinalsMap(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+    val nullCountOrdinal = colStatsSchemaOrdinalsMap(HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT)
 
-        val colName = row.getString(colStatsSchemaOrdinalsMap("columnName"))
+    val transposedRDD = colStatsDF.rdd
+      .filter(row => sortedColumns.contains(row.getString(colNameOrdinal)))
+      .map { row =>
+        val (minValue, _) = tryUnpackNonNullVal(row.getAs[Row](minValueOrdinal))
+        val (maxValue, _) = tryUnpackNonNullVal(row.getAs[Row](maxValueOrdinal))
+
+        val colName = row.getString(colNameOrdinal)
         val colType = tableSchemaFieldMap(colName).dataType
 
         val rowValsSeq = row.toSeq.toArray
 
-        rowValsSeq(colStatsSchemaOrdinalsMap("minValue")) = deserialize(minValue, colType)
-        rowValsSeq(colStatsSchemaOrdinalsMap("maxValue")) = deserialize(maxValue, colType)
+        rowValsSeq(minValueOrdinal) = deserialize(minValue, colType)
+        rowValsSeq(maxValueOrdinal) = deserialize(maxValue, colType)
 
         Row(rowValsSeq:_*)
       }
-      .groupBy(r => r.getString(colStatsSchemaOrdinalsMap("fileName")))
+      .groupBy(r => r.getString(fileNameOrdinal))
       .foldByKey(Seq[Row]()) {
         case (_, columnRows) =>
           // Rows seq is always non-empty (otherwise it won't be grouped into)
-          val fileName = columnRows.head.get(colStatsSchemaOrdinalsMap("fileName"))
+          val fileName = columnRows.head.get(fileNameOrdinal)
           val coalescedRowValuesSeq = columnRows.toSeq
             // NOTE: It's crucial to maintain appropriate ordering of the columns
             //       matching table layout
-            .sortBy(_.getString(colStatsSchemaOrdinalsMap("columnName")))
+            .sortBy(_.getString(colNameOrdinal))
             .foldLeft(Seq[Any](fileName)) {
               case (acc, columnRow) =>
-                acc ++ Seq("minValue", "maxValue", "nullCount").map(ord => columnRow.get(colStatsSchemaOrdinalsMap(ord)))
+                acc ++ Seq(minValueOrdinal, maxValueOrdinal, nullCountOrdinal).map(ord => columnRow.get(ord))
             }
 
           Seq(Row(coalescedRowValuesSeq:_*))
@@ -234,6 +237,9 @@ object ColumnStatsIndexSupport {
   private val COLUMN_STATS_INDEX_MIN_VALUE_STAT_NAME = "minValue"
   private val COLUMN_STATS_INDEX_MAX_VALUE_STAT_NAME = "maxValue"
   private val COLUMN_STATS_INDEX_NUM_NULLS_STAT_NAME = "num_nulls"
+
+  private val metadataRecordSchemaString: String = HoodieMetadataRecord.SCHEMA$.toString
+  private val metadataRecordStructType: StructType = AvroConversionUtils.convertAvroSchemaToStructType(HoodieMetadataRecord.SCHEMA$)
 
   /**
    * @VisibleForTesting
