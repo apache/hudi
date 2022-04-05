@@ -176,7 +176,7 @@ public class AWSGlueCatalogSyncClient extends AbstractHiveSyncHoodieClient {
   }
 
   @Override
-  public void dropPartitionsToTable(String tableName, List<String> partitionsToDrop) {
+  public void dropPartitions(String tableName, List<String> partitionsToDrop) {
     throw new UnsupportedOperationException("Not support dropPartitionsToTable yet.");
   }
 
