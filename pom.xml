@@ -1670,7 +1670,7 @@
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
-        <skipITs>true</skipITs>
+        <skipITs>false</skipITs>
       </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark3</module>

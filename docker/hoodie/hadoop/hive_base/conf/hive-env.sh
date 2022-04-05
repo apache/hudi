@@ -38,8 +38,7 @@
 
 # The heap size of the jvm stared by hive shell script can be controlled via:
 #
-# export HADOOP_HEAPSIZE=1024
-#
+export HADOOP_HEAPSIZE=4096
 # Larger heap size may be required when running queries over large number of files or partitions. 
 # By default hive shell scripts use a heap size of 256 (MB).  Larger heap size would also be 
 # appropriate for hive server (hwi etc).
