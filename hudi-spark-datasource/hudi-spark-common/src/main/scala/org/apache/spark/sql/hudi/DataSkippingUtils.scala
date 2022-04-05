@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.ColumnStatsIndexSupport.{getMaxColumnNameFor, getMinColumnNameFor, getNumNullsColumnNameFor}
+import org.apache.hudi.ColumnStatsIndexSupport.{getMaxColumnNameFor, getMinColumnNameFor, getNullCountColumnNameFor}
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.spark.internal.Logging
@@ -211,7 +211,7 @@ object DataSkippingUtils extends Logging {
           .map(colName => GreaterThan(genColNumNullsExpr(colName), Literal(0)))
 
       // Filter "colA is not null"
-      // Translates to "colA_nullCount = 0" for index lookup
+      // Translates to "colA_nullCount < colA_valueCount" for index lookup
       case IsNotNull(attribute: AttributeReference) =>
         getTargetIndexedColumnName(attribute, indexSchema)
           .map(colName => EqualTo(genColNumNullsExpr(colName), Literal(0)))
@@ -294,7 +294,7 @@ object DataSkippingUtils extends Logging {
     Set.apply(
       getMinColumnNameFor(colName),
       getMaxColumnNameFor(colName),
-      getNumNullsColumnNameFor(colName)
+      getNullCountColumnNameFor(colName)
     )
       .forall(stat => indexSchema.exists(_.name == stat))
   }
@@ -325,12 +325,14 @@ object DataSkippingUtils extends Logging {
 
 private object ColumnStatsExpressionUtils {
 
-  def genColMinValueExpr(colName: String): Expression =
+  @inline def genColMinValueExpr(colName: String): Expression =
     col(getMinColumnNameFor(colName)).expr
-  def genColMaxValueExpr(colName: String): Expression =
+
+  @inline def genColMaxValueExpr(colName: String): Expression =
     col(getMaxColumnNameFor(colName)).expr
-  def genColNumNullsExpr(colName: String): Expression =
-    col(getNumNullsColumnNameFor(colName)).expr
+
+  @inline def genColNumNullsExpr(colName: String): Expression =
+    col(getNullCountColumnNameFor(colName)).expr
 
   def genColumnValuesEqualToExpression(colName: String,
                                        value: Expression,
