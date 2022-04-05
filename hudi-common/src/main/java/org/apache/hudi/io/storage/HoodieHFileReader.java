@@ -21,7 +21,6 @@ package org.apache.hudi.io.storage;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PositionedReadable;
@@ -43,6 +42,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.util.LazyRef;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -74,26 +74,35 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
 
   private final Path path;
   private final Configuration conf;
+
+  private final LazyRef<Schema> schema;
+
+  // NOTE: PLEASE READ THIS CAREFULLY
+  //       Reader is ONLY THREAD-SAFE for {@code Scanner} operating in Positional Read ("pread")
+  //       mode (ie created w/ "pread = true")
   private final HFile.Reader reader;
-  // TODO make final
-  private Schema schema;
 
-  public HoodieHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig) throws IOException {
-    this.conf = configuration;
-    this.path = path;
-    this.reader = HoodieHFileUtils.createHFileReader(FSUtils.getFs(path.toString(), configuration), path, cacheConfig, conf);
+  public HoodieHFileReader(Configuration hadoopConf, Path path, CacheConfig cacheConfig) throws IOException {
+    this(hadoopConf,
+        path,
+        HoodieHFileUtils.createHFileReader(FSUtils.getFs(path.toString(), hadoopConf), path, cacheConfig, hadoopConf),
+        Option.empty());
   }
 
-  public HoodieHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig, FileSystem fs) throws IOException {
-    this.conf = configuration;
-    this.path = path;
-    this.reader = HoodieHFileUtils.createHFileReader(fs, path, cacheConfig, configuration);
+  public HoodieHFileReader(Configuration hadoopConf, Path path, CacheConfig cacheConfig, FileSystem fs) throws IOException {
+    this(hadoopConf, path, HoodieHFileUtils.createHFileReader(fs, path, cacheConfig, hadoopConf), Option.empty());
   }
 
-  public HoodieHFileReader(FileSystem fs, Path dummyPath, byte[] content) throws IOException {
-    this.reader = HoodieHFileUtils.createHFileReader(fs, dummyPath, content);
-    this.path = null;
-    this.conf = null;
+  public HoodieHFileReader(FileSystem fs, Path dummyPath, byte[] content, Option<Schema> schemaOpt) throws IOException {
+    this(null, null, HoodieHFileUtils.createHFileReader(fs, dummyPath, content), schemaOpt);
+  }
+
+  public HoodieHFileReader(Configuration hadoopConf, Path path, HFile.Reader reader, Option<Schema> schemaOpt) throws IOException {
+    this.conf = hadoopConf;
+    this.path = path;
+    this.reader = reader;
+    this.schema = schemaOpt.map(LazyRef::eager)
+        .orElseGet(() -> LazyRef.lazy(() -> fetchSchema(reader)));
   }
 
   @Override
@@ -105,19 +114,12 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
 
   @Override
   public Schema getSchema() {
-    if (schema == null) {
-      HFileInfo fileInfo = reader.getHFileInfo();
-      schema = new Schema.Parser().parse(new String(fileInfo.get(SCHEMA_KEY.getBytes())));
-    }
-
-    return schema;
+    return schema.get();
   }
 
-  /**
-   * Sets up the writer schema explicitly.
-   */
-  public void withSchema(Schema schema) {
-    this.schema = schema;
+  private static Schema fetchSchema(HFile.Reader reader) {
+    HFileInfo fileInfo = reader.getHFileInfo();
+    return new Schema.Parser().parse(new String(fileInfo.get(SCHEMA_KEY.getBytes())));
   }
 
   @Override
@@ -158,7 +160,6 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
 
   @Override
   public ClosableIterator<R> getRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema readerSchema) throws IOException {
-    this.schema = readerSchema;
     return new RecordByKeyPrefixIterator(keyPrefixes, readerSchema);
   }
 
