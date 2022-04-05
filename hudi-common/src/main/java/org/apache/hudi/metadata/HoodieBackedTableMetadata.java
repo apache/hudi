@@ -152,9 +152,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return engineContext.parallelize(partitionFileSlices)
         .flatMap(
             (SerializableFunction<FileSlice, Iterator<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>>>) fileSlice -> {
-              // we are moving the readers to executors in this code path. So, reusing readers may not make sense.
+              // NOTE: Since this will be executed by executors, we can't access previously cached
+              //       readers, and therefore have to always open new ones
               Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> readers =
-                  openReadersIfNeeded(partitionName, fileSlice, false);
+                  openReaders(partitionName, fileSlice);
               try {
                 List<Long> timings = new ArrayList<>();
 
@@ -194,19 +195,17 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> result = new ArrayList<>();
     AtomicInteger fileSlicesKeysCount = new AtomicInteger();
     partitionFileSliceToKeysMap.forEach((partitionFileSlicePair, fileSliceKeys) -> {
-      Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> readers = openReadersIfNeeded(partitionName,
-          partitionFileSlicePair.getRight(), true);
+      Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> readers =
+          getOrCreateReaders(partitionName, partitionFileSlicePair.getRight());
       try {
         List<Long> timings = new ArrayList<>();
         HoodieFileReader baseFileReader = readers.getKey();
         HoodieMetadataMergedLogRecordReader logRecordScanner = readers.getRight();
-
         if (baseFileReader == null && logRecordScanner == null) {
           return;
         }
 
         boolean fullKeys = true;
-
         Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords =
             readLogRecords(logRecordScanner, fileSliceKeys, fullKeys, timings);
 
@@ -425,20 +424,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    *
    * @param partitionName    - Partition name
    * @param slice            - The file slice to open readers for
-   * @param useCachedReaders true if cached readers can be used. false otherwise.
    * @return File reader and the record scanner pair for the requested file slice
    */
-  private Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> openReadersIfNeeded(String partitionName, FileSlice slice, boolean useCachedReaders) {
-    if (useCachedReaders) {
-      return partitionReaders.computeIfAbsent(Pair.of(partitionName, slice.getFileId()), k -> openReaders(partitionName, slice));
-    } else {
-      // col stats look up deletegate the reading of file slices to executors. So, reusing readers may not make sense.
-      return openReaders(partitionName, slice);
-    }
+  private Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> getOrCreateReaders(String partitionName, FileSlice slice) {
+    return partitionReaders.computeIfAbsent(Pair.of(partitionName, slice.getFileId()), k -> openReaders(partitionName, slice));
   }
 
   private Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> openReaders(String partitionName, FileSlice slice) {
-
     try {
       HoodieTimer timer = new HoodieTimer().startTimer();
       // Open base file reader
