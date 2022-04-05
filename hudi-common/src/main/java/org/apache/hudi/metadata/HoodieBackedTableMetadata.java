@@ -497,7 +497,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return validInstantTimestamps;
   }
 
-  public Pair<HoodieMetadataMergedLogRecordReader, Long> getLogRecordScanner(List<HoodieLogFile> logFiles, String partitionName) {
+  public Pair<HoodieMetadataMergedLogRecordReader, Long> getLogRecordScanner(List<HoodieLogFile> logFiles,
+                                                                             String partitionName) {
+    return getLogRecordScanner(logFiles, partitionName, Option.empty());
+  }
+
+  public Pair<HoodieMetadataMergedLogRecordReader, Long> getLogRecordScanner(List<HoodieLogFile> logFiles,
+                                                                             String partitionName,
+                                                                             Option<Boolean> allowFullScanOverride) {
     HoodieTimer timer = new HoodieTimer().startTimer();
     List<String> sortedLogFilePaths = logFiles.stream()
         .sorted(HoodieLogFile.getLogFileComparator())
@@ -511,7 +518,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     Option<HoodieInstant> latestMetadataInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
     String latestMetadataInstantTime = latestMetadataInstant.map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
 
-    boolean allowFullScan = isFullScanAllowedForPartition(partitionName);
+    boolean allowFullScan = allowFullScanOverride.orElseGet(() -> isFullScanAllowedForPartition(partitionName));
 
     // Load the schema
     Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
@@ -538,10 +545,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return Pair.of(logRecordScanner, logScannerOpenMs);
   }
 
+  // NOTE: We're allowing eager full-scan of the log-files only for "files" partition.
+  //       Other partitions (like "column_stats", "bloom_filters") will have to be fetched
+  //       t/h point-lookups
   private boolean isFullScanAllowedForPartition(String partitionName) {
-    // NOTE: We're allowing eager full-scan of the log-files only for "files" partition.
-    //       Other partitions (like "column_stats", "bloom_filters") will have to be fetched
-    //       t/h point-lookups
     switch (partitionName) {
       case PARTITION_NAME_FILES:
         return metadataConfig.allowFullScan();
