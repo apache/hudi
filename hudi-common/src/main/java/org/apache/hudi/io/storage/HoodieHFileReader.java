@@ -51,6 +51,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
@@ -261,18 +262,17 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
 
     class KeyPrefixIterator implements Iterator<GenericRecord> {
       private GenericRecord next = null;
+      private boolean eof = false;
 
       @Override
       public boolean hasNext() {
         if (next != null) {
           return true;
-        }
-
-        Cell c = scanner.getCell();
-        if (c == null) {
+        } else if (eof) {
           return false;
         }
 
+        Cell c = Objects.requireNonNull(scanner.getCell());
         byte[] keyBytes = copyKeyFromCell(c);
         String key = new String(keyBytes);
         // Check whether we're still reading records corresponding to the key-prefix
@@ -282,7 +282,14 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
 
         // Extract the byte value before releasing the lock since we cannot hold on to the returned cell afterwards
         byte[] valueBytes = copyValueFromCell(c);
-        next = deserializeUnchecked(keyBytes, valueBytes, writerSchema, readerSchema);
+        try {
+          next = deserialize(keyBytes, valueBytes, writerSchema, readerSchema);
+          // In case scanner is not able to advance, it means we reached EOF
+          eof = !scanner.next();
+        } catch (IOException e) {
+          throw new HoodieIOException("Failed to deserialize payload", e);
+        }
+
         return true;
       }
 
