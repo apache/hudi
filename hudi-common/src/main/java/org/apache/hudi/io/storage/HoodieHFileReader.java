@@ -82,6 +82,11 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   //       Reader is ONLY THREAD-SAFE for {@code Scanner} operating in Positional Read ("pread")
   //       mode (ie created w/ "pread = true")
   private final HFile.Reader reader;
+  // NOTE: Scanner caches read blocks, therefore it's important to re-use scanner
+  //       wherever possible
+  private final HFileScanner sharedScanner;
+
+  private final Object sharedScannerLock = new Object();
 
   public HoodieHFileReader(Configuration hadoopConf, Path path, CacheConfig cacheConfig) throws IOException {
     this(path,
@@ -100,6 +105,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   public HoodieHFileReader(Path path, HFile.Reader reader, Option<Schema> schemaOpt) throws IOException {
     this.path = path;
     this.reader = reader;
+    this.sharedScanner = getHFileScanner(reader);
     this.schema = schemaOpt.map(LazyRef::eager)
         .orElseGet(() -> LazyRef.lazy(() -> fetchSchema(reader)));
   }
@@ -143,15 +149,19 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
    */
   @Override
   public Set<String> filterRowKeys(Set<String> candidateRowKeys) {
-    HFileScanner hFileScanner = getHFileScannerUnchecked();
-    return candidateRowKeys.stream().filter(k -> {
-      try {
-        return isKeyAvailable(k, hFileScanner);
-      } catch (IOException e) {
-        LOG.error("Failed to check key availability: " + k);
-        return false;
-      }
-    }).collect(Collectors.toSet());
+    checkState(candidateRowKeys instanceof TreeSet,
+        String.format("HFile reader expects a TreeSet as iterating over ordered keys is more performant, got (%s)", candidateRowKeys.getClass().getSimpleName()));
+
+    synchronized (sharedScannerLock) {
+      return candidateRowKeys.stream().filter(k -> {
+        try {
+          return isKeyAvailable(k, sharedScanner);
+        } catch (IOException e) {
+          LOG.error("Failed to check key availability: " + k);
+          return false;
+        }
+      }).collect(Collectors.toSet());
+    }
   }
 
   @Override
@@ -171,8 +181,9 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
 
   @Override
   public Option<R> getRecordByKey(String key, Schema readerSchema) throws IOException {
-    HFileScanner hFileScanner = getHFileScanner();
-    return getRecordByKeyInternal(key, readerSchema, hFileScanner);
+    synchronized (sharedScannerLock) {
+      return getRecordByKeyInternal(key, readerSchema, sharedScanner);
+    }
   }
 
   @Override
