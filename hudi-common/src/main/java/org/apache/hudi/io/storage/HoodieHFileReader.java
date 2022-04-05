@@ -288,8 +288,8 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   private R deserialize(final byte[] keyBytes, final byte[] valueBytes, Schema writerSchema, Schema readerSchema) throws IOException {
     R record = (R) HoodieAvroUtils.bytesToAvro(valueBytes, writerSchema, readerSchema);
 
-    getKeySchema(writerSchema).ifPresent(keyFieldSchema -> {
-      final Object keyObject = getRecordKey(record, keyFieldSchema);
+    getKeySchema(readerSchema).ifPresent(keyFieldSchema -> {
+      final Object keyObject = record.get(keyFieldSchema.pos());
       if (keyObject != null && keyObject.toString().isEmpty()) {
         record.put(keyFieldSchema.pos(), new String(keyBytes));
       }
@@ -363,10 +363,6 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     } catch (IOException e) {
       throw new HoodieIOException("Cannot seek to beginning of HFile " + reader.getHFileInfo().toString(), e);
     }
-  }
-
-  private static <R extends IndexedRecord> String getRecordKey(R record, Schema.Field keyFieldSchema) {
-    return (String) record.get(keyFieldSchema.pos());
   }
 
   private static Option<Schema.Field> getKeySchema(Schema schema) {
