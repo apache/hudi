@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.ColumnStatsIndexSupport.{getMaxColumnNameFor, getMinColumnNameFor, getNullCountColumnNameFor}
+import org.apache.hudi.ColumnStatsIndexSupport.{getMaxColumnNameFor, getMinColumnNameFor, getNullCountColumnNameFor, getValueCountColumnNameFor}
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.spark.internal.Logging
@@ -214,7 +214,7 @@ object DataSkippingUtils extends Logging {
       // Translates to "colA_nullCount < colA_valueCount" for index lookup
       case IsNotNull(attribute: AttributeReference) =>
         getTargetIndexedColumnName(attribute, indexSchema)
-          .map(colName => EqualTo(genColNumNullsExpr(colName), Literal(0)))
+          .map(colName => LessThan(genColNumNullsExpr(colName), genColValueCountExpr(colName)))
 
       // Filter "expr(colA) in (B1, B2, ...)"
       // Translates to "(colA_minValue <= B1 AND colA_maxValue >= B1) OR (colA_minValue <= B2 AND colA_maxValue >= B2) ... "
@@ -334,7 +334,10 @@ private object ColumnStatsExpressionUtils {
   @inline def genColNumNullsExpr(colName: String): Expression =
     col(getNullCountColumnNameFor(colName)).expr
 
-  def genColumnValuesEqualToExpression(colName: String,
+  @inline def genColValueCountExpr(colName: String): Expression =
+    col(getValueCountColumnNameFor(colName)).expr
+
+  @inline def genColumnValuesEqualToExpression(colName: String,
                                        value: Expression,
                                        targetExprBuilder: Function[Expression, Expression] = Predef.identity): Expression = {
     // TODO clean up
