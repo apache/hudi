@@ -1747,8 +1747,8 @@
       <properties>
         <flink.version>${flink1.14.version}</flink.version>
         <flink.runtime.artifactId>flink-runtime</flink.runtime.artifactId>
-        <flink.table.runtime.artifactId>flink-table-runtime_${scala.binary.version}</flink.table.runtime.artifactId>
-        <flink.table.planner.artifactId>flink-table-planner_${scala.binary.version}</flink.table.planner.artifactId>
+        <flink.table.runtime.artifactId>flink-table-runtime_2.12</flink.table.runtime.artifactId>
+        <flink.table.planner.artifactId>flink-table-planner_2.12</flink.table.planner.artifactId>
         <hudi.flink.module>hudi-flink1.14.x</hudi.flink.module>
         <flink.bundle.version>1.14</flink.bundle.version>
         <skipITs>true</skipITs>
