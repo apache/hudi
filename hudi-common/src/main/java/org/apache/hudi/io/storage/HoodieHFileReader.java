@@ -61,19 +61,19 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
 
 public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileReader<R> {
-  public static final String SCHEMA_KEY = "schema";
 
   // TODO HoodieHFileReader right now tightly coupled to MT, we should break that coupling
-  public static final String KEY_FIELD_NAME = "key";
+  public static final String SCHEMA_KEY = "schema";
   public static final String KEY_BLOOM_FILTER_META_BLOCK = "bloomFilter";
   public static final String KEY_BLOOM_FILTER_TYPE_CODE = "bloomFilterTypeCode";
+
+  public static final String KEY_FIELD_NAME = "key";
   public static final String KEY_MIN_RECORD = "minRecordKey";
   public static final String KEY_MAX_RECORD = "maxRecordKey";
 
   private static final Logger LOG = LogManager.getLogger(HoodieHFileReader.class);
 
   private final Path path;
-  private final Configuration conf;
 
   private final LazyRef<Schema> schema;
 
@@ -83,22 +83,20 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   private final HFile.Reader reader;
 
   public HoodieHFileReader(Configuration hadoopConf, Path path, CacheConfig cacheConfig) throws IOException {
-    this(hadoopConf,
-        path,
+    this(path,
         HoodieHFileUtils.createHFileReader(FSUtils.getFs(path.toString(), hadoopConf), path, cacheConfig, hadoopConf),
         Option.empty());
   }
 
   public HoodieHFileReader(Configuration hadoopConf, Path path, CacheConfig cacheConfig, FileSystem fs) throws IOException {
-    this(hadoopConf, path, HoodieHFileUtils.createHFileReader(fs, path, cacheConfig, hadoopConf), Option.empty());
+    this(path, HoodieHFileUtils.createHFileReader(fs, path, cacheConfig, hadoopConf), Option.empty());
   }
 
   public HoodieHFileReader(FileSystem fs, Path dummyPath, byte[] content, Option<Schema> schemaOpt) throws IOException {
-    this(null, null, HoodieHFileUtils.createHFileReader(fs, dummyPath, content), schemaOpt);
+    this(null, HoodieHFileUtils.createHFileReader(fs, dummyPath, content), schemaOpt);
   }
 
-  public HoodieHFileReader(Configuration hadoopConf, Path path, HFile.Reader reader, Option<Schema> schemaOpt) throws IOException {
-    this.conf = hadoopConf;
+  public HoodieHFileReader(Path path, HFile.Reader reader, Option<Schema> schemaOpt) throws IOException {
     this.path = path;
     this.reader = reader;
     this.schema = schemaOpt.map(LazyRef::eager)
