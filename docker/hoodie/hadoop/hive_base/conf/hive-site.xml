@@ -15,8 +15,4 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 --><configuration>
-    <property>
-        <name>hive.vectorized.execution.enabled</name>
-        <value>false</value>
-    </property>
 </configuration>

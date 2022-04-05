@@ -535,6 +535,7 @@
               <envFile>${dockerCompose.envFile}</envFile>
             </configuration>
           </execution>
+          <!--
           <execution>
             <id>down</id>
             <phase>post-integration-test</phase>
@@ -547,6 +548,7 @@
               <removeVolumes>true</removeVolumes>
             </configuration>
           </execution>
+          -->
         </executions>
       </plugin>
       <plugin>
