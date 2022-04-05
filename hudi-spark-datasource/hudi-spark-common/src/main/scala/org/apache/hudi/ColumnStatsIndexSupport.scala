@@ -134,6 +134,7 @@ trait ColumnStatsIndexSupport extends SparkAdapterSupport {
     val maxValueOrdinal = colStatsSchemaOrdinalsMap(HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE)
     val fileNameOrdinal = colStatsSchemaOrdinalsMap(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
     val nullCountOrdinal = colStatsSchemaOrdinalsMap(HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT)
+    val valueCountOrdinal = colStatsSchemaOrdinalsMap(HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT)
 
     val transposedRDD = colStatsDF.rdd
       .filter(row => sortedColumns.contains(row.getString(colNameOrdinal)))
@@ -162,7 +163,7 @@ trait ColumnStatsIndexSupport extends SparkAdapterSupport {
             .sortBy(_.getString(colNameOrdinal))
             .foldLeft(Seq[Any](fileName)) {
               case (acc, columnRow) =>
-                acc ++ Seq(minValueOrdinal, maxValueOrdinal, nullCountOrdinal).map(ord => columnRow.get(ord))
+                acc ++ Seq(minValueOrdinal, maxValueOrdinal, nullCountOrdinal, valueCountOrdinal).map(ord => columnRow.get(ord))
             }
 
           Seq(Row(coalescedRowValuesSeq:_*))
