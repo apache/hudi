@@ -75,7 +75,6 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   private final Path path;
   private final Configuration conf;
   private final HFile.Reader reader;
-  private final FSDataInputStream fsDataInputStream;
   // TODO make final
   private Schema schema;
 
@@ -83,13 +82,11 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     this.conf = configuration;
     this.path = path;
     this.reader = HoodieHFileUtils.createHFileReader(FSUtils.getFs(path.toString(), configuration), path, cacheConfig, conf);
-    this.fsDataInputStream = null;
   }
 
   public HoodieHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig, FileSystem fs) throws IOException {
     this.conf = configuration;
     this.path = path;
-    this.fsDataInputStream = fs.open(path);
     this.reader = HoodieHFileUtils.createHFileReader(fs, path, cacheConfig, configuration);
   }
 
@@ -97,7 +94,6 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     this.reader = HoodieHFileUtils.createHFileReader(fs, dummyPath, content);
     this.path = null;
     this.conf = null;
-    this.fsDataInputStream = null;
   }
 
   @Override
@@ -307,9 +303,6 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   public synchronized void close() {
     try {
       reader.close();
-      if (fsDataInputStream != null) {
-        fsDataInputStream.close();
-      }
     } catch (IOException e) {
       throw new HoodieIOException("Error closing the hfile reader", e);
     }
