@@ -46,7 +46,6 @@ import org.apache.hudi.util.LazyRef;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -56,9 +55,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileReader<R> {
 
@@ -115,20 +116,17 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     return schema.get();
   }
 
-  private static Schema fetchSchema(HFile.Reader reader) {
-    HFileInfo fileInfo = reader.getHFileInfo();
-    return new Schema.Parser().parse(new String(fileInfo.get(SCHEMA_KEY.getBytes())));
-  }
-
   @Override
   public BloomFilter readBloomFilter() {
-    HFileInfo fileInfo;
     try {
-      fileInfo = reader.getHFileInfo();
-      ByteBuff serializedFilter = reader.getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK, false).getBufferWithoutHeader();
-      byte[] filterBytes = new byte[serializedFilter.remaining()];
-      serializedFilter.get(filterBytes); // read the bytes that were written
-      return BloomFilterFactory.fromString(new String(filterBytes),
+      // NOTE: This access to reader is thread-safe
+      HFileInfo fileInfo = reader.getHFileInfo();
+      ByteBuff buf = reader.getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK, false).getBufferWithoutHeader();
+      // We have to copy bytes here, since we can't reuse buffer's underlying
+      // array as is, since it contains additional metadata (header)
+      byte[] bytes = new byte[buf.remaining()];
+      buf.get(bytes);
+      return BloomFilterFactory.fromString(new String(bytes),
           new String(fileInfo.get(KEY_BLOOM_FILTER_TYPE_CODE.getBytes())));
     } catch (IOException e) {
       throw new HoodieException("Could not read bloom filter from " + path, e);
@@ -175,6 +173,20 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   public Option<R> getRecordByKey(String key, Schema readerSchema) throws IOException {
     HFileScanner hFileScanner = getHFileScanner();
     return getRecordByKeyInternal(key, readerSchema, hFileScanner);
+  }
+
+  @Override
+  public long getTotalRecords() {
+    return reader.getEntries();
+  }
+
+  @Override
+  public synchronized void close() {
+    try {
+      reader.close();
+    } catch (IOException e) {
+      throw new HoodieIOException("Error closing the hfile reader", e);
+    }
   }
 
   private Map<String, R> getRecordsByKeyPrefixesInternal(List<String> keyPrefixes, HFileScanner hFileScanner, Schema readerSchema) throws IOException {
@@ -263,14 +275,6 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     return new Pair<>(new String(keyBytes), record);
   }
 
-  private static byte[] copyKeyFromCell(Cell cell) {
-    return Arrays.copyOfRange(cell.getRowArray(), cell.getRowOffset(), cell.getRowOffset() + cell.getRowLength());
-  }
-
-  private static byte[] copyValueFromCell(Cell c) {
-    return Arrays.copyOfRange(c.getValueArray(), c.getValueOffset(), c.getValueOffset() + c.getValueLength());
-  }
-
   /**
    * Deserialize the record byte array contents to record object.
    *
@@ -293,18 +297,17 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     return record;
   }
 
-  @Override
-  public long getTotalRecords() {
-    return reader.getEntries();
+  private static Schema fetchSchema(HFile.Reader reader) {
+    HFileInfo fileInfo = reader.getHFileInfo();
+    return new Schema.Parser().parse(new String(fileInfo.get(SCHEMA_KEY.getBytes())));
   }
 
-  @Override
-  public synchronized void close() {
-    try {
-      reader.close();
-    } catch (IOException e) {
-      throw new HoodieIOException("Error closing the hfile reader", e);
-    }
+  private static byte[] copyKeyFromCell(Cell cell) {
+    return Arrays.copyOfRange(cell.getRowArray(), cell.getRowOffset(), cell.getRowOffset() + cell.getRowLength());
+  }
+
+  private static byte[] copyValueFromCell(Cell c) {
+    return Arrays.copyOfRange(c.getValueArray(), c.getValueOffset(), c.getValueOffset() + c.getValueLength());
   }
 
   /**
@@ -341,20 +344,10 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
         .collect(Collectors.toList());
   }
 
-  @Nonnull
-  private HFileScanner getHFileScanner() throws IOException {
-    HFileScanner hFileScanner = reader.getScanner(false, false);
-    hFileScanner.seekTo(); // seek to beginning of file.
-    return hFileScanner;
-  }
-
-  @Nonnull
-  private HFileScanner getHFileScannerUnchecked() {
-    try {
-      return getHFileScanner();
-    } catch (IOException e) {
-      throw new HoodieIOException("Cannot seek to beginning of HFile " + reader.getHFileInfo().toString(), e);
-    }
+  private static HFileScanner getHFileScanner(HFile.Reader reader) throws IOException {
+    // NOTE: Only scanners created in Positional Read ("pread") mode could share the same reader,
+    //       since scanners in default mode will be seeking w/in the underlying stream
+    return reader.getScanner(false, true);
   }
 
   private static Option<Schema.Field> getKeySchema(Schema schema) {
