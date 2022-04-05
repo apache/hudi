@@ -157,7 +157,7 @@ trait ColumnStatsIndexSupport extends SparkAdapterSupport {
         case (_, columnRows) =>
           // Rows seq is always non-empty (otherwise it won't be grouped into)
           val fileName = columnRows.head.get(fileNameOrdinal)
-          val valueCount = columnRows.head.get(fileNameOrdinal)
+          val valueCount = columnRows.head.get(valueCountOrdinal)
 
           val coalescedRowValuesSeq = columnRows.toSeq
             // NOTE: It's crucial to maintain appropriate ordering of the columns
