@@ -214,7 +214,7 @@ object DataSkippingUtils extends Logging {
       // Translates to "colA_nullCount < colA_valueCount" for index lookup
       case IsNotNull(attribute: AttributeReference) =>
         getTargetIndexedColumnName(attribute, indexSchema)
-          .map(colName => LessThan(genColNumNullsExpr(colName), genColValueCountExpr(colName)))
+          .map(colName => LessThan(genColNumNullsExpr(colName), genColValueCountExpr))
 
       // Filter "expr(colA) in (B1, B2, ...)"
       // Translates to "(colA_minValue <= B1 AND colA_maxValue >= B1) OR (colA_minValue <= B2 AND colA_maxValue >= B2) ... "
@@ -325,24 +325,14 @@ object DataSkippingUtils extends Logging {
 
 private object ColumnStatsExpressionUtils {
 
-  @inline def genColMinValueExpr(colName: String): Expression =
-    col(getMinColumnNameFor(colName)).expr
-
-  @inline def genColMaxValueExpr(colName: String): Expression =
-    col(getMaxColumnNameFor(colName)).expr
-
-  @inline def genColNumNullsExpr(colName: String): Expression =
-    col(getNullCountColumnNameFor(colName)).expr
-
-  @inline def genColValueCountExpr(colName: String): Expression =
-    col(getValueCountColumnNameFor(colName)).expr
+  @inline def genColMinValueExpr(colName: String): Expression = col(getMinColumnNameFor(colName)).expr
+  @inline def genColMaxValueExpr(colName: String): Expression = col(getMaxColumnNameFor(colName)).expr
+  @inline def genColNumNullsExpr(colName: String): Expression = col(getNullCountColumnNameFor(colName)).expr
+  @inline def genColValueCountExpr: Expression = col(getValueCountColumnNameFor).expr
 
   @inline def genColumnValuesEqualToExpression(colName: String,
                                        value: Expression,
                                        targetExprBuilder: Function[Expression, Expression] = Predef.identity): Expression = {
-    // TODO clean up
-    checkState(isValueExpression(value))
-
     val minValueExpr = targetExprBuilder.apply(genColMinValueExpr(colName))
     val maxValueExpr = targetExprBuilder.apply(genColMaxValueExpr(colName))
     // Only case when column C contains value V is when min(C) <= V <= max(c)
@@ -352,9 +342,6 @@ private object ColumnStatsExpressionUtils {
   def genColumnOnlyValuesEqualToExpression(colName: String,
                                            value: Expression,
                                            targetExprBuilder: Function[Expression, Expression] = Predef.identity): Expression = {
-    // TODO clean up
-    checkState(isValueExpression(value))
-
     val minValueExpr = targetExprBuilder.apply(genColMinValueExpr(colName))
     val maxValueExpr = targetExprBuilder.apply(genColMaxValueExpr(colName))
     // Only case when column C contains _only_ value V is when min(C) = V AND max(c) = V

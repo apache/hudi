@@ -157,13 +157,15 @@ trait ColumnStatsIndexSupport extends SparkAdapterSupport {
         case (_, columnRows) =>
           // Rows seq is always non-empty (otherwise it won't be grouped into)
           val fileName = columnRows.head.get(fileNameOrdinal)
+          val valueCount = columnRows.head.get(fileNameOrdinal)
+
           val coalescedRowValuesSeq = columnRows.toSeq
             // NOTE: It's crucial to maintain appropriate ordering of the columns
             //       matching table layout
             .sortBy(_.getString(colNameOrdinal))
-            .foldLeft(Seq[Any](fileName)) {
+            .foldLeft(Seq[Any](fileName, valueCount)) {
               case (acc, columnRow) =>
-                acc ++ Seq(minValueOrdinal, maxValueOrdinal, nullCountOrdinal, valueCountOrdinal).map(ord => columnRow.get(ord))
+                acc ++ Seq(minValueOrdinal, maxValueOrdinal, nullCountOrdinal).map(ord => columnRow.get(ord))
             }
 
           Seq(Row(coalescedRowValuesSeq:_*))
@@ -239,16 +241,17 @@ object ColumnStatsIndexSupport {
    */
   def composeIndexSchema(targetColumnNames: Seq[String], tableSchema: StructType): StructType = {
     val fileNameField = StructField(COLUMN_STATS_INDEX_FILE_COLUMN_NAME, StringType, nullable = true, Metadata.empty)
+    val valueCountField = StructField(COLUMN_STATS_INDEX_VALUE_COUNT_STAT_NAME, LongType, nullable = true, Metadata.empty)
+
     val targetFields = targetColumnNames.map(colName => tableSchema.fields.find(f => f.name == colName).get)
 
     StructType(
-      targetFields.foldLeft(Seq(fileNameField)) {
+      targetFields.foldLeft(Seq(fileNameField, valueCountField)) {
         case (acc, field) =>
           acc ++ Seq(
             composeColumnStatStructType(field.name, COLUMN_STATS_INDEX_MIN_VALUE_STAT_NAME, field.dataType),
             composeColumnStatStructType(field.name, COLUMN_STATS_INDEX_MAX_VALUE_STAT_NAME, field.dataType),
-            composeColumnStatStructType(field.name, COLUMN_STATS_INDEX_NULL_COUNT_STAT_NAME, LongType),
-            composeColumnStatStructType(field.name, COLUMN_STATS_INDEX_VALUE_COUNT_STAT_NAME, LongType))
+            composeColumnStatStructType(field.name, COLUMN_STATS_INDEX_NULL_COUNT_STAT_NAME, LongType))
       }
     )
   }
@@ -262,8 +265,8 @@ object ColumnStatsIndexSupport {
   @inline def getNullCountColumnNameFor(colName: String): String =
     formatColName(colName, COLUMN_STATS_INDEX_NULL_COUNT_STAT_NAME)
 
-  @inline def getValueCountColumnNameFor(colName: String): String =
-    formatColName(colName, COLUMN_STATS_INDEX_VALUE_COUNT_STAT_NAME)
+  @inline def getValueCountColumnNameFor: String =
+    COLUMN_STATS_INDEX_VALUE_COUNT_STAT_NAME
 
   @inline private def formatColName(col: String, statName: String) = { // TODO add escaping for
     String.format("%s_%s", col, statName)
