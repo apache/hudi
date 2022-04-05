@@ -135,7 +135,7 @@ object DataSkippingUtils extends Logging {
           }
 
       // Filter "colA = null"
-      // Translates to "colA_num_nulls = null" for index lookup
+      // Translates to "colA_nullCount = null" for index lookup
       case EqualNullSafe(attrRef: AttributeReference, litNull @ Literal(null, _)) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map(colName => EqualTo(genColNumNullsExpr(colName), litNull))
@@ -205,13 +205,13 @@ object DataSkippingUtils extends Logging {
           }
 
       // Filter "colA is null"
-      // Translates to "colA_num_nulls > 0" for index lookup
+      // Translates to "colA_nullCount > 0" for index lookup
       case IsNull(attribute: AttributeReference) =>
         getTargetIndexedColumnName(attribute, indexSchema)
           .map(colName => GreaterThan(genColNumNullsExpr(colName), Literal(0)))
 
       // Filter "colA is not null"
-      // Translates to "colA_num_nulls = 0" for index lookup
+      // Translates to "colA_nullCount = 0" for index lookup
       case IsNotNull(attribute: AttributeReference) =>
         getTargetIndexedColumnName(attribute, indexSchema)
           .map(colName => EqualTo(genColNumNullsExpr(colName), Literal(0)))

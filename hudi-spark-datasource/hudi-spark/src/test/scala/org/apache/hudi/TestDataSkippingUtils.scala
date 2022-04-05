@@ -40,17 +40,17 @@ case class IndexRow(fileName: String,
                     // Corresponding A column is LongType
                     A_minValue: Long = -1,
                     A_maxValue: Long = -1,
-                    A_num_nulls: Long = -1,
+                    A_nullCount: Long = -1,
 
                     // Corresponding B column is StringType
                     B_minValue: String = null,
                     B_maxValue: String = null,
-                    B_num_nulls: Long = -1,
+                    B_nullCount: Long = -1,
 
                     // Corresponding B column is TimestampType
                     C_minValue: Timestamp = null,
                     C_maxValue: Timestamp = null,
-                    C_num_nulls: Long = -1) {
+                    C_nullCount: Long = -1) {
   def toRow: Row = Row(productIterator.toSeq: _*)
 }
 
@@ -390,11 +390,11 @@ object TestDataSkippingUtils {
           IndexRow("file_1",
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
             C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
-            C_num_nulls = 0),
+            C_nullCount = 0),
           IndexRow("file_2",
             C_minValue = new Timestamp(1646625048000L), // 03/07/2022
             C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
-            C_num_nulls = 0)
+            C_nullCount = 0)
         ),
         Seq("file_2")),
       arguments(
@@ -403,11 +403,11 @@ object TestDataSkippingUtils {
           IndexRow("file_1",
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
             C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
-            C_num_nulls = 0),
+            C_nullCount = 0),
           IndexRow("file_2",
             C_minValue = new Timestamp(1646625048000L), // 03/07/2022
             C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
-            C_num_nulls = 0)
+            C_nullCount = 0)
         ),
         Seq("file_2")),
       arguments(
@@ -416,11 +416,11 @@ object TestDataSkippingUtils {
           IndexRow("file_1",
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
             C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
-            C_num_nulls = 0),
+            C_nullCount = 0),
           IndexRow("file_2",
             C_minValue = new Timestamp(1646625048000L), // 03/07/2022
             C_maxValue = new Timestamp(1646625048000L), // 03/07/2022
-            C_num_nulls = 0)
+            C_nullCount = 0)
         ),
         Seq("file_1")),
       arguments(
@@ -429,11 +429,11 @@ object TestDataSkippingUtils {
           IndexRow("file_1",
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
             C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
-            C_num_nulls = 0),
+            C_nullCount = 0),
           IndexRow("file_2",
             C_minValue = new Timestamp(1646625048000L), // 03/07/2022
             C_maxValue = new Timestamp(1646625048000L), // 03/07/2022
-            C_num_nulls = 0)
+            C_nullCount = 0)
         ),
         Seq("file_1")),
       arguments(
@@ -442,11 +442,11 @@ object TestDataSkippingUtils {
           IndexRow("file_1",
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
             C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
-            C_num_nulls = 0),
+            C_nullCount = 0),
           IndexRow("file_2",
             C_minValue = new Timestamp(1646625048000L), // 03/07/2022
             C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
-            C_num_nulls = 0)
+            C_nullCount = 0)
         ),
         Seq("file_2")),
       arguments(
@@ -455,11 +455,11 @@ object TestDataSkippingUtils {
           IndexRow("file_1",
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
             C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
-            C_num_nulls = 0),
+            C_nullCount = 0),
           IndexRow("file_2",
             C_minValue = new Timestamp(1646625048000L), // 03/07/2022
             C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
-            C_num_nulls = 0)
+            C_nullCount = 0)
         ),
         Seq("file_2")),
       arguments(
@@ -468,11 +468,11 @@ object TestDataSkippingUtils {
           IndexRow("file_1",
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
             C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
-            C_num_nulls = 0),
+            C_nullCount = 0),
           IndexRow("file_2",
             C_minValue = new Timestamp(1646625048000L), // 03/07/2022
             C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
-            C_num_nulls = 0)
+            C_nullCount = 0)
         ),
         Seq("file_1")),
       arguments(
@@ -481,11 +481,11 @@ object TestDataSkippingUtils {
           IndexRow("file_1",
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
             C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
-            C_num_nulls = 0),
+            C_nullCount = 0),
           IndexRow("file_2",
             C_minValue = new Timestamp(1646625048000L), // 03/07/2022
             C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
-            C_num_nulls = 0)
+            C_nullCount = 0)
         ),
         Seq("file_1")),
       arguments(
@@ -494,11 +494,11 @@ object TestDataSkippingUtils {
           IndexRow("file_1",
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
             C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
-            C_num_nulls = 0),
+            C_nullCount = 0),
           IndexRow("file_2",
             C_minValue = new Timestamp(1646625048000L), // 03/07/2022
             C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
-            C_num_nulls = 0)
+            C_nullCount = 0)
         ),
         Seq("file_2")),
       arguments(
@@ -507,11 +507,11 @@ object TestDataSkippingUtils {
           IndexRow("file_1",
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
             C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
-            C_num_nulls = 0),
+            C_nullCount = 0),
           IndexRow("file_2",
             C_minValue = new Timestamp(1646625048000L), // 03/07/2022
             C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
-            C_num_nulls = 0)
+            C_nullCount = 0)
         ),
         Seq("file_2")),
       arguments(
@@ -520,11 +520,11 @@ object TestDataSkippingUtils {
           IndexRow("file_1",
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
             C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
-            C_num_nulls = 0),
+            C_nullCount = 0),
           IndexRow("file_2",
             C_minValue = new Timestamp(1646625048000L), // 03/07/2022
             C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
-            C_num_nulls = 0)
+            C_nullCount = 0)
         ),
         Seq("file_1")),
       arguments(
@@ -533,11 +533,11 @@ object TestDataSkippingUtils {
           IndexRow("file_1",
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
             C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
-            C_num_nulls = 0),
+            C_nullCount = 0),
           IndexRow("file_2",
             C_minValue = new Timestamp(1646625048000L), // 03/07/2022
             C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
-            C_num_nulls = 0)
+            C_nullCount = 0)
         ),
         Seq("file_1")),
       arguments(
@@ -546,11 +546,11 @@ object TestDataSkippingUtils {
           IndexRow("file_1",
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
             C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
-            C_num_nulls = 0),
+            C_nullCount = 0),
           IndexRow("file_2",
             C_minValue = new Timestamp(1646625048000L), // 03/07/2022
             C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
-            C_num_nulls = 0)
+            C_nullCount = 0)
         ),
         Seq("file_1")),
       arguments(
@@ -559,11 +559,11 @@ object TestDataSkippingUtils {
           IndexRow("file_1",
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
             C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
-            C_num_nulls = 0),
+            C_nullCount = 0),
           IndexRow("file_2",
             C_minValue = new Timestamp(1646625048000L), // 03/07/2022
             C_maxValue = new Timestamp(1646625048000L), // 03/07/2022
-            C_num_nulls = 0)
+            C_nullCount = 0)
         ),
         Seq("file_1")),
       arguments(
@@ -573,11 +573,11 @@ object TestDataSkippingUtils {
           IndexRow("file_1",
             B_minValue = "2022-03-07", // 03/07/2022
             B_maxValue = "2022-03-08", // 03/08/2022
-            B_num_nulls = 0),
+            B_nullCount = 0),
           IndexRow("file_2",
             B_minValue = "2022-03-06", // 03/06/2022
             B_maxValue = "2022-03-06", // 03/06/2022
-            B_num_nulls = 0)
+            B_nullCount = 0)
         ),
         Seq("file_1"))
 

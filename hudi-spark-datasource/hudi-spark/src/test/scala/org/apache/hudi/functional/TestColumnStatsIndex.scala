@@ -232,7 +232,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
                 Seq(
                   s"min($col) AS $minColName",
                   s"max($col) AS $maxColName",
-                  s"sum(cast(isnull($col) AS long)) AS ${col}_num_nulls"
+                  s"sum(cast(isnull($col) AS long)) AS ${col}_nullCount"
                 )
               })
 
