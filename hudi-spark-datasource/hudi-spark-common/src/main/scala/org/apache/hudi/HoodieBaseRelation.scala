@@ -27,7 +27,7 @@ import org.apache.hadoop.mapred.JobConf
 
 import org.apache.hudi.HoodieBaseRelation.getPartitionPath
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.common.config.SerializableConfiguration
+import org.apache.hudi.common.config.{HoodieMetadataConfig, SerializableConfiguration}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
@@ -68,7 +68,8 @@ case class HoodieTableState(tablePath: String,
                             recordKeyField: String,
                             preCombineFieldOpt: Option[String],
                             usesVirtualKeys: Boolean,
-                            recordPayloadClassName: String)
+                            recordPayloadClassName: String,
+                            metadataConfig: HoodieMetadataConfig)
 
 /**
  * Hoodie BaseRelation which extends [[PrunedFilteredScan]].
@@ -339,7 +340,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       recordKeyField = recordKeyField,
       preCombineFieldOpt = preCombineFieldOpt,
       usesVirtualKeys = !tableConfig.populateMetaFields(),
-      recordPayloadClassName = tableConfig.getPayloadClass
+      recordPayloadClassName = tableConfig.getPayloadClass,
+      metadataConfig = fileIndex.metadataConfig
     )
   }
 
