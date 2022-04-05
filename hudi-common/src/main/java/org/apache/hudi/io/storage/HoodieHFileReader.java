@@ -283,8 +283,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
         // Extract the byte value before releasing the lock since we cannot hold on to the returned cell afterwards
         byte[] valueBytes = copyValueFromCell(c);
         next = deserializeUnchecked(keyBytes, valueBytes, writerSchema, readerSchema);
-
-        return false;
+        return true;
       }
 
       @Override

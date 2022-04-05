@@ -66,6 +66,7 @@ import java.util.stream.StreamSupport;
 
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
+import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.io.storage.HoodieHFileConfig.HFILE_COMPARATOR;
 import static org.apache.hudi.io.storage.HoodieHFileReader.SCHEMA_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -253,13 +254,9 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     Iterator<GenericRecord> iterator =
         hfileReader.getRecordsByKeyPrefixIterator(keyPrefixes, avroSchema);
 
-    List<GenericRecord> recordsByPrefix =
-        StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
-            .collect(Collectors.toList());
+    List<GenericRecord> recordsByPrefix = toStream(iterator).collect(Collectors.toList());
 
-    List<GenericRecord> allRecords =
-        StreamSupport.stream(Spliterators.spliteratorUnknownSize(hfileReader.getRecordIterator(), Spliterator.ORDERED), false)
-            .collect(Collectors.toList());
+    List<GenericRecord> allRecords = toStream(hfileReader.getRecordIterator()).collect(Collectors.toList());
 
     assertEquals(allRecords, recordsByPrefix);
 
