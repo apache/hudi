@@ -201,7 +201,7 @@ case class HoodieFileIndex(spark: SparkSession,
     } else {
       val queryReferencedColumns = collectReferencedColumns(spark, queryFilters, schema)
 
-      val colStatsDF: DataFrame = readColumnStatsIndex(spark, queryReferencedColumns, metadataConfig, basePath)
+      val colStatsDF: DataFrame = readColumnStatsIndex(spark, basePath, metadataConfig, queryReferencedColumns)
 
       // Persist DF to avoid re-computing column statistics unraveling
       withPersistence(colStatsDF) {
