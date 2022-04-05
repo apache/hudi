@@ -27,6 +27,8 @@
 
   <properties>
     <main.basedir>${project.parent.basedir}</main.basedir>
+    <!-- override parquet version to be same as Hive 3.1.2 -->
+    <parquet.version>1.10.1</parquet.version>
   </properties>
 
   <dependencies>
