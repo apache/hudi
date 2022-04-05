@@ -54,7 +54,8 @@ trait ColumnStatsIndexSupport extends SparkAdapterSupport {
       HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME,
       HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE,
       HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE,
-      HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT)
+      HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT,
+      HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_COUNT)
 
     val requiredMetadataIndexColumns =
       (targetColStatsIndexColumns :+ HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME).map(colName =>
@@ -227,6 +228,7 @@ object ColumnStatsIndexSupport {
   private val COLUMN_STATS_INDEX_MIN_VALUE_STAT_NAME = "minValue"
   private val COLUMN_STATS_INDEX_MAX_VALUE_STAT_NAME = "maxValue"
   private val COLUMN_STATS_INDEX_NULL_COUNT_STAT_NAME = "nullCount"
+  private val COLUMN_STATS_INDEX_VALUE_COUNT_STAT_NAME = "valueCount"
 
   private val metadataRecordSchemaString: String = HoodieMetadataRecord.SCHEMA$.toString
   private val metadataRecordStructType: StructType = AvroConversionUtils.convertAvroSchemaToStructType(HoodieMetadataRecord.SCHEMA$)
@@ -244,7 +246,8 @@ object ColumnStatsIndexSupport {
           acc ++ Seq(
             composeColumnStatStructType(field.name, COLUMN_STATS_INDEX_MIN_VALUE_STAT_NAME, field.dataType),
             composeColumnStatStructType(field.name, COLUMN_STATS_INDEX_MAX_VALUE_STAT_NAME, field.dataType),
-            composeColumnStatStructType(field.name, COLUMN_STATS_INDEX_NULL_COUNT_STAT_NAME, LongType))
+            composeColumnStatStructType(field.name, COLUMN_STATS_INDEX_NULL_COUNT_STAT_NAME, LongType),
+            composeColumnStatStructType(field.name, COLUMN_STATS_INDEX_VALUE_COUNT_STAT_NAME, LongType))
       }
     )
   }
@@ -259,7 +262,7 @@ object ColumnStatsIndexSupport {
     formatColName(colName, COLUMN_STATS_INDEX_NULL_COUNT_STAT_NAME)
 
   @inline def getValueCountColumnNameFor(colName: String): String =
-    formatColName(colName, COLUMN_STATS_INDEX_NULL_COUNT_STAT_NAME)
+    formatColName(colName, COLUMN_STATS_INDEX_VALUE_COUNT_STAT_NAME)
 
   @inline private def formatColName(col: String, statName: String) = { // TODO add escaping for
     String.format("%s_%s", col, statName)

@@ -36,7 +36,6 @@ import scala.collection.JavaConverters._
 
 // NOTE: Only A, B columns are indexed
 case class IndexRow(fileName: String,
-
                     // Corresponding A column is LongType
                     A_minValue: Long = -1,
                     A_maxValue: Long = -1,
@@ -132,28 +131,28 @@ object TestDataSkippingUtils {
       arguments(
         col("B").startsWith("abc").expr,
         Seq(
-          IndexRow("file_1", 0, 0, 0, "aba", "adf", 1), // may contain strings starting w/ "abc"
-          IndexRow("file_2", 0, 0, 0, "adf", "azy", 0),
-          IndexRow("file_3", 0, 0, 0, "aaa", "aba", 0)
+          IndexRow("file_1", B_minValue = "aba", B_maxValue = "adf", B_nullCount = 1), // may contain strings starting w/ "abc"
+          IndexRow("file_2", B_minValue = "adf", B_maxValue = "azy", B_nullCount = 0),
+          IndexRow("file_3", B_minValue = "aaa", B_maxValue = "aba", B_nullCount = 0)
         ),
         Seq("file_1")),
       arguments(
         Not(col("B").startsWith("abc").expr),
         Seq(
-          IndexRow("file_1", 0, 0, 0, "aba", "adf", 1), // may contain strings starting w/ "abc"
-          IndexRow("file_2", 0, 0, 0, "adf", "azy", 0),
-          IndexRow("file_3", 0, 0, 0, "aaa", "aba", 0),
-          IndexRow("file_4", 0, 0, 0, "abc123", "abc345", 0) // all strings start w/ "abc"
+          IndexRow("file_1", B_minValue = "aba", B_maxValue = "adf", B_nullCount = 1), // may contain strings starting w/ "abc"
+          IndexRow("file_2", B_minValue = "adf", B_maxValue = "azy", B_nullCount = 0),
+          IndexRow("file_3", B_minValue = "aaa", B_maxValue = "aba", B_nullCount = 0),
+          IndexRow("file_4", B_minValue = "abc123", B_maxValue = "abc345", B_nullCount = 0) // all strings start w/ "abc"
         ),
         Seq("file_1", "file_2", "file_3")),
       arguments(
         // Composite expression
         Not(lower(col("B")).startsWith("abc").expr),
         Seq(
-          IndexRow("file_1", 0, 0, 0, "ABA", "ADF", 1), // may contain strings starting w/ "ABC" (after upper)
-          IndexRow("file_2", 0, 0, 0, "ADF", "AZY", 0),
-          IndexRow("file_3", 0, 0, 0, "AAA", "ABA", 0),
-          IndexRow("file_4", 0, 0, 0, "ABC123", "ABC345", 0) // all strings start w/ "ABC" (after upper)
+          IndexRow("file_1", B_minValue = "ABA", B_maxValue = "ADF", B_nullCount = 1), // may contain strings starting w/ "ABC" (after upper)
+          IndexRow("file_2", B_minValue = "ADF", B_maxValue = "AZY", B_nullCount = 0),
+          IndexRow("file_3", B_minValue = "AAA", B_maxValue = "ABA", B_nullCount = 0),
+          IndexRow("file_4", B_minValue = "ABC123", B_maxValue = "ABC345", B_nullCount = 0) // all strings start w/ "ABC" (after upper)
         ),
         Seq("file_1", "file_2", "file_3"))
     )
@@ -338,22 +337,22 @@ object TestDataSkippingUtils {
         // Filter out all rows that contain A = 0 AND B = 'abc'
         "A != 0 OR B != 'abc'",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", -2, -1, 0),
-          IndexRow("file_4", 0, 0, 0, "abc", "abc", 0), // only contains A = 0, B = 'abc'
-          IndexRow("file_5", 0, 0, 0, "abc", "abc", 0) // only contains A = 0, B = 'abc'
+          IndexRow("file_1", A_minValue = 1,  A_maxValue = 2,  A_nullCount = 0),
+          IndexRow("file_2", A_minValue = -1, A_maxValue = 1,  A_nullCount = 0),
+          IndexRow("file_3", A_minValue = -2, A_maxValue = -1, A_nullCount =  0),
+          IndexRow("file_4", A_minValue = 0, A_maxValue = 0, A_nullCount = 0, B_minValue = "abc", B_maxValue = "abc", B_nullCount = 0), // only contains A = 0, B = 'abc'
+          IndexRow("file_5", A_minValue = 0, A_maxValue = 0, A_nullCount = 0, B_minValue = "abc", B_maxValue = "abc", B_nullCount = 0) // only contains A = 0, B = 'abc'
         ),
         Seq("file_1", "file_2", "file_3")),
       arguments(
         // This is an equivalent to the above expression
         "NOT(A = 0 AND B = 'abc')",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", -2, -1, 0),
-          IndexRow("file_4", 0, 0, 0, "abc", "abc", 0), // only contains A = 0, B = 'abc'
-          IndexRow("file_5", 0, 0, 0, "abc", "abc", 0) // only contains A = 0, B = 'abc'
+          IndexRow("file_1", A_minValue = 1, A_maxValue = 2, A_nullCount = 0),
+          IndexRow("file_2", A_minValue = -1, A_maxValue = 1, A_nullCount = 0),
+          IndexRow("file_3", A_minValue = -2, A_maxValue = -1, A_nullCount = 0),
+          IndexRow("file_4", A_minValue = 0, A_maxValue = 0, A_nullCount = 0, B_minValue = "abc", B_maxValue = "abc", B_nullCount = 0), // only contains A = 0, B = 'abc'
+          IndexRow("file_5", A_minValue = 0, A_maxValue = 0, A_nullCount = 0, B_minValue = "abc", B_maxValue = "abc", B_nullCount = 0) // only contains A = 0, B = 'abc'
         ),
         Seq("file_1", "file_2", "file_3")),
 
@@ -361,10 +360,10 @@ object TestDataSkippingUtils {
         // Queries contains expression involving non-indexed column D
         "A = 0 AND B = 'abc' AND D IS NULL",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", -2, -1, 0),
-          IndexRow("file_4", 0, 0, 0, "aaa", "xyz", 0) // might contain A = 0 AND B = 'abc'
+          IndexRow("file_1", A_minValue = 1, A_maxValue = 2, A_nullCount = 0),
+          IndexRow("file_2", A_minValue = -1, A_maxValue = 1, A_nullCount = 0),
+          IndexRow("file_3", A_minValue = -2, A_maxValue = -1, A_nullCount = 0),
+          IndexRow("file_4", A_minValue = 0, A_maxValue = 0, A_nullCount = 0, B_minValue = "aaa", B_maxValue = "xyz", B_nullCount = 0) // might contain A = 0 AND B = 'abc'
         ),
         Seq("file_4")),
 
@@ -372,10 +371,10 @@ object TestDataSkippingUtils {
         // Queries contains expression involving non-indexed column D
         "A = 0 OR B = 'abc' OR D IS NULL",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", -2, -1, 0),
-          IndexRow("file_4", 0, 0, 0, "aaa", "xyz", 0) // might contain B = 'abc'
+          IndexRow("file_1", A_minValue = 1, A_maxValue = 2, A_nullCount = 0),
+          IndexRow("file_2", A_minValue = -1, A_maxValue =  1, A_nullCount = 0),
+          IndexRow("file_3", A_minValue = -2, A_maxValue =  -1, A_nullCount = 0),
+          IndexRow("file_4", B_minValue = "aaa", B_maxValue = "xyz", B_nullCount = 0) // might contain B = 'abc'
         ),
         Seq("file_1", "file_2", "file_3", "file_4"))
     )
