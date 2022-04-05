@@ -47,6 +47,7 @@ import org.apache.log4j.Logger;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -208,14 +209,15 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
 
     // HFile read will be efficient if keys are sorted, since on storage records are sorted by key.
     // This will avoid unnecessary seeks.
-    Collections.sort(keys);
+    List<String> sortedKeys = new ArrayList<>(keys);
+    Collections.sort(sortedKeys);
 
     final HoodieHFileReader<IndexedRecord> reader =
              new HoodieHFileReader<>(inlineConf, inlinePath, new CacheConfig(inlineConf), inlinePath.getFileSystem(inlineConf));
 
     // Get writer's schema from the header
     final ClosableIterator<IndexedRecord> recordIterator =
-        fullKey ? reader.getRecordsByKeysIterator(keys, readerSchema) : reader.getRecordsByKeyPrefixIterator(keys, readerSchema);
+        fullKey ? reader.getRecordsByKeysIterator(sortedKeys, readerSchema) : reader.getRecordsByKeyPrefixIterator(sortedKeys, readerSchema);
 
     return new ClosableIterator<IndexedRecord>() {
       @Override
