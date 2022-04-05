@@ -700,6 +700,7 @@ public class HoodieTableMetaClient implements Serializable {
     private Boolean urlEncodePartitioning;
     private HoodieTimelineTimeZone commitTimeZone;
     private Boolean partitionMetafileUseBaseFormat;
+    private Boolean dropPartitionColumnsWhenWrite;
 
     /**
      * Persist the configs that is written at the first time, and should not be changed.
@@ -819,6 +820,11 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public PropertyBuilder setDropPartitionColumnsWhenWrite(Boolean dropPartitionColumnsWhenWrite) {
+      this.dropPartitionColumnsWhenWrite = dropPartitionColumnsWhenWrite;
+      return this;
+    }
+
     public PropertyBuilder set(String key, Object value) {
       if (HoodieTableConfig.PERSISTED_CONFIG_LIST.contains(key)) {
         this.others.put(key, value);
@@ -917,6 +923,10 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT)) {
         setPartitionMetafileUseBaseFormat(hoodieConfig.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT));
       }
+
+      if (hoodieConfig.contains(HoodieTableConfig.DROP_PARTITION_COLUMNS)) {
+        setDropPartitionColumnsWhenWrite(hoodieConfig.getBoolean(HoodieTableConfig.DROP_PARTITION_COLUMNS));
+      }
       return this;
     }
 
@@ -997,6 +1007,10 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (null != partitionMetafileUseBaseFormat) {
         tableConfig.setValue(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT, partitionMetafileUseBaseFormat.toString());
+      }
+
+      if (null != dropPartitionColumnsWhenWrite) {
+        tableConfig.setValue(HoodieTableConfig.DROP_PARTITION_COLUMNS, Boolean.toString(dropPartitionColumnsWhenWrite));
       }
       return tableConfig.getProps();
     }

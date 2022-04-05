@@ -749,8 +749,17 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
   @ParameterizedTest @ValueSource(booleans = Array(true, false))
   def testCopyOnWriteWithDropPartitionColumns(enableDropPartitionColumns: Boolean) {
-    val resultContainPartitionColumn = copyOnWriteTableSelect(enableDropPartitionColumns)
-    assertEquals(enableDropPartitionColumns, !resultContainPartitionColumn)
+    val records1 = recordsToStrings(dataGen.generateInsertsContainsAllPartitions("000", 100)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.DROP_PARTITION_COLUMNS.key, enableDropPartitionColumns)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    val snapshotDF1 = spark.read.format("org.apache.hudi").load(basePath)
+    assertEquals(snapshotDF1.count(), 100)
+    assertEquals(3, snapshotDF1.select("partition").distinct().count())
   }
 
   @Test
@@ -861,22 +870,6 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.key(), "true")
       .load(basePath)
     assertEquals(500, hoodieIncViewDF.count())
-  }
-
-  def copyOnWriteTableSelect(enableDropPartitionColumns: Boolean): Boolean = {
-    val records1 = recordsToStrings(dataGen.generateInsertsContainsAllPartitions("000", 3)).toList
-    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("org.apache.hudi")
-      .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.DROP_PARTITION_COLUMNS.key, enableDropPartitionColumns)
-      .mode(SaveMode.Overwrite)
-      .save(basePath)
-    val snapshotDF1 = spark.read.format("org.apache.hudi")
-      .load(basePath + "/*/*/*/*")
-    snapshotDF1.registerTempTable("tmptable")
-    val result = spark.sql("select * from tmptable limit 1").collect()(0)
-    result.schema.contains(new StructField("partition", StringType, true))
   }
 
   @Test

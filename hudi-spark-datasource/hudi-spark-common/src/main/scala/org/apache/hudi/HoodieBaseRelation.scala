@@ -19,10 +19,12 @@ package org.apache.hudi
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.hbase.io.hfile.CacheConfig
 import org.apache.hadoop.mapred.JobConf
+
 import org.apache.hudi.HoodieBaseRelation.getPartitionPath
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.common.config.SerializableConfiguration
@@ -33,27 +35,29 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.io.storage.HoodieHFileReader
-import org.apache.hudi.metadata.HoodieTableMetadata
+
 import org.apache.spark.TaskContext
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
-import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile}
+import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile, PartitioningUtils}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{Row, SQLContext, SparkSession}
+import org.apache.spark.unsafe.types.UTF8String
 
 import java.io.Closeable
+import java.net.URI
+
 import scala.collection.JavaConverters._
 import scala.util.Try
+import scala.util.control.NonFatal
 
 trait HoodieFileSplit {}
 
@@ -141,6 +145,12 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
   /**
+   * if true, need to deal with schema for creating file reader.
+   */
+  protected val dropPartitionColumnsWhenWrite: Boolean =
+    metaClient.getTableConfig.isDropPartitionColumns && partitionColumns.nonEmpty
+
+  /**
    * NOTE: PLEASE READ THIS CAREFULLY
    *
    * Even though [[HoodieFileIndex]] initializes eagerly listing all of the files w/in the given Hudi table,
@@ -209,14 +219,37 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
     val fileSplits = collectFileSplits(partitionFilters, dataFilters)
 
-    val partitionSchema = StructType(Nil)
-    val tableSchema = HoodieTableSchema(tableStructSchema, if (internalSchema.isEmptySchema) tableAvroSchema.toString else AvroInternalSchemaConverter.convert(internalSchema, tableAvroSchema.getName).toString, internalSchema)
-    val requiredSchema = HoodieTableSchema(requiredStructSchema, requiredAvroSchema.toString, requiredInternalSchema)
+    val partitionSchema = if (dropPartitionColumnsWhenWrite) {
+      // when hoodie.datasource.write.drop.partition.columns is true, partition columns can't be persisted in
+      // data files.
+      StructType(partitionColumns.map(StructField(_, StringType)))
+    } else {
+      StructType(Nil)
+    }
 
+    val tableSchema = HoodieTableSchema(tableStructSchema, if (internalSchema.isEmptySchema) tableAvroSchema.toString else AvroInternalSchemaConverter.convert(internalSchema, tableAvroSchema.getName).toString, internalSchema)
+    val dataSchema = if (dropPartitionColumnsWhenWrite) {
+      val dataStructType = StructType(tableStructSchema.filterNot(f => partitionColumns.contains(f.name)))
+      HoodieTableSchema(
+        dataStructType,
+        sparkAdapter.getAvroSchemaConverters.toAvroType(dataStructType, nullable = false, "record").toString()
+      )
+    } else {
+      tableSchema
+    }
+    val requiredSchema = if (dropPartitionColumnsWhenWrite) {
+      val requiredStructType = StructType(requiredStructSchema.filterNot(f => partitionColumns.contains(f.name)))
+      HoodieTableSchema(
+        requiredStructType,
+        sparkAdapter.getAvroSchemaConverters.toAvroType(requiredStructType, nullable = false, "record").toString()
+      )
+    } else {
+      HoodieTableSchema(requiredStructSchema, requiredAvroSchema.toString, requiredInternalSchema)
+    }
     // Here we rely on a type erasure, to workaround inherited API restriction and pass [[RDD[InternalRow]]] back as [[RDD[Row]]]
     // Please check [[needConversion]] scala-doc for more details
     if (fileSplits.nonEmpty)
-      composeRDD(fileSplits, partitionSchema, tableSchema, requiredSchema, filters).asInstanceOf[RDD[Row]]
+      composeRDD(fileSplits, partitionSchema, dataSchema, requiredSchema, filters).asInstanceOf[RDD[Row]]
     else
       sparkSession.sparkContext.emptyRDD
   }
@@ -286,8 +319,16 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   }
 
   protected final def appendMandatoryColumns(requestedColumns: Array[String]): Array[String] = {
-    val missing = mandatoryColumns.filter(col => !requestedColumns.contains(col))
-    requestedColumns ++ missing
+    if (dropPartitionColumnsWhenWrite) {
+      if (requestedColumns.isEmpty) {
+        mandatoryColumns.toArray
+      } else {
+        requestedColumns
+      }
+    } else {
+      val missing = mandatoryColumns.filter(col => !requestedColumns.contains(col))
+      requestedColumns ++ missing
+    }
   }
 
   protected def getTableState: HoodieTableState = {
@@ -307,6 +348,38 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.recordLevelFilter.enabled", "true")
     // TODO(HUDI-3639) vectorized reader has to be disabled to make sure MORIncrementalRelation is working properly
     sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "false")
+  }
+
+  /**
+   * For enable hoodie.datasource.write.drop.partition.columns, need to create an InternalRow on partition values
+   * and pass this reader on parquet file. So that, we can query the partition columns.
+   */
+  protected def getPartitionColumnsAsInternalRow(file: FileStatus): InternalRow = {
+    try {
+      val tableConfig = metaClient.getTableConfig
+      if (dropPartitionColumnsWhenWrite) {
+        val relativePath = new URI(metaClient.getBasePath).relativize(new URI(file.getPath.getParent.toString)).toString
+        val hiveStylePartitioningEnabled = tableConfig.getHiveStylePartitioningEnable.toBoolean
+        if (hiveStylePartitioningEnabled) {
+          val partitionSpec = PartitioningUtils.parsePathFragment(relativePath)
+          InternalRow.fromSeq(partitionColumns.map(partitionSpec(_)).map(UTF8String.fromString))
+        } else {
+          if (partitionColumns.length == 1) {
+            InternalRow.fromSeq(Seq(UTF8String.fromString(relativePath)))
+          } else {
+            val parts = relativePath.split("/")
+            assert(parts.size == partitionColumns.length)
+            InternalRow.fromSeq(parts.map(UTF8String.fromString))
+          }
+        }
+      } else {
+        InternalRow.empty
+      }
+    } catch {
+      case NonFatal(e) =>
+        logWarning(s"Failed to get the right partition InternalRow for file : ${file.toString}")
+        InternalRow.empty
+    }
   }
 }
 

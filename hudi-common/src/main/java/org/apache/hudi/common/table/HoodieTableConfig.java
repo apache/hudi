@@ -196,6 +196,11 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("If true, partition metafiles are saved in the same format as basefiles for this dataset (e.g. Parquet / ORC). "
           + "If false (default) partition metafiles are saved as properties files.");
 
+  public static final ConfigProperty<Boolean> DROP_PARTITION_COLUMNS = ConfigProperty
+      .key("hoodie.datasource.write.drop.partition.columns")
+      .defaultValue(false)
+      .withDocumentation("When set to true, will not write the partition columns into hudi. By default, false.");
+
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
 
@@ -426,6 +431,9 @@ public class HoodieTableConfig extends HoodieConfig {
       if (hoodieConfig.contains(TIMELINE_TIMEZONE)) {
         HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getString(TIMELINE_TIMEZONE)));
       }
+
+      hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS);
+
       storeProperties(hoodieConfig.getProps(), outputStream);
     }
   }
@@ -597,6 +605,10 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public String getUrlEncodePartitioning() {
     return getString(URL_ENCODE_PARTITIONING);
+  }
+
+  public Boolean isDropPartitionColumns() {
+    return getBooleanOrDefault(DROP_PARTITION_COLUMNS);
   }
 
   /**
