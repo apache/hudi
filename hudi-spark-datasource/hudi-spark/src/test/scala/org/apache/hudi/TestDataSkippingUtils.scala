@@ -40,16 +40,19 @@ case class IndexRow(fileName: String,
                     A_minValue: Long = -1,
                     A_maxValue: Long = -1,
                     A_nullCount: Long = -1,
+                    A_valueCount: Long = -1,
 
                     // Corresponding B column is StringType
                     B_minValue: String = null,
                     B_maxValue: String = null,
                     B_nullCount: Long = -1,
+                    B_valueCount: Long = -1,
 
                     // Corresponding B column is TimestampType
                     C_minValue: Timestamp = null,
                     C_maxValue: Timestamp = null,
-                    C_nullCount: Long = -1) {
+                    C_nullCount: Long = -1,
+                    C_valueCount: Long = -1) {
   def toRow: Row = Row(productIterator.toSeq: _*)
 }
 
@@ -266,8 +269,15 @@ object TestDataSkippingUtils {
       arguments(
         "A is not null",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 1)
+          IndexRow("file_1", 1, 2, 0, 1),
+          IndexRow("file_2", -1, 1, 1, 2) // might still contain non-null values (if nullCount < valueCount)
+        ),
+        Seq("file_1", "file_2")),
+      arguments(
+        "A is not null",
+        Seq(
+          IndexRow("file_1", 1, 2, 0, 1),
+          IndexRow("file_2", -1, 1, 1, 1) // might NOT contain non-null values (nullCount == valueCount)
         ),
         Seq("file_1")),
       arguments(
