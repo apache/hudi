@@ -514,7 +514,7 @@ public abstract class AbstractHoodieLogRecordReader {
     return payloadClassFQN;
   }
 
-  protected Option<String> getPartitionName() {
+  public Option<String> getPartitionName() {
     return partitionName;
   }
 

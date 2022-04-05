@@ -75,6 +75,9 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FILES;
 
 /**
  * Table metadata provided by an internal DFS backed Hudi metadata table.
@@ -236,7 +239,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Retrieve records from log file
     timer.startTimer();
     if (logRecordScanner != null) {
-      if (metadataConfig.allowFullScan()) {
+      String partitionName = logRecordScanner.getPartitionName().get();
+      if (isFullScanAllowedForPartition(partitionName)) {
         checkArgument(fullKey, "If full-scan is required, only full keys could be used!");
         // Path which does full scan of log files
         for (String key : keys) {
@@ -507,6 +511,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     Option<HoodieInstant> latestMetadataInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
     String latestMetadataInstantTime = latestMetadataInstant.map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
 
+    boolean allowFullScan = isFullScanAllowedForPartition(partitionName);
+
     // Load the schema
     Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
     HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().fromProperties(metadataConfig.getProps()).build();
@@ -522,7 +528,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .withDiskMapType(commonConfig.getSpillableDiskMapType())
         .withBitCaskDiskMapCompressionEnabled(commonConfig.isBitCaskDiskMapCompressionEnabled())
         .withLogBlockTimestamps(validInstantTimestamps)
-        .allowFullScan(metadataConfig.allowFullScan())
+        .allowFullScan(allowFullScan)
         .withPartition(partitionName)
         .build();
 
@@ -530,6 +536,21 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     LOG.info(String.format("Opened %d metadata log files (dataset instant=%s, metadata instant=%s) in %d ms",
         sortedLogFilePaths.size(), getLatestDataInstantTime(), latestMetadataInstantTime, logScannerOpenMs));
     return Pair.of(logRecordScanner, logScannerOpenMs);
+  }
+
+  private boolean isFullScanAllowedForPartition(String partitionName) {
+    // NOTE: We're allowing eager full-scan of the log-files only for "files" partition.
+    //       Other partitions (like "column_stats", "bloom_filters") will have to be fetched
+    //       t/h point-lookups
+    switch (partitionName) {
+      case PARTITION_NAME_FILES:
+        return metadataConfig.allowFullScan();
+
+      case PARTITION_NAME_COLUMN_STATS:
+      case PARTITION_NAME_BLOOM_FILTERS:
+      default:
+        return false;
+    }
   }
 
   /**
