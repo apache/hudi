@@ -85,11 +85,6 @@ case class HoodieFileIndex(spark: SparkSession,
 
   override def rootPaths: Seq[Path] = queryPaths.asScala
 
-  def isDataSkippingEnabled: Boolean = {
-    options.getOrElse(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(),
-      spark.sessionState.conf.getConfString(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "false")).toBoolean
-  }
-
   /**
    * Returns the FileStatus for all the base files (excluding log files). This should be used only for
    * cases where Spark directly fetches the list of files via HoodieFileIndex or for read optimized query logic
@@ -196,8 +191,10 @@ case class HoodieFileIndex(spark: SparkSession,
    * @return list of pruned (data-skipped) candidate base-files' names
    */
   private def lookupCandidateFilesInMetadataTable(queryFilters: Seq[Expression]): Try[Option[Set[String]]] = Try {
-    if (!isDataSkippingEnabled || queryFilters.isEmpty || !HoodieTableMetadataUtil.getCompletedMetadataPartitions(metaClient.getTableConfig)
-      .contains(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)) {
+    if (!isMetadataTableEnabled || !isColumnStatsIndexEnabled || !isColumnStatsIndexAvailable || !isDataSkippingEnabled) {
+      validateConfig()
+      Option.empty
+    } else if (queryFilters.isEmpty) {
       Option.empty
     } else {
       val queryReferencedColumns = collectReferencedColumns(spark, queryFilters, schema)
@@ -245,13 +242,27 @@ case class HoodieFileIndex(spark: SparkSession,
 
   override def refresh(): Unit = super.refresh()
 
-  override def inputFiles: Array[String] = {
-    val fileStatusList = allFiles
-    fileStatusList.map(_.getPath.toString).toArray
-  }
+  override def inputFiles: Array[String] =
+    allFiles.map(_.getPath.toString).toArray
 
-  override def sizeInBytes: Long = {
-    cachedFileSize
+  override def sizeInBytes: Long = cachedFileSize
+
+  private def isColumnStatsIndexAvailable =
+    HoodieTableMetadataUtil.getCompletedMetadataPartitions(metaClient.getTableConfig)
+      .contains(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
+
+  private def isDataSkippingEnabled: Boolean =
+    options.getOrElse(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(),
+      spark.sessionState.conf.getConfString(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "false")).toBoolean
+
+  private def isMetadataTableEnabled: Boolean = metadataConfig.enabled()
+  private def isColumnStatsIndexEnabled: Boolean = metadataConfig.isColumnStatsIndexEnabled
+
+  private def validateConfig(): Unit = {
+    if (isDataSkippingEnabled && (!isMetadataTableEnabled || !isColumnStatsIndexEnabled)) {
+      logWarning("Data skipping requires both Metadata Table and Column Stats Index to be enabled as well! " +
+        s"(isMetadataTableEnabled = ${isMetadataTableEnabled}, isColumnStatsIndexEnabled = ${isColumnStatsIndexEnabled}")
+    }
   }
 }
 
