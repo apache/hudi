@@ -227,12 +227,6 @@ trait ColumnStatsIndexSupport extends SparkAdapterSupport {
 
 object ColumnStatsIndexSupport {
 
-  private val COLUMN_STATS_INDEX_FILE_COLUMN_NAME = "fileName"
-  private val COLUMN_STATS_INDEX_MIN_VALUE_STAT_NAME = "minValue"
-  private val COLUMN_STATS_INDEX_MAX_VALUE_STAT_NAME = "maxValue"
-  private val COLUMN_STATS_INDEX_NULL_COUNT_STAT_NAME = "nullCount"
-  private val COLUMN_STATS_INDEX_VALUE_COUNT_STAT_NAME = "valueCount"
-
   private val metadataRecordSchemaString: String = HoodieMetadataRecord.SCHEMA$.toString
   private val metadataRecordStructType: StructType = AvroConversionUtils.convertAvroSchemaToStructType(HoodieMetadataRecord.SCHEMA$)
 
@@ -240,8 +234,8 @@ object ColumnStatsIndexSupport {
    * @VisibleForTesting
    */
   def composeIndexSchema(targetColumnNames: Seq[String], tableSchema: StructType): StructType = {
-    val fileNameField = StructField(COLUMN_STATS_INDEX_FILE_COLUMN_NAME, StringType, nullable = true, Metadata.empty)
-    val valueCountField = StructField(COLUMN_STATS_INDEX_VALUE_COUNT_STAT_NAME, LongType, nullable = true, Metadata.empty)
+    val fileNameField = StructField(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME, StringType, nullable = true, Metadata.empty)
+    val valueCountField = StructField(HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_COUNT, LongType, nullable = true, Metadata.empty)
 
     val targetFields = targetColumnNames.map(colName => tableSchema.fields.find(f => f.name == colName).get)
 
@@ -249,24 +243,24 @@ object ColumnStatsIndexSupport {
       targetFields.foldLeft(Seq(fileNameField, valueCountField)) {
         case (acc, field) =>
           acc ++ Seq(
-            composeColumnStatStructType(field.name, COLUMN_STATS_INDEX_MIN_VALUE_STAT_NAME, field.dataType),
-            composeColumnStatStructType(field.name, COLUMN_STATS_INDEX_MAX_VALUE_STAT_NAME, field.dataType),
-            composeColumnStatStructType(field.name, COLUMN_STATS_INDEX_NULL_COUNT_STAT_NAME, LongType))
+            composeColumnStatStructType(field.name, HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE, field.dataType),
+            composeColumnStatStructType(field.name, HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE, field.dataType),
+            composeColumnStatStructType(field.name, HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT, LongType))
       }
     )
   }
 
   @inline def getMinColumnNameFor(colName: String): String =
-    formatColName(colName, COLUMN_STATS_INDEX_MIN_VALUE_STAT_NAME)
+    formatColName(colName, HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE)
 
   @inline def getMaxColumnNameFor(colName: String): String =
-    formatColName(colName, COLUMN_STATS_INDEX_MAX_VALUE_STAT_NAME)
+    formatColName(colName, HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE)
 
   @inline def getNullCountColumnNameFor(colName: String): String =
-    formatColName(colName, COLUMN_STATS_INDEX_NULL_COUNT_STAT_NAME)
+    formatColName(colName, HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT)
 
   @inline def getValueCountColumnNameFor: String =
-    COLUMN_STATS_INDEX_VALUE_COUNT_STAT_NAME
+    HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_COUNT
 
   @inline private def formatColName(col: String, statName: String) = { // TODO add escaping for
     String.format("%s_%s", col, statName)
