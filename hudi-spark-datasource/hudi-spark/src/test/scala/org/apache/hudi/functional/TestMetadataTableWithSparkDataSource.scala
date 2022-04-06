@@ -51,6 +51,8 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     val opts: Map[String, String] = commonOpts ++ Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS.key -> "true",
       HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "1"
     )
 
@@ -74,22 +76,29 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
       .mode(SaveMode.Append)
       .save(basePath)
 
-    val metadataDF = spark.read.format(hudi).load(s"$basePath/.hoodie/metadata")
+    // Files partition of MT
+    val filesPartitionDF = spark.read.format(hudi).load(s"$basePath/.hoodie/metadata/files")
 
     // Smoke test
-    metadataDF.show()
+    filesPartitionDF.show()
 
     // Query w/ 0 requested columns should be working fine
-    assertEquals(4, metadataDF.count())
+    assertEquals(4, filesPartitionDF.count())
 
     val expectedKeys = Seq("2015/03/16", "2015/03/17", "2016/03/15", "__all_partitions__")
-    val keys = metadataDF.select("key")
+    val keys = filesPartitionDF.select("key")
       .collect()
       .map(_.getString(0))
       .toSeq
       .sorted
 
     assertEquals(expectedKeys, keys)
+
+    // Column Stats Index partition of MT
+    val colStatsDF = spark.read.format(hudi).load(s"$basePath/.hoodie/metadata/column_stats")
+
+    // Smoke test
+    colStatsDF.show()
   }
 
   private def parseRecords(records: Seq[String]) = {

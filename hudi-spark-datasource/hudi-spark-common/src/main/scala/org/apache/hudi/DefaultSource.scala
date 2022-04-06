@@ -21,12 +21,12 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
+import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 import org.apache.log4j.LogManager
-import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.streaming.HoodieStreamSource
 import org.apache.spark.sql.sources._
@@ -46,6 +46,7 @@ class DefaultSource extends RelationProvider
   with DataSourceRegister
   with StreamSinkProvider
   with StreamSourceProvider
+  with SparkAdapterSupport
   with Serializable {
 
   SparkSession.getActiveSession.foreach { spark =>
@@ -108,7 +109,6 @@ class DefaultSource extends RelationProvider
              (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
              (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
           new BaseFileOnlyRelation(sqlContext, metaClient, parameters, userSchema, globPaths)
-
         case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
           new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
 
@@ -126,6 +126,11 @@ class DefaultSource extends RelationProvider
             s"isBootstrappedTable: $isBootstrappedTable ")
       }
     }
+  }
+
+  def getValidCommits(metaClient: HoodieTableMetaClient): String = {
+    metaClient
+      .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstants.toArray().map(_.asInstanceOf[HoodieInstant].getFileName).mkString(",")
   }
 
   /**

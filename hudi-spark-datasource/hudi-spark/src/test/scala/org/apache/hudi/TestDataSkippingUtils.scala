@@ -17,11 +17,12 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper
+import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql.catalyst.expressions.{Expression, Not}
 import org.apache.spark.sql.functions.{col, lower}
 import org.apache.spark.sql.hudi.DataSkippingUtils
+import org.apache.spark.sql.internal.SQLConf.SESSION_LOCAL_TIMEZONE
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{Column, HoodieCatalystExpressionUtils, Row, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -34,24 +35,22 @@ import java.sql.Timestamp
 import scala.collection.JavaConverters._
 
 // NOTE: Only A, B columns are indexed
-case class IndexRow(
-  file: String,
+case class IndexRow(fileName: String,
 
-  // Corresponding A column is LongType
-  A_minValue: Long = -1,
-  A_maxValue: Long = -1,
-  A_num_nulls: Long = -1,
+                    // Corresponding A column is LongType
+                    A_minValue: Long = -1,
+                    A_maxValue: Long = -1,
+                    A_num_nulls: Long = -1,
 
-  // Corresponding B column is StringType
-  B_minValue: String = null,
-  B_maxValue: String = null,
-  B_num_nulls: Long = -1,
+                    // Corresponding B column is StringType
+                    B_minValue: String = null,
+                    B_maxValue: String = null,
+                    B_num_nulls: Long = -1,
 
-  // Corresponding B column is TimestampType
-  C_minValue: Timestamp = null,
-  C_maxValue: Timestamp = null,
-  C_num_nulls: Long = -1
-) {
+                    // Corresponding B column is TimestampType
+                    C_minValue: Timestamp = null,
+                    C_maxValue: Timestamp = null,
+                    C_num_nulls: Long = -1) {
   def toRow: Row = Row(productIterator.toSeq: _*)
 }
 
@@ -78,28 +77,27 @@ class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSuppor
       )
     )
 
-  val indexSchema: StructType =
-    ColumnStatsIndexHelper.composeIndexSchema(
-      sourceTableSchema.fields.toSeq
-        .filter(f => indexedCols.contains(f.name))
-        .asJava
-    )
+  val indexSchema: StructType = composeIndexSchema(indexedCols, sourceTableSchema)
 
   @ParameterizedTest
   @MethodSource(
     Array(
-        "testBasicLookupFilterExpressionsSource",
-        "testAdvancedLookupFilterExpressionsSource",
-        "testCompositeFilterExpressionsSource"
+      "testBasicLookupFilterExpressionsSource",
+      "testAdvancedLookupFilterExpressionsSource",
+      "testCompositeFilterExpressionsSource"
     ))
   def testLookupFilterExpressions(sourceExpr: String, input: Seq[IndexRow], output: Seq[String]): Unit = {
+    // We have to fix the timezone to make sure all date-bound utilities output
+    // is consistent with the fixtures
+    spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "UTC")
+
     val resolvedExpr: Expression = exprUtils.resolveExpr(spark, sourceExpr, sourceTableSchema)
     val lookupFilter = DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(resolvedExpr, indexSchema)
 
     val indexDf = spark.createDataFrame(input.map(_.toRow).asJava, indexSchema)
 
     val rows = indexDf.where(new Column(lookupFilter))
-      .select("file")
+      .select("fileName")
       .collect()
       .map(_.getString(0))
       .toSeq
@@ -119,7 +117,7 @@ class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSuppor
     val indexDf = spark.createDataset(input)
 
     val rows = indexDf.where(new Column(lookupFilter))
-      .select("file")
+      .select("fileName")
       .collect()
       .map(_.getString(0))
       .toSeq
@@ -338,7 +336,7 @@ object TestDataSkippingUtils {
 
       arguments(
         // Filter out all rows that contain A = 0 AND B = 'abc'
-      "A != 0 OR B != 'abc'",
+        "A != 0 OR B != 'abc'",
         Seq(
           IndexRow("file_1", 1, 2, 0),
           IndexRow("file_2", -1, 1, 0),
@@ -384,186 +382,187 @@ object TestDataSkippingUtils {
   }
 
   def testCompositeFilterExpressionsSource(): java.util.stream.Stream[Arguments] = {
+    // NOTE: all timestamps in UTC
     java.util.stream.Stream.of(
       arguments(
-        "date_format(C, 'MM/dd/yyyy') = '03/06/2022'",
+        "date_format(C, 'MM/dd/yyyy') = '03/07/2022'",
         Seq(
           IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
             C_num_nulls = 0),
           IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646711448000L), // 03/07/2022
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
             C_num_nulls = 0)
         ),
         Seq("file_2")),
       arguments(
-        "'03/06/2022' = date_format(C, 'MM/dd/yyyy')",
+        "'03/07/2022' = date_format(C, 'MM/dd/yyyy')",
         Seq(
           IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
             C_num_nulls = 0),
           IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646711448000L), // 03/07/2022
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
             C_num_nulls = 0)
         ),
         Seq("file_2")),
       arguments(
-        "'03/06/2022' != date_format(C, 'MM/dd/yyyy')",
+        "'03/07/2022' != date_format(C, 'MM/dd/yyyy')",
         Seq(
           IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
             C_num_nulls = 0),
           IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646625048000L), // 03/06/2022
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646625048000L), // 03/07/2022
             C_num_nulls = 0)
         ),
         Seq("file_1")),
       arguments(
-        "date_format(C, 'MM/dd/yyyy') != '03/06/2022'",
+        "date_format(C, 'MM/dd/yyyy') != '03/07/2022'",
         Seq(
           IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
             C_num_nulls = 0),
           IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646625048000L), // 03/06/2022
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646625048000L), // 03/07/2022
             C_num_nulls = 0)
         ),
         Seq("file_1")),
       arguments(
-        "date_format(C, 'MM/dd/yyyy') < '03/07/2022'",
+        "date_format(C, 'MM/dd/yyyy') < '03/08/2022'",
         Seq(
           IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
             C_num_nulls = 0),
           IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646711448000L), // 03/07/2022
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
             C_num_nulls = 0)
         ),
         Seq("file_2")),
       arguments(
-        "'03/07/2022' > date_format(C, 'MM/dd/yyyy')",
+        "'03/08/2022' > date_format(C, 'MM/dd/yyyy')",
         Seq(
           IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
             C_num_nulls = 0),
           IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646711448000L), // 03/07/2022
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
             C_num_nulls = 0)
         ),
         Seq("file_2")),
       arguments(
-        "'03/07/2022' < date_format(C, 'MM/dd/yyyy')",
+        "'03/08/2022' < date_format(C, 'MM/dd/yyyy')",
         Seq(
           IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
             C_num_nulls = 0),
           IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646711448000L), // 03/07/2022
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
             C_num_nulls = 0)
         ),
         Seq("file_1")),
       arguments(
-        "date_format(C, 'MM/dd/yyyy') > '03/07/2022'",
+        "date_format(C, 'MM/dd/yyyy') > '03/08/2022'",
         Seq(
           IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
             C_num_nulls = 0),
           IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646711448000L), // 03/07/2022
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
             C_num_nulls = 0)
         ),
         Seq("file_1")),
       arguments(
-        "date_format(C, 'MM/dd/yyyy') <= '03/06/2022'",
+        "date_format(C, 'MM/dd/yyyy') <= '03/07/2022'",
         Seq(
           IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
             C_num_nulls = 0),
           IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646711448000L), // 03/07/2022
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
             C_num_nulls = 0)
         ),
         Seq("file_2")),
       arguments(
-        "'03/06/2022' >= date_format(C, 'MM/dd/yyyy')",
+        "'03/07/2022' >= date_format(C, 'MM/dd/yyyy')",
         Seq(
           IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
             C_num_nulls = 0),
           IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646711448000L), // 03/07/2022
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
             C_num_nulls = 0)
         ),
         Seq("file_2")),
       arguments(
-        "'03/08/2022' <= date_format(C, 'MM/dd/yyyy')",
+        "'03/09/2022' <= date_format(C, 'MM/dd/yyyy')",
         Seq(
           IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
             C_num_nulls = 0),
           IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646711448000L), // 03/07/2022
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
             C_num_nulls = 0)
         ),
         Seq("file_1")),
       arguments(
-        "date_format(C, 'MM/dd/yyyy') >= '03/08/2022'",
+        "date_format(C, 'MM/dd/yyyy') >= '03/09/2022'",
         Seq(
           IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
             C_num_nulls = 0),
           IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646711448000L), // 03/07/2022
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
             C_num_nulls = 0)
         ),
         Seq("file_1")),
       arguments(
-        "date_format(C, 'MM/dd/yyyy') IN ('03/08/2022')",
+        "date_format(C, 'MM/dd/yyyy') IN ('03/09/2022')",
         Seq(
           IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
             C_num_nulls = 0),
           IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646711448000L), // 03/07/2022
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
             C_num_nulls = 0)
         ),
         Seq("file_1")),
       arguments(
-        "date_format(C, 'MM/dd/yyyy') NOT IN ('03/06/2022')",
+        "date_format(C, 'MM/dd/yyyy') NOT IN ('03/07/2022')",
         Seq(
           IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
             C_num_nulls = 0),
           IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646625048000L), // 03/06/2022
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646625048000L), // 03/07/2022
             C_num_nulls = 0)
         ),
         Seq("file_1")),

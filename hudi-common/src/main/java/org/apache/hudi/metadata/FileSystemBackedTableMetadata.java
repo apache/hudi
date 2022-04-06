@@ -96,7 +96,7 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
               } else if (!fileStatus.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
                 pathsToList.add(fileStatus.getPath());
               }
-            } else if (fileStatus.getPath().getName().equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE)) {
+            } else if (fileStatus.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
               String partitionName = FSUtils.getRelativePartitionPath(new Path(datasetBasePath), fileStatus.getPath().getParent());
               partitionPaths.add(partitionName);
             }

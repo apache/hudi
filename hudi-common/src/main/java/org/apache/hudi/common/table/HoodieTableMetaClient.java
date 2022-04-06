@@ -90,6 +90,8 @@ public class HoodieTableMetaClient implements Serializable {
   public static final String BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH = BOOTSTRAP_INDEX_ROOT_FOLDER_PATH + Path.SEPARATOR
       + ".fileids";
 
+  public static final String SCHEMA_FOLDER_NAME = ".schema";
+
   public static final String MARKER_EXTN = ".marker";
 
   private String basePath;
@@ -190,6 +192,13 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public String getColumnStatsIndexPath() {
     return new Path(metaPath, COLUMN_STATISTICS_INDEX_NAME).toString();
+  }
+
+  /**
+   * @return schema folder path
+   */
+  public String getSchemaFolderName() {
+    return new Path(metaPath, SCHEMA_FOLDER_NAME).toString();
   }
 
   /**
@@ -391,6 +400,11 @@ public class HoodieTableMetaClient implements Serializable {
     Path metaPathDir = new Path(basePath, METAFOLDER_NAME);
     if (!fs.exists(metaPathDir)) {
       fs.mkdirs(metaPathDir);
+    }
+    // create schema folder
+    Path schemaPathDir = new Path(metaPathDir, SCHEMA_FOLDER_NAME);
+    if (!fs.exists(schemaPathDir)) {
+      fs.mkdirs(schemaPathDir);
     }
 
     // if anything other than default archive log folder is specified, create that too
@@ -685,6 +699,8 @@ public class HoodieTableMetaClient implements Serializable {
     private Boolean hiveStylePartitioningEnable;
     private Boolean urlEncodePartitioning;
     private HoodieTimelineTimeZone commitTimeZone;
+    private Boolean partitionMetafileUseBaseFormat;
+    private Boolean dropPartitionColumnsWhenWrite;
 
     /**
      * Persist the configs that is written at the first time, and should not be changed.
@@ -799,6 +815,16 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public PropertyBuilder setPartitionMetafileUseBaseFormat(Boolean useBaseFormat) {
+      this.partitionMetafileUseBaseFormat = useBaseFormat;
+      return this;
+    }
+
+    public PropertyBuilder setDropPartitionColumnsWhenWrite(Boolean dropPartitionColumnsWhenWrite) {
+      this.dropPartitionColumnsWhenWrite = dropPartitionColumnsWhenWrite;
+      return this;
+    }
+
     public PropertyBuilder set(String key, Object value) {
       if (HoodieTableConfig.PERSISTED_CONFIG_LIST.contains(key)) {
         this.others.put(key, value);
@@ -894,6 +920,13 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.URL_ENCODE_PARTITIONING)) {
         setUrlEncodePartitioning(hoodieConfig.getBoolean(HoodieTableConfig.URL_ENCODE_PARTITIONING));
       }
+      if (hoodieConfig.contains(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT)) {
+        setPartitionMetafileUseBaseFormat(hoodieConfig.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT));
+      }
+
+      if (hoodieConfig.contains(HoodieTableConfig.DROP_PARTITION_COLUMNS)) {
+        setDropPartitionColumnsWhenWrite(hoodieConfig.getBoolean(HoodieTableConfig.DROP_PARTITION_COLUMNS));
+      }
       return this;
     }
 
@@ -971,6 +1004,13 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (null != commitTimeZone) {
         tableConfig.setValue(HoodieTableConfig.TIMELINE_TIMEZONE, commitTimeZone.toString());
+      }
+      if (null != partitionMetafileUseBaseFormat) {
+        tableConfig.setValue(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT, partitionMetafileUseBaseFormat.toString());
+      }
+
+      if (null != dropPartitionColumnsWhenWrite) {
+        tableConfig.setValue(HoodieTableConfig.DROP_PARTITION_COLUMNS, Boolean.toString(dropPartitionColumnsWhenWrite));
       }
       return tableConfig.getProps();
     }

@@ -471,11 +471,10 @@ object DataSourceWriteOptions {
     .sinceVersion("0.9.0")
     .withDocumentation("This class is used by kafka client to deserialize the records")
 
-  val DROP_PARTITION_COLUMNS: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.write.drop.partition.columns")
-    .defaultValue("false")
-    .withDocumentation("When set to true, will not write the partition columns into hudi. " +
-      "By default, false.")
+  val DROP_PARTITION_COLUMNS: ConfigProperty[Boolean] = ConfigProperty
+    .key(HoodieTableConfig.DROP_PARTITION_COLUMNS.key())
+    .defaultValue(HoodieTableConfig.DROP_PARTITION_COLUMNS.defaultValue().booleanValue())
+    .withDocumentation(HoodieTableConfig.DROP_PARTITION_COLUMNS.doc())
 
   /** @deprecated Use {@link HIVE_ASSUME_DATE_PARTITION} and its methods instead */
   @Deprecated

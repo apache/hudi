@@ -224,6 +224,8 @@ public class HoodieMultiTableDeltaStreamer {
       tableConfig.compactSchedulingWeight = globalConfig.compactSchedulingWeight;
       tableConfig.deltaSyncSchedulingMinShare = globalConfig.deltaSyncSchedulingMinShare;
       tableConfig.deltaSyncSchedulingWeight = globalConfig.deltaSyncSchedulingWeight;
+      tableConfig.clusterSchedulingWeight = globalConfig.clusterSchedulingWeight;
+      tableConfig.clusterSchedulingMinShare = globalConfig.clusterSchedulingMinShare;
       tableConfig.sparkMaster = globalConfig.sparkMaster;
     }
   }
@@ -376,6 +378,14 @@ public class HoodieMultiTableDeltaStreamer {
      */
     @Parameter(names = {"--checkpoint"}, description = "Resume Delta Streamer from this checkpoint.")
     public String checkpoint = null;
+
+    @Parameter(names = {"--cluster-scheduling-weight"}, description = "Scheduling weight for clustering as defined in "
+        + "https://spark.apache.org/docs/latest/job-scheduling.html")
+    public Integer clusterSchedulingWeight = 1;
+
+    @Parameter(names = {"--cluster-scheduling-minshare"}, description = "Minshare for clustering as defined in "
+        + "https://spark.apache.org/docs/latest/job-scheduling.html")
+    public Integer clusterSchedulingMinShare = 0;
 
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;

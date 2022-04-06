@@ -20,6 +20,9 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FileStatus
+import org.apache.hudi.client.utils.SparkInternalSchemaConverter
+import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{PredicateHelper, SpecificInternalRow, UnsafeProjection}
@@ -31,7 +34,7 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
 
 import scala.collection.JavaConverters._
 
-object HoodieDataSourceHelper extends PredicateHelper {
+object HoodieDataSourceHelper extends PredicateHelper with SparkAdapterSupport {
 
 
   /**
@@ -46,7 +49,7 @@ object HoodieDataSourceHelper extends PredicateHelper {
                                options: Map[String, String],
                                hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
 
-    val readParquetFile: PartitionedFile => Iterator[Any] = new ParquetFileFormat().buildReaderWithPartitionValues(
+    val readParquetFile: PartitionedFile => Iterator[Any] = sparkAdapter.createHoodieParquetFileFormat().get.buildReaderWithPartitionValues(
       sparkSession = sparkSession,
       dataSchema = dataSchema,
       partitionSchema = partitionSchema,
@@ -78,4 +81,19 @@ object HoodieDataSourceHelper extends PredicateHelper {
     }
   }
 
+  /**
+    * Set internalSchema evolution parameters to configuration.
+    * spark will broadcast them to each executor, we use those parameters to do schema evolution.
+    *
+    * @param conf hadoop conf.
+    * @param internalSchema internalschema for query.
+    * @param tablePath hoodie table base path.
+    * @param validCommits valid commits, using give validCommits to validate all legal histroy Schema files, and return the latest one.
+    */
+  def getConfigurationWithInternalSchema(conf: Configuration, internalSchema: InternalSchema, tablePath: String, validCommits: String): Configuration = {
+    conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
+    conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, tablePath)
+    conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
+    conf
+  }
 }

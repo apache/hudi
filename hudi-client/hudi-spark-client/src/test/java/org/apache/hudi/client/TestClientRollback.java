@@ -318,7 +318,14 @@ public class TestClientRollback extends HoodieClientTestBase {
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withRollbackUsingMarkers(false)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
+        .withMetadataConfig(
+            HoodieMetadataConfig.newBuilder()
+                // Column Stats Index is disabled, since these tests construct tables which are
+                // not valid (empty commit metadata, invalid parquet files)
+                .withMetadataIndexColumnStats(false)
+                .enable(enableMetadataTable)
+                .build()
+        )
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();

@@ -57,6 +57,7 @@ import org.apache.hudi.hive.HoodieHiveClient;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.utilities.DummySchemaProvider;
 import org.apache.hudi.utilities.HoodieClusteringJob;
+import org.apache.hudi.utilities.HoodieIndexer;
 import org.apache.hudi.utilities.deltastreamer.DeltaSync;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
@@ -129,6 +130,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
+import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
+import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
@@ -395,6 +399,22 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
       int numDeltaCommits = (int) timeline.getInstants().count();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
+    }
+
+    static void assertPendingIndexCommit(String tablePath, FileSystem fs) {
+      HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build();
+      HoodieTimeline timeline = meta.getActiveTimeline().getAllCommitsTimeline().filterPendingIndexTimeline();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
+      int numIndexCommits = (int) timeline.getInstants().count();
+      assertEquals(1, numIndexCommits, "Got=" + numIndexCommits + ", exp=1");
+    }
+
+    static void assertCompletedIndexCommit(String tablePath, FileSystem fs) {
+      HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build();
+      HoodieTimeline timeline = meta.getActiveTimeline().getAllCommitsTimeline().filterCompletedIndexTimeline();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
+      int numIndexCommits = (int) timeline.getInstants().count();
+      assertEquals(1, numIndexCommits, "Got=" + numIndexCommits + ", exp=1");
     }
 
     static void assertNoReplaceCommits(String tablePath, FileSystem fs) {
@@ -961,6 +981,53 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     return config;
   }
 
+  private HoodieIndexer.Config buildIndexerConfig(String basePath,
+                                                  String tableName,
+                                                  String indexInstantTime,
+                                                  String runningMode,
+                                                  String indexTypes) {
+    HoodieIndexer.Config config = new HoodieIndexer.Config();
+    config.basePath = basePath;
+    config.tableName = tableName;
+    config.indexInstantTime = indexInstantTime;
+    config.propsFilePath = dfsBasePath + "/indexer.properties";
+    config.runningMode = runningMode;
+    config.indexTypes = indexTypes;
+    return config;
+  }
+
+  @Test
+  public void testHoodieIndexer() throws Exception {
+    String tableBasePath = dfsBasePath + "/asyncindexer";
+    HoodieDeltaStreamer ds = initialHoodieDeltaStreamer(tableBasePath, 1000, "false");
+
+    deltaStreamerTestRunner(ds, (r) -> {
+      TestHelpers.assertAtLeastNCommits(2, tableBasePath, dfs);
+
+      Option<String> scheduleIndexInstantTime = Option.empty();
+      try {
+        HoodieIndexer scheduleIndexingJob = new HoodieIndexer(jsc,
+            buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, null, SCHEDULE, "COLUMN_STATS"));
+        scheduleIndexInstantTime = scheduleIndexingJob.doSchedule();
+      } catch (Exception e) {
+        LOG.info("Schedule indexing failed", e);
+        return false;
+      }
+      if (scheduleIndexInstantTime.isPresent()) {
+        TestHelpers.assertPendingIndexCommit(tableBasePath, dfs);
+        LOG.info("Schedule indexing success, now build index with instant time " + scheduleIndexInstantTime.get());
+        HoodieIndexer runIndexingJob = new HoodieIndexer(jsc,
+            buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, scheduleIndexInstantTime.get(), EXECUTE, "COLUMN_STATS"));
+        runIndexingJob.start(0);
+        LOG.info("Metadata indexing success");
+        TestHelpers.assertCompletedIndexCommit(tableBasePath, dfs);
+      } else {
+        LOG.warn("Metadata indexing failed");
+      }
+      return true;
+    });
+  }
+
   @Disabled("HUDI-3710 to fix the ConcurrentModificationException")
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
@@ -1131,28 +1198,28 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
           LOG.info("Cluster success");
         } else {
           LOG.warn("Import failed");
-          if (!runningMode.toLowerCase().equals(HoodieClusteringJob.EXECUTE)) {
+          if (!runningMode.toLowerCase().equals(EXECUTE)) {
             return false;
           }
         }
       } catch (Exception e) {
         LOG.warn("ScheduleAndExecute clustering failed", e);
         exception = e;
-        if (!runningMode.equalsIgnoreCase(HoodieClusteringJob.EXECUTE)) {
+        if (!runningMode.equalsIgnoreCase(EXECUTE)) {
           return false;
         }
       }
       switch (runningMode.toLowerCase()) {
-        case HoodieClusteringJob.SCHEDULE_AND_EXECUTE: {
+        case SCHEDULE_AND_EXECUTE: {
           TestHelpers.assertAtLeastNReplaceCommits(2, tableBasePath, dfs);
           return true;
         }
-        case HoodieClusteringJob.SCHEDULE: {
+        case SCHEDULE: {
           TestHelpers.assertAtLeastNReplaceRequests(2, tableBasePath, dfs);
           TestHelpers.assertNoReplaceCommits(tableBasePath, dfs);
           return true;
         }
-        case HoodieClusteringJob.EXECUTE: {
+        case EXECUTE: {
           TestHelpers.assertNoReplaceCommits(tableBasePath, dfs);
           return true;
         }
