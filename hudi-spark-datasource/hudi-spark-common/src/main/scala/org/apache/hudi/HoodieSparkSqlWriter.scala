@@ -40,6 +40,8 @@ import org.apache.hudi.execution.bulkinsert.{BulkInsertInternalPartitionerWithRo
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
 import org.apache.hudi.index.SparkHoodieIndexFactory
 import org.apache.hudi.internal.DataSourceInternalWriterHelper
+import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.internal.schema.utils.{AvroSchemaEvolutionUtils, SerDeHelper}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
@@ -52,11 +54,6 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.internal.StaticSQLConf
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.{SPARK_VERSION, SparkContext}
-import org.apache.spark.SparkContext
-
-import java.util.Properties
-import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.internal.schema.utils.{AvroSchemaEvolutionUtils, SerDeHelper}
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable
@@ -93,6 +90,8 @@ object HoodieSparkSqlWriter {
     val originKeyGeneratorClassName = HoodieWriterUtils.getOriginKeyGenerator(parameters)
     val timestampKeyGeneratorConfigs = extractConfigsRelatedToTimestmapBasedKeyGenerator(
       originKeyGeneratorClassName, parameters)
+    //validate datasource and tableconfig keygen are the same
+    validateKeyGeneratorConfig(originKeyGeneratorClassName, tableConfig);
     val databaseName = hoodieConfig.getStringOrDefault(HoodieTableConfig.DATABASE_NAME, "")
     val tblName = hoodieConfig.getStringOrThrow(HoodieWriteConfig.TBL_NAME,
       s"'${HoodieWriteConfig.TBL_NAME.key}' must be set.").trim
