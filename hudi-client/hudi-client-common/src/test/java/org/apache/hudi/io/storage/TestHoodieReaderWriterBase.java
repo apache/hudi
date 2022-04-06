@@ -38,6 +38,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -217,7 +218,7 @@ public abstract class TestHoodieReaderWriterBase {
 
   private void verifyFilterRowKeys(HoodieFileReader<GenericRecord> hoodieReader) {
     Set<String> candidateRowKeys = IntStream.range(40, NUM_RECORDS * 2)
-        .mapToObj(i -> "key" + String.format("%02d", i)).collect(Collectors.toSet());
+        .mapToObj(i -> "key" + String.format("%02d", i)).collect(Collectors.toCollection(TreeSet::new));
     List<String> expectedKeys = IntStream.range(40, NUM_RECORDS)
         .mapToObj(i -> "key" + String.format("%02d", i)).sorted().collect(Collectors.toList());
     assertEquals(expectedKeys, hoodieReader.filterRowKeys(candidateRowKeys)

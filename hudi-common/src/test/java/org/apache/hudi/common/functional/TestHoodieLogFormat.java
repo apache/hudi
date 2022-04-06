@@ -2038,7 +2038,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
    * Utility to convert the given iterator to a List.
    */
   private static List<IndexedRecord> getRecords(HoodieDataBlock dataBlock) {
-    ClosableIterator<IndexedRecord> itr = dataBlock.getRecordItr();
+    ClosableIterator<IndexedRecord> itr = dataBlock.getRecordIterator();
 
     List<IndexedRecord> elements = new ArrayList<>();
     itr.forEachRemaining(elements::add);

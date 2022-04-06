@@ -122,7 +122,7 @@ public class HoodieLogFileCommand implements CommandMarker {
             instantTime = "dummy_instant_time_" + dummyInstantTimeCount;
           }
           if (n instanceof HoodieDataBlock) {
-            try (ClosableIterator<IndexedRecord> recordItr = ((HoodieDataBlock) n).getRecordItr()) {
+            try (ClosableIterator<IndexedRecord> recordItr = ((HoodieDataBlock) n).getRecordIterator()) {
               recordItr.forEachRemaining(r -> recordCount.incrementAndGet());
             }
           }
@@ -236,7 +236,7 @@ public class HoodieLogFileCommand implements CommandMarker {
           HoodieLogBlock n = reader.next();
           if (n instanceof HoodieDataBlock) {
             HoodieDataBlock blk = (HoodieDataBlock) n;
-            try (ClosableIterator<IndexedRecord> recordItr = blk.getRecordItr()) {
+            try (ClosableIterator<IndexedRecord> recordItr = blk.getRecordIterator()) {
               recordItr.forEachRemaining(record -> {
                 if (allRecords.size() < limit) {
                   allRecords.add(record);

@@ -138,7 +138,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   /**
    * Returns all the records iterator contained w/in this block.
    */
-  public final ClosableIterator<IndexedRecord> getRecordItr() {
+  public final ClosableIterator<IndexedRecord> getRecordIterator() {
     if (records.isPresent()) {
       return list2Iterator(records.get());
     }
@@ -162,21 +162,21 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    * @return List of IndexedRecords for the keys of interest.
    * @throws IOException in case of failures encountered when reading/parsing records
    */
-  public final ClosableIterator<IndexedRecord> getRecordItr(List<String> keys) throws IOException {
+  public final ClosableIterator<IndexedRecord> getRecordIterator(List<String> keys, boolean fullKey) throws IOException {
     boolean fullScan = keys.isEmpty();
     if (enablePointLookups && !fullScan) {
-      return lookupRecords(keys);
+      return lookupRecords(keys, fullKey);
     }
 
     // Otherwise, we fetch all the records and filter out all the records, but the
     // ones requested
-    ClosableIterator<IndexedRecord> allRecords = getRecordItr();
+    ClosableIterator<IndexedRecord> allRecords = getRecordIterator();
     if (fullScan) {
       return allRecords;
     }
 
     HashSet<String> keySet = new HashSet<>(keys);
-    return FilteringIterator.getInstance(allRecords, keySet, this::getRecordKey);
+    return FilteringIterator.getInstance(allRecords, keySet, fullKey, this::getRecordKey);
   }
 
   protected ClosableIterator<IndexedRecord> readRecordsFromBlockPayload() throws IOException {
@@ -193,7 +193,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     }
   }
 
-  protected ClosableIterator<IndexedRecord> lookupRecords(List<String> keys) throws IOException {
+  protected ClosableIterator<IndexedRecord> lookupRecords(List<String> keys, boolean fullKey) throws IOException {
     throw new UnsupportedOperationException(
         String.format("Point lookups are not supported by this Data block type (%s)", getBlockType())
     );
@@ -252,21 +252,25 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     private final ClosableIterator<T> nested; // nested iterator
 
     private final Set<String> keys; // the filtering keys
+    private final boolean fullKey;
+
     private final Function<T, Option<String>> keyExtract; // function to extract the key
 
     private T next;
 
-    private FilteringIterator(ClosableIterator<T> nested, Set<String> keys, Function<T, Option<String>> keyExtract) {
+    private FilteringIterator(ClosableIterator<T> nested, Set<String> keys, boolean fullKey, Function<T, Option<String>> keyExtract) {
       this.nested = nested;
       this.keys = keys;
+      this.fullKey = fullKey;
       this.keyExtract = keyExtract;
     }
 
     public static <T extends IndexedRecord> FilteringIterator<T> getInstance(
         ClosableIterator<T> nested,
         Set<String> keys,
+        boolean fullKey,
         Function<T, Option<String>> keyExtract) {
-      return new FilteringIterator<>(nested, keys, keyExtract);
+      return new FilteringIterator<>(nested, keys, fullKey, keyExtract);
     }
 
     @Override
@@ -278,7 +282,13 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     public boolean hasNext() {
       while (this.nested.hasNext()) {
         this.next = this.nested.next();
-        if (keys.contains(keyExtract.apply(this.next).orElse(null))) {
+        String key = keyExtract.apply(this.next)
+            .orElseGet(() -> {
+              throw new IllegalStateException(String.format("Record without a key (%s)", this.next));
+            });
+
+        if (fullKey && keys.contains(key)
+            || !fullKey && keys.stream().anyMatch(key::startsWith)) {
           return true;
         }
       }

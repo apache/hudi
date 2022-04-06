@@ -57,7 +57,6 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
@@ -129,7 +128,7 @@ public abstract class AbstractHoodieLogRecordReader {
   // Store the last instant log blocks (needed to implement rollback)
   private Deque<HoodieLogBlock> currentInstantLogBlocks = new ArrayDeque<>();
   // Enables full scan of log records
-  protected final boolean enableFullScan;
+  protected final boolean forceFullScan;
   private int totalScannedLogFiles;
   // Progress
   private float progress = 0.0f;
@@ -150,7 +149,7 @@ public abstract class AbstractHoodieLogRecordReader {
   protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
                                           Schema readerSchema, String latestInstantTime, boolean readBlocksLazily,
                                           boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
-                                          boolean withOperationField, boolean enableFullScan,
+                                          boolean withOperationField, boolean forceFullScan,
                                           Option<String> partitionName, InternalSchema internalSchema) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
@@ -167,7 +166,7 @@ public abstract class AbstractHoodieLogRecordReader {
     this.bufferSize = bufferSize;
     this.instantRange = instantRange;
     this.withOperationField = withOperationField;
-    this.enableFullScan = enableFullScan;
+    this.forceFullScan = forceFullScan;
     this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
     this.path = basePath;
 
@@ -189,10 +188,14 @@ public abstract class AbstractHoodieLogRecordReader {
   }
 
   public synchronized void scan() {
-    scan(Option.empty());
+    scanInternal(Option.empty());
   }
 
-  public synchronized void scan(Option<List<String>> keys) {
+  public synchronized void scan(List<String> keys) {
+    scanInternal(Option.of(new KeySpec(keys, true)));
+  }
+
+  protected synchronized void scanInternal(Option<KeySpec> keySpecOpt) {
     currentInstantLogBlocks = new ArrayDeque<>();
     progress = 0.0f;
     totalLogFiles = new AtomicLong(0);
@@ -205,15 +208,16 @@ public abstract class AbstractHoodieLogRecordReader {
     HoodieTimeline completedInstantsTimeline = commitsTimeline.filterCompletedInstants();
     HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
     try {
-
       // Get the key field based on populate meta fields config
       // and the table type
       final String keyField = getKeyField();
 
       // Iterate over the paths
+      boolean enableRecordLookups = !forceFullScan;
       logFormatReaderWrapper = new HoodieLogFormatReader(fs,
           logFilePaths.stream().map(logFile -> new HoodieLogFile(new Path(logFile))).collect(Collectors.toList()),
-          readerSchema, readBlocksLazily, reverseReader, bufferSize, !enableFullScan, keyField, internalSchema);
+          readerSchema, readBlocksLazily, reverseReader, bufferSize, enableRecordLookups, keyField, internalSchema);
+
       Set<HoodieLogFile> scannedLogFiles = new HashSet<>();
       while (logFormatReaderWrapper.hasNext()) {
         HoodieLogFile logFile = logFormatReaderWrapper.getLogFile();
@@ -250,7 +254,7 @@ public abstract class AbstractHoodieLogRecordReader {
             if (isNewInstantBlock(logBlock) && !readBlocksLazily) {
               // If this is an avro data block belonging to a different commit/instant,
               // then merge the last blocks and records into the main result
-              processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keys);
+              processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOpt);
             }
             // store the current block
             currentInstantLogBlocks.push(logBlock);
@@ -260,7 +264,7 @@ public abstract class AbstractHoodieLogRecordReader {
             if (isNewInstantBlock(logBlock) && !readBlocksLazily) {
               // If this is a delete data block belonging to a different commit/instant,
               // then merge the last blocks and records into the main result
-              processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keys);
+              processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOpt);
             }
             // store deletes so can be rolled back
             currentInstantLogBlocks.push(logBlock);
@@ -335,7 +339,7 @@ public abstract class AbstractHoodieLogRecordReader {
       // merge the last read block when all the blocks are done reading
       if (!currentInstantLogBlocks.isEmpty()) {
         LOG.info("Merging the final data blocks");
-        processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keys);
+        processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOpt);
       }
       // Done
       progress = 1.0f;
@@ -370,11 +374,11 @@ public abstract class AbstractHoodieLogRecordReader {
    * Iterate over the GenericRecord in the block, read the hoodie key and partition path and call subclass processors to
    * handle it.
    */
-  private void processDataBlock(HoodieDataBlock dataBlock, Option<List<String>> keys) throws Exception {
-    try (ClosableIterator<IndexedRecord> recordItr = dataBlock.getRecordItr(keys.orElse(Collections.emptyList()))) {
+  private void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws Exception {
+    try (ClosableIterator<IndexedRecord> recordIterator = getRecordsIterator(dataBlock, keySpecOpt)) {
       Option<Schema> schemaOption = getMergedSchema(dataBlock);
-      while (recordItr.hasNext()) {
-        IndexedRecord currentRecord = recordItr.next();
+      while (recordIterator.hasNext()) {
+        IndexedRecord currentRecord = recordIterator.next();
         IndexedRecord record = schemaOption.isPresent() ? HoodieAvroUtils.rewriteRecordWithNewSchema(currentRecord, schemaOption.get()) : currentRecord;
         processNextRecord(createHoodieRecord(record, this.hoodieTableMetaClient.getTableConfig(), this.payloadClassFQN,
             this.preCombineField, this.withOperationField, this.simpleKeyGenFields, this.partitionName));
@@ -449,23 +453,20 @@ public abstract class AbstractHoodieLogRecordReader {
    * Process the set of log blocks belonging to the last instant which is read fully.
    */
   private void processQueuedBlocksForInstant(Deque<HoodieLogBlock> logBlocks, int numLogFilesSeen,
-                                             Option<List<String>> keys) throws Exception {
+                                             Option<KeySpec> keySpecOpt) throws Exception {
     while (!logBlocks.isEmpty()) {
       LOG.info("Number of remaining logblocks to merge " + logBlocks.size());
       // poll the element at the bottom of the stack since that's the order it was inserted
       HoodieLogBlock lastBlock = logBlocks.pollLast();
       switch (lastBlock.getBlockType()) {
         case AVRO_DATA_BLOCK:
-          processDataBlock((HoodieAvroDataBlock) lastBlock, keys);
+          processDataBlock((HoodieAvroDataBlock) lastBlock, keySpecOpt);
           break;
         case HFILE_DATA_BLOCK:
-          if (!keys.isPresent()) {
-            keys = Option.of(Collections.emptyList());
-          }
-          processDataBlock((HoodieHFileDataBlock) lastBlock, keys);
+          processDataBlock((HoodieHFileDataBlock) lastBlock, keySpecOpt);
           break;
         case PARQUET_DATA_BLOCK:
-          processDataBlock((HoodieParquetDataBlock) lastBlock, keys);
+          processDataBlock((HoodieParquetDataBlock) lastBlock, keySpecOpt);
           break;
         case DELETE_BLOCK:
           Arrays.stream(((HoodieDeleteBlock) lastBlock).getRecordsToDelete()).forEach(this::processNextDeletedRecord);
@@ -479,6 +480,15 @@ public abstract class AbstractHoodieLogRecordReader {
     }
     // At this step the lastBlocks are consumed. We track approximate progress by number of log-files seen
     progress = numLogFilesSeen - 1 / logFilePaths.size();
+  }
+
+  private ClosableIterator<IndexedRecord> getRecordsIterator(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
+    if (keySpecOpt.isPresent()) {
+      KeySpec keySpec = keySpecOpt.get();
+      return dataBlock.getRecordIterator(keySpec.keys, keySpec.fullKey);
+    }
+
+    return dataBlock.getRecordIterator();
   }
 
   /**
@@ -504,7 +514,7 @@ public abstract class AbstractHoodieLogRecordReader {
     return payloadClassFQN;
   }
 
-  protected Option<String> getPartitionName() {
+  public Option<String> getPartitionName() {
     return partitionName;
   }
 
@@ -518,6 +528,16 @@ public abstract class AbstractHoodieLogRecordReader {
 
   public boolean isWithOperationField() {
     return withOperationField;
+  }
+
+  protected static class KeySpec {
+    private final List<String> keys;
+    private final boolean fullKey;
+
+    public KeySpec(List<String> keys, boolean fullKey) {
+      this.keys = keys;
+      this.fullKey = fullKey;
+    }
   }
 
   /**
