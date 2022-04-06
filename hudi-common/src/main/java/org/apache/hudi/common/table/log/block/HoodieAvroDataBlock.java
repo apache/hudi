@@ -314,7 +314,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     output.write(schemaContent);
 
     List<IndexedRecord> records = new ArrayList<>();
-    try (ClosableIterator<IndexedRecord> recordItr = getRecordItr()) {
+    try (ClosableIterator<IndexedRecord> recordItr = getRecordIterator()) {
       recordItr.forEachRemaining(records::add);
     }
 

@@ -289,8 +289,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getString(DIR_FILTER_REGEX);
   }
 
-  public boolean enableFullScan() {
-    return getBoolean(ENABLE_FULL_SCAN_LOG_FILES);
+  public boolean allowFullScan() {
+    return getBooleanOrDefault(ENABLE_FULL_SCAN_LOG_FILES);
   }
 
   public boolean populateMetaFields() {
