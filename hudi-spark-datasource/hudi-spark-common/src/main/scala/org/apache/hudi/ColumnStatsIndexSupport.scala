@@ -207,7 +207,9 @@ trait ColumnStatsIndexSupport extends SparkAdapterSupport {
         val converter = AvroConversionUtils.createAvroToInternalRowConverter(metadataRecordSchema, metadataRecordStructType)
 
         it.map { record =>
-          toScalaOption(record.getData.getInsertValue())
+          // schema and props are ignored for generating metadata record from the payload
+          // instead, the underlying file system, or bloom filter, or columns stats metadata (part of payload) are directly used
+          toScalaOption(record.getData.getInsertValue(null, null))
             .flatMap(avroRecord => converter(avroRecord.asInstanceOf[GenericRecord]))
             .orNull
         }

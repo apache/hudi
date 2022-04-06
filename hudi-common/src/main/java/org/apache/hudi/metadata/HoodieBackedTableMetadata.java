@@ -183,7 +183,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
               } catch (IOException ioe) {
                 throw new HoodieIOException("Error merging records from metadata table for  " + keyPrefixes.size() + " key : ", ioe);
               } finally {
-                close(Pair.of(partitionName, fileSlice.getFileId()));
+                closeReader(readers);
               }
             }
         )
@@ -564,6 +564,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private synchronized void close(Pair<String, String> partitionFileSlicePair) {
     Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> readers =
         partitionReaders.remove(partitionFileSlicePair);
+    closeReader(readers);
+  }
+
+  private void closeReader(Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> readers) {
     if (readers != null) {
       try {
         if (readers.getKey() != null) {

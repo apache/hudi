@@ -75,8 +75,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.TypeUtils.unsafeCast;
-import static org.apache.hudi.common.util.DateTimeUtils.microsToInstant;
 import static org.apache.hudi.common.util.DateTimeUtils.instantToMicros;
+import static org.apache.hudi.common.util.DateTimeUtils.microsToInstant;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_LIST;
@@ -388,10 +388,6 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRecord, Schema schema) throws IOException {
     return combineAndGetUpdateValue(oldRecord, schema, new Properties());
-  }
-
-  public Option<IndexedRecord> getInsertValue() throws IOException {
-    return getInsertValue(null, null);
   }
 
   @Override
