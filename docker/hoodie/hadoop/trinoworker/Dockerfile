@@ -18,7 +18,7 @@
 #
 # Trino docker setup is adapted from https://github.com/Lewuathe/docker-trino-cluster
 
-ARG HADOOP_VERSION=2.8.4
+ARG HADOOP_VERSION=3.1.0
 ARG TRINO_VERSION=368
 FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-trinobase_${TRINO_VERSION}:latest as trino-base
 
