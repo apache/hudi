@@ -95,6 +95,7 @@ import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getCompletedMetadataPartitions;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightAndCompletedMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
 
 /**
@@ -377,7 +378,25 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       if (initializeFromFilesystem(dataMetaClient, inflightInstantTimestamp)) {
         metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.INITIALIZE_STR, timer.endTimer()));
       }
+      return;
     }
+
+    // if metadata table exists, then check if any of the enabled partition types needs to be initialized
+    Set<String> inflightAndCompletedPartitions = getInflightAndCompletedMetadataPartitions(dataMetaClient.getTableConfig());
+    List<MetadataPartitionType> partitionsToInit = this.enabledPartitionTypes.stream()
+        .filter(p -> !inflightAndCompletedPartitions.contains(p.getPartitionPath()) && !MetadataPartitionType.FILES.equals(p))
+        .collect(Collectors.toList());
+
+    // if there are no partitions to initialize or there is a pending operation, then don't initialize in this round
+    if (partitionsToInit.isEmpty() || anyPendingDataInstant(dataMetaClient, inflightInstantTimestamp)) {
+      return;
+    }
+
+    String createInstantTime = getInitialCommitInstantTime(dataMetaClient);
+    initTableMetadata(); // re-init certain flags in BaseTableMetadata
+    initializeEnabledFileGroups(dataMetaClient, createInstantTime, partitionsToInit);
+    initialCommit(createInstantTime, partitionsToInit);
+    updateInitializedPartitionsInTableConfig(partitionsToInit);
   }
 
   private <T extends SpecificRecordBase> boolean metadataTableExists(HoodieTableMetaClient dataMetaClient,
@@ -502,26 +521,11 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   private boolean initializeFromFilesystem(HoodieTableMetaClient dataMetaClient,
                                            Option<String> inflightInstantTimestamp) throws IOException {
-    ValidationUtils.checkState(enabled, "Metadata table cannot be initialized as it is not enabled");
-
-    // We can only initialize if there are no pending operations on the dataset
-    List<HoodieInstant> pendingDataInstant = dataMetaClient.getActiveTimeline()
-        .getInstants().filter(i -> !i.isCompleted())
-        .filter(i -> !inflightInstantTimestamp.isPresent() || !i.getTimestamp().equals(inflightInstantTimestamp.get()))
-        .collect(Collectors.toList());
-
-    if (!pendingDataInstant.isEmpty()) {
-      metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BOOTSTRAP_ERR_STR, 1));
-      LOG.warn("Cannot initialize metadata table as operation(s) are in progress on the dataset: "
-          + Arrays.toString(pendingDataInstant.toArray()));
+    if (anyPendingDataInstant(dataMetaClient, inflightInstantTimestamp)) {
       return false;
     }
 
-    // If there is no commit on the dataset yet, use the SOLO_COMMIT_TIMESTAMP as the instant time for initial commit
-    // Otherwise, we use the timestamp of the latest completed action.
-    String createInstantTime = dataMetaClient.getActiveTimeline().filterCompletedInstants()
-        .getReverseOrderedInstants().findFirst().map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
-    LOG.info("Creating a new metadata table in " + metadataWriteConfig.getBasePath() + " at instant " + createInstantTime);
+    String createInstantTime = getInitialCommitInstantTime(dataMetaClient);
 
     initializeMetaClient(dataWriteConfig.getMetadataConfig().populateMetaFields());
     initTableMetadata();
@@ -535,13 +539,36 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       enabledPartitionTypes = this.enabledPartitionTypes;
     }
     initializeEnabledFileGroups(dataMetaClient, createInstantTime, enabledPartitionTypes);
-
-    // During cold startup, the list of files to be committed can be huge. So creating a HoodieCommitMetadata out
-    // of these large number of files and calling the existing update(HoodieCommitMetadata) function does not scale
-    // well. Hence, we have a special commit just for the initialization scenario.
     initialCommit(createInstantTime, enabledPartitionTypes);
     updateInitializedPartitionsInTableConfig(enabledPartitionTypes);
     return true;
+  }
+
+  private String getInitialCommitInstantTime(HoodieTableMetaClient dataMetaClient) {
+    // If there is no commit on the dataset yet, use the SOLO_COMMIT_TIMESTAMP as the instant time for initial commit
+    // Otherwise, we use the timestamp of the latest completed action.
+    String createInstantTime = dataMetaClient.getActiveTimeline().filterCompletedInstants()
+        .getReverseOrderedInstants().findFirst().map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
+    LOG.info("Creating a new metadata table in " + metadataWriteConfig.getBasePath() + " at instant " + createInstantTime);
+    return createInstantTime;
+  }
+
+  private boolean anyPendingDataInstant(HoodieTableMetaClient dataMetaClient, Option<String> inflightInstantTimestamp) {
+    ValidationUtils.checkState(enabled, "Metadata table cannot be initialized as it is not enabled");
+
+    // We can only initialize if there are no pending operations on the dataset
+    List<HoodieInstant> pendingDataInstant = dataMetaClient.getActiveTimeline()
+        .getInstants().filter(i -> !i.isCompleted())
+        .filter(i -> !inflightInstantTimestamp.isPresent() || !i.getTimestamp().equals(inflightInstantTimestamp.get()))
+        .collect(Collectors.toList());
+
+    if (!pendingDataInstant.isEmpty()) {
+      metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BOOTSTRAP_ERR_STR, 1));
+      LOG.warn("Cannot initialize metadata table as operation(s) are in progress on the dataset: "
+          + Arrays.toString(pendingDataInstant.toArray()));
+      return true;
+    }
+    return false;
   }
 
   private void updateInitializedPartitionsInTableConfig(List<MetadataPartitionType> partitionTypes) {
@@ -973,8 +1000,12 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   }
 
   /**
-   * This is invoked to initialize metadata table for a dataset. Bootstrap Commit has special handling mechanism due to its scale compared to
-   * other regular commits.
+   * This is invoked to initialize metadata table for a dataset.
+   * Initial commit has special handling mechanism due to its scale compared to other regular commits.
+   * During cold startup, the list of files to be committed can be huge.
+   * So creating a HoodieCommitMetadata out of these large number of files,
+   * and calling the existing update(HoodieCommitMetadata) function does not scale well.
+   * Hence, we have a special commit just for the initialization scenario.
    */
   private void initialCommit(String createInstantTime, List<MetadataPartitionType> partitionTypes) {
     // List all partitions in the basePath of the containing dataset
@@ -992,18 +1023,17 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
     final Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
 
-    // Record which saves the list of all partitions
-    HoodieRecord allPartitionRecord = HoodieMetadataPayload.createPartitionListRecord(partitions);
-    if (partitions.isEmpty()) {
-      // in case of initializing of a fresh table, there won't be any partitions, but we need to make a boostrap commit
-      final HoodieData<HoodieRecord> allPartitionRecordsRDD = engineContext.parallelize(
-          Collections.singletonList(allPartitionRecord), 1);
-      partitionToRecordsMap.put(MetadataPartitionType.FILES, allPartitionRecordsRDD);
-      commit(createInstantTime, partitionToRecordsMap, false);
-      return;
-    }
-
     if (partitionTypes.contains(MetadataPartitionType.FILES)) {
+      // Record which saves the list of all partitions
+      HoodieRecord allPartitionRecord = HoodieMetadataPayload.createPartitionListRecord(partitions);
+      if (partitions.isEmpty()) {
+        // in case of initializing of a fresh table, there won't be any partitions, but we need to make a boostrap commit
+        final HoodieData<HoodieRecord> allPartitionRecordsRDD = engineContext.parallelize(
+            Collections.singletonList(allPartitionRecord), 1);
+        partitionToRecordsMap.put(MetadataPartitionType.FILES, allPartitionRecordsRDD);
+        commit(createInstantTime, partitionToRecordsMap, false);
+        return;
+      }
       HoodieData<HoodieRecord> filesPartitionRecords = getFilesPartitionRecords(createInstantTime, partitionInfoList, allPartitionRecord);
       ValidationUtils.checkState(filesPartitionRecords.count() == (partitions.size() + 1));
       partitionToRecordsMap.put(MetadataPartitionType.FILES, filesPartitionRecords);
