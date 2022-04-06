@@ -24,12 +24,15 @@ MVN=${MVN:-mvn}
 # fail immediately
 set -o errexit
 set -o nounset
-# print command before executing
-set -o xtrace
 
 CURR_DIR=$(pwd)
 if [ ! -d "$CURR_DIR/packaging" ] ; then
   echo "You have to call the script from the repository root dir that contains 'packaging/'"
+  exit 1
+fi
+
+if [ "$#" -gt "1" ]; then
+  echo "Only accept 0 or 1 argument. Use -h to see examples."
   exit 1
 fi
 
@@ -39,10 +42,36 @@ declare -a SUPPORTED_VERSION_OPTS=(
 "-Dscala-2.12 -Dspark3.1 -Dflink1.14"
 "-Dscala-2.12 -Dspark3.2 -Dflink1.14"
 )
+printf -v joined "'%s'\n" "${SUPPORTED_VERSION_OPTS[@]}"
+
+if [ "${1:-}" == "-h" ]; then
+  echo "
+Usage: $(basename "$0") [OPTIONS]
+
+Options:
+<version option>  One of the version options below
+${joined}
+-h, --help
+"
+  exit 0
+fi
+
+VERSION_OPT=${1:-}
+valid_version_opt=false
+for v in "${SUPPORTED_VERSION_OPTS[@]}"; do
+    [[ $VERSION_OPT == "$v" ]] && valid_version_opt=true
+done
+
+if [ "$valid_version_opt" = true ]; then
+  SUPPORTED_VERSION_OPTS=("$VERSION_OPT")
+elif [ "$#" == "1" ]; then
+  echo "Version option $VERSION_OPT is invalid. Use -h to see examples."
+  exit 1
+fi
 
 for v in "${SUPPORTED_VERSION_OPTS[@]}"
 do
   echo "Deploying to repository.apache.org with version option ${v}"
   COMMON_OPTIONS="${v} -Prelease -DskipTests -DretryFailedDeploymentCount=10 -DdeployArtifacts=true"
-  $MVN clean deploy $COMMON_OPTIONS
+  echo $COMMON_OPTIONS
 done
