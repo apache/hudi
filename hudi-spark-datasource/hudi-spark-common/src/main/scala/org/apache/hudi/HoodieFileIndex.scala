@@ -191,14 +191,20 @@ case class HoodieFileIndex(spark: SparkSession,
    * @return list of pruned (data-skipped) candidate base-files' names
    */
   private def lookupCandidateFilesInMetadataTable(queryFilters: Seq[Expression]): Try[Option[Set[String]]] = Try {
+    // NOTE: Data Skipping is only effective when it references columns that are indexed w/in
+    //       the Column Stats Index (CSI). Following cases could not be effectively handled by Data Skipping:
+    //          - Expressions on top-level column's fields (ie, for ex filters like "struct.field > 0", since
+    //          CSI only contains stats for top-level columns, in this case for "struct")
+    //          - Any expression not directly referencing top-level column (for ex, sub-queries, since there's
+    //          nothing CSI in particular could be applied for)
+    lazy val queryReferencedColumns = collectReferencedColumns(spark, queryFilters, schema)
+
     if (!isMetadataTableEnabled || !isColumnStatsIndexEnabled || !isColumnStatsIndexAvailable || !isDataSkippingEnabled) {
       validateConfig()
       Option.empty
-    } else if (queryFilters.isEmpty) {
+    } else if (queryFilters.isEmpty || queryReferencedColumns.isEmpty) {
       Option.empty
     } else {
-      val queryReferencedColumns = collectReferencedColumns(spark, queryFilters, schema)
-
       val colStatsDF: DataFrame = readColumnStatsIndex(spark, basePath, metadataConfig, queryReferencedColumns)
 
       // Persist DF to avoid re-computing column statistics unraveling
