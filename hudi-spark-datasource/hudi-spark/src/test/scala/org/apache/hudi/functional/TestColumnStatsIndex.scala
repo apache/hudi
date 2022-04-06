@@ -209,7 +209,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
     })
   }
 
-  private def buildColumnStatsTableManually(tablePath: String, zorderedCols: Seq[String], indexSchema: StructType) = {
+  private def buildColumnStatsTableManually(tablePath: String, indexedCols: Seq[String], indexSchema: StructType) = {
     val files = {
       val it = fs.listFiles(new Path(tablePath), true)
       var seq = Seq[LocatedFileStatus]()
@@ -224,15 +224,16 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
         val df = spark.read.schema(sourceTableSchema).parquet(file.getPath.toString)
         val exprs: Seq[String] =
           s"'${typedLit(file.getPath.getName)}' AS file" +:
+          s"sum(1) AS valueCount" +:
             df.columns
-              .filter(col => zorderedCols.contains(col))
+              .filter(col => indexedCols.contains(col))
               .flatMap(col => {
                 val minColName = s"${col}_minValue"
                 val maxColName = s"${col}_maxValue"
                 Seq(
                   s"min($col) AS $minColName",
                   s"max($col) AS $maxColName",
-                  s"sum(cast(isnull($col) AS long)) AS ${col}_num_nulls"
+                  s"sum(cast(isnull($col) AS long)) AS ${col}_nullCount"
                 )
               })
 

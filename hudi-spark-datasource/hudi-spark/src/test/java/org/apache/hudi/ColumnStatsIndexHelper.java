@@ -130,7 +130,7 @@ public class ColumnStatsIndexHelper {
    *
    * <pre>
    * +---------------------------+------------+------------+-------------+
-   * |          file             | A_minValue | A_maxValue | A_num_nulls |
+   * |          file             | A_minValue | A_maxValue | A_nullCount |
    * +---------------------------+------------+------------+-------------+
    * | one_base_file.parquet     |          1 |         10 |           0 |
    * | another_base_file.parquet |        -10 |          0 |           5 |
