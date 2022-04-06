@@ -36,13 +36,13 @@ if [ "$#" -gt "1" ]; then
   exit 1
 fi
 
-declare -a SUPPORTED_VERSION_OPTS=(
+declare -a ALL_VERSION_OPTS=(
 "-Dscala-2.11 -Dspark2.4 -Dflink1.13"
 "-Dscala-2.12 -Dspark2.4 -Dflink1.13"
 "-Dscala-2.12 -Dspark3.1 -Dflink1.14"
 "-Dscala-2.12 -Dspark3.2 -Dflink1.14"
 )
-printf -v joined "'%s'\n" "${SUPPORTED_VERSION_OPTS[@]}"
+printf -v joined "'%s'\n" "${ALL_VERSION_OPTS[@]}"
 
 if [ "${1:-}" == "-h" ]; then
   echo "
@@ -58,18 +58,19 @@ fi
 
 VERSION_OPT=${1:-}
 valid_version_opt=false
-for v in "${SUPPORTED_VERSION_OPTS[@]}"; do
+for v in "${ALL_VERSION_OPTS[@]}"; do
     [[ $VERSION_OPT == "$v" ]] && valid_version_opt=true
 done
 
 if [ "$valid_version_opt" = true ]; then
-  SUPPORTED_VERSION_OPTS=("$VERSION_OPT")
+  # run deploy for only specified version option
+  ALL_VERSION_OPTS=("$VERSION_OPT")
 elif [ "$#" == "1" ]; then
   echo "Version option $VERSION_OPT is invalid. Use -h to see examples."
   exit 1
 fi
 
-for v in "${SUPPORTED_VERSION_OPTS[@]}"
+for v in "${ALL_VERSION_OPTS[@]}"
 do
   echo "Deploying to repository.apache.org with version option ${v}"
   COMMON_OPTIONS="${v} -Prelease -DskipTests -DretryFailedDeploymentCount=10 -DdeployArtifacts=true"
