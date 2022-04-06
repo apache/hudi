@@ -221,6 +221,34 @@ services:
         - ${HUDI_WS}:/var/hoodie/ws
       command: worker
 
+  trino-coordinator-1:
+    container_name: trino-coordinator-1
+    hostname: trino-coordinator-1
+    image: apachehudi/hudi-hadoop_3.1.0-trinocoordinator_368:latest
+    ports:
+      - '8091:8091'
+    links:
+      - "hivemetastore"
+    volumes:
+      - ${HUDI_WS}:/var/hoodie/ws
+    command: http://trino-coordinator-1:8091 trino-coordinator-1
+
+  trino-worker-1:
+    container_name: trino-worker-1
+    hostname: trino-worker-1
+    image: apachehudi/hudi-hadoop_3.1.0-trinoworker_368:latest
+    depends_on: [ "trino-coordinator-1" ]
+    ports:
+      - '8092:8092'
+    links:
+      - "hivemetastore"
+      - "hiveserver"
+      - "hive-metastore-postgresql"
+      - "namenode"
+    volumes:
+      - ${HUDI_WS}:/var/hoodie/ws
+    command: http://trino-coordinator-1:8091 trino-worker-1
+
   graphite:
     container_name: graphite
     hostname: graphite
@@ -248,6 +276,7 @@ services:
       - "hive-metastore-postgresql"
       - "namenode"
       - "presto-coordinator-1"
+      - "trino-coordinator-1"
     volumes:
       - ${HUDI_WS}:/var/hoodie/ws
 
@@ -267,6 +296,7 @@ services:
       - "hive-metastore-postgresql"
       - "namenode"
       - "presto-coordinator-1"
+      - "trino-coordinator-1"
     volumes:
       - ${HUDI_WS}:/var/hoodie/ws
 
