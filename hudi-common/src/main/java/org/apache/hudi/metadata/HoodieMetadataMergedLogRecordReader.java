@@ -36,9 +36,9 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -99,33 +99,33 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
     return Collections.singletonList(Pair.of(key, Option.ofNullable((HoodieRecord) records.get(key))));
   }
 
-  public synchronized List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeyPrefixes(List<String> keyPrefixes) {
+  @SuppressWarnings("unchecked")
+  public List<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes) {
     // Following operations have to be atomic, otherwise concurrent
     // readers would race with each other and could crash when
     // processing log block records as part of scan.
-    records.clear();
-    scanInternal(Option.of(new KeySpec(keyPrefixes, false)));
-    return records.values().stream()
-        .map(record ->
-            Pair.of(record.getKey().getRecordKey(), Option.ofNullable((HoodieRecord<HoodieMetadataPayload>) record)))
-        .collect(Collectors.toList());
+    synchronized (this) {
+      records.clear();
+      scanInternal(Option.of(new KeySpec(keyPrefixes, false)));
+      return records.values().stream()
+          .filter(Objects::nonNull)
+          .map(record -> (HoodieRecord<HoodieMetadataPayload>) record)
+          .collect(Collectors.toList());
+    }
   }
 
+  @SuppressWarnings("unchecked")
   public synchronized List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> keys) {
     // Following operations have to be atomic, otherwise concurrent
     // readers would race with each other and could crash when
     // processing log block records as part of scan.
-    records.clear();
-    scan(keys);
-    List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> metadataRecords = new ArrayList<>();
-    keys.forEach(entry -> {
-      if (records.containsKey(entry)) {
-        metadataRecords.add(Pair.of(entry, Option.ofNullable((HoodieRecord) records.get(entry))));
-      } else {
-        metadataRecords.add(Pair.of(entry, Option.empty()));
-      }
-    });
-    return metadataRecords;
+    synchronized (this) {
+      records.clear();
+      scan(keys);
+      return keys.stream()
+          .map(key -> Pair.of(key, Option.ofNullable((HoodieRecord<HoodieMetadataPayload>) records.get(key))))
+          .collect(Collectors.toList());
+    }
   }
 
   @Override
