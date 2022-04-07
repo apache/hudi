@@ -112,6 +112,7 @@
     <hive.groupid>org.apache.hive</hive.groupid>
     <hive.version>2.3.1</hive.version>
     <hive.exec.classifier>core</hive.exec.classifier>
+    <hive.parquet.version>1.10.1</hive.parquet.version>
     <metrics.version>4.1.1</metrics.version>
     <orc.version>1.6.0</orc.version>
     <airlift.version>0.16</airlift.version>
