@@ -21,6 +21,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
+import org.apache.hudi.TestHoodieFileIndex.DataSkippingTestCase
 import org.apache.hudi.client.HoodieJavaWriteClient
 import org.apache.hudi.client.common.HoodieJavaEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -45,6 +46,7 @@ import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, GreaterThanOrEqual, LessThan, Literal}
 import org.apache.spark.sql.execution.datasources.{NoopCache, PartitionDirectory}
 import org.apache.spark.sql.functions.{lit, struct}
+import org.apache.spark.sql.sources.v2.DataSourceOptions
 import org.apache.spark.sql.types.{IntegerType, StringType}
 import org.apache.spark.sql.{DataFrameWriter, Row, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -334,8 +336,9 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     assert(fileIndex.getAllQueryPartitionPaths.get(0).path.equals("c"))
   }
 
-  @Test
-  def testDataSkippingWhileFileListing(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("testDataSkippingWhileFileListingParams"))
+  def testDataSkippingWhileFileListing(testCase: DataSkippingTestCase): Unit = {
     val r = new Random(0xDEED)
     val tuples = for (i <- 1 to 1000) yield (i, 1000 - i, r.nextString(5), r.nextInt(4))
 
@@ -343,16 +346,19 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     import _spark.implicits._
     val inputDF = tuples.toDF("id", "inv_id", "str", "rand")
 
+    val metadataOpts = Map(
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> testCase.enableColumnStats.toString,
+      HoodieMetadataConfig.ENABLE.key -> testCase.enableMetadata.toString,
+    )
+
     val opts = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       RECORDKEY_FIELD.key -> "id",
       PRECOMBINE_FIELD.key -> "id",
-      HoodieMetadataConfig.ENABLE.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
-    )
+    ) ++ metadataOpts
 
     // If there are any failures in the Data Skipping flow, test should fail
     spark.sqlContext.setConf(DataSkippingFailureMode.configName, DataSkippingFailureMode.Strict.value);
@@ -371,23 +377,22 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     val props = Map[String, String](
       "path" -> basePath,
       QUERY_TYPE.key -> QUERY_TYPE_SNAPSHOT_OPT_VAL,
-      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
-      // NOTE: Metadata Table has to be enabled on the read path as well
-      HoodieMetadataConfig.ENABLE.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
-    )
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> testCase.enableDataSkipping.toString
+    ) ++ metadataOpts // NOTE: Metadata Table has to be enabled on the read path as well
 
     val fileIndex = HoodieFileIndex(spark, metaClient, Option.empty, props, NoopCache)
 
     val allFilesPartitions = fileIndex.listFiles(Seq(), Seq())
     assertEquals(10, allFilesPartitions.head.files.length)
 
-    // We're selecting a single file that contains "id" == 1 row, which there should be
-    // strictly 1. Given that 1 is minimal possible value, Data Skipping should be able to
-    // truncate search space to just a single file
-    val dataFilter = EqualTo(AttributeReference("id", IntegerType, nullable = false)(), Literal(1))
-    val filteredPartitions = fileIndex.listFiles(Seq(), Seq(dataFilter))
-    assertEquals(1, filteredPartitions.head.files.length)
+    if (testCase.enableDataSkipping && testCase.enableMetadata && testCase.enableColumnStats) {
+      // We're selecting a single file that contains "id" == 1 row, which there should be
+      // strictly 1. Given that 1 is minimal possible value, Data Skipping should be able to
+      // truncate search space to just a single file
+      val dataFilter = EqualTo(AttributeReference("id", IntegerType, nullable = false)(), Literal(1))
+      val filteredPartitions = fileIndex.listFiles(Seq(), Seq(dataFilter))
+      assertEquals(1, filteredPartitions.head.files.length)
+    }
   }
 
   private def attribute(partition: String): AttributeReference = {
@@ -411,6 +416,18 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
 }
 
 object TestHoodieFileIndex {
+  case class DataSkippingTestCase(enableMetadata: Boolean,
+                                  enableColumnStats: Boolean,
+                                  enableDataSkipping: Boolean)
+
+  def testDataSkippingWhileFileListingParams: Seq[DataSkippingTestCase] =
+    DataSkippingTestCase(enableMetadata = false, enableColumnStats = false, enableDataSkipping = false) ::
+      DataSkippingTestCase(enableMetadata = false, enableColumnStats = false, enableDataSkipping = true) ::
+      DataSkippingTestCase(enableMetadata = true, enableColumnStats = false, enableDataSkipping = true) ::
+      DataSkippingTestCase(enableMetadata = false, enableColumnStats = true, enableDataSkipping = true) ::
+      DataSkippingTestCase(enableMetadata = true, enableColumnStats = true, enableDataSkipping = true) ::
+      Nil
+
   def keyGeneratorParameters(): java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
       Arguments.arguments(null.asInstanceOf[String]),
