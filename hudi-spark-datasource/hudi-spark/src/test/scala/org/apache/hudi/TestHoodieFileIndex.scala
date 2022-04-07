@@ -21,15 +21,13 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
-import org.apache.hudi.TestHoodieFileIndex.DataSkippingTestCase
 import org.apache.hudi.client.HoodieJavaWriteClient
 import org.apache.hudi.client.common.HoodieJavaEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.engine.EngineType
-import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieRecord, HoodieTableQueryType, HoodieTableType}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
@@ -39,18 +37,15 @@ import org.apache.hudi.config.{HoodieStorageConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.TimestampType
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
-import org.apache.hudi.metadata.{HoodieTableMetadata, MetadataPartitionType}
-import org.apache.hudi.testutils.{HoodieClientTestBase, SparkClientFunctionalTestHarness}
+import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, GreaterThanOrEqual, LessThan, Literal}
 import org.apache.spark.sql.execution.datasources.{NoopCache, PartitionDirectory}
 import org.apache.spark.sql.functions.{lit, struct}
-import org.apache.spark.sql.sources.v2.DataSourceOptions
 import org.apache.spark.sql.types.{IntegerType, StringType}
 import org.apache.spark.sql.{DataFrameWriter, Row, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{BeforeEach, Tag, Test}
+import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource, ValueSource}
 
@@ -336,9 +331,8 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     assert(fileIndex.getAllQueryPartitionPaths.get(0).path.equals("c"))
   }
 
-  @ParameterizedTest
-  @MethodSource(Array("testDataSkippingWhileFileListingParams"))
-  def testDataSkippingWhileFileListing(testCase: DataSkippingTestCase): Unit = {
+  @Test
+  def testDataSkippingWhileFileListing(): Unit = {
     val r = new Random(0xDEED)
     val tuples = for (i <- 1 to 1000) yield (i, 1000 - i, r.nextString(5), r.nextInt(4))
 
@@ -346,9 +340,9 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     import _spark.implicits._
     val inputDF = tuples.toDF("id", "inv_id", "str", "rand")
 
-    val metadataOpts = Map(
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> testCase.enableColumnStats.toString,
-      HoodieMetadataConfig.ENABLE.key -> testCase.enableMetadata.toString,
+    val writeMetadataOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
     )
 
     val opts = Map(
@@ -358,7 +352,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       RECORDKEY_FIELD.key -> "id",
       PRECOMBINE_FIELD.key -> "id",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
-    ) ++ metadataOpts
+    ) ++ writeMetadataOpts
 
     // If there are any failures in the Data Skipping flow, test should fail
     spark.sqlContext.setConf(DataSkippingFailureMode.configName, DataSkippingFailureMode.Strict.value);
@@ -374,24 +368,45 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
 
-    val props = Map[String, String](
-      "path" -> basePath,
-      QUERY_TYPE.key -> QUERY_TYPE_SNAPSHOT_OPT_VAL,
-      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> testCase.enableDataSkipping.toString
-    ) ++ metadataOpts // NOTE: Metadata Table has to be enabled on the read path as well
+    case class TestCase(enableMetadata: Boolean,
+                                    enableColumnStats: Boolean,
+                                    enableDataSkipping: Boolean)
 
-    val fileIndex = HoodieFileIndex(spark, metaClient, Option.empty, props, NoopCache)
+    val testCases: Seq[TestCase] =
+      TestCase(enableMetadata = false, enableColumnStats = false, enableDataSkipping = false) ::
+      TestCase(enableMetadata = false, enableColumnStats = false, enableDataSkipping = true) ::
+      TestCase(enableMetadata = true, enableColumnStats = false, enableDataSkipping = true) ::
+      TestCase(enableMetadata = false, enableColumnStats = true, enableDataSkipping = true) ::
+      TestCase(enableMetadata = true, enableColumnStats = true, enableDataSkipping = true) ::
+      Nil
 
-    val allFilesPartitions = fileIndex.listFiles(Seq(), Seq())
-    assertEquals(10, allFilesPartitions.head.files.length)
+    for (testCase <- testCases) {
+      val readMetadataOpts = Map(
+        // NOTE: Metadata Table has to be enabled on the read path as well
+        HoodieMetadataConfig.ENABLE.key -> testCase.enableMetadata.toString,
+        HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> testCase.enableColumnStats.toString,
+        HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+      )
 
-    if (testCase.enableDataSkipping && testCase.enableMetadata && testCase.enableColumnStats) {
-      // We're selecting a single file that contains "id" == 1 row, which there should be
-      // strictly 1. Given that 1 is minimal possible value, Data Skipping should be able to
-      // truncate search space to just a single file
-      val dataFilter = EqualTo(AttributeReference("id", IntegerType, nullable = false)(), Literal(1))
-      val filteredPartitions = fileIndex.listFiles(Seq(), Seq(dataFilter))
-      assertEquals(1, filteredPartitions.head.files.length)
+      val props = Map[String, String](
+        "path" -> basePath,
+        QUERY_TYPE.key -> QUERY_TYPE_SNAPSHOT_OPT_VAL,
+        DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> testCase.enableDataSkipping.toString
+      ) ++ readMetadataOpts
+
+      val fileIndex = HoodieFileIndex(spark, metaClient, Option.empty, props, NoopCache)
+
+      val allFilesPartitions = fileIndex.listFiles(Seq(), Seq())
+      assertEquals(10, allFilesPartitions.head.files.length)
+
+      if (testCase.enableDataSkipping && testCase.enableMetadata && testCase.enableColumnStats) {
+        // We're selecting a single file that contains "id" == 1 row, which there should be
+        // strictly 1. Given that 1 is minimal possible value, Data Skipping should be able to
+        // truncate search space to just a single file
+        val dataFilter = EqualTo(AttributeReference("id", IntegerType, nullable = false)(), Literal(1))
+        val filteredPartitions = fileIndex.listFiles(Seq(), Seq(dataFilter))
+        assertEquals(1, filteredPartitions.head.files.length)
+      }
     }
   }
 
@@ -416,18 +431,6 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
 }
 
 object TestHoodieFileIndex {
-  case class DataSkippingTestCase(enableMetadata: Boolean,
-                                  enableColumnStats: Boolean,
-                                  enableDataSkipping: Boolean)
-
-  def testDataSkippingWhileFileListingParams: java.util.stream.Stream[Arguments] =
-    java.util.stream.Stream.of(
-      Arguments.arguments(DataSkippingTestCase(enableMetadata = false, enableColumnStats = false, enableDataSkipping = false)),
-      Arguments.arguments(DataSkippingTestCase(enableMetadata = false, enableColumnStats = false, enableDataSkipping = true)),
-      Arguments.arguments(DataSkippingTestCase(enableMetadata = true, enableColumnStats = false, enableDataSkipping = true)),
-      Arguments.arguments(DataSkippingTestCase(enableMetadata = false, enableColumnStats = true, enableDataSkipping = true)),
-      Arguments.arguments(DataSkippingTestCase(enableMetadata = true, enableColumnStats = true, enableDataSkipping = true))
-    )
 
   def keyGeneratorParameters(): java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
