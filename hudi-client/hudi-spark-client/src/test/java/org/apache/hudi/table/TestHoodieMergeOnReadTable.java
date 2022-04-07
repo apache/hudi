@@ -591,7 +591,8 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       writeRecords.persist(StorageLevel.MEMORY_AND_DISK());
       List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
       assertNoWriteErrors(statuses);
-      client.commitStats(newCommitTime, statuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
+      client.commitStats(newCommitTime, statuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(),
+          metaClient.getCommitActionType(), Option.empty(), Option.empty());
       assertEquals(spark().sparkContext().persistentRdds().size(), 0);
     }
 
@@ -610,7 +611,8 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       writeRecords.persist(StorageLevel.MEMORY_AND_DISK());
       List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
       assertNoWriteErrors(statuses);
-      client.commitStats(newCommitTime, statuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
+      client.commitStats(newCommitTime, statuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(),
+          metaClient.getCommitActionType(), Option.empty(), Option.empty());
       assertTrue(spark().sparkContext().persistentRdds().size() > 0);
     }
 

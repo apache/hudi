@@ -71,6 +71,8 @@ import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.internal.schema.action.TableChanges;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.action.InternalSchemaChangeApplier;
@@ -103,6 +105,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -210,12 +213,13 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
                                  String commitActionType, Map<String, List<String>> partitionToReplacedFileIds);
 
   public boolean commitStats(String instantTime, List<HoodieWriteStat> stats, Option<Map<String, String>> extraMetadata,
-                             String commitActionType) {
-    return commitStats(instantTime, stats, extraMetadata, commitActionType, Collections.emptyMap());
+      String commitActionType, Option<TableChange.BaseColumnChange> changeType, Option<InternalSchema> oldInternalSchema) {
+    return commitStats(instantTime, stats, extraMetadata, commitActionType, Collections.emptyMap(), changeType, oldInternalSchema);
   }
 
   public boolean commitStats(String instantTime, List<HoodieWriteStat> stats, Option<Map<String, String>> extraMetadata,
-                             String commitActionType, Map<String, List<String>> partitionToReplaceFileIds) {
+                             String commitActionType, Map<String, List<String>> partitionToReplaceFileIds,
+      Option<TableChange.BaseColumnChange> changeType, Option<InternalSchema> oldInternalSchema) {
     // Skip the empty commit if not allowed
     if (!config.allowEmptyCommit() && stats.isEmpty()) {
       return true;
@@ -223,20 +227,39 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     LOG.info("Committing " + instantTime + " action " + commitActionType);
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = createTable(config, hadoopConf);
-    HoodieCommitMetadata metadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds,
-        extraMetadata, operationType, config.getWriteSchema(), commitActionType);
     HoodieInstant inflightInstant = new HoodieInstant(State.INFLIGHT, table.getMetaClient().getCommitActionType(), instantTime);
     HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config);
     this.txnManager.beginTransaction(Option.of(inflightInstant),
         lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
+    HoodieTableMetaClient metaClient = createMetaClient(true);
+    TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
+    HoodieCommitMetadata metadata;
     try {
+      Option<InternalSchema> latestInternalScheme = schemaUtil.getTableInternalSchemaFromCommitMetadata();
+      if (latestInternalScheme.isPresent() && oldInternalSchema.isPresent()  && changeType.isPresent() && !latestInternalScheme.get().equals(oldInternalSchema.get())) {
+        // support DDL concurrency
+        InternalSchema verifiedInternalScheme = getVerifiedInternalSchema(changeType.get(), latestInternalScheme.get(), oldInternalSchema.get());
+        verifySchemaAndMetaData(verifiedInternalScheme, instantTime, extraMetadata, metaClient, schemaUtil);
+      } else if (latestInternalScheme.isPresent() && oldInternalSchema.isPresent() && !changeType.isPresent()) {
+        // support DDL and DML concurrency
+        boolean supportAddOrChangeComment = oldInternalSchema.get().getAllColsFullName().stream()
+            .allMatch(fieldName -> latestInternalScheme.get().findField(fieldName) != null
+            && oldInternalSchema.get().findField(fieldName).type().typeId().equals(latestInternalScheme.get().findField(fieldName).type().typeId()));
+        if (!supportAddOrChangeComment) {
+          throw new UnsupportedOperationException("cannot evolution schema implicitly, actions such as rename, delete, and type change were found");
+        }
+        verifySchemaAndMetaData(latestInternalScheme.get(), instantTime, extraMetadata, metaClient, schemaUtil);
+      } else if (latestInternalScheme.isPresent() && operationType != null && operationType.equals(WriteOperationType.DELETE)) {
+        verifySchemaAndMetaData(latestInternalScheme.get(), instantTime, extraMetadata, metaClient, schemaUtil);
+      }
+      metadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds, extraMetadata, operationType, config.getWriteSchema(), commitActionType);
       preCommit(inflightInstant, metadata);
       commit(table, commitActionType, instantTime, metadata, stats);
       // already within lock, and so no lock requried for archival
       postCommit(table, metadata, instantTime, extraMetadata, false);
       LOG.info("Committed " + instantTime);
       releaseResources();
-    } catch (IOException e) {
+    } catch (IOException | UnsupportedOperationException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
     } finally {
       this.txnManager.endTransaction(Option.of(inflightInstant));
@@ -252,6 +275,105 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       commitCallback.call(new HoodieWriteCommitCallbackMessage(instantTime, config.getTableName(), config.getBasePath(), stats));
     }
     return true;
+  }
+
+  public void verifySchemaAndMetaData(InternalSchema internalSchema, String instantTime, Option<Map<String, String>> extraMetadata, HoodieTableMetaClient metaClient, TableSchemaResolver schemaUtil) {
+    // verify write schema
+    Schema schema = AvroInternalSchemaConverter.convert(internalSchema, config.getTableName());
+    config.setSchema(schema.toString());
+    // verify lastedSchema of extraMetadata
+    if (extraMetadata.isPresent() && !extraMetadata.get().isEmpty()) {
+      extraMetadata.get().put(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(internalSchema.setSchemaId(Long.parseLong(instantTime))));
+    } else {
+      extraMetadata = Option.of(new HashMap<>());
+      extraMetadata.get().put(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(internalSchema.setSchemaId(Long.parseLong(instantTime))));
+    }
+    FileBasedInternalSchemaStorageManager schemaManager = new FileBasedInternalSchemaStorageManager(metaClient);
+    // The current commit operation is not complete, but history schema file of current commit has been generated.
+    // The history schema file of current commit in the .schema directory is cleared to obtain the history schema of the last commit.
+    schemaManager.cleanResidualFiles();
+    String verifiedHistorySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElse("");
+    // verify historySchema
+    schemaManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(internalSchema, verifiedHistorySchemaStr));
+  }
+
+  public static InternalSchema getVerifiedInternalSchema(TableChange.BaseColumnChange changeType, InternalSchema latestInternalScheme, InternalSchema baseInternalSchema) {
+    InternalSchemaChangeApplier internalSchemaChangeApplier = new InternalSchemaChangeApplier(latestInternalScheme);
+    switch (changeType.columnChangeId()) {
+      case ADD:
+        // Do addChange of current commit on latest internal schema to generate final internal schema of current commit.
+        TableChanges.ColumnAddChange addChange = (TableChanges.ColumnAddChange) changeType;
+        Map<Integer, ArrayList<TableChange.ColumnPositionChange>> positionChangeMap = addChange.getPositionChangeMap();
+        for (Map.Entry<Integer, ArrayList<Types.Field>> entry : addChange.getParentId2AddCols().entrySet()) {
+          Integer newColumnParentId = entry.getKey();
+          ArrayList<Types.Field> newFieldArray = entry.getValue();
+          for (Types.Field field : newFieldArray) {
+            String rawName = newColumnParentId == -1
+                ? field.name()
+                : latestInternalScheme.findfullName(newColumnParentId) + "." + field.name();
+            String position = null;
+            TableChange.ColumnPositionChange.ColumnPositionType positionType = TableChange.ColumnPositionChange.ColumnPositionType.NO_OPERATION;
+            // Whether this new column need to change position
+            if (positionChangeMap.containsKey(newColumnParentId)) {
+              for (TableChange.ColumnPositionChange positionChange : positionChangeMap.get(newColumnParentId)) {
+                if (addChange.getFullColName2Id().get(rawName) == positionChange.getSrcId()) {
+                  if (positionChange.getDsrId() != -1) {
+                    position = latestInternalScheme.findfullName(positionChange.getDsrId());
+                  }
+                  positionType = positionChange.type();
+                }
+              }
+            }
+            internalSchemaChangeApplier.latestSchema = internalSchemaChangeApplier.applyAddChange(rawName, field.type(), field.doc(), position, positionType);
+          }
+        }
+        break;
+      case UPDATE:
+        // Do updateChange of current commit on latest internal schema to generate final internal schema of current commit.
+        TableChanges.ColumnUpdateChange updateChange = (TableChanges.ColumnUpdateChange) changeType;
+        for (Map.Entry<Integer, Types.Field> entry : updateChange.getUpdates().entrySet()) {
+          Integer updateColumnId = entry.getKey();
+          Types.Field updateColumnField = entry.getValue();
+          if (latestInternalScheme.getAllIds().contains(updateColumnId)) {
+            String oldName = baseInternalSchema.findField(updateColumnId).name();
+            Type oldType = baseInternalSchema.findField(updateColumnId).type();
+            String oldComment = baseInternalSchema.findField(updateColumnId).doc();
+            if (!oldName.equals(updateColumnField.name())) {
+              // Whether updateChange will rename column
+              internalSchemaChangeApplier.latestSchema = internalSchemaChangeApplier.applyRenameChange(latestInternalScheme.findfullName(updateColumnId), updateColumnField.name());
+            } else if (!oldType.equals(updateColumnField.type())) {
+              // Whether updateChange will change type of column
+              internalSchemaChangeApplier.latestSchema = internalSchemaChangeApplier.applyColumnTypeChange(latestInternalScheme.findfullName(updateColumnId), updateColumnField.type());
+            } else if (oldComment == null || !oldComment.equals(updateColumnField.doc())) {
+              // Whether updateChange will change comment of column
+              internalSchemaChangeApplier.latestSchema = internalSchemaChangeApplier.applyColumnCommentChange(latestInternalScheme.findfullName(updateColumnId), updateColumnField.doc());
+            } else {
+              throw new UnsupportedOperationException("cannot evolution schema implicitly,"
+                + "the update operation only supports rename, change type and change comment with different value on concurrency mode");            }
+          } else {
+            // The column to be updated has been deleted
+            throw new UnsupportedOperationException("cannot evolution schema implicitly, the column for which the update operation is performed does not exist.");
+          }
+        }
+        break;
+      case DELETE:
+        // Do deleteChange of current commit on latest internal schema to generate final internal schema of current commit.
+        TableChanges.ColumnDeleteChange deleteChange = (TableChanges.ColumnDeleteChange) changeType;
+        Set<Integer> currentExistedColumns = latestInternalScheme.getAllIds();
+        List<Integer> conflictedColumns = deleteChange.getDeletes().stream().filter(columnId -> !currentExistedColumns.contains(columnId)).collect(Collectors.toList());
+        if (conflictedColumns.isEmpty()) {
+          String[] deleteColNames = deleteChange.getDeletes().stream().map(latestInternalScheme::findfullName).collect(
+            Collectors.joining(",")).split(",");
+          internalSchemaChangeApplier.latestSchema = internalSchemaChangeApplier.applyDeleteChange(deleteColNames);
+        } else {
+          // The column to be deleted has been deleted
+          throw new UnsupportedOperationException("cannot evolution schema implicitly, the columns for which the drop operation is performed does not exist.");
+        }
+        break;
+      default:
+        throw new UnsupportedOperationException("Operations other than add column, drop column, and update column are not supported during concurrency");
+    }
+    return internalSchemaChangeApplier.latestSchema;
   }
 
   protected void commit(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata metadata,
@@ -1704,6 +1826,6 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     // try to save history schemas
     FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(metaClient);
     schemasManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(newSchema, historySchemaStr));
-    commitStats(instantTime, Collections.EMPTY_LIST, Option.of(extraMeta), commitActionType);
+    commitStats(instantTime, Collections.EMPTY_LIST, Option.of(extraMeta), commitActionType, Option.empty(), Option.empty());
   }
 }

@@ -28,7 +28,7 @@ import java.util.Arrays;
  * Manage schema change for HoodieWriteClient.
  */
 public class InternalSchemaChangeApplier {
-  private InternalSchema latestSchema;
+  public InternalSchema latestSchema;
 
   public InternalSchemaChangeApplier(InternalSchema latestSchema) {
     this.latestSchema = latestSchema;
@@ -37,27 +37,29 @@ public class InternalSchemaChangeApplier {
   /**
    * Add columns to table.
    *
-   * @param colName col name to be added. if we want to add col to a nested filed, the fullName should be specify
+   * @param colFullName col full name to be added. if we want to add col to a nested filed, the fullName should be specify
    * @param colType col type to be added.
    * @param doc col doc to be added.
    * @param position col position to be added
    * @param positionType col position change type. now support three change types: first/after/before
    */
   public InternalSchema applyAddChange(
-      String colName,
+      String colFullName,
       Type colType,
       String doc,
       String position,
       TableChange.ColumnPositionChange.ColumnPositionType positionType) {
     TableChanges.ColumnAddChange add = TableChanges.ColumnAddChange.get(latestSchema);
-    String parentName = TableChangesHelper.getParentName(colName);
-    add.addColumns(parentName, colName, colType, doc);
+    String parentName = TableChangesHelper.getParentName(colFullName);
+    int splitPoint = colFullName.lastIndexOf(".");
+    String rawName = splitPoint > 0 ? colFullName.substring(splitPoint + 1) : colFullName;
+    add.addColumns(parentName, rawName, colType, doc);
     if (positionType != null) {
       switch (positionType) {
         case NO_OPERATION:
           break;
         case FIRST:
-          add.addPositionChange(colName, "", positionType);
+          add.addPositionChange(colFullName, "", positionType);
           break;
         case AFTER:
         case BEFORE:
@@ -68,7 +70,7 @@ public class InternalSchemaChangeApplier {
           if (!parentName.equals(referParentName)) {
             throw new IllegalArgumentException("cannot reorder two columns which has different parent");
           }
-          add.addPositionChange(colName, position, positionType);
+          add.addPositionChange(colFullName, position, positionType);
           break;
         default:
           throw new IllegalArgumentException(String.format("only support first/before/after but found: %s", positionType));

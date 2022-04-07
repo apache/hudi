@@ -21,6 +21,7 @@ import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.util
 import java.util.concurrent.atomic.AtomicInteger
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
@@ -33,7 +34,7 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{CommitUtils, Option}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.internal.schema.action.TableChange.ColumnChangeID
+import org.apache.hudi.internal.schema.action.TableChange.{BaseColumnChange, ColumnChangeID}
 import org.apache.hudi.internal.schema.action.TableChanges
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.{SchemaChangeUtils, SerDeHelper}
@@ -70,18 +71,18 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     // convert to delete first then add again
     val deleteChanges = changes.filter(p => p.isInstanceOf[DeleteColumn]).map(_.asInstanceOf[DeleteColumn])
     val addChanges = changes.filter(p => p.isInstanceOf[AddColumn]).map(_.asInstanceOf[AddColumn])
-    val (oldSchema, historySchema) = getInternalSchemaAndHistorySchemaStr(sparkSession)
-    val newSchema = applyAddAction2Schema(sparkSession, applyDeleteAction2Schema(sparkSession, oldSchema, deleteChanges), addChanges)
+    val (oldSchema, historySchema) = AlterTableCommand.getInternalSchemaAndHistorySchemaStr(table, sparkSession)
+    val (newSchema, _) = applyAddAction2Schema(sparkSession, applyDeleteAction2Schema(sparkSession, oldSchema, deleteChanges)._1, addChanges)
     val verifiedHistorySchema = if (historySchema == null || historySchema.isEmpty) {
       SerDeHelper.inheritSchemas(oldSchema, "")
     } else {
       historySchema
     }
-    AlterTableCommand.commitWithSchema(newSchema, verifiedHistorySchema, table, sparkSession)
+    AlterTableCommand.commitWithSchema(null, null, newSchema, verifiedHistorySchema, table, sparkSession)
     logInfo("column replace finished")
   }
 
-  def applyAddAction2Schema(sparkSession: SparkSession, oldSchema: InternalSchema, addChanges: Seq[AddColumn]): InternalSchema = {
+  def applyAddAction2Schema(sparkSession: SparkSession, oldSchema: InternalSchema, addChanges: Seq[AddColumn]): (InternalSchema, TableChanges.ColumnAddChange) = {
     val addChange = TableChanges.ColumnAddChange.get(oldSchema)
     addChanges.foreach { addColumn =>
       val names = addColumn.fieldNames()
@@ -99,35 +100,35 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
         case _ =>
       }
     }
-    SchemaChangeUtils.applyTableChanges2Schema(oldSchema, addChange)
+    (SchemaChangeUtils.applyTableChanges2Schema(oldSchema, addChange), addChange)
   }
 
-  def applyDeleteAction2Schema(sparkSession: SparkSession, oldSchema: InternalSchema, deleteChanges: Seq[DeleteColumn]): InternalSchema = {
+  def applyDeleteAction2Schema(sparkSession: SparkSession, oldSchema: InternalSchema, deleteChanges: Seq[DeleteColumn]): (InternalSchema, TableChanges.ColumnDeleteChange) = {
     val deleteChange = TableChanges.ColumnDeleteChange.get(oldSchema)
     deleteChanges.foreach { c =>
       val originalColName = c.fieldNames().mkString(".")
       checkSchemaChange(Seq(originalColName), table)
       deleteChange.deleteColumn(originalColName)
     }
-    SchemaChangeUtils.applyTableChanges2Schema(oldSchema, deleteChange).setSchemaId(oldSchema.getMaxColumnId)
+    (SchemaChangeUtils.applyTableChanges2Schema(oldSchema, deleteChange).setSchemaId(oldSchema.getMaxColumnId), deleteChange)
   }
 
 
   def applyAddAction(sparkSession: SparkSession): Unit = {
-    val (oldSchema, historySchema) = getInternalSchemaAndHistorySchemaStr(sparkSession)
-    val newSchema = applyAddAction2Schema(sparkSession, oldSchema, changes.map(_.asInstanceOf[AddColumn]))
+    val (oldSchema, historySchema) = AlterTableCommand.getInternalSchemaAndHistorySchemaStr(table, sparkSession)
+    val (newSchema, addChange) = applyAddAction2Schema(sparkSession, oldSchema, changes.map(_.asInstanceOf[AddColumn]))
     val verifiedHistorySchema = if (historySchema == null || historySchema.isEmpty) {
       SerDeHelper.inheritSchemas(oldSchema, "")
     } else {
       historySchema
     }
-    AlterTableCommand.commitWithSchema(newSchema, verifiedHistorySchema, table, sparkSession)
+    AlterTableCommand.commitWithSchema(addChange, oldSchema, newSchema, verifiedHistorySchema, table, sparkSession)
     logInfo("column add finished")
   }
 
   def applyDeleteAction(sparkSession: SparkSession): Unit = {
-    val (oldSchema, historySchema) = getInternalSchemaAndHistorySchemaStr(sparkSession)
-    val newSchema = applyDeleteAction2Schema(sparkSession, oldSchema, changes.map(_.asInstanceOf[DeleteColumn]))
+    val (oldSchema, historySchema) = AlterTableCommand.getInternalSchemaAndHistorySchemaStr(table, sparkSession)
+    val (newSchema, deleteChange) = applyDeleteAction2Schema(sparkSession, oldSchema, changes.map(_.asInstanceOf[DeleteColumn]))
     // delete action should not change the getMaxColumnId field.
     newSchema.setMaxColumnId(oldSchema.getMaxColumnId)
     val verifiedHistorySchema = if (historySchema == null || historySchema.isEmpty) {
@@ -135,12 +136,12 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     } else {
       historySchema
     }
-    AlterTableCommand.commitWithSchema(newSchema, verifiedHistorySchema, table, sparkSession)
+    AlterTableCommand.commitWithSchema(deleteChange, oldSchema, newSchema, verifiedHistorySchema, table, sparkSession)
     logInfo("column delete finished")
   }
 
   def applyUpdateAction(sparkSession: SparkSession): Unit = {
-    val (oldSchema, historySchema) = getInternalSchemaAndHistorySchemaStr(sparkSession)
+    val (oldSchema, historySchema) = AlterTableCommand.getInternalSchemaAndHistorySchemaStr(table, sparkSession)
     val updateChange = TableChanges.ColumnUpdateChange.get(oldSchema)
     changes.foreach { change =>
       change match {
@@ -174,7 +175,7 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     } else {
       historySchema
     }
-    AlterTableCommand.commitWithSchema(newSchema, verifiedHistorySchema, table, sparkSession)
+    AlterTableCommand.commitWithSchema(updateChange, oldSchema, newSchema, verifiedHistorySchema, table, sparkSession)
     logInfo("column update finished")
   }
 
@@ -209,21 +210,6 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     logInfo("table properties change finished")
   }
 
-  def getInternalSchemaAndHistorySchemaStr(sparkSession: SparkSession): (InternalSchema, String) = {
-    val path = AlterTableCommand.getTableLocation(table, sparkSession)
-    val hadoopConf = sparkSession.sessionState.newHadoopConf()
-    val metaClient = HoodieTableMetaClient.builder().setBasePath(path)
-      .setConf(hadoopConf).build()
-    val schemaUtil = new TableSchemaResolver(metaClient)
-
-    val schema = schemaUtil.getTableInternalSchemaFromCommitMetadata().orElse {
-      AvroInternalSchemaConverter.convert(schemaUtil.getTableAvroSchema)
-    }
-
-    val historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata.orElse("")
-    (schema, historySchemaStr)
-  }
-
   def checkSchemaChange(colNames: Seq[String], catalogTable: CatalogTable): Unit = {
     val primaryKeys = catalogTable.storage.properties.getOrElse("primaryKey", catalogTable.properties.getOrElse("primaryKey", "keyid")).split(",").map(_.trim)
     val preCombineKey = Seq(catalogTable.storage.properties.getOrElse("preCombineField", catalogTable.properties.getOrElse("preCombineField", "ts"))).map(_.trim)
@@ -241,14 +227,15 @@ object AlterTableCommand extends Logging {
 
   /**
     * Generate an commit with new schema to change the table's schema.
-    *
-    * @param internalSchema new schema after change
+    * @param changeType the change type of current commit
+    * @param oldSchema old schema before change
+    * @param newSchema new schema after change
     * @param historySchemaStr history schemas
     * @param table The hoodie table.
     * @param sparkSession The spark session.
     */
-  def commitWithSchema(internalSchema: InternalSchema, historySchemaStr: String, table: CatalogTable, sparkSession: SparkSession): Unit = {
-    val schema = AvroInternalSchemaConverter.convert(internalSchema, table.identifier.table)
+  def commitWithSchema(changeType: BaseColumnChange, oldSchema: InternalSchema, newSchema: InternalSchema, historySchemaStr: String, table: CatalogTable, sparkSession: SparkSession): Unit = {
+    val schema = AvroInternalSchemaConverter.convert(newSchema, table.identifier.table)
     val path = getTableLocation(table, sparkSession)
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
     val client = DataSourceUtils.createHoodieClient(jsc, schema.toString,
@@ -268,10 +255,11 @@ object AlterTableCommand extends Logging {
     metadata.setOperationType(WriteOperationType.ALTER_SCHEMA)
     timeLine.transitionRequestedToInflight(requested, Option.of(metadata.toJsonString.getBytes(StandardCharsets.UTF_8)))
     val extraMeta = new util.HashMap[String, String]()
-    extraMeta.put(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(internalSchema.setSchemaId(instantTime.toLong)))
+    extraMeta.put(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(newSchema.setSchemaId(instantTime.toLong)))
     val schemaManager = new FileBasedInternalSchemaStorageManager(metaClient)
-    schemaManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(internalSchema, historySchemaStr))
-    client.commit(instantTime, jsc.emptyRDD, Option.of(extraMeta))
+    schemaManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(newSchema, historySchemaStr))
+    client.commitWithChangeType(instantTime, jsc.emptyRDD, Option.of(extraMeta), Option.ofNullable(changeType), Option.ofNullable(oldSchema))
+    val verifiedSchemaAndHistorySchema = AlterTableCommand.getInternalSchemaAndHistorySchemaStr(table, sparkSession)
     val existRoTable = sparkSession.catalog.tableExists(table.identifier.unquotedString + "_ro")
     val existRtTable = sparkSession.catalog.tableExists(table.identifier.unquotedString + "_rt")
     try {
@@ -285,7 +273,7 @@ object AlterTableCommand extends Logging {
     }
     // try to sync to hive
     // drop partition field before call alter table
-    val fullSparkSchema = SparkInternalSchemaConverter.constructSparkSchemaFromInternalSchema(internalSchema)
+    val fullSparkSchema = SparkInternalSchemaConverter.constructSparkSchemaFromInternalSchema(verifiedSchemaAndHistorySchema._1)
     val dataSparkSchema = new StructType(fullSparkSchema.fields.filter(p => !table.partitionColumnNames.exists(f => sparkSession.sessionState.conf.resolver(f, p.name))))
     alterTableDataSchema(sparkSession, table.identifier.database.getOrElse("default"), table.identifier.table, dataSparkSchema)
     if (existRoTable) alterTableDataSchema(sparkSession, table.identifier.database.getOrElse("default"), table.identifier.table + "_ro", dataSparkSchema)
@@ -342,6 +330,19 @@ object AlterTableCommand extends Logging {
       INLINE_CLUSTERING_ENABLE.key -> INLINE_CLUSTERING_ENABLE.defaultValue,
       ASYNC_CLUSTERING_ENABLE.key -> ASYNC_CLUSTERING_ENABLE.defaultValue
     ) ++ DataSourceOptionsHelper.translateConfigurations(parameters)
+  }
+
+  def getInternalSchemaAndHistorySchemaStr(table: CatalogTable, sparkSession: SparkSession): (InternalSchema, String) = {
+    val path = AlterTableCommand.getTableLocation(table, sparkSession)
+    val hadoopConf = sparkSession.sessionState.newHadoopConf()
+    val metaClient = HoodieTableMetaClient.builder().setBasePath(path)
+      .setConf(hadoopConf).build()
+    val schemaUtil = new TableSchemaResolver(metaClient)
+    val schema = schemaUtil.getTableInternalSchemaFromCommitMetadata().orElse {
+      AvroInternalSchemaConverter.convert(schemaUtil.getTableAvroSchema)
+    }
+    val historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata.orElse("")
+    (schema, historySchemaStr)
   }
 }
 

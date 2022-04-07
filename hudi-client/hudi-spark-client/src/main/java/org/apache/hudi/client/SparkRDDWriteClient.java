@@ -18,6 +18,8 @@
 
 package org.apache.hudi.client;
 
+import org.apache.avro.Schema;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.utils.TransactionUtils;
@@ -44,6 +46,9 @@ import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.action.TableChange;
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metrics.DistributedRegistry;
@@ -65,6 +70,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -119,7 +125,35 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
                         String commitActionType, Map<String, List<String>> partitionToReplacedFileIds) {
     context.setJobStatus(this.getClass().getSimpleName(), "Committing stats");
     List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect();
-    return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds);
+    return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds,  Option.empty(), Option.empty());
+  }
+
+  /**
+   *
+   * @param changeType the type of column change of current commit
+   * @param oldInternalSchema the internal schema of last commit
+   * @param instantTime the instant time of current commit
+   * @param writeStatuses the write statuses of current commit
+   * @param extraMetadata the extraMetaData of current commit
+   * @return Complete changes performed at the given instantTime marker with specified action.
+   */
+  public boolean commitWithChangeType(String instantTime, JavaRDD<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata,
+      Option<TableChange.BaseColumnChange> changeType, Option<InternalSchema> oldInternalSchema) {
+    HoodieTableMetaClient metaClient = createMetaClient(false);
+    String actionType = metaClient.getCommitActionType();
+    List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect();
+    return commitStats(instantTime, writeStats, extraMetadata, actionType, Collections.emptyMap(), changeType, oldInternalSchema);
+  }
+
+  public boolean commitWithSchema(String instantTime, JavaRDD<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata,
+      String commitActionType, Map<String, List<String>> partitionToReplacedFileIdsString, Option<String> oldSchemaOption) {
+    InternalSchema oldInternalSchema = null;
+    if (oldSchemaOption.isPresent()) {
+      Schema oldAvroSchema = HoodieAvroUtils.createHoodieWriteSchema(new Schema.Parser().parse(oldSchemaOption.get()));
+      oldInternalSchema = AvroInternalSchemaConverter.convert(oldAvroSchema);
+    }
+    return commitStats(instantTime, writeStatuses.map(WriteStatus::getStat).collect(), extraMetadata, commitActionType,
+      partitionToReplacedFileIdsString, Option.empty(), Option.ofNullable(oldInternalSchema));
   }
 
   @Override

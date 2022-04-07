@@ -88,7 +88,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
     LOG.info(String.format("persist history schema success on commit time: %s", instantTime));
   }
 
-  private void cleanResidualFiles() {
+  public void cleanResidualFiles() {
     List<String> validateCommits = getValidInstants();
     try {
       FileSystem fs = baseSchemaPath.getFileSystem(conf);

@@ -81,7 +81,7 @@ public class DataSourceInternalWriterHelper {
   public void commit(List<HoodieWriteStat> writeStatList) {
     try {
       writeClient.commitStats(instantTime, writeStatList, Option.of(extraMetadata),
-          CommitUtils.getCommitActionType(operationType, metaClient.getTableType()));
+          CommitUtils.getCommitActionType(operationType, metaClient.getTableType()), Option.empty(), Option.empty());
     } catch (Exception ioe) {
       throw new HoodieException(ioe.getMessage(), ioe);
     } finally {
