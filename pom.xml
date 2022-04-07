@@ -129,6 +129,7 @@
     <flink.runtime.artifactId>flink-runtime</flink.runtime.artifactId>
     <flink.table.runtime.artifactId>flink-table-runtime_${scala.binary.version}</flink.table.runtime.artifactId>
     <flink.table.planner.artifactId>flink-table-planner_${scala.binary.version}</flink.table.planner.artifactId>
+    <flink.format.parquet.version>1.12.2</flink.format.parquet.version>
     <spark31.version>3.1.3</spark31.version>
     <spark32.version>3.2.1</spark32.version>
     <hudi.spark.module>hudi-spark2</hudi.spark.module>
