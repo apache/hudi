@@ -297,7 +297,7 @@ public class HoodieTableMetadataUtil {
     List<HoodieRecord> records = new ArrayList<>(commitMetadata.getPartitionToWriteStats().size());
 
     // Add record bearing added partitions list
-    List<String> partitionsAdded = new ArrayList<>(commitMetadata.getPartitionToWriteStats().keySet());
+    List<String> partitionsAdded = getPartitionsAdded(commitMetadata);
 
     // Add record bearing deleted partitions list
     List<String> partitionsDeleted = getPartitionsDeleted(commitMetadata);
@@ -352,7 +352,16 @@ public class HoodieTableMetadataUtil {
     return records;
   }
 
-  private static ArrayList<String> getPartitionsDeleted(HoodieCommitMetadata commitMetadata) {
+  private static List<String> getPartitionsAdded(HoodieCommitMetadata commitMetadata) {
+    return commitMetadata.getPartitionToWriteStats().keySet()
+        .stream()
+        // In case of non-partitioned table we need to make sure we filter out empty string
+        // as the partition name we're trying to add
+        .filter(partitionPath -> !StringUtils.isNullOrEmpty(partitionPath))
+        .collect(Collectors.toList());
+  }
+
+  private static List<String> getPartitionsDeleted(HoodieCommitMetadata commitMetadata) {
     if (commitMetadata instanceof HoodieReplaceCommitMetadata
         && WriteOperationType.DELETE_PARTITION.equals(commitMetadata.getOperationType())) {
       Map<String, List<String>> partitionToReplaceFileIds =
@@ -361,7 +370,7 @@ public class HoodieTableMetadataUtil {
         return new ArrayList<>(partitionToReplaceFileIds.keySet());
       }
     }
-    return new ArrayList<>();
+    return Collections.emptyList();
   }
 
   /**
