@@ -1035,7 +1035,8 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   public void dropIndex(List<MetadataPartitionType> partitionTypes) {
     HoodieTable table = createTable(config, hadoopConf);
     String dropInstant = HoodieActiveTimeline.createNewInstantTime();
-    this.txnManager.beginTransaction();
+    HoodieInstant ownerInstant = new HoodieInstant(true, HoodieTimeline.INDEXING_ACTION, dropInstant);
+    this.txnManager.beginTransaction(Option.of(ownerInstant), Option.empty());
     try {
       context.setJobStatus(this.getClass().getSimpleName(), "Dropping partitions from metadata table");
       table.getMetadataWriter(dropInstant).ifPresent(w -> {
@@ -1046,7 +1047,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
         }
       });
     } finally {
-      this.txnManager.endTransaction();
+      this.txnManager.endTransaction(Option.of(ownerInstant));
     }
   }
 
@@ -1432,13 +1433,13 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     }
 
     HoodieTable table;
-
-    this.txnManager.beginTransaction();
+    HoodieInstant ownerInstant = new HoodieInstant(true, CommitUtils.getCommitActionType(operationType, metaClient.getTableType()), instantTime.get());
+    this.txnManager.beginTransaction(Option.of(ownerInstant), Option.empty());
     try {
       tryUpgrade(metaClient, instantTime);
       table = doInitTable(metaClient, instantTime, initialMetadataTableIfNecessary);
     } finally {
-      this.txnManager.endTransaction();
+      this.txnManager.endTransaction(Option.of(ownerInstant));
     }
 
     // Validate table properties
