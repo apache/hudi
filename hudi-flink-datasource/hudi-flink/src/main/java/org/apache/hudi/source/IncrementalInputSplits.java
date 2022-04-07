@@ -136,7 +136,7 @@ public class IncrementalInputSplits implements Serializable {
     }
     List<HoodieInstant> instants = filterInstantsWithRange(commitTimeline, issuedInstant);
     // get the latest instant that satisfies condition
-    final HoodieInstant instantToIssue = instants.size() == 0 ? null : instants.get(instants.size() - 1);
+    final HoodieInstant instantToIssue = instants.isEmpty() ? null : instants.get(instants.size() - 1);
     final InstantRange instantRange;
     if (instantToIssue != null) {
       if (issuedInstant != null) {
@@ -173,7 +173,7 @@ public class IncrementalInputSplits implements Serializable {
         fileIndex.setPartitionPaths(this.requiredPartitions);
       }
       writePartitions = new HashSet<>(fileIndex.getOrBuildPartitionPaths());
-      if (writePartitions.size() == 0) {
+      if (writePartitions.isEmpty()) {
         LOG.warn("No partitions found for reading in user provided path.");
         return Result.EMPTY;
       }
@@ -182,14 +182,14 @@ public class IncrementalInputSplits implements Serializable {
       List<HoodieCommitMetadata> activeMetadataList = instants.stream()
           .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline)).collect(Collectors.toList());
       List<HoodieCommitMetadata> archivedMetadataList = getArchivedMetadata(metaClient, instantRange, commitTimeline, tableName);
-      if (archivedMetadataList.size() > 0) {
+      if (!archivedMetadataList.isEmpty()) {
         LOG.warn("\n"
             + "--------------------------------------------------------------------------------\n"
             + "---------- caution: the reader has fall behind too much from the writer,\n"
             + "---------- tweak 'read.tasks' option to add parallelism of read tasks.\n"
             + "--------------------------------------------------------------------------------");
       }
-      List<HoodieCommitMetadata> metadataList = archivedMetadataList.size() > 0
+      List<HoodieCommitMetadata> metadataList = !archivedMetadataList.isEmpty()
           // IMPORTANT: the merged metadata list must be in ascending order by instant time
           ? mergeList(archivedMetadataList, activeMetadataList)
           : activeMetadataList;
@@ -200,7 +200,7 @@ public class IncrementalInputSplits implements Serializable {
         writePartitions = writePartitions.stream()
             .filter(this.requiredPartitions::contains).collect(Collectors.toSet());
       }
-      if (writePartitions.size() == 0) {
+      if (writePartitions.isEmpty()) {
         LOG.warn("No partitions found for reading in user provided path.");
         return Result.EMPTY;
       }
@@ -213,7 +213,7 @@ public class IncrementalInputSplits implements Serializable {
     }
 
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, commitTimeline, fileStatuses);
-    final String endInstant = instantToIssue.getTimestamp();
+    final String endInstant = instantRange == null ? fsView.getLastInstant().get().getTimestamp() : instantToIssue.getTimestamp();
     final AtomicInteger cnt = new AtomicInteger(0);
     final String mergeType = this.conf.getString(FlinkOptions.MERGE_TYPE);
     List<MergeOnReadInputSplit> inputSplits = writePartitions.stream()
