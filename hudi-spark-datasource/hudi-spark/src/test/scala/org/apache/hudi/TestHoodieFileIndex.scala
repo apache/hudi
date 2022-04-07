@@ -420,13 +420,14 @@ object TestHoodieFileIndex {
                                   enableColumnStats: Boolean,
                                   enableDataSkipping: Boolean)
 
-  def testDataSkippingWhileFileListingParams: Seq[DataSkippingTestCase] =
-    DataSkippingTestCase(enableMetadata = false, enableColumnStats = false, enableDataSkipping = false) ::
-      DataSkippingTestCase(enableMetadata = false, enableColumnStats = false, enableDataSkipping = true) ::
-      DataSkippingTestCase(enableMetadata = true, enableColumnStats = false, enableDataSkipping = true) ::
-      DataSkippingTestCase(enableMetadata = false, enableColumnStats = true, enableDataSkipping = true) ::
-      DataSkippingTestCase(enableMetadata = true, enableColumnStats = true, enableDataSkipping = true) ::
-      Nil
+  def testDataSkippingWhileFileListingParams: java.util.stream.Stream[Arguments] =
+    java.util.stream.Stream.of(
+      Arguments.arguments(DataSkippingTestCase(enableMetadata = false, enableColumnStats = false, enableDataSkipping = false)),
+      Arguments.arguments(DataSkippingTestCase(enableMetadata = false, enableColumnStats = false, enableDataSkipping = true)),
+      Arguments.arguments(DataSkippingTestCase(enableMetadata = true, enableColumnStats = false, enableDataSkipping = true)),
+      Arguments.arguments(DataSkippingTestCase(enableMetadata = false, enableColumnStats = true, enableDataSkipping = true)),
+      Arguments.arguments(DataSkippingTestCase(enableMetadata = true, enableColumnStats = true, enableDataSkipping = true))
+    )
 
   def keyGeneratorParameters(): java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(

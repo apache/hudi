@@ -36,7 +36,7 @@ import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.api._
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.MethodSource
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 import java.math.BigInteger
 import java.sql.{Date, Timestamp}
@@ -312,8 +312,9 @@ object TestColumnStatsIndex {
 
   case class ColumnStatsTestCase(forceFullLogScan: Boolean, readFullMetadataTable: Boolean)
 
-  private def testMetadataColumnStatsIndexParams: Seq[ColumnStatsTestCase] =
-    ColumnStatsTestCase(forceFullLogScan = false, readFullMetadataTable = false) ::
-    ColumnStatsTestCase(forceFullLogScan = true, readFullMetadataTable = true) ::
-    Nil
+  private def testMetadataColumnStatsIndexParams: java.util.stream.Stream[Arguments] =
+    java.util.stream.Stream.of(
+      Arguments.arguments(ColumnStatsTestCase(forceFullLogScan = false, readFullMetadataTable = false)),
+      Arguments.arguments(ColumnStatsTestCase(forceFullLogScan = true, readFullMetadataTable = true))
+    )
 }
