@@ -312,7 +312,7 @@ object TestColumnStatsIndex {
 
   case class ColumnStatsTestCase(forceFullLogScan: Boolean, readFullMetadataTable: Boolean)
 
-  private def testMetadataColumnStatsIndexParams: java.util.stream.Stream[Arguments] =
+  def testMetadataColumnStatsIndexParams: java.util.stream.Stream[Arguments] =
     java.util.stream.Stream.of(
       Arguments.arguments(ColumnStatsTestCase(forceFullLogScan = false, readFullMetadataTable = false)),
       Arguments.arguments(ColumnStatsTestCase(forceFullLogScan = true, readFullMetadataTable = true))
