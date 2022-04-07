@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.async.AsyncArchiveService;
 import org.apache.hudi.async.AsyncCleanerService;
 import org.apache.hudi.avro.HoodieAvroUtils;
@@ -72,7 +71,6 @@ import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.action.InternalSchemaChangeApplier;
@@ -82,6 +80,7 @@ import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metrics.HoodieMetrics;
@@ -95,8 +94,9 @@ import org.apache.hudi.table.upgrade.SupportsUpgradeDowngrade;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 
 import com.codahale.metrics.Timer;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.avro.Schema;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -105,11 +105,11 @@ import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
-import java.util.Set;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -1113,9 +1113,28 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   protected Map<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInfos(HoodieTableMetaClient metaClient, boolean ignoreCompactionAndClusteringInstants) {
     List<HoodieInstant> instants = metaClient.getActiveTimeline().filterPendingRollbackTimeline().getInstants().collect(Collectors.toList());
     Map<String, Option<HoodiePendingRollbackInfo>> infoMap = new HashMap<>();
-    for (HoodieInstant instant : instants) {
+    for (HoodieInstant rollbackInstant : instants) {
+      HoodieRollbackPlan rollbackPlan;
       try {
-        HoodieRollbackPlan rollbackPlan = RollbackUtils.getRollbackPlan(metaClient, instant);
+        rollbackPlan = RollbackUtils.getRollbackPlan(metaClient, rollbackInstant);
+      } catch (IOException e) {
+        if (rollbackInstant.isRequested()) {
+          LOG.warn("Fetching rollback plan failed for " + rollbackInstant + ", deleting the plan since it's in REQUESTED state", e);
+          try {
+            metaClient.getActiveTimeline().deletePending(rollbackInstant);
+          } catch (HoodieIOException he) {
+            LOG.warn("Cannot delete " + rollbackInstant, he);
+            continue;
+          }
+        } else {
+          // Here we assume that if the rollback is inflight, the rollback plan is intact
+          // in instant.rollback.requested.  The exception here can be due to other reasons.
+          LOG.warn("Fetching rollback plan failed for " + rollbackInstant + ", skip the plan", e);
+        }
+        continue;
+      }
+
+      try {
         String action = rollbackPlan.getInstantToRollback().getAction();
         if (ignoreCompactionAndClusteringInstants) {
           if (!HoodieTimeline.COMPACTION_ACTION.equals(action)) {
@@ -1124,14 +1143,14 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
                 rollbackPlan.getInstantToRollback().getCommitTime())).isPresent();
             if (!isClustering) {
               String instantToRollback = rollbackPlan.getInstantToRollback().getCommitTime();
-              infoMap.putIfAbsent(instantToRollback, Option.of(new HoodiePendingRollbackInfo(instant, rollbackPlan)));
+              infoMap.putIfAbsent(instantToRollback, Option.of(new HoodiePendingRollbackInfo(rollbackInstant, rollbackPlan)));
             }
           }
         } else {
-          infoMap.putIfAbsent(rollbackPlan.getInstantToRollback().getCommitTime(), Option.of(new HoodiePendingRollbackInfo(instant, rollbackPlan)));
+          infoMap.putIfAbsent(rollbackPlan.getInstantToRollback().getCommitTime(), Option.of(new HoodiePendingRollbackInfo(rollbackInstant, rollbackPlan)));
         }
-      } catch (IOException e) {
-        LOG.warn("Fetching rollback plan failed for " + infoMap + ", skip the plan", e);
+      } catch (Exception e) {
+        LOG.warn("Processing rollback plan failed for " + rollbackInstant + ", skip the plan", e);
       }
     }
     return infoMap;
