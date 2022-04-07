@@ -89,5 +89,4 @@ class SparkDataSourceContinuousIngest(val spark: SparkSession, val conf: Configu
     fsOutStream.flush()
     fsOutStream.close()
   }
-
 }

@@ -48,11 +48,11 @@ import java.util.Map;
  * ./bin/spark-submit --packages org.apache.spark:spark-avro_2.11:2.4.4 --driver-memory 4g   --executor-memory 4g \
  * --conf spark.serializer=org.apache.spark.serializer.KryoSerializer   --conf spark.sql.catalogImplementation=hive \
  * --class org.apache.hudi.integ.testsuite.SparkDSContinuousIngestTool \
- * /Users/nsb/Documents/personal/projects/nov26/hudi/packaging/hudi-integ-test-bundle/target/hudi-integ-test-bundle-0.11.0-SNAPSHOT.jar \
- * --source-path file:///Users/nsb/Documents/personal/datasets/spark_ds_continuous   --checkpoint-file-path /tmp/hudi/checkpoint  \
+ * ${HUDI_ROOT_DIR}/packaging/hudi-integ-test-bundle/target/hudi-integ-test-bundle-0.11.0-SNAPSHOT.jar \
+ * --source-path file:${SOURCE_DIR}/spark_ds_continuous   --checkpoint-file-path /tmp/hudi/checkpoint  \
  * --base-path file:///tmp/hudi/tbl_path/   --props /tmp/hudi_props.out
  *
- * Contents of hudi_props.out
+ * Contents of hudi.properties
  *
  * hoodie.insert.shuffle.parallelism=4
  * hoodie.upsert.shuffle.parallelism=4
@@ -66,9 +66,9 @@ import java.util.Map;
  * hoodie.table.name=hudi_tbl
  */
 
-public class SparkDSContinuousIngestTool {
+public class SparkDataSourceContinuousIngestTool {
 
-  private static final Logger LOG = LogManager.getLogger(SparkDSContinuousIngestTool.class);
+  private static final Logger LOG = LogManager.getLogger(SparkDataSourceContinuousIngestTool.class);
 
   private final Config cfg;
   // Properties with source, hoodie client, key generator etc.
@@ -76,7 +76,7 @@ public class SparkDSContinuousIngestTool {
   private HoodieSparkEngineContext context;
   private SparkSession sparkSession;
 
-  public SparkDSContinuousIngestTool(JavaSparkContext jsc, Config cfg) {
+  public SparkDataSourceContinuousIngestTool(JavaSparkContext jsc, Config cfg) {
     if (cfg.propsFilePath != null) {
       cfg.propsFilePath = FSUtils.addSchemeIfLocalPath(cfg.propsFilePath).toString();
     }
@@ -95,9 +95,9 @@ public class SparkDSContinuousIngestTool {
       cmd.usage();
       System.exit(1);
     }
-    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("hudi-table-repair", cfg.sparkMaster, cfg.sparkMemory);
+    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("spark-datasource-continuous-ingestion-tool", cfg.sparkMaster, cfg.sparkMemory);
     try {
-      new SparkDSContinuousIngestTool(jsc, cfg).run();
+      new SparkDataSourceContinuousIngestTool(jsc, cfg).run();
     } catch (Throwable throwable) {
       LOG.error("Fail to run Continuous Ingestion for spark datasource " + cfg.basePath, throwable);
     } finally {
