@@ -912,31 +912,38 @@ public class HoodieTableMetadataUtil {
       return engineContext.emptyHoodieData();
     }
 
-    final List<Pair<String, List<String>>> partitionToDeletedFilesList = partitionToDeletedFiles.entrySet()
-        .stream().map(e -> Pair.of(e.getKey(), e.getValue())).collect(Collectors.toList());
-    int parallelism = Math.max(Math.min(partitionToDeletedFilesList.size(), recordsGenerationParams.getColumnStatsIndexParallelism()), 1);
-    final HoodieData<Pair<String, List<String>>> partitionToDeletedFilesRDD = engineContext.parallelize(partitionToDeletedFilesList, parallelism);
+    final List<Pair<String, List<String>>> partitionToDeletedFilesList = partitionToDeletedFiles.entrySet().stream()
+        .map(e -> Pair.of(e.getKey(), e.getValue()))
+        .collect(Collectors.toList());
+
+    int deletedFilesTargetParallelism = Math.max(Math.min(partitionToDeletedFilesList.size(), recordsGenerationParams.getColumnStatsIndexParallelism()), 1);
+    final HoodieData<Pair<String, List<String>>> partitionToDeletedFilesRDD =
+        engineContext.parallelize(partitionToDeletedFilesList, deletedFilesTargetParallelism);
 
     HoodieData<HoodieRecord> deletedFilesRecordsRDD = partitionToDeletedFilesRDD.flatMap(partitionToDeletedFilesPair -> {
-      final String partitionName = partitionToDeletedFilesPair.getLeft();
-      final String partition = getPartitionIdentifier(partitionName);
+      final String partitionPath = partitionToDeletedFilesPair.getLeft();
+      final String partitionId = getPartitionIdentifier(partitionPath);
       final List<String> deletedFileList = partitionToDeletedFilesPair.getRight();
 
       return deletedFileList.stream().flatMap(deletedFile -> {
-        final String filePathWithPartition = partitionName + "/" + deletedFile;
-        return getColumnStatsRecords(partition, filePathWithPartition, dataTableMetaClient, columnsToIndex, true);
+        final String filePathWithPartition = partitionPath + "/" + deletedFile;
+        return getColumnStatsRecords(partitionId, filePathWithPartition, dataTableMetaClient, columnsToIndex, true);
       }).iterator();
     });
+
     allRecordsRDD = allRecordsRDD.union(deletedFilesRecordsRDD);
 
-    final List<Pair<String, Map<String, Long>>> partitionToAppendedFilesList = partitionToAppendedFiles.entrySet()
-        .stream().map(entry -> Pair.of(entry.getKey(), entry.getValue())).collect(Collectors.toList());
-    parallelism = Math.max(Math.min(partitionToAppendedFilesList.size(), recordsGenerationParams.getColumnStatsIndexParallelism()), 1);
-    final HoodieData<Pair<String, Map<String, Long>>> partitionToAppendedFilesRDD = engineContext.parallelize(partitionToAppendedFilesList, parallelism);
+    final List<Pair<String, Map<String, Long>>> partitionToAppendedFilesList = partitionToAppendedFiles.entrySet().stream()
+        .map(entry -> Pair.of(entry.getKey(), entry.getValue()))
+        .collect(Collectors.toList());
+
+    int appendedFilesTargetParallelism = Math.max(Math.min(partitionToAppendedFilesList.size(), recordsGenerationParams.getColumnStatsIndexParallelism()), 1);
+    final HoodieData<Pair<String, Map<String, Long>>> partitionToAppendedFilesRDD =
+        engineContext.parallelize(partitionToAppendedFilesList, appendedFilesTargetParallelism);
 
     HoodieData<HoodieRecord> appendedFilesRecordsRDD = partitionToAppendedFilesRDD.flatMap(partitionToAppendedFilesPair -> {
-      final String partitionName = partitionToAppendedFilesPair.getLeft();
-      final String partition = getPartitionIdentifier(partitionName);
+      final String partitionPath = partitionToAppendedFilesPair.getLeft();
+      final String partitionId = getPartitionIdentifier(partitionPath);
       final Map<String, Long> appendedFileMap = partitionToAppendedFilesPair.getRight();
 
       return appendedFileMap.entrySet().stream().flatMap(appendedFileNameLengthEntry -> {
@@ -944,11 +951,11 @@ public class HoodieTableMetadataUtil {
             || !appendedFileNameLengthEntry.getKey().endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
           return Stream.empty();
         }
-        final String filePathWithPartition = partitionName + "/" + appendedFileNameLengthEntry.getKey();
-        return getColumnStatsRecords(partition, filePathWithPartition, dataTableMetaClient, columnsToIndex, false);
+        final String filePathWithPartition = partitionPath + "/" + appendedFileNameLengthEntry.getKey();
+        return getColumnStatsRecords(partitionId, filePathWithPartition, dataTableMetaClient, columnsToIndex, false);
       }).iterator();
-
     });
+
     allRecordsRDD = allRecordsRDD.union(appendedFilesRecordsRDD);
 
     return allRecordsRDD;
