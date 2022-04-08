@@ -353,8 +353,7 @@ public class HoodieTableMetadataUtil {
   }
 
   private static List<String> getPartitionsAdded(HoodieCommitMetadata commitMetadata) {
-    return commitMetadata.getPartitionToWriteStats().keySet()
-        .stream()
+    return commitMetadata.getPartitionToWriteStats().keySet().stream()
         // We need to make sure we properly handle case of non-partitioned tables
         .map(HoodieTableMetadataUtil::getPartitionIdentifier)
         .collect(Collectors.toList());
@@ -365,10 +364,13 @@ public class HoodieTableMetadataUtil {
         && WriteOperationType.DELETE_PARTITION.equals(commitMetadata.getOperationType())) {
       Map<String, List<String>> partitionToReplaceFileIds =
           ((HoodieReplaceCommitMetadata) commitMetadata).getPartitionToReplaceFileIds();
-      if (!partitionToReplaceFileIds.isEmpty()) {
-        return new ArrayList<>(partitionToReplaceFileIds.keySet());
-      }
+
+      return partitionToReplaceFileIds.keySet().stream()
+          // We need to make sure we properly handle case of non-partitioned tables
+          .map(HoodieTableMetadataUtil::getPartitionIdentifier)
+          .collect(Collectors.toList());
     }
+
     return Collections.emptyList();
   }
 
