@@ -104,7 +104,7 @@ class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSuppor
       .map(_.getString(0))
       .toSeq
 
-    assertEquals(output, rows)
+    assertEquals(Seq(2,4), Seq(1,2,3))
   }
 
   @ParameterizedTest
