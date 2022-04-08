@@ -54,16 +54,16 @@ public class ITTestCommitsCommand extends AbstractShellIntegrationTest {
 
   @BeforeEach
   public void init() throws IOException {
-    String tableName = "test_table_" + ITTestCommitsCommand.class.getName();
-    String tablePath = Paths.get(basePath, tableName).toString();
+    tableName = "test_table_" + ITTestCommitsCommand.class.getName();
+    basePath = Paths.get(basePath, tableName).toString();
 
     HoodieCLI.conf = jsc.hadoopConfiguration();
     // Create table and connect
     new TableCommand().createTable(
-        tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
+        basePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
-    metaClient.setBasePath(tablePath);
-    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    initMetaClient();
   }
 
   /**

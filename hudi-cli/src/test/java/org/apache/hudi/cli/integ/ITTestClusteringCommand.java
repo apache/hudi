@@ -61,21 +61,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class ITTestClusteringCommand extends AbstractShellIntegrationTest {
 
-  private String tablePath;
-  private String tableName;
-
   @BeforeEach
   public void init() throws IOException {
     tableName = "test_table_" + ITTestClusteringCommand.class.getName();
-    tablePath = Paths.get(basePath, tableName).toString();
+    basePath = Paths.get(basePath, tableName).toString();
 
     HoodieCLI.conf = jsc.hadoopConfiguration();
     // Create table and connect
     new TableCommand().createTable(
-        tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
+        basePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
-    metaClient.setBasePath(tablePath);
-    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    initMetaClient();
   }
 
   /**
@@ -168,7 +165,7 @@ public class ITTestClusteringCommand extends AbstractShellIntegrationTest {
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
 
     // Create the write client to write some records in
-    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
+    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withDeleteParallelism(2).forTable(tableName)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
