@@ -97,8 +97,8 @@ public class HoodieTableMetaClient implements Serializable {
   // NOTE: Since those two parameters lay on the hot-path of a lot of computations, we
   //       use tailored extension of the {@code Path} class allowing to avoid repetitive
   //       computations secured by its immutability
-  private LazyCachingPath basePath;
-  private LazyCachingPath metaPath;
+  private transient LazyCachingPath basePath;
+  private transient LazyCachingPath metaPath;
 
   private transient HoodieWrapperFileSystem fs;
   private boolean loadActiveTimelineOnLoad;
@@ -166,11 +166,18 @@ public class HoodieTableMetaClient implements Serializable {
    */
   private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
     in.defaultReadObject();
+    String basePathStr = in.readUTF();
+    String metaPathStr = in.readUTF();
+
     fs = null; // will be lazily initialized
+    basePath = new LazyCachingPath(basePathStr);
+    metaPath = new LazyCachingPath(metaPathStr);
   }
 
   private void writeObject(java.io.ObjectOutputStream out) throws IOException {
     out.defaultWriteObject();
+    out.writeBytes(basePath.toString());
+    out.writeBytes(metaPath.toString());
   }
 
   /**
