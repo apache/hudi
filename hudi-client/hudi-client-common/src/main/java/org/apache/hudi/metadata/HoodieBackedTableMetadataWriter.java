@@ -79,7 +79,6 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -88,7 +87,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
@@ -1018,7 +1016,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     List<DirectoryInfo> partitionInfoList = listAllPartitions(dataMetaClient);
     Map<String, Map<String, Long>> partitionToFilesMap = partitionInfoList.stream()
         .map(p -> {
-          String partitionName = HoodieTableMetadataUtil.getPartition(p.getRelativePath());
+          String partitionName = HoodieTableMetadataUtil.getPartitionIdentifier(p.getRelativePath());
           return Pair.of(partitionName, p.getFileNameToSizeMap());
         })
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
@@ -1066,7 +1064,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
       // Record which saves files within a partition
       return HoodieMetadataPayload.createPartitionFilesRecord(
-          HoodieTableMetadataUtil.getPartition(partitionInfo.getRelativePath()), Option.of(validFileNameToSizeMap), Option.empty());
+          HoodieTableMetadataUtil.getPartitionIdentifier(partitionInfo.getRelativePath()), Option.of(validFileNameToSizeMap), Option.empty());
     });
 
     return filesPartitionRecords.union(fileListRecords);

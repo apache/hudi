@@ -1454,7 +1454,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
               .forEach(partitionWriteStat -> {
                 String partitionStatName = partitionWriteStat.getKey();
                 List<HoodieWriteStat> writeStats = partitionWriteStat.getValue();
-                String partition = HoodieTableMetadataUtil.getPartition(partitionStatName);
+                String partition = HoodieTableMetadataUtil.getPartitionIdentifier(partitionStatName);
                 if (!commitToPartitionsToFiles.get(commitTime).containsKey(partition)) {
                   commitToPartitionsToFiles.get(commitTime).put(partition, new ArrayList<>());
                 }

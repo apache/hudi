@@ -312,7 +312,7 @@ public class HoodieTableMetadataUtil {
               String partitionStatName = entry.getKey();
               List<HoodieWriteStat> writeStats = entry.getValue();
 
-              String partition = getPartition(partitionStatName);
+              String partition = getPartitionIdentifier(partitionStatName);
 
               HashMap<String, Long> updatedFilesToSizesMapping =
                   writeStats.stream().reduce(new HashMap<>(writeStats.size()),
@@ -356,7 +356,7 @@ public class HoodieTableMetadataUtil {
     return commitMetadata.getPartitionToWriteStats().keySet()
         .stream()
         // We need to make sure we properly handle case of non-partitioned tables
-        .map(HoodieTableMetadataUtil::getPartition)
+        .map(HoodieTableMetadataUtil::getPartitionIdentifier)
         .collect(Collectors.toList());
   }
 
@@ -477,7 +477,7 @@ public class HoodieTableMetadataUtil {
     int[] fileDeleteCount = {0};
     List<String> deletedPartitions = new ArrayList<>();
     cleanMetadata.getPartitionMetadata().forEach((partitionName, partitionMetadata) -> {
-      final String partition = getPartition(partitionName);
+      final String partition = getPartitionIdentifier(partitionName);
       // Files deleted from a partition
       List<String> deletedFiles = partitionMetadata.getDeletePathPatterns();
       HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.empty(),
@@ -784,7 +784,7 @@ public class HoodieTableMetadataUtil {
 
     partitionToDeletedFiles.forEach((partitionName, deletedFiles) -> {
       fileChangeCount[0] += deletedFiles.size();
-      final String partition = getPartition(partitionName);
+      final String partition = getPartitionIdentifier(partitionName);
 
       Option<Map<String, Long>> filesAdded = Option.empty();
       if (partitionToAppendedFiles.containsKey(partitionName)) {
@@ -797,7 +797,7 @@ public class HoodieTableMetadataUtil {
     });
 
     partitionToAppendedFiles.forEach((partitionName, appendedFileMap) -> {
-      final String partition = getPartition(partitionName);
+      final String partition = getPartitionIdentifier(partitionName);
       fileChangeCount[1] += appendedFileMap.size();
 
       // Validate that no appended file has been deleted
@@ -820,7 +820,7 @@ public class HoodieTableMetadataUtil {
   /**
    * Returns partition name for the given path.
    */
-  public static String getPartition(@Nonnull String relativePartitionPath) {
+  public static String getPartitionIdentifier(@Nonnull String relativePartitionPath) {
     return EMPTY_PARTITION_NAME.equals(relativePartitionPath) ? NON_PARTITIONED_NAME : relativePartitionPath;
   }
 
@@ -847,7 +847,7 @@ public class HoodieTableMetadataUtil {
           return Stream.empty();
         }
 
-        final String partition = getPartition(partitionName);
+        final String partition = getPartitionIdentifier(partitionName);
         return Stream.<HoodieRecord>of(HoodieMetadataPayload.createBloomFilterMetadataRecord(
             partition, deletedFile, instantTime, StringUtils.EMPTY_STRING, ByteBuffer.allocate(0), true));
       }).iterator();
@@ -862,7 +862,7 @@ public class HoodieTableMetadataUtil {
     HoodieData<HoodieRecord> appendedFilesRecordsRDD = partitionToAppendedFilesRDD.flatMap(partitionToAppendedFilesPair -> {
       final String partitionName = partitionToAppendedFilesPair.getLeft();
       final Map<String, Long> appendedFileMap = partitionToAppendedFilesPair.getRight();
-      final String partition = getPartition(partitionName);
+      final String partition = getPartitionIdentifier(partitionName);
       return appendedFileMap.entrySet().stream().flatMap(appendedFileLengthPairEntry -> {
         final String appendedFile = appendedFileLengthPairEntry.getKey();
         if (!FSUtils.isBaseFile(new Path(appendedFile))) {
@@ -917,7 +917,7 @@ public class HoodieTableMetadataUtil {
 
     HoodieData<HoodieRecord> deletedFilesRecordsRDD = partitionToDeletedFilesRDD.flatMap(partitionToDeletedFilesPair -> {
       final String partitionName = partitionToDeletedFilesPair.getLeft();
-      final String partition = getPartition(partitionName);
+      final String partition = getPartitionIdentifier(partitionName);
       final List<String> deletedFileList = partitionToDeletedFilesPair.getRight();
 
       return deletedFileList.stream().flatMap(deletedFile -> {
@@ -934,7 +934,7 @@ public class HoodieTableMetadataUtil {
 
     HoodieData<HoodieRecord> appendedFilesRecordsRDD = partitionToAppendedFilesRDD.flatMap(partitionToAppendedFilesPair -> {
       final String partitionName = partitionToAppendedFilesPair.getLeft();
-      final String partition = getPartition(partitionName);
+      final String partition = getPartitionIdentifier(partitionName);
       final Map<String, Long> appendedFileMap = partitionToAppendedFilesPair.getRight();
 
       return appendedFileMap.entrySet().stream().flatMap(appendedFileNameLengthEntry -> {
@@ -1138,7 +1138,7 @@ public class HoodieTableMetadataUtil {
                                                             HoodieTableMetaClient datasetMetaClient,
                                                             List<String> columnsToIndex,
                                                             boolean isDeleted) {
-    String partitionName = getPartition(partitionPath);
+    String partitionName = getPartitionIdentifier(partitionPath);
     // NOTE: We have to chop leading "/" to make sure Hadoop does not treat it like
     //       absolute path
     String filePartitionPath = filePath.startsWith("/") ? filePath.substring(1) : filePath;
