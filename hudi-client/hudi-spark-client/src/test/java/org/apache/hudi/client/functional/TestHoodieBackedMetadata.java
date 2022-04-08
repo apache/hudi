@@ -362,7 +362,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     HoodieTableConfig hoodieTableConfig2 =
         new HoodieTableConfig(this.fs, metaClient.getMetaPath(), writeConfig2.getPayloadClass());
-    assertEquals(StringUtils.EMPTY_STRING, hoodieTableConfig2.getMetadataPartitions());
+    assertEquals(Collections.emptyList(), hoodieTableConfig2.getMetadataPartitions());
     // Assert metadata table folder is deleted
     assertFalse(metaClient.getFs().exists(
         new Path(HoodieTableMetadata.getMetadataTableBasePath(writeConfig2.getBasePath()))));

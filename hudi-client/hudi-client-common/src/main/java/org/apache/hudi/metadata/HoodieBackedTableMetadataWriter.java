@@ -733,8 +733,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         dataWriteConfig.getMetadataBloomFilterIndexParallelism(),
         dataWriteConfig.isMetadataColumnStatsIndexEnabled(),
         dataWriteConfig.getColumnStatsIndexParallelism(),
-        StringUtils.toList(dataWriteConfig.getColumnsEnabledForColumnStatsIndex()),
-        StringUtils.toList(dataWriteConfig.getColumnsEnabledForBloomFilterIndex()));
+        dataWriteConfig.getColumnsEnabledForColumnStatsIndex(),
+        dataWriteConfig.getColumnsEnabledForBloomFilterIndex());
   }
 
   /**

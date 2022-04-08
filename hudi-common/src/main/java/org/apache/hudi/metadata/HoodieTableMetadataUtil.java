@@ -80,6 +80,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -599,7 +600,8 @@ public class HoodieTableMetadataUtil {
     }
 
     if (recordsGenerationParams.getEnabledPartitionTypes().contains(MetadataPartitionType.COLUMN_STATS)) {
-      final HoodieData<HoodieRecord> metadataColumnStatsRDD = convertFilesToColumnStatsRecords(engineContext, partitionToDeletedFiles, partitionToAppendedFiles, recordsGenerationParams);
+      final HoodieData<HoodieRecord> metadataColumnStatsRDD =
+          convertFilesToColumnStatsRecords(engineContext, partitionToDeletedFiles, partitionToAppendedFiles, recordsGenerationParams);
       partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS, metadataColumnStatsRDD);
     }
     return partitionToRecordsMap;
@@ -1345,11 +1347,11 @@ public class HoodieTableMetadataUtil {
   }
 
   public static Set<String> getInflightMetadataPartitions(HoodieTableConfig tableConfig) {
-    return StringUtils.toSet(tableConfig.getMetadataPartitionsInflight());
+    return new HashSet<>(tableConfig.getMetadataPartitionsInflight());
   }
 
   public static Set<String> getCompletedMetadataPartitions(HoodieTableConfig tableConfig) {
-    return StringUtils.toSet(tableConfig.getMetadataPartitions());
+    return new HashSet<>(tableConfig.getMetadataPartitions());
   }
 
   public static Set<String> getInflightAndCompletedMetadataPartitions(HoodieTableConfig tableConfig) {

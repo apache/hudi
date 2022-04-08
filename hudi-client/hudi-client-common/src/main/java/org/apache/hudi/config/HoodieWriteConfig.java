@@ -1557,11 +1557,11 @@ public class HoodieWriteConfig extends HoodieConfig {
     return isMetadataTableEnabled() && getMetadataConfig().isColumnStatsIndexEnabled();
   }
 
-  public String getColumnsEnabledForColumnStatsIndex() {
+  public List<String> getColumnsEnabledForColumnStatsIndex() {
     return getMetadataConfig().getColumnsEnabledForColumnStatsIndex();
   }
 
-  public String getColumnsEnabledForBloomFilterIndex() {
+  public List<String> getColumnsEnabledForBloomFilterIndex() {
     return getMetadataConfig().getColumnsEnabledForBloomFilterIndex();
   }
 

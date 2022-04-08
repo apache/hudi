@@ -19,6 +19,7 @@
 package org.apache.hudi.common.config;
 
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import javax.annotation.concurrent.Immutable;
@@ -26,6 +27,7 @@ import javax.annotation.concurrent.Immutable;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.List;
 import java.util.Properties;
 
 /**
@@ -253,12 +255,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBooleanOrDefault(ENABLE_METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS);
   }
 
-  public String getColumnsEnabledForColumnStatsIndex() {
-    return getString(COLUMN_STATS_INDEX_FOR_COLUMNS);
+  public List<String> getColumnsEnabledForColumnStatsIndex() {
+    return StringUtils.split(getString(COLUMN_STATS_INDEX_FOR_COLUMNS), CONFIG_VALUES_DELIMITER);
   }
 
-  public String getColumnsEnabledForBloomFilterIndex() {
-    return getString(BLOOM_FILTER_INDEX_FOR_COLUMNS);
+  public List<String> getColumnsEnabledForBloomFilterIndex() {
+    return StringUtils.split(getString(BLOOM_FILTER_INDEX_FOR_COLUMNS), CONFIG_VALUES_DELIMITER);
   }
 
   public int getBloomFilterIndexFileGroupCount() {
