@@ -58,11 +58,20 @@ public class Lazy<T> {
     return ref;
   }
 
-  public static <T> Lazy<T> lazy(Supplier<T> initializer) {
+  /**
+   * Executes provided {@code initializer} lazily, while providing for "exactly once" semantic,
+   * to instantiate value of type {@link T} being subsequently held by the returned instance of
+   * {@link Lazy}
+   */
+  public static <T> Lazy<T> lazily(Supplier<T> initializer) {
     return new Lazy<>(initializer);
   }
 
-  public static <T> Lazy<T> eager(T ref) {
+  /**
+   * Instantiates {@link Lazy} in an "eagerly" fashion setting it w/ the provided value of
+   * type {@link T} directly, bypassing lazy initialization sequence
+   */
+  public static <T> Lazy<T> eagerly(T ref) {
     return new Lazy<>(ref);
   }
 }

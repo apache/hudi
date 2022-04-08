@@ -110,8 +110,8 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     // For shared scanner, which is primarily used for point-lookups, we're caching blocks
     // by default, to minimize amount of traffic to the underlying storage
     this.sharedScanner = getHFileScanner(reader, true);
-    this.schema = schemaOpt.map(Lazy::eager)
-        .orElseGet(() -> Lazy.lazy(() -> fetchSchema(reader)));
+    this.schema = schemaOpt.map(Lazy::eagerly)
+        .orElseGet(() -> Lazy.lazily(() -> fetchSchema(reader)));
   }
 
   @Override

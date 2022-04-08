@@ -64,6 +64,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.util.Lazy;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -554,8 +555,9 @@ public class HoodieTableMetadataUtil {
 
     HoodieTableMetaClient dataTableMetaClient = recordsGenerationParams.getDataMetaClient();
 
-    List<String> columnsToIndex = getColumnsToIndex(recordsGenerationParams,
-        dataTableMetaClient.getTableConfig(), tryResolveSchemaForTable(dataTableMetaClient));
+    List<String> columnsToIndex =
+        getColumnsToIndex(recordsGenerationParams, dataTableMetaClient.getTableConfig(),
+            Lazy.lazily(() -> tryResolveSchemaForTable(dataTableMetaClient)));
 
     if (columnsToIndex.isEmpty()) {
       // In case there are no columns to index, bail
@@ -904,8 +906,9 @@ public class HoodieTableMetadataUtil {
     HoodieData<HoodieRecord> allRecordsRDD = engineContext.emptyHoodieData();
     HoodieTableMetaClient dataTableMetaClient = recordsGenerationParams.getDataMetaClient();
 
-    final List<String> columnsToIndex = getColumnsToIndex(recordsGenerationParams,
-        dataTableMetaClient.getTableConfig(), tryResolveSchemaForTable(dataTableMetaClient));
+    final List<String> columnsToIndex =
+        getColumnsToIndex(recordsGenerationParams, dataTableMetaClient.getTableConfig(),
+            Lazy.lazily(() -> tryResolveSchemaForTable(dataTableMetaClient)));
 
     if (columnsToIndex.isEmpty()) {
       // In case there are no columns to index, bail
@@ -1098,7 +1101,7 @@ public class HoodieTableMetadataUtil {
           tableConfig.populateMetaFields() ? addMetadataFields(schema) : schema);
 
       List<String> columnsToIndex = getColumnsToIndex(recordsGenerationParams,
-          tableConfig, tableSchema);
+          tableConfig, Lazy.eagerly(tableSchema));
 
       if (columnsToIndex.isEmpty()) {
         // In case there are no columns to index, bail
@@ -1119,10 +1122,14 @@ public class HoodieTableMetadataUtil {
    */
   private static List<String> getColumnsToIndex(MetadataRecordsGenerationParams recordsGenParams,
                                                 HoodieTableConfig tableConfig,
-                                                Option<Schema> writerSchemaOpt) {
-    if (recordsGenParams.isAllColumnStatsIndexEnabled() && writerSchemaOpt.isPresent()) {
-      return writerSchemaOpt.get().getFields().stream()
-          .map(Schema.Field::name).collect(Collectors.toList());
+                                                Lazy<Option<Schema>> lazyWriterSchemaOpt) {
+    if (recordsGenParams.isAllColumnStatsIndexEnabled()) {
+      Option<Schema> writerSchemaOpt = lazyWriterSchemaOpt.get();
+      if (writerSchemaOpt.isPresent()) {
+        return writerSchemaOpt.get().getFields().stream()
+            .map(Schema.Field::name)
+            .collect(Collectors.toList());
+      }
     }
 
     // In case no writer schema could be obtained we fall back to only index primary key
