@@ -143,6 +143,19 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
   private static final Conversions.DecimalConversion AVRO_DECIMAL_CONVERSION = new Conversions.DecimalConversion();
 
+  // NOTE: PLEASE READ CAREFULLY
+  //
+  // In Avro 1.10 generated builders rely on {@code SpecificData.getForSchema} invocation that in turn
+  // does use reflection to load the code-gen'd class corresponding to the Avro record model. This has
+  // serious adverse effects in terms of performance when gets executed on the hot-path (both, in terms
+  // of runtime and efficiency).
+  //
+  // To work this around instead of using default code-gen'd builder invoking {@code SpecificData.getForSchema},
+  // we instead rely on overloaded ctor accepting another instance of the builder: {@code Builder(Builder)},
+  // which bypasses such invocation. Following corresponding builder's stubs are statically initialized
+  // to be used exactly for that purpose.
+  //
+  // You can find more details in HUDI-3834
   private static final HoodieMetadataColumnStats.Builder METADATA_COLUMN_STATS_BUILDER_STUB = HoodieMetadataColumnStats.newBuilder();
   private static final StringWrapper.Builder STRING_WRAPPER_BUILDER_STUB = StringWrapper.newBuilder();
   private static final BytesWrapper.Builder BYTES_WRAPPER_BUILDER_STUB = BytesWrapper.newBuilder();
