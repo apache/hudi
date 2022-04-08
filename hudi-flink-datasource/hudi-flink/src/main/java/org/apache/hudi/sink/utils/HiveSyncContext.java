@@ -18,10 +18,12 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.aws.sync.AwsGlueCatalogSyncTool;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -48,6 +50,10 @@ public class HiveSyncContext {
   }
 
   public HiveSyncTool hiveSyncTool() {
+    HiveSyncMode syncMode = HiveSyncMode.of(syncConfig.syncMode);
+    if (syncMode == HiveSyncMode.GLUE) {
+      return new AwsGlueCatalogSyncTool(this.syncConfig, this.hiveConf, this.fs);
+    }
     return new HiveSyncTool(this.syncConfig, this.hiveConf, this.fs);
   }
 

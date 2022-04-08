@@ -56,6 +56,11 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
   protected val mergeType: String = optParams.getOrElse(DataSourceReadOptions.REALTIME_MERGE.key,
     DataSourceReadOptions.REALTIME_MERGE.defaultValue)
 
+  override def imbueConfigs(sqlContext: SQLContext): Unit = {
+    super.imbueConfigs(sqlContext)
+    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "true")
+  }
+
   protected override def composeRDD(fileSplits: Seq[HoodieMergeOnReadFileSplit],
                                     partitionSchema: StructType,
                                     tableSchema: HoodieTableSchema,
@@ -74,7 +79,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
-      hadoopConf = new Configuration(conf)
+      hadoopConf = HoodieDataSourceHelper.getConfigurationWithInternalSchema(new Configuration(conf), internalSchema, metaClient.getBasePath, validCommits)
     )
 
     val requiredSchemaParquetReader = createBaseFileReader(
@@ -86,7 +91,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
-      hadoopConf = new Configuration(conf)
+      hadoopConf = HoodieDataSourceHelper.getConfigurationWithInternalSchema(new Configuration(conf), requiredSchema.internalSchema, metaClient.getBasePath, validCommits)
     )
 
     val tableState = getTableState
@@ -122,7 +127,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
 
       val partitionedBaseFile = baseFile.map { file =>
         val filePath = getFilePath(file.getFileStatus.getPath)
-        PartitionedFile(InternalRow.empty, filePath, 0, file.getFileLen)
+        PartitionedFile(getPartitionColumnsAsInternalRow(file.getFileStatus), filePath, 0, file.getFileLen)
       }
 
       HoodieMergeOnReadFileSplit(partitionedBaseFile, logFiles)

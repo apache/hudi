@@ -18,23 +18,6 @@
 
 package org.apache.hudi.examples.quickstart;
 
-import static junit.framework.TestCase.assertEquals;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import java.io.File;
-import java.io.FileFilter;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Properties;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.table.data.RowData;
@@ -59,6 +42,26 @@ import org.apache.hudi.examples.quickstart.utils.QuickstartConfigurations;
 import org.apache.parquet.Strings;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.hadoop.ParquetReader;
+
+import java.io.File;
+import java.io.FileFilter;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Properties;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import static junit.framework.TestCase.assertEquals;
+import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
+import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * Data set for testing, also some utilities to check the results.
@@ -345,7 +348,7 @@ public class TestQuickstartData {
       List<String> logPaths,
       Schema readSchema,
       String instant) {
-    return HoodieMergedLogRecordScanner.newBuilder()
+    HoodieMergedLogRecordScanner.Builder logRecordScannerBuilder = HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
         .withBasePath(basePath)
         .withLogFilePaths(logPaths)
@@ -357,8 +360,12 @@ public class TestQuickstartData {
         .withMaxMemorySizeInBytes(1024 * 1024L)
         .withSpillableMapBasePath("/tmp/")
         .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue())
-        .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue())
-        .build();
+        .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue());
+    if (!isNullOrEmpty(logPaths)) {
+      logRecordScannerBuilder
+          .withPartition(getRelativePartitionPath(new Path(basePath), new Path(logPaths.get(0)).getParent()));
+    }
+    return logRecordScannerBuilder.build();
   }
 
   /**

@@ -211,6 +211,11 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
         val numFields = st.length
         (getter, ordinal) => structConverter(getter.getStruct(ordinal, numFields))
 
+      case (st: StructType, UNION) =>
+        val unionConverter = newUnionConverter(st, avroType, catalystPath, avroPath)
+        val numFields = st.length
+        (getter, ordinal) => unionConverter(getter.getStruct(ordinal, numFields))
+
       case (MapType(kt, vt, valueContainsNull), MAP) if kt == StringType =>
         val valueConverter = newConverter(
           vt, resolveNullableType(avroType.getValueType, valueContainsNull),
@@ -288,6 +293,50 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
       result
   }
 
+  private def newUnionConverter(catalystStruct: StructType,
+                                avroUnion: Schema,
+                                catalystPath: Seq[String],
+                                avroPath: Seq[String]): InternalRow => Any = {
+    if (avroUnion.getType != UNION || !canMapUnion(catalystStruct, avroUnion)) {
+      throw new IncompatibleSchemaException(s"Cannot convert Catalyst type $catalystStruct to " +
+        s"Avro type $avroUnion.")
+    }
+    val nullable = avroUnion.getTypes.size() > 0 && avroUnion.getTypes.get(0).getType == Type.NULL
+    val avroInnerTypes = if (nullable) {
+      avroUnion.getTypes.asScala.tail
+    } else {
+      avroUnion.getTypes.asScala
+    }
+    val fieldConverters = catalystStruct.zip(avroInnerTypes).map {
+      case (f1, f2) => newConverter(f1.dataType, f2, catalystPath, avroPath)
+    }
+    val numFields = catalystStruct.length
+    (row: InternalRow) =>
+      var i = 0
+      var result: Any = null
+      while (i < numFields) {
+        if (!row.isNullAt(i)) {
+          if (result != null) {
+            throw new IncompatibleSchemaException(s"Cannot convert Catalyst record $catalystStruct to " +
+              s"Avro union $avroUnion. Record has more than one optional values set")
+          }
+          result = fieldConverters(i).apply(row, i)
+        }
+        i += 1
+      }
+      if (!nullable && result == null) {
+        throw new IncompatibleSchemaException(s"Cannot convert Catalyst record $catalystStruct to " +
+          s"Avro union $avroUnion. Record has no values set, while should have exactly one")
+      }
+      result
+  }
+
+  private def canMapUnion(catalystStruct: StructType, avroStruct: Schema): Boolean = {
+    (avroStruct.getTypes.size() > 0 &&
+      avroStruct.getTypes.get(0).getType == Type.NULL &&
+      avroStruct.getTypes.size() - 1 == catalystStruct.length) || avroStruct.getTypes.size() == catalystStruct.length
+  }
+
   /**
    * Resolve a possibly nullable Avro Type.
    *
@@ -315,12 +364,12 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
     if (avroType.getType == Type.UNION) {
       val fields = avroType.getTypes.asScala
       val actualType = fields.filter(_.getType != Type.NULL)
-      if (fields.length != 2 || actualType.length != 1) {
-        throw new UnsupportedAvroTypeException(
-          s"Unsupported Avro UNION type $avroType: Only UNION of a null type and a non-null " +
-            "type is supported")
+      if (fields.length == 2 && actualType.length == 1) {
+        (true, actualType.head)
+      } else {
+        // This is just a normal union, not used to designate nullability
+        (false, avroType)
       }
-      (true, actualType.head)
     } else {
       (false, avroType)
     }

@@ -21,7 +21,7 @@
     <parent>
         <artifactId>hudi-examples</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>0.11.0-SNAPSHOT</version>
+        <version>0.12.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -171,13 +171,13 @@
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-table-runtime_${scala.binary.version}</artifactId>
+            <artifactId>${flink.table.runtime.artifactId}</artifactId>
             <version>${flink.version}</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-table-planner_${scala.binary.version}</artifactId>
+            <artifactId>${flink.table.planner.artifactId}</artifactId>
             <version>${flink.version}</version>
             <scope>provided</scope>
         </dependency>
@@ -320,7 +320,7 @@
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-runtime</artifactId>
+            <artifactId>${flink.runtime.artifactId}</artifactId>
             <version>${flink.version}</version>
             <scope>test</scope>
             <type>test-jar</type>
@@ -334,7 +334,7 @@
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-table-runtime_${scala.binary.version}</artifactId>
+            <artifactId>${flink.table.runtime.artifactId}</artifactId>
             <version>${flink.version}</version>
             <scope>test</scope>
             <type>test-jar</type>

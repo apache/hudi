@@ -630,4 +630,37 @@ class TestInsertTable extends TestHoodieSqlBase {
       }
     }
   }
+
+  test("Test enable hoodie.datasource.write.drop.partition.columns when write") {
+    spark.sql("set hoodie.sql.bulk.insert.enable = false")
+    Seq("mor", "cow").foreach { tableType =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  dt string
+             | ) using hudi
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts',
+             |  type = '$tableType',
+             |  hoodie.datasource.write.drop.partition.columns = 'true'
+             | )
+       """.stripMargin)
+        spark.sql(s"insert into $tableName partition(dt='2021-12-25') values (1, 'a1', 10, 1000)")
+        spark.sql(s"insert into $tableName partition(dt='2021-12-25') values (2, 'a2', 20, 1000)")
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(1, "a1", 10, 1000, "2021-12-25"),
+          Seq(2, "a2", 20, 1000, "2021-12-25")
+        )
+      }
+    }
+  }
 }

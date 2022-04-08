@@ -517,17 +517,14 @@ class TestMORDataSource extends HoodieClientTestBase {
     checkAnswer((1, "a0", 12, 101, false))
 
     writeData((1, "a0", 16, 97, true))
-    // Ordering value will not be honored for a delete record as the payload is sent as empty payload
-    checkAnswer((1, "a0", 16, 97, true))
+    // Ordering value will be honored, the delete record is considered as obsolete
+    // because it has smaller version number (97 < 101)
+    checkAnswer((1, "a0", 12, 101, false))
 
     writeData((1, "a0", 18, 96, false))
-    // Ideally, once a record is deleted, preCombine does not kick. So, any new record will be considered valid ignoring
-    // ordering val. But what happens ini hudi is, all records in log files are reconciled and then merged with base
-    // file. After reconciling all records from log files, it results in (1, "a0", 18, 96, false) and ths is merged with
-    // (1, "a0", 10, 100, false) in base file and hence we see (1, "a0", 10, 100, false) as it has higher preComine value.
-    // the result might differ depending on whether compaction was triggered or not(after record is deleted). In this
-    // test, no compaction is triggered and hence we see the record from base file.
-    checkAnswer((1, "a0", 10, 100, false))
+    // Ordering value will be honored, the data record is considered as obsolete
+    // because it has smaller version number (96 < 101)
+    checkAnswer((1, "a0", 12, 101, false))
   }
 
   private def writeData(data: (Int, String, Int, Int, Boolean)): Unit = {

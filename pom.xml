@@ -29,7 +29,7 @@
   <groupId>org.apache.hudi</groupId>
   <artifactId>hudi</artifactId>
   <packaging>pom</packaging>
-  <version>0.11.0-SNAPSHOT</version>
+  <version>0.12.0-SNAPSHOT</version>
   <description>Apache Hudi brings stream style processing on big data</description>
   <url>https://github.com/apache/hudi</url>
   <name>Hudi</name>
@@ -39,6 +39,7 @@
     <module>hudi-cli</module>
     <module>hudi-client</module>
     <module>hudi-aws</module>
+    <module>hudi-gcp</module>
     <module>hudi-hadoop-mr</module>
     <module>hudi-spark-datasource</module>
     <module>hudi-timeline-service</module>
@@ -47,6 +48,7 @@
     <module>packaging/hudi-hadoop-mr-bundle</module>
     <module>packaging/hudi-datahub-sync-bundle</module>
     <module>packaging/hudi-hive-sync-bundle</module>
+    <module>packaging/hudi-gcp-bundle</module>
     <module>packaging/hudi-spark-bundle</module>
     <module>packaging/hudi-presto-bundle</module>
     <module>packaging/hudi-utilities-bundle</module>
@@ -127,9 +129,13 @@
     <flink.runtime.artifactId>flink-runtime</flink.runtime.artifactId>
     <flink.table.runtime.artifactId>flink-table-runtime_${scala.binary.version}</flink.table.runtime.artifactId>
     <flink.table.planner.artifactId>flink-table-planner_${scala.binary.version}</flink.table.planner.artifactId>
+    <flink.format.parquet.version>1.12.2</flink.format.parquet.version>
+    <spark31.version>3.1.3</spark31.version>
+    <spark32.version>3.2.1</spark32.version>
     <hudi.spark.module>hudi-spark2</hudi.spark.module>
     <hudi.spark.common.module>hudi-spark2-common</hudi.spark.common.module>
     <avro.version>1.8.2</avro.version>
+    <caffeine.version>2.9.1</caffeine.version>
     <scala11.version>2.11.12</scala11.version>
     <scala12.version>2.12.10</scala12.version>
     <scala.version>${scala11.version}</scala.version>
@@ -554,6 +560,13 @@
         <artifactId>avro</artifactId>
         <version>${avro.version}</version>
         <scope>provided</scope>
+      </dependency>
+
+      <!-- caffeine -->
+      <dependency>
+        <groupId>com.github.ben-manes.caffeine</groupId>
+        <artifactId>caffeine</artifactId>
+        <version>${caffeine.version}</version>
       </dependency>
 
       <!-- Parquet -->

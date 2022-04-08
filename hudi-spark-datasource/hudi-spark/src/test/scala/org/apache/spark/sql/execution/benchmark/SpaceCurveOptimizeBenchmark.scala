@@ -19,8 +19,8 @@
 package org.apache.spark.sql.execution.benchmark
 
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.ColumnStatsIndexHelper.buildColumnStatsTableFor
 import org.apache.hudi.config.HoodieClusteringConfig.LayoutOptimizationStrategy
-import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper
 import org.apache.hudi.sort.SpaceCurveSortingHelper
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.hudi.TestHoodieSqlBase
@@ -38,7 +38,7 @@ object SpaceCurveOptimizeBenchmark extends TestHoodieSqlBase {
 
     val orderedColsTypes = Seq(StructField(co1, IntegerType), StructField(co2, IntegerType))
     val colStatsIndexTable =
-      ColumnStatsIndexHelper.buildColumnStatsTableFor(spark, sourceTableDF.inputFiles.toSeq, orderedColsTypes)
+      buildColumnStatsTableFor(spark, sourceTableDF.inputFiles.toSeq, orderedColsTypes)
         .collect()
         .map(f => (f.getInt(1), f.getInt(2), f.getInt(4), f.getInt(5)))
 

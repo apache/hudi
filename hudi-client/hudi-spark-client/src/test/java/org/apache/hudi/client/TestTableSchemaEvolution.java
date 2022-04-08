@@ -291,7 +291,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     }
 
     // Rollback to the original schema
-    client.restoreToInstant("004");
+    client.restoreToInstant("004", hoodieWriteConfig.isMetadataTableEnabled());
     checkLatestDeltaCommit("004");
 
     // Updates with original schema are now allowed
@@ -432,7 +432,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
 
     // Revert to the older commit and ensure that the original schema can now
     // be used for inserts and inserts.
-    client.restoreToInstant("003");
+    client.restoreToInstant("003", hoodieWriteConfig.isMetadataTableEnabled());
     curTimeline = metaClient.reloadActiveTimeline().getCommitTimeline().filterCompletedInstants();
     assertTrue(curTimeline.lastInstant().get().getTimestamp().equals("003"));
     checkReadRecords("000", numRecords);

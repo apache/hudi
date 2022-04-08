@@ -119,7 +119,7 @@ public class TestInlineCompaction extends CompactionTestBase {
   @Test
   public void testSuccessfulCompactionBasedOnNumOrTime() throws Exception {
     // Given: make three commits
-    HoodieWriteConfig cfg = getConfigForInlineCompaction(3, 20, CompactionTriggerStrategy.NUM_OR_TIME);
+    HoodieWriteConfig cfg = getConfigForInlineCompaction(3, 60, CompactionTriggerStrategy.NUM_OR_TIME);
     try (SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(cfg)) {
       List<HoodieRecord> records = dataGen.generateInserts(HoodieActiveTimeline.createNewInstantTime(), 10);
       HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
@@ -134,7 +134,7 @@ public class TestInlineCompaction extends CompactionTestBase {
       assertEquals(4, metaClient.getActiveTimeline().getWriteTimeline().countInstants());
       // 4th commit, that will trigger compaction because reach the time elapsed
       metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
-      finalInstant = HoodieActiveTimeline.createNewInstantTime(20000);
+      finalInstant = HoodieActiveTimeline.createNewInstantTime(60000);
       createNextDeltaCommit(finalInstant, dataGen.generateUpdates(finalInstant, 10), writeClient, metaClient, cfg, false);
 
       metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();

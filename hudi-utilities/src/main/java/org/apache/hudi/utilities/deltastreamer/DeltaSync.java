@@ -278,6 +278,8 @@ public class DeltaSync implements Serializable {
           .setKeyGeneratorClassProp(props.getProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
               SimpleKeyGenerator.class.getName()))
           .setPreCombineField(cfg.sourceOrderingField)
+          .setPartitionMetafileUseBaseFormat(props.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
+              HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()))
           .initTable(new Configuration(jssc.hadoopConfiguration()),
             cfg.targetBasePath);
     }
@@ -371,6 +373,8 @@ public class DeltaSync implements Serializable {
               HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))
           .setKeyGeneratorClassProp(props.getProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
               SimpleKeyGenerator.class.getName()))
+          .setPartitionMetafileUseBaseFormat(props.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
+              HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()))
           .initTable(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath);
     }
 

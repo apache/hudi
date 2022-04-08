@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -229,7 +230,7 @@ public class FSUtils {
 
   /**
    * Obtain all the partition paths, that are present in this table, denoted by presence of
-   * {@link HoodiePartitionMetadata#HOODIE_PARTITION_METAFILE}.
+   * {@link HoodiePartitionMetadata#HOODIE_PARTITION_METAFILE_PREFIX}.
    *
    * If the basePathStr is a subdirectory of .hoodie folder then we assume that the partitions of an internal
    * table (a hoodie table within the .hoodie directory) are to be obtained.
@@ -245,7 +246,7 @@ public class FSUtils {
     final List<String> partitions = new ArrayList<>();
     processFiles(fs, basePathStr, (locatedFileStatus) -> {
       Path filePath = locatedFileStatus.getPath();
-      if (filePath.getName().equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE)) {
+      if (filePath.getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
         partitions.add(getRelativePartitionPath(basePath, filePath.getParent()));
       }
       return true;
@@ -585,12 +586,21 @@ public class FSUtils {
   }
 
   public static Path getPartitionPath(String basePath, String partitionPath) {
-    return getPartitionPath(new Path(basePath), partitionPath);
+    if (StringUtils.isNullOrEmpty(partitionPath)) {
+      return new Path(basePath);
+    }
+
+    // NOTE: We have to chop leading "/" to make sure Hadoop does not treat it like
+    //       absolute path
+    String properPartitionPath = partitionPath.startsWith("/")
+        ? partitionPath.substring(1)
+        : partitionPath;
+    return getPartitionPath(new Path(basePath), properPartitionPath);
   }
 
   public static Path getPartitionPath(Path basePath, String partitionPath) {
     // FOr non-partitioned table, return only base-path
-    return ((partitionPath == null) || (partitionPath.isEmpty())) ? basePath : new Path(basePath, partitionPath);
+    return StringUtils.isNullOrEmpty(partitionPath) ? basePath : new Path(basePath, partitionPath);
   }
 
   /**

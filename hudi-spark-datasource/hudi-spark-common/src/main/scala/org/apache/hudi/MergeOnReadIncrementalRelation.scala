@@ -48,6 +48,11 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
 
   override type FileSplit = HoodieMergeOnReadFileSplit
 
+  override def imbueConfigs(sqlContext: SQLContext): Unit = {
+    super.imbueConfigs(sqlContext)
+    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "false")
+  }
+
   override protected def timeline: HoodieTimeline = {
     val startTimestamp = optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)
     val endTimestamp = optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key, super.timeline.lastInstant().get.getTimestamp)
@@ -75,7 +80,7 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
-      hadoopConf = new Configuration(conf)
+      hadoopConf = HoodieDataSourceHelper.getConfigurationWithInternalSchema(new Configuration(conf), internalSchema, metaClient.getBasePath, validCommits)
     )
 
     val requiredSchemaParquetReader = createBaseFileReader(
@@ -87,7 +92,7 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
-      hadoopConf = new Configuration(conf)
+      hadoopConf = HoodieDataSourceHelper.getConfigurationWithInternalSchema(new Configuration(conf), requiredSchema.internalSchema, metaClient.getBasePath, validCommits)
     )
 
     val hoodieTableState = getTableState

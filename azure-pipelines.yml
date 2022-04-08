@@ -44,7 +44,7 @@ stages:
               options: -T 2.5C -DskipTests
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
           - task: Maven@3
             displayName: UT common flink client/spark-client
             inputs:
@@ -53,7 +53,7 @@ stages:
               options: -Punit-tests -pl hudi-common,hudi-flink-datasource/hudi-flink,hudi-client/hudi-spark-client
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
           - task: Maven@3
             displayName: FT common flink
             inputs:
@@ -62,7 +62,7 @@ stages:
               options: -Pfunctional-tests -pl hudi-common,hudi-flink-datasource/hudi-flink
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
       - job: UT_FT_2
         condition: false
         displayName: FT client/spark-client
@@ -76,7 +76,7 @@ stages:
               options: -T 2.5C -DskipTests
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
           - task: Maven@3
             displayName: FT client/spark-client
             inputs:
@@ -85,7 +85,7 @@ stages:
               options: -Pfunctional-tests -pl hudi-client/hudi-spark-client
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
       - job: UT_FT_3
         condition: false
         displayName: UT FT clients & cli & utilities & sync/hive-sync
@@ -99,7 +99,7 @@ stages:
               options: -T 2.5C -DskipTests
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
           - task: Maven@3
             displayName: UT clients & cli & utilities & sync/hive-sync
             inputs:
@@ -108,7 +108,7 @@ stages:
               options: -Punit-tests -pl hudi-client/hudi-client-common,hudi-client/hudi-flink-client,hudi-client/hudi-java-client,hudi-cli,hudi-utilities,hudi-sync/hudi-hive-sync
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
           - task: Maven@3
             displayName: FT clients & cli & utilities & sync/hive-sync
             inputs:
@@ -117,7 +117,7 @@ stages:
               options: -Pfunctional-tests -pl hudi-client/hudi-client-common,hudi-client/hudi-flink-client,hudi-client/hudi-java-client,hudi-cli,hudi-utilities,hudi-sync/hudi-hive-sync
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
       - job: UT_FT_4
         displayName: UT FT other modules
         timeoutInMinutes: '90'
@@ -130,7 +130,7 @@ stages:
               options: -T 2.5C -DskipTests
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
           - task: Maven@3
             displayName: UT other modules
             inputs:
@@ -139,7 +139,7 @@ stages:
               options: -Punit-tests -pl $(EXCLUDE_TESTED_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
           - task: Maven@3
             displayName: FT other modules
             inputs:
@@ -148,7 +148,7 @@ stages:
               options: -Pfunctional-tests -pl $(EXCLUDE_TESTED_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
       - job: IT
         condition: false
         displayName: IT modules

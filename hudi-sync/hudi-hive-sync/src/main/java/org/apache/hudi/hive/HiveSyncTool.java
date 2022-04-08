@@ -404,7 +404,7 @@ public class HiveSyncTool extends AbstractSyncTool implements AutoCloseable {
       List<String> dropPartitions = filterPartitions(partitionEvents, PartitionEventType.DROP);
       if (!dropPartitions.isEmpty()) {
         LOG.info("Drop Partitions " + dropPartitions);
-        hoodieHiveClient.dropPartitionsToTable(tableName, dropPartitions);
+        hoodieHiveClient.dropPartitions(tableName, dropPartitions);
       }
 
       partitionsChanged = !updatePartitions.isEmpty() || !newPartitions.isEmpty() || !dropPartitions.isEmpty();

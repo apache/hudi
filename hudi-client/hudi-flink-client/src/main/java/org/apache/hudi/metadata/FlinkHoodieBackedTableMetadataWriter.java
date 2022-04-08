@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.conf.Configuration;
@@ -160,5 +161,10 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
     // Update total size of the metadata and count of base/log files
     metrics.ifPresent(m -> m.updateSizeMetrics(metadataMetaClient, metadata));
+  }
+
+  @Override
+  public void deletePartitions(String instantTime, List<MetadataPartitionType> partitions) {
+    throw new HoodieNotSupportedException("Dropping metadata index not supported for Flink metadata table yet.");
   }
 }

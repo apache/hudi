@@ -114,4 +114,16 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   default Option<Map<String, String>> getMetadata() {
     return Option.empty();
   }
+
+  /**
+   * This method can be used to extract the ordering value of the payload for combining/merging,
+   * or 0 if no value is specified which means natural order(arrival time is used).
+   *
+   * @return the ordering value
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
+  default Comparable<?> getOrderingValue() {
+    // default natural order
+    return 0;
+  }
 }

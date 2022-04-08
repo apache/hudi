@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.11.0-SNAPSHOT</version>
+    <version>0.12.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -120,6 +120,7 @@
 
                   <include>com.github.davidmoten:guava-mini</include>
                   <include>com.github.davidmoten:hilbert-curve</include>
+                  <include>com.github.ben-manes.caffeine:caffeine</include>
                   <include>com.twitter:bijection-avro_${scala.binary.version}</include>
                   <include>com.twitter:bijection-core_${scala.binary.version}</include>
                   <include>io.confluent:kafka-avro-serializer</include>

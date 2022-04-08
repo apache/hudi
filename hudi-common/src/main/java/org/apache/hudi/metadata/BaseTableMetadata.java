@@ -284,7 +284,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
     List<String> partitions = Collections.emptyList();
     if (hoodieRecord.isPresent()) {
-      mayBeHandleSpuriousDeletes(hoodieRecord, "\"all partitions\"");
+      handleSpuriousDeletes(hoodieRecord, "\"all partitions\"");
       partitions = hoodieRecord.get().getData().getFilenames();
       // Partition-less tables have a single empty partition
       if (partitions.contains(NON_PARTITIONED_NAME)) {
@@ -315,7 +315,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
     FileStatus[] statuses = {};
     if (hoodieRecord.isPresent()) {
-      mayBeHandleSpuriousDeletes(hoodieRecord, partitionName);
+      handleSpuriousDeletes(hoodieRecord, partitionName);
       statuses = hoodieRecord.get().getData().getFileStatuses(hadoopConf.get(), partitionPath);
     }
 
@@ -350,7 +350,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
     for (Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>> entry: partitionsFileStatus) {
       if (entry.getValue().isPresent()) {
-        mayBeHandleSpuriousDeletes(entry.getValue(), entry.getKey());
+        handleSpuriousDeletes(entry.getValue(), entry.getKey());
         result.put(partitionInfo.get(entry.getKey()).toString(), entry.getValue().get().getData().getFileStatuses(hadoopConf.get(), partitionInfo.get(entry.getKey())));
       }
     }
@@ -360,11 +360,11 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   }
 
   /**
-   * Maybe handle spurious deletes. Depending on config, throw an exception or log a warn msg.
+   * Handle spurious deletes. Depending on config, throw an exception or log a warn msg.
    * @param hoodieRecord instance of {@link HoodieRecord} of interest.
    * @param partitionName partition name of interest.
    */
-  private void mayBeHandleSpuriousDeletes(Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord, String partitionName) {
+  private void handleSpuriousDeletes(Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord, String partitionName) {
     if (!hoodieRecord.get().getData().getDeletions().isEmpty()) {
       if (metadataConfig.ignoreSpuriousDeletes()) {
         LOG.warn("Metadata record for " + partitionName + " encountered some files to be deleted which was not added before. "
@@ -378,7 +378,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
   protected abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName);
 
-  protected abstract List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> key, String partitionName);
+  public abstract List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> key, String partitionName);
 
   protected HoodieEngineContext getEngineContext() {
     return engineContext != null ? engineContext : new HoodieLocalEngineContext(hadoopConf.get());
