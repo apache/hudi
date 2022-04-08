@@ -49,7 +49,6 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -75,7 +74,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -561,7 +559,7 @@ public class HoodieTableMetadataUtil {
     HoodieTableMetaClient dataTableMetaClient = recordsGenerationParams.getDataMetaClient();
 
     List<String> columnsToIndex =
-        getColumnsToIndex(recordsGenerationParams, dataTableMetaClient.getTableConfig(),
+        getColumnsToIndex(recordsGenerationParams,
             Lazy.lazily(() -> tryResolveSchemaForTable(dataTableMetaClient)));
 
     if (columnsToIndex.isEmpty()) {
@@ -913,7 +911,7 @@ public class HoodieTableMetadataUtil {
     HoodieTableMetaClient dataTableMetaClient = recordsGenerationParams.getDataMetaClient();
 
     final List<String> columnsToIndex =
-        getColumnsToIndex(recordsGenerationParams, dataTableMetaClient.getTableConfig(),
+        getColumnsToIndex(recordsGenerationParams,
             Lazy.lazily(() -> tryResolveSchemaForTable(dataTableMetaClient)));
 
     if (columnsToIndex.isEmpty()) {
@@ -1107,7 +1105,7 @@ public class HoodieTableMetadataUtil {
           tableConfig.populateMetaFields() ? addMetadataFields(schema) : schema);
 
       List<String> columnsToIndex = getColumnsToIndex(recordsGenerationParams,
-          tableConfig, Lazy.eagerly(tableSchema));
+          Lazy.eagerly(tableSchema));
 
       if (columnsToIndex.isEmpty()) {
         // In case there are no columns to index, bail
@@ -1127,20 +1125,21 @@ public class HoodieTableMetadataUtil {
    * Get the list of columns for the table for column stats indexing
    */
   private static List<String> getColumnsToIndex(MetadataRecordsGenerationParams recordsGenParams,
-                                                HoodieTableConfig tableConfig,
                                                 Lazy<Option<Schema>> lazyWriterSchemaOpt) {
     checkState(recordsGenParams.isColumnStatsIndexEnabled());
 
-    Option<Schema> writerSchemaOpt = lazyWriterSchemaOpt.get();
-    if (writerSchemaOpt.isPresent()) {
-      return writerSchemaOpt.get().getFields().stream()
-          .map(Schema.Field::name)
-          .collect(Collectors.toList());
+    List<String> targetColumns = recordsGenParams.getTargetColumnsForColumnStatsIndex();
+    if (!targetColumns.isEmpty()) {
+      return targetColumns;
     }
 
-    // In case no writer schema could be obtained we fall back to only index primary key
-    // columns
-    return Arrays.asList(tableConfig.getRecordKeyFields().get());
+    Option<Schema> writerSchemaOpt = lazyWriterSchemaOpt.get();
+    return writerSchemaOpt
+        .map(writerSchema ->
+            writerSchema.getFields().stream()
+                .map(Schema.Field::name)
+                .collect(Collectors.toList()))
+        .orElse(Collections.emptyList());
   }
 
   private static Stream<HoodieRecord> translateWriteStatToColumnStats(HoodieWriteStat writeStat,

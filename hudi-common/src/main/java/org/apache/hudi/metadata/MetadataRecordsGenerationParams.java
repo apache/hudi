@@ -38,17 +38,21 @@ public class MetadataRecordsGenerationParams implements Serializable {
   private final List<MetadataPartitionType> enabledPartitionTypes;
   private final String bloomFilterType;
   private final int bloomIndexParallelism;
-  private final boolean isAllColumnStatsIndexEnabled;
+  private final boolean isColumnStatsIndexEnabled;
   private final int columnStatsIndexParallelism;
+  private final List<String> targetColumnsForColumnStatsIndex;
+  private final List<String> targetColumnsForBloomFilterIndex;
 
   MetadataRecordsGenerationParams(HoodieTableMetaClient dataMetaClient, List<MetadataPartitionType> enabledPartitionTypes, String bloomFilterType, int bloomIndexParallelism,
-                                  boolean isAllColumnStatsIndexEnabled, int columnStatsIndexParallelism) {
+                                  boolean isColumnStatsIndexEnabled, int columnStatsIndexParallelism, List<String> targetColumnsForColumnStatsIndex, List<String> targetColumnsForBloomFilterIndex) {
     this.dataMetaClient = dataMetaClient;
     this.enabledPartitionTypes = enabledPartitionTypes;
     this.bloomFilterType = bloomFilterType;
     this.bloomIndexParallelism = bloomIndexParallelism;
-    this.isAllColumnStatsIndexEnabled = isAllColumnStatsIndexEnabled;
+    this.isColumnStatsIndexEnabled = isColumnStatsIndexEnabled;
     this.columnStatsIndexParallelism = columnStatsIndexParallelism;
+    this.targetColumnsForColumnStatsIndex = targetColumnsForColumnStatsIndex;
+    this.targetColumnsForBloomFilterIndex = targetColumnsForBloomFilterIndex;
   }
 
   public HoodieTableMetaClient getDataMetaClient() {
@@ -64,7 +68,7 @@ public class MetadataRecordsGenerationParams implements Serializable {
   }
 
   public boolean isColumnStatsIndexEnabled() {
-    return isAllColumnStatsIndexEnabled;
+    return isColumnStatsIndexEnabled;
   }
 
   public int getBloomIndexParallelism() {
@@ -73,5 +77,13 @@ public class MetadataRecordsGenerationParams implements Serializable {
 
   public int getColumnStatsIndexParallelism() {
     return columnStatsIndexParallelism;
+  }
+
+  public List<String> getTargetColumnsForColumnStatsIndex() {
+    return targetColumnsForColumnStatsIndex;
+  }
+
+  public List<String> getSecondaryKeysForBloomFilterIndex() {
+    return targetColumnsForBloomFilterIndex;
   }
 }
