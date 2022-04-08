@@ -355,9 +355,8 @@ public class HoodieTableMetadataUtil {
   private static List<String> getPartitionsAdded(HoodieCommitMetadata commitMetadata) {
     return commitMetadata.getPartitionToWriteStats().keySet()
         .stream()
-        // In case of non-partitioned table we need to make sure we filter out empty string
-        // as the partition name we're trying to add
-        .filter(partitionPath -> !StringUtils.isNullOrEmpty(partitionPath))
+        // We need to make sure we properly handle case of non-partitioned tables
+        .map(HoodieTableMetadataUtil::getPartition)
         .collect(Collectors.toList());
   }
 
@@ -820,12 +819,9 @@ public class HoodieTableMetadataUtil {
 
   /**
    * Returns partition name for the given path.
-   *
-   * @param path
-   * @return
    */
-  public static String getPartition(@Nonnull String path) {
-    return EMPTY_PARTITION_NAME.equals(path) ? NON_PARTITIONED_NAME : path;
+  public static String getPartition(@Nonnull String relativePartitionPath) {
+    return EMPTY_PARTITION_NAME.equals(relativePartitionPath) ? NON_PARTITIONED_NAME : relativePartitionPath;
   }
 
   /**
