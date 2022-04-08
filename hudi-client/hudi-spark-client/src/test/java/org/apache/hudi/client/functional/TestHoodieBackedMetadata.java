@@ -623,7 +623,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             .withMetadataIndexBloomFilterFileGroups(4)
             .withMetadataIndexColumnStats(true)
             .withMetadataIndexBloomFilterFileGroups(2)
-            .withMetadataIndexForAllColumns(true)
             .build())
         .build();
     init(tableType, writeConfig);

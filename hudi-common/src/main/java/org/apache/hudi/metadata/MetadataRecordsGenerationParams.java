@@ -63,7 +63,7 @@ public class MetadataRecordsGenerationParams implements Serializable {
     return bloomFilterType;
   }
 
-  public boolean isAllColumnStatsIndexEnabled() {
+  public boolean isColumnStatsIndexEnabled() {
     return isAllColumnStatsIndexEnabled;
   }
 

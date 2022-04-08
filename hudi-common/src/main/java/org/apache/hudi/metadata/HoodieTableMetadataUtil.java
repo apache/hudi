@@ -96,6 +96,7 @@ import static org.apache.hudi.avro.HoodieAvroUtils.convertValueForSpecificDataTy
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.resolveNullableSchema;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.unwrapStatisticValueWrapper;
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
@@ -810,7 +811,7 @@ public class HoodieTableMetadataUtil {
       fileChangeCount[1] += appendedFileMap.size();
 
       // Validate that no appended file has been deleted
-      ValidationUtils.checkState(
+      checkState(
           !appendedFileMap.keySet().removeAll(partitionToDeletedFiles.getOrDefault(partition, Collections.emptyList())),
           "Rollback file cannot both be appended and deleted");
 
@@ -1123,18 +1124,18 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
-   * Get the latest columns for the table for column stats indexing.
+   * Get the list of columns for the table for column stats indexing
    */
   private static List<String> getColumnsToIndex(MetadataRecordsGenerationParams recordsGenParams,
                                                 HoodieTableConfig tableConfig,
                                                 Lazy<Option<Schema>> lazyWriterSchemaOpt) {
-    if (recordsGenParams.isAllColumnStatsIndexEnabled()) {
-      Option<Schema> writerSchemaOpt = lazyWriterSchemaOpt.get();
-      if (writerSchemaOpt.isPresent()) {
-        return writerSchemaOpt.get().getFields().stream()
-            .map(Schema.Field::name)
-            .collect(Collectors.toList());
-      }
+    checkState(recordsGenParams.isColumnStatsIndexEnabled());
+
+    Option<Schema> writerSchemaOpt = lazyWriterSchemaOpt.get();
+    if (writerSchemaOpt.isPresent()) {
+      return writerSchemaOpt.get().getFields().stream()
+          .map(Schema.Field::name)
+          .collect(Collectors.toList());
     }
 
     // In case no writer schema could be obtained we fall back to only index primary key
