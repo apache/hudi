@@ -17,7 +17,7 @@ To contribute code, you need
    Agreement](https://www.apache.org/licenses/icla.pdf) (ICLA) to the Apache
    Software Foundation (ASF).
  - (Recommended) Create an account on [JIRA](https://issues.apache.org/jira/projects/HUDI/summary) to open issues/find similar issues.
- - (Recommended) Join our dev mailing list & slack channel, listed on [community](/contribute/get-involved) page.
+ - (Recommended) Join our dev mailing list & slack channel, listed on [community](/community/get-involved) page.
 
 
 ## IDE Setup
