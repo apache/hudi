@@ -166,7 +166,7 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
     ExpressionEncoder encoder = getEncoder(inputDf.schema());
     return inputDf.groupByKey(
             (MapFunction<Row, String>) value ->
-                value.getAs(partitionPathField) + "+" + value.getAs(recordKeyField), Encoders.STRING())
+                (partitionPathField.isEmpty() ? value.getAs(recordKeyField) : (value.getAs(partitionPathField) + "+" + value.getAs(recordKeyField))), Encoders.STRING())
         .reduceGroups((ReduceFunction<Row>) (v1, v2) -> {
           int ts1 = v1.getAs(SchemaUtils.SOURCE_ORDERING_FIELD);
           int ts2 = v2.getAs(SchemaUtils.SOURCE_ORDERING_FIELD);

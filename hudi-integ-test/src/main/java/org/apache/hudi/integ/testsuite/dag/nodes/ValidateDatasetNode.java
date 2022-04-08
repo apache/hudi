@@ -20,6 +20,7 @@ package org.apache.hudi.integ.testsuite.dag.nodes;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 import org.apache.spark.sql.Dataset;
@@ -48,7 +49,9 @@ public class ValidateDatasetNode extends BaseValidateDatasetNode {
   @Override
   public Dataset<Row> getDatasetToValidate(SparkSession session, ExecutionContext context,
                                            StructType inputSchema) {
-    String hudiPath = context.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/*/*/*";
+    String partitionPathField = context.getWriterContext().getProps().getString(DataSourceWriteOptions.PARTITIONPATH_FIELD().key());
+    log.info("XXX Partition path field " + partitionPathField);
+    String hudiPath = context.getHoodieTestSuiteWriter().getCfg().targetBasePath + (partitionPathField.isEmpty() ? "/" : "/*/*/*");
     log.info("Validate data in target hudi path " + hudiPath);
     Dataset<Row> hudiDf = session.read().option(HoodieMetadataConfig.ENABLE.key(), String.valueOf(config.isEnableMetadataValidate()))
         .format("hudi").load(hudiPath);

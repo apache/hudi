@@ -454,17 +454,17 @@ spark-submit \
 --conf spark.driver.extraClassPath=/var/demo/jars/* \
 --conf spark.executor.extraClassPath=/var/demo/jars/* \
 --class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob \
-/opt/hudi-integ-test-bundle-0.11.0-SNAPSHOT.jar \
+/Users/nsb/Documents/personal/projects/nov26/hudi/packaging/hudi-integ-test-bundle/target/hudi-integ-test-bundle-0.12.0-SNAPSHOT.jar \
 --source-ordering-field test_suite_source_ordering_field \
 --use-deltastreamer \
---target-base-path /user/hive/warehouse/hudi-integ-test-suite/output \
---input-base-path /user/hive/warehouse/hudi-integ-test-suite/input \
+--target-base-path /tmp/hudi/output \
+--input-base-path /tmp/hudi/input \
 --target-table table1 \
---props test.properties \
+--props /tmp/test.properties \
 --schemaprovider-class org.apache.hudi.integ.testsuite.schema.TestSuiteFileBasedSchemaProvider \
 --source-class org.apache.hudi.utilities.sources.AvroDFSSource \
 --input-file-size 125829120 \
---workload-yaml-path file:/opt/simple-deltastreamer.yaml \
+--workload-yaml-path file://Users/nsb/Documents/personal/projects/nov26/hudi/docker/demo/config/test-suite/simple-deltastreamer.yaml \
 --workload-generator-classname org.apache.hudi.integ.testsuite.dag.WorkflowDagGenerator \
 --table-type COPY_ON_WRITE \
 --compact-scheduling-minshare 1 \
