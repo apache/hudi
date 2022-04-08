@@ -143,6 +143,18 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
   private static final Conversions.DecimalConversion AVRO_DECIMAL_CONVERSION = new Conversions.DecimalConversion();
 
+  private static final HoodieMetadataColumnStats.Builder METADATA_COLUMN_STATS_BUILDER_STUB = HoodieMetadataColumnStats.newBuilder();
+  private static final StringWrapper.Builder STRING_WRAPPER_BUILDER_STUB = StringWrapper.newBuilder();
+  private static final BytesWrapper.Builder BYTES_WRAPPER_BUILDER_STUB = BytesWrapper.newBuilder();
+  private static final DoubleWrapper.Builder DOUBLE_WRAPPER_BUILDER_STUB = DoubleWrapper.newBuilder();
+  private static final FloatWrapper.Builder FLOAT_WRAPPER_BUILDER_STUB = FloatWrapper.newBuilder();
+  private static final LongWrapper.Builder LONG_WRAPPER_BUILDER_STUB = LongWrapper.newBuilder();
+  private static final IntWrapper.Builder INT_WRAPPER_BUILDER_STUB = IntWrapper.newBuilder();
+  private static final BooleanWrapper.Builder BOOLEAN_WRAPPER_BUILDER_STUB = BooleanWrapper.newBuilder();
+  private static final TimestampMicrosWrapper.Builder TIMESTAMP_MICROS_WRAPPER_BUILDER_STUB = TimestampMicrosWrapper.newBuilder();
+  private static final DecimalWrapper.Builder DECIMAL_WRAPPER_BUILDER_STUB = DecimalWrapper.newBuilder();
+  private static final DateWrapper.Builder DATE_WRAPPER_BUILDER_STUB = DateWrapper.newBuilder();
+
   private String key = null;
   private int type = 0;
   private Map<String, HoodieMetadataFileInfo> filesystemMetadata = null;
@@ -201,7 +213,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
           checkArgument(record.getSchema().getField(SCHEMA_FIELD_ID_COLUMN_STATS) == null,
               String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_COLUMN_STATS, METADATA_TYPE_COLUMN_STATS));
         } else {
-          columnStatMetadata = HoodieMetadataColumnStats.newBuilder()
+          columnStatMetadata = HoodieMetadataColumnStats.newBuilder(METADATA_COLUMN_STATS_BUILDER_STUB)
               .setFileName((String) columnStatsRecord.get(COLUMN_STATS_FIELD_FILE_NAME))
               .setColumnName((String) columnStatsRecord.get(COLUMN_STATS_FIELD_COLUMN_NAME))
               .setMinValue(columnStatsRecord.get(COLUMN_STATS_FIELD_MIN_VALUE))
@@ -605,7 +617,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         .max(Comparator.naturalOrder())
         .orElse(null);
 
-    return HoodieMetadataColumnStats.newBuilder()
+    return HoodieMetadataColumnStats.newBuilder(METADATA_COLUMN_STATS_BUILDER_STUB)
         .setFileName(newColumnStats.getFileName())
         .setColumnName(newColumnStats.getColumnName())
         .setMinValue(wrapStatisticValue(minValue))
@@ -653,11 +665,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       LocalDate localDate = statValue instanceof LocalDate
           ? (LocalDate) statValue
           : ((Date) statValue).toLocalDate();
-      return DateWrapper.newBuilder().setValue((int) localDate.toEpochDay()).build();
+      return DateWrapper.newBuilder(DATE_WRAPPER_BUILDER_STUB).setValue((int) localDate.toEpochDay()).build();
     } else if (statValue instanceof BigDecimal) {
       Schema valueSchema = DecimalWrapper.SCHEMA$.getField("value").schema();
       BigDecimal upcastDecimal = tryUpcastDecimal((BigDecimal) statValue, (LogicalTypes.Decimal) valueSchema.getLogicalType());
-      return DecimalWrapper.newBuilder()
+      return DecimalWrapper.newBuilder(DECIMAL_WRAPPER_BUILDER_STUB)
           .setValue(AVRO_DECIMAL_CONVERSION.toBytes(upcastDecimal, valueSchema, valueSchema.getLogicalType()))
           .build();
     } else if (statValue instanceof Timestamp) {
@@ -665,23 +677,23 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       //       rely on logical types to do proper encoding of the native Java types,
       //       and hereby have to encode statistic manually
       Instant instant = ((Timestamp) statValue).toInstant();
-      return TimestampMicrosWrapper.newBuilder()
+      return TimestampMicrosWrapper.newBuilder(TIMESTAMP_MICROS_WRAPPER_BUILDER_STUB)
           .setValue(instantToMicros(instant))
           .build();
     } else if (statValue instanceof Boolean) {
-      return BooleanWrapper.newBuilder().setValue((Boolean) statValue).build();
+      return BooleanWrapper.newBuilder(BOOLEAN_WRAPPER_BUILDER_STUB).setValue((Boolean) statValue).build();
     } else if (statValue instanceof Integer) {
-      return IntWrapper.newBuilder().setValue((Integer) statValue).build();
+      return IntWrapper.newBuilder(INT_WRAPPER_BUILDER_STUB).setValue((Integer) statValue).build();
     } else if (statValue instanceof Long) {
-      return LongWrapper.newBuilder().setValue((Long) statValue).build();
+      return LongWrapper.newBuilder(LONG_WRAPPER_BUILDER_STUB).setValue((Long) statValue).build();
     } else if (statValue instanceof Float) {
-      return FloatWrapper.newBuilder().setValue((Float) statValue).build();
+      return FloatWrapper.newBuilder(FLOAT_WRAPPER_BUILDER_STUB).setValue((Float) statValue).build();
     } else if (statValue instanceof Double) {
-      return DoubleWrapper.newBuilder().setValue((Double) statValue).build();
+      return DoubleWrapper.newBuilder(DOUBLE_WRAPPER_BUILDER_STUB).setValue((Double) statValue).build();
     } else if (statValue instanceof ByteBuffer) {
-      return BytesWrapper.newBuilder().setValue((ByteBuffer) statValue).build();
+      return BytesWrapper.newBuilder(BYTES_WRAPPER_BUILDER_STUB).setValue((ByteBuffer) statValue).build();
     } else if (statValue instanceof String || statValue instanceof Utf8) {
-      return StringWrapper.newBuilder().setValue(statValue.toString()).build();
+      return StringWrapper.newBuilder(STRING_WRAPPER_BUILDER_STUB).setValue(statValue.toString()).build();
     } else {
       throw new UnsupportedOperationException(String.format("Unsupported type of the statistic (%s)", statValue.getClass()));
     }
