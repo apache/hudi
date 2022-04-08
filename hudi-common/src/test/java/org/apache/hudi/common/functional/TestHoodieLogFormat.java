@@ -89,6 +89,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -574,12 +575,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.close();
     FileCreateUtils.createDeltaCommit(basePath, "100", fs);
     // scan all log blocks (across multiple log files)
+    List<String> logFilePaths = logFiles.stream()
+        .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList());
+    assertTrue(logFilePaths.size() > 0);
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
         .withBasePath(basePath)
-        .withLogFilePaths(
-            logFiles.stream()
-                .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList()))
+        .withLogFilePaths(logFilePaths)
         .withReaderSchema(schema)
         .withLatestInstantTime("100")
         .withMaxMemorySizeInBytes(10240L)
@@ -589,6 +591,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withPartition(getRelativePartitionPath(new Path(basePath), new Path(logFilePaths.get(0)).getParent()))
         .build();
 
     List<IndexedRecord> scannedRecords = new ArrayList<>();
@@ -803,6 +806,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withPartition(getRelativePartitionPath(new Path(basePath), new Path(allLogFiles.get(0)).getParent()))
         .build();
     assertEquals(200, scanner.getTotalLogRecords());
     Set<String> readKeys = new HashSet<>(200);
@@ -881,6 +885,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withPartition(getRelativePartitionPath(new Path(basePath), new Path(allLogFiles.get(0)).getParent()))
         .build();
     assertEquals(200, scanner.getTotalLogRecords(), "We read 200 records from 2 write batches");
     Set<String> readKeys = new HashSet<>(200);
@@ -968,6 +973,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withPartition(getRelativePartitionPath(new Path(basePath), new Path(allLogFiles.get(0)).getParent()))
         .build();
     assertEquals(200, scanner.getTotalLogRecords(), "We would read 200 records");
     Set<String> readKeys = new HashSet<>(200);
@@ -1046,6 +1052,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withPartition(getRelativePartitionPath(new Path(basePath), new Path(allLogFiles.get(0)).getParent()))
         .build();
 
     assertEquals(200, scanner.getTotalLogRecords(), "We still would read 200 records");
@@ -1092,6 +1099,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withPartition(getRelativePartitionPath(new Path(basePath), new Path(allLogFiles.get(0)).getParent()))
         .build();
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
     assertEquals(200, readKeys.size(), "Stream collect should return all 200 records after rollback of delete");
@@ -1187,6 +1195,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withPartition(getRelativePartitionPath(new Path(basePath), new Path(allLogFiles.get(0)).getParent()))
         .build();
 
     assertEquals(200, scanner.getTotalLogRecords(), "We still would read 200 records");
@@ -1290,6 +1299,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withPartition(getRelativePartitionPath(new Path(basePath), new Path(allLogFiles.get(0)).getParent()))
         .build();
     assertEquals(0, scanner.getTotalLogRecords(), "We would have scanned 0 records because of rollback");
 
@@ -1358,6 +1368,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withPartition(getRelativePartitionPath(new Path(basePath), new Path(allLogFiles.get(0)).getParent()))
         .build();
     assertEquals(0, scanner.getTotalLogRecords(), "We would read 0 records");
     FileCreateUtils.deleteDeltaCommit(basePath, "100", fs);
@@ -1409,6 +1420,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withPartition(getRelativePartitionPath(new Path(basePath), new Path(allLogFiles.get(0)).getParent()))
         .build();
     assertEquals(100, scanner.getTotalLogRecords(), "We still would read 100 records");
     final List<String> readKeys = new ArrayList<>(100);
@@ -1479,6 +1491,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withPartition(getRelativePartitionPath(new Path(basePath), new Path(allLogFiles.get(0)).getParent()))
         .build();
     assertEquals(0, scanner.getTotalLogRecords(), "We would read 0 records");
   }
@@ -1585,6 +1598,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withPartition(getRelativePartitionPath(new Path(basePath), new Path(allLogFiles.get(0)).getParent()))
         .build();
     assertEquals(0, scanner.getTotalLogRecords(), "We would read 0 records");
     FileCreateUtils.deleteDeltaCommit(basePath, "100", fs);
@@ -1659,6 +1673,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
           .withSpillableMapBasePath(BASE_OUTPUT_PATH)
           .withDiskMapType(diskMapType)
           .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+          .withPartition(getRelativePartitionPath(new Path(basePath), new Path(allLogFiles.get(0)).getParent()))
           .build();
 
       assertEquals(Math.max(numRecordsInLog1, numRecordsInLog2), scanner.getNumMergedRecordsInLog(),
