@@ -69,18 +69,10 @@ public class TestStringUtils {
   }
 
   @Test
-  public void testStringToSet() {
-    assertEquals(new HashSet<>(), StringUtils.toSet(null));
-    assertEquals(new HashSet<>(), StringUtils.toSet(""));
-    Set<String> expected = new HashSet<>(Arrays.asList("a", "b", "c"));
-    assertEquals(expected, StringUtils.toSet("a,b, c"));
-  }
-
-  @Test
-  public void testStringToList() {
-    assertEquals(new ArrayList<>(), StringUtils.toList(null));
-    assertEquals(new ArrayList<>(), StringUtils.toList(""));
-    List<String> expected = Arrays.asList("a", "b", "c");
-    assertEquals(expected, StringUtils.toList("a,b, c"));
+  public void testSplit() {
+    assertEquals(new ArrayList<>(), StringUtils.split(null, ","));
+    assertEquals(new ArrayList<>(), StringUtils.split("", ","));
+    assertEquals(Arrays.asList("a", "b", "c"), StringUtils.split("a,b, c", ","));
+    assertEquals(Arrays.asList("a", "b", "c"), StringUtils.split("a,b,, c ", ","));
   }
 }

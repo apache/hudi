@@ -19,12 +19,8 @@
 package org.apache.hudi.common.util;
 
 import javax.annotation.Nullable;
-
-import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.Collections;
 import java.util.List;
-import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -34,10 +30,6 @@ import java.util.stream.Stream;
 public class StringUtils {
 
   public static final String EMPTY_STRING = "";
-  private static final Function<String, Set<String>> STRING_TO_SET = (str) -> Stream.of(str.split(","))
-      .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toSet());
-  private static final Function<String, List<String>> STRING_TO_LIST = (str) -> Stream.of(str.split(","))
-      .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
 
   /**
    * <p>
@@ -114,22 +106,13 @@ public class StringUtils {
   }
 
   /**
-   * Converts the input string, delimited by comma, to a set of strings.
-   *
-   * @param input
-   * @return
+   * Splits input string, delimited {@code delimiter} into a list of non-empty strings
+   * (skipping any empty string produced during splitting)
    */
-  public static Set<String> toSet(@Nullable String input) {
-    return isNullOrEmpty(input) ? new HashSet<>() : STRING_TO_SET.apply(input);
-  }
-
-  /**
-   * Converts the input string, delimited by comma, to a list of strings.
-   *
-   * @param input
-   * @return
-   */
-  public static List<String> toList(@Nullable String input) {
-    return isNullOrEmpty(input) ? new ArrayList<>() : STRING_TO_LIST.apply(input);
+  public static List<String> split(@Nullable String input, String delimiter) {
+    if (isNullOrEmpty(input)) {
+      return Collections.emptyList();
+    }
+    return Stream.of(input.split(delimiter)).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
   }
 }
