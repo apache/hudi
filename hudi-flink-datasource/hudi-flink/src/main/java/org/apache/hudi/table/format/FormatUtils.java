@@ -151,12 +151,11 @@ public class FormatUtils {
                 HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
         .withInstantRange(split.getInstantRange())
         .withOperationField(withOperationField);
-    if (isNullOrEmpty(logPaths)) {
-      return logRecordScannerBuilder.build();
+    if (!isNullOrEmpty(logPaths)) {
+      logRecordScannerBuilder
+          .withPartition(getRelativePartitionPath(new Path(basePath), new Path(logPaths.get(0)).getParent()));
     }
-    return logRecordScannerBuilder
-        .withPartition(getRelativePartitionPath(new Path(basePath), new Path(logPaths.get(0)).getParent()))
-        .build();
+    return logRecordScannerBuilder.build();
   }
 
   private static HoodieUnMergedLogRecordScanner unMergedLogScanner(
@@ -258,12 +257,11 @@ public class FormatUtils {
         .withSpillableMapBasePath(writeConfig.getSpillableMapBasePath())
         .withDiskMapType(writeConfig.getCommonConfig().getSpillableDiskMapType())
         .withBitCaskDiskMapCompressionEnabled(writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled());
-    if (isNullOrEmpty(logPaths)) {
-      return logRecordScannerBuilder.build();
+    if (!isNullOrEmpty(logPaths)) {
+      logRecordScannerBuilder
+          .withPartition(getRelativePartitionPath(new Path(basePath), new Path(logPaths.get(0)).getParent()));
     }
-    return logRecordScannerBuilder
-        .withPartition(getRelativePartitionPath(new Path(basePath), new Path(logPaths.get(0)).getParent()))
-        .build();
+    return logRecordScannerBuilder.build();
   }
 
   private static Boolean string2Boolean(String s) {

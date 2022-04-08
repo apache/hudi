@@ -98,12 +98,11 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
         .withDiskMapType(jobConf.getEnum(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue()))
         .withBitCaskDiskMapCompressionEnabled(jobConf.getBoolean(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
             HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()));
-    if (isNullOrEmpty(logPaths)) {
-      return logRecordScannerBuilder.build();
+    if (!isNullOrEmpty(logPaths)) {
+      logRecordScannerBuilder
+          .withPartition(getRelativePartitionPath(new Path(split.getBasePath()), new Path(logPaths.get(0)).getParent()));
     }
-    return logRecordScannerBuilder
-        .withPartition(getRelativePartitionPath(new Path(split.getBasePath()), new Path(logPaths.get(0)).getParent()))
-        .build();
+    return logRecordScannerBuilder.build();
   }
 
   private Option<GenericRecord> buildGenericRecordwithCustomPayload(HoodieRecord record) throws IOException {
