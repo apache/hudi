@@ -90,6 +90,8 @@ public abstract class ITTestBase {
     List<String> cmd = new ArrayList<>();
     cmd.add("hive");
     cmd.add("--hiveconf");
+    cmd.add("hive.execution.engine=mr");
+    cmd.add("--hiveconf");
     cmd.add("hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat");
     cmd.add("--hiveconf");
     cmd.add("hive.stats.autogather=false");
@@ -100,6 +102,7 @@ public abstract class ITTestBase {
 
   private static String getHiveConsoleCommandFile(String commandFile, String additionalVar) {
     StringBuilder builder = new StringBuilder().append("beeline -u " + HIVE_SERVER_JDBC_URL)
+        .append(" --hiveconf hive.execution.engine=mr")
         .append(" --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat ")
         .append(" --hiveconf hive.stats.autogather=false ")
         .append(" --hivevar hudi.hadoop.bundle=" + HUDI_HADOOP_BUNDLE);
@@ -145,6 +148,11 @@ public abstract class ITTestBase {
     await().atMost(300, SECONDS).until(this::servicesUp);
     LOG.info(String.format("Waiting for all the containers and services finishes in %d ms",
         System.currentTimeMillis() - currTs));
+    try {
+      Thread.sleep(60000);
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+    }
   }
 
   private boolean servicesUp() {

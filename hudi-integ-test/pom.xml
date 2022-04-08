@@ -567,6 +567,7 @@
             </goals>
             <configuration>
               <skip>${docker.compose.skip}</skip>
+              <host>unix:///var/run/docker.sock</host>
               <composeFile>${dockerCompose.file}</composeFile>
               <detachedMode>true</detachedMode>
               <envFile>${dockerCompose.envFile}</envFile>
