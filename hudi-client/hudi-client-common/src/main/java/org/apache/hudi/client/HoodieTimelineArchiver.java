@@ -587,19 +587,16 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       List<IndexedRecord> records = new ArrayList<>();
       for (HoodieInstant hoodieInstant : instants) {
         try {
-          if (table.getActiveTimeline().isEmpty(hoodieInstant)
-                  && (
-                          hoodieInstant.getAction().equals(HoodieTimeline.CLEAN_ACTION)
-                          || (hoodieInstant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION) && hoodieInstant.isCompleted())
-                     )
-          ) {
-            table.getActiveTimeline().deleteEmptyInstantIfExists(hoodieInstant);
+          deleteAnyLeftOverMarkers(context, hoodieInstant);
+          // in local FS and HDFS, there could be empty completed instants due to crash.
+          if (table.getActiveTimeline().isEmpty(hoodieInstant) && hoodieInstant.isCompleted()) {
+            // lets add an entry to the archival, even if not for the plan.
+            records.add(convertToAvroRecord(hoodieInstant, true));
           } else {
-            deleteAnyLeftOverMarkers(context, hoodieInstant);
-            records.add(convertToAvroRecord(hoodieInstant));
-            if (records.size() >= this.config.getCommitArchivalBatchSize()) {
-              writeToFile(wrapperSchema, records);
-            }
+            records.add(convertToAvroRecord(hoodieInstant, false));
+          }
+          if (records.size() >= this.config.getCommitArchivalBatchSize()) {
+            writeToFile(wrapperSchema, records);
           }
         } catch (Exception e) {
           LOG.error("Failed to archive commits, .commit file: " + hoodieInstant.getFileName(), e);
@@ -632,8 +629,9 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     }
   }
 
-  private IndexedRecord convertToAvroRecord(HoodieInstant hoodieInstant)
+  private IndexedRecord convertToAvroRecord(HoodieInstant hoodieInstant, boolean isEmpty)
       throws IOException {
-    return MetadataConversionUtils.createMetaWrapper(hoodieInstant, metaClient);
+    return isEmpty ? MetadataConversionUtils.createMetaWrapperForEmptyInstant(hoodieInstant)
+        : MetadataConversionUtils.createMetaWrapper(hoodieInstant, metaClient);
   }
 }
