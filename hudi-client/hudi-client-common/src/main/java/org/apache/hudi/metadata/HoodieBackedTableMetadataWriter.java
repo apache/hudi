@@ -729,12 +729,12 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
   private MetadataRecordsGenerationParams getRecordsGenerationParams() {
     return new MetadataRecordsGenerationParams(
-        dataMetaClient, enabledPartitionTypes, dataWriteConfig.getBloomFilterType(),
+        dataMetaClient,
+        enabledPartitionTypes,
+        dataWriteConfig.getBloomFilterType(),
         dataWriteConfig.getMetadataBloomFilterIndexParallelism(),
         dataWriteConfig.isMetadataColumnStatsIndexEnabled(),
-        dataWriteConfig.getColumnStatsIndexParallelism(),
-        dataWriteConfig.getColumnsEnabledForColumnStatsIndex(),
-        dataWriteConfig.getColumnsEnabledForBloomFilterIndex());
+        dataWriteConfig.getColumnStatsIndexParallelism());
   }
 
   /**

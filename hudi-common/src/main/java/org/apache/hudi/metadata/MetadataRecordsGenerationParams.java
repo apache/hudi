@@ -26,7 +26,12 @@ import java.util.List;
 
 /**
  * Encapsulates all parameters required to generate metadata index for enabled index types.
+ *
+ * @deprecated this component currently duplicates configuration coming from the {@code HoodieWriteConfig}
+ *             which is problematic; instead we should break this component down and use source of truth
+ *             for each respective data-point directly ({@code HoodieWriteConfig}, {@code HoodieTableMetaClient}, etc)
  */
+@Deprecated
 public class MetadataRecordsGenerationParams implements Serializable {
 
   private final HoodieTableMetaClient dataMetaClient;
@@ -35,19 +40,15 @@ public class MetadataRecordsGenerationParams implements Serializable {
   private final int bloomIndexParallelism;
   private final boolean isAllColumnStatsIndexEnabled;
   private final int columnStatsIndexParallelism;
-  private final List<String> columnsToIndex;
-  private final List<String> bloomSecondaryKeys;
 
   MetadataRecordsGenerationParams(HoodieTableMetaClient dataMetaClient, List<MetadataPartitionType> enabledPartitionTypes, String bloomFilterType, int bloomIndexParallelism,
-                                  boolean isAllColumnStatsIndexEnabled, int columnStatsIndexParallelism, List<String> columnsToIndex, List<String> bloomSecondaryKeys) {
+                                  boolean isAllColumnStatsIndexEnabled, int columnStatsIndexParallelism) {
     this.dataMetaClient = dataMetaClient;
     this.enabledPartitionTypes = enabledPartitionTypes;
     this.bloomFilterType = bloomFilterType;
     this.bloomIndexParallelism = bloomIndexParallelism;
     this.isAllColumnStatsIndexEnabled = isAllColumnStatsIndexEnabled;
     this.columnStatsIndexParallelism = columnStatsIndexParallelism;
-    this.columnsToIndex = columnsToIndex;
-    this.bloomSecondaryKeys = bloomSecondaryKeys;
   }
 
   public HoodieTableMetaClient getDataMetaClient() {
@@ -72,13 +73,5 @@ public class MetadataRecordsGenerationParams implements Serializable {
 
   public int getColumnStatsIndexParallelism() {
     return columnStatsIndexParallelism;
-  }
-
-  public List<String> getColumnsToIndex() {
-    return columnsToIndex;
-  }
-
-  public List<String> getBloomSecondaryKeys() {
-    return bloomSecondaryKeys;
   }
 }
