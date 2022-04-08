@@ -75,20 +75,23 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
   @ParameterizedTest
   @MethodSource(Array("testMetadataColumnStatsIndexParams"))
   def testMetadataColumnStatsIndex(testCase: ColumnStatsTestCase): Unit = {
+    val metadataOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
+    )
+
     val opts = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       RECORDKEY_FIELD.key -> "c1",
       PRECOMBINE_FIELD.key -> "c1",
-      HoodieMetadataConfig.ENABLE.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
       // NOTE: Currently only this setting is used like following by different MT partitions:
       //          - Files: using it
       //          - Column Stats: NOT using it (defaults to doing "point-lookups")
       HoodieMetadataConfig.ENABLE_FULL_SCAN_LOG_FILES.key -> testCase.forceFullLogScan.toString,
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
-    )
+    ) ++ metadataOpts
 
     setTableName("hoodie_test")
     initMetaClient()
@@ -112,7 +115,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
     metaClient = HoodieTableMetaClient.reload(metaClient)
 
     val metadataConfig = HoodieMetadataConfig.newBuilder()
-      .fromProperties(toProperties(opts))
+      .fromProperties(toProperties(metadataOpts))
       .build()
 
     val targetColumnsToRead: Seq[String] = {
