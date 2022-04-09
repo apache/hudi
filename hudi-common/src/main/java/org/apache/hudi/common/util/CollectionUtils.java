@@ -32,9 +32,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.Spliterator;
+import java.util.Spliterators;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 public class CollectionUtils {
 
@@ -46,6 +49,16 @@ public class CollectionUtils {
 
   public static boolean nonEmpty(Collection<?> c) {
     return !isNullOrEmpty(c);
+  }
+
+  /**
+   * Collects provided {@link Iterator} to a {@link Stream}
+   */
+  public static <T> Stream<T> toStream(Iterator<T> iterator) {
+    return StreamSupport.stream(
+        Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED),
+        false
+    );
   }
 
   /**

@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 
 import org.apache.avro.Schema;
@@ -185,7 +186,7 @@ public class InputFormatTestUtil {
   public static void setupSnapshotScanMode(JobConf jobConf) {
     setupSnapshotScanMode(jobConf, false);
   }
-  
+
   private static void setupSnapshotScanMode(JobConf jobConf, boolean includePending) {
     setUpScanMode(jobConf);
     String includePendingCommitsName =
@@ -467,8 +468,8 @@ public class InputFormatTestUtil {
             new LocalFileSystem(lfs),
             "0",
             new Path(basePath.toAbsolutePath().toString()),
-            new Path(partitionPath.toAbsolutePath().toString())
-        );
+            new Path(partitionPath.toAbsolutePath().toString()),
+            Option.of(HoodieFileFormat.PARQUET));
 
     partitionMetadata.trySave((int) (Math.random() * 1000));
   }

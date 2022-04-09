@@ -26,12 +26,13 @@ import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
-import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
+import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadataUtil}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, Expression, Literal}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
-import org.apache.spark.sql.hudi.{DataSkippingUtils, HoodieSqlCommonUtils}
+import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
@@ -195,14 +196,13 @@ case class HoodieFileIndex(spark: SparkSession,
    * @return list of pruned (data-skipped) candidate base-files' names
    */
   private def lookupCandidateFilesInMetadataTable(queryFilters: Seq[Expression]): Try[Option[Set[String]]] = Try {
-    val fs = metaClient.getFs
-    val metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(basePath)
-
-    if (!isDataSkippingEnabled || !fs.exists(new Path(metadataTablePath)) || queryFilters.isEmpty) {
+    if (!isDataSkippingEnabled || queryFilters.isEmpty || !HoodieTableMetadataUtil.getCompletedMetadataPartitions(metaClient.getTableConfig)
+      .contains(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)) {
       Option.empty
     } else {
-      val colStatsDF: DataFrame = readColumnStatsIndex(spark, metadataTablePath)
       val queryReferencedColumns = collectReferencedColumns(spark, queryFilters, schema)
+
+      val colStatsDF: DataFrame = readColumnStatsIndex(spark, basePath, metadataConfig, queryReferencedColumns)
 
       // Persist DF to avoid re-computing column statistics unraveling
       withPersistence(colStatsDF) {
@@ -212,7 +212,7 @@ case class HoodieFileIndex(spark: SparkSession,
         withPersistence(transposedColStatsDF) {
           val indexSchema = transposedColStatsDF.schema
           val indexFilter =
-            queryFilters.map(DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(_, indexSchema))
+            queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexSchema))
               .reduce(And)
 
           val allIndexedFileNames =

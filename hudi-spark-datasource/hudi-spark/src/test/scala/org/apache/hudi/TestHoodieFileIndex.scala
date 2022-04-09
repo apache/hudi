@@ -372,7 +372,11 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     val props = Map[String, String](
       "path" -> basePath,
       QUERY_TYPE.key -> QUERY_TYPE_SNAPSHOT_OPT_VAL,
-      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true"
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+      // NOTE: Metadata Table has to be enabled on the read path as well
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS.key -> "true"
     )
 
     val fileIndex = HoodieFileIndex(spark, metaClient, Option.empty, props, NoopCache)

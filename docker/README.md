@@ -51,9 +51,19 @@ mvn clean pre-integration-test -DskipTests -Ddocker.compose.skip=true -Ddocker.b
 mvn clean pre-integration-test -DskipTests -Ddocker.compose.skip=true -Ddocker.build.skip=false -pl :hudi-hadoop-trinobase-docker -am
 ```
 
-Alternatively, you can use `docker` cli directly under `hoodie/hadoop`. Note that, you need to manually name your local
-image by using `-t` option to match the naming in the `pom.xml`, so that you can update the corresponding image
-repository in Docker Hub (detailed steps in the next section).
+Alternatively, you can use `docker` cli directly under `hoodie/hadoop` to build images in a faster way. If you use this
+approach, make sure you first build Hudi modules with `integration-tests` profile as below so that the latest Hudi jars
+built are copied to the corresponding Hudi docker folder, e.g., `$HUDI_DIR/docker/hoodie/hadoop/hive_base/target`, which
+is required to build each docker image. Otherwise, the `target/` folder can be missing and `docker` cli complains about
+that: `failed to compute cache key: "/target" not found: not found`.
+
+```shell
+mvn -Pintegration-tests clean package -DskipTests
+```
+
+Note that, to build the image with `docker` cli, you need to manually name your local image by using `-t` option to
+match the naming in the `pom.xml`, so that you can update the corresponding image repository in Docker Hub (detailed
+steps in the next section).
 
 ```shell
 # Run under hoodie/hadoop, the <tag> is optional, "latest" by default

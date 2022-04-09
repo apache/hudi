@@ -154,6 +154,7 @@ class HoodieStreamSource(
     } else {
       // Consume the data between (startCommitTime, endCommitTime]
       val incParams = parameters ++ Map(
+        DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
         DataSourceReadOptions.BEGIN_INSTANTTIME.key -> startCommitTime(startOffset),
         DataSourceReadOptions.END_INSTANTTIME.key -> endOffset.commitTime
       )

@@ -20,10 +20,11 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+
 import org.apache.hudi.HoodieBaseRelation.createBaseFileReader
 import org.apache.hudi.common.table.HoodieTableMetaClient
+
 import org.apache.spark.sql.SQLContext
-import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
@@ -91,7 +92,7 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
           sparkSession = sparkSession,
           file = file,
           // TODO clarify why this is required
-          partitionValues = InternalRow.empty
+          partitionValues = getPartitionColumnsAsInternalRow(file)
         )
       }
     }

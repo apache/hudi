@@ -190,6 +190,17 @@ public class HoodieTableConfig extends HoodieConfig {
       .defaultValue(HoodieTimelineTimeZone.LOCAL)
       .withDocumentation("User can set hoodie commit timeline timezone, such as utc, local and so on. local is default");
 
+  public static final ConfigProperty<Boolean> PARTITION_METAFILE_USE_BASE_FORMAT = ConfigProperty
+      .key("hoodie.partition.metafile.use.base.format")
+      .defaultValue(false)
+      .withDocumentation("If true, partition metafiles are saved in the same format as basefiles for this dataset (e.g. Parquet / ORC). "
+          + "If false (default) partition metafiles are saved as properties files.");
+
+  public static final ConfigProperty<Boolean> DROP_PARTITION_COLUMNS = ConfigProperty
+      .key("hoodie.datasource.write.drop.partition.columns")
+      .defaultValue(false)
+      .withDocumentation("When set to true, will not write the partition columns into hudi. By default, false.");
+
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
 
@@ -420,6 +431,9 @@ public class HoodieTableConfig extends HoodieConfig {
       if (hoodieConfig.contains(TIMELINE_TIMEZONE)) {
         HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getString(TIMELINE_TIMEZONE)));
       }
+
+      hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS);
+
       storeProperties(hoodieConfig.getProps(), outputStream);
     }
   }
@@ -593,6 +607,10 @@ public class HoodieTableConfig extends HoodieConfig {
     return getString(URL_ENCODE_PARTITIONING);
   }
 
+  public Boolean isDropPartitionColumns() {
+    return getBooleanOrDefault(DROP_PARTITION_COLUMNS);
+  }
+
   /**
    * Read the table checksum.
    */
@@ -608,6 +626,16 @@ public class HoodieTableConfig extends HoodieConfig {
     return getStringOrDefault(TABLE_METADATA_PARTITIONS, StringUtils.EMPTY_STRING);
   }
   
+  /**
+   * Returns the format to use for partition meta files.
+   */
+  public Option<HoodieFileFormat> getPartitionMetafileFormat() {
+    if (getBooleanOrDefault(PARTITION_METAFILE_USE_BASE_FORMAT)) {
+      return Option.of(getBaseFileFormat());
+    }
+    return Option.empty();
+  }
+
   public Map<String, String> propsMap() {
     return props.entrySet().stream()
         .collect(Collectors.toMap(e -> String.valueOf(e.getKey()), e -> String.valueOf(e.getValue())));

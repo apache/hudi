@@ -23,7 +23,7 @@ import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedReco
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
-import org.apache.hudi.HoodieConversionUtils.toScalaOption
+import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
 import org.apache.hudi.HoodieMergeOnReadRDD.{AvroDeserializerSupport, collectFieldOrdinals, getPartitionPath, projectAvro, projectAvroUnsafe, projectRowUnsafe, resolveAvroSchemaNullability}
 import org.apache.hudi.MergeOnReadSnapshotRelation.getFilePath
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -50,6 +50,7 @@ import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskCont
 
 import java.io.Closeable
 import java.util.Properties
+import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.util.Try
 
@@ -188,17 +189,23 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     protected def removeLogRecord(key: String): Option[HoodieRecord[_ <: HoodieRecordPayload[_]]] =
       logRecords.remove(key)
 
-    override def hasNext: Boolean =
+    override def hasNext: Boolean = hasNextInternal
+
+    // NOTE: It's crucial for this method to be annotated w/ [[@tailrec]] to make sure
+    //       that recursion is unfolded into a loop to avoid stack overflows while
+    //       handling records
+    @tailrec private def hasNextInternal: Boolean = {
       logRecordsIterator.hasNext && {
         val avroRecordOpt = logRecordsIterator.next()
         if (avroRecordOpt.isEmpty) {
           // Record has been deleted, skipping
-          this.hasNext
+          this.hasNextInternal
         } else {
           recordToLoad = unsafeProjection(deserialize(avroRecordOpt.get))
           true
         }
       }
+    }
 
     override final def next(): InternalRow = recordToLoad
 
@@ -257,7 +264,12 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
 
     private val recordKeyOrdinal = baseFileReaderSchema.structTypeSchema.fieldIndex(tableState.recordKeyField)
 
-    override def hasNext: Boolean = {
+    override def hasNext: Boolean = hasNextInternal
+
+    // NOTE: It's crucial for this method to be annotated w/ [[@tailrec]] to make sure
+    //       that recursion is unfolded into a loop to avoid stack overflows while
+    //       handling records
+    @tailrec private def hasNextInternal: Boolean = {
       if (baseFileIterator.hasNext) {
         val curRowRecord = baseFileIterator.next()
         val curKey = curRowRecord.getString(recordKeyOrdinal)
@@ -270,7 +282,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
           val mergedAvroRecordOpt = merge(serialize(curRowRecord), updatedRecordOpt.get)
           if (mergedAvroRecordOpt.isEmpty) {
             // Record has been deleted, skipping
-            this.hasNext
+            this.hasNextInternal
           } else {
             // NOTE: In occurrence of a merge we can't know the schema of the record being returned, b/c
             //       record from the Delta Log will bear (full) Table schema, while record from the Base file
@@ -312,17 +324,23 @@ private object HoodieMergeOnReadRDD {
     val fs = FSUtils.getFs(tablePath, hadoopConf)
 
     if (HoodieTableMetadata.isMetadataTable(tablePath)) {
-      val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build()
+      val metadataConfig = tableState.metadataConfig
       val dataTableBasePath = getDataTableBasePathFromMetadataTable(tablePath)
       val metadataTable = new HoodieBackedTableMetadata(
         new HoodieLocalEngineContext(hadoopConf), metadataConfig,
         dataTableBasePath,
         hadoopConf.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP, HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
 
+      // We have to force full-scan for the MT log record reader, to make sure
+      // we can iterate over all of the partitions, since by default some of the partitions (Column Stats,
+      // Bloom Filter) are in "point-lookup" mode
+      val forceFullScan = true
+
       // NOTE: In case of Metadata Table partition path equates to partition name (since there's just one level
       //       of indirection among MT partitions)
       val relativePartitionPath = getRelativePartitionPath(new Path(tablePath), partitionPath)
-      metadataTable.getLogRecordScanner(logFiles.asJava, relativePartitionPath).getLeft
+      metadataTable.getLogRecordScanner(logFiles.asJava, relativePartitionPath, toJavaOption(Some(forceFullScan)))
+        .getLeft
     } else {
       val logRecordScannerBuilder = HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)

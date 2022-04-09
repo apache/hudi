@@ -173,7 +173,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       try {
         // Save hoodie partition meta in the partition path
         HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, baseInstantTime,
-            new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath));
+            new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
+            hoodieTable.getPartitionMetafileFormat());
         partitionMetadata.trySave(getPartitionId());
 
         // Since the actual log file written to can be different based on when rollover happens, we use the
