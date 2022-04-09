@@ -19,11 +19,13 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * {@link Serializable} wrapper encapsulating {@link Path}
@@ -52,5 +54,17 @@ public class SerializablePath implements Serializable {
   @Override
   public String toString() {
     return path.toString();
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    SerializablePath that = (SerializablePath) o;
+    return Objects.equals(path, that.path);
   }
 }
