@@ -103,7 +103,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 import scala.collection.JavaConversions;
@@ -189,9 +189,9 @@ public class DeltaSync implements Serializable, Closeable {
   private final TypedProperties props;
 
   /**
-   * Callback when write client is instantiated.
+   * Callback when a new write client is created.
    */
-  private transient Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient;
+  private transient BiFunction<HoodieWriteConfig, Option<EmbeddedTimelineService>, Boolean> onCreatingNewWriteClient;
 
   /**
    * Timeline with completed commits.
@@ -223,13 +223,13 @@ public class DeltaSync implements Serializable, Closeable {
 
   public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
                    TypedProperties props, JavaSparkContext jssc, FileSystem fs, Configuration conf,
-                   Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
+                   BiFunction<HoodieWriteConfig, Option<EmbeddedTimelineService>, Boolean> onCreatingNewWriteClient) throws IOException {
 
     this.cfg = cfg;
     this.jssc = jssc;
     this.sparkSession = sparkSession;
     this.fs = fs;
-    this.onInitializingHoodieWriteClient = onInitializingHoodieWriteClient;
+    this.onCreatingNewWriteClient = onCreatingNewWriteClient;
     this.props = props;
     this.userProvidedSchemaProvider = schemaProvider;
     this.processedSchema = new SchemaSet();
@@ -319,8 +319,8 @@ public class DeltaSync implements Serializable, Closeable {
             || !(processedSchema.isSchemaPresent(newTargetSchema))) {
           LOG.info("Seeing new schema. Source :" + newSourceSchema.toString(true)
               + ", Target :" + newTargetSchema.toString(true));
-          // We need to recreate write client with new schema and register them.
-          reInitWriteClient(newSourceSchema, newTargetSchema);
+          // We need to create write client with new schema and register them.
+          createNewWriteClientWithSchema(newSourceSchema, newTargetSchema);
           processedSchema.addSchema(newSourceSchema);
           processedSchema.addSchema(newTargetSchema);
         }
@@ -732,22 +732,22 @@ public class DeltaSync implements Serializable, Closeable {
     if ((null != schemaProvider)) {
       Schema sourceSchema = schemaProvider.getSourceSchema();
       Schema targetSchema = schemaProvider.getTargetSchema();
-      reInitWriteClient(sourceSchema, targetSchema);
+      createNewWriteClientWithSchema(sourceSchema, targetSchema);
     }
   }
 
-  private void reInitWriteClient(Schema sourceSchema, Schema targetSchema) throws IOException {
+  private void createNewWriteClientWithSchema(Schema sourceSchema, Schema targetSchema) throws IOException {
     LOG.info("Setting up new Hoodie Write Client");
     if (isDropPartitionColumns()) {
       targetSchema = HoodieAvroUtils.removeFields(targetSchema, getPartitionColumns(keyGenerator, props));
     }
     registerAvroSchemas(sourceSchema, targetSchema);
-    HoodieWriteConfig hoodieCfg = getHoodieClientConfig(targetSchema);
-    if (hoodieCfg.isEmbeddedTimelineServerEnabled()) {
+    HoodieWriteConfig writeConfig = getHoodieClientConfig(targetSchema);
+    if (writeConfig.isEmbeddedTimelineServerEnabled()) {
       if (!embeddedTimelineService.isPresent()) {
-        embeddedTimelineService = EmbeddedTimelineServerHelper.createEmbeddedTimelineService(new HoodieSparkEngineContext(jssc), hoodieCfg);
+        embeddedTimelineService = EmbeddedTimelineServerHelper.createEmbeddedTimelineService(new HoodieSparkEngineContext(jssc), writeConfig);
       } else {
-        EmbeddedTimelineServerHelper.updateWriteConfigWithTimelineServer(embeddedTimelineService.get(), hoodieCfg);
+        EmbeddedTimelineServerHelper.updateWriteConfigWithTimelineServer(embeddedTimelineService.get(), writeConfig);
       }
     }
 
@@ -755,8 +755,8 @@ public class DeltaSync implements Serializable, Closeable {
       // Close Write client.
       writeClient.close();
     }
-    writeClient = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jssc), hoodieCfg, embeddedTimelineService);
-    onInitializingHoodieWriteClient.apply(writeClient);
+    writeClient = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jssc), writeConfig, embeddedTimelineService);
+    onCreatingNewWriteClient.apply(writeConfig, embeddedTimelineService);
   }
 
   /**

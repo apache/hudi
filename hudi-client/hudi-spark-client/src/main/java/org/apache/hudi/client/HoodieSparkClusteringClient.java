@@ -25,8 +25,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-
 import org.apache.hudi.common.util.Option;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -50,14 +50,25 @@ public class HoodieSparkClusteringClient<T extends HoodieRecordPayload> extends
   @Override
   public void cluster(HoodieInstant instant) throws IOException {
     LOG.info("Executing clustering instance " + instant);
-    SparkRDDWriteClient<T> writeClient = (SparkRDDWriteClient<T>) clusteringClient;
+    SparkRDDWriteClient<T> writeClient;
+    synchronized (writeClientUpdateLock) {
+      isClusterRunning = true;
+      writeClient = (SparkRDDWriteClient<T>) clusteringClient;
+    }
     Option<HoodieCommitMetadata> commitMetadata = writeClient.cluster(instant.getTimestamp(), true).getCommitMetadata();
     Stream<HoodieWriteStat> hoodieWriteStatStream = commitMetadata.get().getPartitionToWriteStats().entrySet().stream().flatMap(e ->
-            e.getValue().stream());
+        e.getValue().stream());
     long errorsCount = hoodieWriteStatStream.mapToLong(HoodieWriteStat::getTotalWriteErrors).sum();
     if (errorsCount > 0) {
       // TODO: Should we treat this fatal and throw exception?
       LOG.error("Clustering for instant (" + instant + ") failed with write errors");
+    }
+
+    synchronized (writeClientUpdateLock) {
+      for (BaseHoodieWriteClient oldClient : this.oldClusteringClientList) {
+        oldClient.close();
+      }
+      isClusterRunning = false;
     }
   }
 }

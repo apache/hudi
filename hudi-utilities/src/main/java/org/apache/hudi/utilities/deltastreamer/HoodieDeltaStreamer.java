@@ -27,6 +27,7 @@ import org.apache.hudi.async.SparkAsyncCompactService;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.config.HoodieConfig;
@@ -661,7 +662,7 @@ public class HoodieDeltaStreamer implements Serializable {
           UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc), props, jssc, cfg.transformerClassNames);
 
       deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, props, jssc, fs, conf,
-          this::onInitializingWriteClient);
+          this::onCreatingNewWriteClient);
     }
 
     public DeltaSyncService(HoodieDeltaStreamer.Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf)
@@ -773,13 +774,16 @@ public class HoodieDeltaStreamer implements Serializable {
     }
 
     /**
-     * Callback to initialize write client and start compaction service if required.
+     * Callback to create new write client and start compaction service if required.
      *
-     * @param writeClient HoodieWriteClient
+     * @param writeConfig             New write config.
+     * @param embeddedTimelineService {@link EmbeddedTimelineService} instance if available.
      * @return
      */
-    protected Boolean onInitializingWriteClient(SparkRDDWriteClient writeClient) {
+    protected Boolean onCreatingNewWriteClient(HoodieWriteConfig writeConfig, Option<EmbeddedTimelineService> embeddedTimelineService) {
       if (cfg.isAsyncCompactionEnabled()) {
+        SparkRDDWriteClient writeClient = new SparkRDDWriteClient<>(
+            new HoodieSparkEngineContext(jssc), writeConfig, embeddedTimelineService);
         if (asyncCompactService.isPresent()) {
           // Update the write client used by Async Compactor.
           asyncCompactService.get().updateWriteClient(writeClient);
@@ -803,6 +807,8 @@ public class HoodieDeltaStreamer implements Serializable {
       }
       // start async clustering if required
       if (HoodieClusteringConfig.from(props).isAsyncClusteringEnabled()) {
+        SparkRDDWriteClient writeClient = new SparkRDDWriteClient<>(
+            new HoodieSparkEngineContext(jssc), writeConfig, embeddedTimelineService);
         if (asyncClusteringService.isPresent()) {
           asyncClusteringService.get().updateWriteClient(writeClient);
         } else {

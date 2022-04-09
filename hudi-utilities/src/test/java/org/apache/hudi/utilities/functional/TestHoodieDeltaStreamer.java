@@ -21,7 +21,7 @@ package org.apache.hudi.utilities.functional;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.HoodieConfig;
@@ -130,6 +130,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -2196,7 +2197,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     public TestDeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider, TypedProperties props,
                          JavaSparkContext jssc, FileSystem fs, Configuration conf,
-                         Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
+                         BiFunction<HoodieWriteConfig, Option<EmbeddedTimelineService>, Boolean>
+                             onInitializingHoodieWriteClient) throws IOException {
       super(cfg, sparkSession, schemaProvider, props, jssc, fs, conf, onInitializingHoodieWriteClient);
     }
 
