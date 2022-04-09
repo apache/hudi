@@ -757,7 +757,11 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     if (!dataWriteConfig.isMetadataTableEnabled()) {
       return;
     }
-    Set<String> partitionsToUpdate = getMetadataPartitionsToUpdate();
+
+    Set<String> partitionsToUpdate = getEnabledPartitionTypes().stream()
+        .map(MetadataPartitionType::getPartitionPath)
+        .collect(Collectors.toSet());
+
     Set<String> inflightIndexes = getInflightMetadataPartitions(dataMetaClient.getTableConfig());
     // if indexing is inflight then do not trigger table service
     boolean doNotTriggerTableService = partitionsToUpdate.stream().anyMatch(inflightIndexes::contains);
@@ -768,18 +772,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
           .filter(entry -> partitionsToUpdate.contains(entry.getKey().getPartitionPath())).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
       commit(instantTime, partitionRecordsMap, !doNotTriggerTableService && canTriggerTableService);
     }
-  }
-
-  private Set<String> getMetadataPartitionsToUpdate() {
-    // fetch partitions to update from table config
-    Set<String> partitionsToUpdate = getCompletedMetadataPartitions(dataMetaClient.getTableConfig());
-    // add inflight indexes as well because the file groups have already been initialized, so writers can log updates
-    partitionsToUpdate.addAll(getInflightMetadataPartitions(dataMetaClient.getTableConfig()));
-    if (!partitionsToUpdate.isEmpty()) {
-      return partitionsToUpdate;
-    }
-    // fallback to all enabled partitions if table config returned no partitions
-    return getEnabledPartitionTypes().stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
   }
 
   @Override
