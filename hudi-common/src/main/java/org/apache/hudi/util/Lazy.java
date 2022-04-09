@@ -20,21 +20,25 @@ package org.apache.hudi.util;
 
 import java.util.function.Supplier;
 
-// TODO java-doc
-public class LazyRef<T> {
+/**
+ * Utility implementing lazy semantics in Java
+ *
+ * @param <T> type of the object being held by {@link Lazy}
+ */
+public class Lazy<T> {
 
   private volatile boolean initialized;
 
   private Supplier<T> initializer;
   private T ref;
 
-  private LazyRef(Supplier<T> initializer) {
+  private Lazy(Supplier<T> initializer) {
     this.initializer = initializer;
     this.ref = null;
     this.initialized = false;
   }
 
-  private LazyRef(T ref) {
+  private Lazy(T ref) {
     this.initializer = null;
     this.ref = ref;
     this.initialized = true;
@@ -54,11 +58,20 @@ public class LazyRef<T> {
     return ref;
   }
 
-  public static <T> LazyRef<T> lazy(Supplier<T> initializer) {
-    return new LazyRef<>(initializer);
+  /**
+   * Executes provided {@code initializer} lazily, while providing for "exactly once" semantic,
+   * to instantiate value of type {@link T} being subsequently held by the returned instance of
+   * {@link Lazy}
+   */
+  public static <T> Lazy<T> lazily(Supplier<T> initializer) {
+    return new Lazy<>(initializer);
   }
 
-  public static <T> LazyRef<T> eager(T ref) {
-    return new LazyRef<>(ref);
+  /**
+   * Instantiates {@link Lazy} in an "eagerly" fashion setting it w/ the provided value of
+   * type {@link T} directly, bypassing lazy initialization sequence
+   */
+  public static <T> Lazy<T> eagerly(T ref) {
+    return new Lazy<>(ref);
   }
 }

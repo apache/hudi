@@ -18,6 +18,11 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.avro.specific.SpecificRecordBase;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieInstantInfo;
@@ -55,7 +60,6 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -66,12 +70,6 @@ import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
-
-import org.apache.avro.specific.SpecificRecordBase;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -729,12 +727,14 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
   private MetadataRecordsGenerationParams getRecordsGenerationParams() {
     return new MetadataRecordsGenerationParams(
-        dataMetaClient, enabledPartitionTypes, dataWriteConfig.getBloomFilterType(),
+        dataMetaClient,
+        enabledPartitionTypes,
+        dataWriteConfig.getBloomFilterType(),
         dataWriteConfig.getMetadataBloomFilterIndexParallelism(),
         dataWriteConfig.isMetadataColumnStatsIndexEnabled(),
         dataWriteConfig.getColumnStatsIndexParallelism(),
-        StringUtils.toList(dataWriteConfig.getColumnsEnabledForColumnStatsIndex()),
-        StringUtils.toList(dataWriteConfig.getColumnsEnabledForBloomFilterIndex()));
+        dataWriteConfig.getColumnsEnabledForColumnStatsIndex(),
+        dataWriteConfig.getColumnsEnabledForBloomFilterIndex());
   }
 
   /**
@@ -1021,6 +1021,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         })
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
+    int totalDataFilesCount = partitionToFilesMap.values().stream().mapToInt(Map::size).sum();
     List<String> partitions = new ArrayList<>(partitionToFilesMap.keySet());
 
     if (partitionTypes.contains(MetadataPartitionType.FILES)) {
@@ -1031,19 +1032,19 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       partitionToRecordsMap.put(MetadataPartitionType.FILES, filesPartitionRecords);
     }
 
-    if (partitionTypes.contains(MetadataPartitionType.BLOOM_FILTERS)) {
+    if (partitionTypes.contains(MetadataPartitionType.BLOOM_FILTERS) && totalDataFilesCount > 0) {
       final HoodieData<HoodieRecord> recordsRDD = HoodieTableMetadataUtil.convertFilesToBloomFilterRecords(
           engineContext, Collections.emptyMap(), partitionToFilesMap, getRecordsGenerationParams(), createInstantTime);
       partitionToRecordsMap.put(MetadataPartitionType.BLOOM_FILTERS, recordsRDD);
     }
 
-    if (partitionTypes.contains(MetadataPartitionType.COLUMN_STATS)) {
+    if (partitionTypes.contains(MetadataPartitionType.COLUMN_STATS) && totalDataFilesCount > 0) {
       final HoodieData<HoodieRecord> recordsRDD = HoodieTableMetadataUtil.convertFilesToColumnStatsRecords(
           engineContext, Collections.emptyMap(), partitionToFilesMap, getRecordsGenerationParams());
       partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS, recordsRDD);
     }
 
-    LOG.info("Committing " + partitions.size() + " partitions and " + partitionToFilesMap.values().size() + " files to metadata");
+    LOG.info("Committing " + partitions.size() + " partitions and " + totalDataFilesCount + " files to metadata");
 
     commit(createInstantTime, partitionToRecordsMap, false);
   }

@@ -618,12 +618,18 @@ public class HoodieTableConfig extends HoodieConfig {
     return getLong(TABLE_CHECKSUM);
   }
 
-  public String getMetadataPartitionsInflight() {
-    return getStringOrDefault(TABLE_METADATA_PARTITIONS_INFLIGHT, StringUtils.EMPTY_STRING);
+  public List<String> getMetadataPartitionsInflight() {
+    return StringUtils.split(
+        getStringOrDefault(TABLE_METADATA_PARTITIONS_INFLIGHT, StringUtils.EMPTY_STRING),
+        CONFIG_VALUES_DELIMITER
+    );
   }
 
-  public String getMetadataPartitions() {
-    return getStringOrDefault(TABLE_METADATA_PARTITIONS, StringUtils.EMPTY_STRING);
+  public List<String> getMetadataPartitions() {
+    return StringUtils.split(
+        getStringOrDefault(TABLE_METADATA_PARTITIONS, StringUtils.EMPTY_STRING),
+        CONFIG_VALUES_DELIMITER
+    );
   }
   
   /**
