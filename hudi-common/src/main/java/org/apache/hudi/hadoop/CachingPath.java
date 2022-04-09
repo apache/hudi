@@ -21,6 +21,7 @@ package org.apache.hudi.hadoop;
 import org.apache.hadoop.fs.Path;
 
 import javax.annotation.concurrent.ThreadSafe;
+import java.io.Serializable;
 import java.net.URI;
 
 /**
@@ -31,35 +32,35 @@ import java.net.URI;
  * NOTE: This class is thread-safe
  */
 @ThreadSafe
-public class LazyCachingPath extends Path {
+public class CachingPath extends Path implements Serializable {
 
   // NOTE: `volatile` keyword is redundant here and put mostly for reader notice, since all
   //       reads/writes to references are always atomic (including 64-bit JVMs)
   //       https://docs.oracle.com/javase/specs/jls/se8/html/jls-17.html#jls-17.7
   private volatile String fileName;
-  private volatile String s;
+  private volatile String fullPathStr;
 
-  public LazyCachingPath(String parent, String child) {
+  public CachingPath(String parent, String child) {
     super(parent, child);
   }
 
-  public LazyCachingPath(Path parent, String child) {
+  public CachingPath(Path parent, String child) {
     super(parent, child);
   }
 
-  public LazyCachingPath(String parent, Path child) {
+  public CachingPath(String parent, Path child) {
     super(parent, child);
   }
 
-  public LazyCachingPath(Path parent, Path child) {
+  public CachingPath(Path parent, Path child) {
     super(parent, child);
   }
 
-  public LazyCachingPath(String pathString) throws IllegalArgumentException {
+  public CachingPath(String pathString) throws IllegalArgumentException {
     super(pathString);
   }
 
-  public LazyCachingPath(URI aUri) {
+  public CachingPath(URI aUri) {
     super(aUri);
   }
 
@@ -77,9 +78,9 @@ public class LazyCachingPath extends Path {
   public String toString() {
     // This value could be overwritten concurrently and that's okay, since
     // {@code Path} is immutable
-    if (s == null) {
-      s = super.toString();
+    if (fullPathStr == null) {
+      fullPathStr = super.toString();
     }
-    return s;
+    return fullPathStr;
   }
 }
