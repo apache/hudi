@@ -32,7 +32,7 @@ dag_content:
       num_records_insert: 300
       repeat_count: 1
       num_records_upsert: 3000
-      num_partitions_upsert: 50
+      num_partitions_upsert: 1
     type: SparkUpsertNode
     deps: first_insert
   first_delete:

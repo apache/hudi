@@ -64,16 +64,20 @@ class SparkDataSourceContinuousIngest(val spark: SparkSession, val conf: Configu
       }
     }
 
-    orderedBatch.foreach(entry => {
-      log.info("Consuming from batch " + entry)
-      val pathToConsume = new Path(sourcePath.toString + "/" + entry.getPath.getName)
-      val df = spark.read.format(sourceFormat).load(pathToConsume.toString)
+    if (orderedBatch.isEmpty) {
+      log.info("All batches have been consumed. Exiting.")
+    } else {
+      orderedBatch.foreach(entry => {
+        log.info("Consuming from batch " + entry)
+        val pathToConsume = new Path(sourcePath.toString + "/" + entry.getPath.getName)
+        val df = spark.read.format(sourceFormat).load(pathToConsume.toString)
 
-      df.write.format("hudi").options(hudiOptions).mode(SaveMode.Append).save(hudiBasePath.toString)
-      writeToFile(checkpointFile, entry.getPath.getName, checkPointFs)
-      log.info("Completed batch " + entry + ". Moving to next batch. Sleeping for " + minSyncIntervalSeconds + " secs before next batch")
-      Thread.sleep(minSyncIntervalSeconds * 1000)
-    })
+        df.write.format("hudi").options(hudiOptions).mode(SaveMode.Append).save(hudiBasePath.toString)
+        writeToFile(checkpointFile, entry.getPath.getName, checkPointFs)
+        log.info("Completed batch " + entry + ". Moving to next batch. Sleeping for " + minSyncIntervalSeconds + " secs before next batch")
+        Thread.sleep(minSyncIntervalSeconds * 1000)
+      })
+    }
   }
 
   def fetchListOfFilesToConsume(fs: FileSystem, basePath: Path, pathFilter: PathFilter): Array[FileStatus] = {
