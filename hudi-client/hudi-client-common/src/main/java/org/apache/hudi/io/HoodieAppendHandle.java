@@ -54,7 +54,6 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.SizeEstimator;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
@@ -66,6 +65,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -73,7 +73,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.collectColumnRangeMetadata;
 
@@ -348,15 +347,16 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
 
     if (config.isMetadataColumnStatsIndexEnabled()) {
       final List<Schema.Field> fieldsToIndex;
-      if (StringUtils.isNullOrEmpty(config.getColumnsEnabledForColumnStatsIndex())) {
-        // If column stats index is enabled but columns not configured then we assume that all columns should be indexed
+      // If column stats index is enabled but columns not configured then we assume that
+      // all columns should be indexed
+      if (config.getColumnsEnabledForColumnStatsIndex().isEmpty()) {
         fieldsToIndex = writeSchemaWithMetaFields.getFields();
       } else {
-        Set<String> columnsToIndex = Stream.of(config.getColumnsEnabledForColumnStatsIndex().split(","))
-            .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toSet());
+        Set<String> columnsToIndexSet = new HashSet<>(config.getColumnsEnabledForColumnStatsIndex());
 
         fieldsToIndex = writeSchemaWithMetaFields.getFields().stream()
-            .filter(field -> columnsToIndex.contains(field.name())).collect(Collectors.toList());
+            .filter(field -> columnsToIndexSet.contains(field.name()))
+            .collect(Collectors.toList());
       }
 
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangesMetadataMap =

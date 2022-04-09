@@ -19,6 +19,7 @@
 package org.apache.hudi.common.config;
 
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import javax.annotation.concurrent.Immutable;
@@ -26,6 +27,7 @@ import javax.annotation.concurrent.Immutable;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.List;
 import java.util.Properties;
 
 /**
@@ -173,15 +175,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "log files and read parallelism in the column stats index partition. The recommendation is to size the "
           + "file group count such that the base files are under 1GB.");
 
-  public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS = ConfigProperty
-      .key(METADATA_PREFIX + ".index.column.stats.all_columns.enable")
-      .defaultValue(true)
-      .sinceVersion("0.11.0")
-      .withDocumentation("Enable indexing column ranges of user data files for all columns under "
-          + "metadata table key lookups. When enabled, metadata table will have a partition to "
-          + "store the column ranges and will be used for pruning files during the index lookups. "
-          + "Only applies if " + ENABLE_METADATA_INDEX_COLUMN_STATS.key() + " is enabled.");
-
   public static final ConfigProperty<Integer> COLUMN_STATS_INDEX_PARALLELISM = ConfigProperty
           .key(METADATA_PREFIX + ".index.column.stats.parallelism")
           .defaultValue(10)
@@ -249,16 +242,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBooleanOrDefault(ENABLE_METADATA_INDEX_COLUMN_STATS);
   }
 
-  public boolean isMetadataColumnStatsIndexForAllColumnsEnabled() {
-    return getBooleanOrDefault(ENABLE_METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS);
+  public List<String> getColumnsEnabledForColumnStatsIndex() {
+    return StringUtils.split(getString(COLUMN_STATS_INDEX_FOR_COLUMNS), CONFIG_VALUES_DELIMITER);
   }
 
-  public String getColumnsEnabledForColumnStatsIndex() {
-    return getString(COLUMN_STATS_INDEX_FOR_COLUMNS);
-  }
-
-  public String getColumnsEnabledForBloomFilterIndex() {
-    return getString(BLOOM_FILTER_INDEX_FOR_COLUMNS);
+  public List<String> getColumnsEnabledForBloomFilterIndex() {
+    return StringUtils.split(getString(BLOOM_FILTER_INDEX_FOR_COLUMNS), CONFIG_VALUES_DELIMITER);
   }
 
   public int getBloomFilterIndexFileGroupCount() {
@@ -350,11 +339,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withColumnStatsIndexParallelism(int parallelism) {
       metadataConfig.setValue(COLUMN_STATS_INDEX_PARALLELISM, String.valueOf(parallelism));
-      return this;
-    }
-
-    public Builder withMetadataIndexForAllColumns(boolean enable) {
-      metadataConfig.setValue(ENABLE_METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS, String.valueOf(enable));
       return this;
     }
 

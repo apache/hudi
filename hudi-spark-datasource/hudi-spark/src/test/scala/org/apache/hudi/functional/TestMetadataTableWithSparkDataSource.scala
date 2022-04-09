@@ -51,8 +51,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     val metadataOpts: Map[String, String] = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS.key -> "true"
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
     )
 
     val combinedOpts: Map[String, String] = commonOpts ++ metadataOpts ++
