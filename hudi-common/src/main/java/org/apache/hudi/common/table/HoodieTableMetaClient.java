@@ -49,7 +49,8 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
-import org.apache.hudi.hadoop.LazyCachingPath;
+import org.apache.hudi.hadoop.CachingPath;
+import org.apache.hudi.hadoop.SerializablePath;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -97,8 +98,8 @@ public class HoodieTableMetaClient implements Serializable {
   // NOTE: Since those two parameters lay on the hot-path of a lot of computations, we
   //       use tailored extension of the {@code Path} class allowing to avoid repetitive
   //       computations secured by its immutability
-  private transient LazyCachingPath basePath;
-  private transient LazyCachingPath metaPath;
+  private transient SerializablePath basePath;
+  private transient SerializablePath metaPath;
 
   private transient HoodieWrapperFileSystem fs;
   private boolean loadActiveTimelineOnLoad;
@@ -118,10 +119,10 @@ public class HoodieTableMetaClient implements Serializable {
     this.consistencyGuardConfig = consistencyGuardConfig;
     this.fileSystemRetryConfig = fileSystemRetryConfig;
     this.hadoopConf = new SerializableConfiguration(conf);
-    this.basePath = new LazyCachingPath(basePath);
-    this.metaPath = new LazyCachingPath(basePath, METAFOLDER_NAME);
+    this.basePath = new SerializablePath(new CachingPath(basePath));
+    this.metaPath = new SerializablePath(new CachingPath(basePath, METAFOLDER_NAME));
     this.fs = getFs();
-    TableNotFoundException.checkTableValidity(fs, this.basePath, metaPath);
+    TableNotFoundException.checkTableValidity(fs, this.basePath.get(), metaPath.get());
     this.tableConfig = new HoodieTableConfig(fs, metaPath.toString(), payloadClassName);
     this.tableType = tableConfig.getTableType();
     Option<TimelineLayoutVersion> tableConfigVersion = tableConfig.getTimelineLayoutVersion();
@@ -166,25 +167,19 @@ public class HoodieTableMetaClient implements Serializable {
    */
   private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
     in.defaultReadObject();
-    String basePathStr = in.readUTF();
-    String metaPathStr = in.readUTF();
 
     fs = null; // will be lazily initialized
-    basePath = new LazyCachingPath(basePathStr);
-    metaPath = new LazyCachingPath(metaPathStr);
   }
 
   private void writeObject(java.io.ObjectOutputStream out) throws IOException {
     out.defaultWriteObject();
-    out.writeBytes(basePath.toString());
-    out.writeBytes(metaPath.toString());
   }
 
   /**
    * Returns base path of the table
    */
   public Path getBasePathV2() {
-    return basePath;
+    return basePath.get();
   }
 
   /**
@@ -193,7 +188,7 @@ public class HoodieTableMetaClient implements Serializable {
    */
   @Deprecated
   public String getBasePath() {
-    return basePath.toString(); // this invocation is cached
+    return basePath.get().toString(); // this invocation is cached
   }
 
   /**
@@ -207,14 +202,14 @@ public class HoodieTableMetaClient implements Serializable {
    * @return Meta path
    */
   public String getMetaPath() {
-    return metaPath.toString();  // this invocation is cached
+    return metaPath.get().toString();  // this invocation is cached
   }
 
   /**
    * @return schema folder path
    */
   public String getSchemaFolderName() {
-    return new Path(metaPath, SCHEMA_FOLDER_NAME).toString();
+    return new Path(metaPath.get(), SCHEMA_FOLDER_NAME).toString();
   }
 
   /**
@@ -286,7 +281,7 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public HoodieWrapperFileSystem getFs() {
     if (fs == null) {
-      FileSystem fileSystem = FSUtils.getFs(metaPath, hadoopConf.newCopy());
+      FileSystem fileSystem = FSUtils.getFs(metaPath.get(), hadoopConf.newCopy());
 
       if (fileSystemRetryConfig.isFileSystemActionRetryEnable()) {
         fileSystem = new HoodieRetryWrapperFileSystem(fileSystem,
@@ -557,7 +552,7 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public List<HoodieInstant> scanHoodieInstantsFromFileSystem(Set<String> includedExtensions,
       boolean applyLayoutVersionFilters) throws IOException {
-    return scanHoodieInstantsFromFileSystem(metaPath, includedExtensions, applyLayoutVersionFilters);
+    return scanHoodieInstantsFromFileSystem(metaPath.get(), includedExtensions, applyLayoutVersionFilters);
   }
 
   /**
