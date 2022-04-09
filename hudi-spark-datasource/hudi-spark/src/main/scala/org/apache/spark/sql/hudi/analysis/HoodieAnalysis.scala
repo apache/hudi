@@ -539,7 +539,7 @@ case class HoodiePostAnalysisRule(sparkSession: SparkSession) extends Rule[Logic
       // Rewrite TruncateTableCommand to TruncateHoodieTableCommand
       case TruncateTableCommand(tableName, partitionSpec)
         if sparkAdapter.isHoodieTable(tableName, sparkSession) =>
-        new TruncateHoodieTableCommand(tableName, partitionSpec)
+        TruncateHoodieTableCommand(tableName, partitionSpec)
       case _ => plan
     }
   }

@@ -29,13 +29,13 @@ import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.{AvroConversionUtils, SparkAdapterSupport}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.{Resolver, UnresolvedRelation}
-import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HoodieCatalogTable}
+import org.apache.spark.sql.catalyst.analysis.Resolver
+import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
+import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Cast, Expression, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
-import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
-import org.apache.spark.sql.types.{DataType, NullType, StringType, StructField, StructType}
+import org.apache.spark.sql.types._
 import org.apache.spark.sql.{AnalysisException, Column, DataFrame, SparkSession}
 
 import java.net.URI
@@ -128,6 +128,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
 
   /**
    * Add the hoodie meta fields to the schema.
+   *
    * @param schema
    * @return
    */
@@ -143,6 +144,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
 
   /**
    * Remove the meta fields from the schema.
+   *
    * @param schema
    * @return
    */
@@ -171,6 +173,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
 
   /**
    * Get the table location.
+   *
    * @param tableId
    * @param spark
    * @return
@@ -233,6 +236,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
 
   /**
    * Split the expression to a sub expression seq by the AND operation.
+   *
    * @param expression
    * @return
    */
@@ -262,7 +266,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
    * Currently we support three kinds of instant time format for time travel query:
    * 1、yyyy-MM-dd HH:mm:ss
    * 2、yyyy-MM-dd
-   *   This will convert to 'yyyyMMdd000000'.
+   * This will convert to 'yyyyMMdd000000'.
    * 3、yyyyMMddHHmmss
    */
   def formatQueryInstant(queryInstant: String): String = {
@@ -270,7 +274,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     if (instantLength == 19 || instantLength == 23) { // for yyyy-MM-dd HH:mm:ss[.SSS]
       HoodieInstantTimeGenerator.getInstantForDateString(queryInstant)
     } else if (instantLength == HoodieInstantTimeGenerator.SECS_INSTANT_ID_LENGTH
-      || instantLength  == HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH) { // for yyyyMMddHHmmss[SSS]
+      || instantLength == HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH) { // for yyyyMMddHHmmss[SSS]
       HoodieActiveTimeline.parseDateFromInstantTime(queryInstant) // validate the format
       queryInstant
     } else if (instantLength == 10) { // for yyyy-MM-dd
@@ -300,7 +304,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
 
   // Find the origin column from schema by column name, throw an AnalysisException if the column
   // reference is invalid.
-  def findColumnByName(schema: StructType, name: String, resolver: Resolver):Option[StructField] = {
+  def findColumnByName(schema: StructType, name: String, resolver: Resolver): Option[StructField] = {
     schema.fields.collectFirst {
       case field if resolver(field.name, name) => field
     }
@@ -371,5 +375,33 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
       }.mkString("/")
     }.mkString(",")
     partitionsToDrop
+  }
+
+  def getPartitionPathToTruncate(hoodieCatalogTable: HoodieCatalogTable,
+                                 table: CatalogTable,
+                                 partitionSpec: Option[TablePartitionSpec],
+                                 resolver: Resolver): String = {
+    val partCols = table.partitionColumnNames
+    val normalizedSpec: Seq[Map[String, String]] = Seq(partitionSpec.map { spec =>
+      normalizePartitionSpec(
+        spec,
+        partCols,
+        table.identifier.quotedString,
+        resolver)
+    }.get)
+
+    val allPartitionPaths = hoodieCatalogTable.getPartitionPaths
+    val enableEncodeUrl = isUrlEncodeEnabled(allPartitionPaths, table)
+
+    val partitionsToTruncate = normalizedSpec.map { spec =>
+      hoodieCatalogTable.partitionFields.map { partitionColumn =>
+        if (enableEncodeUrl) {
+          partitionColumn + "=" + "\"" + spec(partitionColumn) + "\""
+        } else {
+          partitionColumn + "=" + "'" + spec(partitionColumn) + "'"
+        }
+      }.mkString(" and ")
+    }.mkString
+    partitionsToTruncate
   }
 }
