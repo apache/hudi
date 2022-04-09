@@ -76,7 +76,7 @@ jobs:
           SPARK_VERSION: ${{ matrix.sparkVersion }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
-          mvn -T 2.5C clean install -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -Dspark.version="$SPARK_VERSION" -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+          mvn clean install -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -Dspark.version="$SPARK_VERSION" -Pintegration-tests -DskipTests=true -B -V
       - name: Quickstart Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
