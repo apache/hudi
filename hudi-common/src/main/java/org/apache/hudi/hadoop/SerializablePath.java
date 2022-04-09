@@ -19,7 +19,6 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
