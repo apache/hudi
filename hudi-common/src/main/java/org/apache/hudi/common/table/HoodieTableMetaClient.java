@@ -98,8 +98,8 @@ public class HoodieTableMetaClient implements Serializable {
   // NOTE: Since those two parameters lay on the hot-path of a lot of computations, we
   //       use tailored extension of the {@code Path} class allowing to avoid repetitive
   //       computations secured by its immutability
-  private transient SerializablePath basePath;
-  private transient SerializablePath metaPath;
+  private SerializablePath basePath;
+  private SerializablePath metaPath;
 
   private transient HoodieWrapperFileSystem fs;
   private boolean loadActiveTimelineOnLoad;
