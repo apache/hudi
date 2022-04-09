@@ -886,7 +886,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     return !HoodieTableMetadata.isMetadataTable(metaClient.getBasePath())
         && !config.isMetadataTableEnabled()
         && (!metaClient.getTableConfig().contains(TABLE_METADATA_PARTITIONS)
-        || metaClient.getTableConfig().getMetadataPartitions().isEmpty());
+        || !metaClient.getTableConfig().getMetadataPartitions().isEmpty());
   }
 
   /**
