@@ -92,7 +92,7 @@ docker push apachehudi/hudi-hadoop_2.8.4-trinobase_368
 You can also easily push the image to the Docker Hub using Docker Desktop app: go to `Images`, search for the image by
 the name, and then click on the three dots and `Push to Hub`.
 
-![Push to Docker Hub](push_to_docker_hub.png)
+![Push to Docker Hub](images/push_to_docker_hub.png)
 
 Note that you need to ask for permission to upload the Hudi Docker Demo images to the repositories.
 
