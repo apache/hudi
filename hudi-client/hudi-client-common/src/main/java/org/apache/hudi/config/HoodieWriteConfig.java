@@ -1541,6 +1541,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieIndexConfig.BLOOM_INDEX_USE_CACHING);
   }
 
+  public boolean getBloomIndexUseMetadata() {
+    return getBooleanOrDefault(HoodieIndexConfig.BLOOM_INDEX_USE_METADATA);
+  }
+
   public boolean useBloomIndexTreebasedFilter() {
     return getBoolean(HoodieIndexConfig.BLOOM_INDEX_TREE_BASED_FILTER);
   }
