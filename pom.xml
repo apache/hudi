@@ -140,7 +140,7 @@
     <scala12.version>2.12.10</scala12.version>
     <scala.version>${scala11.version}</scala.version>
     <scala.binary.version>2.11</scala.binary.version>
-    <apache-rat-plugin.version>0.12</apache-rat-plugin.version>
+    <apache-rat-plugin.version>0.13</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
     <scalatest.version>3.0.1</scalatest.version>
     <scalatest.spark3.version>3.1.0</scalatest.spark3.version>
@@ -312,7 +312,7 @@
         <configuration>
           <autoVersionSubmodules>true</autoVersionSubmodules>
           <useReleaseProfile>false</useReleaseProfile>
-          <releaseProfiles>release</releaseProfiles>
+          <releaseProfiles>release,integration-tests</releaseProfiles>
           <goals>deploy</goals>
         </configuration>
       </plugin>
@@ -432,6 +432,7 @@
               <exclude>DISCLAIMER</exclude>
               <exclude>**/.*</exclude>
               <exclude>**/*.json</exclude>
+              <exclude>**/*.hfile</exclude>
               <exclude>**/*.log</exclude>
               <exclude>**/*.sqltemplate</exclude>
               <exclude>**/compose_env</exclude>
@@ -444,6 +445,9 @@
               <exclude>**/generated-sources/**</exclude>
               <exclude>.github/**</exclude>
               <exclude>**/*.sql</exclude>
+              <!-- local files not in version control -->
+              <exclude>**/*.iml</exclude>
+              <exclude>.mvn/**</exclude>
             </excludes>
           </configuration>
           <executions>
@@ -1200,9 +1204,6 @@
           <value>true</value>
         </property>
       </activation>
-      <properties>
-        <integration-tests>true</integration-tests>
-      </properties>
       <build>
         <plugins>
           <plugin>
@@ -1375,7 +1376,8 @@
       <id>integration-tests</id>
       <activation>
         <property>
-          <name>integration-tests</name>
+          <name>deployArtifacts</name>
+          <value>true</value>
         </property>
       </activation>
       <modules>
@@ -1386,7 +1388,7 @@
       <properties>
         <skipUTs>true</skipUTs>
         <skipFTs>true</skipFTs>
-        <skipITs>false</skipITs>
+        <skipITs>${skipTests}</skipITs>
       </properties>
       <build>
         <plugins>

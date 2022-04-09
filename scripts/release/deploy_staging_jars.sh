@@ -73,6 +73,6 @@ fi
 for v in "${ALL_VERSION_OPTS[@]}"
 do
   echo "Deploying to repository.apache.org with version option ${v}"
-  COMMON_OPTIONS="${v} -Prelease -DskipTests -DretryFailedDeploymentCount=10 -DdeployArtifacts=true"
+  COMMON_OPTIONS="${v} -DdeployArtifacts=true -DskipTests -DretryFailedDeploymentCount=10"
   $MVN clean deploy $COMMON_OPTIONS
 done
