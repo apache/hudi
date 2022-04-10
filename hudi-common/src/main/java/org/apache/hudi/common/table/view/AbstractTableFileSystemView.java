@@ -95,7 +95,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   private BootstrapIndex bootstrapIndex;
 
   private String getPartitionPathFromFilePath(String fullPath) {
-    return FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), new Path(fullPath).getParent());
+    return FSUtils.getRelativePartitionPath(metaClient.getBasePathV2(), new Path(fullPath).getParent());
   }
 
   /**
@@ -172,7 +172,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
     Map<Pair<String, String>, List<HoodieLogFile>> logFiles = logFileStream.collect(Collectors.groupingBy((logFile) -> {
       String partitionPathStr =
-          FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), logFile.getPath().getParent());
+          FSUtils.getRelativePartitionPath(metaClient.getBasePathV2(), logFile.getPath().getParent());
       return Pair.of(partitionPathStr, logFile.getFileId());
     }));
 
@@ -299,7 +299,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         try {
           LOG.info("Building file system view for partition (" + partitionPathStr + ")");
 
-          Path partitionPath = FSUtils.getPartitionPath(metaClient.getBasePath(), partitionPathStr);
+          Path partitionPath = FSUtils.getPartitionPath(metaClient.getBasePathV2(), partitionPathStr);
           long beginLsTs = System.currentTimeMillis();
           FileStatus[] statuses = listPartition(partitionPath);
           long endLsTs = System.currentTimeMillis();
