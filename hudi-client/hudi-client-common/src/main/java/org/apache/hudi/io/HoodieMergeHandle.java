@@ -338,8 +338,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
         } else if (writeUpdateRecord(hoodieRecord, oldRecord, combinedAvroRecord)) {
           /*
            * ONLY WHEN 1) we have an update for this key AND 2) We are able to successfully
-           * write the the combined new
-           * value
+           * write the combined new value
            *
            * We no longer need to copy the old record over.
            */
