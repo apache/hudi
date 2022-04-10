@@ -20,19 +20,47 @@ package org.apache.hudi.hadoop;
 
 import org.apache.hadoop.fs.Path;
 
+import javax.annotation.concurrent.ThreadSafe;
+import java.io.Serializable;
 import java.net.URI;
 
 /**
+ * This is an extension of the {@code Path} class allowing to avoid repetitive
+ * computations (like {@code getFileName}, {@code toString}) which are secured
+ * by its immutability
+ *
  * NOTE: This class is thread-safe
  */
-public class FileNameCachingPath extends Path {
+@ThreadSafe
+public class CachingPath extends Path implements Serializable {
 
-  // NOTE: volatile keyword is redundant here and put mostly for reader notice, since all
+  // NOTE: `volatile` keyword is redundant here and put mostly for reader notice, since all
   //       reads/writes to references are always atomic (including 64-bit JVMs)
   //       https://docs.oracle.com/javase/specs/jls/se8/html/jls-17.html#jls-17.7
   private volatile String fileName;
+  private volatile String fullPathStr;
 
-  public FileNameCachingPath(URI aUri) {
+  public CachingPath(String parent, String child) {
+    super(parent, child);
+  }
+
+  public CachingPath(Path parent, String child) {
+    super(parent, child);
+  }
+
+  public CachingPath(String parent, Path child) {
+    super(parent, child);
+  }
+
+  public CachingPath(Path parent, Path child) {
+    super(parent, child);
+  }
+
+  public CachingPath(String pathString) throws IllegalArgumentException {
+    super(pathString);
+  }
+
+  public CachingPath(URI aUri) {
     super(aUri);
   }
 
@@ -44,5 +72,15 @@ public class FileNameCachingPath extends Path {
       fileName = super.getName();
     }
     return fileName;
+  }
+
+  @Override
+  public String toString() {
+    // This value could be overwritten concurrently and that's okay, since
+    // {@code Path} is immutable
+    if (fullPathStr == null) {
+      fullPathStr = super.toString();
+    }
+    return fullPathStr;
   }
 }
