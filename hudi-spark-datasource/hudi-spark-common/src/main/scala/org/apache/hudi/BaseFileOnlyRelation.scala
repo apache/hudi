@@ -20,10 +20,11 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+
 import org.apache.hudi.HoodieBaseRelation.createBaseFileReader
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, SQLContext}
-import org.apache.spark.sql.catalyst.InternalRow
+
+import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
@@ -52,11 +53,20 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
 
   override type FileSplit = HoodieBaseFileSplit
 
+  override lazy val mandatoryColumns: Seq[String] =
+    Seq(recordKeyField)
+
+  override def imbueConfigs(sqlContext: SQLContext): Unit = {
+    super.imbueConfigs(sqlContext)
+    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "true")
+  }
+
   protected override def composeRDD(fileSplits: Seq[HoodieBaseFileSplit],
                                     partitionSchema: StructType,
                                     tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
                                     filters: Array[Filter]): HoodieUnsafeRDD = {
+
     val baseFileReader = createBaseFileReader(
       spark = sparkSession,
       partitionSchema = partitionSchema,
@@ -66,7 +76,7 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
-      hadoopConf = new Configuration(conf)
+      hadoopConf = HoodieDataSourceHelper.getConfigurationWithInternalSchema(new Configuration(conf), requiredSchema.internalSchema, metaClient.getBasePath, validCommits)
     )
 
     new HoodieFileScanRDD(sparkSession, baseFileReader, fileSplits)
@@ -82,7 +92,7 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
           sparkSession = sparkSession,
           file = file,
           // TODO clarify why this is required
-          partitionValues = InternalRow.empty
+          partitionValues = getPartitionColumnsAsInternalRow(file)
         )
       }
     }

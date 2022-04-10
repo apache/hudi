@@ -120,6 +120,14 @@
             "HoodieCommitMetadata"
          ],
          "default": null
+      },
+      {
+         "name":"hoodieIndexCommitMetadata",
+         "type":[
+            "null",
+            "HoodieIndexCommitMetadata"
+         ],
+         "default": null
       }
    ]
 }

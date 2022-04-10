@@ -238,8 +238,11 @@ public class HMSDDLExecutor implements DDLExecutor {
     LOG.info("Drop partitions " + partitionsToDrop.size() + " on " + tableName);
     try {
       for (String dropPartition : partitionsToDrop) {
-        String partitionClause = HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, syncConfig);
-        client.dropPartition(syncConfig.databaseName, tableName, partitionClause, false);
+        if (HivePartitionUtil.partitionExists(client, tableName, dropPartition, partitionValueExtractor, syncConfig)) {
+          String partitionClause =
+              HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, syncConfig);
+          client.dropPartition(syncConfig.databaseName, tableName, partitionClause, false);
+        }
         LOG.info("Drop partition " + dropPartition + " on " + tableName);
       }
     } catch (TException e) {

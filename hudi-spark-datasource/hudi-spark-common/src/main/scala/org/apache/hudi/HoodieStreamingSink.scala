@@ -81,7 +81,9 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     // Override to use direct markers. In Structured streaming, timeline server is closed after
     // first micro-batch and subsequent micro-batches do not have timeline server running.
     // Thus, we can't use timeline-server-based markers.
-    val updatedOptions = options.updated(HoodieWriteConfig.MARKERS_TYPE.key(), MarkerType.DIRECT.name())
+    var updatedOptions = options.updated(HoodieWriteConfig.MARKERS_TYPE.key(), MarkerType.DIRECT.name())
+    // we need auto adjustment enabled for streaming sink since async table services are feasible within the same JVM.
+    updatedOptions = updatedOptions.updated(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key, "true")
 
     retry(retryCnt, retryIntervalMs)(
       Try(
@@ -205,7 +207,8 @@ class HoodieStreamingSink(sqlContext: SQLContext,
   protected def triggerAsyncClustering(client: SparkRDDWriteClient[HoodieRecordPayload[Nothing]]): Unit = {
     if (null ==  asyncClusteringService) {
       log.info("Triggering async clustering!")
-      asyncClusteringService = new SparkStreamingAsyncClusteringService(client)
+      asyncClusteringService = new SparkStreamingAsyncClusteringService(new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
+        client)
       asyncClusteringService.start(new Function[java.lang.Boolean, java.lang.Boolean] {
         override def apply(errored: lang.Boolean): lang.Boolean = {
           log.info(s"Async clustering service shutdown. Errored ? $errored")

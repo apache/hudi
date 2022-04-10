@@ -585,7 +585,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     client.savepoint("004", "user1","comment1");
 
-    client.restoreToInstant("004");
+    client.restoreToInstant("004", config.isMetadataTableEnabled());
 
     assertFalse(metaClient.reloadActiveTimeline().getRollbackTimeline().lastInstant().isPresent());
 
@@ -1397,6 +1397,41 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withInlineClustering(true)
         .withPreserveHoodieCommitMetadata(preserveCommitMetadata).build();
     testInsertAndClustering(clusteringConfig, populateMetaFields, true, false, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
+  }
+
+  @Test
+  public void testRolblackOfRegularCommitWithPendingReplaceCommitInTimeline() throws Exception {
+    HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
+        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withInlineClustering(true)
+        .withPreserveHoodieCommitMetadata(true).build();
+    // trigger clustering, but do not complete
+    testInsertAndClustering(clusteringConfig, true, false, false, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
+
+    // trigger another partial commit, followed by valid commit. rollback of partial commit should succeed.
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withAutoCommit(false);
+    SparkRDDWriteClient client = getHoodieWriteClient(cfgBuilder.build());
+    String commitTime1 = HoodieActiveTimeline.createNewInstantTime();
+    List<HoodieRecord> records1 = dataGen.generateInserts(commitTime1, 200);
+    client.startCommitWithTime(commitTime1);
+    JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(records1, 2);
+    JavaRDD<WriteStatus> statuses = client.upsert(insertRecordsRDD1, commitTime1);
+    List<WriteStatus> statusList = statuses.collect();
+    assertNoWriteErrors(statusList);
+
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    assertEquals(2, metaClient.getActiveTimeline().getCommitsTimeline().filterInflightsAndRequested().countInstants());
+
+    // trigger another commit. this should rollback latest partial commit.
+    records1 = dataGen.generateInserts(commitTime1, 200);
+    client.startCommitWithTime(commitTime1);
+    insertRecordsRDD1 = jsc.parallelize(records1, 2);
+    statuses = client.upsert(insertRecordsRDD1, commitTime1);
+    statusList = statuses.collect();
+    assertNoWriteErrors(statusList);
+    client.commit(commitTime1, statuses);
+    metaClient.reloadActiveTimeline();
+    // rollback should have succeeded. Essentially, the pending clustering should not hinder the rollback of regular commits.
+    assertEquals(1, metaClient.getActiveTimeline().getCommitsTimeline().filterInflightsAndRequested().countInstants());
   }
 
   @ParameterizedTest

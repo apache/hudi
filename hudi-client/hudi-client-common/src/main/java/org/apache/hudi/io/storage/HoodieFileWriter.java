@@ -37,8 +37,6 @@ public interface HoodieFileWriter<R extends IndexedRecord> {
 
   void writeAvro(String key, R oldRecord) throws IOException;
 
-  long getBytesWritten();
-
   default void prepRecordWithMetadata(R avroRecord, HoodieRecord record, String instantTime, Integer partitionId, AtomicLong recordIndex, String fileName) {
     String seqId = HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex.getAndIncrement());
     HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord, record.getRecordKey(), record.getPartitionPath(), fileName);

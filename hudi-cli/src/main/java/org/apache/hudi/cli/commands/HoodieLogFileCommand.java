@@ -67,6 +67,9 @@ import java.util.stream.Collectors;
 import scala.Tuple2;
 import scala.Tuple3;
 
+import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+
 /**
  * CLI command to display log file options.
  */
@@ -122,7 +125,7 @@ public class HoodieLogFileCommand implements CommandMarker {
             instantTime = "dummy_instant_time_" + dummyInstantTimeCount;
           }
           if (n instanceof HoodieDataBlock) {
-            try (ClosableIterator<IndexedRecord> recordItr = ((HoodieDataBlock) n).getRecordItr()) {
+            try (ClosableIterator<IndexedRecord> recordItr = ((HoodieDataBlock) n).getRecordIterator()) {
               recordItr.forEachRemaining(r -> recordCount.incrementAndGet());
             }
           }
@@ -185,7 +188,7 @@ public class HoodieLogFileCommand implements CommandMarker {
         .collect(Collectors.toList());
 
     // logFilePaths size must > 1
-    assert logFilePaths.size() > 0 : "There is no log file";
+    checkArgument(logFilePaths.size() > 0, "There is no log file");
 
     // TODO : readerSchema can change across blocks/log files, fix this inside Scanner
     AvroSchemaConverter converter = new AvroSchemaConverter();
@@ -218,6 +221,7 @@ public class HoodieLogFileCommand implements CommandMarker {
               .withSpillableMapBasePath(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.defaultValue())
               .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue())
               .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue())
+              .withPartition(getRelativePartitionPath(new Path(client.getBasePath()), new Path(logFilePaths.get(0)).getParent()))
               .build();
       for (HoodieRecord<? extends HoodieRecordPayload> hoodieRecord : scanner) {
         Option<IndexedRecord> record = hoodieRecord.getData().getInsertValue(readerSchema);
@@ -236,7 +240,7 @@ public class HoodieLogFileCommand implements CommandMarker {
           HoodieLogBlock n = reader.next();
           if (n instanceof HoodieDataBlock) {
             HoodieDataBlock blk = (HoodieDataBlock) n;
-            try (ClosableIterator<IndexedRecord> recordItr = blk.getRecordItr()) {
+            try (ClosableIterator<IndexedRecord> recordItr = blk.getRecordIterator()) {
               recordItr.forEachRemaining(record -> {
                 if (allRecords.size() < limit) {
                   allRecords.add(record);

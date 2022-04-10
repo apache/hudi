@@ -18,24 +18,9 @@
 
 package org.apache.hudi.integ.testsuite.generator;
 
-import java.io.IOException;
-import java.io.Serializable;
-import java.io.UncheckedIOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import java.util.stream.StreamSupport;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.integ.testsuite.configuration.DFSDeltaConfig;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.converter.Converter;
@@ -51,12 +36,29 @@ import org.apache.hudi.integ.testsuite.writer.DeltaWriterAdapter;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriterFactory;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
 
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.storage.StorageLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.io.Serializable;
+import java.io.UncheckedIOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.StreamSupport;
 
 import scala.Tuple2;
 
@@ -85,7 +87,7 @@ public class DeltaGenerator implements Serializable {
     this.partitionPathFieldNames = keyGenerator.getPartitionPathFields();
   }
 
-  public JavaRDD<DeltaWriteStats> writeRecords(JavaRDD<GenericRecord> records) {
+  public Pair<Integer, JavaRDD<DeltaWriteStats>> writeRecords(JavaRDD<GenericRecord> records) {
     if (deltaOutputConfig.shouldDeleteOldInputData() && batchId > 1) {
       Path oldInputDir = new Path(deltaOutputConfig.getDeltaBasePath(), Integer.toString(batchId - 1));
       try {
@@ -107,7 +109,7 @@ public class DeltaGenerator implements Serializable {
       }
     }).flatMap(List::iterator);
     batchId++;
-    return ws;
+    return Pair.of(batchId, ws);
   }
 
   public int getBatchId() {
@@ -156,15 +158,22 @@ public class DeltaGenerator implements Serializable {
           adjustedRDD = deltaInputReader.read(config.getNumRecordsUpsert());
           adjustedRDD = adjustRDDToGenerateExactNumUpdates(adjustedRDD, jsc, config.getNumRecordsUpsert());
         } else {
-          deltaInputReader =
-              new DFSHoodieDatasetInputReader(jsc, ((DFSDeltaConfig) deltaOutputConfig).getDatasetOutputPath(),
-                  schemaStr);
-          if (config.getFractionUpsertPerFile() > 0) {
-            adjustedRDD = deltaInputReader.read(config.getNumUpsertPartitions(), config.getNumUpsertFiles(),
-                config.getFractionUpsertPerFile());
+          if (((DFSDeltaConfig) deltaOutputConfig).shouldUseHudiToGenerateUpdates()) {
+            deltaInputReader =
+                new DFSHoodieDatasetInputReader(jsc, ((DFSDeltaConfig) deltaOutputConfig).getDeltaBasePath(),
+                    schemaStr);
+            if (config.getFractionUpsertPerFile() > 0) {
+              adjustedRDD = deltaInputReader.read(config.getNumUpsertPartitions(), config.getNumUpsertFiles(),
+                  config.getFractionUpsertPerFile());
+            } else {
+              adjustedRDD = deltaInputReader.read(config.getNumUpsertPartitions(), config.getNumUpsertFiles(), config
+                  .getNumRecordsUpsert());
+            }
           } else {
-            adjustedRDD = deltaInputReader.read(config.getNumUpsertPartitions(), config.getNumUpsertFiles(), config
-                .getNumRecordsUpsert());
+            deltaInputReader = new DFSAvroDeltaInputReader(sparkSession, schemaStr,
+                ((DFSDeltaConfig) deltaOutputConfig).getDeltaBasePath(), Option.empty(), Option.empty());
+            adjustedRDD = deltaInputReader.read(config.getNumRecordsUpsert());
+            adjustedRDD = adjustRDDToGenerateExactNumUpdates(adjustedRDD, jsc, config.getNumRecordsUpsert());
           }
         }
 

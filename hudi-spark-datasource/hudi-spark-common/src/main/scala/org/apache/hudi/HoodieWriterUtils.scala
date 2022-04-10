@@ -18,13 +18,16 @@
 package org.apache.hudi
 
 import java.util.Properties
+
 import org.apache.hudi.DataSourceOptionsHelper.allAlternatives
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfig
+import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
@@ -90,12 +93,6 @@ object HoodieWriterUtils {
     Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(parameters)
   }
 
-  def toProperties(params: Map[String, String]): TypedProperties = {
-    val props = new TypedProperties()
-    params.foreach(kv => props.setProperty(kv._1, kv._2))
-    props
-  }
-
   /**
    * Get the partition columns to stored to hoodie.properties.
    * @param parameters
@@ -156,6 +153,36 @@ object HoodieWriterUtils {
       if (null != datasourceKeyGen && null != tableConfigKeyGen
           && datasourceKeyGen != tableConfigKeyGen) {
         diffConfigs.append(s"KeyGenerator:\t$datasourceKeyGen\t$tableConfigKeyGen\n")
+      }
+    }
+
+    if (diffConfigs.nonEmpty) {
+      diffConfigs.insert(0, "\nConfig conflict(key\tcurrent value\texisting value):\n")
+      throw new HoodieException(diffConfigs.toString.trim)
+    }
+    // Check schema evolution for bootstrap table.
+    // now we do not support bootstrap table.
+    if (params.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)
+      && params.getOrElse(HoodieWriteConfig.SCHEMA_EVOLUTION_ENABLE.key(), "false").toBoolean) {
+      throw new HoodieException(String
+        .format("now schema evolution cannot support bootstrap table, pls set %s to false", HoodieWriteConfig.SCHEMA_EVOLUTION_ENABLE.key()))
+    }
+  }
+
+  /**
+   * Detects conflicts between datasourceKeyGen and existing table configuration keyGen
+   */
+  def validateKeyGeneratorConfig(datasourceKeyGen: String, tableConfig: HoodieConfig): Unit = {
+    val diffConfigs = StringBuilder.newBuilder
+
+    if (null != tableConfig) {
+      val tableConfigKeyGen = tableConfig.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME)
+      if (null != tableConfigKeyGen && null != datasourceKeyGen) {
+        val nonPartitionedTableConfig = tableConfigKeyGen.equals(classOf[NonpartitionedKeyGenerator].getCanonicalName)
+        val simpleKeyDataSourceConfig = datasourceKeyGen.equals(classOf[SimpleKeyGenerator].getCanonicalName)
+        if (nonPartitionedTableConfig && simpleKeyDataSourceConfig) {
+          diffConfigs.append(s"KeyGenerator:\t$datasourceKeyGen\t$tableConfigKeyGen\n")
+        }
       }
     }
 

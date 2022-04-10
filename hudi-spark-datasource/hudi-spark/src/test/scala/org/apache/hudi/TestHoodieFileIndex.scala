@@ -20,6 +20,7 @@ package org.apache.hudi
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.client.HoodieJavaWriteClient
 import org.apache.hudi.client.common.HoodieJavaEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -350,9 +351,11 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       PRECOMBINE_FIELD.key -> "id",
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS.key -> "true",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
     )
+
+    // If there are any failures in the Data Skipping flow, test should fail
+    spark.sqlContext.setConf(DataSkippingFailureMode.configName, DataSkippingFailureMode.Strict.value);
 
     inputDF.repartition(4)
       .write
@@ -368,7 +371,10 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     val props = Map[String, String](
       "path" -> basePath,
       QUERY_TYPE.key -> QUERY_TYPE_SNAPSHOT_OPT_VAL,
-      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true"
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+      // NOTE: Metadata Table has to be enabled on the read path as well
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
     )
 
     val fileIndex = HoodieFileIndex(spark, metaClient, Option.empty, props, NoopCache)

@@ -26,24 +26,33 @@ import java.util.List;
 
 /**
  * Encapsulates all parameters required to generate metadata index for enabled index types.
+ *
+ * @deprecated this component currently duplicates configuration coming from the {@code HoodieWriteConfig}
+ *             which is problematic; instead we should break this component down and use source of truth
+ *             for each respective data-point directly ({@code HoodieWriteConfig}, {@code HoodieTableMetaClient}, etc)
  */
+@Deprecated
 public class MetadataRecordsGenerationParams implements Serializable {
 
   private final HoodieTableMetaClient dataMetaClient;
   private final List<MetadataPartitionType> enabledPartitionTypes;
   private final String bloomFilterType;
   private final int bloomIndexParallelism;
-  private final boolean isAllColumnStatsIndexEnabled;
+  private final boolean isColumnStatsIndexEnabled;
   private final int columnStatsIndexParallelism;
+  private final List<String> targetColumnsForColumnStatsIndex;
+  private final List<String> targetColumnsForBloomFilterIndex;
 
   MetadataRecordsGenerationParams(HoodieTableMetaClient dataMetaClient, List<MetadataPartitionType> enabledPartitionTypes, String bloomFilterType, int bloomIndexParallelism,
-      boolean isAllColumnStatsIndexEnabled, int columnStatsIndexParallelism) {
+                                  boolean isColumnStatsIndexEnabled, int columnStatsIndexParallelism, List<String> targetColumnsForColumnStatsIndex, List<String> targetColumnsForBloomFilterIndex) {
     this.dataMetaClient = dataMetaClient;
     this.enabledPartitionTypes = enabledPartitionTypes;
     this.bloomFilterType = bloomFilterType;
     this.bloomIndexParallelism = bloomIndexParallelism;
-    this.isAllColumnStatsIndexEnabled = isAllColumnStatsIndexEnabled;
+    this.isColumnStatsIndexEnabled = isColumnStatsIndexEnabled;
     this.columnStatsIndexParallelism = columnStatsIndexParallelism;
+    this.targetColumnsForColumnStatsIndex = targetColumnsForColumnStatsIndex;
+    this.targetColumnsForBloomFilterIndex = targetColumnsForBloomFilterIndex;
   }
 
   public HoodieTableMetaClient getDataMetaClient() {
@@ -58,8 +67,8 @@ public class MetadataRecordsGenerationParams implements Serializable {
     return bloomFilterType;
   }
 
-  public boolean isAllColumnStatsIndexEnabled() {
-    return isAllColumnStatsIndexEnabled;
+  public boolean isColumnStatsIndexEnabled() {
+    return isColumnStatsIndexEnabled;
   }
 
   public int getBloomIndexParallelism() {
@@ -68,5 +77,13 @@ public class MetadataRecordsGenerationParams implements Serializable {
 
   public int getColumnStatsIndexParallelism() {
     return columnStatsIndexParallelism;
+  }
+
+  public List<String> getTargetColumnsForColumnStatsIndex() {
+    return targetColumnsForColumnStatsIndex;
+  }
+
+  public List<String> getSecondaryKeysForBloomFilterIndex() {
+    return targetColumnsForBloomFilterIndex;
   }
 }

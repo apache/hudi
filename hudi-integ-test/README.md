@@ -126,7 +126,7 @@ NOTE : The properties-file should have all the necessary information required to
  information on what properties need to be set, take a look at the test suite section under demo steps.
 ```
 shell$ ./prepare_integration_suite.sh --spark-command
-spark-submit --packages com.databricks:spark-avro_2.11:4.0.0 --master prepare_integration_suite.sh --deploy-mode
+spark-submit --master prepare_integration_suite.sh --deploy-mode
 --properties-file  --class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob target/hudi-integ-test-0.6
 .0-SNAPSHOT.jar --source-class  --source-ordering-field  --input-base-path  --target-base-path  --target-table  --props  --storage-type  --payload-class  --workload-yaml-path  --input-file-size  --<deltastreamer-ingest>
 ```
@@ -198,7 +198,6 @@ Launch a Copy-on-Write job:
 =========================
 ## Run the following command to start the test suite
 spark-submit \
---packages org.apache.spark:spark-avro_2.11:2.4.0 \
 --conf spark.task.cpus=1 \
 --conf spark.executor.cores=1 \
 --conf spark.task.maxFailures=100 \
@@ -245,7 +244,6 @@ Or a Merge-on-Read job:
 =========================
 ## Run the following command to start the test suite
 spark-submit \
---packages org.apache.spark:spark-avro_2.11:2.4.0 \
 --conf spark.task.cpus=1 \
 --conf spark.executor.cores=1 \
 --conf spark.task.maxFailures=100 \
@@ -438,7 +436,6 @@ docker exec -it adhoc-2 /bin/bash
 Sample COW command
 ```
 spark-submit \
---packages org.apache.spark:spark-avro_2.11:2.4.0 \
 --conf spark.task.cpus=1 \
 --conf spark.executor.cores=1 \
 --conf spark.task.maxFailures=100 \

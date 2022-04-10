@@ -26,17 +26,19 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
-import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -80,7 +82,19 @@ public class TestRollbacksCommand extends CLIFunctionalTestHarness {
         put(DEFAULT_THIRD_PARTITION_PATH, "file-3");
       }
     };
-    HoodieTestTable.of(metaClient)
+
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(tablePath)
+        .withMetadataConfig(
+            // Column Stats Index is disabled, since these tests construct tables which are
+            // not valid (empty commit metadata, etc)
+            HoodieMetadataConfig.newBuilder()
+                .withMetadataIndexColumnStats(false)
+                .build()
+        )
+        .withRollbackUsingMarkers(false)
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
+    HoodieMetadataTestTable.of(metaClient, SparkHoodieBackedTableMetadataWriter.create(
+            metaClient.getHadoopConf(), config, context))
         .withPartitionMetaFiles(DEFAULT_PARTITION_PATHS)
         .addCommit("100")
         .withBaseFilesInPartitions(partitionAndFileId)
@@ -88,11 +102,8 @@ public class TestRollbacksCommand extends CLIFunctionalTestHarness {
         .withBaseFilesInPartitions(partitionAndFileId)
         .addInflightCommit("102")
         .withBaseFilesInPartitions(partitionAndFileId);
-    // generate two rollback
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(tablePath)
-        .withRollbackUsingMarkers(false)
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
+    // generate two rollback
     try (BaseHoodieWriteClient client = new SparkRDDWriteClient(context(), config)) {
       // Rollback inflight commit3 and commit2
       client.rollback("102");

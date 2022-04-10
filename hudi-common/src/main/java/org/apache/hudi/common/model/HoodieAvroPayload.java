@@ -36,17 +36,16 @@ public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload>
   // Store the GenericRecord converted to bytes - 1) Doesn't store schema hence memory efficient 2) Makes the payload
   // java serializable
   private final byte[] recordBytes;
+  private final Comparable<?> orderingVal;
 
   public HoodieAvroPayload(GenericRecord record, Comparable<?> orderingVal) {
-    this(Option.of(record));
+    this.recordBytes = record == null ? new byte[0] : HoodieAvroUtils.avroToBytes(record);
+    this.orderingVal = orderingVal;
   }
 
   public HoodieAvroPayload(Option<GenericRecord> record) {
-    if (record.isPresent()) {
-      this.recordBytes = HoodieAvroUtils.avroToBytes(record.get());
-    } else {
-      this.recordBytes = new byte[0];
-    }
+    this.recordBytes = record.isPresent() ? HoodieAvroUtils.avroToBytes(record.get()) : new byte[0];
+    this.orderingVal = 0;
   }
 
   @Override
@@ -70,5 +69,10 @@ public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload>
   // for examples
   public byte[] getRecordBytes() {
     return recordBytes;
+  }
+
+  @Override
+  public Comparable<?> getOrderingValue() {
+    return orderingVal;
   }
 }

@@ -308,7 +308,7 @@ object SparkHoodieTableFileIndex {
   }
 
   private def deduceQueryType(configProperties: TypedProperties): HoodieTableQueryType = {
-    configProperties.asScala(QUERY_TYPE.key) match {
+    configProperties.asScala.getOrElse(QUERY_TYPE.key, QUERY_TYPE.defaultValue) match {
       case QUERY_TYPE_SNAPSHOT_OPT_VAL => HoodieTableQueryType.SNAPSHOT
       case QUERY_TYPE_INCREMENTAL_OPT_VAL => HoodieTableQueryType.INCREMENTAL
       case QUERY_TYPE_READ_OPTIMIZED_OPT_VAL => HoodieTableQueryType.READ_OPTIMIZED

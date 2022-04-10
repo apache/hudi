@@ -33,6 +33,8 @@ object HoodieProcedures {
 
   private def initProcedureBuilders: util.Map[String, Supplier[ProcedureBuilder]] = {
     val mapBuilder: ImmutableMap.Builder[String, Supplier[ProcedureBuilder]] = ImmutableMap.builder()
+    mapBuilder.put(RunCompactionProcedure.NAME, RunCompactionProcedure.builder)
+    mapBuilder.put(ShowCompactionProcedure.NAME, ShowCompactionProcedure.builder)
     mapBuilder.put(CreateSavepointsProcedure.NAME, CreateSavepointsProcedure.builder)
     mapBuilder.put(DeleteSavepointsProcedure.NAME, DeleteSavepointsProcedure.builder)
     mapBuilder.put(RollbackSavepointsProcedure.NAME, RollbackSavepointsProcedure.builder)

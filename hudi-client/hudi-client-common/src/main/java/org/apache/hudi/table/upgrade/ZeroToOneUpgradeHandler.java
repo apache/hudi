@@ -18,14 +18,14 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.IOType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -35,14 +35,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.rollback.BaseRollbackHelper;
-import org.apache.hudi.table.action.rollback.ListingBasedRollbackHelper;
-import org.apache.hudi.table.action.rollback.ListingBasedRollbackRequest;
-import org.apache.hudi.table.action.rollback.RollbackUtils;
+import org.apache.hudi.table.action.rollback.ListingBasedRollbackStrategy;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 
 import java.util.Collections;
 import java.util.List;
@@ -100,14 +95,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
         writeMarkers.quietDeleteMarkerDir(context, parallelism);
 
         // generate rollback stats
-        List<ListingBasedRollbackRequest> rollbackRequests;
-        if (table.getMetaClient().getTableType() == HoodieTableType.COPY_ON_WRITE) {
-          rollbackRequests = RollbackUtils.generateRollbackRequestsByListingCOW(context, table.getMetaClient().getBasePath());
-        } else {
-          rollbackRequests = RollbackUtils.generateRollbackRequestsUsingFileListingMOR(commitInstantOpt.get(), table, context);
-        }
-        List<HoodieRollbackStat> rollbackStats = getListBasedRollBackStats(table.getMetaClient(), table.getConfig(),
-            context, commitInstantOpt, rollbackRequests);
+        List<HoodieRollbackStat> rollbackStats = getListBasedRollBackStats(table, context, commitInstantOpt);
 
         // recreate markers adhering to marker based rollback
         for (HoodieRollbackStat rollbackStat : rollbackStats) {
@@ -126,12 +114,12 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
     }
   }
 
-  List<HoodieRollbackStat> getListBasedRollBackStats(
-      HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieEngineContext context,
-      Option<HoodieInstant> commitInstantOpt, List<ListingBasedRollbackRequest> rollbackRequests) {
-    List<HoodieRollbackRequest> hoodieRollbackRequests = new ListingBasedRollbackHelper(metaClient, config)
-        .getRollbackRequestsForRollbackPlan(context, commitInstantOpt.get(), rollbackRequests);
-    return new BaseRollbackHelper(metaClient, config).collectRollbackStats(context, commitInstantOpt.get(), hoodieRollbackRequests);
+  List<HoodieRollbackStat> getListBasedRollBackStats(HoodieTable<?, ?, ?, ?> table, HoodieEngineContext context, Option<HoodieInstant> commitInstantOpt) {
+    List<HoodieRollbackRequest> hoodieRollbackRequests =
+        new ListingBasedRollbackStrategy(table, context, table.getConfig(), commitInstantOpt.get().getTimestamp())
+            .getRollbackRequests(commitInstantOpt.get());
+    return new BaseRollbackHelper(table.getMetaClient(), table.getConfig())
+        .collectRollbackStats(context, commitInstantOpt.get(), hoodieRollbackRequests);
   }
 
   /**
@@ -143,7 +131,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
    * @param table       {@link HoodieTable} instance to use
    * @return the marker file name thus curated.
    */
-  private static String getFileNameForMarkerFromLogFile(String logFilePath, HoodieTable table) {
+  private static String getFileNameForMarkerFromLogFile(String logFilePath, HoodieTable<?, ?, ?, ?> table) {
     Path logPath = new Path(table.getMetaClient().getBasePath(), logFilePath);
     String fileId = FSUtils.getFileIdFromLogPath(logPath);
     String baseInstant = FSUtils.getBaseCommitTimeFromLogPath(logPath);

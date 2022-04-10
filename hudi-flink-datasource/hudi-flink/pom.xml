@@ -22,17 +22,17 @@
     <parent>
         <artifactId>hudi-flink-datasource</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>0.11.0-SNAPSHOT</version>
+        <version>0.12.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>hudi-flink</artifactId>
-    <version>0.11.0-SNAPSHOT</version>
+    <version>0.12.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <properties>
         <main.basedir>${project.parent.parent.basedir}</main.basedir>
-        <parquet.version>1.11.1</parquet.version>
+        <parquet.version>${flink.format.parquet.version}</parquet.version>
     </properties>
 
     <build>

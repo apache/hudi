@@ -24,9 +24,9 @@ import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.common.util.{ClusteringUtils, Option => HOption}
 import org.apache.hudi.config.HoodieClusteringConfig
 import org.apache.hudi.exception.HoodieClusteringException
-import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieFileIndex}
+import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieFileIndex, SparkAdapterSupport}
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, Row}
+import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.expressions.PredicateHelper
 import org.apache.spark.sql.execution.datasources.FileStatusCache
 import org.apache.spark.sql.types._
@@ -34,7 +34,14 @@ import org.apache.spark.sql.types._
 import java.util.function.Supplier
 import scala.collection.JavaConverters._
 
-class RunClusteringProcedure extends BaseProcedure with ProcedureBuilder with PredicateHelper with Logging {
+class RunClusteringProcedure extends BaseProcedure
+  with ProcedureBuilder
+  with PredicateHelper
+  with Logging
+  with SparkAdapterSupport {
+
+  private val exprUtils = sparkAdapter.createCatalystExpressionUtils()
+
   /**
    * OPTIMIZE table_name|table_path [WHERE predicate]
    * [ORDER BY (col_name1 [, ...] ) ]
@@ -120,9 +127,9 @@ class RunClusteringProcedure extends BaseProcedure with ProcedureBuilder with Pr
     // Resolve partition predicates
     val schemaResolver = new TableSchemaResolver(metaClient)
     val tableSchema = AvroConversionUtils.convertAvroSchemaToStructType(schemaResolver.getTableAvroSchema)
-    val condition = HoodieCatalystExpressionUtils.resolveFilterExpr(sparkSession, predicate, tableSchema)
+    val condition = exprUtils.resolveExpr(sparkSession, predicate, tableSchema)
     val partitionColumns = metaClient.getTableConfig.getPartitionFields.orElse(Array[String]())
-    val (partitionPredicates, dataPredicates) = HoodieCatalystExpressionUtils.splitPartitionAndDataPredicates(
+    val (partitionPredicates, dataPredicates) = exprUtils.splitPartitionAndDataPredicates(
       sparkSession, splitConjunctivePredicates(condition).toArray, partitionColumns)
     checkArgument(dataPredicates.isEmpty, "Only partition predicates are allowed")
 

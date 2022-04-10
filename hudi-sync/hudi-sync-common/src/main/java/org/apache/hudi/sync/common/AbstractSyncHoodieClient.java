@@ -18,6 +18,13 @@
 
 package org.apache.hudi.sync.common;
 
+import java.io.Serializable;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
@@ -31,22 +38,16 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 
-import java.io.Serializable;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-
-public abstract class AbstractSyncHoodieClient {
+public abstract class AbstractSyncHoodieClient implements AutoCloseable {
 
   private static final Logger LOG = LogManager.getLogger(AbstractSyncHoodieClient.class);
 
+  public static final String HOODIE_LAST_COMMIT_TIME_SYNC = "last_commit_time_sync";
   public static final TypeConverter TYPE_CONVERTOR = new TypeConverter() {};
 
   protected final HoodieTableMetaClient metaClient;
@@ -89,17 +90,29 @@ public abstract class AbstractSyncHoodieClient {
                                    String serdeClass, Map<String, String> serdeProperties,
                                    Map<String, String> tableProperties);
 
+  /**
+   * @deprecated Use {@link #tableExists} instead.
+   */
+  @Deprecated
   public abstract boolean doesTableExist(String tableName);
+
+  public abstract boolean tableExists(String tableName);
 
   public abstract Option<String> getLastCommitTimeSynced(String tableName);
 
   public abstract void updateLastCommitTimeSynced(String tableName);
 
+  public abstract Option<String> getLastReplicatedTime(String tableName);
+
+  public abstract void updateLastReplicatedTimeStamp(String tableName, String timeStamp);
+
+  public abstract void deleteLastReplicatedTimeStamp(String tableName);
+
   public abstract void addPartitionsToTable(String tableName, List<String> partitionsToAdd);
 
   public abstract void updatePartitionsToTable(String tableName, List<String> changedPartitions);
 
-  public abstract void dropPartitionsToTable(String tableName, List<String> partitionsToDrop);
+  public abstract void dropPartitions(String tableName, List<String> partitionsToDrop);
 
   public  void updateTableProperties(String tableName, Map<String, String> tableProperties) {}
 
@@ -156,8 +169,7 @@ public abstract class AbstractSyncHoodieClient {
 
   public boolean isDropPartition() {
     try {
-      Option<HoodieCommitMetadata> hoodieCommitMetadata;
-      hoodieCommitMetadata = new TableSchemaResolver(metaClient).getLatestCommitMetadata();
+      Option<HoodieCommitMetadata> hoodieCommitMetadata = HoodieTableMetadataUtil.getLatestCommitMetadata(metaClient);
 
       if (hoodieCommitMetadata.isPresent()
           && WriteOperationType.DELETE_PARTITION.equals(hoodieCommitMetadata.get().getOperationType())) {

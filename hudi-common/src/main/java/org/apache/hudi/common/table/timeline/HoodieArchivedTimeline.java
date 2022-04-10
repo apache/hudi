@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -117,7 +118,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
    *
    * @deprecated
    */
-  public HoodieArchivedTimeline() {}
+  public HoodieArchivedTimeline() {
+  }
 
   /**
    * This method is only used when this object is deserialized in a spark executor.
@@ -206,6 +208,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
         return Option.of("hoodieCompactionPlan");
       case HoodieTimeline.REPLACE_COMMIT_ACTION:
         return Option.of("hoodieReplaceCommitMetadata");
+      case HoodieTimeline.INDEXING_ACTION:
+        return Option.of("hoodieIndexCommitMetadata");
       default:
         LOG.error(String.format("Unknown action in metadata (%s)", action));
         return Option.empty();
@@ -248,16 +252,19 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
           int instantsInPreviousFile = instantsInRange.size();
           // Read the avro blocks
           while (reader.hasNext()) {
-            HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
-            // TODO If we can store additional metadata in datablock, we can skip parsing records
-            // (such as startTime, endTime of records in the block)
-            try (ClosableIterator<IndexedRecord> itr = blk.getRecordItr()) {
-              StreamSupport.stream(Spliterators.spliteratorUnknownSize(itr, Spliterator.IMMUTABLE), true)
-                  // Filter blocks in desired time window
-                  .filter(r -> commitsFilter.apply((GenericRecord) r))
-                  .map(r -> readCommit((GenericRecord) r, loadInstantDetails))
-                  .filter(c -> filter == null || filter.isInRange(c))
-                  .forEach(instantsInRange::add);
+            HoodieLogBlock block = reader.next();
+            if (block instanceof HoodieAvroDataBlock) {
+              HoodieAvroDataBlock avroBlock = (HoodieAvroDataBlock) block;
+              // TODO If we can store additional metadata in datablock, we can skip parsing records
+              // (such as startTime, endTime of records in the block)
+              try (ClosableIterator<IndexedRecord> itr = avroBlock.getRecordIterator()) {
+                StreamSupport.stream(Spliterators.spliteratorUnknownSize(itr, Spliterator.IMMUTABLE), true)
+                    // Filter blocks in desired time window
+                    .filter(r -> commitsFilter.apply((GenericRecord) r))
+                    .map(r -> readCommit((GenericRecord) r, loadInstantDetails))
+                    .filter(c -> filter == null || filter.isInRange(c))
+                    .forEach(instantsInRange::add);
+              }
             }
           }
 
