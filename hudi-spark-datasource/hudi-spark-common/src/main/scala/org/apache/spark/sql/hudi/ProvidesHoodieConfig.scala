@@ -260,7 +260,6 @@ trait ProvidesHoodieConfig extends Logging {
     withSparkConf(sparkSession, options) {
       Map(
         "path" -> path,
-        AVRO_SCHEMA_VALIDATE_ENABLE.key() -> AVRO_SCHEMA_VALIDATE_ENABLE.defaultValue(),
         RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
         TBL_NAME.key -> tableConfig.getTableName,
         HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,

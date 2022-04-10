@@ -21,16 +21,15 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.getPartitionPathToTruncate
-import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 
 /**
  * Command for truncate hudi table.
  */
 case class TruncateHoodieTableCommand(
-                                       tableIdentifier: TableIdentifier,
-                                       partitionSpec: Option[TablePartitionSpec])
-  extends HoodieLeafRunnableCommand with ProvidesHoodieConfig {
+   tableIdentifier: TableIdentifier,
+   partitionSpec: Option[TablePartitionSpec])
+  extends HoodieLeafRunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val fullTableName = s"${tableIdentifier.database}.${tableIdentifier.table}"
