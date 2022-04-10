@@ -185,7 +185,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
   }
 
   @Test
-  def testMetadataColumnStatsIndexForPartiallyIndexedData(): Unit = {
+  def testMetadataColumnStatsIndexPartialProjection(): Unit = {
     val targetColumnsToIndex = Seq("c1", "c2", "c3")
 
     val metadataOpts = Map(
