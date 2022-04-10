@@ -26,6 +26,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig
+import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.hash.ColumnIndexID
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
@@ -146,18 +147,29 @@ trait ColumnStatsIndexSupport extends SparkAdapterSupport {
     val transposedRDD = colStatsDF.rdd
       .filter(row => sortedTargetColumns.contains(row.getString(colNameOrdinal)))
       .map { row =>
-        val (minValue, _) = tryUnpackNonNullVal(row.getAs[Row](minValueOrdinal))
-        val (maxValue, _) = tryUnpackNonNullVal(row.getAs[Row](maxValueOrdinal))
+        if (row.isNullAt(minValueOrdinal) && row.isNullAt(maxValueOrdinal)) {
+          // Corresponding row could be null in either of the 2 cases
+          //    - Column contains only null values (in that case both min/max have to be nulls)
+          //    - This is a stubbed Column Stats record (used as a tombstone)
+          row
+        } else {
+          val minValueStruct = row.getAs[Row](minValueOrdinal)
+          val maxValueStruct = row.getAs[Row](maxValueOrdinal)
 
-        val colName = row.getString(colNameOrdinal)
-        val colType = tableSchemaFieldMap(colName).dataType
+          checkState(minValueStruct != null && maxValueStruct != null, "Invalid Column Stats record: either both min/max have to be null, or both have to be non-null")
 
-        val rowValsSeq = row.toSeq.toArray
+          val colName = row.getString(colNameOrdinal)
+          val colType = tableSchemaFieldMap(colName).dataType
 
-        rowValsSeq(minValueOrdinal) = deserialize(minValue, colType)
-        rowValsSeq(maxValueOrdinal) = deserialize(maxValue, colType)
+          val (minValue, _) = tryUnpackNonNullVal(minValueStruct)
+          val (maxValue, _) = tryUnpackNonNullVal(maxValueStruct)
+          val rowValsSeq = row.toSeq.toArray
+          // Update min-/max-value structs w/ unwrapped values in-place
+          rowValsSeq(minValueOrdinal) = deserialize(minValue, colType)
+          rowValsSeq(maxValueOrdinal) = deserialize(maxValue, colType)
 
-        Row(rowValsSeq:_*)
+          Row(rowValsSeq: _*)
+        }
       }
       .groupBy(r => r.getString(fileNameOrdinal))
       .foldByKey(Seq[Row]()) {
