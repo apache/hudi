@@ -68,7 +68,7 @@ trait ColumnStatsIndexSupport extends SparkAdapterSupport {
       if (targetColumns.nonEmpty) {
         readColumnStatsIndexForColumnsInternal(spark, targetColumns, metadataConfig, tableBasePath)
       } else {
-        readFullColumnStatsIndexInternal(spark, tableBasePath)
+        readFullColumnStatsIndexInternal(spark, metadataConfig, tableBasePath)
       }
     }
 
@@ -181,10 +181,11 @@ trait ColumnStatsIndexSupport extends SparkAdapterSupport {
     spark.createDataFrame(transposedRDD, indexSchema)
   }
 
-  private def readFullColumnStatsIndexInternal(spark: SparkSession, tableBasePath: String) = {
+  private def readFullColumnStatsIndexInternal(spark: SparkSession, metadataConfig: HoodieMetadataConfig, tableBasePath: String): DataFrame = {
     val metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(tableBasePath)
     // Read Metadata Table's Column Stats Index into Spark's [[DataFrame]]
     spark.read.format("org.apache.hudi")
+      .options(metadataConfig.getProps.asScala)
       .load(s"$metadataTablePath/${MetadataPartitionType.COLUMN_STATS.getPartitionPath}")
   }
 

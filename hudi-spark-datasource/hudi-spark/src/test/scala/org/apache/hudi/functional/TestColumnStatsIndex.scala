@@ -19,7 +19,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileSystem, LocatedFileStatus, Path}
+import org.apache.hadoop.fs.{LocatedFileStatus, Path}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieConversionUtils.toProperties
@@ -27,6 +27,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.ParquetUtils
 import org.apache.hudi.config.{HoodieStorageConfig, HoodieWriteConfig}
+import org.apache.hudi.functional.TestColumnStatsIndex.ColumnStatsTestCase
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.spark.sql._
@@ -35,7 +36,7 @@ import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.api._
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 import java.math.BigInteger
 import java.sql.{Date, Timestamp}
@@ -72,19 +73,25 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testMetadataColumnStatsIndex(forceFullLogScan: Boolean): Unit = {
+  @MethodSource(Array("testMetadataColumnStatsIndexParams"))
+  def testMetadataColumnStatsIndex(testCase: ColumnStatsTestCase): Unit = {
+    val metadataOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
+    )
+
     val opts = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       RECORDKEY_FIELD.key -> "c1",
       PRECOMBINE_FIELD.key -> "c1",
-      HoodieMetadataConfig.ENABLE.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.ENABLE_FULL_SCAN_LOG_FILES.key -> forceFullLogScan.toString,
+      // NOTE: Currently only this setting is used like following by different MT partitions:
+      //          - Files: using it
+      //          - Column Stats: NOT using it (defaults to doing "point-lookups")
+      HoodieMetadataConfig.ENABLE_FULL_SCAN_LOG_FILES.key -> testCase.forceFullLogScan.toString,
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
-    )
+    ) ++ metadataOpts
 
     setTableName("hoodie_test")
     initMetaClient()
@@ -108,10 +115,17 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
     metaClient = HoodieTableMetaClient.reload(metaClient)
 
     val metadataConfig = HoodieMetadataConfig.newBuilder()
-      .fromProperties(toProperties(opts))
+      .fromProperties(toProperties(metadataOpts))
       .build()
 
-    val colStatsDF = readColumnStatsIndex(spark, basePath, metadataConfig, sourceTableSchema.fieldNames)
+    val targetColumnsToRead: Seq[String] = {
+      // Providing empty seq of columns to [[readColumnStatsIndex]] will lead to the whole
+      // MT to be read, and subsequently filtered
+      if (testCase.readFullMetadataTable) Seq.empty
+      else sourceTableSchema.fieldNames
+    }
+
+    val colStatsDF = readColumnStatsIndex(spark, basePath, metadataConfig, targetColumnsToRead)
     val transposedColStatsDF = transposeColumnStatsIndex(spark, colStatsDF, sourceTableSchema.fieldNames, sourceTableSchema)
 
     val expectedColStatsSchema = composeIndexSchema(sourceTableSchema.fieldNames, sourceTableSchema)
@@ -151,7 +165,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
 
-    val updatedColStatsDF = readColumnStatsIndex(spark, basePath, metadataConfig, sourceTableSchema.fieldNames)
+    val updatedColStatsDF = readColumnStatsIndex(spark, basePath, metadataConfig, targetColumnsToRead)
     val transposedUpdatedColStatsDF = transposeColumnStatsIndex(spark, updatedColStatsDF, sourceTableSchema.fieldNames, sourceTableSchema)
 
     val expectedColStatsIndexUpdatedDF =
@@ -243,26 +257,6 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
     )
   }
 
-  def bootstrapParquetInputTableFromJSON(sourceJSONTablePath: String, targetParquetTablePath: String): Unit = {
-    val jsonInputDF =
-    // NOTE: Schema here is provided for validation that the input date is in the appropriate format
-      spark.read
-        .schema(sourceTableSchema)
-        .json(sourceJSONTablePath)
-
-    jsonInputDF
-      .sort("c1")
-      .repartition(4, new Column("c1"))
-      .write
-      .format("parquet")
-      .mode("overwrite")
-      .save(targetParquetTablePath)
-
-    val fs = FileSystem.get(spark.sparkContext.hadoopConfiguration)
-    // Have to cleanup additional artefacts of Spark write
-    fs.delete(new Path(targetParquetTablePath, "_SUCCESS"), false)
-  }
-
   private def generateRandomDataFrame(spark: SparkSession): DataFrame = {
     val sourceTableSchema =
       new StructType()
@@ -315,4 +309,15 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
       .sort("c1_maxValue", "c1_minValue")
   }
 
+}
+
+object TestColumnStatsIndex {
+
+  case class ColumnStatsTestCase(forceFullLogScan: Boolean, readFullMetadataTable: Boolean)
+
+  def testMetadataColumnStatsIndexParams: java.util.stream.Stream[Arguments] =
+    java.util.stream.Stream.of(
+      Arguments.arguments(ColumnStatsTestCase(forceFullLogScan = false, readFullMetadataTable = false)),
+      Arguments.arguments(ColumnStatsTestCase(forceFullLogScan = true, readFullMetadataTable = true))
+    )
 }
