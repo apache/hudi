@@ -14,51 +14,26 @@ jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
-      max-parallel: 8
       matrix:
         include:
-          # Spark 2.4.4, scala 2.11
           - scalaProfile: "scala-2.11"
             sparkProfile: "spark2.4"
-            sparkVersion: "2.4.4"
             flinkProfile: "flink1.13"
 
-          # Spark 2.4.4, scala 2.12
+          - scalaProfile: "scala-2.11"
+            sparkProfile: "spark2.4"
+            flinkProfile: "flink1.14"
+
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark2.4"
-            sparkVersion: "2.4.4"
-            flinkProfile: "flink1.14"
-
-          # Spark 3.1.x
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.1"
-            sparkVersion: "3.1.0"
             flinkProfile: "flink1.13"
 
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.1"
-            sparkVersion: "3.1.1"
-            flinkProfile: "flink1.13"
-
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.1"
-            sparkVersion: "3.1.2"
             flinkProfile: "flink1.14"
-
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.1"
-            sparkVersion: "3.1.3"
-            flinkProfile: "flink1.14"
-
-          # Spark 3.2.x
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.2"
-            sparkVersion: "3.2.0"
-            flinkProfile: "flink1.13"
 
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.2"
-            sparkVersion: "3.2.1"
             flinkProfile: "flink1.14"
 
     steps:
@@ -73,16 +48,14 @@ jobs:
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SPARK_VERSION: ${{ matrix.sparkVersion }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
-          mvn clean install -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -Dspark.version="$SPARK_VERSION" -Pintegration-tests -DskipTests=true -B -V
+          mvn clean install -Pintegration-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true -B -V
       - name: Quickstart Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SPARK_VERSION: ${{ matrix.sparkVersion }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        if: ${{ !startsWith(env.SPARK_VERSION, '3.2.') }} # skip test spark 3.2 before hadoop upgrade to 3.x
+        if: ${{ !endsWith(env.SPARK_PROFILE, '3.2') }} # skip test spark 3.2 before hadoop upgrade to 3.x
         run:
-          mvn test -P "unit-tests" -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -Dspark.version="$SPARK_VERSION" -DfailIfNoTests=false -pl hudi-examples/hudi-examples-flink,hudi-examples/hudi-examples-java,hudi-examples/hudi-examples-spark
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DfailIfNoTests=false -pl hudi-examples/hudi-examples-flink,hudi-examples/hudi-examples-java,hudi-examples/hudi-examples-spark
