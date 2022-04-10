@@ -243,6 +243,214 @@ call rollback_savepoints(table => 'test_hudi_table', instant_time => '2022010922
 
 ## Optimization table
 
-### RunClusteringProcedure
+### run_clustering
+:::note
+Trigger clustering on a hoodie table. By using partition predicates, clustering table can be run 
+with specified partitions. You can also specify the order columns to sort data. Newly clustering
+instant will be generated every call, and all pending clustering instants are executed. When calling 
+this procedure, one of parameters ``table`` and ``path`` must be specified at least. If both 
+parameters are given, ``table`` will take effect.
+:::
 
-### ShowClusteringProcedure
+#### Usage
+
+Input
+
+| Parameter Name | Type   | Required | Default Value | Description                   |
+|----------------|--------|----------|---------------|-------------------------------|
+| table          | String | N        | None          | Name of table to be clustered |
+| path           | String | N        | None          | Path of table to be clustered |
+| predicate      | String | N        | None          | Predicate to filter partition |
+| order          | String | N        | None          | Order column split by `,`     |
+
+Output
+
+Empty
+
+#### Example
+Clustering test_hudi_table with table name
+```
+call run_clustering(table => 'test_hudi_table')
+```
+
+Clustering test_hudi_table with table path
+```
+call run_clustering(path => '/tmp/hoodie/test_hudi_table')
+```
+
+Clustering test_hudi_table with table name, predicate and order column
+```
+call run_clustering(table => 'test_hudi_table', predicate => 'ts <= 20220408L', order => 'ts')
+```
+
+### show_clustering
+:::note
+Show pending clusterings on a hoodie table. When calling this procedure, one of parameters ``table``
+and ``path`` must be specified at least. If both parameters are given, ``table`` will take effect.
+:::
+
+#### Usage
+
+Input
+
+| Parameter Name | Type   | Required | Default Value | Description                      |
+|----------------|--------|----------|---------------|----------------------------------|
+| table          | String | N        | None          | Name of table to be clustered    |
+| path           | String | N        | None          | Path of table to be clustered    |
+| limit          | Int    | N        | None          | Max result number to be returned |
+
+Output
+
+| Parameter Name | Type   | Required | Default Value | Description                           |
+|----------------|--------|----------|---------------|---------------------------------------|
+| timestamp      | String | N        | None          | Instant time                          |
+| groups         | Int    | N        | None          | Number of file groups to be processed |
+
+#### Example
+Show pending clusterings with table name
+```
+call show_clustering(table => 'test_hudi_table')
+```
+| timestamp         | groups | 
+|-------------------|--------|
+| 20220408153707928 | 2      |
+| 20220408153636963 | 3      |
+
+Show pending clusterings with table path
+```
+call show_clustering(path => '/tmp/hoodie/test_hudi_table')
+```
+| timestamp         | groups | 
+|-------------------|--------|
+| 20220408153707928 | 2      |
+| 20220408153636963 | 3      |
+
+Show pending clusterings with table name and limit
+```
+call show_clustering(table => 'test_hudi_table', limit => 1)
+```
+| timestamp         | groups | 
+|-------------------|--------|
+| 20220408153707928 | 2      |
+
+### run_compaction
+:::note
+Schedule or run compaction on a hoodie table. For scheduling compaction, if `timestamp` is specified, 
+new scheduled compaction will use given timestamp as instant time. Otherwise, compaction will be scheduled 
+by using current system time. For running compaction, given ``timestamp`` must be a pending compaction 
+instant time that already exists, if it's not, exception will be thrown. Meanwhile, if ``timestamp``
+is specified and there are pending compactions, all pending compactions will be executed without new 
+compaction instant generated. When calling this procedure, one of parameters ``table`` and ``path`` 
+must be specified at least. If both parameters are given, ``table`` will take effect.
+:::
+
+#### Usage
+
+Input
+
+| Parameter Name | Type   | Required | Default Value | Description                         |
+|----------------|--------|----------|---------------|-------------------------------------|
+| op             | String | N        | None          | Operation type, `RUN` or `SCHEDULE` |
+| table          | String | N        | None          | Name of table to be compacted       |
+| path           | String | N        | None          | Path of table to be compacted       |
+| timestamp      | String | N        | None          | Instant time                        |
+
+Output
+
+The output of `RUN` operation is `EMPTY`, the output of `SCHEDULE` as follow:
+
+| Parameter Name | Type   | Required  | Default Value | Description  |
+|----------------|--------|-----------|---------------|--------------|
+| instant        | String | N         | None          | Instant name |
+
+#### Example
+Run compaction with table name
+```
+call run_compaction(op => 'run', table => 'test_hudi_table')
+```
+
+Run compaction with table path
+```
+call run_compaction(op => 'run', path => '/tmp/hoodie/test_hudi_table')
+```
+
+Run compaction with table path and timestamp
+```
+call run_compaction(op => 'run', path => '/tmp/hoodie/test_hudi_table', timestamp => '20220408153658568')
+```
+
+Schedule compaction with table name
+```
+call run_compaction(op => 'schedule', table => 'test_hudi_table')
+```
+| instant           |
+|-------------------|
+| 20220408153650834 |
+
+Schedule compaction with table path
+```
+call run_compaction(op => 'schedule', path => '/tmp/hoodie/test_hudi_table')
+```
+| instant           |
+|-------------------|
+| 20220408153650834 |
+
+Schedule compaction with table path and timestamp
+```
+call run_compaction(op => 'schedule', path => '/tmp/hoodie/test_hudi_table', timestamp => '20220408153658568')
+```
+| instant           |
+|-------------------|
+| 20220408153658568 |
+
+### show_compaction
+:::note
+Show all compactions on a hoodie table, in-flight or completed compactions are included, and result will
+be in reverse order according to trigger time. When calling this procedure, one of parameters ``table`` 
+and ``path`` must be specified at least. If both parameters are given, ``table`` will take effect.
+:::
+
+#### Usage
+
+Input
+
+| Parameter Name | Type   | Required | Default Value | Description                      |
+|----------------|--------|----------|---------------|----------------------------------|
+| table          | String | N        | None          | Name of table to show compaction |
+| path           | String | N        | None          | Path of table to show compaction |
+| limit          | Int    | N        | None          | Max result number to be returned |
+
+Output
+
+| Parameter Name | Type   | Required | Default Value | Description                           |
+|----------------|--------|----------|---------------|---------------------------------------|
+| timestamp      | String | N        | None          | Instant time                          |
+| action         | String | N        | None          | Action name of compaction             |
+| size           | Int    | N        | None          | Number of file slices to be compacted |
+
+#### Example
+Show compactions with table name
+```
+call show_compaction(table => 'test_hudi_table')
+```
+| timestamp         | action     | size    |
+|-------------------|------------|---------|
+| 20220408153707928 | compaction | 10      |
+| 20220408153636963 | compaction | 10      |
+
+Show compactions with table path
+```
+call show_compaction(path => '/tmp/hoodie/test_hudi_table')
+```
+| timestamp         | action     | size    |
+|-------------------|------------|---------|
+| 20220408153707928 | compaction | 10      |
+| 20220408153636963 | compaction | 10      |
+
+Show compactions with table name and limit
+```
+call show_compaction(table => 'test_hudi_table', limit => 1)
+```
+| timestamp         | action     | size    |
+|-------------------|------------|---------|
+| 20220408153707928 | compaction | 10      |
