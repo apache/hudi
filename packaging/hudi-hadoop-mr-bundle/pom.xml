@@ -68,6 +68,7 @@
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
                   <!-- Parquet -->
+                  <include>org.apache.parquet:parquet-avro</include>
                   <include>org.apache.parquet:parquet-hadoop-bundle</include>
                   <include>org.apache.avro:avro</include>
                   <include>com.esotericsoftware:kryo-shaded</include>
@@ -255,6 +256,13 @@
     </dependency>
 
     <!-- Parquet -->
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-avro</artifactId>
+      <version>${parquet.version}</version>
+      <scope>compile</scope>
+    </dependency>
+
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-hadoop-bundle</artifactId>
