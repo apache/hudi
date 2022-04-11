@@ -1353,13 +1353,9 @@ public class HoodieTableMetadataUtil {
     return new HashSet<>(tableConfig.getMetadataPartitionsInflight());
   }
 
-  public static Set<String> getCompletedMetadataPartitions(HoodieTableConfig tableConfig) {
-    return new HashSet<>(tableConfig.getMetadataPartitions());
-  }
-
   public static Set<String> getInflightAndCompletedMetadataPartitions(HoodieTableConfig tableConfig) {
     Set<String> inflightAndCompletedPartitions = getInflightMetadataPartitions(tableConfig);
-    inflightAndCompletedPartitions.addAll(getCompletedMetadataPartitions(tableConfig));
+    inflightAndCompletedPartitions.addAll(tableConfig.getMetadataPartitions());
     return inflightAndCompletedPartitions;
   }
 

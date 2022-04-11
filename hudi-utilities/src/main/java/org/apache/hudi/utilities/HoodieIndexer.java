@@ -48,7 +48,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getCompletedMetadataPartitions;
 import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
@@ -221,7 +220,7 @@ public class HoodieIndexer {
   }
 
   private boolean indexExists(List<MetadataPartitionType> partitionTypes) {
-    Set<String> indexedMetadataPartitions = getCompletedMetadataPartitions(metaClient.getTableConfig());
+    Set<String> indexedMetadataPartitions = metaClient.getTableConfig().getMetadataPartitions();
     Set<String> requestedIndexPartitionPaths = partitionTypes.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
     requestedIndexPartitionPaths.retainAll(indexedMetadataPartitions);
     if (!requestedIndexPartitionPaths.isEmpty()) {

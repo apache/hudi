@@ -43,7 +43,6 @@ import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getCompletedMetadataPartitions;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 
 /**
@@ -81,7 +80,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
 
     JavaRDD<List<HoodieKeyLookupResult>> keyLookupResultRDD;
     if (config.getBloomIndexUseMetadata()
-        && getCompletedMetadataPartitions(hoodieTable.getMetaClient().getTableConfig())
+        && hoodieTable.getMetaClient().getTableConfig().getMetadataPartitions()
         .contains(BLOOM_FILTERS.getPartitionPath())) {
       // Step 1: Sort by file id
       JavaRDD<Tuple2<String, HoodieKey>> sortedFileIdAndKeyPairs =
