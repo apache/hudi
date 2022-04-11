@@ -13,42 +13,51 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-dag_name: cow-spark-simple.yaml
-dag_rounds: 1
-dag_intermittent_delay_mins: 1
+dag_name: deltastreamer-long-running-multi-partitions.yaml
+dag_rounds: 6
+dag_intermittent_delay_mins: 0
 dag_content:
   first_insert:
     config:
       record_size: 1000
       num_partitions_insert: 1
       repeat_count: 1
-      num_records_insert: 100
-    type: SparkInsertNode
+      num_records_insert: 1000
+    type: InsertNode
     deps: none
-  first_validate:
+  second_insert:
     config:
-      validate_hive: false
-    type: ValidateDatasetNode
+      record_size: 1000
+      num_partitions_insert: 1
+      repeat_count: 1
+      num_records_insert: 10000
     deps: first_insert
+    type: InsertNode
   first_upsert:
     config:
       record_size: 1000
       num_partitions_insert: 1
-      num_records_insert: 50
+      num_records_insert: 1000
       repeat_count: 1
-      num_records_upsert: 100
+      num_records_upsert: 8000
       num_partitions_upsert: 1
-    type: SparkUpsertNode
-    deps: first_validate
+    type: UpsertNode
+    deps: second_insert
   first_delete:
     config:
       num_partitions_delete: 1
-      num_records_delete: 30
-    type: SparkDeleteNode
+      num_records_delete: 1000
+    type: DeleteNode
     deps: first_upsert
   second_validate:
     config:
+      validate_once_every_itr : 3
       validate_hive: false
-      delete_input_data: false
+      delete_input_data: true
     type: ValidateDatasetNode
     deps: first_delete
+  last_validate:
+    config:
+      execute_itr_count: 6
+    type: ValidateAsyncOperations
+    deps: second_validate

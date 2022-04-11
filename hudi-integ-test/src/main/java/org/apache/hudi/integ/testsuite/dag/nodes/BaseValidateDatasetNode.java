@@ -81,7 +81,7 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
       SparkSession session = SparkSession.builder().sparkContext(context.getJsc().sc()).getOrCreate();
       // todo: Fix partitioning schemes. For now, assumes data based partitioning.
       String inputPath = context.getHoodieTestSuiteWriter().getCfg().inputBasePath + "/*/*";
-      log.warn("Validation using data from input path " + inputPath);
+      log.info("Validation using data from input path " + inputPath);
       // listing batches to be validated
       String inputPathStr = context.getHoodieTestSuiteWriter().getCfg().inputBasePath;
       if (log.isDebugEnabled()) {
@@ -166,7 +166,7 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
     ExpressionEncoder encoder = getEncoder(inputDf.schema());
     return inputDf.groupByKey(
             (MapFunction<Row, String>) value ->
-                value.getAs(partitionPathField) + "+" + value.getAs(recordKeyField), Encoders.STRING())
+                (partitionPathField.isEmpty() ? value.getAs(recordKeyField) : (value.getAs(partitionPathField) + "+" + value.getAs(recordKeyField))), Encoders.STRING())
         .reduceGroups((ReduceFunction<Row>) (v1, v2) -> {
           int ts1 = v1.getAs(SchemaUtils.SOURCE_ORDERING_FIELD);
           int ts2 = v2.getAs(SchemaUtils.SOURCE_ORDERING_FIELD);
