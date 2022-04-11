@@ -1094,6 +1094,24 @@ alter table hudi_cow_pt_tbl drop partition (dt='2021-12-09', hh='10');
 Currently,  the result of `show partitions` is based on the filesystem table path. It's not precise when delete the whole partition data or drop certain partition directly.
 
 :::
+### Procedures
+**Syntax**
+```sql
+--Call procedure by positional arguments
+CALL system.procedure_name(arg_1, arg_2, ... arg_n)
+
+--Call procedure by named arguments
+CALL system.procedure_name(arg_name_2 => arg_2, arg_name_1 => arg_1, ... arg_name_n => arg_n)
+```
+**Examples**
+```sql
+--show commit's info
+call show_commits(table => 'test_hudi_table', limit => 10);
+```
+
+Call command has already support some commit procedures and table optimization procedures, 
+more details please refer to [procedures](/docs/next/procedures).
+
 
 ## Where to go from here?
 

@@ -28,115 +28,106 @@ CALL system.procedure_name(arg_1, arg_2, ... arg_n)
 
 ### show_commits
 
-:::note
-Show a commit's info.
-:::
+Show commits' info.
 
-#### Usage
+**Input**
 
-Iutput
+| Parameter Name | Type   | Required | Default Value | Description                          |
+|----------------|--------|----------|---------------|--------------------------------------|
+| table          | String | Y        | None          | Hudi table name                      |
+| limit          | Int    | N        | 10            | Max number of records to be returned |
 
-| Parameter Name | Type | Required | Default Value | Description |
-|------------|--------|--------|--------|--------|
-| table | String | Y | None | hudi table name |
-| limit | Int | N | 10 | return result's limit |
+**Output**
 
-Output
+| Output Name                  | Type   |
+|------------------------------|--------|
+| commit_time                  | String |
+| total_bytes_written          | Long   |
+| total_files_added            | Long   |
+| total_files_updated          | Long   |
+| total_partitions_written     | Long   |
+| total_records_written        | Long   |
+| total_update_records_written | Long   |
+| total_errors                 | Long   |
 
-| Output Name | Type |
-|------------|--------|
-| commit_time | String |
-| total_bytes_written | Long |
-| total_files_added | Long |
-| total_files_updated | Long |
-| total_partitions_written | Long |
-| total_records_written | Long |
-| total_update_records_written | Long |
-| total_errors | Long |
+**Example**
 
-#### Example
 ```
 call show_commits(table => 'test_hudi_table', limit => 10);
 ```
 
-|    commit_time   |	total_bytes_written | total_files_added | total_files_updated | total_partitions_written | total_records_written | total_update_records_written | total_errors |
-|----------------- | ------------- |-------------|-------------|------------------ |------------- |----------------  |-------------------------|
-|20220216171049652 |	432653     |	0 |	1 |	1 |	0 |	0 |	0 |
-|20220216171027021 |	435346     |	1 |	0 |	1 |	1 |	0 |	0 |
-|20220216171019361 |	435349     |	1 |	0 |	1 |	1 |	0 |	0 |
+| commit_time       | 	total_bytes_written     | total_files_added | total_files_updated | total_partitions_written | total_records_written | total_update_records_written | total_errors |
+|-------------------|--------------------------|-------------------|---------------------|--------------------------|-----------------------|------------------------------|--------------|
+| 20220216171049652 | 	432653                  | 0                 | 1                   | 1                        | 0                     | 0                            | 0            |
+| 20220216171027021 | 	435346                  | 1                 | 0                   | 1                        | 1                     | 	0                           | 0            |
+| 20220216171019361 | 	435349                  | 1                 | 0                   | 1                        | 1                     | 	0                           | 0            |
 
 ### show_commits_metadata
 
-:::note
-Show a commits metadata.
-:::
+Show commits' metadata.
 
-#### Usage
+**Input**
 
-Iutput
+| Parameter Name | Type   | Required | Default Value | Description                          |
+|----------------|--------|----------|---------------|--------------------------------------|
+| table          | String | Y        | None          | Hudi table name                      |
+| limit          | Int    | N        | 10            | Max number of records to be returned |
 
-| Parameter Name | Type | Required | Default Value | Description |
-|------------|--------|--------|--------|--------|
-| table | String | Y | None | hudi table name |
-| limit | Int | N | 10 | return result's limit |
+**Output**
 
-Output
+| Output Name                     | Type   |
+|---------------------------------|--------|
+| commit_time                     | String |
+| action                          | String |
+| partition                       | String |
+| file_id                         | String |
+| previous_commit                 | String |
+| num_writes                      | Long   |
+| num_inserts                     | Long   |
+| num_deletes                     | Long   |
+| num_update_writes               | String |
+| total_errors                    | Long   |
+| total_log_blocks                | Long   |
+| total_corrupt_logblocks         | Long   |
+| total_rollback_blocks           | Long   |
+| total_log_records               | Long   |
+| total_updated_records_compacted | Long   |
+| total_bytes_written             | Long   |
 
-| Output Name | Type |
-|------------|--------|
-| commit_time | String |
-| action | String |
-| partition | String |
-| file_id | String |
-| previous_commit | String |
-| num_writes | Long |
-| num_inserts | Long |
-| num_deletes | Long |
-| num_update_writes | String |
-| total_errors | Long |
-| total_log_blocks | Long |
-| total_corrupt_logblocks | Long |
-| total_rollback_blocks | Long |
-| total_log_records | Long |
-| total_updated_records_compacted | Long |
-| total_bytes_written | Long |
+**Example**
 
-#### Example
 ```
 call show_commits_metadata(table => 'test_hudi_table');
 ```
 
-|    commit_time   | action |	 partition  |               	file_id              |	previous_commit |	num_writes | num_inserts | num_deletes | num_update_writes | total_errors | total_log_blocks | total_corrupt_logblocks | total_rollback_blocks | total_log_records | total_updated_records_compacted | total_bytes_written|
-|----------------- |  ----  |  ------------ |----------------------------------------| ---------------- |------------- |-------------|-------------|------------------ |------------- |----------------  |-------------------------|---------------------- |-------------------|-------------------------------  |------------------- |
-|20220109225319449 | commit | dt=2021-05-03	| d0073a12-085d-4f49-83e9-402947e7e90a-0 | null             | 	1          | 	1        | 	0          | 0                 | 0            | 0				 | 0					   | 0                     | 0                 | 0                               | 435349             |
-|20220109225311742 | commit	| dt=2021-05-02	| b3b32bac-8a44-4c4d-b433-0cb1bf620f23-0 | 20220109214830592| 	1          | 	1        | 	0	       | 0	               | 0            | 0				 | 0					   | 0                     | 0                 | 0                               | 435340             |
-|20220109225301429 | commit	| dt=2021-05-01	| 0d7298b3-6b55-4cff-8d7d-b0772358b78a-0 | 20220109214830592| 	1          | 	1        | 	0          | 0                 | 0	          | 0				 | 0					   | 0                     | 0                 | 0                               | 435340             |
-|20220109214830592 | commit	| dt=2021-05-01	| 0d7298b3-6b55-4cff-8d7d-b0772358b78a-0 | 20220109191631015| 	0          | 	0        | 	1	       | 0	               | 0            | 0				 | 0					   | 0                     | 0                 | 0                               | 432653             |
-|20220109214830592 | commit	| dt=2021-05-02	| b3b32bac-8a44-4c4d-b433-0cb1bf620f23-0 | 20220109191648181| 	0          | 	0        | 	1	       | 0	               | 0	          | 0				 | 0					   | 0                     | 0                 | 0                               | 432653             |
-|20220109191648181 | commit	| dt=2021-05-02	| b3b32bac-8a44-4c4d-b433-0cb1bf620f23-0 | null             | 	1          | 	1        | 	0          | 0                 | 0            | 0				 | 0					   | 0                     | 0                 | 0                               | 435341             |
-|20220109191631015 | commit	| dt=2021-05-01	| 0d7298b3-6b55-4cff-8d7d-b0772358b78a-0 | null             | 	1          | 	1        | 	0          | 0                 | 0            | 0				 | 0					   | 0                     | 0                 | 0                               | 435341             |
+|    commit_time   | action  | partition     | file_id                                | previous_commit   | num_writes | num_inserts | num_deletes | num_update_writes | total_errors | total_log_blocks | total_corrupt_logblocks | total_rollback_blocks | total_log_records | total_updated_records_compacted | total_bytes_written|
+|----------------- |---------|---------------|----------------------------------------|-------------------|------------|-------------|-------------|-------------------|--------------|------------------|-------------------------|-----------------------|-------------------|---------------------------------|------------------- |
+|20220109225319449 | commit  | dt=2021-05-03 | d0073a12-085d-4f49-83e9-402947e7e90a-0 | null              | 1          | 1           | 0           | 0                 | 0            | 0 	              | 0                       | 0                     | 0                 | 0                               | 435349             |
+|20220109225311742 | commit  | dt=2021-05-02 | b3b32bac-8a44-4c4d-b433-0cb1bf620f23-0 | 20220109214830592 | 1          | 1           | 0           | 0	                | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 435340             |
+|20220109225301429 | commit  | dt=2021-05-01 | 0d7298b3-6b55-4cff-8d7d-b0772358b78a-0 | 20220109214830592 | 1          | 1           | 0           | 0                 | 0	           | 0                | 0                       | 0                     | 0                 | 0                               | 435340             |
+|20220109214830592 | commit  | dt=2021-05-01 | 0d7298b3-6b55-4cff-8d7d-b0772358b78a-0 | 20220109191631015 | 0          | 0           | 1           | 0	                | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 432653             |
+|20220109214830592 | commit  | dt=2021-05-02 | b3b32bac-8a44-4c4d-b433-0cb1bf620f23-0 | 20220109191648181 | 0          | 0           | 1           | 0	                | 0	           | 0                | 0                       | 0                     | 0                 | 0                               | 432653             |
+|20220109191648181 | commit  | dt=2021-05-02 | b3b32bac-8a44-4c4d-b433-0cb1bf620f23-0 | null              | 1          | 1           | 0           | 0                 | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 435341             |
+|20220109191631015 | commit  | dt=2021-05-01 | 0d7298b3-6b55-4cff-8d7d-b0772358b78a-0 | null              | 1          | 1           | 0           | 0                 | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 435341             |
 
 ### rollback_to_instant
 
-:::note
 Rollback a table to the commit that was current at some time.
-:::
 
-#### Usage
+**Input**
 
-Iutput
+| Parameter Name | Type   | Required | Default Value | Description     |
+|----------------|--------|----------|---------------|-----------------|
+| table          | String | Y        | None          | Hudi table name |
 
-| Parameter Name | Type | Required | Default Value | Description |
-|------------|--------|--------|--------|--------|
-| table | String | Y | None | hudi table name |
+**Output**
 
-Output
+| Output Name     | Type    |
+|-----------------|---------|
+| rollback_result | Boolean |
 
-| Output Name | Type |
-|------------|--------|
-| rollback_result | Bollean |
+**Example**
 
-#### Example
 Roll back test_hudi_table to one instant
 ```
 call rollback_to_instant(table => 'test_hudi_table', instant_time => '20220109225319449');
@@ -148,113 +139,106 @@ call rollback_to_instant(table => 'test_hudi_table', instant_time => '2022010922
 
 ### create_savepoints
 
-:::note
-Create a savepoint to hudi's table..
-:::
+Create a savepoint to hudi's table.
 
-#### Usage
+**Input**
 
-Iutput
+| Parameter Name | Type   | Required | Default Value | Description     |
+|----------------|--------|----------|---------------|-----------------|
+| table          | String | Y        | None          | Hudi table name |
+| commit_Time    | String | Y        | None          | Commit time     |
+| user           | String | N        | ""            | User name       |
+| comments       | String | N        | ""            | Comments        |
 
-| Parameter Name | Type | Required | Default Value | Description |
-|------------|--------|--------|--------|--------|
-| table | String | Y | None | hudi table name |
-| commit_Time | String | Y | None | commit time |
-| user | String | N | "" | user name |
-| comments | String | N | "" | comments |
+**Output**
 
-Output
+| Output Name             | Type    |
+|-------------------------|---------|
+| create_savepoint_result | Boolean |
 
-| Output Name | Type |
-|------------|--------|
-| create_savepoint_result | Bollean |
+**Example**
 
-#### Example
 Roll back test_hudi_table to one instant
 ```
 call create_savepoints(table => 'test_hudi_table', instant_time => '20220109225319449');
 ```
 
 | create_savepoint_result |
-| :---------------|
-|    true         |
+|:------------------------|
+| true                    |
 
 ### delete_savepoints
 
-:::note
 Delete a savepoint to hudi's table.
-:::
 
-#### Usage
+**Input**
 
-Iutput
+| Parameter Name | Type   | Required | Default Value | Description     |
+|----------------|--------|----------|---------------|-----------------|
+| table          | String | Y        | None          | Hudi table name |
+| instant_time   | String | Y        | None          | Instant time    |
 
-| Parameter Name | Type | Required | Default Value | Description |
-|------------|--------|--------|--------|--------|
-| table | String | Y | None | hudi table name |
-| instant_time | String | Y | None | instant time |
+**Output**
 
-Output
+| Output Name             | Type    |
+|-------------------------|---------|
+| delete_savepoint_result | Boolean |
 
-| Output Name | Type |
-|------------|--------|
-| delete_savepoint_result | Bollean |
+**Example**
 
-#### Example
 Delete a savepoint to test_hudi_table
 ```
 call delete_savepoints(table => 'test_hudi_table', instant_time => '20220109225319449');
 ```
 
 | delete_savepoint_result |
-| :---------------|
-|    true         |
+|:------------------------|
+| true                    |
 
 ### rollback_savepoints
 
-:::note
 Rollback a table to the commit that was current at some time.
-:::
 
-#### Usage
+**Input**
 
-Iutput
+| Parameter Name | Type   | Required | Default Value | Description     |
+|----------------|--------|----------|---------------|-----------------|
+| table          | String | Y        | None          | Hudi table name |
+| instant_time   | String | Y        | None          | Instant time    |
 
-| Parameter Name | Type | Required | Default Value | Description |
-|------------|--------|--------|--------|--------|
-| table | String | Y | None | hudi table name |
-| instant_time | String | Y | None | instant time |
+**Output**
 
-Output
+| Output Name               | Type    |
+|---------------------------|---------|
+| rollback_savepoint_result | Boolean |
 
-| Output Name | Type |
-|------------|--------|
-| rollback_savepoint_result | Bollean |
+**Example**
 
-#### Example
 Rollback test_hudi_table to one savepoint
 ```
 call rollback_savepoints(table => 'test_hudi_table', instant_time => '20220109225319449');
 ```
 
 | rollback_savepoint_result |
-| :---------------|
-|    true         |
+|:--------------------------|
+| true                      |
 
 ## Optimization table
 
 ### run_clustering
-:::note
+
 Trigger clustering on a hoodie table. By using partition predicates, clustering table can be run 
-with specified partitions. You can also specify the order columns to sort data. Newly clustering
-instant will be generated every call, and all pending clustering instants are executed. When calling 
-this procedure, one of parameters ``table`` and ``path`` must be specified at least. If both 
+with specified partitions, and you can also specify the order columns to sort data.
+
+:::note
+Newly clustering instant will be generated every call, and all pending clustering instants are executed.
+When calling this procedure, one of parameters ``table`` and ``path`` must be specified at least. If both 
 parameters are given, ``table`` will take effect.
+
 :::
 
-#### Usage
 
-Input
+**Input**
 
 | Parameter Name | Type   | Required | Default Value | Description                   |
 |----------------|--------|----------|---------------|-------------------------------|
@@ -263,11 +247,12 @@ Input
 | predicate      | String | N        | None          | Predicate to filter partition |
 | order          | String | N        | None          | Order column split by `,`     |
 
-Output
+**Output**
 
 Empty
 
-#### Example
+**Example**
+
 Clustering test_hudi_table with table name
 ```
 call run_clustering(table => 'test_hudi_table')
@@ -284,29 +269,33 @@ call run_clustering(table => 'test_hudi_table', predicate => 'ts <= 20220408L', 
 ```
 
 ### show_clustering
+
+Show pending clusterings on a hoodie table. 
+
 :::note
-Show pending clusterings on a hoodie table. When calling this procedure, one of parameters ``table``
-and ``path`` must be specified at least. If both parameters are given, ``table`` will take effect.
+When calling this procedure, one of parameters ``table`` and ``path`` must be specified at least. 
+If both parameters are given, ``table`` will take effect.
+
 :::
 
-#### Usage
 
-Input
+**Input**
 
-| Parameter Name | Type   | Required | Default Value | Description                      |
-|----------------|--------|----------|---------------|----------------------------------|
-| table          | String | N        | None          | Name of table to be clustered    |
-| path           | String | N        | None          | Path of table to be clustered    |
-| limit          | Int    | N        | None          | Max result number to be returned |
+| Parameter Name | Type   | Required | Default Value | Description                          |
+|----------------|--------|----------|---------------|--------------------------------------|
+| table          | String | N        | None          | Name of table to be clustered        |
+| path           | String | N        | None          | Path of table to be clustered        |
+| limit          | Int    | N        | None          | Max number of records to be returned |
 
-Output
+**Output**
 
 | Parameter Name | Type   | Required | Default Value | Description                           |
 |----------------|--------|----------|---------------|---------------------------------------|
 | timestamp      | String | N        | None          | Instant time                          |
 | groups         | Int    | N        | None          | Number of file groups to be processed |
 
-#### Example
+**Example**
+
 Show pending clusterings with table name
 ```
 call show_clustering(table => 'test_hudi_table')
@@ -334,19 +323,23 @@ call show_clustering(table => 'test_hudi_table', limit => 1)
 | 20220408153707928 | 2      |
 
 ### run_compaction
+
+Schedule or run compaction on a hoodie table. 
+
 :::note
-Schedule or run compaction on a hoodie table. For scheduling compaction, if `timestamp` is specified, 
-new scheduled compaction will use given timestamp as instant time. Otherwise, compaction will be scheduled 
-by using current system time. For running compaction, given ``timestamp`` must be a pending compaction 
-instant time that already exists, if it's not, exception will be thrown. Meanwhile, if ``timestamp``
-is specified and there are pending compactions, all pending compactions will be executed without new 
-compaction instant generated. When calling this procedure, one of parameters ``table`` and ``path`` 
-must be specified at least. If both parameters are given, ``table`` will take effect.
+For scheduling compaction, if `timestamp` is specified, new scheduled compaction will use given 
+timestamp as instant time. Otherwise, compaction will be scheduled by using current system time. 
+
+For running compaction, given ``timestamp`` must be a pending compaction instant time that 
+already exists, if it's not, exception will be thrown. Meanwhile, if ``timestamp``is specified 
+and there are pending compactions, all pending compactions will be executed without new compaction 
+instant generated. 
+
+When calling this procedure, one of parameters ``table`` and ``path``must be specified at least. 
+If both parameters are given, ``table`` will take effect.
 :::
 
-#### Usage
-
-Input
+**Input**
 
 | Parameter Name | Type   | Required | Default Value | Description                         |
 |----------------|--------|----------|---------------|-------------------------------------|
@@ -355,7 +348,7 @@ Input
 | path           | String | N        | None          | Path of table to be compacted       |
 | timestamp      | String | N        | None          | Instant time                        |
 
-Output
+**Output**
 
 The output of `RUN` operation is `EMPTY`, the output of `SCHEDULE` as follow:
 
@@ -363,7 +356,8 @@ The output of `RUN` operation is `EMPTY`, the output of `SCHEDULE` as follow:
 |----------------|--------|-----------|---------------|--------------|
 | instant        | String | N         | None          | Instant name |
 
-#### Example
+**Example**
+
 Run compaction with table name
 ```
 call run_compaction(op => 'run', table => 'test_hudi_table')
@@ -404,23 +398,24 @@ call run_compaction(op => 'schedule', path => '/tmp/hoodie/test_hudi_table', tim
 | 20220408153658568 |
 
 ### show_compaction
-:::note
+
 Show all compactions on a hoodie table, in-flight or completed compactions are included, and result will
-be in reverse order according to trigger time. When calling this procedure, one of parameters ``table`` 
-and ``path`` must be specified at least. If both parameters are given, ``table`` will take effect.
+be in reverse order according to trigger time. 
+
+:::note
+When calling this procedure, one of parameters ``table``and ``path`` must be specified at least. 
+If both parameters are given, ``table`` will take effect.
 :::
 
-#### Usage
+**Input**
 
-Input
+| Parameter Name | Type   | Required | Default Value | Description                          |
+|----------------|--------|----------|---------------|--------------------------------------|
+| table          | String | N        | None          | Name of table to show compaction     |
+| path           | String | N        | None          | Path of table to show compaction     |
+| limit          | Int    | N        | None          | Max number of records to be returned |
 
-| Parameter Name | Type   | Required | Default Value | Description                      |
-|----------------|--------|----------|---------------|----------------------------------|
-| table          | String | N        | None          | Name of table to show compaction |
-| path           | String | N        | None          | Path of table to show compaction |
-| limit          | Int    | N        | None          | Max result number to be returned |
-
-Output
+**Output**
 
 | Parameter Name | Type   | Required | Default Value | Description                           |
 |----------------|--------|----------|---------------|---------------------------------------|
@@ -428,7 +423,8 @@ Output
 | action         | String | N        | None          | Action name of compaction             |
 | size           | Int    | N        | None          | Number of file slices to be compacted |
 
-#### Example
+**Example**
+
 Show compactions with table name
 ```
 call show_compaction(table => 'test_hudi_table')
