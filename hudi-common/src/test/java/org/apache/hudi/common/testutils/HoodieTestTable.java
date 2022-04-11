@@ -282,13 +282,13 @@ public class HoodieTestTable {
   }
 
   public HoodieTestTable addClean(String instantTime, HoodieCleanerPlan cleanerPlan, HoodieCleanMetadata metadata) throws IOException {
-    return addClean(instantTime, cleanerPlan, metadata, false);
+    return addClean(instantTime, cleanerPlan, metadata, false, false);
   }
 
-  public HoodieTestTable addClean(String instantTime, HoodieCleanerPlan cleanerPlan, HoodieCleanMetadata metadata, boolean isEmpty) throws IOException {
-    createRequestedCleanFile(basePath, instantTime, cleanerPlan, false);
-    createInflightCleanFile(basePath, instantTime, cleanerPlan, false);
-    createCleanFile(basePath, instantTime, metadata, isEmpty);
+  public HoodieTestTable addClean(String instantTime, HoodieCleanerPlan cleanerPlan, HoodieCleanMetadata metadata, boolean isEmptyForAll, boolean isEmptyCompleted) throws IOException {
+    createRequestedCleanFile(basePath, instantTime, cleanerPlan, isEmptyForAll);
+    createInflightCleanFile(basePath, instantTime, cleanerPlan, isEmptyForAll);
+    createCleanFile(basePath, instantTime, metadata, isEmptyCompleted);
     currentInstantTime = instantTime;
     return this;
   }

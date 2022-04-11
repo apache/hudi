@@ -696,10 +696,14 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   }
 
   public HoodieInstant createCleanMetadata(String instantTime, boolean inflightOnly) throws IOException {
-    return createCleanMetadata(instantTime, inflightOnly, false);
+    return createCleanMetadata(instantTime, inflightOnly, false, false);
   }
 
-  public HoodieInstant createCleanMetadata(String instantTime, boolean inflightOnly, boolean isEmpty) throws IOException {
+  public HoodieInstant createEmptyCleanMetadata(String instantTime, boolean inflightOnly) throws IOException {
+    return createCleanMetadata(instantTime, inflightOnly, true, true);
+  }
+
+  public HoodieInstant createCleanMetadata(String instantTime, boolean inflightOnly, boolean isEmptyForAll, boolean isEmptyCompleted) throws IOException {
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant("", "", ""), "", new HashMap<>(),
             CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>());
     if (inflightOnly) {
@@ -713,7 +717,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
               Collections.emptyList(),
               instantTime);
       HoodieCleanMetadata cleanMetadata = convertCleanMetadata(instantTime, Option.of(0L), Collections.singletonList(cleanStats));
-      HoodieTestTable.of(metaClient).addClean(instantTime, cleanerPlan, cleanMetadata, isEmpty);
+      HoodieTestTable.of(metaClient).addClean(instantTime, cleanerPlan, cleanMetadata, isEmptyForAll, isEmptyCompleted);
     }
     return new HoodieInstant(inflightOnly, "clean", instantTime);
   }

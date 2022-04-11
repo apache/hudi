@@ -891,7 +891,7 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     int startInstant = 1;
     List<HoodieInstant> expectedArchivedInstants = new ArrayList<>();
     for (int i = 0; i < maxInstantsToKeep + 1; i++, startInstant++) {
-      createCleanMetadata(startInstant + "", false, isEmpty || i % 2 == 0);
+      createCleanMetadata(startInstant + "", false, false, isEmpty || i % 2 == 0);
       expectedArchivedInstants.add(new HoodieInstant(State.REQUESTED, HoodieTimeline.CLEAN_ACTION, startInstant + ""));
       expectedArchivedInstants.add(new HoodieInstant(State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, startInstant + ""));
       expectedArchivedInstants.add(new HoodieInstant(State.COMPLETED, HoodieTimeline.CLEAN_ACTION, startInstant + ""));
@@ -1286,7 +1286,8 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
 
   private List<HoodieInstant> getArchivedInstants(HoodieInstant instant) {
     List<HoodieInstant> instants = new ArrayList<>();
-    if (instant.getAction() == HoodieTimeline.COMMIT_ACTION || instant.getAction() == HoodieTimeline.DELTA_COMMIT_ACTION || instant.getAction() == HoodieTimeline.CLEAN_ACTION) {
+    if (instant.getAction().equals(HoodieTimeline.COMMIT_ACTION) || instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)
+        || instant.getAction().equals(HoodieTimeline.CLEAN_ACTION) || instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION)) {
       instants.add(new HoodieInstant(State.REQUESTED, instant.getAction(), instant.getTimestamp()));
     }
     instants.add(new HoodieInstant(State.INFLIGHT, instant.getAction(), instant.getTimestamp()));

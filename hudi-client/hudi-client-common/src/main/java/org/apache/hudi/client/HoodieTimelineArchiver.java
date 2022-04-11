@@ -591,9 +591,9 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
           // in local FS and HDFS, there could be empty completed instants due to crash.
           if (table.getActiveTimeline().isEmpty(hoodieInstant) && hoodieInstant.isCompleted()) {
             // lets add an entry to the archival, even if not for the plan.
-            records.add(convertToAvroRecord(hoodieInstant, true));
+            records.add(createAvroRecordFromEmptyInstant(hoodieInstant));
           } else {
-            records.add(convertToAvroRecord(hoodieInstant, false));
+            records.add(convertToAvroRecord(hoodieInstant));
           }
           if (records.size() >= this.config.getCommitArchivalBatchSize()) {
             writeToFile(wrapperSchema, records);
@@ -629,9 +629,12 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     }
   }
 
-  private IndexedRecord convertToAvroRecord(HoodieInstant hoodieInstant, boolean isEmpty)
+  private IndexedRecord convertToAvroRecord(HoodieInstant hoodieInstant)
       throws IOException {
-    return isEmpty ? MetadataConversionUtils.createMetaWrapperForEmptyInstant(hoodieInstant)
-        : MetadataConversionUtils.createMetaWrapper(hoodieInstant, metaClient);
+    return MetadataConversionUtils.createMetaWrapper(hoodieInstant, metaClient);
+  }
+
+  private IndexedRecord createAvroRecordFromEmptyInstant(HoodieInstant hoodieInstant) throws IOException {
+    return MetadataConversionUtils.createMetaWrapperForEmptyInstant(hoodieInstant);
   }
 }
