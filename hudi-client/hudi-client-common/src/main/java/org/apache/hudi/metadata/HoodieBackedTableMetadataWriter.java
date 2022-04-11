@@ -379,21 +379,24 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }
 
     // if metadata table exists, then check if any of the enabled partition types needs to be initialized
-    Set<String> inflightAndCompletedPartitions = getInflightAndCompletedMetadataPartitions(dataMetaClient.getTableConfig());
-    List<MetadataPartitionType> partitionsToInit = this.enabledPartitionTypes.stream()
-        .filter(p -> !inflightAndCompletedPartitions.contains(p.getPartitionPath()) && !MetadataPartitionType.FILES.equals(p))
-        .collect(Collectors.toList());
+    // NOTE: It needs to be guarded by async index config because if that is enabled then initialization happens through the index scheduler.
+    if (!dataWriteConfig.isMetadataAsyncIndex()) {
+      Set<String> inflightAndCompletedPartitions = getInflightAndCompletedMetadataPartitions(dataMetaClient.getTableConfig());
+      LOG.info("Async metadata indexing enabled and following partitions already initialized: " + inflightAndCompletedPartitions);
+      List<MetadataPartitionType> partitionsToInit = this.enabledPartitionTypes.stream()
+          .filter(p -> !inflightAndCompletedPartitions.contains(p.getPartitionPath()) && !MetadataPartitionType.FILES.equals(p))
+          .collect(Collectors.toList());
+      // if there are no partitions to initialize or there is a pending operation, then don't initialize in this round
+      if (partitionsToInit.isEmpty() || anyPendingDataInstant(dataMetaClient, inflightInstantTimestamp)) {
+        return;
+      }
 
-    // if there are no partitions to initialize or there is a pending operation, then don't initialize in this round
-    if (partitionsToInit.isEmpty() || anyPendingDataInstant(dataMetaClient, inflightInstantTimestamp)) {
-      return;
+      String createInstantTime = getInitialCommitInstantTime(dataMetaClient);
+      initTableMetadata(); // re-init certain flags in BaseTableMetadata
+      initializeEnabledFileGroups(dataMetaClient, createInstantTime, partitionsToInit);
+      initialCommit(createInstantTime, partitionsToInit);
+      updateInitializedPartitionsInTableConfig(partitionsToInit);
     }
-
-    String createInstantTime = getInitialCommitInstantTime(dataMetaClient);
-    initTableMetadata(); // re-init certain flags in BaseTableMetadata
-    initializeEnabledFileGroups(dataMetaClient, createInstantTime, partitionsToInit);
-    initialCommit(createInstantTime, partitionsToInit);
-    updateInitializedPartitionsInTableConfig(partitionsToInit);
   }
 
   private <T extends SpecificRecordBase> boolean metadataTableExists(HoodieTableMetaClient dataMetaClient,
@@ -557,6 +560,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     List<HoodieInstant> pendingDataInstant = dataMetaClient.getActiveTimeline()
         .getInstants().filter(i -> !i.isCompleted())
         .filter(i -> !inflightInstantTimestamp.isPresent() || !i.getTimestamp().equals(inflightInstantTimestamp.get()))
+        // regular writers should not be blocked due to pending indexing action
+        .filter(i -> !HoodieTimeline.INDEXING_ACTION.equals(i.getAction()))
         .collect(Collectors.toList());
 
     if (!pendingDataInstant.isEmpty()) {
