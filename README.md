@@ -64,6 +64,8 @@ spark-2.4.4-bin-hadoop2.7/bin/spark-shell \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
+To build for integration tests that include `hudi-integ-test-bundle`, use `-Dintegration-tests`.
+
 To build the Javadoc for all Java and Scala classes:
 ```
 # Javadoc generated under target/site/apidocs
