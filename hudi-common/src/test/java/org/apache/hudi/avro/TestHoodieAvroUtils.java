@@ -32,6 +32,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -225,6 +226,20 @@ public class TestHoodieAvroUtils {
     assertEquals(NUM_FIELDS_IN_EXAMPLE_SCHEMA + HoodieRecord.HOODIE_META_COLUMNS.size(), schemaWithMetaCols.getFields().size());
     Schema schemaWithoutMetaCols = HoodieAvroUtils.removeMetadataFields(schemaWithMetaCols);
     assertEquals(NUM_FIELDS_IN_EXAMPLE_SCHEMA, schemaWithoutMetaCols.getFields().size());
+  }
+
+  @Test
+  public void testRemoveFields() {
+    GenericRecord rec = new GenericData.Record(new Schema.Parser().parse(EXAMPLE_SCHEMA));
+    rec.put("_row_key", "key1");
+    rec.put("non_pii_col", "val1");
+    rec.put("pii_col", "val2");
+    rec.put("timestamp", 3.5);
+    GenericRecord rec1 = HoodieAvroUtils.removeFields(rec, Arrays.asList("pii_col"));
+    assertEquals("key1", rec1.get("_row_key"));
+    assertEquals("val1", rec1.get("non_pii_col"));
+    assertEquals(3.5, rec1.get("timestamp"));
+    assertNull(rec1.get("pii_col"));
   }
 
   @Test

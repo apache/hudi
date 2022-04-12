@@ -31,6 +31,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -111,6 +112,7 @@ import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT;
 import static org.apache.hudi.config.HoodieWriteConfig.AUTO_COMMIT_ENABLE;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_INSERT;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_UPSERT;
+import static org.apache.hudi.config.HoodieWriteConfig.DROP_PARTITION_COLUMNS;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_RESET_KEY;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
@@ -477,14 +479,19 @@ public class DeltaSync implements Serializable {
     }
 
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
+    boolean isDropPartitionColumns = props.getBoolean(DROP_PARTITION_COLUMNS.key());
+    String partitionColumns = HoodieSparkUtils.getPartitionColumns(keyGenerator, props);
+    List<String> listOfPartitionColumns = Arrays.asList(partitionColumns.split(","));
     JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
+    HoodieKey key = keyGenerator.getKey(avroRDD.first());
     JavaRDD<HoodieRecord> records = avroRDD.map(gr -> {
+      gr = isDropPartitionColumns ? HoodieAvroUtils.removeFields(gr, listOfPartitionColumns) : gr;
       HoodieRecordPayload payload = shouldCombine ? DataSourceUtils.createPayload(cfg.payloadClassName, gr,
           (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false, props.getBoolean(
               KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
               Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()))))
           : DataSourceUtils.createPayload(cfg.payloadClassName, gr);
-      return new HoodieAvroRecord<>(keyGenerator.getKey(gr), payload);
+      return new HoodieAvroRecord<>(key, payload);
     });
 
     return Pair.of(schemaProvider, Pair.of(checkpointStr, records));
@@ -727,6 +734,13 @@ public class DeltaSync implements Serializable {
 
   private void reInitWriteClient(Schema sourceSchema, Schema targetSchema) throws IOException {
     LOG.info("Setting up new Hoodie Write Client");
+    final boolean isDropPartitionColumns = props.getBoolean(DROP_PARTITION_COLUMNS.key());
+    if (isDropPartitionColumns) {
+      String partitionColumns = HoodieSparkUtils.getPartitionColumns(keyGenerator, props);
+      List<String> listOfPartitionColumns = Arrays.asList(partitionColumns.split(","));
+      targetSchema = HoodieAvroUtils.removeFields(targetSchema, listOfPartitionColumns);
+    }
+
     registerAvroSchemas(sourceSchema, targetSchema);
     HoodieWriteConfig hoodieCfg = getHoodieClientConfig(targetSchema);
     if (hoodieCfg.isEmbeddedTimelineServerEnabled()) {
