@@ -779,11 +779,15 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // fetch partitions to update from table config
     Set<String> partitionsToUpdate = getCompletedMetadataPartitions(dataMetaClient.getTableConfig());
     // add inflight indexes as well because the file groups have already been initialized, so writers can log updates
+    // NOTE: Async HoodieIndexer can move some partition to inflight. While that partition is still being built,
+    //       the regular ingestion writers should not be blocked. They can go ahead and log updates to the metadata partition.
+    //       Instead of depending on enabledPartitionTypes, the table config becomes the source of truth for which partitions to update.
     partitionsToUpdate.addAll(getInflightMetadataPartitions(dataMetaClient.getTableConfig()));
     if (!partitionsToUpdate.isEmpty()) {
       return partitionsToUpdate;
     }
     // fallback to all enabled partitions if table config returned no partitions
+    LOG.warn("There are no partitions to update according to table config. Falling back to enabled partition types in the write config.");
     return getEnabledPartitionTypes().stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
   }
 
