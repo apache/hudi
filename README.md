@@ -64,6 +64,8 @@ spark-2.4.4-bin-hadoop2.7/bin/spark-shell \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
+To build for integration tests that include `hudi-integ-test-bundle`, use `-Dintegration-tests`.
+
 To build the Javadoc for all Java and Scala classes:
 ```
 # Javadoc generated under target/site/apidocs
@@ -72,32 +74,31 @@ mvn clean javadoc:aggregate -Pjavadocs
 
 ### Build with different Spark versions
 
-The default Spark version supported is 2.4.4. To build for different Spark versions and Scala 2.12, use the
-corresponding profile
+The default Spark version supported is 2.4.4. Refer to the table below for building with different Spark and Scala versions.
 
-| Label | Artifact Name for Spark Bundle | Maven Profile Option | Notes |
-|--|--|--|--|
-| Spark 2.4, Scala 2.11  | hudi-spark2.4-bundle_2.11 | `-Pspark2.4` | For Spark 2.4.4, which is the same as the default  |
-| Spark 2.4, Scala 2.12 | hudi-spark2.4-bundle_2.12 | `-Pspark2.4,scala-2.12` | For Spark 2.4.4, which is the same as the default and Scala 2.12 |
-| Spark 3.1, Scala 2.12 | hudi-spark3.1-bundle_2.12 | `-Pspark3.1` | For Spark 3.1.x |
-| Spark 3.2, Scala 2.12 | hudi-spark3.2-bundle_2.12 | `-Pspark3.2` | For Spark 3.2.x |
-| Spark 3, Scala 2.12 | hudi-spark3-bundle_2.12 | `-Pspark3` | This is the same as `Spark 3.2, Scala 2.12` |
-| Spark, Scala 2.11 | hudi-spark-bundle_2.11 | Default | The default profile, supporting Spark 2.4.4 |
-| Spark, Scala 2.12 | hudi-spark-bundle_2.12 | `-Pscala-2.12` | The default profile (for Spark 2.4.4) with Scala 2.12 |
+| Maven build options       | Expected Spark bundle jar name               | Notes                                            |
+|:--------------------------|:---------------------------------------------|:-------------------------------------------------|
+| (empty)                   | hudi-spark-bundle_2.11 (legacy bundle name)  | For Spark 2.4.4 and Scala 2.11 (default options) |
+| `-Dspark2.4`              | hudi-spark2.4-bundle_2.11                    | For Spark 2.4.4 and Scala 2.11 (same as default) |
+| `-Dspark2.4 -Dscala-2.12` | hudi-spark2.4-bundle_2.12                    | For Spark 2.4.4 and Scala 2.12                   |
+| `-Dspark3.1 -Dscala-2.12` | hudi-spark3.1-bundle_2.12                    | For Spark 3.1.x and Scala 2.12                   |
+| `-Dspark3.2 -Dscala-2.12` | hudi-spark3.2-bundle_2.12                    | For Spark 3.2.x and Scala 2.12                   |
+| `-Dspark3`                | hudi-spark3-bundle_2.12 (legacy bundle name) | For Spark 3.2.x and Scala 2.12                   |
+| `-Dscala-2.12`            | hudi-spark-bundle_2.12 (legacy bundle name)  | For Spark 2.4.4 and Scala 2.12                   |
 
 For example,
 ```
-# Build against Spark 3.2.x (the default build shipped with the public Spark 3 bundle)
-mvn clean package -DskipTests -Pspark3.2
+# Build against Spark 3.2.x
+mvn clean package -DskipTests -Dspark3.2 -Dscala-2.12
 
 # Build against Spark 3.1.x
-mvn clean package -DskipTests -Pspark3.1
+mvn clean package -DskipTests -Dspark3.1 -Dscala-2.12
 
 # Build against Spark 2.4.4 and Scala 2.12
-mvn clean package -DskipTests -Pspark2.4,scala-2.12
+mvn clean package -DskipTests -Dspark2.4 -Dscala-2.12
 ```
 
-### What about "spark-avro" module? 
+#### What about "spark-avro" module?
 
 Starting from versions 0.11, Hudi no longer requires `spark-avro` to be specified using `--packages`
 
