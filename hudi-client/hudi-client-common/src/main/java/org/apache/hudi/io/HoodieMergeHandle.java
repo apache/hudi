@@ -293,13 +293,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     }
     try {
       if (indexedRecord.isPresent() && !isDelete) {
-        // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
-        if (preserveMetadata && useWriterSchemaForCompaction) { // useWriteSchema will be true only in case of compaction.
-          fileWriter.writeAvro(hoodieRecord.getRecordKey(),
-              rewriteRecordWithMetadata((GenericRecord) indexedRecord.get(), newFilePath.getName()));
-        } else {
-          fileWriter.writeAvroWithMetadata(hoodieRecord.getKey(), rewriteRecord((GenericRecord) indexedRecord.get()));
-        }
+        writeToFile(hoodieRecord.getKey(), (GenericRecord) indexedRecord.get());
         recordsWritten++;
       } else {
         recordsDeleted++;
@@ -355,14 +349,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     if (copyOldRecord) {
       // this should work as it is, since this is an existing record
       try {
-        if (preserveMetadata && useWriterSchemaForCompaction) {
-          // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
-          //       file holding this record even in cases when overall otherwise metadata is preserved
-          oldRecord.put(HoodieRecord.FILENAME_METADATA_FIELD_POS, newFilePath.getName());
-          fileWriter.writeAvro(key, oldRecord);
-        } else {
-          fileWriter.writeAvroWithMetadata(new HoodieKey(key, partitionPath), oldRecord);
-        }
+        writeToFile(new HoodieKey(key, partitionPath), oldRecord);
       } catch (IOException | RuntimeException e) {
         String errMsg = String.format("Failed to merge old record into new file for key %s from old file %s to new file %s with writerSchema %s",
                 key, getOldFilePath(), newFilePath, writeSchemaWithMetaFields.toString(true));
@@ -370,6 +357,16 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
         throw new HoodieUpsertException(errMsg, e);
       }
       recordsWritten++;
+    }
+  }
+
+  protected void writeToFile(HoodieKey key, GenericRecord avroRecord) throws IOException {
+    if (preserveMetadata && useWriterSchemaForCompaction) {
+      // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
+      //       file holding this record even in cases when overall otherwise metadata is preserved
+      fileWriter.writeAvro(key.getRecordKey(), rewriteRecordWithMetadata(avroRecord, newFilePath.getName()));
+    } else {
+      fileWriter.writeAvroWithMetadata(key, rewriteRecord(avroRecord));
     }
   }
 
