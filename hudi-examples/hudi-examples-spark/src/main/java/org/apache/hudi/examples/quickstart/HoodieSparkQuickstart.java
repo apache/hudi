@@ -18,7 +18,6 @@
 
 package org.apache.hudi.examples.quickstart;
 
-import org.apache.hudi.QuickstartUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
