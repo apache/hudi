@@ -1570,8 +1570,6 @@
       <properties>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
-        <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
-        <skipITs>true</skipITs>
       </properties>
       <activation>
         <property>
@@ -1613,6 +1611,9 @@
         <module>hudi-spark-datasource/hudi-spark2</module>
         <module>hudi-spark-datasource/hudi-spark2-common</module>
       </modules>
+      <properties>
+        <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
+      </properties>
       <activation>
         <activeByDefault>true</activeByDefault>
         <property>
@@ -1631,6 +1632,7 @@
       </modules>
       <properties>
         <sparkbundle.version>2.4</sparkbundle.version>
+        <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
       </properties>
       <activation>
         <property>
