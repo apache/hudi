@@ -248,6 +248,10 @@ public class FileCreateUtils {
     createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_ROLLBACK_EXTENSION, content);
   }
 
+  public static void createRequestedRollbackFile(String basePath, String instantTime) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_ROLLBACK_EXTENSION);
+  }
+
   public static void createInflightRollbackFile(String basePath, String instantTime) throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_ROLLBACK_EXTENSION);
   }

@@ -889,12 +889,19 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
     int startInstant = 1;
+    List<HoodieInstant> expectedArchivedInstants = new ArrayList<>();
     for (int i = 0; i < maxInstantsToKeep + 1; i++, startInstant++) {
-      createCleanMetadata(startInstant + "", false, isEmpty || i % 2 == 0);
+      createCleanMetadata(startInstant + "", false, false, isEmpty || i % 2 == 0);
+      expectedArchivedInstants.add(new HoodieInstant(State.REQUESTED, HoodieTimeline.CLEAN_ACTION, startInstant + ""));
+      expectedArchivedInstants.add(new HoodieInstant(State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, startInstant + ""));
+      expectedArchivedInstants.add(new HoodieInstant(State.COMPLETED, HoodieTimeline.CLEAN_ACTION, startInstant + ""));
     }
 
     for (int i = 0; i < maxInstantsToKeep + 1; i++, startInstant += 2) {
       createCommitAndRollbackFile(startInstant + 1 + "", startInstant + "", false, isEmpty || i % 2 == 0);
+      expectedArchivedInstants.add(new HoodieInstant(State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, startInstant + ""));
+      expectedArchivedInstants.add(new HoodieInstant(State.INFLIGHT, HoodieTimeline.ROLLBACK_ACTION, startInstant + ""));
+      expectedArchivedInstants.add(new HoodieInstant(State.COMPLETED, HoodieTimeline.ROLLBACK_ACTION, startInstant + ""));
     }
 
     if (enableMetadataTable) {
@@ -916,6 +923,14 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
 
     assertTrue(actionInstantMap.containsKey("rollback"), "Rollback Action key must be preset");
     assertEquals(minInstantsToKeep, actionInstantMap.get("rollback").size(), "Should have min instant");
+
+    // verify all expected instants are part of archived timeline
+    metaClient.getArchivedTimeline().loadCompletedInstantDetailsInMemory();
+    HoodieInstant firstInstant = metaClient.reloadActiveTimeline().firstInstant().get();
+    expectedArchivedInstants = expectedArchivedInstants.stream()
+        .filter(entry -> HoodieTimeline.compareTimestamps(entry.getTimestamp(), HoodieTimeline.LESSER_THAN, firstInstant.getTimestamp()
+    )).collect(Collectors.toList());
+    expectedArchivedInstants.forEach(entry -> assertTrue(metaClient.getArchivedTimeline().containsInstant(entry)));
   }
 
   @ParameterizedTest
@@ -1271,7 +1286,8 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
 
   private List<HoodieInstant> getArchivedInstants(HoodieInstant instant) {
     List<HoodieInstant> instants = new ArrayList<>();
-    if (instant.getAction() == HoodieTimeline.COMMIT_ACTION || instant.getAction() == HoodieTimeline.DELTA_COMMIT_ACTION || instant.getAction() == HoodieTimeline.CLEAN_ACTION) {
+    if (instant.getAction().equals(HoodieTimeline.COMMIT_ACTION) || instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)
+        || instant.getAction().equals(HoodieTimeline.CLEAN_ACTION) || instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION)) {
       instants.add(new HoodieInstant(State.REQUESTED, instant.getAction(), instant.getTimestamp()));
     }
     instants.add(new HoodieInstant(State.INFLIGHT, instant.getAction(), instant.getTimestamp()));
