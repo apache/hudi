@@ -22,6 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -354,10 +355,14 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     if (copyOldRecord) {
       // this should work as it is, since this is an existing record
       try {
-        // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
-        //       file holding this record even in cases when overall otherwise metadata is preserved
-        oldRecord.put(HoodieRecord.FILENAME_METADATA_FIELD_POS, newFilePath.getName());
-        fileWriter.writeAvro(key, oldRecord);
+        if (preserveMetadata && useWriterSchemaForCompaction) {
+          // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
+          //       file holding this record even in cases when overall otherwise metadata is preserved
+          oldRecord.put(HoodieRecord.FILENAME_METADATA_FIELD_POS, newFilePath.getName());
+          fileWriter.writeAvro(key, oldRecord);
+        } else {
+          fileWriter.writeAvroWithMetadata(new HoodieKey(key, partitionPath), oldRecord);
+        }
       } catch (IOException | RuntimeException e) {
         String errMsg = String.format("Failed to merge old record into new file for key %s from old file %s to new file %s with writerSchema %s",
                 key, getOldFilePath(), newFilePath, writeSchemaWithMetaFields.toString(true));
