@@ -48,7 +48,7 @@ dag_content:
       num_records_insert: 300
       repeat_count: 1
       num_records_upsert: 100
-      num_partitions_upsert: 50
+      num_partitions_upsert: 10
     type: UpsertNode
     deps: third_insert
   first_delete:
