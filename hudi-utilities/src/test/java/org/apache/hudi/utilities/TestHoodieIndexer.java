@@ -132,8 +132,8 @@ public class TestHoodieIndexer extends HoodieCommonTestHarness implements SparkP
     assertNoWriteErrors(statuses);
 
     // validate table config
-    assertTrue(HoodieTableMetadataUtil.getCompletedMetadataPartitions(reload(metaClient).getTableConfig()).contains(FILES.getPartitionPath()));
-    assertTrue(HoodieTableMetadataUtil.getCompletedMetadataPartitions(reload(metaClient).getTableConfig()).contains(BLOOM_FILTERS.getPartitionPath()));
+    assertTrue(reload(metaClient).getTableConfig().getMetadataPartitions().contains(FILES.getPartitionPath()));
+    assertTrue(reload(metaClient).getTableConfig().getMetadataPartitions().contains(BLOOM_FILTERS.getPartitionPath()));
 
     // build indexer config which has only column_stats enabled (files is enabled by default)
     HoodieIndexer.Config config = new HoodieIndexer.Config();
@@ -148,9 +148,9 @@ public class TestHoodieIndexer extends HoodieCommonTestHarness implements SparkP
     assertEquals(0, indexer.start(0));
 
     // validate table config
-    assertTrue(HoodieTableMetadataUtil.getCompletedMetadataPartitions(reload(metaClient).getTableConfig()).contains(FILES.getPartitionPath()));
-    assertTrue(HoodieTableMetadataUtil.getCompletedMetadataPartitions(reload(metaClient).getTableConfig()).contains(BLOOM_FILTERS.getPartitionPath()));
-    assertTrue(HoodieTableMetadataUtil.getCompletedMetadataPartitions(reload(metaClient).getTableConfig()).contains(COLUMN_STATS.getPartitionPath()));
+    assertTrue(reload(metaClient).getTableConfig().getMetadataPartitions().contains(FILES.getPartitionPath()));
+    assertTrue(reload(metaClient).getTableConfig().getMetadataPartitions().contains(BLOOM_FILTERS.getPartitionPath()));
+    assertTrue(reload(metaClient).getTableConfig().getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath()));
     // validate metadata partitions actually exist
     assertTrue(HoodieTableMetadataUtil.metadataPartitionExists(basePath, context, FILES));
     assertTrue(HoodieTableMetadataUtil.metadataPartitionExists(basePath, context, COLUMN_STATS));
