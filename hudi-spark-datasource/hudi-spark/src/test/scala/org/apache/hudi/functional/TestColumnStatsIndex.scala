@@ -63,6 +63,10 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
     initPath()
     initSparkContexts()
     initFileSystem()
+
+    setTableName("hoodie_test")
+    initMetaClient()
+
     spark = sqlContext.sparkSession
   }
 
@@ -93,10 +97,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
     ) ++ metadataOpts
 
-    setTableName("hoodie_test")
-    initMetaClient()
-
-    val sourceJSONTablePath = getClass.getClassLoader.getResource("index/zorder/input-table-json").toString
+    val sourceJSONTablePath = getClass.getClassLoader.getResource("index/colstats/input-table-json").toString
 
     // NOTE: Schema here is provided for validation that the input date is in the appropriate format
     val inputDF = spark.read.schema(sourceTableSchema).json(sourceJSONTablePath)
@@ -118,14 +119,14 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
       .fromProperties(toProperties(metadataOpts))
       .build()
 
-    val targetColumnsToRead: Seq[String] = {
+    val requestedColumns: Seq[String] = {
       // Providing empty seq of columns to [[readColumnStatsIndex]] will lead to the whole
       // MT to be read, and subsequently filtered
       if (testCase.readFullMetadataTable) Seq.empty
       else sourceTableSchema.fieldNames
     }
 
-    val colStatsDF = readColumnStatsIndex(spark, basePath, metadataConfig, targetColumnsToRead)
+    val colStatsDF = readColumnStatsIndex(spark, basePath, metadataConfig, requestedColumns)
     val transposedColStatsDF = transposeColumnStatsIndex(spark, colStatsDF, sourceTableSchema.fieldNames, sourceTableSchema)
 
     val expectedColStatsSchema = composeIndexSchema(sourceTableSchema.fieldNames, sourceTableSchema)
@@ -134,7 +135,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
     val expectedColStatsIndexTableDf =
       spark.read
         .schema(expectedColStatsSchema)
-        .json(getClass.getClassLoader.getResource("index/zorder/column-stats-index-table.json").toString)
+        .json(getClass.getClassLoader.getResource("index/colstats/column-stats-index-table.json").toString)
 
     assertEquals(expectedColStatsIndexTableDf.schema, transposedColStatsDF.schema)
     // NOTE: We have to drop the `fileName` column as it contains semi-random components
@@ -149,7 +150,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
     assertEquals(asJson(sort(manualColStatsTableDF)), asJson(sort(transposedColStatsDF)))
 
     // do an upsert and validate
-    val updateJSONTablePath = getClass.getClassLoader.getResource("index/zorder/another-input-table-json").toString
+    val updateJSONTablePath = getClass.getClassLoader.getResource("index/colstats/another-input-table-json").toString
     val updateDF = spark.read
       .schema(sourceTableSchema)
       .json(updateJSONTablePath)
@@ -165,13 +166,13 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
 
-    val updatedColStatsDF = readColumnStatsIndex(spark, basePath, metadataConfig, targetColumnsToRead)
+    val updatedColStatsDF = readColumnStatsIndex(spark, basePath, metadataConfig, requestedColumns)
     val transposedUpdatedColStatsDF = transposeColumnStatsIndex(spark, updatedColStatsDF, sourceTableSchema.fieldNames, sourceTableSchema)
 
     val expectedColStatsIndexUpdatedDF =
       spark.read
         .schema(expectedColStatsSchema)
-        .json(getClass.getClassLoader.getResource("index/zorder/updated-column-stats-index-table.json").toString)
+        .json(getClass.getClassLoader.getResource("index/colstats/updated-column-stats-index-table.json").toString)
 
     assertEquals(expectedColStatsIndexUpdatedDF.schema, transposedUpdatedColStatsDF.schema)
     assertEquals(asJson(sort(expectedColStatsIndexUpdatedDF)), asJson(sort(transposedUpdatedColStatsDF.drop("fileName"))))
@@ -181,6 +182,153 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
       buildColumnStatsTableManually(basePath, sourceTableSchema.fieldNames, expectedColStatsSchema)
 
     assertEquals(asJson(sort(manualUpdatedColStatsTableDF)), asJson(sort(transposedUpdatedColStatsDF)))
+  }
+
+  @Test
+  def testMetadataColumnStatsIndexPartialProjection(): Unit = {
+    val targetColumnsToIndex = Seq("c1", "c2", "c3")
+
+    val metadataOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> targetColumnsToIndex.mkString(",")
+    )
+
+    val opts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      RECORDKEY_FIELD.key -> "c1",
+      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+    ) ++ metadataOpts
+
+    val sourceJSONTablePath = getClass.getClassLoader.getResource("index/colstats/input-table-json").toString
+
+    // NOTE: Schema here is provided for validation that the input date is in the appropriate format
+    val inputDF = spark.read.schema(sourceTableSchema).json(sourceJSONTablePath)
+
+    inputDF
+      .sort("c1")
+      .repartition(4, new Column("c1"))
+      .write
+      .format("hudi")
+      .options(opts)
+      .option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key, 10 * 1024)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+
+    val metadataConfig = HoodieMetadataConfig.newBuilder()
+      .fromProperties(toProperties(metadataOpts))
+      .build()
+
+    ////////////////////////////////////////////////////////////////////////
+    // Case #1: Empty CSI projection
+    //          Projection is requested for columns which are NOT indexed
+    //          by the CSI
+    ////////////////////////////////////////////////////////////////////////
+
+    {
+      // These are NOT indexed
+      val requestedColumns = Seq("c4")
+
+      val emptyColStatsDF = readColumnStatsIndex(spark, basePath, metadataConfig, requestedColumns)
+      val emptyTransposedColStatsDF = transposeColumnStatsIndex(spark, emptyColStatsDF, requestedColumns, sourceTableSchema)
+
+      assertEquals(0, emptyColStatsDF.collect().length)
+      assertEquals(0, emptyTransposedColStatsDF.collect().length)
+    }
+
+    ////////////////////////////////////////////////////////////////////////
+    // Case #2: Partial CSI projection
+    //          Projection is requested for set of columns some of which are
+    //          NOT indexed by the CSI
+    ////////////////////////////////////////////////////////////////////////
+
+    {
+      // We have to include "c1", since we sort the expected outputs by this column
+      val requestedColumns = Seq("c1", "c4")
+
+      val partialColStatsDF = readColumnStatsIndex(spark, basePath, metadataConfig, requestedColumns)
+      val partialTransposedColStatsDF = transposeColumnStatsIndex(spark, partialColStatsDF, requestedColumns, sourceTableSchema)
+
+      val targetIndexedColumns = targetColumnsToIndex.intersect(requestedColumns)
+      val expectedColStatsSchema = composeIndexSchema(targetIndexedColumns, sourceTableSchema)
+
+      // Match against expected column stats table
+      val expectedColStatsIndexTableDf =
+        spark.read
+          .schema(expectedColStatsSchema)
+          .json(getClass.getClassLoader.getResource("index/colstats/partial-column-stats-index-table.json").toString)
+
+      assertEquals(expectedColStatsIndexTableDf.schema, partialTransposedColStatsDF.schema)
+      // NOTE: We have to drop the `fileName` column as it contains semi-random components
+      //       that we can't control in this test. Nevertheless, since we manually verify composition of the
+      //       ColStats Index by reading Parquet footers from individual Parquet files, this is not an issue
+      assertEquals(asJson(sort(expectedColStatsIndexTableDf)), asJson(sort(partialTransposedColStatsDF.drop("fileName"))))
+
+      // Collect Column Stats manually (reading individual Parquet files)
+      val manualColStatsTableDF =
+        buildColumnStatsTableManually(basePath, targetIndexedColumns, expectedColStatsSchema)
+
+      assertEquals(asJson(sort(manualColStatsTableDF)), asJson(sort(partialTransposedColStatsDF)))
+    }
+
+    ////////////////////////////////////////////////////////////////////////
+    // Case #3: Aligned CSI projection
+    //          Projection is requested for set of columns some of which are
+    //          indexed only for subset of files
+    ////////////////////////////////////////////////////////////////////////
+
+    {
+      // NOTE: The update we're writing is intentionally omitting some of the columns
+      //       present in an earlier source
+      val missingCols = Seq("c2", "c3")
+      val partialSourceTableSchema = StructType(sourceTableSchema.fields.filterNot(f => missingCols.contains(f.name)))
+
+      val updateJSONTablePath = getClass.getClassLoader.getResource("index/colstats/partial-another-input-table-json").toString
+      val updateDF = spark.read
+        .schema(partialSourceTableSchema)
+        .json(updateJSONTablePath)
+
+      updateDF.repartition(4)
+        .write
+        .format("hudi")
+        .options(opts)
+        .option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key, 10 * 1024)
+        .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+        .mode(SaveMode.Append)
+        .save(basePath)
+
+      metaClient = HoodieTableMetaClient.reload(metaClient)
+
+      val requestedColumns = sourceTableSchema.fieldNames
+
+      // Nevertheless, the last update was written with a new schema (that is a subset of the original table schema),
+      // we should be able to read CSI, which will be properly padded (with nulls) after transposition
+      val updatedColStatsDF = readColumnStatsIndex(spark, basePath, metadataConfig, requestedColumns)
+      val transposedUpdatedColStatsDF = transposeColumnStatsIndex(spark, updatedColStatsDF, requestedColumns, sourceTableSchema)
+
+      val targetIndexedColumns = targetColumnsToIndex.intersect(requestedColumns)
+      val expectedColStatsSchema = composeIndexSchema(targetIndexedColumns, sourceTableSchema)
+
+      val expectedColStatsIndexUpdatedDF =
+        spark.read
+          .schema(expectedColStatsSchema)
+          .json(getClass.getClassLoader.getResource("index/colstats/updated-partial-column-stats-index-table.json").toString)
+
+      assertEquals(expectedColStatsIndexUpdatedDF.schema, transposedUpdatedColStatsDF.schema)
+      assertEquals(asJson(sort(expectedColStatsIndexUpdatedDF)), asJson(sort(transposedUpdatedColStatsDF.drop("fileName"))))
+
+      // Collect Column Stats manually (reading individual Parquet files)
+      val manualUpdatedColStatsTableDF =
+        buildColumnStatsTableManually(basePath, targetIndexedColumns, expectedColStatsSchema)
+
+      assertEquals(asJson(sort(manualUpdatedColStatsTableDF)), asJson(sort(transposedUpdatedColStatsDF)))
+    }
   }
 
   @Test
