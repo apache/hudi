@@ -293,7 +293,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     }
     try {
       if (indexedRecord.isPresent() && !isDelete) {
-        writeToFile(hoodieRecord.getKey(), (GenericRecord) indexedRecord.get());
+        writeToFile(hoodieRecord.getKey(), (GenericRecord) indexedRecord.get(), preserveMetadata && useWriterSchemaForCompaction);
         recordsWritten++;
       } else {
         recordsDeleted++;
@@ -347,9 +347,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     }
 
     if (copyOldRecord) {
-      // this should work as it is, since this is an existing record
       try {
-        writeToFile(new HoodieKey(key, partitionPath), oldRecord);
+        // NOTE: We're enforcing preservation of the record metadata to keep existing semantic
+        writeToFile(new HoodieKey(key, partitionPath), oldRecord, true);
       } catch (IOException | RuntimeException e) {
         String errMsg = String.format("Failed to merge old record into new file for key %s from old file %s to new file %s with writerSchema %s",
                 key, getOldFilePath(), newFilePath, writeSchemaWithMetaFields.toString(true));
@@ -360,10 +360,10 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     }
   }
 
-  protected void writeToFile(HoodieKey key, GenericRecord avroRecord) throws IOException {
-    if (preserveMetadata && useWriterSchemaForCompaction) {
+  protected void writeToFile(HoodieKey key, GenericRecord avroRecord, boolean shouldPreserveRecordMetadata) throws IOException {
+    if (shouldPreserveRecordMetadata) {
       // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
-      //       file holding this record even in cases when overall otherwise metadata is preserved
+      //       file holding this record even in cases when overall metadata is preserved
       fileWriter.writeAvro(key.getRecordKey(), rewriteRecordWithMetadata(avroRecord, newFilePath.getName()));
     } else {
       fileWriter.writeAvroWithMetadata(key, rewriteRecord(avroRecord));
