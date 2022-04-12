@@ -20,6 +20,8 @@ package org.apache.hudi.common.util;
 
 import javax.annotation.Nullable;
 import java.util.Collections;
+import java.nio.ByteBuffer;
+import java.util.Base64;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -88,6 +90,11 @@ public class StringUtils {
   }
 
   public static String objToString(@Nullable Object obj) {
+    if (obj != null && obj instanceof ByteBuffer) {
+      ByteBuffer byteBuffer = (ByteBuffer) obj;
+      return Base64.getEncoder().encodeToString(byteBuffer.array());
+    }
+
     return obj == null ? null : obj.toString();
   }
 

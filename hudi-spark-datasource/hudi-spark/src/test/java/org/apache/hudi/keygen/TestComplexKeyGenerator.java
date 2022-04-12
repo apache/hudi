@@ -125,6 +125,18 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @Test
+  public void testBytesValueKeyGenerator() {
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "nation");
+    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "timestamp");
+    ComplexKeyGenerator compositeKeyGenerator = new ComplexKeyGenerator(properties);
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    GenericRecord record = dataGenerator.generateGenericRecords(1).get(0);
+    HoodieKey hoodieKey = compositeKeyGenerator.getKey(record);
+    assertEquals("nation:Q2FuYWRh", hoodieKey.getRecordKey());
+  }
+
+  @Test
   public void testMultipleValueKeyGenerator() {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key,timestamp");
