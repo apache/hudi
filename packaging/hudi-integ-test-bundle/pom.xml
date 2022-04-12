@@ -17,7 +17,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.11.0-SNAPSHOT</version>
+    <version>0.12.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -124,6 +124,7 @@
                   <include>org.mortbay.jetty:jetty-util</include>
 
                   <include>org.rocksdb:rocksdbjni</include>
+                  <include>com.github.ben-manes.caffeine:caffeine</include>
                   <include>com.beust:jcommander</include>
                   <include>com.twitter:bijection-avro_${scala.binary.version}</include>
                   <include>com.twitter:bijection-core_${scala.binary.version}</include>
@@ -176,6 +177,13 @@
                 </includes>
               </artifactSet>
               <relocations>
+                <!-- NOTE: We have to relocate all classes w/in org.apache.spark.sql.avro to avoid
+                           potential classpath collisions in case users would like to also use "spark-avro" w/in
+                           their runtime, since Hudi carries some of the same classes as "spark-avro" -->
+                <relocation>
+                  <pattern>org.apache.spark.sql.avro.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.spark.sql.avro.</shadedPattern>
+                </relocation>
                 <relocation>
                   <pattern>com.beust.jcommander.</pattern>
                   <shadedPattern>org.apache.hudi.com.beust.jcommander.</shadedPattern>

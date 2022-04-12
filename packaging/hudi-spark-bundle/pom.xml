@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.11.0-SNAPSHOT</version>
+    <version>0.12.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -95,6 +95,7 @@
 
                   <include>com.github.davidmoten:guava-mini</include>
                   <include>com.github.davidmoten:hilbert-curve</include>
+                  <include>com.github.ben-manes.caffeine:caffeine</include>
                   <include>com.twitter:bijection-avro_${scala.binary.version}</include>
                   <include>com.twitter:bijection-core_${scala.binary.version}</include>
                   <include>io.dropwizard.metrics:metrics-core</include>
@@ -108,7 +109,6 @@
                   <include>com.yammer.metrics:metrics-core</include>
                   <include>com.google.guava:guava</include>
 
-                  <include>org.apache.spark:spark-avro_${scala.binary.version}</include>
                   <include>org.apache.hive:hive-common</include>
                   <include>org.apache.hive:hive-service</include>
                   <include>org.apache.hive:hive-service-rpc</include>
@@ -135,6 +135,13 @@
                 </includes>
               </artifactSet>
               <relocations>
+                <!-- NOTE: We have to relocate all classes w/in org.apache.spark.sql.avro to avoid
+                           potential classpath collisions in case users would like to also use "spark-avro" w/in
+                           their runtime, since Hudi carries some of the same classes as "spark-avro" -->
+                <relocation>
+                  <pattern>org.apache.spark.sql.avro.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.spark.sql.avro.</shadedPattern>
+                </relocation>
                 <relocation>
                   <pattern>com.yammer.metrics.</pattern>
                   <shadedPattern>org.apache.hudi.com.yammer.metrics.</shadedPattern>
@@ -161,10 +168,6 @@
                 <relocation>
                   <pattern>org.apache.htrace.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.spark.sql.avro.</pattern>
-                  <shadedPattern>${spark.bundle.spark.shade.prefix}org.apache.spark.sql.avro.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hive.jdbc.</pattern>
@@ -208,7 +211,7 @@
                 </relocation>
                 <relocation>
                   <pattern>com.google.common.</pattern>
-                  <shadedPattern>${spark.bundle.spark.shade.prefix}com.google.common.</shadedPattern>
+                  <shadedPattern>org.apache.hudi.com.google.common.</shadedPattern>
                 </relocation>
                 <!-- TODO: Revisit GH ISSUE #533 & PR#633-->
                 <!-- The classes below in org.apache.hadoop.metrics2 package come from
@@ -362,13 +365,6 @@
       <version>${project.version}</version>
     </dependency>
 
-    <!-- Spark (Packages) -->
-    <dependency>
-      <groupId>org.apache.spark</groupId>
-      <artifactId>spark-avro_${scala.binary.version}</artifactId>
-      <scope>${spark.bundle.avro.scope}</scope>
-    </dependency>
-
     <!-- Parquet -->
     <dependency>
       <groupId>org.apache.parquet</groupId>
@@ -439,13 +435,6 @@
       <properties>
         <spark.bundle.hive.scope>compile</spark.bundle.hive.scope>
         <spark.bundle.hive.shade.prefix>org.apache.hudi.</spark.bundle.hive.shade.prefix>
-      </properties>
-    </profile>
-    <profile>
-      <id>spark-shade-unbundle-avro</id>
-      <properties>
-        <spark.bundle.avro.scope>provided</spark.bundle.avro.scope>
-        <spark.bundle.spark.shade.prefix />
       </properties>
     </profile>
   </profiles>

@@ -51,7 +51,7 @@ public abstract class HoodieLogBlock {
    * corresponding changes need to be made to {@link HoodieLogBlockVersion} TODO : Change this to a class, something
    * like HoodieLogBlockVersionV1/V2 and implement/override operations there
    */
-  public static int version = 1;
+  public static int version = 2;
   // Header for each log block
   private final Map<HeaderMetadataType, String> logBlockHeader;
   // Footer for each log block

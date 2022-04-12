@@ -19,6 +19,10 @@
 package org.apache.hudi.common.util;
 
 import javax.annotation.Nullable;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Simple utility for operations on strings.
@@ -46,7 +50,7 @@ public class StringUtils {
    * </pre>
    */
   public static <T> String join(final String... elements) {
-    return join(elements, "");
+    return join(elements, EMPTY_STRING);
   }
 
   public static <T> String joinUsingDelim(String delim, final String... elements) {
@@ -99,5 +103,16 @@ public class StringUtils {
 
   private static boolean stringIsNullOrEmpty(@Nullable String string) {
     return string == null || string.isEmpty();
+  }
+
+  /**
+   * Splits input string, delimited {@code delimiter} into a list of non-empty strings
+   * (skipping any empty string produced during splitting)
+   */
+  public static List<String> split(@Nullable String input, String delimiter) {
+    if (isNullOrEmpty(input)) {
+      return Collections.emptyList();
+    }
+    return Stream.of(input.split(delimiter)).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
   }
 }

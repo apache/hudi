@@ -136,6 +136,7 @@ public class TestHoodieWriteConfig {
             put(INLINE_COMPACT.key(), "true");
             put(AUTO_CLEAN.key(), "true");
             put(ASYNC_CLEAN.key(), "false");
+            put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
           }
         }), true, true, WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL,
         HoodieFailedWritesCleaningPolicy.LAZY, inProcessLockProviderClassName);
@@ -148,6 +149,7 @@ public class TestHoodieWriteConfig {
             put(INLINE_COMPACT.key(), "true");
             put(AUTO_CLEAN.key(), "true");
             put(ASYNC_CLEAN.key(), "true");
+            put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
           }
         }), true, true, WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL,
         HoodieFailedWritesCleaningPolicy.LAZY, inProcessLockProviderClassName);
@@ -160,6 +162,7 @@ public class TestHoodieWriteConfig {
             put(INLINE_COMPACT.key(), "false");
             put(AUTO_CLEAN.key(), "true");
             put(ASYNC_CLEAN.key(), "false");
+            put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
           }
         }), true,
         tableType == HoodieTableType.MERGE_ON_READ,
@@ -181,10 +184,43 @@ public class TestHoodieWriteConfig {
             put(INLINE_COMPACT.key(), "true");
             put(AUTO_CLEAN.key(), "true");
             put(ASYNC_CLEAN.key(), "false");
+            put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
           }
         }), Option.of(true), Option.of(false), Option.of(true),
         WriteConcurrencyMode.valueOf(WRITE_CONCURRENCY_MODE.defaultValue()),
         HoodieFailedWritesCleaningPolicy.valueOf(FAILED_WRITES_CLEANER_POLICY.defaultValue()),
+        HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
+  }
+
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testAutoAdjustLockConfigs(HoodieTableType tableType) {
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(HoodieTableConfig.TYPE.key(), tableType.name());
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withAutoAdjustLockConfigs(false)
+        .withClusteringConfig(new HoodieClusteringConfig.Builder().withAsyncClustering(true).build())
+        .withProperties(properties)
+        .build();
+
+    verifyConcurrencyControlRelatedConfigs(writeConfig,
+        true, true,
+        WriteConcurrencyMode.valueOf(WRITE_CONCURRENCY_MODE.defaultValue()),
+        HoodieFailedWritesCleaningPolicy.valueOf(FAILED_WRITES_CLEANER_POLICY.defaultValue()),
+        HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
+
+    writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withAutoAdjustLockConfigs(false)
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withClusteringConfig(new HoodieClusteringConfig.Builder().withAsyncClustering(true).build())
+        .withProperties(properties)
+        .build();
+
+    verifyConcurrencyControlRelatedConfigs(writeConfig,
+        true, true,
+        WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL, HoodieFailedWritesCleaningPolicy.LAZY,
         HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
   }
 
@@ -199,8 +235,10 @@ public class TestHoodieWriteConfig {
         .withLockConfig(HoodieLockConfig.newBuilder()
             .withLockProvider(FileSystemBasedLockProviderTestClass.class)
             .build())
+        .withAutoAdjustLockConfigs(true)
         .withProperties(properties)
         .build();
+
     verifyConcurrencyControlRelatedConfigs(writeConfig,
         true, tableType == HoodieTableType.MERGE_ON_READ,
         WriteConcurrencyMode.valueOf(WRITE_CONCURRENCY_MODE.defaultValue()),
@@ -217,6 +255,7 @@ public class TestHoodieWriteConfig {
             put(ASYNC_CLEAN.key(), "true");
             put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
                 ZookeeperBasedLockProvider.class.getName());
+            put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
           }
         }), true, true,
         WriteConcurrencyMode.valueOf(WRITE_CONCURRENCY_MODE.defaultValue()),
@@ -227,6 +266,7 @@ public class TestHoodieWriteConfig {
     writeConfig = createWriteConfig(new HashMap<String, String>() {
       {
         put(HoodieTableConfig.TYPE.key(), tableType.name());
+        put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
       }
     });
     if (writeConfig.areAnyTableServicesAsync()) {
@@ -252,6 +292,7 @@ public class TestHoodieWriteConfig {
           {
             put(HoodieTableConfig.TYPE.key(), tableType.name());
             put(TABLE_SERVICES_ENABLED.key(), "false");
+            put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
           }
         }), false, tableType == HoodieTableType.MERGE_ON_READ,
         WriteConcurrencyMode.fromValue(WRITE_CONCURRENCY_MODE.defaultValue()),
@@ -268,6 +309,7 @@ public class TestHoodieWriteConfig {
                 WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
             put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
                 FileSystemBasedLockProviderTestClass.class.getName());
+            put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
           }
         }), false, tableType == HoodieTableType.MERGE_ON_READ,
         WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL,
@@ -288,6 +330,7 @@ public class TestHoodieWriteConfig {
             put(INLINE_COMPACT.key(), "true");
             put(AUTO_CLEAN.key(), "true");
             put(ASYNC_CLEAN.key(), "false");
+            put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
           }
         }), true, true,
         WriteConcurrencyMode.fromValue(WRITE_CONCURRENCY_MODE.defaultValue()),
@@ -306,6 +349,7 @@ public class TestHoodieWriteConfig {
                 WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
             put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
                 FileSystemBasedLockProviderTestClass.class.getName());
+            put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
           }
         }), true, true, WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL,
         HoodieFailedWritesCleaningPolicy.LAZY, FileSystemBasedLockProviderTestClass.class.getName());

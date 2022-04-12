@@ -83,10 +83,10 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     HoodieWriteConfig writeConfig = getConfigBuilder().withRollbackUsingMarkers(false).build();
     HoodieTable table = this.getHoodieTable(metaClient, writeConfig);
     HoodieInstant needRollBackInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "002");
-
+    String rollbackInstant = "003";
     // execute CopyOnWriteRollbackActionExecutor with filelisting mode
     BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
-        new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, "003", needRollBackInstant, false,
+        new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, rollbackInstant, needRollBackInstant, false,
             table.getConfig().shouldRollbackUsingMarkers());
     HoodieRollbackPlan rollbackPlan = (HoodieRollbackPlan) copyOnWriteRollbackPlanActionExecutor.execute().get();
     CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutor = new CopyOnWriteRollbackActionExecutor(context, table.getConfig(), table, "003", needRollBackInstant, true,
@@ -125,7 +125,9 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     assertTrue(testTable.commitExists("001"));
     assertTrue(testTable.baseFileExists(p1, "001", "id11"));
     assertTrue(testTable.baseFileExists(p2, "001", "id12"));
-    assertFalse(testTable.inflightCommitExists("002"));
+    // Note that executeRollback() does not delete inflight instant files
+    // The deletion is done in finishRollback() called by runRollback()
+    assertTrue(testTable.inflightCommitExists("002"));
     assertFalse(testTable.commitExists("002"));
     assertFalse(testTable.baseFileExists(p1, "002", "id21"));
     assertFalse(testTable.baseFileExists(p2, "002", "id22"));

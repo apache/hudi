@@ -130,11 +130,25 @@ public class HoodieCommitMetadata implements Serializable {
   public HashMap<String, String> getFileIdAndFullPaths(String basePath) {
     HashMap<String, String> fullPaths = new HashMap<>();
     for (Map.Entry<String, String> entry : getFileIdAndRelativePaths().entrySet()) {
-      String fullPath =
-          (entry.getValue() != null) ? (FSUtils.getPartitionPath(basePath, entry.getValue())).toString() : null;
+      String fullPath = entry.getValue() != null
+          ? FSUtils.getPartitionPath(basePath, entry.getValue()).toString()
+          : null;
       fullPaths.put(entry.getKey(), fullPath);
     }
     return fullPaths;
+  }
+
+  public List<String> getFullPathsByPartitionPath(String basePath, String partitionPath) {
+    HashSet<String> fullPaths = new HashSet<>();
+    if (getPartitionToWriteStats().get(partitionPath) != null) {
+      for (HoodieWriteStat stat : getPartitionToWriteStats().get(partitionPath)) {
+        if ((stat.getFileId() != null)) {
+          String fullPath = FSUtils.getPartitionPath(basePath, stat.getPath()).toString();
+          fullPaths.add(fullPath);
+        }
+      }
+    }
+    return new ArrayList<>(fullPaths);
   }
 
   public Map<HoodieFileGroupId, String> getFileGroupIdAndFullPaths(String basePath) {

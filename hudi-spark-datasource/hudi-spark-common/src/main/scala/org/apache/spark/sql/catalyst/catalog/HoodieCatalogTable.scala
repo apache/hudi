@@ -111,6 +111,11 @@ class HoodieCatalogTable(val spark: SparkSession, val table: CatalogTable) exten
   lazy val partitionFields: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
   /**
+   * BaseFileFormat
+   */
+  lazy val baseFileFormat: String = metaClient.getTableConfig.getBaseFileFormat.name()
+
+  /**
    * The schema of table.
    * Make StructField nullable and fill the comments in.
    */

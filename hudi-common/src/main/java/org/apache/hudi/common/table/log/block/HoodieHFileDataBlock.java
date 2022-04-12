@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
@@ -47,6 +48,7 @@ import org.apache.log4j.Logger;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -149,6 +151,8 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
       }
     });
 
+    writer.appendFileInfo(HoodieHFileReader.SCHEMA_KEY.getBytes(), getSchema().toString().getBytes());
+
     writer.close();
     ostream.flush();
     ostream.close();
@@ -163,11 +167,9 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     // Get schema from the header
     Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
+    FileSystem fs = FSUtils.getFs(pathForReader.toString(), new Configuration());
     // Read the content
-    HoodieHFileReader<IndexedRecord> reader = new HoodieHFileReader<>(
-        FSUtils.getFs(pathForReader.toString(), new Configuration()), pathForReader, content);
-    // Sets up the writer schema
-    reader.withSchema(writerSchema);
+    HoodieHFileReader<IndexedRecord> reader = new HoodieHFileReader<>(fs, pathForReader, content, Option.of(writerSchema));
     Iterator<IndexedRecord> recordIterator = reader.getRecordIterator(readerSchema);
     return new ClosableIterator<IndexedRecord>() {
       @Override
@@ -189,13 +191,14 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
 
   // TODO abstract this w/in HoodieDataBlock
   @Override
-  protected ClosableIterator<IndexedRecord> lookupRecords(List<String> keys) throws IOException {
+  protected ClosableIterator<IndexedRecord> lookupRecords(List<String> keys, boolean fullKey) throws IOException {
     HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
 
     // NOTE: It's important to extend Hadoop configuration here to make sure configuration
     //       is appropriately carried over
     Configuration inlineConf = new Configuration(blockContentLoc.getHadoopConf());
     inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
+    inlineConf.setClassLoader(Thread.currentThread().getContextClassLoader());
 
     Path inlinePath = InLineFSUtils.getInlineFilePath(
         blockContentLoc.getLogFile().getPath(),
@@ -203,13 +206,18 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
 
-    // HFile read will be efficient if keys are sorted, since on storage, records are sorted by key. This will avoid unnecessary seeks.
-    Collections.sort(keys);
+    // HFile read will be efficient if keys are sorted, since on storage records are sorted by key.
+    // This will avoid unnecessary seeks.
+    List<String> sortedKeys = new ArrayList<>(keys);
+    Collections.sort(sortedKeys);
 
     final HoodieHFileReader<IndexedRecord> reader =
              new HoodieHFileReader<>(inlineConf, inlinePath, new CacheConfig(inlineConf), inlinePath.getFileSystem(inlineConf));
+
     // Get writer's schema from the header
-    final ClosableIterator<IndexedRecord> recordIterator = reader.getRecordIterator(keys, readerSchema);
+    final ClosableIterator<IndexedRecord> recordIterator =
+        fullKey ? reader.getRecordsByKeysIterator(sortedKeys, readerSchema) : reader.getRecordsByKeyPrefixIterator(sortedKeys, readerSchema);
+
     return new ClosableIterator<IndexedRecord>() {
       @Override
       public boolean hasNext() {

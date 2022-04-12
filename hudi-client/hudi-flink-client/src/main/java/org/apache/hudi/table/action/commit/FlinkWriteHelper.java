@@ -107,6 +107,7 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends BaseWrit
       // everything
       // so pick it from one of the records.
       boolean choosePrev = data2.compareTo(data1) < 0;
+      boolean choosePrev = data1 == reducedData;
       HoodieKey reducedKey = choosePrev ? rec1.getKey() : rec2.getKey();
       HoodieOperation operation = choosePrev ? rec1.getOperation() : rec2.getOperation();
       HoodieRecord<T> hoodieRecord = new HoodieAvroRecord<>(reducedKey, reducedData, operation);

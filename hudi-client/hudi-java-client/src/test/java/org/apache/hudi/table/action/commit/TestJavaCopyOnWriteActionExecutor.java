@@ -402,7 +402,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
         counts++;
       }
     }
-    assertEquals(3, counts, "If the number of records are more than 1150, then there should be a new file");
+    assertEquals(5, counts, "If the number of records are more than 1150, then there should be a new file");
   }
 
   @Test

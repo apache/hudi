@@ -156,9 +156,9 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
 
   private AmazonDynamoDB getDynamoDBClient() {
     String region = this.lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_REGION.key());
-    String endpointURL = this.lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_ENDPOINT_URL.key()) == null
-                          ? RegionUtils.getRegion(region).getServiceEndpoint(AmazonDynamoDB.ENDPOINT_PREFIX)
-                          : this.lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_ENDPOINT_URL.key());
+    String endpointURL = this.lockConfiguration.getConfig().containsKey(DynamoDbBasedLockConfig.DYNAMODB_ENDPOINT_URL.key())
+                          ? this.lockConfiguration.getConfig().getString(DynamoDbBasedLockConfig.DYNAMODB_ENDPOINT_URL.key())
+                          : RegionUtils.getRegion(region).getServiceEndpoint(AmazonDynamoDB.ENDPOINT_PREFIX);
     AwsClientBuilder.EndpointConfiguration dynamodbEndpoint =
             new AwsClientBuilder.EndpointConfiguration(endpointURL, region);
     return AmazonDynamoDBClientBuilder.standard()

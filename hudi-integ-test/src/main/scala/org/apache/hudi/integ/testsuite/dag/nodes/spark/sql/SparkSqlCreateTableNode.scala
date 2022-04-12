@@ -58,7 +58,7 @@ class SparkSqlCreateTableNode(dagNodeConfig: Config) extends DagNode[RDD[WriteSt
     if (config.shouldUseCtas) {
       // Prepares data for CTAS query
       if (!config.isDisableGenerate) {
-        context.getDeltaGenerator.writeRecords(context.getDeltaGenerator.generateInserts(config)).count()
+        context.getDeltaGenerator.writeRecords(context.getDeltaGenerator.generateInserts(config)).getValue().count()
       }
       val nextBatch = context.getWriterContext.getHoodieTestSuiteWriter.getNextBatch
       val sparkSession = context.getWriterContext.getSparkSession

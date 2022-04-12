@@ -917,7 +917,7 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
     String hoodieTableDDL = sql("hoodie_sink")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.OPERATION, "bulk_insert")
-        .option(FlinkOptions.WRITE_BULK_INSERT_SHUFFLE_BY_PARTITION, true)
+        .option(FlinkOptions.WRITE_BULK_INSERT_SHUFFLE_INPUT, true)
         .option(FlinkOptions.INDEX_TYPE, indexType)
         .option(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning)
         .end();
@@ -1214,7 +1214,7 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
   @ParameterizedTest
   @ValueSource(strings = {"insert", "upsert", "bulk_insert"})
   void testBuiltinFunctionWithCatalog(String operation) {
-    TableEnvironment tableEnv = streamTableEnv;
+    TableEnvironment tableEnv = batchTableEnv;
 
     String hudiCatalogDDL = catalog("hudi_" + operation)
         .catalogPath(tempFile.getAbsolutePath())

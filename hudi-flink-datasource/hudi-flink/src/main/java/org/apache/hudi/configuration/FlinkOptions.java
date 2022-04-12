@@ -459,17 +459,17 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Timeout limit for a writer task after it finishes a checkpoint and\n"
           + "waits for the instant commit success, only for internal use");
 
-  public static final ConfigOption<Boolean> WRITE_BULK_INSERT_SHUFFLE_BY_PARTITION = ConfigOptions
-      .key("write.bulk_insert.shuffle_by_partition")
+  public static final ConfigOption<Boolean> WRITE_BULK_INSERT_SHUFFLE_INPUT = ConfigOptions
+      .key("write.bulk_insert.shuffle_input")
       .booleanType()
       .defaultValue(true)
-      .withDescription("Whether to shuffle the inputs by partition path for bulk insert tasks, default true");
+      .withDescription("Whether to shuffle the inputs by specific fields for bulk insert tasks, default true");
 
-  public static final ConfigOption<Boolean> WRITE_BULK_INSERT_SORT_BY_PARTITION = ConfigOptions
-      .key("write.bulk_insert.sort_by_partition")
+  public static final ConfigOption<Boolean> WRITE_BULK_INSERT_SORT_INPUT = ConfigOptions
+      .key("write.bulk_insert.sort_input")
       .booleanType()
       .defaultValue(true)
-      .withDescription("Whether to sort the inputs by partition path for bulk insert tasks, default true");
+      .withDescription("Whether to sort the inputs by specific fields for bulk insert tasks, default true");
 
   public static final ConfigOption<Integer> WRITE_SORT_MEMORY = ConfigOptions
       .key("write.sort.memory")
@@ -671,7 +671,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Boolean> HIVE_SYNC_SUPPORT_TIMESTAMP = ConfigOptions
       .key("hive_sync.support_timestamp")
       .booleanType()
-      .defaultValue(false)
+      .defaultValue(true)
       .withDescription("INT64 with original type TIMESTAMP_MICROS is converted to hive timestamp type.\n"
           + "Disabled by default for backward compatibility.");
 
