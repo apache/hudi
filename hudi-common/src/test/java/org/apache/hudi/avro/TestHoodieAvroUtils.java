@@ -230,6 +230,11 @@ public class TestHoodieAvroUtils {
 
   @Test
   public void testRemoveFields() {
+    // partitioned table test.
+    String schemaStr = "{\"type\": \"record\",\"name\": \"testrec\",\"fields\": [ "
+        + "{\"name\": \"timestamp\",\"type\": \"double\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
+        + "{\"name\": \"non_pii_col\", \"type\": \"string\"}]},";
+    Schema expectedSchema = new Schema.Parser().parse(schemaStr);
     GenericRecord rec = new GenericData.Record(new Schema.Parser().parse(EXAMPLE_SCHEMA));
     rec.put("_row_key", "key1");
     rec.put("non_pii_col", "val1");
@@ -240,6 +245,16 @@ public class TestHoodieAvroUtils {
     assertEquals("val1", rec1.get("non_pii_col"));
     assertEquals(3.5, rec1.get("timestamp"));
     assertNull(rec1.get("pii_col"));
+    assertEquals(expectedSchema, rec1.getSchema());
+
+    // non-partitioned table test with empty list of fields.
+    schemaStr = "{\"type\": \"record\",\"name\": \"testrec\",\"fields\": [ "
+        + "{\"name\": \"timestamp\",\"type\": \"double\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
+        + "{\"name\": \"non_pii_col\", \"type\": \"string\"},"
+        + "{\"name\": \"pii_col\", \"type\": \"string\"}]},";
+    expectedSchema = new Schema.Parser().parse(schemaStr);
+    rec1 = HoodieAvroUtils.removeFields(rec, Arrays.asList(""));
+    assertEquals(expectedSchema, rec1.getSchema());
   }
 
   @Test

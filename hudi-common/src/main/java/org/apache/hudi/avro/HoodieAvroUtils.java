@@ -447,8 +447,8 @@ public class HoodieAvroUtils {
    * <p>
    * To better understand how it removes please check {@link #rewriteRecord(GenericRecord, Schema)}
    */
-  public static GenericRecord removeFields(GenericRecord record, List<String> columnsToRemove) {
-    Schema newSchema = removeFields(record.getSchema(), columnsToRemove);
+  public static GenericRecord removeFields(GenericRecord record, List<String> fieldsToRemove) {
+    Schema newSchema = removeFields(record.getSchema(), fieldsToRemove);
     return rewriteRecord(record, newSchema);
   }
 

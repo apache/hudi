@@ -133,11 +133,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Easily configure one the built-in key generators, instead of specifying the key generator class."
           + "Currently supports SIMPLE, COMPLEX, TIMESTAMP, CUSTOM, NON_PARTITION, GLOBAL_DELETE");
 
-  public static final ConfigProperty<Boolean> DROP_PARTITION_COLUMNS = ConfigProperty
-      .key("hoodie.datasource.write.drop.partition.columns")
-      .defaultValue(false)
-      .withDocumentation("When set to true, will not write the partition columns into hudi. By default, false.");
-
   public static final ConfigProperty<String> ROLLBACK_USING_MARKERS_ENABLE = ConfigProperty
       .key("hoodie.rollback.using.markers")
       .defaultValue("true")
