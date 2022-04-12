@@ -297,7 +297,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
           fileWriter.writeAvro(hoodieRecord.getRecordKey(),
               rewriteRecordWithMetadata((GenericRecord) indexedRecord.get(), newFilePath.getName()));
         } else {
-          fileWriter.writeAvroWithMetadata(rewriteRecord((GenericRecord) indexedRecord.get()), hoodieRecord);
+          fileWriter.writeAvroWithMetadata(hoodieRecord.getKey(), rewriteRecord((GenericRecord) indexedRecord.get()));
         }
         recordsWritten++;
       } else {
@@ -354,11 +354,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     if (copyOldRecord) {
       // this should work as it is, since this is an existing record
       try {
-        // rewrite file names
-        // do not preserve FILENAME_METADATA_FIELD
-        if (preserveMetadata && useWriterSchemaForCompaction) {
-          oldRecord.put(HoodieRecord.FILENAME_METADATA_FIELD_POS, newFilePath.getName());
-        }
+        // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
+        //       file holding this record even in cases when overall otherwise metadata is preserved
+        oldRecord.put(HoodieRecord.FILENAME_METADATA_FIELD_POS, newFilePath.getName());
         fileWriter.writeAvro(key, oldRecord);
       } catch (IOException | RuntimeException e) {
         String errMsg = String.format("Failed to merge old record into new file for key %s from old file %s to new file %s with writerSchema %s",
