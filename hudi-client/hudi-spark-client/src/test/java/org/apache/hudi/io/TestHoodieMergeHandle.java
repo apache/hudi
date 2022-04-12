@@ -21,12 +21,15 @@ package org.apache.hudi.io;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -48,6 +51,8 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
@@ -198,6 +203,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
       // Check the entire dataset has 47 records still
       dataSet = getRecords();
       assertEquals(47, dataSet.count(), "Must contain 47 records");
+
       Row[] rows = (Row[]) dataSet.collect();
       int record1Count = 0;
       int record2Count = 0;
@@ -224,6 +230,22 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
       // Assert that id2 record count which has been updated to rider-004 and driver-004 is 21, which is the total
       // number of records with row_key id2
       assertEquals(21, record2Count);
+
+      // Validate that all the records only reference the _latest_ base files as part of the
+      // FILENAME_METADATA_FIELD payload (entailing that corresponding metadata is in-sync with
+      // the state of the table
+      HoodieTableFileSystemView tableView =
+          getHoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline(), HoodieTestTable.of(metaClient).listAllBaseFiles());
+
+      Set<String> latestBaseFileNames = tableView.getLatestBaseFiles()
+          .map(BaseFile::getFileName)
+          .collect(Collectors.toSet());
+
+      Set<Object> metadataFilenameFieldRefs = dataSet.collectAsList().stream()
+          .map(row -> row.getAs(HoodieRecord.FILENAME_METADATA_FIELD))
+          .collect(Collectors.toSet());
+
+      assertEquals(latestBaseFileNames, metadataFilenameFieldRefs);
     }
   }
 
