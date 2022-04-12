@@ -33,6 +33,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.orc.storage.ql.exec.vector.ColumnVector;
 import org.apache.orc.storage.ql.exec.vector.VectorizedRowBatch;
 import org.apache.hudi.common.bloom.BloomFilter;
@@ -94,10 +95,10 @@ public class HoodieOrcWriter<T extends HoodieRecordPayload, R extends IndexedRec
   }
 
   @Override
-  public void writeAvroWithMetadata(R avroRecord, HoodieRecord record) throws IOException {
-    prepRecordWithMetadata(avroRecord, record, instantTime,
+  public void writeAvroWithMetadata(HoodieKey key, R avroRecord) throws IOException {
+    prepRecordWithMetadata(key, avroRecord, instantTime,
         taskContextSupplier.getPartitionIdSupplier().get(), RECORD_INDEX, file.getName());
-    writeAvro(record.getRecordKey(), avroRecord);
+    writeAvro(key.getRecordKey(), avroRecord);
   }
 
   @Override

@@ -23,6 +23,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
@@ -111,13 +112,13 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   }
 
   @Override
-  public void writeAvroWithMetadata(R avroRecord, HoodieRecord record) throws IOException {
+  public void writeAvroWithMetadata(HoodieKey key, R avroRecord) throws IOException {
     if (populateMetaFields) {
-      prepRecordWithMetadata(avroRecord, record, instantTime,
+      prepRecordWithMetadata(key, avroRecord, instantTime,
           taskContextSupplier.getPartitionIdSupplier().get(), recordIndex, file.getName());
-      writeAvro(record.getRecordKey(), (IndexedRecord) avroRecord);
+      writeAvro(key.getRecordKey(), avroRecord);
     } else {
-      writeAvro(record.getRecordKey(), (IndexedRecord) avroRecord);
+      writeAvro(key.getRecordKey(), avroRecord);
     }
   }
 

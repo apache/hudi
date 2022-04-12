@@ -22,6 +22,7 @@ import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 
@@ -84,12 +85,12 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
   }
 
   @Override
-  public void writeAvroWithMetadata(R avroRecord, HoodieRecord record) throws IOException {
+  public void writeAvroWithMetadata(HoodieKey key, R avroRecord) throws IOException {
     if (populateMetaFields) {
-      prepRecordWithMetadata(avroRecord, record, instantTime,
+      prepRecordWithMetadata(key, avroRecord, instantTime,
           taskContextSupplier.getPartitionIdSupplier().get(), recordIndex, file.getName());
       super.write(avroRecord);
-      writeSupport.add(record.getRecordKey());
+      writeSupport.add(key.getRecordKey());
     } else {
       super.write(avroRecord);
     }

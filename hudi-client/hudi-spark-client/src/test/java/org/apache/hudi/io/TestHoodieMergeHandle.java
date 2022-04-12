@@ -21,7 +21,6 @@ package org.apache.hudi.io;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieCommonConfig;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -36,8 +35,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
-
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -94,7 +91,6 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
         .withProperties(properties)
         .build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
-      FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
 
       /**
        * Write 1 (only inserts) This will do a bulk insert of 44 records of which there are 2 records repeated 21 times
