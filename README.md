@@ -101,6 +101,18 @@ mvn clean package -DskipTests -Pspark2.4,scala-2.12
 
 Starting from versions 0.11, Hudi no longer requires `spark-avro` to be specified using `--packages`
 
+### Build with different Flink versions
+
+The default Flink version supported is 1.14. Refer to the table below for building with different Flink and Scala versions.
+
+| Maven build options        | Expected Flink bundle jar name | Notes                                           |
+|:---------------------------|:-------------------------------|:------------------------------------------------|
+| (empty)                    | hudi-flink1.14-bundle_2.11     | For Flink 1.14 and Scala 2.11 (default options) |
+| `-Dflink1.14`              | hudi-flink1.14-bundle_2.11     | For Flink 1.14 and Scala 2.11 (same as default) |
+| `-Dflink1.14 -Dscala-2.12` | hudi-flink1.14-bundle_2.12     | For Flink 1.14 and Scala 2.12                   |
+| `-Dflink1.13`              | hudi-flink1.13-bundle_2.11     | For Flink 1.13 and Scala 2.11                   |
+| `-Dflink1.13 -Dscala-2.12` | hudi-flink1.13-bundle_2.12     | For Flink 1.13 and Scala 2.12                   |
+
 ## Running Tests
 
 Unit tests can be run with maven profile `unit-tests`.
