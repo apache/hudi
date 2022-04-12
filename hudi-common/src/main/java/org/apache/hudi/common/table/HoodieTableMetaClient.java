@@ -699,6 +699,8 @@ public class HoodieTableMetaClient implements Serializable {
     private HoodieTimelineTimeZone commitTimeZone;
     private Boolean partitionMetafileUseBaseFormat;
     private Boolean dropPartitionColumnsWhenWrite;
+    private String metadataPartitions;
+    private String inflightMetadataPartitions;
 
     /**
      * Persist the configs that is written at the first time, and should not be changed.
@@ -823,6 +825,16 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public PropertyBuilder setMetadataPartitions(String partitions) {
+      this.metadataPartitions = partitions;
+      return this;
+    }
+
+    public PropertyBuilder setInflightMetadataPartitions(String partitions) {
+      this.inflightMetadataPartitions = partitions;
+      return this;
+    }
+
     public PropertyBuilder set(String key, Object value) {
       if (HoodieTableConfig.PERSISTED_CONFIG_LIST.contains(key)) {
         this.others.put(key, value);
@@ -925,6 +937,14 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.DROP_PARTITION_COLUMNS)) {
         setDropPartitionColumnsWhenWrite(hoodieConfig.getBoolean(HoodieTableConfig.DROP_PARTITION_COLUMNS));
       }
+
+      if (hoodieConfig.contains(HoodieTableConfig.TABLE_METADATA_PARTITIONS)) {
+        setMetadataPartitions(hoodieConfig.getString(HoodieTableConfig.TABLE_METADATA_PARTITIONS));
+      }
+
+      if (hoodieConfig.contains(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT)) {
+        setInflightMetadataPartitions(hoodieConfig.getString(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT));
+      }
       return this;
     }
 
@@ -1009,6 +1029,14 @@ public class HoodieTableMetaClient implements Serializable {
 
       if (null != dropPartitionColumnsWhenWrite) {
         tableConfig.setValue(HoodieTableConfig.DROP_PARTITION_COLUMNS, Boolean.toString(dropPartitionColumnsWhenWrite));
+      }
+
+      if (null != metadataPartitions) {
+        tableConfig.setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS, metadataPartitions);
+      }
+
+      if (null != inflightMetadataPartitions) {
+        tableConfig.setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT, inflightMetadataPartitions);
       }
       return tableConfig.getProps();
     }
