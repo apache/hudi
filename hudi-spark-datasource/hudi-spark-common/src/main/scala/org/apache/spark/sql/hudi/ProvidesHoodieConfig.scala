@@ -189,7 +189,6 @@ trait ProvidesHoodieConfig extends Logging {
         PARTITIONPATH_FIELD.key -> partitionFieldsStr,
         PAYLOAD_CLASS_NAME.key -> payloadClassName,
         ENABLE_ROW_WRITER.key -> enableBulkInsert.toString,
-        HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(hasPrecombineColumn),
         HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key -> partitionFieldsStr,
         HoodieSyncConfig.META_SYNC_ENABLED.key -> enableHive.toString,
         HiveSyncConfig.HIVE_SYNC_MODE.key -> hiveSyncConfig.syncMode,
