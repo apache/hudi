@@ -372,4 +372,34 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     }.mkString(",")
     partitionsToDrop
   }
+
+
+  /**
+   * which is mainly to construct the where condition of partition sql,
+   * Can be used to delete or query.
+   *
+   * @param hoodieCatalogTable
+   * @param normalizedSpecs
+   * @return
+   */
+  def getPartitionSqlCondition(hoodieCatalogTable: HoodieCatalogTable,
+                               normalizedSpecs: Seq[Map[String, String]]): String = {
+    val table = hoodieCatalogTable.table
+    val allPartitionPaths = hoodieCatalogTable.getPartitionPaths
+    val enableEncodeUrl = isUrlEncodeEnabled(allPartitionPaths, table)
+
+    val partitionsToTruncate = normalizedSpecs.map { spec =>
+      hoodieCatalogTable.partitionFields.map { partitionColumn =>
+        if (enableEncodeUrl) {
+          // The urlcode character appears in the partition,
+          // which cannot be deleted with single quotation marks.
+          // Double quotation marks are used after url decoding.
+          partitionColumn + "=" + "\"" + spec(partitionColumn) + "\""
+        } else {
+          partitionColumn + "=" + "'" + spec(partitionColumn) + "'"
+        }
+      }.mkString(" and ")
+    }.mkString
+    partitionsToTruncate
+  }
 }

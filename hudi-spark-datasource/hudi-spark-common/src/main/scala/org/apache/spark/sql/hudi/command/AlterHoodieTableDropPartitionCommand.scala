@@ -18,8 +18,6 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.HoodieSparkSqlWriter
-import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
@@ -66,14 +64,12 @@ case class AlterHoodieTableDropPartitionCommand(
       parameters,
       sparkSession.emptyDataFrame)
 
-    // Recursively delete partition directories
+    // delete partition's data
     if (purge) {
-      val engineContext = new HoodieSparkEngineContext(sparkSession.sparkContext)
       val basePath = hoodieCatalogTable.tableLocation
-      val fullPartitionPath = FSUtils.getPartitionPath(basePath, partitionsToDrop)
-      logInfo("Clean partition up " + fullPartitionPath)
-      val fs = FSUtils.getFs(basePath, sparkSession.sparkContext.hadoopConfiguration)
-      FSUtils.deleteDir(engineContext, fs, fullPartitionPath, sparkSession.sparkContext.defaultParallelism)
+      val df = sparkSession.sqlContext.read.format("hudi").load(basePath)
+      val partitionsToDelete: String = getPartitionSqlCondition(hoodieCatalogTable, normalizedSpecs)
+      df.sqlContext.sql(s"""delete from ${hoodieCatalogTable.tableName} where $partitionsToDelete""")
     }
 
     sparkSession.catalog.refreshTable(tableIdentifier.unquotedString)

@@ -78,7 +78,7 @@ case class TruncateHoodieTableCommand(
       AlterHoodieTableDropPartitionCommand(tableIdentifier,
         specs = Seq(specs.get),
         ifExists = false,
-        purge = false,
+        purge = true,
         retainData = false)
         .run(sparkSession)
     }
