@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.command
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.getPartitionPathToTruncate
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{getPartitionSqlCondition, normalizePartitionSpec}
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 
 /**
@@ -53,17 +53,21 @@ case class TruncateHoodieTableCommand(
     }
 
     val basePath = hoodieCatalogTable.tableLocation
-
-    val df = sparkSession.sqlContext.read
-      .format("hudi")
-      .load(basePath)
+    val df = sparkSession.sqlContext.read.format("hudi").load(basePath)
 
     if (partitionSpec.isEmpty) {
       df.sqlContext.sql(s"delete from ${hoodieCatalogTable.tableName}")
     } else {
-      val resolver = sparkSession.sessionState.conf.resolver
-      val partitionsToTruncate: String = getPartitionPathToTruncate(hoodieCatalogTable, table, partitionSpec, resolver)
-      df.sqlContext.sql(s"""delete from ${hoodieCatalogTable.tableName} where $partitionsToTruncate""")
+      val normalizedSpecs: Seq[Map[String, String]] = Seq(partitionSpec.map { spec =>
+        normalizePartitionSpec(
+          spec,
+          hoodieCatalogTable.partitionFields,
+          hoodieCatalogTable.tableName,
+          sparkSession.sessionState.conf.resolver)
+      }.get)
+
+      val partitionsToDelete: String = getPartitionSqlCondition(hoodieCatalogTable, normalizedSpecs)
+      df.sqlContext.sql(s"""delete from ${hoodieCatalogTable.tableName} where $partitionsToDelete""")
     }
 
     // After deleting the data, refresh the table to make sure we don't keep around a stale

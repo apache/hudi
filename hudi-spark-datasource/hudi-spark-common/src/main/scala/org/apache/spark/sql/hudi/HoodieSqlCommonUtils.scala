@@ -30,7 +30,6 @@ import org.apache.hudi.{AvroConversionUtils, SparkAdapterSupport}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.Resolver
-import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Cast, Expression, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
@@ -377,25 +376,26 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     partitionsToDrop
   }
 
-  def getPartitionPathToTruncate(hoodieCatalogTable: HoodieCatalogTable,
-                                 table: CatalogTable,
-                                 partitionSpec: Option[TablePartitionSpec],
-                                 resolver: Resolver): String = {
-    val partCols = table.partitionColumnNames
-    val normalizedSpec: Seq[Map[String, String]] = Seq(partitionSpec.map { spec =>
-      normalizePartitionSpec(
-        spec,
-        partCols,
-        table.identifier.quotedString,
-        resolver)
-    }.get)
-
+  /**
+   * which is mainly to construct the where condition of partition sql,
+   * Can be used to delete or query.
+   *
+   * @param hoodieCatalogTable
+   * @param normalizedSpecs
+   * @return
+   */
+  def getPartitionSqlCondition(hoodieCatalogTable: HoodieCatalogTable,
+                               normalizedSpecs: Seq[Map[String, String]]): String = {
+    val table = hoodieCatalogTable.table
     val allPartitionPaths = hoodieCatalogTable.getPartitionPaths
     val enableEncodeUrl = isUrlEncodeEnabled(allPartitionPaths, table)
 
-    val partitionsToTruncate = normalizedSpec.map { spec =>
+    val partitionsToTruncate = normalizedSpecs.map { spec =>
       hoodieCatalogTable.partitionFields.map { partitionColumn =>
         if (enableEncodeUrl) {
+          // The urlcode character appears in the partition,
+          // which cannot be deleted with single quotation marks.
+          // Double quotation marks are used after url decoding.
           partitionColumn + "=" + "\"" + spec(partitionColumn) + "\""
         } else {
           partitionColumn + "=" + "'" + spec(partitionColumn) + "'"
