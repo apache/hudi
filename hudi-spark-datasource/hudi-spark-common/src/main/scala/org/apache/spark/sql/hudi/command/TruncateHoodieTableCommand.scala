@@ -31,7 +31,7 @@ import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
  */
 case class TruncateHoodieTableCommand(
    tableIdentifier: TableIdentifier,
-   partitionSpec: Option[TablePartitionSpec])
+   specs: Option[TablePartitionSpec])
   extends HoodieLeafRunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
