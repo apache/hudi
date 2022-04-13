@@ -30,8 +30,8 @@ import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
  * Command for truncate hudi table.
  */
 case class TruncateHoodieTableCommand(
-                                       tableIdentifier: TableIdentifier,
-                                       specs: Option[TablePartitionSpec])
+   tableIdentifier: TableIdentifier,
+   partitionSpec: Option[TablePartitionSpec])
   extends HoodieLeafRunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
