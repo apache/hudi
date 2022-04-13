@@ -1453,15 +1453,15 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public int getHbaseIndexGetBatchSize() {
-    return getIntOrDefault(HoodieHBaseIndexConfig.GET_BATCH_SIZE);
+    return getInt(HoodieHBaseIndexConfig.GET_BATCH_SIZE);
   }
 
   public Boolean getHBaseIndexRollbackSync() {
-    return getBooleanOrDefault(HoodieHBaseIndexConfig.ROLLBACK_SYNC_ENABLE);
+    return getBoolean(HoodieHBaseIndexConfig.ROLLBACK_SYNC_ENABLE);
   }
 
   public int getHbaseIndexPutBatchSize() {
-    return getIntOrDefault(HoodieHBaseIndexConfig.PUT_BATCH_SIZE);
+    return getInt(HoodieHBaseIndexConfig.PUT_BATCH_SIZE);
   }
 
   public boolean getHbaseIndexPutBatchSizeAutoCompute() {
@@ -1469,27 +1469,27 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getHBaseQPSResourceAllocatorClass() {
-    return getStringOrDefault(HoodieHBaseIndexConfig.QPS_ALLOCATOR_CLASS_NAME);
+    return getString(HoodieHBaseIndexConfig.QPS_ALLOCATOR_CLASS_NAME);
   }
 
   public String getHBaseQPSZKnodePath() {
-    return getStringOrDefault(HoodieHBaseIndexConfig.ZKPATH_QPS_ROOT);
+    return getString(HoodieHBaseIndexConfig.ZKPATH_QPS_ROOT);
   }
 
   public String getHBaseZkZnodeSessionTimeout() {
-    return getStringOrDefault(HoodieHBaseIndexConfig.ZK_SESSION_TIMEOUT_MS);
+    return getString(HoodieHBaseIndexConfig.ZK_SESSION_TIMEOUT_MS);
   }
 
   public String getHBaseZkZnodeConnectionTimeout() {
-    return getStringOrDefault(HoodieHBaseIndexConfig.ZK_CONNECTION_TIMEOUT_MS);
+    return getString(HoodieHBaseIndexConfig.ZK_CONNECTION_TIMEOUT_MS);
   }
 
   public boolean getHBaseIndexShouldComputeQPSDynamically() {
-    return getBooleanOrDefault(HoodieHBaseIndexConfig.COMPUTE_QPS_DYNAMICALLY);
+    return getBoolean(HoodieHBaseIndexConfig.COMPUTE_QPS_DYNAMICALLY);
   }
 
   public int getHBaseIndexDesiredPutsTime() {
-    return getIntOrDefault(HoodieHBaseIndexConfig.DESIRED_PUTS_TIME_IN_SECONDS);
+    return getInt(HoodieHBaseIndexConfig.DESIRED_PUTS_TIME_IN_SECONDS);
   }
 
   public String getBloomFilterType() {
@@ -1506,7 +1506,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    * the jobs would be (0.17) 1/6, 0.33 (2/6) and 0.5 (3/6) respectively.
    */
   public float getHbaseIndexQPSFraction() {
-    return getFloatOrDefault(HoodieHBaseIndexConfig.QPS_FRACTION);
+    return getFloat(HoodieHBaseIndexConfig.QPS_FRACTION);
   }
 
   public float getHBaseIndexMinQPSFraction() {
@@ -1522,7 +1522,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    * Hoodie jobs to an Hbase Region Server
    */
   public int getHbaseIndexMaxQPSPerRegionServer() {
-    return getIntOrDefault(HoodieHBaseIndexConfig.MAX_QPS_PER_REGION_SERVER);
+    return getInt(HoodieHBaseIndexConfig.MAX_QPS_PER_REGION_SERVER);
   }
 
   public boolean getHbaseIndexUpdatePartitionPath() {

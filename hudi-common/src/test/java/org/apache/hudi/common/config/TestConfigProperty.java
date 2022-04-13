@@ -56,11 +56,6 @@ public class TestConfigProperty extends HoodieConfig {
       })
       .withDocumentation("Fake config only for testing");
 
-  public static ConfigProperty<Float> FAKE_FLOAT_CONFIG = ConfigProperty
-      .key("test.fake.float.config")
-      .defaultValue(0.5f)
-      .withDocumentation("Fake config only for testing");
-
   @Test
   public void testGetTypedValue() {
     HoodieConfig hoodieConfig = new HoodieConfig();
@@ -92,7 +87,6 @@ public class TestConfigProperty extends HoodieConfig {
     HoodieConfig hoodieConfig = new HoodieConfig(props);
     assertEquals("1", hoodieConfig.getStringOrDefault(FAKE_STRING_CONFIG));
     assertEquals("2", hoodieConfig.getStringOrDefault(FAKE_STRING_CONFIG, "2"));
-    assertEquals(0.5f, hoodieConfig.getFloatOrDefault(FAKE_FLOAT_CONFIG));
   }
 
   @Test
@@ -119,6 +113,6 @@ public class TestConfigProperty extends HoodieConfig {
   @Test
   public void testSetDefaults() {
     setDefaults(this.getClass().getName());
-    assertEquals(4, getProps().size());
+    assertEquals(3, getProps().size());
   }
 }
