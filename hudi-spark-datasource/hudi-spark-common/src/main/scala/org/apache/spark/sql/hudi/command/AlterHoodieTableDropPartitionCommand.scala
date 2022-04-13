@@ -64,14 +64,6 @@ case class AlterHoodieTableDropPartitionCommand(
       parameters,
       sparkSession.emptyDataFrame)
 
-    // delete partition's data
-    if (purge) {
-      val basePath = hoodieCatalogTable.tableLocation
-      val df = sparkSession.sqlContext.read.format("hudi").load(basePath)
-      val partitionsToDelete: String = getPartitionSqlCondition(hoodieCatalogTable, normalizedSpecs)
-      df.sqlContext.sql(s"""delete from ${hoodieCatalogTable.tableName} where $partitionsToDelete""")
-    }
-
     sparkSession.catalog.refreshTable(tableIdentifier.unquotedString)
     logInfo(s"Finish execute alter table drop partition command for $fullTableName")
     Seq.empty[Row]
