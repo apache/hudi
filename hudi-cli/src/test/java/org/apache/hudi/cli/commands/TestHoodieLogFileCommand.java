@@ -65,7 +65,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -204,7 +203,6 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
     // get expected result of 10 records.
     List<String> logFilePaths = Arrays.stream(fs.globStatus(new Path(partitionPath + "/*")))
         .map(status -> status.getPath().toString()).collect(Collectors.toList());
-    assertTrue(logFilePaths.size() > 0);
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
         .withBasePath(tablePath)
@@ -223,7 +221,6 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
         .withSpillableMapBasePath(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.defaultValue())
         .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue())
         .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue())
-        .withPartition(getRelativePartitionPath(new Path(tablePath), new Path(logFilePaths.get(0)).getParent()))
         .build();
 
     Iterator<HoodieRecord<? extends HoodieRecordPayload>> records = scanner.iterator();
