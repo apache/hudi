@@ -119,6 +119,6 @@ public class TestConfigProperty extends HoodieConfig {
   @Test
   public void testSetDefaults() {
     setDefaults(this.getClass().getName());
-    assertEquals(3, getProps().size());
+    assertEquals(4, getProps().size());
   }
 }
