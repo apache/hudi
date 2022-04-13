@@ -29,13 +29,12 @@ import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.{AvroConversionUtils, SparkAdapterSupport}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.{Resolver, UnresolvedRelation}
-import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HoodieCatalogTable}
+import org.apache.spark.sql.catalyst.analysis.Resolver
+import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Cast, Expression, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
-import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
-import org.apache.spark.sql.types.{DataType, NullType, StringType, StructField, StructType}
+import org.apache.spark.sql.types._
 import org.apache.spark.sql.{AnalysisException, Column, DataFrame, SparkSession}
 
 import java.net.URI
@@ -371,35 +370,5 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
       }.mkString("/")
     }.mkString(",")
     partitionsToDrop
-  }
-
-
-  /**
-   * which is mainly to construct the where condition of partition sql,
-   * Can be used to delete or query.
-   *
-   * @param hoodieCatalogTable
-   * @param normalizedSpecs
-   * @return
-   */
-  def getPartitionSqlCondition(hoodieCatalogTable: HoodieCatalogTable,
-                               normalizedSpecs: Seq[Map[String, String]]): String = {
-    val table = hoodieCatalogTable.table
-    val allPartitionPaths = hoodieCatalogTable.getPartitionPaths
-    val enableEncodeUrl = isUrlEncodeEnabled(allPartitionPaths, table)
-
-    val partitionsToTruncate = normalizedSpecs.map { spec =>
-      hoodieCatalogTable.partitionFields.map { partitionColumn =>
-        if (enableEncodeUrl) {
-          // The urlcode character appears in the partition,
-          // which cannot be deleted with single quotation marks.
-          // Double quotation marks are used after url decoding.
-          partitionColumn + "=" + "\"" + spec(partitionColumn) + "\""
-        } else {
-          partitionColumn + "=" + "'" + spec(partitionColumn) + "'"
-        }
-      }.mkString(" and ")
-    }.mkString
-    partitionsToTruncate
   }
 }

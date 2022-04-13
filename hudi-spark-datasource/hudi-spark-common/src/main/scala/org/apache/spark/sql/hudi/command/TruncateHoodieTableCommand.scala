@@ -18,13 +18,16 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.HoodieSparkSqlWriter
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
-import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{getPartitionPathToDrop, normalizePartitionSpec}
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig
+import org.apache.spark.sql.{AnalysisException, Row, SaveMode, SparkSession}
 
 /**
  * Command for truncate hudi table.
@@ -32,7 +35,7 @@ import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 case class TruncateHoodieTableCommand(
    tableIdentifier: TableIdentifier,
    specs: Option[TablePartitionSpec])
-  extends HoodieLeafRunnableCommand {
+  extends HoodieLeafRunnableCommand with ProvidesHoodieConfig {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val fullTableName = s"${tableIdentifier.database}.${tableIdentifier.table}"
@@ -69,18 +72,29 @@ case class TruncateHoodieTableCommand(
       HoodieTableMetaClient.withPropertyBuilder()
         .fromProperties(properties)
         .initTable(hadoopConf, hoodieCatalogTable.tableLocation)
-
-      // After deleting the data, refresh the table to make sure we don't keep around a stale
-      // file relation in the metastore cache and cached table data in the cache manager.
-      sparkSession.catalog.refreshTable(table.identifier.quotedString)
-      Seq.empty[Row]
     } else {
-      AlterHoodieTableDropPartitionCommand(tableIdentifier,
-        specs = Seq(specs.get),
-        ifExists = false,
-        purge = false,
-        retainData = false)
-        .run(sparkSession)
+      val normalizedSpecs: Seq[Map[String, String]] = Seq(specs.map { spec =>
+        normalizePartitionSpec(
+          spec,
+          hoodieCatalogTable.partitionFields,
+          hoodieCatalogTable.tableName,
+          sparkSession.sessionState.conf.resolver)
+      }.get)
+
+      // drop partitions to lazy clean
+      val partitionsToDrop = getPartitionPathToDrop(hoodieCatalogTable, normalizedSpecs)
+      val parameters = buildHoodieDropPartitionsConfig(sparkSession, hoodieCatalogTable, partitionsToDrop)
+      HoodieSparkSqlWriter.write(
+        sparkSession.sqlContext,
+        SaveMode.Append,
+        parameters,
+        sparkSession.emptyDataFrame)
     }
+
+    // After deleting the data, refresh the table to make sure we don't keep around a stale
+    // file relation in the metastore cache and cached table data in the cache manager.
+    sparkSession.catalog.refreshTable(table.identifier.quotedString)
+    logInfo(s"Finish execute truncate table command for $fullTableName")
+    Seq.empty[Row]
   }
 }
