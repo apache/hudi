@@ -142,7 +142,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
           fileWriter.writeAvro(record.getRecordKey(),
               rewriteRecordWithMetadata((GenericRecord) avroRecord.get(), path.getName()));
         } else {
-          fileWriter.writeAvroWithMetadata(rewriteRecord((GenericRecord) avroRecord.get()), record);
+          fileWriter.writeAvroWithMetadata(record.getKey(), rewriteRecord((GenericRecord) avroRecord.get()));
         }
         // update the new location of record, so we know where to find it next
         record.unseal();
