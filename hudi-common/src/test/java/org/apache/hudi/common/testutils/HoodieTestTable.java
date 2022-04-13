@@ -681,7 +681,8 @@ public class HoodieTestTable {
           boolean toReturn = true;
           String filePath = entry.getPath().toString();
           String fileName = entry.getPath().getName();
-          if (fileName.startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX) || (!fileName.contains("log") && !fileName.contains("parquet"))
+          if (fileName.startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)
+              || !FileCreateUtils.isBaseOrLogFilename(fileName)
               || filePath.contains("metadata")) {
             toReturn = false;
           } else {
