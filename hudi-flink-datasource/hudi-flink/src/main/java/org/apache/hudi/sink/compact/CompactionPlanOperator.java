@@ -88,8 +88,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
       // when the earliest inflight instant has timed out, assumes it has failed
       // already and just rolls it back.
 
-      // comment out: do we really need the timeout rollback ?
-      // CompactionUtil.rollbackEarliestCompaction(table, conf);
+      CompactionUtil.rollbackEarliestCompaction(table, conf);
       scheduleCompaction(table, checkpointId);
     } catch (Throwable throwable) {
       // make it fail-safe
@@ -99,11 +98,19 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
 
   private void scheduleCompaction(HoodieFlinkTable<?> table, long checkpointId) throws IOException {
     // the first instant takes the highest priority.
-    Option<HoodieInstant> firstRequested = table.getActiveTimeline().filterPendingCompactionTimeline()
+    HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
+    Option<HoodieInstant> firstRequested = pendingCompactionTimeline
         .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED).firstInstant();
     if (!firstRequested.isPresent()) {
       // do nothing.
       LOG.info("No compaction plan for checkpoint " + checkpointId);
+      return;
+    }
+
+    Option<HoodieInstant> firstInflight = pendingCompactionTimeline
+        .filter(instant -> instant.getState() == HoodieInstant.State.INFLIGHT).firstInstant();
+    if (firstInflight.isPresent()) {
+      LOG.warn("Waiting for pending compaction instant : " + firstInflight + " to complete, skip scheduling new compaction plans");
       return;
     }
 
