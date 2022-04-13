@@ -57,13 +57,7 @@ case class AlterHoodieTableDropPartitionCommand(
         sparkSession.sessionState.conf.resolver)
     }
 
-    // step1: delete partition's data
-    val basePath = hoodieCatalogTable.tableLocation
-    val df = sparkSession.sqlContext.read.format("hudi").load(basePath)
-    val partitionsToDelete: String = getPartitionSqlCondition(hoodieCatalogTable, normalizedSpecs)
-    df.sqlContext.sql(s"""delete from ${hoodieCatalogTable.tableName} where $partitionsToDelete""")
-
-    // step2: drop partitions to lazy clean
+    // drop partitions to lazy clean
     val partitionsToDrop = getPartitionPathToDrop(hoodieCatalogTable, normalizedSpecs)
     val parameters = buildHoodieDropPartitionsConfig(sparkSession, hoodieCatalogTable, partitionsToDrop)
     HoodieSparkSqlWriter.write(
@@ -72,7 +66,7 @@ case class AlterHoodieTableDropPartitionCommand(
       parameters,
       sparkSession.emptyDataFrame)
 
-    // step3: Recursively delete partition directories
+    // Recursively delete partition directories
     if (purge) {
       val engineContext = new HoodieSparkEngineContext(sparkSession.sparkContext)
       val basePath = hoodieCatalogTable.tableLocation
