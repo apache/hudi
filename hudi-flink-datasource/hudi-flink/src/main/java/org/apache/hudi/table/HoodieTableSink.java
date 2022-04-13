@@ -78,7 +78,7 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
 
       // Append mode
       if (OptionsResolver.isAppendMode(conf)) {
-        return Pipelines.append(conf, rowType, dataStream);
+        return Pipelines.append(conf, rowType, dataStream, context.isBounded());
       }
 
       // default parallelism
