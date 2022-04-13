@@ -67,6 +67,7 @@ class TestTruncateTable extends TestHoodieSqlBase {
         val df = Seq((1, "z3", "v1", "2021/10/01"), (2, "l4", "v1", "2021/10/02"))
           .toDF("id", "name", "ts", "dt")
 
+        // Before https://github.com/apache/hudi/pull/5282, Here is the TABLE_TYPE modified to COW.
         df.write.format("hudi")
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
           .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
@@ -109,7 +110,6 @@ class TestTruncateTable extends TestHoodieSqlBase {
         val df = Seq((1, "z3", "v1", "2021", "10", "01"), (2, "l4", "v1", "2021", "10","02"))
           .toDF("id", "name", "ts", "year", "month", "day")
 
-        // Before https://github.com/apache/hudi/pull/5282, Here is the TABLE_TYPE modified to COW.
         df.write.format("hudi")
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
           .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
