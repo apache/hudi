@@ -345,7 +345,7 @@ private object HoodieMergeOnReadRDD {
       val logRecordScannerBuilder = HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
         .withBasePath(tablePath)
-        .withLogFilePaths(logFiles.map(logFile => getFilePath(logFile.getPath)).asJava)
+        .withLogFilePaths(logFiles.map(logFile => logFile.getPath.toString).asJava)
         .withReaderSchema(logSchema)
         .withLatestInstantTime(tableState.latestCommitTimestamp)
         .withReadBlocksLazily(
