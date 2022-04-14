@@ -42,11 +42,11 @@ public class Metrics {
 
   private final MetricRegistry registry;
   private MetricsReporter reporter;
-  private final String commonMetricPrefix;
+  private final Option<String> commonMetricPrefix;
 
   private Metrics(HoodieWriteConfig metricConfig) {
     registry = new MetricRegistry();
-    commonMetricPrefix = metricConfig.getMetricReporterMetricsNamePrefix();
+    commonMetricPrefix = Option.ofNullable(metricConfig.getMetricReporterMetricsNamePrefix());
     reporter = MetricsReporterFactory.createReporter(metricConfig, registry);
     if (reporter == null) {
       throw new RuntimeException("Cannot initialize Reporter.");
@@ -80,7 +80,7 @@ public class Metrics {
   }
 
   private void registerHoodieCommonMetrics() {
-    registerGauges(Registry.getAllMetrics(true, true), Option.of(commonMetricPrefix));
+    registerGauges(Registry.getAllMetrics(true, true), commonMetricPrefix);
   }
 
   public static Metrics getInstance() {
