@@ -116,7 +116,6 @@ public abstract class HoodieAsyncService implements Serializable {
   public void shutdown(boolean force) {
     if (!shutdownRequested || force) {
       shutdownRequested = true;
-      shutdown = true;
       if (executor != null) {
         if (force) {
           executor.shutdownNow();
@@ -124,22 +123,22 @@ public abstract class HoodieAsyncService implements Serializable {
           executor.shutdown();
           try {
             // Wait for some max time after requesting shutdown
-            executor.awaitTermination(24, TimeUnit.HOURS);
+            boolean finished = executor.awaitTermination(1, TimeUnit.MINUTES);
+            LOG.info(String.format("Service (%s) shutdown (%s)", getClass().getSimpleName(), finished));
           } catch (InterruptedException ie) {
             LOG.error("Interrupted while waiting for shutdown", ie);
           }
         }
       }
+      shutdown = true;
     }
   }
 
   /**
    * Start the service. Runs the service in a different thread and returns. Also starts a monitor thread to
    * run-callbacks in case of shutdown
-   * 
-   * @param onShutdownCallback
    */
-  public void start(Function<Boolean, Boolean> onShutdownCallback) {
+  public void start(Function<Boolean, Boolean> onCompleteCallback) {
     if (started) {
       LOG.warn("The async service already started.");
       return;
@@ -148,7 +147,7 @@ public abstract class HoodieAsyncService implements Serializable {
     future = res.getKey();
     executor = res.getValue();
     started = true;
-    shutdownCallback(onShutdownCallback);
+    shutdownCallback(onCompleteCallback);
   }
 
   /**

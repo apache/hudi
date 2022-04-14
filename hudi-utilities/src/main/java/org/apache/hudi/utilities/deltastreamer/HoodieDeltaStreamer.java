@@ -803,13 +803,16 @@ public class HoodieDeltaStreamer implements Serializable {
       return true;
     }
 
-    /**
-     * Close all resources.
-     */
-    public void close() {
-      if (null != deltaSync) {
+    @Override
+    public void shutdown(boolean force) {
+      // NOTE: We're shutting down in a sequence which is inverse of the initialization one
+      if (deltaSync != null) {
         deltaSync.close();
       }
+
+      super.shutdown(force);
+
+      LOG.info("Shutdown DeltaSync Service");
     }
 
     public SchemaProvider getSchemaProvider() {
