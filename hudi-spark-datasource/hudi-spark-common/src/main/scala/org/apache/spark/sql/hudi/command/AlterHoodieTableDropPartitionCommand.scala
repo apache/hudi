@@ -18,8 +18,6 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.HoodieSparkSqlWriter
-import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
@@ -29,11 +27,11 @@ import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.{AnalysisException, Row, SaveMode, SparkSession}
 
 case class AlterHoodieTableDropPartitionCommand(
-    tableIdentifier: TableIdentifier,
-    specs: Seq[TablePartitionSpec],
-    ifExists : Boolean,
-    purge : Boolean,
-    retainData : Boolean)
+   tableIdentifier: TableIdentifier,
+   partitionSpecs: Seq[TablePartitionSpec],
+   ifExists : Boolean,
+   purge : Boolean,
+   retainData : Boolean)
   extends HoodieLeafRunnableCommand with ProvidesHoodieConfig {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
@@ -49,7 +47,7 @@ case class AlterHoodieTableDropPartitionCommand(
     DDLUtils.verifyAlterTableType(
       sparkSession.sessionState.catalog, hoodieCatalogTable.table, isView = false)
 
-    val normalizedSpecs: Seq[Map[String, String]] = specs.map { spec =>
+    val normalizedSpecs: Seq[Map[String, String]] = partitionSpecs.map { spec =>
       normalizePartitionSpec(
         spec,
         hoodieCatalogTable.partitionFields,
@@ -57,6 +55,8 @@ case class AlterHoodieTableDropPartitionCommand(
         sparkSession.sessionState.conf.resolver)
     }
 
+    // drop partitions to lazy clean (https://github.com/apache/hudi/pull/4489)
+    // delete partition files by enabling cleaner and setting retention policies.
     val partitionsToDrop = getPartitionPathToDrop(hoodieCatalogTable, normalizedSpecs)
     val parameters = buildHoodieDropPartitionsConfig(sparkSession, hoodieCatalogTable, partitionsToDrop)
     HoodieSparkSqlWriter.write(
@@ -64,17 +64,6 @@ case class AlterHoodieTableDropPartitionCommand(
       SaveMode.Append,
       parameters,
       sparkSession.emptyDataFrame)
-
-
-    // Recursively delete partition directories
-    if (purge) {
-      val engineContext = new HoodieSparkEngineContext(sparkSession.sparkContext)
-      val basePath = hoodieCatalogTable.tableLocation
-      val fullPartitionPath = FSUtils.getPartitionPath(basePath, partitionsToDrop)
-      logInfo("Clean partition up " + fullPartitionPath)
-      val fs = FSUtils.getFs(basePath, sparkSession.sparkContext.hadoopConfiguration)
-      FSUtils.deleteDir(engineContext, fs, fullPartitionPath, sparkSession.sparkContext.defaultParallelism)
-    }
 
     sparkSession.catalog.refreshTable(tableIdentifier.unquotedString)
     logInfo(s"Finish execute alter table drop partition command for $fullTableName")
