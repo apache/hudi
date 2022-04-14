@@ -54,8 +54,6 @@ import java.util.Set;
  * @author Attila Szegedi
  */
 public class ObjectSizeCalculator {
-  private static final ThreadLocal<ObjectSizeCalculator> OBJECT_SIZE_CALCULATOR_THREAD_LOCAL = ThreadLocal.withInitial(() -> new ObjectSizeCalculator(CurrentLayout.SPEC));
-
   private static class CurrentLayout {
 
     private static final MemoryLayoutSpecification SPEC = getEffectiveMemoryLayoutSpecification();
@@ -73,7 +71,7 @@ public class ObjectSizeCalculator {
    * @throws UnsupportedOperationException if the current vm memory layout cannot be detected.
    */
   public static long getObjectSize(Object obj) throws UnsupportedOperationException {
-    return obj == null ? 0 : OBJECT_SIZE_CALCULATOR_THREAD_LOCAL.get().calculateObjectSize(obj);
+    return obj == null ? 0 : new ObjectSizeCalculator(CurrentLayout.SPEC).calculateObjectSize(obj);
   }
 
   // Fixed object header size for arrays.
