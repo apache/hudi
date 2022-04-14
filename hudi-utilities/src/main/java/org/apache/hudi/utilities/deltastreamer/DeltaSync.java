@@ -211,9 +211,9 @@ public class DeltaSync implements Serializable {
    */
   private transient SparkRDDWriteClient writeClient;
 
-  private transient HoodieDeltaStreamerMetrics metrics;
+  private final transient HoodieDeltaStreamerMetrics metrics;
 
-  private transient HoodieMetrics hoodieMetrics;
+  private final transient HoodieMetrics hoodieMetrics;
 
   public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
                    TypedProperties props, JavaSparkContext jssc, FileSystem fs, Configuration conf,
@@ -745,7 +745,7 @@ public class DeltaSync implements Serializable {
       }
     }
 
-    if (null != writeClient) {
+    if (writeClient != null) {
       // Close Write client.
       writeClient.close();
     }
@@ -866,15 +866,12 @@ public class DeltaSync implements Serializable {
    * Close all resources.
    */
   public void close() {
-    if (null != writeClient) {
+    if (writeClient != null) {
       writeClient.close();
       writeClient = null;
     }
 
-    LOG.info("Shutting down embedded timeline server");
-    if (embeddedTimelineService.isPresent()) {
-      embeddedTimelineService.get().stop();
-    }
+    embeddedTimelineService.ifPresent(EmbeddedTimelineService::stop);
   }
 
   public FileSystem getFs() {
@@ -899,7 +896,7 @@ public class DeltaSync implements Serializable {
    *
    * @return Requested clustering instant.
    */
-  public Option<String> getClusteringInstantOpt() {
+  public Option<String> scheduleClustering() {
     if (writeClient != null) {
       return writeClient.scheduleClustering(Option.empty());
     } else {

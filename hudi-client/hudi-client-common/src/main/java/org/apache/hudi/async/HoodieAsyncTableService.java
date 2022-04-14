@@ -41,10 +41,10 @@ public abstract class HoodieAsyncTableService extends HoodieAsyncService impleme
   }
 
   @Override
-  public void start(Function<Boolean, Boolean> onShutdownCallback) {
+  public void start(Function<Boolean, Boolean> onCompleteCallback) {
     if (!tableServicesEnabled(writeConfig)) {
       return;
     }
-    super.start(onShutdownCallback);
+    super.start(onCompleteCallback);
   }
 }

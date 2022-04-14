@@ -184,14 +184,14 @@ public class HoodieDeltaStreamer implements Serializable {
     } else {
       if (cfg.continuousMode) {
         deltaSyncService.ifPresent(ds -> {
-          ds.start(this::onDeltaSyncShutdown);
+          ds.start(this::onDeltaSyncComplete);
           try {
             ds.waitForShutdown();
           } catch (Exception e) {
             throw new HoodieException(e.getMessage(), e);
           }
         });
-        LOG.info("Delta Sync shutting down");
+        LOG.info("Shutdown DeltaStreamer");
       } else {
         LOG.info("Delta Streamer running only single round");
         try {
@@ -206,8 +206,8 @@ public class HoodieDeltaStreamer implements Serializable {
           LOG.error("Got error running delta sync once. Shutting down", ex);
           throw ex;
         } finally {
-          deltaSyncService.ifPresent(DeltaSyncService::close);
-          LOG.info("Shut down delta streamer");
+          deltaSyncService.ifPresent(ds -> ds.shutdown(false));
+          LOG.info("Shutdown DeltaStreamer");
         }
       }
     }
@@ -217,9 +217,8 @@ public class HoodieDeltaStreamer implements Serializable {
     return cfg;
   }
 
-  private boolean onDeltaSyncShutdown(boolean error) {
-    LOG.info("DeltaSync shutdown. Closing write client. Error?" + error);
-    deltaSyncService.ifPresent(DeltaSyncService::close);
+  private boolean onDeltaSyncComplete(boolean ignored) {
+    deltaSyncService.ifPresent(ds -> ds.shutdown(false));
     return true;
   }
 
@@ -601,7 +600,7 @@ public class HoodieDeltaStreamer implements Serializable {
     /**
      * Delta Sync.
      */
-    private transient DeltaSync deltaSync;
+    private final transient DeltaSync deltaSync;
 
     public DeltaSyncService(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                             Option<TypedProperties> properties) throws IOException {
@@ -684,7 +683,7 @@ public class HoodieDeltaStreamer implements Serializable {
                 }
               }
               if (clusteringConfig.isAsyncClusteringEnabled()) {
-                Option<String> clusteringInstant = deltaSync.getClusteringInstantOpt();
+                Option<String> clusteringInstant = deltaSync.scheduleClustering();
                 if (clusteringInstant.isPresent()) {
                   LOG.info("Scheduled async clustering for instant: " + clusteringInstant.get());
                   asyncClusteringService.get().enqueuePendingAsyncServiceInstant(new HoodieInstant(State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringInstant.get()));
