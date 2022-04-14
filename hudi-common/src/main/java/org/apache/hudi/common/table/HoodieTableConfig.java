@@ -198,7 +198,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> DROP_PARTITION_COLUMNS = ConfigProperty
       .key("hoodie.datasource.write.drop.partition.columns")
-      .defaultValue(false)
+      .defaultValue(true)
       .withDocumentation("When set to true, will not write the partition columns into hudi. By default, false.");
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
