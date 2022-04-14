@@ -34,7 +34,7 @@ import org.apache.spark.sql.{AnalysisException, Row, SaveMode, SparkSession}
  */
 case class TruncateHoodieTableCommand(
    tableIdentifier: TableIdentifier,
-   specs: Option[TablePartitionSpec])
+   partitionSpec: Option[TablePartitionSpec])
   extends HoodieLeafRunnableCommand with ProvidesHoodieConfig {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
@@ -45,24 +45,25 @@ case class TruncateHoodieTableCommand(
 
     val catalog = sparkSession.sessionState.catalog
     val table = catalog.getTableMetadata(tableIdentifier)
-    val tableIdentWithDB = table.identifier.quotedString
+    val tableId = table.identifier.quotedString
 
     if (table.tableType == CatalogTableType.VIEW) {
       throw new AnalysisException(
-        s"Operation not allowed: TRUNCATE TABLE on views: $tableIdentWithDB")
+        s"Operation not allowed: TRUNCATE TABLE on views: $tableId")
     }
 
-    if (table.partitionColumnNames.isEmpty && specs.isDefined) {
+    if (table.partitionColumnNames.isEmpty && partitionSpec.isDefined) {
       throw new AnalysisException(
         s"Operation not allowed: TRUNCATE TABLE ... PARTITION is not supported " +
-          s"for tables that are not partitioned: $tableIdentWithDB")
+          s"for tables that are not partitioned: $tableId")
     }
 
     val basePath = hoodieCatalogTable.tableLocation
     val properties = hoodieCatalogTable.tableConfig.getProps
     val hadoopConf = sparkSession.sessionState.newHadoopConf()
 
-    if (specs.isEmpty) {
+    // If we have not specified the partition, truncate will delete all the data in the table path
+    if (partitionSpec.isEmpty) {
       val targetPath = new Path(basePath)
       val engineContext = new HoodieSparkEngineContext(sparkSession.sparkContext)
       val fs = FSUtils.getFs(basePath, sparkSession.sparkContext.hadoopConfiguration)
@@ -73,7 +74,7 @@ case class TruncateHoodieTableCommand(
         .fromProperties(properties)
         .initTable(hadoopConf, hoodieCatalogTable.tableLocation)
     } else {
-      val normalizedSpecs: Seq[Map[String, String]] = Seq(specs.map { spec =>
+      val normalizedSpecs: Seq[Map[String, String]] = Seq(partitionSpec.map { spec =>
         normalizePartitionSpec(
           spec,
           hoodieCatalogTable.partitionFields,
