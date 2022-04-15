@@ -1148,6 +1148,11 @@ public class HoodieWriteConfig extends HoodieConfig {
   /**
    * compaction properties.
    */
+
+  public int getLogCompactionBlocksThreshold() {
+    return getInt(HoodieCompactionConfig.LOG_COMPACTION_BLOCKS_THRESHOLD);
+  }
+
   public HoodieCleaningPolicy getCleanerPolicy() {
     return HoodieCleaningPolicy.valueOf(getString(CLEANER_POLICY));
   }
@@ -1252,6 +1257,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT);
   }
 
+  public boolean inlineLogCompactionEnabled() {
+    return getBoolean(HoodieCompactionConfig.INLINE_LOG_COMPACT);
+  }
+
   public CompactionTriggerStrategy getInlineCompactTriggerStrategy() {
     return CompactionTriggerStrategy.valueOf(getString(HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY));
   }
@@ -1335,6 +1344,14 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getTargetPartitionsPerDayBasedCompaction() {
     return getInt(HoodieCompactionConfig.TARGET_PARTITIONS_PER_DAYBASED_COMPACTION);
+  }
+
+  public String getPartitionsForLogCompaction() {
+    return getString(HoodieCompactionConfig.PARTITIONS_FOR_LOG_COMPACTION);
+  }
+
+  public String getPartitionsForCompaction() {
+    return getString(HoodieCompactionConfig.PARTITIONS_FOR_COMPACTION);
   }
 
   public int getCommitArchivalBatchSize() {
@@ -2095,7 +2112,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   public Boolean areAnyTableServicesExecutedInline() {
     return areTableServicesEnabled()
-        && (inlineClusteringEnabled() || inlineCompactionEnabled()
+        && (inlineClusteringEnabled() || inlineCompactionEnabled() || inlineLogCompactionEnabled()
         || (isAutoClean() && !isAsyncClean()) || (isAutoArchive() && !isAsyncArchive()));
   }
 

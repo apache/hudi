@@ -30,17 +30,21 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.HoodieAppendHandle;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.SparkBootstrapDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.compact.HoodieSparkMergeOnReadTableCompactor;
 import org.apache.hudi.table.action.compact.RunCompactionActionExecutor;
+import org.apache.hudi.table.action.compact.RunLogCompactionActionExecutor;
 import org.apache.hudi.table.action.compact.ScheduleCompactionActionExecutor;
 import org.apache.hudi.table.action.deltacommit.SparkBulkInsertDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.SparkBulkInsertPreppedDeltaCommitActionExecutor;
@@ -54,6 +58,8 @@ import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
 import org.apache.hudi.table.action.rollback.RestorePlanActionExecutor;
 
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -73,7 +79,7 @@ import java.util.Map;
  * action
  * </p>
  */
-public class HoodieSparkMergeOnReadTable<T extends HoodieRecordPayload> extends HoodieSparkCopyOnWriteTable<T> {
+public class HoodieSparkMergeOnReadTable<T extends HoodieRecordPayload> extends HoodieSparkCopyOnWriteTable<T> implements HoodieCompactionHandler<T> {
 
   HoodieSparkMergeOnReadTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
@@ -127,9 +133,8 @@ public class HoodieSparkMergeOnReadTable<T extends HoodieRecordPayload> extends 
 
   @Override
   public Option<HoodieCompactionPlan> scheduleCompaction(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
-    ScheduleCompactionActionExecutor scheduleCompactionExecutor = new ScheduleCompactionActionExecutor<>(
-        context, config, this, instantTime, extraMetadata,
-        new HoodieSparkMergeOnReadTableCompactor<>());
+    ScheduleCompactionActionExecutor scheduleCompactionExecutor = new ScheduleCompactionActionExecutor(
+        context, config, this, instantTime, extraMetadata, WriteOperationType.COMPACT);
     return scheduleCompactionExecutor.execute();
   }
 
@@ -148,6 +153,21 @@ public class HoodieSparkMergeOnReadTable<T extends HoodieRecordPayload> extends 
   }
 
   @Override
+  public Option<HoodieCompactionPlan> scheduleLogCompaction(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
+    ScheduleCompactionActionExecutor scheduleLogCompactionExecutor = new ScheduleCompactionActionExecutor(
+        context, config, this, instantTime, extraMetadata, WriteOperationType.LOG_COMPACT);
+    return scheduleLogCompactionExecutor.execute();
+  }
+
+  @Override
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> logCompact(
+      HoodieEngineContext context, String logCompactionInstantTime) {
+    RunLogCompactionActionExecutor logCompactionExecutor = new RunLogCompactionActionExecutor(
+        context, config, this, logCompactionInstantTime, this);
+    return logCompactionExecutor.execute();
+  }
+
+  @Override
   public void rollbackBootstrap(HoodieEngineContext context, String instantTime) {
     new RestorePlanActionExecutor<>(context, config, this, instantTime, HoodieTimeline.INIT_INSTANT_TS).execute();
     new MergeOnReadRestoreActionExecutor<>(context, config, this, instantTime, HoodieTimeline.INIT_INSTANT_TS).execute();
@@ -159,6 +179,17 @@ public class HoodieSparkMergeOnReadTable<T extends HoodieRecordPayload> extends 
                                                      HoodieInstant instantToRollback, boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers) {
     return new BaseRollbackPlanActionExecutor<>(context, config, this, instantTime, instantToRollback, skipTimelinePublish,
         shouldRollbackUsingMarkers).execute();
+  }
+
+  @Override
+  public Iterator<List<WriteStatus>> handlePreppedInserts(String instantTime, String partitionPath, String fileId,
+                                                          Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap,
+                                                          Map<HoodieLogBlock.HeaderMetadataType, String> header) {
+    HoodieAppendHandle appendHandle = new HoodieAppendHandle(config, instantTime, this,
+        partitionPath, fileId, recordMap.values().iterator(), taskContextSupplier, header);
+    appendHandle.write(recordMap);
+    List<WriteStatus> writeStatuses = appendHandle.close();
+    return Collections.singletonList(writeStatuses).iterator();
   }
 
   @Override

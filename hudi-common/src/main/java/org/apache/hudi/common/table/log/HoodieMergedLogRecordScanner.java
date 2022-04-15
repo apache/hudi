@@ -79,6 +79,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   private long maxMemorySizeInBytes;
   // Stores the total time taken to perform reading and merging of log blocks
   private long totalTimeTakenToReadAndMergeBlocks;
+  private final boolean preserveCommitMetadata;
 
   @SuppressWarnings("unchecked")
   protected HoodieMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
@@ -88,10 +89,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
                                          ExternalSpillableMap.DiskMapType diskMapType,
                                          boolean isBitCaskDiskMapCompressionEnabled,
                                          boolean withOperationField, boolean forceFullScan,
-                                         Option<String> partitionName, InternalSchema internalSchema) {
+                                         Option<String> partitionName, InternalSchema internalSchema,
+                                         boolean preserveCommitMetadata, boolean useScanV2) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
         instantRange, withOperationField,
-        forceFullScan, partitionName, internalSchema);
+        forceFullScan, partitionName, internalSchema, useScanV2);
+    this.preserveCommitMetadata = preserveCommitMetadata;
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
@@ -156,7 +159,14 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       // If combinedValue is oldValue, no need rePut oldRecord
       if (combinedValue != oldValue) {
         HoodieOperation operation = hoodieRecord.getOperation();
-        records.put(key, new HoodieAvroRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()), combinedValue, operation));
+        HoodieRecord latestHoodieRecord = new HoodieAvroRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()), combinedValue, operation);
+        // If preserveMetadata is true. Use the same location.
+        if (this.preserveCommitMetadata) {
+          latestHoodieRecord.unseal();
+          latestHoodieRecord.setCurrentLocation(hoodieRecord.getCurrentLocation());
+          latestHoodieRecord.seal();
+        }
+        records.put(key, latestHoodieRecord);
       }
     } else {
       // Put the record as is
@@ -221,8 +231,14 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     // incremental filtering
     protected Option<InstantRange> instantRange = Option.empty();
     protected String partitionName;
+    // auto scan default true
+    private boolean autoScan = true;
+    // To preserve commit metadata and file location.
+    protected boolean preserveCommitMetadata = false;
     // operation field default false
     private boolean withOperationField = false;
+    // Use scanV2 method.
+    private boolean useScanV2 = false;
 
     @Override
     public Builder withFileSystem(FileSystem fs) {
@@ -310,9 +326,20 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       return this;
     }
 
+    public Builder withPreserveCommitMetadata(boolean preserveCommitMetadata) {
+      this.preserveCommitMetadata = preserveCommitMetadata;
+      return this;
+    }
+
     @Override
     public Builder withPartition(String partitionName) {
       this.partitionName = partitionName;
+      return this;
+    }
+
+    @Override
+    public Builder withUseScanV2(boolean useScanV2) {
+      this.useScanV2 = useScanV2;
       return this;
     }
 
@@ -325,7 +352,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
           latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
           bufferSize, spillableMapBasePath, instantRange,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, true,
-          Option.ofNullable(partitionName), internalSchema);
+          Option.ofNullable(partitionName), internalSchema, preserveCommitMetadata, useScanV2);
     }
   }
 }

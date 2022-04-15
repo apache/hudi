@@ -85,6 +85,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
   private final SyncableFileSystemView fileSystemView;
   private final HoodieTimeline commitTimeline;
   private final Map<HoodieFileGroupId, CompactionOperation> fgIdToPendingCompactionOperations;
+  private final Map<HoodieFileGroupId, CompactionOperation> fgIdToPendingLogCompactionOperations;
   private HoodieTable<T, I, K, O> hoodieTable;
   private HoodieWriteConfig config;
   private transient HoodieEngineContext context;
@@ -95,12 +96,16 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     this.fileSystemView = hoodieTable.getHoodieView();
     this.commitTimeline = hoodieTable.getCompletedCommitsTimeline();
     this.config = config;
-    this.fgIdToPendingCompactionOperations =
-        ((SyncableFileSystemView) hoodieTable.getSliceView()).getPendingCompactionOperations()
+    SyncableFileSystemView fileSystemView = (SyncableFileSystemView) hoodieTable.getSliceView();
+    this.fgIdToPendingCompactionOperations = fileSystemView
+        .getPendingCompactionOperations()
             .map(entry -> Pair.of(
                 new HoodieFileGroupId(entry.getValue().getPartitionPath(), entry.getValue().getFileId()),
                 entry.getValue()))
             .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+    this.fgIdToPendingLogCompactionOperations = fileSystemView.getPendingLogCompactionOperations()
+        .map(entry -> Pair.of(new HoodieFileGroupId(entry.getValue().getPartitionPath(), entry.getValue().getFileId()), entry.getValue()))
+        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
   }
 
   /**
@@ -243,7 +248,9 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
       int keepVersions = config.getCleanerFileVersionsRetained();
       // do not cleanup slice required for pending compaction
       Iterator<FileSlice> fileSliceIterator =
-          fileGroup.getAllFileSlices().filter(fs -> !isFileSliceNeededForPendingCompaction(fs)).iterator();
+          fileGroup.getAllFileSlices()
+              .filter(fs -> !isFileSliceNeededForPendingCompaction(fs) && !isFileSliceNeededForPendingLogCompaction(fs))
+              .iterator();
       if (isFileGroupInPendingCompaction(fileGroup)) {
         // We have already saved the last version of file-groups for pending compaction Id
         keepVersions--;
@@ -352,7 +359,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
           }
 
           // Always keep the last commit
-          if (!isFileSliceNeededForPendingCompaction(aSlice) && HoodieTimeline
+          if (!isFileSliceNeededForPendingCompaction(aSlice) && && !isFileSliceNeededForPendingLogCompaction(aSlice) HoodieTimeline
               .compareTimestamps(earliestCommitToRetain.getTimestamp(), HoodieTimeline.GREATER_THAN, fileCommitTime)) {
             // this is a commit, that should be cleaned.
             aFile.ifPresent(hoodieDataFile -> {
@@ -519,7 +526,27 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     return false;
   }
 
+  /**
+   * Determine if file slice needed to be preserved for pending logcompaction.
+   *
+   * @param fileSlice File Slice
+   * @return true if file slice needs to be preserved, false otherwise.
+   */
+  private boolean isFileSliceNeededForPendingLogCompaction(FileSlice fileSlice) {
+    CompactionOperation op = fgIdToPendingLogCompactionOperations.get(fileSlice.getFileGroupId());
+    if (null != op) {
+      // If file slice's instant time is newer or same as that of operation, do not clean
+      return HoodieTimeline.compareTimestamps(fileSlice.getBaseInstantTime(), HoodieTimeline.GREATER_THAN_OR_EQUALS, op.getBaseInstantTime()
+      );
+    }
+    return false;
+  }
+
   private boolean isFileGroupInPendingCompaction(HoodieFileGroup fg) {
     return fgIdToPendingCompactionOperations.containsKey(fg.getFileGroupId());
+  }
+
+  private boolean isFileGroupInPendingLogCompaction(HoodieFileGroup fg) {
+    return fgIdToPendingLogCompactionOperations.containsKey(fg.getFileGroupId());
   }
 }

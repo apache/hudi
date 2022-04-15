@@ -44,7 +44,6 @@ public class HoodieFileReaderFactory {
     if (ORC.getFileExtension().equals(extension)) {
       return newOrcFileReader(conf, path);
     }
-
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 

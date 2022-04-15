@@ -118,8 +118,26 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   // Header metadata for a log block
   protected final Map<HeaderMetadataType, String> header = new HashMap<>();
   private SizeEstimator<HoodieRecord> sizeEstimator;
+  // Instant time of the basefile on which append operation is performed.
+  private String baseInstantTime;
+  // This is used to distinguish between normal append and logcompaction's append operation.
+  private boolean isLogCompaction = false;
+  // use writer schema for log compaction.
+  private boolean useWriterSchema = false;
 
   private Properties recordProperties = new Properties();
+
+  /**
+   * This is used by log compaction only.
+   */
+  public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                            String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr,
+                            TaskContextSupplier taskContextSupplier, Map<HeaderMetadataType, String> header) {
+    this(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier);
+    this.useWriterSchema = true;
+    this.isLogCompaction = true;
+    this.header.putAll(header);
+  }
 
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr, TaskContextSupplier taskContextSupplier) {
@@ -215,7 +233,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       // If the format can not record the operation field, nullify the DELETE payload manually.
       boolean nullifyPayload = HoodieOperation.isDelete(hoodieRecord.getOperation()) && !config.allowOperationMetadataField();
       recordProperties.put(HoodiePayloadProps.PAYLOAD_IS_UPDATE_RECORD_FOR_MOR, String.valueOf(isUpdateRecord));
-      Option<IndexedRecord> avroRecord = nullifyPayload ? Option.empty() : hoodieRecord.getData().getInsertValue(tableSchema, recordProperties);
+      Option<IndexedRecord> avroRecord = nullifyPayload ? Option.empty() : getInsertValue(hoodieRecord);
       if (avroRecord.isPresent()) {
         if (avroRecord.get().equals(IGNORE_RECORD)) {
           return avroRecord;
@@ -228,12 +246,14 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
         if (config.populateMetaFields()) {
           HoodieAvroUtils.addHoodieKeyToRecord(rewriteRecord, hoodieRecord.getRecordKey(),
               hoodieRecord.getPartitionPath(), fileId);
-          HoodieAvroUtils.addCommitMetadataToRecord(rewriteRecord, instantTime, seqId);
+          if (!this.isLogCompaction) {
+            HoodieAvroUtils.addCommitMetadataToRecord(rewriteRecord, instantTime, seqId);
+          }
         }
         if (config.allowOperationMetadataField()) {
           HoodieAvroUtils.addOperationToRecord(rewriteRecord, hoodieRecord.getOperation());
         }
-        if (isUpdateRecord) {
+        if (isUpdateRecord || isLogCompaction) {
           updatedRecordsWritten++;
         } else {
           insertRecordsWritten++;
@@ -254,6 +274,14 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       writeStatus.markFailure(hoodieRecord, e, recordMetadata);
     }
     return Option.empty();
+  }
+
+  private Option<IndexedRecord> getInsertValue(HoodieRecord<T> hoodieRecord) throws IOException {
+    if (useWriterSchema) {
+      return hoodieRecord.getData().getInsertValue(tableSchemaWithMetaFields, recordProperties);
+    } else {
+      return hoodieRecord.getData().getInsertValue(tableSchema, recordProperties);
+    }
   }
 
   private void initNewStatus() {
@@ -384,11 +412,16 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       flushToDiskIfRequired(record);
       writeToBuffer(record);
     }
-    appendDataAndDeleteBlocks(header);
+    appendDataAndDeleteBlocks(header, true);
     estimatedNumberOfBytesWritten += averageRecordSize * numberOfRecords;
   }
 
-  protected void appendDataAndDeleteBlocks(Map<HeaderMetadataType, String> header) {
+  /**
+   * Appends data and delete blocks. When appendDeleteBlocks value is false, only data blocks are appended.
+   * This is done so that all the data blocks are created first and then a single delete block is added.
+   * Otherwise what can end up happening is creation of multiple small delete blocks get added after each data block.
+   */
+  protected void appendDataAndDeleteBlocks(Map<HeaderMetadataType, String> header, boolean appendDeleteBlocks) {
     try {
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, instantTime);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writeSchemaWithMetaFields.toString());
@@ -401,7 +434,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
         blocks.add(getBlock(config, pickLogDataBlockFormat(), recordList, header, keyField));
       }
 
-      if (recordsToDelete.size() > 0) {
+      if (appendDeleteBlocks && recordsToDelete.size() > 0) {
         blocks.add(new HoodieDeleteBlock(recordsToDelete.toArray(new DeleteRecord[0]), header));
       }
 
@@ -409,7 +442,9 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
         AppendResult appendResult = writer.appendBlocks(blocks);
         processAppendResult(appendResult, recordList);
         recordList.clear();
-        recordsToDelete.clear();
+        if (appendDeleteBlocks) {
+          recordsToDelete.clear();
+        }
       }
     } catch (Exception e) {
       throw new HoodieAppendException("Failed while appending records to " + writer.getLogFile().getPath(), e);
@@ -441,7 +476,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   public List<WriteStatus> close() {
     try {
       // flush any remaining records to disk
-      appendDataAndDeleteBlocks(header);
+      appendDataAndDeleteBlocks(header, true);
       recordItr = null;
       if (writer != null) {
         writer.close();
@@ -458,6 +493,23 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       return statuses;
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);
+    }
+  }
+
+  public void write(Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap) {
+    Iterator<String> keyIterator = recordMap.keySet().stream().iterator();
+    try {
+      while (keyIterator.hasNext()) {
+        final String key = keyIterator.next();
+        HoodieRecord<T> record = (HoodieRecord<T>) recordMap.get(key);
+        init(record);
+        // For logCompaction operations all the records are read and written as a huge block.
+        writeToBuffer(record);
+      }
+      appendDataAndDeleteBlocks(header, true);
+      estimatedNumberOfBytesWritten += averageRecordSize * numberOfRecords;
+    } catch (Exception e) {
+      throw new HoodieUpsertException("Failed to compact blocks for fileId " + fileId, e);
     }
   }
 
@@ -515,7 +567,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       // avg of new and old
       LOG.info("AvgRecordSize => " + averageRecordSize);
       averageRecordSize = (averageRecordSize + sizeEstimator.sizeEstimate(record)) / 2;
-      appendDataAndDeleteBlocks(header);
+      // Delete blocks will be appended after appending all the data blocks.
+      appendDataAndDeleteBlocks(header, false);
       estimatedNumberOfBytesWritten += averageRecordSize * numberOfRecords;
       numberOfRecords = 0;
     }

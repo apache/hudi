@@ -25,6 +25,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -107,8 +108,7 @@ public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload>
       String instantTime,
       Option<Map<String, String>> extraMetadata) {
     ScheduleCompactionActionExecutor scheduleCompactionExecutor = new ScheduleCompactionActionExecutor(
-        context, config, this, instantTime, extraMetadata,
-        new HoodieFlinkMergeOnReadTableCompactor());
+        context, config, this, instantTime, extraMetadata, WriteOperationType.COMPACT);
     return scheduleCompactionExecutor.execute();
   }
 

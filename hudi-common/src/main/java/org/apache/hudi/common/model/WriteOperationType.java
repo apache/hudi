@@ -53,7 +53,8 @@ public enum WriteOperationType {
 
   // alter schema
   ALTER_SCHEMA("alter_schema"),
-
+  // log compact
+  LOG_COMPACT("logcompact"),
   // used for old version
   UNKNOWN("unknown");
 

@@ -61,6 +61,12 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + "but users are expected to trigger async job for execution. If `hoodie.compact.inline` is set to true, regular writers will do both scheduling and "
           + "execution inline for compaction");
 
+  public static final ConfigProperty<String> INLINE_LOG_COMPACT = ConfigProperty
+      .key("hoodie.log.compaction.inline")
+      .defaultValue("false")
+      .withDocumentation("When set to true, logcompaction service is triggered after each write. While being "
+          + " simpler operationally, this adds extra latency on the write path.");
+
   public static final ConfigProperty<String> INLINE_COMPACT_NUM_DELTA_COMMITS = ConfigProperty
       .key("hoodie.compact.inline.max.delta.commits")
       .defaultValue("5")
@@ -148,6 +154,20 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("When rewriting data, preserves existing hoodie_commit_time");
 
+  public static final ConfigProperty<String> PARTITIONS_FOR_COMPACTION = ConfigProperty
+      .key("hoodie.compaction.target.partitions")
+      .defaultValue("")
+      .withDocumentation("Used by org.apache.hudi.table.action.compact.strategy.SpecificPartitionCompactionStrategy "
+          + "to filter the required partitions to compact. This takes a string value with partitions separated by comma. "
+          + "Empty value implies no filtering so all the partitions are selected.");
+
+  public static final ConfigProperty<String> PARTITIONS_FOR_LOG_COMPACTION = ConfigProperty
+      .key("hoodie.log.compaction.target.partitions")
+      .defaultValue("")
+      .withDocumentation("Used by org.apache.hudi.table.action.compact.plan.generators.HoodieLogCompactionPlanGenerator "
+          + "to filter the required partitions to log compact. This takes a string value with partitions separated by comma. "
+          + "Empty value implies no filtering so all the partitions are selected.");
+
   /**
    * Configs related to specific table types.
    */
@@ -173,6 +193,21 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + "record size estimate compute dynamically based on commit metadata. "
           + " This is critical in computing the insert parallelism and bin-packing inserts into small files.");
 
+  public static final ConfigProperty<Long> ARCHIVE_MERGE_SMALL_FILE_LIMIT_BYTES = ConfigProperty
+      .key("hoodie.archive.merge.small.file.limit.bytes")
+      .defaultValue(20L * 1024 * 1024)
+      .withDocumentation("This config sets the archive file size limit below which an archive file becomes a candidate to be selected as such a small file.");
+
+  public static final ConfigProperty<Boolean> ARCHIVE_MERGE_ENABLE = ConfigProperty
+      .key("hoodie.archive.merge.enable")
+      .defaultValue(false)
+      .withDocumentation("When enable, hoodie will auto merge several small archive files into larger one. It's"
+          + " useful when storage scheme doesn't support append operation.");
+
+  public static final ConfigProperty<String> LOG_COMPACTION_BLOCKS_THRESHOLD = ConfigProperty
+      .key("hoodie.log.compaction.blocks.threshold")
+      .defaultValue("5")
+      .withDocumentation("Log compaction can be scheduled if the no. of log blocks crosses this threshold value.");
 
   /** @deprecated Use {@link #INLINE_COMPACT} and its methods instead */
   @Deprecated
@@ -321,6 +356,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withInlineLogCompaction(Boolean inlineLogCompaction) {
+      compactionConfig.setValue(INLINE_LOG_COMPACT, String.valueOf(inlineLogCompaction));
+      return this;
+    }
+
     public Builder withInlineCompactionTriggerStrategy(CompactionTriggerStrategy compactionTriggerStrategy) {
       compactionConfig.setValue(INLINE_COMPACT_TRIGGER_STRATEGY, compactionTriggerStrategy.name());
       return this;
@@ -398,6 +438,21 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withPreserveCommitMetadata(boolean preserveCommitMetadata) {
       compactionConfig.setValue(PRESERVE_COMMIT_METADATA, String.valueOf(preserveCommitMetadata));
+      return this;
+    }
+
+    public Builder withPartitionsForCompaction(String partitionsForCompaction) {
+      compactionConfig.setValue(PARTITIONS_FOR_COMPACTION, partitionsForCompaction);
+      return this;
+    }
+
+    public Builder withPartitionsForLogCompaction(String partitionsForLogCompaction) {
+      compactionConfig.setValue(PARTITIONS_FOR_LOG_COMPACTION, partitionsForLogCompaction);
+      return this;
+    }
+
+    public Builder withLogCompactionBlocksThreshold(String logCompactionBlocksThreshold) {
+      compactionConfig.setValue(LOG_COMPACTION_BLOCKS_THRESHOLD, logCompactionBlocksThreshold);
       return this;
     }
 

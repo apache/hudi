@@ -142,12 +142,47 @@ public class CompactionUtils {
     }).collect(Collectors.toList());
   }
 
+  /**
+   * Get all pending logcompaction plans along with their instants.
+   *
+   * @param metaClient Hoodie Meta Client
+   */
+  public static List<Pair<HoodieInstant, HoodieCompactionPlan>> getAllPendingLogCompactionPlans(
+      HoodieTableMetaClient metaClient) {
+    List<HoodieInstant> pendingLogCompactionInstants =
+        metaClient.getActiveTimeline().filterPendingLogCompactionTimeline().getInstants().collect(Collectors.toList());
+    return pendingLogCompactionInstants.stream().map(instant -> {
+      try {
+        return Pair.of(instant, getLogCompactionPlan(metaClient, instant.getTimestamp()));
+      } catch (IOException e) {
+        throw new HoodieException(e);
+      }
+    }).collect(Collectors.toList());
+  }
+
+  /**
+   * This method will serve only Compaction instants
+   * because we use same HoodieCompactionPlan for both the operations.
+   */
   public static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, String compactionInstant)
       throws IOException {
     CompactionPlanMigrator migrator = new CompactionPlanMigrator(metaClient);
     HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(
         metaClient.getActiveTimeline().readCompactionPlanAsBytes(
             HoodieTimeline.getCompactionRequestedInstant(compactionInstant)).get());
+    return migrator.upgradeToLatest(compactionPlan, compactionPlan.getVersion());
+  }
+
+  /**
+   * This method will serve only log compaction instants,
+   * because we use same HoodieCompactionPlan for both the operations.
+   */
+  public static HoodieCompactionPlan getLogCompactionPlan(HoodieTableMetaClient metaClient,
+                                                       String logCompactionInstant) throws IOException {
+    HoodieInstant compactionRequestedInstant = HoodieTimeline.getLogCompactionRequestedInstant(logCompactionInstant);
+    CompactionPlanMigrator migrator = new CompactionPlanMigrator(metaClient);
+    HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(
+        metaClient.getActiveTimeline().readCompactionPlanAsBytes(compactionRequestedInstant).get());
     return migrator.upgradeToLatest(compactionPlan, compactionPlan.getVersion());
   }
 
@@ -183,6 +218,40 @@ public class CompactionUtils {
     return fgIdToPendingCompactionWithInstantMap;
   }
 
+  /**
+   * Get all partition + file Ids with pending Log Compaction operations and their target log compaction instant time.
+   */
+  public static Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> getAllPendingLogCompactionOperations(
+      HoodieTableMetaClient metaClient) {
+    List<Pair<HoodieInstant, HoodieCompactionPlan>> pendingLogCompactionPlanWithInstants =
+        getAllPendingLogCompactionPlans(metaClient);
+
+    Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> fgIdToPendingLogCompactionWithInstantMap =
+        new HashMap<>();
+    pendingLogCompactionPlanWithInstants.stream().flatMap(instantPlanPair ->
+        getPendingCompactionOperations(instantPlanPair.getKey(), instantPlanPair.getValue())).forEach(pair -> {
+
+          // Defensive check to ensure a single-fileId does not have more than one pending log compaction with different
+          // file slices. If we find a full duplicate we assume it is caused by eventual nature of the move operation
+          // on some DFSs.
+          if (fgIdToPendingLogCompactionWithInstantMap.containsKey(pair.getKey())) {
+            HoodieCompactionOperation operation = pair.getValue().getValue();
+            HoodieCompactionOperation anotherOperation = fgIdToPendingLogCompactionWithInstantMap.get(pair.getKey()).getValue();
+
+            if (!operation.equals(anotherOperation)) {
+              String msg = "Hudi File Id (" + pair.getKey() + ") has more than 1 pending logcompactions. Instants: "
+                  + pair.getValue() + ", " + fgIdToPendingLogCompactionWithInstantMap.get(pair.getKey());
+              throw new IllegalStateException(msg);
+            }
+          }
+          fgIdToPendingLogCompactionWithInstantMap.put(pair.getKey(), pair.getValue());
+        });
+    return fgIdToPendingLogCompactionWithInstantMap;
+  }
+
+  /**
+   * Get pending compaction operations for both major and minor compaction.
+   */
   public static Stream<Pair<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>>> getPendingCompactionOperations(
       HoodieInstant instant, HoodieCompactionPlan compactionPlan) {
     List<HoodieCompactionOperation> ops = compactionPlan.getOperations();

@@ -16,31 +16,15 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.model;
+package org.apache.hudi.common.table.view;
 
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import java.util.HashSet;
+import java.util.Set;
 
-/**
- * Supported runtime table services.
- */
-public enum TableServiceType {
-  ARCHIVE, COMPACT, CLUSTER, CLEAN, LOG_COMPACT;
+public class FileSystemViewExpectedState {
+  public Set<String> logFilesCurrentlyPresent = new HashSet<>();
+  public Set<String> baseFilesCurrentlyPresent = new HashSet<>();
+  public Set<String> pendingCompactionFgIdsCurrentlyPresent = new HashSet<>();
+  public Set<String> pendingLogCompactionFgIdsCurrentlyPresent = new HashSet<>();
 
-  public String getAction() {
-    switch (this) {
-      case ARCHIVE:
-        // for table service type completeness; there is no timeline action associated with archive
-        return "NONE";
-      case COMPACT:
-        return HoodieTimeline.COMPACTION_ACTION;
-      case CLEAN:
-        return HoodieTimeline.CLEAN_ACTION;
-      case CLUSTER:
-        return HoodieTimeline.REPLACE_COMMIT_ACTION;
-      case LOG_COMPACT:
-        return HoodieTimeline.LOG_COMPACTION_ACTION;
-      default:
-        throw new IllegalArgumentException("Unknown table service " + this);
-    }
-  }
 }

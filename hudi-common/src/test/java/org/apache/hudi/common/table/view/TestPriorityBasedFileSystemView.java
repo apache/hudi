@@ -555,6 +555,35 @@ public class TestPriorityBasedFileSystemView {
   }
 
   @Test
+  public void testGetPendingLogCompactionOperations() {
+    Stream<Pair<String, CompactionOperation>> actual;
+    Stream<Pair<String, CompactionOperation>> expected = Collections.singleton(
+        (Pair<String, CompactionOperation>) new ImmutablePair<>("test", new CompactionOperation()))
+        .stream();
+
+    when(primary.getPendingLogCompactionOperations()).thenReturn(expected);
+    actual = fsView.getPendingLogCompactionOperations();
+    assertEquals(expected, actual);
+
+    resetMocks();
+    when(primary.getPendingLogCompactionOperations()).thenThrow(new RuntimeException());
+    when(secondary.getPendingLogCompactionOperations()).thenReturn(expected);
+    actual = fsView.getPendingLogCompactionOperations();
+    assertEquals(expected, actual);
+
+    resetMocks();
+    when(secondary.getPendingLogCompactionOperations()).thenReturn(expected);
+    actual = fsView.getPendingLogCompactionOperations();
+    assertEquals(expected, actual);
+
+    resetMocks();
+    when(secondary.getPendingLogCompactionOperations()).thenThrow(new RuntimeException());
+    assertThrows(RuntimeException.class, () -> {
+      fsView.getPendingLogCompactionOperations();
+    });
+  }
+
+  @Test
   public void testClose() {
     fsView.close();
     verify(primary, times(1)).close();

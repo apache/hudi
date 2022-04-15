@@ -35,6 +35,7 @@ import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -1768,6 +1769,109 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       maps.put(partition, list);
     }
     return HoodieTestTable.generateHoodieWriteStatForPartition(maps, commitTime, false);
+  }
+
+  @Test
+  public void testPendingMajorAndMinorCompactionOperations() throws Exception {
+    String partitionPath = "2020/06/27";
+    new File(basePath + "/" + partitionPath).mkdirs();
+
+    // create 2 fileId in partition1
+    String fileId1 = UUID.randomUUID().toString();
+    String fileId2 = UUID.randomUUID().toString();
+
+    // This is used for verifying file system view after every commit.
+    FileSystemViewExpectedState expectedState = new FileSystemViewExpectedState();
+
+    // First delta commit on partitionPath1 which creates 2 log files.
+    String commitTime1 = "001";
+    String logFileName1 = FSUtils.makeLogFileName(fileId1, HoodieFileFormat.HOODIE_LOG.getFileExtension(), commitTime1, 1, TEST_WRITE_TOKEN);
+    String logFileName2 = FSUtils.makeLogFileName(fileId2, HoodieFileFormat.HOODIE_LOG.getFileExtension(), commitTime1, 1, TEST_WRITE_TOKEN);
+    new File(basePath + "/" + partitionPath + "/" + logFileName1).createNewFile();
+    new File(basePath + "/" + partitionPath + "/" + logFileName2).createNewFile();
+    expectedState.logFilesCurrentlyPresent.add(logFileName1);
+    expectedState.logFilesCurrentlyPresent.add(logFileName2);
+
+    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.addWriteStat(partitionPath, getHoodieWriteStat(partitionPath, fileId1, logFileName1));
+    commitMetadata.addWriteStat(partitionPath, getHoodieWriteStat(partitionPath, fileId2, logFileName2));
+    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, commitTime1);
+    saveAsComplete(commitTimeline, instant1, Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+
+    SyncableFileSystemView fileSystemView = getFileSystemView(metaClient.reloadActiveTimeline(), true);
+
+    // Verify file system view after 1st commit.
+    verifyFileSystemView(partitionPath, expectedState, fileSystemView);
+
+    // Second ingestion commit on partitionPath1
+    // First delta commit on partitionPath1 which creates 2 log files.
+    String commitTime2 = "002";
+    String logFileName3 = FSUtils.makeLogFileName(fileId1, HoodieFileFormat.HOODIE_LOG.getFileExtension(), commitTime1, 2, TEST_WRITE_TOKEN);
+    new File(basePath + "/" + partitionPath + "/" + logFileName3).createNewFile();
+    expectedState.logFilesCurrentlyPresent.add(logFileName3);
+
+    commitTimeline = metaClient.getActiveTimeline();
+    commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.addWriteStat(partitionPath, getHoodieWriteStat(partitionPath, fileId1, logFileName3));
+    HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, commitTime2);
+
+    saveAsComplete(commitTimeline, instant2, Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+
+    // Verify file system view after 2nd commit.
+    verifyFileSystemView(partitionPath, expectedState, fileSystemView);
+
+    // Create compaction commit
+    List<HoodieLogFile> logFiles = Stream.of(basePath + "/" + partitionPath + "/" + logFileName1,
+        basePath + "/" + partitionPath + "/" + logFileName3).map(HoodieLogFile::new).collect(Collectors.toList());
+    CompactionOperation compactionOperation = new CompactionOperation(Option.empty(), partitionPath, logFiles, Collections.emptyMap());
+    HoodieCompactionPlan compactionPlan = getHoodieCompactionPlan(Collections.singletonList(compactionOperation));
+    expectedState.pendingCompactionFgIdsCurrentlyPresent.add(fileId1);
+
+    String commitTime3 = "003";
+    HoodieInstant compactionInstant =
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, commitTime3);
+    HoodieInstant compactionRequested = HoodieTimeline.getCompactionRequestedInstant(compactionInstant.getTimestamp());
+    metaClient.getActiveTimeline().saveToCompactionRequested(compactionRequested,
+        TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
+    metaClient.getActiveTimeline().transitionCompactionRequestedToInflight(compactionRequested);
+
+    // Verify file system view after 3rd commit which is compaction.requested.
+    verifyFileSystemView(partitionPath, expectedState, fileSystemView);
+
+
+    // Create log compaction commit
+    logFiles = Collections.singletonList(new HoodieLogFile(basePath + "/" + partitionPath + "/" + logFileName2));
+    CompactionOperation logCompactionOperation = new CompactionOperation(Option.empty(), partitionPath, logFiles, Collections.emptyMap());
+    HoodieCompactionPlan logCompactionPlan = getHoodieCompactionPlan(Collections.singletonList(logCompactionOperation));
+    expectedState.pendingLogCompactionFgIdsCurrentlyPresent.add(fileId2);
+
+    String commitTime4 = "004";
+    HoodieInstant logCompactionInstant =
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, commitTime4);
+    HoodieInstant logCompactionRequested = HoodieTimeline.getLogCompactionRequestedInstant(logCompactionInstant.getTimestamp());
+    metaClient.getActiveTimeline().saveToLogCompactionRequested(logCompactionRequested,
+        TimelineMetadataUtils.serializeCompactionPlan(logCompactionPlan));
+    metaClient.getActiveTimeline().transitionLogCompactionRequestedToInflight(logCompactionRequested);
+
+    // Verify file system view after 4rd commit which is logcompaction.requested.
+    verifyFileSystemView(partitionPath, expectedState, fileSystemView);
+  }
+
+  private HoodieCompactionPlan getHoodieCompactionPlan(List<CompactionOperation> operations) {
+    return HoodieCompactionPlan.newBuilder()
+        .setOperations(operations.stream()
+            .map(CompactionUtils::buildHoodieCompactionOperation)
+            .collect(Collectors.toList()))
+        .setVersion(CompactionUtils.LATEST_COMPACTION_METADATA_VERSION).build();
+  }
+
+  private HoodieWriteStat getHoodieWriteStat(String partitionPath, String fileId, String relativeFilePath) {
+    HoodieWriteStat writeStat = new HoodieWriteStat();
+    writeStat.setFileId(fileId);
+    writeStat.setPath(partitionPath + "/" + relativeFilePath);
+    writeStat.setPartitionPath(partitionPath);
+    return writeStat;
   }
 
   @Override
