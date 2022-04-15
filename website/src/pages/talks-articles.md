@@ -94,6 +94,8 @@ Data Summit Connect, May, 2021
 
 39. ["Apache Hudi Meetup at Uber with talks from Philips, Moveworks & Uber (including Hudi OSS roadmap 2022)"](https://youtu.be/8Q0kM-emMyo) - By Felix Kizhakkel Jose (Philips), Bhavani Sudha (Moveworks), Prashant Wason (Uber), March 2022
 
+40. ["Apache Hudi with Vinoth Chandar"](https://softwareengineeringdaily.com/2022/03/08/apache-hudi-with-vinoth-chandar/) By Software Engineering Daily. Mar 5, 2022 
+
 ## Articles
 
 You can check out [our blog pages](https://hudi.apache.org/blog.html) for content written by our committers/contributors.
@@ -136,3 +138,17 @@ You can check out [our blog pages](https://hudi.apache.org/blog.html) for conten
 35. ["https://aws.amazon.com/blogs/big-data/new-features-from-apache-hudi-0-7-0-and-0-8-0-available-on-amazon-emr/"](https://aws.amazon.com/blogs/big-data/new-features-from-apache-hudi-0-7-0-and-0-8-0-available-on-amazon-emr/) by Udit Mehotra and Gagan Brahmi. Dec 20, 2021
 36. ["Designing the Analytics patterns using a Lake House approach on AWS"](https://dev.to/aws-builders/designing-the-analytics-patterns-using-a-lake-house-approach-on-aws-2hh6) by Adit Modi. Dec 30, 2021
 37. ["The Art of Building Open Data Lakes with Apache Hudi, Kafka, Hive, and Debezium"](https://garystafford.medium.com/the-art-of-building-open-data-lakes-with-apache-hudi-kafka-hive-and-debezium-3d2f71c5981f) by Gary Stafford. Dec 31, 2021
+38. ["Why and How I Integrated Airbyte and Apache Hudi"](https://selectfrom.dev/why-and-how-i-integrated-airbyte-and-apache-hudi-c18aff3af21a) by Harsha Kanna. Jan 18, 2022
+39. ["Hudi powering data lake efforts at Walmart and Disney+ Hotstar"](https://www.techtarget.com/searchdatamanagement/feature/Hudi-powering-data-lake-efforts-at-Walmart-and-Disney-Hotstar) by Sean Kerner. Jan 20, 2022
+40. ["Cost Efficiency @ Scale in Big Data File Format"](https://eng.uber.com/cost-efficiency-big-data/) by Xinli Shang, Kai Jiang, Zheng Shao, and Mohammad Islam. Jan 25, 2022
+41. ["Onehouse Commitment to Openness"](https://www.onehouse.ai/blog/onehouse-commitment-to-openness) by Vinoth Chandar. Feb 2, 2022
+42. ["Onehouse brings a fully-managed lakehouse to Apache Hudi"](https://venturebeat.com/2022/02/03/onehouse-brings-a-fully-managed-lakehouse-to-apache-hudi/) by Paul Sawers. Feb 3, 2022
+43. ["ACID transformations on Distributed file system"](https://medium.com/walmartglobaltech/acid-transformations-on-distributed-file-system-fdec5301c1b1) by Rajasekhar. Feb 9, 2022
+44. ["Open Source Data Lake Table Formats: Evaluating Current Interest and Rate of Adoption"](https://garystafford.medium.com/data-lake-table-formats-interest-and-adoption-rate-40817b87be9e) by Gary Stafford. Feb 12, 2022
+45. ["Fresher Data Lake on AWS S3"](https://robinhood.engineering/author-balaji-varadarajan-e3f496815ebf) by Balaji Varadarajan. Feb 17, 2022
+46. ["Understanding its core concepts from hudi persistence files"](https://programmer.ink/think/understanding-its-core-concepts-from-hudi-persistence-files.html) by QbertsBrother. Feb 20, 2022
+47. ["Create a low-latency source-to-data lake pipeline using Amazon MSK Connect, Apache Flink, and Apache Hudi"](https://aws.amazon.com/blogs/big-data/create-a-low-latency-source-to-data-lake-pipeline-using-amazon-msk-connect-apache-flink-and-apache-hudi/) by Ali Alemi. Mar 1, 2022
+48. ["Build a serverless pipeline to analyze streaming data using AWS Glue, Apache Hudi, and Amazon S3"](https://aws.amazon.com/blogs/big-data/build-a-serverless-pipeline-to-analyze-streaming-data-using-aws-glue-apache-hudi-and-amazon-s3/) by Nikhil Khokhar and Dipta Bhattacharya. Mar 9, 2022
+49. ["Zendesk - Insights for CTOs: Part 3 – Growing your business with modern data capabilities"](https://aws.amazon.com/blogs/architecture/insights-for-ctos-part-3-growing-your-business-with-modern-data-capabilities/) by Syed Jaffry and Johnathan Hwang. Mar 24, 2022
+50. ["Key Learnings on Using Apache HUDI in building Lakehouse Architecture @ Halodoc"](https://blogs.halodoc.io/key-learnings-on-using-apache-hudi-in-building-lakehouse-architecture-halodoc/) by Jitendra Shah. Apr 4, 2022
+51. ["New features from Apache Hudi 0.9.0 on Amazon EMR"](https://aws.amazon.com/blogs/big-data/new-features-from-apache-hudi-0-9-0-on-amazon-emr/) by Kunal Gautam, Gabriele Cacciola, and Udit Mehrotra. Apr 4, 2022
