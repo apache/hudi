@@ -19,36 +19,35 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
-import static org.apache.hudi.execution.bulkinsert.BulkInsertSortMode.PARTITION_SORT;
-
 /**
- * A built-in partitioner that does local sorting w/in the Spark partition,
- * corresponding to the {@code BulkInsertSortMode.PARTITION_SORT} mode.
+ * A built-in partitioner that only does re-partitioning to better align "logical" partitioning
+ * of the dataset w/ the "physical" partitioning of the table (effectively a no-op for non-partitioned
+ * tables)
+ *
+ * Corresponds to the {@link BulkInsertSortMode#PARTITION_NO_SORT} mode.
  */
-public class PartitionSortPartitionerWithRows extends RepartitioningBulkInsertPartitionerBase<Dataset<Row>> {
+public class PartitionNoSortPartitionerWithRows extends RepartitioningBulkInsertPartitionerBase<Dataset<Row>> {
 
-  private final boolean shouldPopulateMetaFields;
-
-  public PartitionSortPartitionerWithRows(HoodieWriteConfig config) {
-    this.shouldPopulateMetaFields = config.populateMetaFields();
+  public PartitionNoSortPartitionerWithRows(HoodieTableConfig tableConfig) {
+    super(tableConfig);
   }
 
   @Override
-  public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
-    if (!shouldPopulateMetaFields) {
-      throw new HoodieException(PARTITION_SORT.name() + " mode requires meta-fields to be enabled");
+  public Dataset<Row> repartitionRecords(Dataset<Row> dataset, int outputSparkPartitions) {
+    if (isPartitionedTable) {
+      return dataset.repartition(outputSparkPartitions, new Column(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+    } else {
+      return dataset.coalesce(outputSparkPartitions);
     }
-
-    return rows.coalesce(outputSparkPartitions).sortWithinPartitions(HoodieRecord.PARTITION_PATH_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
   @Override
   public boolean arePartitionRecordsSorted() {
-    return true;
+    return false;
   }
 }

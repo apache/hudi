@@ -19,48 +19,39 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.table.BulkInsertPartitioner;
+import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.spark.api.java.JavaRDD;
+import scala.Tuple2;
 
 /**
- * A built-in partitioner that avoids expensive sorting for the input records for bulk insert
- * operation, by doing either of the following:
- * <p>
- * - If enforcing the outputSparkPartitions, only does coalesce for input records;
- * <p>
- * - Otherwise, returns input records as is.
- * <p>
- * Corresponds to the {@link BulkInsertSortMode#NONE} mode.
+ * A built-in partitioner that only does re-partitioning to better align "logical" partitioning
+ * of the dataset w/ the "physical" partitioning of the table (effectively a no-op for non-partitioned
+ * tables)
  *
- * @param <T> HoodieRecordPayload type
+ * Corresponds to the {@link BulkInsertSortMode#PARTITION_NO_SORT} mode.
+ *
+ * @param <T> {@link HoodieRecordPayload} type
  */
-public class NonSortPartitioner<T>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+public class PartitionNoSortPartitioner<T extends HoodieRecordPayload>
+    extends RepartitioningBulkInsertPartitionerBase<JavaRDD<HoodieRecord<T>>> {
 
-  private final boolean enforceNumOutputPartitions;
-
-  /**
-   * Default constructor without enforcing the number of output partitions.
-   */
-  public NonSortPartitioner() {
-    this(false);
-  }
-
-  /**
-   * Constructor with `enforceNumOutputPartitions` config.
-   *
-   * @param enforceNumOutputPartitions Whether to enforce the number of output partitions.
-   */
-  public NonSortPartitioner(boolean enforceNumOutputPartitions) {
-    this.enforceNumOutputPartitions = enforceNumOutputPartitions;
+  public PartitionNoSortPartitioner(HoodieTableConfig tableConfig) {
+    super(tableConfig);
   }
 
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitionsCount) {
-    if (enforceNumOutputPartitions) {
+    if (isPartitionedTable) {
+      PartitionPathRDDPartitioner partitioner =
+          new PartitionPathRDDPartitioner((partitionPath) -> (String) partitionPath, outputSparkPartitionsCount);
+
+      return records.mapToPair(record -> new Tuple2<>(record.getPartitionPath(), record))
+          .partitionBy(partitioner)
+          .values();
+    } else {
       return records.coalesce(outputSparkPartitionsCount);
     }
-    return records;
   }
 
   @Override

@@ -21,27 +21,24 @@ package org.apache.hudi.execution.bulkinsert;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.table.BulkInsertPartitioner;
-
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
+import org.apache.spark.sql.HoodieJavaRDDUtils;
 import scala.Tuple2;
+
+import java.util.Comparator;
 
 import static org.apache.hudi.execution.bulkinsert.BulkInsertSortMode.PARTITION_SORT;
 
 /**
  * A built-in partitioner that does local sorting for each RDD partition
- * after coalesce for bulk insert operation, corresponding to the
- * {@code BulkInsertSortMode.PARTITION_SORT} mode.
+ * after coalescing it to specified number of partitions.
+ * Corresponds to the {@link BulkInsertSortMode#PARTITION_SORT} mode.
  *
  * @param <T> HoodieRecordPayload type
  */
 public class RDDPartitionSortPartitioner<T>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+    extends RepartitioningBulkInsertPartitionerBase<JavaRDD<HoodieRecord<T>>> {
 
   private final boolean shouldPopulateMetaFields;
 
@@ -56,23 +53,12 @@ public class RDDPartitionSortPartitioner<T>
       throw new HoodieException(PARTITION_SORT.name() + " mode requires meta-fields to be enabled");
     }
 
-    return records.coalesce(outputSparkPartitions)
-        .mapToPair(record ->
-            new Tuple2<>(
-                new StringBuilder()
-                    .append(record.getPartitionPath())
-                    .append("+")
-                    .append(record.getRecordKey())
-                    .toString(), record))
-        .mapPartitions(partition -> {
-          // Sort locally in partition
-          List<Tuple2<String, HoodieRecord<T>>> recordList = new ArrayList<>();
-          for (; partition.hasNext(); ) {
-            recordList.add(partition.next());
-          }
-          Collections.sort(recordList, (o1, o2) -> o1._1.compareTo(o2._1));
-          return recordList.stream().map(e -> e._2).iterator();
-        });
+    JavaPairRDD<String, HoodieRecord<T>> kvPairsRDD =
+        records.coalesce(outputSparkPartitions).mapToPair(record -> new Tuple2<>(record.getRecordKey(), record));
+
+    // NOTE: [[JavaRDD]] doesn't expose an API to do the sorting w/o (re-)shuffling, as such
+    //       we're relying on our own sequence to achieve that
+    return HoodieJavaRDDUtils.sortWithinPartitions(kvPairsRDD, Comparator.naturalOrder()).values();
   }
 
   @Override

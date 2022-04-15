@@ -20,18 +20,20 @@ package org.apache.spark.sql.adapter
 import org.apache.avro.Schema
 import org.apache.hudi.Spark33HoodieFileScanRDD
 import org.apache.spark.sql.SparkSessionExtensions
+import org.apache.spark.TaskContext
 import org.apache.spark.sql.avro._
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, PartitionedFile}
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark32PlusHoodieParquetFileFormat}
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
+import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, PartitionedFile}
 import org.apache.spark.sql.parser.HoodieSpark3_3ExtendedSqlParser
 import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.sql.vectorized.ColumnarBatchRow
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, HoodieSpark33CatalogUtils, HoodieSpark33CatalystExpressionUtils, HoodieSpark33CatalystPlanUtils, HoodieSpark3CatalogUtils, SparkSession}
+import org.apache.spark.sql._
+import org.apache.spark.util.collection.ExternalSorter
 
 /**
  * Implementation of [[SparkAdapter]] for Spark 3.3.x branch
@@ -88,4 +90,8 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
   override def injectTableFunctions(extensions: SparkSessionExtensions): Unit = {
     TableValuedFunctions.funcs.foreach(extensions.injectTableFunction)
   }
+
+  override def insertInto[K, V, C](ctx: TaskContext,
+                                   records: Iterator[Product2[K, V]],
+                                   sorter: ExternalSorter[K, V, C]): Iterator[Product2[K, C]] = sorter.insertAllAndUpdateMetrics(records)
 }

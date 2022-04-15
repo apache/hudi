@@ -52,9 +52,9 @@ public abstract class BulkInsertInternalPartitionerFactory {
 
     switch (sortMode) {
       case NONE:
-        return new NonSortPartitioner(enforceNumOutputPartitions);
+        return new NonSortPartitioner<>(enforceNumOutputPartitions);
       case GLOBAL_SORT:
-        return new GlobalSortPartitioner(config);
+        return new GlobalSortPartitioner<>(config);
       case PARTITION_SORT:
         return new RDDPartitionSortPartitioner(config);
       case PARTITION_PATH_REPARTITION:
@@ -62,7 +62,7 @@ public abstract class BulkInsertInternalPartitionerFactory {
       case PARTITION_PATH_REPARTITION_AND_SORT:
         return new PartitionPathRepartitionAndSortPartitioner(isTablePartitioned, config);
       default:
-        throw new HoodieException("The bulk insert sort mode \"" + sortMode.name() + "\" is not supported.");
+        throw new HoodieException("The bulk insert sort mode \"" + bulkInsertMode.name() + "\" is not supported.");
     }
   }
 }

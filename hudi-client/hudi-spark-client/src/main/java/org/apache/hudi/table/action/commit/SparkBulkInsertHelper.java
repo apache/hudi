@@ -33,7 +33,6 @@ import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-
 import org.apache.spark.api.java.JavaRDD;
 
 import java.util.List;
@@ -74,7 +73,9 @@ public class SparkBulkInsertHelper<T, R> extends BaseBulkInsertHelper<T, HoodieD
             executor.getCommitActionType(), instantTime), Option.empty(),
         config.shouldAllowMultiWriteOnSameInstant());
 
-    BulkInsertPartitioner partitioner = userDefinedBulkInsertPartitioner.orElse(BulkInsertInternalPartitionerFactory.get(table, config));
+    BulkInsertPartitioner partitioner =
+        userDefinedBulkInsertPartitioner.orElseGet(() ->
+            BulkInsertInternalPartitionerFactory.get(config.getBulkInsertSortMode(), table.getMetaClient().getTableConfig()));
 
     // Write new files
     HoodieData<WriteStatus> writeStatuses =
@@ -121,8 +122,9 @@ public class SparkBulkInsertHelper<T, R> extends BaseBulkInsertHelper<T, HoodieD
           .combineOnCondition(config.shouldCombineBeforeInsert(), inputRecords, targetParallelism, table);
     }
 
-    // only JavaRDD is supported for Spark partitioner, but it is not enforced by BulkInsertPartitioner API. To improve this, TODO HUDI-3463
     final HoodieData<HoodieRecord<T>> repartitionedRecords =
+        // TODO HUDI-3463 only JavaRDD is supported for Spark partitioner, but it is not enforced by BulkInsertPartitioner API
+
         HoodieJavaRDD.of((JavaRDD<HoodieRecord<T>>) partitioner.repartitionRecords(HoodieJavaRDD.getJavaRDD(dedupedRecords), targetParallelism));
 
     JavaRDD<WriteStatus> writeStatusRDD = HoodieJavaRDD.getJavaRDD(repartitionedRecords)

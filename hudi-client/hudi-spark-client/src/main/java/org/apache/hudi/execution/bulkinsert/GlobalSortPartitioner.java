@@ -21,6 +21,7 @@ package org.apache.hudi.execution.bulkinsert;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -28,11 +29,31 @@ import org.apache.spark.api.java.JavaRDD;
 import static org.apache.hudi.execution.bulkinsert.BulkInsertSortMode.GLOBAL_SORT;
 
 /**
- * A built-in partitioner that does global sorting for the input records across partitions
- * after repartition for bulk insert operation, corresponding to the
- * {@code BulkInsertSortMode.GLOBAL_SORT} mode.
+ * A built-in partitioner that does global sorting of the input records across all Spark partitions,
+ * corresponding to the {@link BulkInsertSortMode#GLOBAL_SORT} mode.
  *
- * @param <T> HoodieRecordPayload type
+ * NOTE: Records are sorted by (partitionPath, key) tuple to make sure that physical
+ *       partitioning on disk is aligned with logical partitioning of the dataset (by Spark)
+ *       as much as possible.
+ *       Consider following scenario: dataset is inserted w/ parallelism of N (meaning that Spark
+ *       will partition it into N _logical_ partitions while writing), and has M physical partitions
+ *       on disk. Without alignment "physical" and "logical" partitions (assuming
+ *       here that records are inserted uniformly across partitions), every logical partition,
+ *       which might be handled by separate executor, will be inserting into every physical
+ *       partition, creating a new file for the records it's writing, entailing that new N x M
+ *       files will be added to the table.
+ *
+ *       Instead, we want no more than N + M files to be created, and therefore sort by
+ *       a tuple of (partitionPath, key), which provides for following invariants where every
+ *       Spark partition will either
+ *          - Hold _all_ record from particular physical partition, or
+ *          - Hold _only_ records from that particular physical partition
+ *
+ *       In other words a single Spark partition will either be hold full set of records for
+ *       a few smaller partitions, or it will hold just the records of the larger one. This
+ *       allows us to provide a guarantee that no more N + M files will be created.
+ *
+ * @param <T> {@code HoodieRecordPayload} type
  */
 public class GlobalSortPartitioner<T>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
@@ -50,17 +71,8 @@ public class GlobalSortPartitioner<T>
       throw new HoodieException(GLOBAL_SORT.name() + " mode requires meta-fields to be enabled");
     }
 
-    // Now, sort the records and line them up nicely for loading.
-    return records.sortBy(record -> {
-      // Let's use "partitionPath + key" as the sort key. Spark, will ensure
-      // the records split evenly across RDD partitions, such that small partitions fit
-      // into 1 RDD partition, while big ones spread evenly across multiple RDD partitions
-      return new StringBuilder()
-          .append(record.getPartitionPath())
-          .append("+")
-          .append(record.getRecordKey())
-          .toString();
-    }, true, outputSparkPartitions);
+    return records.sortBy(record ->
+        Pair.of(record.getPartitionPath(), record.getRecordKey()), true, outputSparkPartitions);
   }
 
   @Override

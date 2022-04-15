@@ -190,6 +190,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         Option.ofNullable(strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()))
             .map(listStr -> listStr.split(","));
 
+    HoodieTableConfig tableConfig = getHoodieTable().getMetaClient().getTableConfig();
+
     return orderByColumnsOpt.map(orderByColumns -> {
       HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy = getWriteConfig().getLayoutOptimizationStrategy();
       switch (layoutOptStrategy) {
@@ -201,9 +203,9 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
               getWriteConfig().getLayoutOptimizationCurveBuildMethod(), HoodieAvroUtils.addMetadataFields(schema), recordType);
         case LINEAR:
           return isRowPartitioner
-              ? new RowCustomColumnsSortPartitioner(orderByColumns)
+              ? new RowCustomColumnsSortPartitioner(orderByColumns, tableConfig)
               : new RDDCustomColumnsSortPartitioner(orderByColumns, HoodieAvroUtils.addMetadataFields(schema),
-              getWriteConfig().isConsistentLogicalTimestampEnabled());
+              getWriteConfig().isConsistentLogicalTimestampEnabled(), tableConfig);
         default:
           throw new UnsupportedOperationException(String.format("Layout optimization strategy '%s' is not supported", layoutOptStrategy));
       }

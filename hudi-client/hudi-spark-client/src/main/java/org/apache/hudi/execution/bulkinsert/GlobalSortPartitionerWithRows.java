@@ -30,7 +30,12 @@ import org.apache.spark.sql.functions;
 import static org.apache.hudi.execution.bulkinsert.BulkInsertSortMode.GLOBAL_SORT;
 
 /**
- * A built-in partitioner that does global sorting for the input Rows across partitions after repartition for bulk insert operation, corresponding to the {@code BulkInsertSortMode.GLOBAL_SORT} mode.
+ * A built-in partitioner that does global sorting of the input records across all partitions,
+ * corresponding to the {@link BulkInsertSortMode#GLOBAL_SORT} mode.
+ *
+ * This is a {@link GlobalSortPartitioner} counterpart specialized to work on Spark {@link Row}s
+ * directly to avoid de-/serialization into intermediate representation. Please check out
+ * {@link GlobalSortPartitioner} java-doc for more details regarding its sorting procedure
  */
 public class GlobalSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
@@ -41,14 +46,12 @@ public class GlobalSortPartitionerWithRows implements BulkInsertPartitioner<Data
   }
 
   @Override
-  public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
+  public Dataset<Row> repartitionRecords(Dataset<Row> dataset, int outputSparkPartitions) {
     if (!shouldPopulateMetaFields) {
       throw new HoodieException(GLOBAL_SORT.name() + " mode requires meta-fields to be enabled");
     }
 
-    // Now, sort the records and line them up nicely for loading.
-    // Let's use "partitionPath + key" as the sort key.
-    return rows.sort(functions.col(HoodieRecord.PARTITION_PATH_METADATA_FIELD), functions.col(HoodieRecord.RECORD_KEY_METADATA_FIELD))
+    return dataset.sort(functions.col(HoodieRecord.PARTITION_PATH_METADATA_FIELD), functions.col(HoodieRecord.RECORD_KEY_METADATA_FIELD))
         .coalesce(outputSparkPartitions);
   }
 

@@ -18,58 +18,96 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.avro.Schema;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.BulkInsertPartitioner;
-
-import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
+import scala.Tuple2;
 
+import java.io.Serializable;
 import java.util.Arrays;
+import java.util.Comparator;
+import java.util.function.Function;
+
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
- * A partitioner that does sorting based on specified column values for each RDD partition.
+ * A partitioner that does local sorting for each RDD partition based on the tuple of
+ * values of the columns configured for ordering.
  *
  * @param <T> HoodieRecordPayload type
  */
 public class RDDCustomColumnsSortPartitioner<T>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+    extends RepartitioningBulkInsertPartitionerBase<JavaRDD<HoodieRecord<T>>> {
 
-  private final String[] sortColumnNames;
+  private final String[] orderByColumnNames;
   private final SerializableSchema serializableSchema;
   private final boolean consistentLogicalTimestampEnabled;
 
-  public RDDCustomColumnsSortPartitioner(HoodieWriteConfig config) {
+  public RDDCustomColumnsSortPartitioner(HoodieWriteConfig config, HoodieTableConfig tableConfig) {
+    super(tableConfig);
     this.serializableSchema = new SerializableSchema(new Schema.Parser().parse(config.getSchema()));
-    this.sortColumnNames = getSortColumnName(config);
+    this.orderByColumnNames = getOrderByColumnNames(config);
     this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
+
+    checkState(orderByColumnNames.length > 0);
   }
 
-  public RDDCustomColumnsSortPartitioner(String[] columnNames, Schema schema, boolean consistentLogicalTimestampEnabled) {
-    this.sortColumnNames = columnNames;
+  public RDDCustomColumnsSortPartitioner(String[] columnNames,
+                                         Schema schema,
+                                         boolean consistentLogicalTimestampEnabled,
+                                         HoodieTableConfig tableConfig) {
+    super(tableConfig);
+    this.orderByColumnNames = columnNames;
     this.serializableSchema = new SerializableSchema(schema);
     this.consistentLogicalTimestampEnabled = consistentLogicalTimestampEnabled;
+
+    checkState(orderByColumnNames.length > 0);
   }
 
+  @SuppressWarnings("unchecked")
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
                                                      int outputSparkPartitions) {
-    final String[] sortColumns = this.sortColumnNames;
+    final String[] sortColumns = this.orderByColumnNames;
     final SerializableSchema schema = this.serializableSchema;
     final boolean consistentLogicalTimestampEnabled = this.consistentLogicalTimestampEnabled;
-    return records.sortBy(
-        record -> {
-          Object recordValue = record.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled);
-          // null values are replaced with empty string for null_first order
-          if (recordValue == null) {
-            return StringUtils.EMPTY_STRING;
-          } else {
-            return StringUtils.objToString(recordValue);
-          }
-        },
-        true, outputSparkPartitions);
+
+    // NOTE: In case of partitioned table even "global" ordering (across all RDD partitions) could
+    //       not change table's partitioning and therefore there's no point in doing global sorting
+    //       across "physical" partitions, and instead we can reduce total amount of data being
+    //       shuffled by doing do "local" sorting:
+    //          - First, re-partitioning dataset such that "logical" partitions are aligned w/
+    //          "physical" ones
+    //          - Sorting locally w/in RDD ("logical") partitions
+    //
+    //       Non-partitioned tables will be globally sorted.
+    if (isPartitionedTable) {
+      Comparator<Pair<String, String>> sortingKeyComparator =
+          Comparator.comparing((Function<Pair<String, String>, String> & Serializable) Pair::getValue);
+
+      PartitionPathRDDPartitioner partitioner =
+          new PartitionPathRDDPartitioner((pair) -> ((Pair<String, String>) pair).getKey(), outputSparkPartitions);
+
+      // Both partition-path and record-key are extracted, since
+      //    - Partition-path will be used for re-partitioning (as called out above)
+      //    - Record-key will be used for sorting the records w/in individual partitions
+      return records.mapToPair(record -> {
+        String sortingKey = getSortingKey(record, sortColumns, schema, consistentLogicalTimestampEnabled);
+        String partitionPath = record.getPartitionPath();
+        return new Tuple2<>(Pair.of(partitionPath, sortingKey), record);
+      })
+          .repartitionAndSortWithinPartitions(partitioner, sortingKeyComparator)
+          .values();
+    } else {
+      return records.sortBy(record -> getSortingKey(record, sortColumns, schema, consistentLogicalTimestampEnabled),
+          true, outputSparkPartitions);
+    }
   }
 
   @Override
@@ -77,8 +115,22 @@ public class RDDCustomColumnsSortPartitioner<T>
     return true;
   }
 
-  private String[] getSortColumnName(HoodieWriteConfig config) {
+  static String[] getOrderByColumnNames(HoodieWriteConfig config) {
     return Arrays.stream(config.getUserDefinedBulkInsertPartitionerSortColumns().split(","))
-        .map(String::trim).toArray(String[]::new);
+        .map(String::trim)
+        .toArray(String[]::new);
+  }
+
+  private static String getSortingKey(HoodieRecord record,
+                                      String[] sortColumns,
+                                      SerializableSchema schema,
+                                      boolean consistentLogicalTimestampEnabled) {
+    Object columnValues = record.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled);
+    // null values are replaced with empty string for null_first order
+    if (columnValues == null) {
+      return StringUtils.EMPTY_STRING;
+    } else {
+      return StringUtils.objToString(columnValues);
+    }
   }
 }

@@ -752,7 +752,7 @@ object HoodieSparkSqlWriter {
   def bulkInsertAsRow(sqlContext: SQLContext,
                       hoodieConfig: HoodieConfig,
                       df: DataFrame,
-                      tblName: String,
+                      tableConfig: HoodieTableConfig,
                       basePath: Path,
                       path: String,
                       instantTime: String,
@@ -767,11 +767,11 @@ object HoodieSparkSqlWriter {
     val opts = hoodieConfig.getProps.toMap ++
       Map(HoodieWriteConfig.AVRO_SCHEMA_STRING.key -> writerSchemaStr)
 
-    val writeConfig = DataSourceUtils.createHoodieConfig(writerSchemaStr, path, tblName, mapAsJavaMap(opts))
+    val writeConfig = DataSourceUtils.createHoodieConfig(writerSchemaStr, path, tableConfig.getTableName, mapAsJavaMap(opts))
     val populateMetaFields = hoodieConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS)
 
     val bulkInsertPartitionerRows: BulkInsertPartitioner[Dataset[Row]] = if (populateMetaFields) {
-      val userDefinedBulkInsertPartitionerOpt = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(writeConfig)
+      val userDefinedBulkInsertPartitionerOpt = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(writeConfig, tableConfig)
       if (userDefinedBulkInsertPartitionerOpt.isPresent) {
         userDefinedBulkInsertPartitionerOpt.get
       } else {

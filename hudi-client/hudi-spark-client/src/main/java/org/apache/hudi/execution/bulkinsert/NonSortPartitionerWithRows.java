@@ -31,7 +31,7 @@ import org.apache.spark.sql.Row;
  * <p>
  * - Otherwise, returns input Rows as is.
  * <p>
- * Corresponds to the {@code BulkInsertSortMode.NONE} mode.
+ * Corresponds to the {@link BulkInsertSortMode#NONE} mode.
  */
 public class NonSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 

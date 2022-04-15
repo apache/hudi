@@ -19,6 +19,7 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -26,16 +27,15 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
-
 import org.apache.spark.api.java.function.MapPartitionsFunction;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -46,6 +46,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.execution.bulkinsert.TestBulkInsertInternalPartitioner.genTableConfig;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -133,17 +134,21 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
         populateMetaFields);
   }
 
-  @Test
-  public void testCustomColumnSortPartitionerWithRows() {
+  @ParameterizedTest
+  @ValueSource(booleans = { true, false })
+  public void testCustomColumnSortPartitionerWithRows(boolean isPartitionedTable) {
     Dataset<Row> records1 = generateTestRecords();
     Dataset<Row> records2 = generateTestRecords();
+
+    HoodieTableConfig tableConfig = genTableConfig(isPartitionedTable);
+
     String sortColumnString = records1.columns()[5];
     String[] sortColumns = sortColumnString.split(",");
     Comparator<Row> comparator = getCustomColumnComparator(sortColumns);
 
-    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(sortColumns),
+    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(sortColumns, tableConfig),
         records1, true, false, true, generateExpectedPartitionNumRecords(records1), Option.of(comparator), true);
-    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(sortColumns),
+    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(sortColumns, tableConfig),
         records2, true, false, true, generateExpectedPartitionNumRecords(records2), Option.of(comparator), true);
 
     HoodieWriteConfig config = HoodieWriteConfig
@@ -152,9 +157,9 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
         .withUserDefinedBulkInsertPartitionerClass(RowCustomColumnsSortPartitioner.class.getName())
         .withUserDefinedBulkInsertPartitionerSortColumns(sortColumnString)
         .build();
-    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(config),
+    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(config, tableConfig),
         records1, true, false, true, generateExpectedPartitionNumRecords(records1), Option.of(comparator), true);
-    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(config),
+    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(config, tableConfig),
         records2, true, false, true, generateExpectedPartitionNumRecords(records2), Option.of(comparator), true);
   }
 

@@ -19,15 +19,15 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import java.util.Comparator;
 import java.util.List;
 
 /**
- * A built-in partitioner that does global sorting for the input records across partitions
- * after repartition for bulk insert operation, corresponding to the
- * {@code BulkInsertSortMode.GLOBAL_SORT} mode.
+ * A built-in partitioner that does global sorting of the input records across all partitions,
+ * corresponding to the {@link BulkInsertSortMode#GLOBAL_SORT} mode.
  *
  * @param <T> HoodieRecordPayload type
  */
@@ -37,25 +37,14 @@ public class JavaGlobalSortPartitioner<T>
   @Override
   public List<HoodieRecord<T>> repartitionRecords(List<HoodieRecord<T>> records,
                                                   int outputPartitions) {
-    // Now, sort the records and line them up nicely for loading.
-    records.sort(new Comparator() {
+    records.sort(new Comparator<HoodieRecord<T>>() {
       @Override
-      public int compare(Object o1, Object o2) {
-        HoodieRecord o11 = (HoodieRecord) o1;
-        HoodieRecord o22 = (HoodieRecord) o2;
-        String left = new StringBuilder()
-            .append(o11.getPartitionPath())
-            .append("+")
-            .append(o11.getRecordKey())
-            .toString();
-        String right = new StringBuilder()
-            .append(o22.getPartitionPath())
-            .append("+")
-            .append(o22.getRecordKey())
-            .toString();
-        return left.compareTo(right);
+      public int compare(HoodieRecord<T> o1, HoodieRecord<T> o2) {
+        return Pair.of(o1.getPartitionPath(), o1.getRecordKey())
+            .compareTo(Pair.of(o2.getPartitionPath(), o2.getRecordKey()));
       }
     });
+
     return records;
   }
 

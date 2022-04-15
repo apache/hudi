@@ -20,7 +20,6 @@ package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
-
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
@@ -51,7 +50,7 @@ public abstract class BulkInsertInternalPartitionerWithRowsFactory {
       case PARTITION_PATH_REPARTITION_AND_SORT:
         return new PartitionPathRepartitionAndSortPartitionerWithRows(isTablePartitioned, config);
       default:
-        throw new UnsupportedOperationException("The bulk insert sort mode \"" + sortMode.name() + "\" is not supported.");
+        throw new UnsupportedOperationException("The bulk insert sort mode \"" + bulkInsertMode.name() + "\" is not supported.");
     }
   }
 }
