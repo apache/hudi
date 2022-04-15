@@ -52,6 +52,7 @@ public class NonSortPartitioner<T extends HoodieRecordPayload>
       }
     }
 
+    // TODO handle non-partitioned tables
     // TODO explain
     return records.mapToPair(record -> new Tuple2<>(record.getPartitionPath(), record))
         .partitionBy(new HashingRDDPartitioner())

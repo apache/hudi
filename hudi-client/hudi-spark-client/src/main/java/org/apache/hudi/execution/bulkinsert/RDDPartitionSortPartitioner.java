@@ -56,6 +56,7 @@ public class RDDPartitionSortPartitioner<T extends HoodieRecordPayload>
       }
     }
 
+    // TODO handle non-partitioned tables
     // TODO explain
     return records.mapToPair(record -> new Tuple2<>(Pair.of(record.getPartitionPath(), record.getRecordKey()), record))
         .repartitionAndSortWithinPartitions(new HashingRDDPartitioner(), Comparator.comparing(Pair::getValue))

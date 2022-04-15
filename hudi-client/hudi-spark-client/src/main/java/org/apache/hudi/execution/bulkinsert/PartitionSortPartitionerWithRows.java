@@ -32,6 +32,7 @@ public class PartitionSortPartitionerWithRows implements BulkInsertPartitioner<D
 
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
+    // TODO handle non-partitioned tables
     // TODO explain
     return rows.repartition(outputSparkPartitions, new Column(HoodieRecord.PARTITION_PATH_METADATA_FIELD))
         .sortWithinPartitions(HoodieRecord.RECORD_KEY_METADATA_FIELD);
