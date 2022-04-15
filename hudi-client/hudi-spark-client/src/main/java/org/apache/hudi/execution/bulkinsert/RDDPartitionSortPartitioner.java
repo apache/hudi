@@ -20,15 +20,14 @@ package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.table.BulkInsertPartitioner;
-
+import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
 import scala.Tuple2;
+
+import java.util.Comparator;
+import java.util.Objects;
 
 /**
  * A built-in partitioner that does local sorting for each RDD partition
@@ -43,23 +42,24 @@ public class RDDPartitionSortPartitioner<T extends HoodieRecordPayload>
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
                                                      int outputSparkPartitions) {
-    return records.coalesce(outputSparkPartitions)
-        .mapToPair(record ->
-            new Tuple2<>(
-                new StringBuilder()
-                    .append(record.getPartitionPath())
-                    .append("+")
-                    .append(record.getRecordKey())
-                    .toString(), record))
-        .mapPartitions(partition -> {
-          // Sort locally in partition
-          List<Tuple2<String, HoodieRecord<T>>> recordList = new ArrayList<>();
-          for (; partition.hasNext(); ) {
-            recordList.add(partition.next());
-          }
-          Collections.sort(recordList, (o1, o2) -> o1._1.compareTo(o2._1));
-          return recordList.stream().map(e -> e._2).iterator();
-        });
+    class HashingRDDPartitioner extends Partitioner {
+      @Override
+      public int numPartitions() {
+        return outputSparkPartitions;
+      }
+
+      @SuppressWarnings("unchecked")
+      @Override
+      public int getPartition(Object key) {
+        Pair<String, String> partitionPathRecordKeyPair = (Pair<String, String>) key;
+        return Objects.hash(partitionPathRecordKeyPair.getKey()) % outputSparkPartitions;
+      }
+    }
+
+    // TODO explain
+    return records.mapToPair(record -> new Tuple2<>(Pair.of(record.getPartitionPath(), record.getRecordKey()), record))
+        .repartitionAndSortWithinPartitions(new HashingRDDPartitioner(), Comparator.comparing(Pair::getValue))
+        .values();
   }
 
   @Override

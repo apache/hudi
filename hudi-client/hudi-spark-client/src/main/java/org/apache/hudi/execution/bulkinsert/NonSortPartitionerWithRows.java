@@ -18,8 +18,10 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
+import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
@@ -32,7 +34,8 @@ public class NonSortPartitionerWithRows implements BulkInsertPartitioner<Dataset
 
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
-    return rows.coalesce(outputSparkPartitions);
+    // TODO explain
+    return rows.repartition(outputSparkPartitions, new Column(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
   }
 
   @Override

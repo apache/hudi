@@ -22,7 +22,11 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
+import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
+import scala.Tuple2;
+
+import java.util.Objects;
 
 /**
  * A built-in partitioner that only does coalesce for input records for bulk insert operation,
@@ -36,11 +40,28 @@ public class NonSortPartitioner<T extends HoodieRecordPayload>
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
                                                      int outputSparkPartitions) {
-    return records.coalesce(outputSparkPartitions);
+    class HashingRDDPartitioner extends Partitioner {
+      @Override
+      public int numPartitions() {
+        return outputSparkPartitions;
+      }
+
+      @Override
+      public int getPartition(Object key) {
+        return Objects.hash(key) % outputSparkPartitions;
+      }
+    }
+
+    // TODO explain
+    return records.mapToPair(record -> new Tuple2<>(record.getPartitionPath(), record))
+        .partitionBy(new HashingRDDPartitioner())
+        .values();
   }
 
   @Override
   public boolean arePartitionRecordsSorted() {
     return false;
   }
+
+
 }
