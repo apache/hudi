@@ -839,6 +839,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
 
     // Write 2
+    header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "101");
     List<IndexedRecord> records2 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
@@ -846,13 +847,16 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
 
     // Rollback the last write
+    header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, "101");
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "102");
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
-        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
+        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));
     HoodieCommandBlock commandBlock = new HoodieCommandBlock(header);
     writer.appendBlock(commandBlock);
 
     // Write 3
+    header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "102");
     List<IndexedRecord> records3 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     List<IndexedRecord> copyOfRecords3 = records3.stream()
@@ -1010,16 +1014,16 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     dataBlock = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, records2, header);
     writer.appendBlock(dataBlock);
 
-    copyOfRecords1.addAll(copyOfRecords2);
-    List<String> originalKeys =
-        copyOfRecords1.stream().map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
-            .collect(Collectors.toList());
-
-    // Delete 50 keys
+    // Delete 50 keys from 1st block
     List<DeleteRecord> deletedRecords = copyOfRecords1.stream()
         .map(s -> (DeleteRecord.create(((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString(),
             ((GenericRecord) s).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString())))
         .collect(Collectors.toList()).subList(0, 50);
+
+    copyOfRecords2.addAll(copyOfRecords1);
+    List<String> originalKeys =
+        copyOfRecords2.stream().map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
+            .collect(Collectors.toList());
 
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "102");
     HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedRecords.toArray(new DeleteRecord[50]), header);
@@ -1068,15 +1072,15 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Collections.sort(readKeys);
     assertEquals(originalKeys, readKeys, "CompositeAvroLogReader should return 150 records from 2 versions");
 
-    // Rollback the last block
+    // Rollback the 1st block i.e. a data block.
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "103");
-    header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, "102");
+    header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, "101");
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
-        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
+        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));
     HoodieCommandBlock commandBlock = new HoodieCommandBlock(header);
     writer.appendBlock(commandBlock);
 
-    FileCreateUtils.deleteDeltaCommit(basePath, "102", fs);
+    FileCreateUtils.deleteDeltaCommit(basePath, "101", fs);
 
     readKeys.clear();
     scanner = HoodieMergedLogRecordScanner.newBuilder()
@@ -1084,7 +1088,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withBasePath(basePath)
         .withLogFilePaths(allLogFiles)
         .withReaderSchema(schema)
-        .withLatestInstantTime("101")
+        .withLatestInstantTime("103")
         .withMaxMemorySizeInBytes(10240L)
         .withReadBlocksLazily(readBlocksLazily)
         .withReverseReader(false)
@@ -1094,7 +1098,25 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
         .build();
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
-    assertEquals(200, readKeys.size(), "Stream collect should return all 200 records after rollback of delete");
+    assertEquals(100, readKeys.size(), "Stream collect should return all 200 records after rollback of delete");
+    final List<Boolean> newEmptyPayloads = new ArrayList<>();
+    scanner.forEach(s -> {
+      try {
+        if (!s.getData().getInsertValue(schema).isPresent()) {
+          newEmptyPayloads.add(true);
+        }
+      } catch (IOException io) {
+        throw new UncheckedIOException(io);
+      }
+    });
+    assertEquals(100, readKeys.size(), "Stream collect should return 100 records, since 2nd block is rolled back");
+    assertEquals(50, newEmptyPayloads.size(), "Stream collect should return all 50 records with empty payloads");
+    List<String> firstBlockRecords =
+        copyOfRecords1.stream().map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
+            .collect(Collectors.toList());
+    Collections.sort(firstBlockRecords);
+    Collections.sort(readKeys);
+    assertEquals(firstBlockRecords, readKeys, "CompositeAvroLogReader should return 150 records from 2 versions");
   }
 
   @ParameterizedTest
@@ -1260,7 +1282,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     // Attempt 1 : Write rollback block for a failed write
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
-        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
+        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));
     HoodieCommandBlock commandBlock = new HoodieCommandBlock(header);
     try {
       writer.appendBlock(commandBlock);
@@ -1336,7 +1358,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     // Write 2 rollback blocks (1 data block + 1 delete bloc) for a failed write
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
-        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
+        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));
     HoodieCommandBlock commandBlock = new HoodieCommandBlock(header);
     writer.appendBlock(commandBlock);
     writer.appendBlock(commandBlock);
@@ -1388,7 +1410,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // Write invalid rollback for a failed write (possible for in-flight commits)
     header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, "101");
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
-        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
+        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));
     HoodieCommandBlock commandBlock = new HoodieCommandBlock(header);
     writer.appendBlock(commandBlock);
 
@@ -1458,7 +1480,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "101");
     header.put(HeaderMetadataType.TARGET_INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
-        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
+        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));
     HoodieCommandBlock commandBlock = new HoodieCommandBlock(header);
     writer.appendBlock(commandBlock);
 
@@ -1563,7 +1585,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "101");
     header.put(HeaderMetadataType.TARGET_INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
-        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
+        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));
     HoodieCommandBlock commandBlock = new HoodieCommandBlock(header);
     writer.appendBlock(commandBlock);
     writer.close();

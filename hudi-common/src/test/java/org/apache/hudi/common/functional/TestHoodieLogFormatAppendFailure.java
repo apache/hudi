@@ -143,7 +143,7 @@ public class TestHoodieLogFormatAppendFailure {
         .overBaseCommit("").withFs(fs).build();
     header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
-        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
+        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));
 
     writer.appendBlock(new HoodieCommandBlock(header));
     // The log version should be different for this new writer
