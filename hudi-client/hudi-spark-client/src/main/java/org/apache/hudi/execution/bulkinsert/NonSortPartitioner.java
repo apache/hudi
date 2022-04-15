@@ -26,6 +26,7 @@ import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
 import scala.Tuple2;
 
+import java.io.Serializable;
 import java.util.Objects;
 
 /**
@@ -40,7 +41,7 @@ public class NonSortPartitioner<T extends HoodieRecordPayload>
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
                                                      int outputSparkPartitions) {
-    class HashingRDDPartitioner extends Partitioner {
+    class HashingRDDPartitioner extends Partitioner implements Serializable {
       @Override
       public int numPartitions() {
         return outputSparkPartitions;
