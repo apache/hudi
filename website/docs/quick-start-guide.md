@@ -412,12 +412,12 @@ df.write.format("hudi").
 :::info
 `mode(Overwrite)` overwrites and recreates the table if it already exists.
 You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<city>/`. We provided a record key
-(`uuid` in [schema](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)), partition field (`region/country/city`) and combine logic (`ts` in
-[schema](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)) to ensure trip records are unique within each partition. For more info, refer to
-[Modeling data stored in Hudi](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#FAQ-HowdoImodelthedatastoredinHudi)
+(`uuid` in [schema](https://github.com/apache/hudi/blob/2e6e302efec2fa848ded4f88a95540ad2adb7798/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L60)), partition field (`region/country/city`) and combine logic (`ts` in
+[schema](https://github.com/apache/hudi/blob/2e6e302efec2fa848ded4f88a95540ad2adb7798/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L60)) to ensure trip records are unique within each partition. For more info, refer to
+[Modeling data stored in Hudi](https://hudi.apache.org/learn/faq/#how-do-i-model-the-data-stored-in-hudi)
 and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/writing_data).
 Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue
-`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/writing_data#write-operations)
+`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/write_operations)
 :::
 </TabItem>
 
@@ -453,7 +453,7 @@ You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<
 [Modeling data stored in Hudi](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#FAQ-HowdoImodelthedatastoredinHudi)
 and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/writing_data).
 Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue
-`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/writing_data#write-operations)
+`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/write_operations)
 :::
 </TabItem>
 
@@ -1117,7 +1117,7 @@ more details please refer to [procedures](/docs/next/procedures).
 
 You can also do the quickstart by [building hudi yourself](https://github.com/apache/hudi#building-apache-hudi-from-source), 
 and using `--jars <path to hudi_code>/packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.1?-*.*.*-SNAPSHOT.jar` in the spark-shell command above
-instead of `--packages org.apache.hudi:hudi-spark3.1.2-bundle_2.12:0.10.1`. Hudi also supports scala 2.12. Refer [build with scala 2.12](https://github.com/apache/hudi#build-with-scala-212)
+instead of `--packages org.apache.hudi:hudi-spark3.1.2-bundle_2.12:0.10.1`. Hudi also supports scala 2.12. Refer [build with scala 2.12](https://github.com/apache/hudi#build-with-different-spark-versions)
 for more info.
 
 Also, we used Spark here to show case the capabilities of Hudi. However, Hudi can support multiple table types/query types and 

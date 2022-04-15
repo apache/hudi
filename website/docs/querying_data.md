@@ -49,7 +49,7 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 ```
 
 For examples, refer to [Incremental Queries](/docs/quick-start-guide#incremental-query) in the Spark quickstart. 
-Please refer to [configurations](/docs/configurations#spark-datasource) section, to view all datasource options.
+Please refer to [configurations](/docs/configurations#SPARK_DATASOURCE) section, to view all datasource options.
 
 Additionally, `HoodieReadClient` offers the following functionality using Hudi's implicit indexing.
 
@@ -170,16 +170,16 @@ would ensure Map Reduce execution is chosen for a Hive query, which combines par
 separated) and calls InputFormat.listStatus() only once with all those partitions.
 
 ## PrestoDB
-To setup PrestoDB for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#PrestoDB) page.
+To setup PrestoDB for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#prestodb) page.
 
 ## Trino
-To setup Trino for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#Trino) page.
+To setup Trino for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#trino) page.
 
 ## Impala (3.4 or later)
 
 ### Snapshot Query
 
-Impala is able to query Hudi Copy-on-write table as an [EXTERNAL TABLE](https://docs.cloudera.com/documentation/enterprise/6/6.3/topics/impala_tables#external_tables) on HDFS.  
+Impala is able to query Hudi Copy-on-write table as an [EXTERNAL TABLE](https://docs.cloudera.com/documentation/enterprise/6/6.3/topics/impala_tables.html#external_tables) on HDFS.  
 
 To create a Hudi read optimized table on Impala:
 ```
