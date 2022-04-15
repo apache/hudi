@@ -422,13 +422,7 @@ object HoodieBaseRelation {
     partitionedFile => {
       val extension = FSUtils.getFileExtension(partitionedFile.filePath)
       if (HoodieFileFormat.PARQUET.getFileExtension.equals(extension)) {
-        val iter = parquetReader.apply(partitionedFile)
-        if (iter.isInstanceOf[Closeable]) {
-          // register a callback to close parquetReader which will be executed on task completion.
-          // when tasks finished, this method will be called, and release resources.
-          Option(TaskContext.get()).foreach(_.addTaskCompletionListener[Unit](_ => iter.asInstanceOf[Closeable].close()))
-        }
-        iter
+        parquetReader.apply(partitionedFile)
       } else if (HoodieFileFormat.HFILE.getFileExtension.equals(extension)) {
         hfileReader.apply(partitionedFile)
       } else {
