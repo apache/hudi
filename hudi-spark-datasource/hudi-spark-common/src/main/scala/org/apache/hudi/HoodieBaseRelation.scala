@@ -19,12 +19,10 @@ package org.apache.hudi
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.hbase.io.hfile.CacheConfig
 import org.apache.hadoop.mapred.JobConf
-
 import org.apache.hudi.HoodieBaseRelation.getPartitionPath
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.common.config.{HoodieMetadataConfig, SerializableConfiguration}
@@ -38,13 +36,13 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.io.storage.HoodieHFileReader
-
 import org.apache.spark.TaskContext
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
+import org.apache.spark.sql.execution.FileRelation
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile, PartitioningUtils}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
@@ -54,7 +52,6 @@ import org.apache.spark.unsafe.types.UTF8String
 
 import java.io.Closeable
 import java.net.URI
-
 import scala.collection.JavaConverters._
 import scala.util.Try
 import scala.util.control.NonFatal
@@ -78,7 +75,11 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
                                   val metaClient: HoodieTableMetaClient,
                                   val optParams: Map[String, String],
                                   userSchema: Option[StructType])
-  extends BaseRelation with PrunedFilteredScan with Logging with SparkAdapterSupport {
+  extends BaseRelation
+    with FileRelation
+    with PrunedFilteredScan
+    with SparkAdapterSupport
+    with Logging {
 
   type FileSplit <: HoodieFileSplit
 
@@ -198,6 +199,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    */
   override final def needConversion: Boolean = false
 
+  override def inputFiles: Array[String] = fileIndex.allFiles.map(_.getPath.toUri.toString).toArray
+
   /**
    * NOTE: DO NOT OVERRIDE THIS METHOD
    */
@@ -254,6 +257,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     else
       sparkSession.sparkContext.emptyRDD
   }
+
+
 
   /**
    * Composes RDD provided file splits to read from, table and partition schemas, data filters to be applied
