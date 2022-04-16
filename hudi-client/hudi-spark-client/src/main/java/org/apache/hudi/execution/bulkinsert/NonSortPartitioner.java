@@ -64,6 +64,4 @@ public class NonSortPartitioner<T extends HoodieRecordPayload>
   public boolean arePartitionRecordsSorted() {
     return false;
   }
-
-
 }
