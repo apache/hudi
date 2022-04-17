@@ -20,6 +20,7 @@ package org.apache.spark.sql.parser
 import org.antlr.v4.runtime.ParserRuleContext
 import org.antlr.v4.runtime.tree.{ParseTree, RuleNode, TerminalNode}
 import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.spark.sql.parser.HoodieSqlCommonBaseVisitor
 import org.apache.hudi.spark.sql.parser.HoodieSqlCommonParser._
 import org.apache.spark.internal.Logging
@@ -29,6 +30,7 @@ import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
 import org.apache.spark.sql.catalyst.parser.{ParseException, ParserInterface, ParserUtils}
 import org.apache.spark.sql.catalyst.plans.logical._
+import org.apache.spark.sql.hudi.command.index.HoodieTableIndexColumn
 
 import scala.collection.JavaConverters._
 
@@ -135,6 +137,86 @@ class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface
     // that's why we need to recurse down the tree in reconstructSqlString
     val sqlString = reconstructSqlString(ctx)
     delegate.parseExpression(sqlString)
+  }
+
+  override def visitCreateIndex(ctx: CreateIndexContext): LogicalPlan = withOrigin(ctx) {
+    val table = ctx.tableIdentifier().accept(this).asInstanceOf[LogicalPlan]
+    CreateIndexCommand(
+      ctx.indexName().getText,
+      table,
+      visitIndexCols(ctx.indexCols),
+      ctx.EXISTS != null,
+      visitIndexType(ctx.indexType),
+      Option(ctx.indexProperties()).map(visitNonOptionalIndexProperties))
+  }
+
+  override def visitDropIndex(ctx: DropIndexContext): LogicalPlan = withOrigin(ctx) {
+    DropIndexCommand(
+      ctx.indexName().getText,
+      visitTableIdentifier(ctx.tableIdentifier),
+      ctx.EXISTS != null)
+  }
+
+  override def visitRefreshIndex(ctx: RefreshIndexContext): LogicalPlan = withOrigin(ctx) {
+    RefreshIndexCommand(
+      ctx.indexName().getText,
+      visitTableIdentifier(ctx.tableIdentifier))
+  }
+
+  override def visitShowIndex(ctx: ShowIndexContext): LogicalPlan = withOrigin(ctx) {
+    val indexName = if (ctx.indexName() == null) {
+      Option.empty
+    } else {
+      Option(ctx.indexName().getText)
+    }
+
+    ShowIndexCommand(
+      indexName,
+      visitTableIdentifier(ctx.tableIdentifier)
+    )
+  }
+
+  override def visitIndexCols(ctx: IndexColsContext): Array[HoodieTableIndexColumn] = withOrigin(ctx) {
+    ctx.indexCol.toArray(new Array[IndexColContext](ctx.indexCol.size)).map(visitIndexCol)
+  }
+
+  override def visitIndexCol(ctx: IndexColContext): HoodieTableIndexColumn = withOrigin(ctx) {
+    HoodieTableIndexColumn(ctx.identifier.getText, ctx.DESC == null)
+  }
+
+  override def visitIndexType(ctx: IndexTypeContext): IndexType = withOrigin(ctx) {
+    IndexType.valueOf(ctx.getText.toUpperCase)
+  }
+
+  override def visitIndexProperties(ctx: IndexPropertiesContext): Map[String, Option[String]] = withOrigin(ctx) {
+    val props = ctx.indexProperty.asScala.map { pVal =>
+      val name = pVal.identifier.getText
+      val value = Option(pVal.constant).map(visitStringConstant)
+      name -> value
+    }
+    // Before calling `toMap`, we check duplicated keys to avoid silently ignore index's property values
+    // in index properties like PROPERTIES(a='1', b='2', a='3'). The real semantical check for
+    // index properties will be done in analyzer.
+    checkDuplicateKeys(props, ctx)
+    props.toMap
+  }
+
+  protected def visitNonOptionalIndexProperties(ctx: IndexPropertiesContext): Map[String, String] = withOrigin(ctx) {
+    visitIndexProperties(ctx).map {
+      case (key, None) => throw new ParseException(s"Found an empty partition key '$key'.", ctx)
+      case (key, Some(value)) => key -> value
+    }
+  }
+
+  protected def visitStringConstant(ctx: ConstantContext): String = withOrigin(ctx) {
+    ctx match {
+      case s: StringLiteralContext => createString(s)
+      case o => o.getText
+    }
+  }
+
+  private def createString(ctx: StringLiteralContext): String = {
+    ctx.STRING().asScala.map(string).mkString
   }
 
   private def reconstructSqlString(ctx: ParserRuleContext): String = {

@@ -47,6 +47,7 @@
 
  statement
     : compactionStatement                                                       #compactionCommand
+    | indexStatement                                                            #indexCommand
     | CALL multipartIdentifier '(' (callArgument (',' callArgument)*)? ')'      #call
     | .*?                                                                       #passThrough
     ;
@@ -58,6 +59,15 @@
     | SHOW COMPACTION  ON path = STRING (LIMIT limit = INTEGER_VALUE)?                               #showCompactionOnPath
     ;
 
+ indexStatement
+    : CREATE INDEX (IF NOT EXISTS)? indexName ON (TABLE)?
+        tableIdentifier indexCols (USING indexType)?
+        indexProperties?                                               #createIndex
+    | DROP INDEX (IF EXISTS)? indexName ON (TABLE)? tableIdentifier    #dropIndex
+    | REFRESH INDEX indexName ON (TABLE)? tableIdentifier              #refreshIndex
+    | SHOW INDEX (indexName)? ON (TABLE)? tableIdentifier              #showIndex
+    ;
+
  tableIdentifier
     : (db=IDENTIFIER '.')? table=IDENTIFIER
     ;
@@ -66,6 +76,33 @@
     : expression                    #positionalArgument
     | identifier '=>' expression    #namedArgument
     ;
+
+ indexName
+     : IDENTIFIER
+     ;
+
+ indexCols
+     : '(' indexCol (',' indexCol)* ')'
+     ;
+
+ indexCol
+     : identifier (ASC | DESC)?
+     ;
+
+ indexType
+     : BLOOM
+     | BTREE
+     | BITMAP
+     | LUCENE
+     ;
+
+ indexProperties
+     : PROPERTIES '(' indexProperty (',' indexProperty)* ')'
+     ;
+
+ indexProperty
+     : identifier (EQ constant)?
+     ;
 
  expression
     : constant
@@ -114,20 +151,39 @@
     ;
 
  nonReserved
-     : CALL | COMPACTION | RUN | SCHEDULE | ON | SHOW | LIMIT
+     : CALL  | COMPACTION | RUN | SCHEDULE | ON | SHOW | LIMIT | TABLE
+     | TRUE  | FALSE | REFRESH | CREATE | INDEX | IF | NOT | EXISTS
+     | USING | DROP | SHOW | ASC | DESC | PROPERTIES | INTERVAL | TO
+     | BLOOM | BTREE| BITMAP | LUCENE
      ;
 
  ALL: 'ALL';
  AT: 'AT';
+ ASC: 'ASC';
+ BTREE: 'BTREE';
+ BLOOM: 'BLOOM';
+ BITMAP: 'BITMAP';
  CALL: 'CALL';
  COMPACTION: 'COMPACTION';
+ CREATE: 'CREATE';
+ DESC: 'DESC';
+ DROP: 'DROP';
+ EXISTS: 'EXISTS';
+ REFRESH: 'REFRESH';
  RUN: 'RUN';
  SCHEDULE: 'SCHEDULE';
  ON: 'ON';
+ PROPERTIES: 'PROPERTIES';
+ USING: 'USING';
  SHOW: 'SHOW';
+ IF: 'IF';
+ INDEX: 'INDEX';
  LIMIT: 'LIMIT';
+ LUCENE: 'LUCENE';
  MAP: 'MAP';
+ NOT: 'NOT';
  NULL: 'NULL';
+ TABLE: 'TABLE';
  TRUE: 'TRUE';
  FALSE: 'FALSE';
  INTERVAL: 'INTERVAL';
@@ -135,6 +191,8 @@
 
  PLUS: '+';
  MINUS: '-';
+
+ EQ : '=' | '==';
 
  STRING
     : '\'' ( ~('\''|'\\') | ('\\' .) )* '\''
