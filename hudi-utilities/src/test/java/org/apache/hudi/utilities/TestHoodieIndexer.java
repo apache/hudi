@@ -241,13 +241,7 @@ public class TestHoodieIndexer extends HoodieCommonTestHarness implements SparkP
     assertTrue(metadataPartitionExists(basePath, context, FILES));
 
     // build indexer config which has only bloom_filters enabled
-    HoodieIndexer.Config config = new HoodieIndexer.Config();
-    String propsPath = Objects.requireNonNull(getClass().getClassLoader().getResource("delta-streamer-config/indexer-only-bloom.properties")).getPath();
-    config.basePath = basePath;
-    config.tableName = tableName;
-    config.indexTypes = BLOOM_FILTERS.name();
-    config.runningMode = SCHEDULE_AND_EXECUTE;
-    config.propsFilePath = propsPath;
+    HoodieIndexer.Config config = getHoodieIndexConfig(BLOOM_FILTERS.name(), SCHEDULE_AND_EXECUTE, "delta-streamer-config/indexer-only-bloom.properties");
     // start the indexer and validate bloom_filters index is also complete
     HoodieIndexer indexer = new HoodieIndexer(jsc, config);
     assertEquals(0, indexer.start(0));
@@ -259,13 +253,7 @@ public class TestHoodieIndexer extends HoodieCommonTestHarness implements SparkP
     assertTrue(bloomIndexInstant.isPresent());
 
     // build indexer config which has only column_stats enabled
-    config = new HoodieIndexer.Config();
-    propsPath = Objects.requireNonNull(getClass().getClassLoader().getResource("delta-streamer-config/indexer.properties")).getPath();
-    config.basePath = basePath;
-    config.tableName = tableName;
-    config.indexTypes = COLUMN_STATS.name();
-    config.runningMode = SCHEDULE;
-    config.propsFilePath = propsPath;
+    config = getHoodieIndexConfig(COLUMN_STATS.name(), SCHEDULE, "delta-streamer-config/indexer.properties");
 
     // schedule indexing and validate column_stats index is also initialized
     // and indexing.requested instant is present
@@ -278,19 +266,39 @@ public class TestHoodieIndexer extends HoodieCommonTestHarness implements SparkP
 
     // drop column_stats and validate indexing.requested is also removed from the timeline
     // and completed indexing instant corresponding to bloom_filters index is still present
-    config.runningMode = DROP_INDEX;
-    indexer = new HoodieIndexer(jsc, config);
-    assertEquals(0, indexer.start(0));
-    columnStatsIndexInstant = metaClient.reloadActiveTimeline().filterPendingIndexTimeline().lastInstant();
-    assertFalse(columnStatsIndexInstant.isPresent());
-    assertFalse(metadataPartitionExists(basePath, context, COLUMN_STATS));
-    assertEquals(bloomIndexInstant, metaClient.reloadActiveTimeline().filterCompletedIndexTimeline().lastInstant());
+    dropIndexAndAssert(COLUMN_STATS, "delta-streamer-config/indexer.properties", Option.empty());
 
     // check other partitions are intact
     assertTrue(getCompletedMetadataPartitions(reload(metaClient).getTableConfig()).contains(FILES.getPartitionPath()));
     assertTrue(metadataPartitionExists(basePath, context, FILES));
     assertTrue(getCompletedMetadataPartitions(reload(metaClient).getTableConfig()).contains(BLOOM_FILTERS.getPartitionPath()));
     assertTrue(metadataPartitionExists(basePath, context, BLOOM_FILTERS));
+
+    // drop bloom filter partition. timeline files should not be deleted since the index building is complete.
+    dropIndexAndAssert(BLOOM_FILTERS, "delta-streamer-config/indexer-only-bloom.properties", bloomIndexInstant);
+  }
+
+  private void dropIndexAndAssert(MetadataPartitionType indexType, String resourceFilePath, Option<HoodieInstant> completedIndexInstant) {
+    HoodieIndexer.Config config = getHoodieIndexConfig(indexType.name(), DROP_INDEX, resourceFilePath);
+    HoodieIndexer indexer = new HoodieIndexer(jsc, config);
+    assertEquals(0, indexer.start(0));
+    Option<HoodieInstant> pendingFlights = metaClient.reloadActiveTimeline().filterPendingIndexTimeline().lastInstant();
+    assertFalse(pendingFlights.isPresent());
+    assertFalse(metadataPartitionExists(basePath, context, indexType));
+    if (completedIndexInstant.isPresent()) {
+      assertEquals(completedIndexInstant, metaClient.reloadActiveTimeline().filterCompletedIndexTimeline().lastInstant());
+    }
+  }
+
+  private HoodieIndexer.Config getHoodieIndexConfig(String indexType, String runMode, String resourceFilePath) {
+    HoodieIndexer.Config config = new HoodieIndexer.Config();
+    String propsPath = Objects.requireNonNull(getClass().getClassLoader().getResource(resourceFilePath)).getPath();
+    config.basePath = basePath;
+    config.tableName = tableName;
+    config.indexTypes = indexType;
+    config.runningMode = runMode;
+    config.propsFilePath = propsPath;
+    return config;
   }
 
   private static HoodieWriteConfig.Builder getWriteConfigBuilder(String basePath, String tableName) {
