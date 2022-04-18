@@ -32,11 +32,13 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.testutils.providers.SparkProvider;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -86,6 +88,14 @@ public class TestHoodieIndexer extends HoodieCommonTestHarness implements SparkP
     }
     initPath();
     initMetaClient();
+  }
+
+  protected void initMetaClient() throws IOException {
+    String rootPathStr = "file://" + tempDir.toAbsolutePath().toString();
+    Path rootPath = new Path(rootPathStr);
+    rootPath.getFileSystem(jsc.hadoopConfiguration()).mkdirs(rootPath);
+    metaClient = HoodieTestUtils.init(rootPathStr, getTableType());
+    basePath = metaClient.getBasePath();
   }
 
   @Test
