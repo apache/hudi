@@ -489,8 +489,7 @@ public class HoodieMetadataTableValidator implements Serializable {
       // Suppress the TableNotFound exception if Metadata table is not available to read for now
       LOG.warn("Meta data table is not found. Skip current validation.");
       return false;
-    }
-    catch (Exception ex) {
+    } catch (Exception ex) {
       LOG.warn("Metadata table is not available to ready for now, ", ex);
       return false;
     }
