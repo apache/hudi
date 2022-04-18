@@ -20,7 +20,7 @@ package org.apache.hudi.client.clustering.plan.strategy;
 
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
@@ -29,8 +29,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.HoodieFlinkCopyOnWriteTable;
-import org.apache.hudi.table.HoodieFlinkMergeOnReadTable;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.PartitionAwareClusteringPlanStrategy;
 
 import org.apache.log4j.LogManager;
@@ -53,14 +52,8 @@ public class FlinkSizeBasedClusteringPlanStrategy<T extends HoodieRecordPayload<
     extends PartitionAwareClusteringPlanStrategy<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
   private static final Logger LOG = LogManager.getLogger(FlinkSizeBasedClusteringPlanStrategy.class);
 
-  public FlinkSizeBasedClusteringPlanStrategy(HoodieFlinkCopyOnWriteTable<T> table,
-                                              HoodieFlinkEngineContext engineContext,
-                                              HoodieWriteConfig writeConfig) {
-    super(table, engineContext, writeConfig);
-  }
-
-  public FlinkSizeBasedClusteringPlanStrategy(HoodieFlinkMergeOnReadTable<T> table,
-                                              HoodieFlinkEngineContext engineContext,
+  public FlinkSizeBasedClusteringPlanStrategy(HoodieTable table,
+                                              HoodieEngineContext engineContext,
                                               HoodieWriteConfig writeConfig) {
     super(table, engineContext, writeConfig);
   }

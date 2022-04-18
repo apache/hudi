@@ -69,9 +69,9 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
       HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
       HoodieTable hoodieTable)
       throws HoodieIndexException {
-    // Initialize necessary information before tagging. e.g., hashing metadata
+    // Get bucket location mapper for the given partitions
     List<String> partitions = records.map(HoodieRecord::getPartitionPath).distinct().collectAsList();
-    LOG.info("Initializing hashing metadata for partitions: " + partitions);
+    LOG.info("Get BucketIndexLocationMapper for partitions: " + partitions);
     BucketIndexLocationMapper mapper = getLocationMapper(hoodieTable, partitions);
 
     return records.mapPartitions(iterator ->
@@ -80,7 +80,7 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
           protected HoodieRecord<R> computeNext() {
             // TODO maybe batch the operation to improve performance
             HoodieRecord record = inputItr.next();
-            Option<HoodieRecordLocation> loc = mapper.getRecordLocation(record.getKey(), record.getPartitionPath());
+            Option<HoodieRecordLocation> loc = mapper.getRecordLocation(record.getKey());
             return HoodieIndexUtils.getTaggedRecord(record, loc);
           }
         },

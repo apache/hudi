@@ -128,26 +128,26 @@ public class TestConsistentBucketIdIdentifier {
     HoodieConsistentHashingMetadata meta = new HoodieConsistentHashingMetadata("partition", 8);
     List<ConsistentHashingNode> nodes = meta.getNodes();
 
-    List<String> fileIds = IntStream.range(0, 3).mapToObj(i -> FSUtils.createNewFileId(nodes.get(i).getFileIdPfx(), 0)).collect(Collectors.toList());
+    List<String> fileIds = IntStream.range(0, 3).mapToObj(i -> FSUtils.createNewFileId(nodes.get(i).getFileIdPrefix(), 0)).collect(Collectors.toList());
     List<ConsistentHashingNode> childNodes = new ConsistentBucketIdentifier(meta).mergeBucket(fileIds);
     Assertions.assertEquals(ConsistentHashingNode.NodeTag.DELETE, childNodes.get(0).getTag());
     Assertions.assertEquals(ConsistentHashingNode.NodeTag.DELETE, childNodes.get(1).getTag());
     Assertions.assertEquals(ConsistentHashingNode.NodeTag.REPLACE, childNodes.get(2).getTag());
     Assertions.assertEquals(nodes.get(2).getValue(), childNodes.get(2).getValue());
-    Assertions.assertNotEquals(nodes.get(2).getFileIdPfx(), childNodes.get(2).getFileIdPfx());
+    Assertions.assertNotEquals(nodes.get(2).getFileIdPrefix(), childNodes.get(2).getFileIdPrefix());
 
     fileIds = Arrays.asList(nodes.get(7), nodes.get(0), nodes.get(1)).stream()
-        .map(ConsistentHashingNode::getFileIdPfx).map(f -> FSUtils.createNewFileId(f, 0)).collect(Collectors.toList());
+        .map(ConsistentHashingNode::getFileIdPrefix).map(f -> FSUtils.createNewFileId(f, 0)).collect(Collectors.toList());
     childNodes = new ConsistentBucketIdentifier(meta).mergeBucket(fileIds);
     Assertions.assertEquals(ConsistentHashingNode.NodeTag.DELETE, childNodes.get(0).getTag());
     Assertions.assertEquals(ConsistentHashingNode.NodeTag.DELETE, childNodes.get(1).getTag());
     Assertions.assertEquals(ConsistentHashingNode.NodeTag.REPLACE, childNodes.get(2).getTag());
     Assertions.assertEquals(nodes.get(1).getValue(), childNodes.get(2).getValue());
-    Assertions.assertNotEquals(nodes.get(1).getFileIdPfx(), childNodes.get(2).getFileIdPfx());
+    Assertions.assertNotEquals(nodes.get(1).getFileIdPrefix(), childNodes.get(2).getFileIdPrefix());
 
     boolean exception = false;
     try {
-      fileIds = IntStream.range(0, 2).mapToObj(i -> FSUtils.createNewFileId(nodes.get(i * 2).getFileIdPfx(), 0)).collect(Collectors.toList());
+      fileIds = IntStream.range(0, 2).mapToObj(i -> FSUtils.createNewFileId(nodes.get(i * 2).getFileIdPrefix(), 0)).collect(Collectors.toList());
       new ConsistentBucketIdentifier(meta).mergeBucket(fileIds);
     } catch (Exception e) {
       exception = true;
@@ -167,9 +167,9 @@ public class TestConsistentBucketIdIdentifier {
     ConsistentBucketIdentifier identifier = new ConsistentBucketIdentifier(metadata);
     List<ConsistentHashingNode> nodes = new ArrayList<>(identifier.getNodes());
     Assertions.assertEquals(1024, nodes.get(0).getValue());
-    Assertions.assertEquals("a1", nodes.get(0).getFileIdPfx());
+    Assertions.assertEquals("a1", nodes.get(0).getFileIdPrefix());
     Assertions.assertEquals(metadata.getNodes().get(1).getValue(), nodes.get(1).getValue());
-    Assertions.assertEquals("a2", nodes.get(1).getFileIdPfx());
+    Assertions.assertEquals("a2", nodes.get(1).getFileIdPrefix());
 
     childrenNodes = new ArrayList<>();
     childrenNodes.add(new ConsistentHashingNode(metadata.getNodes().get(0).getValue(), "d1", ConsistentHashingNode.NodeTag.NORMAL));

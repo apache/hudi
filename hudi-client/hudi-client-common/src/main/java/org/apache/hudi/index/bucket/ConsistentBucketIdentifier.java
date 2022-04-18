@@ -76,7 +76,7 @@ public class ConsistentBucketIdentifier extends BucketIdentifier {
   /**
    * Get bucket of the given file group
    *
-   * @param fileId the file group id. NOTE: not filePfx (i.e., uuid)
+   * @param fileId the file group id. NOTE: not filePrefix (i.e., uuid)
    */
   public ConsistentHashingNode getBucketByFileId(String fileId) {
     return fileIdToBucket.get(fileId);
@@ -97,20 +97,14 @@ public class ConsistentBucketIdentifier extends BucketIdentifier {
   }
 
   /**
-   * Get the former node that given the bucket node.
-   *
-   * @param fileId
-   * @return
+   * Get the former node of the given node (inferred from file id).
    */
   public ConsistentHashingNode getFormerBucket(String fileId) {
     return getFormerBucket(getBucketByFileId(fileId).getValue());
   }
 
   /**
-   * Get the former node that neighbouring the hash value.
-   *
-   * @param hashValue
-   * @return
+   * Get the former node of the given node (inferred from hash value).
    */
   public ConsistentHashingNode getFormerBucket(int hashValue) {
     SortedMap<Integer, ConsistentHashingNode> headMap = ring.headMap(hashValue);
@@ -119,15 +113,14 @@ public class ConsistentBucketIdentifier extends BucketIdentifier {
 
   public List<ConsistentHashingNode> mergeBucket(List<String> fileIds) {
     // Get nodes using fileIds
-    List<ConsistentHashingNode> nodes = fileIds.stream().map(this::getBucketByFileId)
-        .collect(Collectors.toList());
+    List<ConsistentHashingNode> nodes = fileIds.stream().map(this::getBucketByFileId).collect(Collectors.toList());
 
     // Validate the input
     for (int i = 0; i < nodes.size() - 1; ++i) {
       ValidationUtils.checkState(getFormerBucket(nodes.get(i + 1).getValue()).getValue() == nodes.get(i).getValue(), "Cannot merge discontinuous hash range");
     }
 
-    // Create child nodes with proper tag (keep last and delete other nodes)
+    // Create child nodes with proper tag (keep the last one and delete other nodes)
     List<ConsistentHashingNode> childNodes = new ArrayList<>(nodes.size());
     for (int i = 0; i < nodes.size() - 1; ++i) {
       childNodes.add(new ConsistentHashingNode(nodes.get(i).getValue(), null, ConsistentHashingNode.NodeTag.DELETE));
@@ -145,7 +138,7 @@ public class ConsistentBucketIdentifier extends BucketIdentifier {
   /**
    * Split bucket in the range middle, also generate the corresponding file ids
    *
-   * TODO support different split criteria, e.g., distributed records evenly using statistics
+   * TODO support different split criteria, e.g., distribute records evenly using statistics
    *
    * @param bucket parent bucket
    * @return lists of children buckets
@@ -192,13 +185,13 @@ public class ConsistentBucketIdentifier extends BucketIdentifier {
         case REPLACE:
           tmp = ring.put(p.getValue(), p);
           if (tmp != null) {
-            fileIdToBucket.remove(FSUtils.createNewFileId(tmp.getFileIdPfx(), 0));
+            fileIdToBucket.remove(FSUtils.createNewFileId(tmp.getFileIdPrefix(), 0));
           }
-          fileIdToBucket.put(FSUtils.createNewFileId(p.getFileIdPfx(), 0), p);
+          fileIdToBucket.put(FSUtils.createNewFileId(p.getFileIdPrefix(), 0), p);
           break;
         case DELETE:
           tmp = ring.remove(p.getValue());
-          fileIdToBucket.remove(FSUtils.createNewFileId(tmp.getFileIdPfx(), 0));
+          fileIdToBucket.remove(FSUtils.createNewFileId(tmp.getFileIdPrefix(), 0));
           break;
         default:
           throw new HoodieClusteringException("Children node is tagged as NORMAL or unknown tag: " + p);

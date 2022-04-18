@@ -152,7 +152,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
         logFiles = fileSlice.get().getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList());
       } else {
         baseInstantTime = instantTime;
-        // Handle log file only case. This is necessary for the concurrent clustering and writer case.
+        // Handle log file only case. This is necessary for the concurrent clustering and writer case (e.g., consistent hashing bucket index).
         // NOTE: flink engine use instantTime to mark operation type, check BaseFlinkCommitActionExecutor::execute
         if (record.getCurrentLocation() != null && HoodieInstantTimeGenerator.isValidInstantTime(record.getCurrentLocation().getInstantTime())) {
           baseInstantTime = record.getCurrentLocation().getInstantTime();

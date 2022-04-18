@@ -32,6 +32,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -57,6 +58,11 @@ public class HoodieConsistentHashingMetadata implements Serializable {
   private final List<ConsistentHashingNode> nodes;
   @JsonIgnore
   protected List<ConsistentHashingNode> childrenNodes = new ArrayList<>();
+  /**
+   * Used to indicate if the metadata is newly created, rather than read from the storage.
+   */
+  @JsonIgnore
+  private boolean firstCreated;
 
   @JsonCreator
   public HoodieConsistentHashingMetadata(@JsonProperty("version") short version, @JsonProperty("partitionPath") String partitionPath,
@@ -68,13 +74,16 @@ public class HoodieConsistentHashingMetadata implements Serializable {
     this.numBuckets = numBuckets;
     this.seqNo = seqNo;
     this.nodes = nodes;
+    this.firstCreated = false;
   }
 
   /**
+   * Only used for creating new hashing metadata.
    * Construct default metadata with all bucket's file group uuid initialized
    */
   public HoodieConsistentHashingMetadata(String partitionPath, int numBuckets) {
     this((short) 0, partitionPath, HoodieTimeline.INIT_INSTANT_TS, numBuckets, 0, constructDefaultHashingNodes(numBuckets));
+    this.firstCreated = true;
   }
 
   private static List<ConsistentHashingNode> constructDefaultHashingNodes(int numBuckets) {
@@ -101,6 +110,10 @@ public class HoodieConsistentHashingMetadata implements Serializable {
 
   public int getSeqNo() {
     return seqNo;
+  }
+
+  public boolean isFirstCreated() {
+    return firstCreated;
   }
 
   public List<ConsistentHashingNode> getNodes() {

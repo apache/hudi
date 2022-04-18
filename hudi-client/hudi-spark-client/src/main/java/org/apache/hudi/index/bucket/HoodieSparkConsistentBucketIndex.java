@@ -40,7 +40,6 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.table.HoodieTable;
 
@@ -73,21 +72,23 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
     super(config);
   }
 
-  /**
-   * Persist hashing metadata to storage. Only clustering operations will modify the metadata.
-   * For example, splitting & merging buckets, or just sorting and producing a new bucket.
-   *
-   * @param writeStatuses
-   * @param context
-   * @param hoodieTable
-   * @param instantTime
-   * @return
-   * @throws HoodieIndexException
-   */
   @Override
   public HoodieData<WriteStatus> updateLocation(HoodieData<WriteStatus> writeStatuses,
                                                 HoodieEngineContext context,
                                                 HoodieTable hoodieTable)
+      throws HoodieIndexException {
+    throw new HoodieIndexException("Consistent hashing index does not support update location without the instant parameter");
+  }
+
+  /**
+   * Persist hashing metadata to storage. Only clustering operations will modify the metadata.
+   * For example, splitting & merging buckets, or just sorting and producing a new bucket.
+   */
+  @Override
+  public HoodieData<WriteStatus> updateLocation(HoodieData<WriteStatus> writeStatuses,
+                                                HoodieEngineContext context,
+                                                HoodieTable hoodieTable,
+                                                String instantTime)
       throws HoodieIndexException {
     HoodieInstant instant = hoodieTable.getMetaClient().getActiveTimeline().findInstantsAfterOrEquals(instantTime, 1).firstInstant().get();
     ValidationUtils.checkState(instant.getTimestamp().equals(instantTime), "Cannot get the same instant, instantTime: " + instantTime);
@@ -123,7 +124,7 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
       // Get new metadata and save
       meta.setChildrenNodes(childNodes);
       List<ConsistentHashingNode> newNodes = (new ConsistentBucketIdentifier(meta)).getNodes().stream()
-          .map(n -> new ConsistentHashingNode(n.getValue(), n.getFileIdPfx(), ConsistentHashingNode.NodeTag.NORMAL))
+          .map(n -> new ConsistentHashingNode(n.getValue(), n.getFileIdPrefix(), ConsistentHashingNode.NodeTag.NORMAL))
           .collect(Collectors.toList());
       HoodieConsistentHashingMetadata newMeta = new HoodieConsistentHashingMetadata(meta.getVersion(), meta.getPartitionPath(),
           instantTime, meta.getNumBuckets(), seqNo + 1, newNodes);
@@ -256,7 +257,8 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
     }
 
     @Override
-    public Option<HoodieRecordLocation> getRecordLocation(HoodieKey key, String partitionPath) {
+    public Option<HoodieRecordLocation> getRecordLocation(HoodieKey key) {
+      String partitionPath = key.getPartitionPath();
       ConsistentHashingNode node = partitionToIdentifier.get(partitionPath).getBucket(key, indexKeyFields);
       if (!StringUtils.isNullOrEmpty(node.getFileIdPrefix())) {
         /**

@@ -271,13 +271,13 @@ public class HoodieIndexConfig extends HoodieConfig {
   public static final ConfigProperty<String> BUCKET_INDEX_MAX_NUM_BUCKETS = ConfigProperty
       .key("hoodie.bucket.index.max.num.buckets")
       .noDefaultValue()
-      .withDocumentation("Only applies if bucket index engine is dynamic (e.g., CONSISTENT_HASHING). Determine the upper bound of "
+      .withDocumentation("Only applies if bucket index engine is consistent hashing. Determine the upper bound of "
           + "the num of buckets in the hudi table. Resizing are not allowed to split bucket if the number is reached.");
 
   public static final ConfigProperty<String> BUCKET_INDEX_MIN_NUM_BUCKETS = ConfigProperty
       .key("hoodie.bucket.index.min.num.buckets")
       .noDefaultValue()
-      .withDocumentation("Only applies if bucket index engine is dynamic (e.g., CONSISTENT_HASHING). Determine the lower bound of "
+      .withDocumentation("Only applies if bucket index engine is consistent hashing. Determine the lower bound of "
           + "the num of buckets in the hudi table. Resizing are not allowed to merge buckets if the number is reached.");
 
   public static final ConfigProperty<String> BUCKET_INDEX_HASH_FIELD = ConfigProperty
@@ -289,13 +289,13 @@ public class HoodieIndexConfig extends HoodieConfig {
   public static final ConfigProperty<Double> BUCKET_SPLIT_THRESHOLD = ConfigProperty
       .key("hoodie.bucket.index.split.threshold")
       .defaultValue(2.0)
-      .withDocumentation("Control if the bucket should be split when using dynamic bucket index (i.e., CONSISTENT HASHING)."
-          + "Specifically, if a file slice size reach `hoodie.xxxx.max.file.size` * threshold, then split will be carried out.");
+      .withDocumentation("Control if the bucket should be split when using consistent hashing bucket index."
+          + "Specifically, if a file slice size reaches `hoodie.xxxx.max.file.size` * threshold, then split will be carried out.");
 
   public static final ConfigProperty<Double> BUCKET_MERGE_THRESHOLD = ConfigProperty
       .key("hoodie.bucket.index.merge.threshold")
       .defaultValue(0.2)
-      .withDocumentation("Control if buckets should be merged when using dynamic bucket index (i.e., CONSISTENT HASHING)."
+      .withDocumentation("Control if buckets should be merged when using consistent hashing bucket index"
           + "Specifically, if a file slice size is smaller than `hoodie.xxxx.max.file.size` * threshold, then it will be considered"
           + "as a merge condidate.");
 

@@ -97,7 +97,6 @@ public class SparkConsistentBucketClusteringPlanStrategy<T extends HoodieRecordP
    * If there is inflight / requested clustering working on the partition, then return empty list
    * to ensure serialized update to the hashing metadata.
    *
-   * @param partition
    * @return candidate file slices to be clustered (i.e., sort, bucket split or merge)
    */
   @Override
@@ -123,10 +122,6 @@ public class SparkConsistentBucketClusteringPlanStrategy<T extends HoodieRecordP
 
   /**
    * Generate cluster group based on split, merge and sort rules
-   *
-   * @param partitionPath
-   * @param fileSlices
-   * @return
    */
   @Override
   protected Stream<HoodieClusteringGroup> buildClusteringGroupsForPartition(String partitionPath, List<FileSlice> fileSlices) {
@@ -167,8 +162,8 @@ public class SparkConsistentBucketClusteringPlanStrategy<T extends HoodieRecordP
    * Generate clustering groups according to split rules。
    * Currently, we always split bucket into two sub-buckets.
    *
-   * @param identifier
-   * @param fileSlices
+   * @param identifier bucket identifier
+   * @param fileSlices file slice candidate to be built as split clustering groups
    * @param splitSlot  number of new bucket allowed to produce, in order to constrain the upper bound of the total number of bucket
    * @return list of clustering group, number of new buckets generated, remaining file slice (that does not split)
    */
@@ -208,8 +203,8 @@ public class SparkConsistentBucketClusteringPlanStrategy<T extends HoodieRecordP
   /**
    * Generate clustering group according to merge rules
    *
-   * @param identifier
-   * @param fileSlices
+   * @param identifier bucket identifier
+   * @param fileSlices file slice candidates to be built as merge clustering groups
    * @param mergeSlot  number of bucket allowed to be merged, in order to guarantee the lower bound of the total number of bucket
    * @return list of clustering group, number of buckets merged (removed), remaining file slice (that does not be merged)
    */
@@ -306,11 +301,6 @@ public class SparkConsistentBucketClusteringPlanStrategy<T extends HoodieRecordP
 
   /**
    * Construct extra metadata for clustering group
-   *
-   * @param partition
-   * @param nodes
-   * @param seqNo
-   * @return
    */
   private Map<String, String> constructExtraMetadata(String partition, List<ConsistentHashingNode> nodes, int seqNo) {
     Map<String, String> extraMetadata = new HashMap<>();
@@ -336,7 +326,6 @@ public class SparkConsistentBucketClusteringPlanStrategy<T extends HoodieRecordP
   }
 
   private void validate() {
-    // TODO maybe block CoW table here
     ValidationUtils.checkArgument(getHoodieTable().getIndex() instanceof HoodieSparkConsistentBucketIndex,
         "SparConsistentBucketClusteringPlanStrategy is only applicable to table with consistent hash index");
   }

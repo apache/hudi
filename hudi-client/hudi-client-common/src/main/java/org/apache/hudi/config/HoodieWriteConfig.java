@@ -102,7 +102,6 @@ import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_POLICY;
 public class HoodieWriteConfig extends HoodieConfig {
 
   private static final Logger LOG = LogManager.getLogger(HoodieWriteConfig.class);
-
   private static final long serialVersionUID = 0L;
 
   // This is a constant as is should never be changed via config (will invalidate previous commits)
@@ -2698,12 +2697,12 @@ public class HoodieWriteConfig extends HoodieConfig {
 
       if (writeConfig.getIndexType() == HoodieIndex.IndexType.BUCKET && writeConfig.getBucketIndexEngineType() == HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING) {
         if (!writeConfig.getClusteringPlanStrategyClass().equals(HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY)) {
-          LOG.warn("Force setting clustering plan strategy class to '" + HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY + "' because of Consistent bucket index");
+          LOG.warn("Force setting clustering plan strategy class to '" + HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY + "' because of consistent hashing bucket index");
           writeConfig.setValue(HoodieClusteringConfig.PLAN_STRATEGY_CLASS_NAME, HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY);
         }
 
         if (!writeConfig.getClusteringExecutionStrategyClass().equals(HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY)) {
-          LOG.warn("Force setting clustering execution strategy class to '" + HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY + "' because of Consistent bucket index");
+          LOG.warn("Force setting clustering execution strategy class to '" + HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY + "' because of consistent hashing bucket index");
           writeConfig.setValue(HoodieClusteringConfig.EXECUTION_STRATEGY_CLASS_NAME, HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY);
         }
       }

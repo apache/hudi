@@ -19,7 +19,6 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
-
 import java.text.ParseException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;

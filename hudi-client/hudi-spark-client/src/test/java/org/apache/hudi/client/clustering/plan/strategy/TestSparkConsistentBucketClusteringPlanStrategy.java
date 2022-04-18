@@ -87,7 +87,7 @@ public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieClien
 
     int[] fsSize = {maxFileSize * 5, (int) (maxFileSize * BUCKET_SPLIT_THRESHOLD.defaultValue() + 1), maxFileSize, maxFileSize * 5};
     List<FileSlice> fileSlices = IntStream.range(0, metadata.getNodes().size()).mapToObj(
-        i -> createFileSliceWithSize(metadata.getNodes().get(i).getFileIdPfx(), 1024, fsSize[i] - 1024)
+        i -> createFileSliceWithSize(metadata.getNodes().get(i).getFileIdPrefix(), 1024, fsSize[i] - 1024)
     ).collect(Collectors.toList());
 
     /**
@@ -128,7 +128,7 @@ public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieClien
     int mergeSize = (int) (maxFileSize * BUCKET_MERGE_THRESHOLD.defaultValue());
     int[] fsSize = {0, maxFileSize, mergeSize / 2, mergeSize / 2, mergeSize / 2, maxFileSize, mergeSize / 4, mergeSize / 4};
     List<FileSlice> fileSlices = IntStream.range(0, metadata.getNodes().size()).mapToObj(
-        i -> createFileSliceWithSize(metadata.getNodes().get(i).getFileIdPfx(), fsSize[i] / 2, fsSize[i] / 2)
+        i -> createFileSliceWithSize(metadata.getNodes().get(i).getFileIdPrefix(), fsSize[i] / 2, fsSize[i] / 2)
     ).collect(Collectors.toList());
 
     /**

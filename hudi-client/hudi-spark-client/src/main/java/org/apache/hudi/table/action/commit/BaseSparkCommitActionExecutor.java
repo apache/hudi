@@ -112,7 +112,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     }
   }
 
-  private HoodieData<HoodieRecord<T>> clusteringHandleUpdate(HoodieData<HoodieRecord<T>> inputRecords, Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
+  private HoodieData<HoodieRecord<T>> clusteringHandleUpdate(HoodieData<HoodieRecord<T>> inputRecords) {
     context.setJobStatus(this.getClass().getSimpleName(), "Handling updates which are under clustering: " + config.getTableName());
     Set<HoodieFileGroupId> fileGroupsInPendingClustering =
         table.getFileSystemView().getFileGroupsInPendingClustering().map(Pair::getKey).collect(Collectors.toSet());
@@ -163,7 +163,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
 
     WorkloadProfile workloadProfile = null;
     if (isWorkloadProfileNeeded()) {
-      context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile");
+      context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
       workloadProfile = new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
       LOG.info("Input workload profile :" + workloadProfile);
     }
@@ -183,9 +183,6 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
 
   /**
    * Count the number of updates/inserts for each file in each partition.
-   *
-   * @param inputRecords
-   * @return
    */
   private Pair<HashMap<String, WorkloadStat>, WorkloadStat> buildProfile(HoodieData<HoodieRecord<T>> inputRecords) {
     HashMap<String, WorkloadStat> partitionPathStatMap = new HashMap<>();
@@ -266,7 +263,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     writeStatuses.persist(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE));
     Instant indexStartTime = Instant.now();
     // Update the index back
-    HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table);
+    HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table, instantTime);
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
     return statuses;

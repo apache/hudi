@@ -21,7 +21,7 @@ package org.apache.hudi.client.functional;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.plan.strategy.SparkConsistentBucketClusteringPlanStrategy;
 import org.apache.hudi.client.clustering.run.strategy.SparkConsistentBucketClusteringExecutionStrategy;
-import org.apache.hudi.client.clustering.update.strategy.SparkDuplicateUpdateStrategy;
+import org.apache.hudi.client.clustering.update.strategy.SparkConsistentHashingDuplicateUpdateStrategy;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -38,6 +38,8 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -48,7 +50,12 @@ import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.hive.serde2.io.DoubleWritable;
+import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.RecordReader;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -60,7 +67,11 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.stream.Collectors;
@@ -75,14 +86,19 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
   private final Random random = new Random();
   private HoodieIndex index;
   private HoodieWriteConfig config;
-  private HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+  private HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0);
 
   public void setup(int maxFileSize) throws IOException {
+    setup(maxFileSize, Collections.emptyMap());
+  }
+
+  public void setup(int maxFileSize, Map<String, String> options) throws IOException {
     initPath();
     initSparkContexts();
     initTestDataGenerator();
     initFileSystem();
     Properties props = getPropertiesForKeyGen();
+    props.putAll(options);
     props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ, props);
     config = getConfigBuilder().withProps(props)
@@ -94,7 +110,7 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
         .withClusteringConfig(HoodieClusteringConfig.newBuilder()
             .withClusteringPlanStrategyClass(SparkConsistentBucketClusteringPlanStrategy.class.getName())
             .withClusteringExecutionStrategyClass(SparkConsistentBucketClusteringExecutionStrategy.class.getName())
-            .withClusteringUpdatesStrategy(SparkDuplicateUpdateStrategy.class.getName()).build())
+            .withClusteringUpdatesStrategy(SparkConsistentHashingDuplicateUpdateStrategy.class.getName()).build())
         .build();
 
     writeClient = getHoodieWriteClient(config);
@@ -107,8 +123,7 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
   }
 
   /**
-   * 1. Test resizing with bucket number upper bound and lower bound
-   * TODO 2. Test resizing with different sort mode enabled
+   * Test resizing with bucket number upper bound and lower bound
    *
    * @throws IOException
    */
@@ -136,6 +151,59 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
         Assertions.assertTrue(fs.getLogFiles().count() == 0);
       });
     });
+  }
+
+  /**
+   * 1. Test PARTITION_SORT mode, i.e., sort by the record key
+   * 2. Test custom column sort
+   *
+   * @throws IOException
+   */
+  @ParameterizedTest
+  @ValueSource(strings = {"_row_key", "begin_lat"})
+  public void testClusteringColumnSort(String sortColumn) throws IOException {
+    Map<String, String> options = new HashMap<>();
+    // Record key is handled specially
+    if (sortColumn.equals("_row_key")) {
+      options.put(HoodieWriteConfig.BULK_INSERT_SORT_MODE.key(), BulkInsertSortMode.PARTITION_SORT.toString());
+    } else {
+      options.put(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key(), sortColumn);
+    }
+    setup(128 * 1024 * 1024, options);
+
+    writeData(HoodieActiveTimeline.createNewInstantTime(), 500, true);
+    writeData(HoodieActiveTimeline.createNewInstantTime(), 500, true);
+    String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
+    writeClient.cluster(clusteringTime, true);
+
+    // Check the specified column is in sort order
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    List<String> inputPaths = Arrays.stream(dataGen.getPartitionPaths()).map(p -> Paths.get(basePath, p).toString()).collect(Collectors.toList());
+
+    // Get record reader for file groups and check each file group independently
+    List<RecordReader> readers = HoodieMergeOnReadTestUtils.getRecordReadersUsingInputFormat(hadoopConf, inputPaths, basePath, new JobConf(hadoopConf), true, false);
+    Schema rawSchema = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
+    Schema.Field field = rawSchema.getField(sortColumn);
+    Comparator comparator;
+    if (field.schema().getType() == Schema.Type.DOUBLE) {
+      comparator = Comparator.comparingDouble(o -> ((DoubleWritable) o).get());
+    } else if (field.schema().getType() == Schema.Type.STRING) {
+      comparator = Comparator.comparing(Object::toString, String::compareTo);
+    } else {
+      throw new HoodieException("Cannot get comparator: unsupported data type, " + field.schema().getType());
+    }
+
+    for (RecordReader recordReader: readers) {
+      Object key = recordReader.createKey();
+      ArrayWritable writable = (ArrayWritable) recordReader.createValue();
+      // The target column in a single file group should be in sorted order
+      Object lastValue = null;
+      while (recordReader.next(key, writable)) {
+        Object rowKey = writable.get()[field.pos()];
+        Assertions.assertTrue(lastValue == null || comparator.compare(lastValue, rowKey) <= 0);
+        lastValue = rowKey;
+      }
+    }
   }
 
   /**
@@ -189,7 +257,7 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
   private List<GenericRecord> readRecords(String[] partitions) {
     return HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf,
         Arrays.stream(partitions).map(p -> Paths.get(basePath, p).toString()).collect(Collectors.toList()),
-        basePath);
+        basePath, new JobConf(hadoopConf), true, false);
   }
 
   /**
