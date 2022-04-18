@@ -918,9 +918,9 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
       .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, "org.apache.hudi.keygen.TimestampBasedKeyGenerator")
       .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "DATE_STRING")
+      .option(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, "yyyy-MM-dd")
       .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyy/MM/dd")
       .option(Config.TIMESTAMP_TIMEZONE_FORMAT_PROP, "GMT+8:00")
-      .option(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, "yyyy-MM-dd")
       .mode(org.apache.spark.sql.SaveMode.Append)
       .save(basePath)
 
@@ -929,15 +929,13 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assert(res.count() == 2)
 
     // data_date is the partition field. Persist to the parquet file using the origin values, and read it.
-    assertTrue(
-      res.select("data_date").map(_.get(0).toString).collect().sorted.sameElements(
-        Array("2018-09-23", "2018-09-24")
-      )
+    assertEquals(
+      res.select("data_date").map(_.get(0).toString).collect().sorted,
+      Array("2018-09-23", "2018-09-24")
     )
-    assertTrue(
-      res.select("_hoodie_partition_path").map(_.get(0).toString).collect().sorted.sameElements(
-        Array("2018/09/23", "2018/09/24")
-      )
+    assertEquals(
+      res.select("_hoodie_partition_path").map(_.get(0).toString).collect().sorted,
+      Array("2018/09/23", "2018/09/24")
     )
   }
 }

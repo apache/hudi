@@ -110,7 +110,7 @@ class DefaultSource extends RelationProvider
         case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
              (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
              (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
-          getBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
+          resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
         case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
           new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
 
@@ -209,11 +209,11 @@ class DefaultSource extends RelationProvider
     new HoodieStreamSource(sqlContext, metadataPath, schema, parameters)
   }
 
-  private def getBaseFileOnlyRelation(sqlContext: SQLContext,
-                                      globPaths: Seq[Path],
-                                      userSchema: Option[StructType],
-                                      metaClient: HoodieTableMetaClient,
-                                      optParams: Map[String, String]) = {
+  private def resolveBaseFileOnlyRelation(sqlContext: SQLContext,
+                                          globPaths: Seq[Path],
+                                          userSchema: Option[StructType],
+                                          metaClient: HoodieTableMetaClient,
+                                          optParams: Map[String, String]) = {
     val baseRelation = new BaseFileOnlyRelation(sqlContext, metaClient, optParams, userSchema, globPaths)
     val enableSchemaOnRead: Boolean = !tryFetchInternalSchema(metaClient).isEmptySchema
 
