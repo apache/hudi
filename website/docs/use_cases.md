@@ -15,7 +15,7 @@ This blog post outlines this use case in more depth - https://hudi.apache.org/bl
 
 ### Near Real-Time Ingestion
 
-Ingesting data from OLTP sources like (event logs, databases, external sources) into a [Data Lake](http://martinfowler.com/bliki/DataLake) is a common problem,
+Ingesting data from OLTP sources like (event logs, databases, external sources) into a [Data Lake](http://martinfowler.com/bliki/DataLake.html) is a common problem,
 that is unfortunately solved in a piecemeal fashion, using a medley of ingestion tools. This "raw data" layer of the data lake often forms the bedrock on which
 more value is created.
 
@@ -27,7 +27,7 @@ even moderately big installations store billions of rows. It goes without saying
 are needed if ingestion is to keep up with the typically high update volumes.
 
 Even for immutable data sources like [Kafka](https://kafka.apache.org), there is often a need to de-duplicate the incoming events against what's stored on DFS.
-Hudi achieves this by [employing indexes](http://hudi.apache.org/blog/hudi-indexing-mechanisms/) of different kinds, quickly and efficiently.
+Hudi achieves this by [employing indexes](http://hudi.apache.org/blog/2020/11/11/hudi-indexing-mechanisms/) of different kinds, quickly and efficiently.
 
 All of this is seamlessly achieved by the Hudi DeltaStreamer tool, which is maintained in tight integration with rest of the code 
 and we are always trying to add more capture sources, to make this easier for the users. The tool also has a continuous mode, where it

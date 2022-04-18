@@ -19,13 +19,13 @@ between multiple table service writers and readers. Additionally, using MVCC, Hu
 the same Hudi Table. Hudi supports `file level OCC`, i.e., for any 2 commits (or writers) happening to the same table, if they do not have writes to overlapping files being changed, both writers are allowed to succeed. 
   This feature is currently *experimental* and requires either Zookeeper or HiveMetastore to acquire locks.
 
-It may be helpful to understand the different guarantees provided by [write operations](/docs/writing_data#write-operations) via Hudi datasource or the delta streamer.
+It may be helpful to understand the different guarantees provided by [write operations](/docs/write_operations/) via Hudi datasource or the delta streamer.
 
 ## Single Writer Guarantees
 
  - *UPSERT Guarantee*: The target table will NEVER show duplicates.
- - *INSERT Guarantee*: The target table wilL NEVER have duplicates if [dedup](/docs/configurations#INSERT_DROP_DUPS_OPT_KEY) is enabled.
- - *BULK_INSERT Guarantee*: The target table will NEVER have duplicates if [dedup](/docs/configurations#INSERT_DROP_DUPS_OPT_KEY) is enabled.
+ - *INSERT Guarantee*: The target table wilL NEVER have duplicates if [dedup](/docs/configurations#hoodiedatasourcewriteinsertdropduplicates) is enabled.
+ - *BULK_INSERT Guarantee*: The target table will NEVER have duplicates if [dedup](/docs/configurations#hoodiedatasourcewriteinsertdropduplicates) is enabled.
  - *INCREMENTAL PULL Guarantee*: Data consumption and checkpoints are NEVER out of order.
 
 ## Multi Writer Guarantees
@@ -33,8 +33,8 @@ It may be helpful to understand the different guarantees provided by [write oper
 With multiple writers using OCC, some of the above guarantees change as follows
 
 - *UPSERT Guarantee*: The target table will NEVER show duplicates.
-- *INSERT Guarantee*: The target table MIGHT have duplicates even if [dedup](/docs/configurations#INSERT_DROP_DUPS_OPT_KEY) is enabled.
-- *BULK_INSERT Guarantee*: The target table MIGHT have duplicates even if [dedup](/docs/configurations#INSERT_DROP_DUPS_OPT_KEY) is enabled.
+- *INSERT Guarantee*: The target table MIGHT have duplicates even if [dedup](/docs/configurations#hoodiedatasourcewriteinsertdropduplicates) is enabled.
+- *BULK_INSERT Guarantee*: The target table MIGHT have duplicates even if [dedup](/docs/configurations#hoodiedatasourcewriteinsertdropduplicates) is enabled.
 - *INCREMENTAL PULL Guarantee*: Data consumption and checkpoints MIGHT be out of order due to multiple writer jobs finishing at different times.
 
 ## Enabling Multi Writing

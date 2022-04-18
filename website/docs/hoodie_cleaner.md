@@ -47,7 +47,7 @@ hoodie.clean.async=true
 ```
 
 ### CLI
-You can also use [Hudi CLI](https://hudi.apache.org/docs/deployment#cli) to run Hoodie Cleaner.
+You can also use [Hudi CLI](/docs/cli) to run Hoodie Cleaner.
 
 CLI provides the below commands for cleaner service:
 - `cleans show`

@@ -83,7 +83,7 @@ At a high level, Hudi is based on MVCC design that writes data to versioned parq
 
 ### What are some ways to write a Hudi dataset?
 
-Typically, you obtain a set of partial updates/inserts from your source and issue [write operations](https://hudi.apache.org/docs/writing_data/) against a Hudi dataset.  If you ingesting data from any of the standard sources like Kafka, or tailing DFS, the [delta streamer](https://hudi.apache.org/docs/writing_data/#deltastreamer) tool is invaluable and provides an easy, self-managed solution to getting data written into Hudi. You can also write your own code to capture data from a custom source using the Spark datasource API and use a [Hudi datasource](https://hudi.apache.org/docs/writing_data/#datasource-writer) to write into Hudi. 
+Typically, you obtain a set of partial updates/inserts from your source and issue [write operations](https://hudi.apache.org/docs/write_operations/) against a Hudi dataset.  If you ingesting data from any of the standard sources like Kafka, or tailing DFS, the [delta streamer](https://hudi.apache.org/docs/hoodie_deltastreamer#deltastreamer) tool is invaluable and provides an easy, self-managed solution to getting data written into Hudi. You can also write your own code to capture data from a custom source using the Spark datasource API and use a [Hudi datasource](https://hudi.apache.org/docs/writing_data/#spark-datasource-writer) to write into Hudi. 
 
 ### How is a Hudi job deployed?
 
@@ -225,7 +225,7 @@ set hive.input.format=org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat
 
 ### Can I register my Hudi dataset with Apache Hive metastore?
 
-Yes. This can be performed either via the standalone [Hive Sync tool](https://hudi.apache.org/docs/writing_data/#syncing-to-hive) or using options in [deltastreamer](https://github.com/apache/hudi/blob/d3edac4612bde2fa9deca9536801dbc48961fb95/docker/demo/sparksql-incremental.commands#L50) tool or [datasource](https://hudi.apache.org/docs/configurations#hoodiedatasourcehive_syncenable).
+Yes. This can be performed either via the standalone [Hive Sync tool](https://hudi.apache.org/docs/syncing_metastore#hive-sync-tool) or using options in [deltastreamer](https://github.com/apache/hudi/blob/d3edac4612bde2fa9deca9536801dbc48961fb95/docker/demo/sparksql-incremental.commands#L50) tool or [datasource](https://hudi.apache.org/docs/configurations#hoodiedatasourcehive_syncenable).
 
 ### How does the Hudi indexing work & what are its benefits? 
 
@@ -255,7 +255,7 @@ That said, for obvious reasons of not blocking ingesting for compaction, you may
 
 ### What performance/ingest latency can I expect for Hudi writing?
 
-The speed at which you can write into Hudi depends on the [write operation](https://hudi.apache.org/docs/writing_data/) and some trade-offs you make along the way like file sizing. Just like how databases incur overhead over direct/raw file I/O on disks,  Hudi operations may have overhead from supporting  database like features compared to reading/writing raw DFS files. That said, Hudi implements advanced techniques from database literature to keep these minimal. User is encouraged to have this perspective when trying to reason about Hudi performance. As the saying goes : there is no free lunch (not yet atleast)
+The speed at which you can write into Hudi depends on the [write operation](https://hudi.apache.org/docs/write_operations) and some trade-offs you make along the way like file sizing. Just like how databases incur overhead over direct/raw file I/O on disks,  Hudi operations may have overhead from supporting  database like features compared to reading/writing raw DFS files. That said, Hudi implements advanced techniques from database literature to keep these minimal. User is encouraged to have this perspective when trying to reason about Hudi performance. As the saying goes : there is no free lunch (not yet atleast)
 
 | Storage Type | Type of workload | Performance | Tips |
 |-------|--------|--------|--------|
@@ -364,7 +364,7 @@ spark.read.parquet("your_data_set/path/to/month").limit(n) // Limit n records
      .save(basePath);
 ```
 
-For merge on read table, you may want to also try scheduling and running compaction jobs. You can run compaction directly using spark submit on org.apache.hudi.utilities.HoodieCompactor or by using [HUDI CLI](https://hudi.apache.org/docs/deployment/#cli).
+For merge on read table, you may want to also try scheduling and running compaction jobs. You can run compaction directly using spark submit on org.apache.hudi.utilities.HoodieCompactor or by using [HUDI CLI](https://hudi.apache.org/docs/cli).
 
 ### If I keep my file versions at 1, with this configuration will i be able to do a roll back (to the last commit) when write fail?
 

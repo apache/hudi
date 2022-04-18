@@ -17,7 +17,7 @@ Hudi provides several key generators out of the box that users can use based on 
 implementation for users to implement and use their own KeyGenerator. This page goes over all different types of key
 generators that are readily available to use.
 
-[Here](https://github.com/apache/hudi/blob/master/hudi-client/hudi-client-common/src/main/java/org/apache/hudi/keygen/KeyGenerator.java)
+[Here](https://github.com/apache/hudi/blob/6f9b02decb5bb2b83709b1b6ec04a97e4d102c11/hudi-common/src/main/java/org/apache/hudi/keygen/KeyGenerator.java)
 is the interface for KeyGenerator in Hudi for your reference.
 
 Before diving into different types of key generators, let’s go over some of the common configs required to be set for
