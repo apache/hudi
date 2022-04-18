@@ -214,8 +214,7 @@ class DefaultSource extends RelationProvider
                                       userSchema: Option[StructType],
                                       metaClient: HoodieTableMetaClient,
                                       optParams: Map[String, String]) = {
-    val relation = new BaseFileOnlyRelation(sqlContext, metaClient, optParams, userSchema, globPaths)
-
+    val baseRelation = new BaseFileOnlyRelation(sqlContext, metaClient, optParams, userSchema, globPaths)
     val enableSchemaOnRead: Boolean = !tryFetchInternalSchema(metaClient).isEmptySchema
 
     // NOTE: We fallback to [[HadoopFsRelation]] in all of the cases except ones requiring usage of
@@ -224,9 +223,9 @@ class DefaultSource extends RelationProvider
     //
     //       You can check out HUDI-3896 for more details
     if (enableSchemaOnRead) {
-      relation
+      baseRelation
     } else {
-      relation.toHadoopFsRelation
+      baseRelation.toHadoopFsRelation
     }
   }
 
