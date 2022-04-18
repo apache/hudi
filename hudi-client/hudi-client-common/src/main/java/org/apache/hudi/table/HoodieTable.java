@@ -368,9 +368,9 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   }
 
   /**
-   * Get the list of savepoints in this table.
+   * Get the list of savepoint timestamps in this table.
    */
-  public List<String> getSavepoints() {
+  public List<String> getSavepointTimestamps() {
     return getCompletedSavepointTimeline().getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
   }
 
