@@ -20,13 +20,14 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-
 import org.apache.hudi.HoodieBaseRelation.createBaseFileReader
+import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.HoodieTableMetaClient
-
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
+import org.apache.spark.sql.hive.orc.OrcFileFormat
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
 
@@ -103,5 +104,18 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
 
     sparkAdapter.getFilePartitions(sparkSession, fileSplits, maxSplitBytes)
       .map(HoodieBaseFileSplit.apply)
+  }
+
+  def toHadoopFsRelation: HadoopFsRelation = {
+    HadoopFsRelation(
+      fileIndex,
+      fileIndex.partitionSchema,
+      fileIndex.dataSchema,
+      bucketSpec = None,
+      fileFormat = metaClient.getTableConfig.getBaseFileFormat match {
+        case HoodieFileFormat.PARQUET => new ParquetFileFormat
+        case HoodieFileFormat.ORC => new OrcFileFormat
+      },
+      optParams)(sparkSession)
   }
 }

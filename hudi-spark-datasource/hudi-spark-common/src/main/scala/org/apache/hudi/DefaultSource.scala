@@ -21,10 +21,11 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
+import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.config.HoodieWriteConfig.SCHEMA_EVOLUTION_ENABLE
 import org.apache.hudi.exception.HoodieException
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
@@ -98,6 +99,7 @@ class DefaultSource extends RelationProvider
     val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
     val tableType = metaClient.getTableType
     val queryType = parameters(QUERY_TYPE.key)
+    val enableSchemaOnRead = parameters.getOrElse(SCHEMA_EVOLUTION_ENABLE.key, SCHEMA_EVOLUTION_ENABLE.defaultValue.toString).toBoolean
     val userSchema = if (schema == null) Option.empty[StructType] else Some(schema)
 
     log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
@@ -108,7 +110,8 @@ class DefaultSource extends RelationProvider
         case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
              (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
              (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
-          new BaseFileOnlyRelation(sqlContext, metaClient, parameters, userSchema, globPaths)
+          val relation = new BaseFileOnlyRelation(sqlContext, metaClient, parameters, userSchema, globPaths)
+          if (enableSchemaOnRead) relation else relation.toHadoopFsRelation
         case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
           new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
 
@@ -141,7 +144,7 @@ class DefaultSource extends RelationProvider
     *
     * TODO: Revisit to return a concrete relation here when we support CREATE TABLE AS for Hudi with DataSource API.
     *       That is the only case where Spark seems to actually need a relation to be returned here
-    *       [[DataSource.writeAndRead()]]
+    *       [[org.apache.spark.sql.execution.datasources.DataSource.writeAndRead()]]
     *
     * @param sqlContext Spark SQL Context
     * @param mode Mode for saving the DataFrame at the destination
