@@ -147,7 +147,7 @@ public class TestHoodieIndexer extends HoodieCommonTestHarness implements SparkP
     String propsPath = Objects.requireNonNull(getClass().getClassLoader().getResource("delta-streamer-config/indexer.properties")).getPath();
     config.basePath = basePath;
     config.tableName = tableName;
-    config.indexTypes = "COLUMN_STATS";
+    config.indexTypes = COLUMN_STATS.name();
     config.runningMode = SCHEDULE_AND_EXECUTE;
     config.propsFilePath = propsPath;
     // start the indexer and validate column_stats index is also complete
@@ -165,7 +165,7 @@ public class TestHoodieIndexer extends HoodieCommonTestHarness implements SparkP
   }
 
   @Test
-  public void testIndexerDropPartitionDeletesInstantFromTimeline() throws Exception {
+  public void testIndexerDropPartitionDeletesInstantFromTimeline() {
     initTestDataGenerator();
     String tableName = "indexer_test";
     HoodieWriteConfig.Builder writeConfigBuilder = getWriteConfigBuilder(basePath, tableName);
@@ -192,7 +192,7 @@ public class TestHoodieIndexer extends HoodieCommonTestHarness implements SparkP
     String propsPath = Objects.requireNonNull(getClass().getClassLoader().getResource("delta-streamer-config/indexer.properties")).getPath();
     config.basePath = basePath;
     config.tableName = tableName;
-    config.indexTypes = "COLUMN_STATS";
+    config.indexTypes = COLUMN_STATS.name();
     config.runningMode = SCHEDULE;
     config.propsFilePath = propsPath;
 
@@ -211,6 +211,80 @@ public class TestHoodieIndexer extends HoodieCommonTestHarness implements SparkP
     indexInstantInTimeline = metaClient.reloadActiveTimeline().filterPendingIndexTimeline().lastInstant();
     assertFalse(indexInstantInTimeline.isPresent());
     assertFalse(metadataPartitionExists(basePath, context, COLUMN_STATS));
+
+    // check other partitions are intact
+    assertTrue(getCompletedMetadataPartitions(reload(metaClient).getTableConfig()).contains(FILES.getPartitionPath()));
+    assertTrue(metadataPartitionExists(basePath, context, FILES));
+    assertTrue(getCompletedMetadataPartitions(reload(metaClient).getTableConfig()).contains(BLOOM_FILTERS.getPartitionPath()));
+    assertTrue(metadataPartitionExists(basePath, context, BLOOM_FILTERS));
+  }
+
+  @Test
+  public void testTwoIndexersOneCreateOneDropPartition() {
+    initTestDataGenerator();
+    String tableName = "indexer_test";
+    HoodieWriteConfig.Builder writeConfigBuilder = getWriteConfigBuilder(basePath, tableName);
+    // enable files on the regular write client
+    HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(true, false);
+    HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfigBuilder.build()).build();
+    // do one upsert with synchronous metadata update
+    SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context, writeConfig);
+    String instant = "0001";
+    writeClient.startCommitWithTime(instant);
+    List<HoodieRecord> records = dataGen.generateInserts(instant, 100);
+    JavaRDD<WriteStatus> result = writeClient.upsert(jsc.parallelize(records, 1), instant);
+    List<WriteStatus> statuses = result.collect();
+    assertNoWriteErrors(statuses);
+
+    // validate files partition built successfully
+    assertTrue(getCompletedMetadataPartitions(reload(metaClient).getTableConfig()).contains(FILES.getPartitionPath()));
+    assertTrue(metadataPartitionExists(basePath, context, FILES));
+
+    // build indexer config which has only bloom_filters enabled
+    HoodieIndexer.Config config = new HoodieIndexer.Config();
+    String propsPath = Objects.requireNonNull(getClass().getClassLoader().getResource("delta-streamer-config/indexer-only-bloom.properties")).getPath();
+    config.basePath = basePath;
+    config.tableName = tableName;
+    config.indexTypes = BLOOM_FILTERS.name();
+    config.runningMode = SCHEDULE_AND_EXECUTE;
+    config.propsFilePath = propsPath;
+    // start the indexer and validate bloom_filters index is also complete
+    HoodieIndexer indexer = new HoodieIndexer(jsc, config);
+    assertEquals(0, indexer.start(0));
+    assertTrue(getCompletedMetadataPartitions(reload(metaClient).getTableConfig()).contains(BLOOM_FILTERS.getPartitionPath()));
+    assertTrue(metadataPartitionExists(basePath, context, BLOOM_FILTERS));
+
+    // completed index timeline for later validation
+    Option<HoodieInstant> bloomIndexInstant = metaClient.reloadActiveTimeline().filterCompletedIndexTimeline().lastInstant();
+    assertTrue(bloomIndexInstant.isPresent());
+
+    // build indexer config which has only column_stats enabled
+    config = new HoodieIndexer.Config();
+    propsPath = Objects.requireNonNull(getClass().getClassLoader().getResource("delta-streamer-config/indexer.properties")).getPath();
+    config.basePath = basePath;
+    config.tableName = tableName;
+    config.indexTypes = COLUMN_STATS.name();
+    config.runningMode = SCHEDULE;
+    config.propsFilePath = propsPath;
+
+    // schedule indexing and validate column_stats index is also initialized
+    // and indexing.requested instant is present
+    indexer = new HoodieIndexer(jsc, config);
+    assertEquals(0, indexer.start(0));
+    Option<HoodieInstant> columnStatsIndexInstant = metaClient.reloadActiveTimeline().filterPendingIndexTimeline().lastInstant();
+    assertTrue(columnStatsIndexInstant.isPresent());
+    assertEquals(REQUESTED, columnStatsIndexInstant.get().getState());
+    assertTrue(metadataPartitionExists(basePath, context, COLUMN_STATS));
+
+    // drop column_stats and validate indexing.requested is also removed from the timeline
+    // and completed indexing instant corresponding to bloom_filters index is still present
+    config.runningMode = DROP_INDEX;
+    indexer = new HoodieIndexer(jsc, config);
+    assertEquals(0, indexer.start(0));
+    columnStatsIndexInstant = metaClient.reloadActiveTimeline().filterPendingIndexTimeline().lastInstant();
+    assertFalse(columnStatsIndexInstant.isPresent());
+    assertFalse(metadataPartitionExists(basePath, context, COLUMN_STATS));
+    assertEquals(bloomIndexInstant, metaClient.reloadActiveTimeline().filterCompletedIndexTimeline().lastInstant());
 
     // check other partitions are intact
     assertTrue(getCompletedMetadataPartitions(reload(metaClient).getTableConfig()).contains(FILES.getPartitionPath()));
