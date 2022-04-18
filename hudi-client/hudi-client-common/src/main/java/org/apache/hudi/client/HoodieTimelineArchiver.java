@@ -413,6 +413,8 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     // We cannot have any holes in the commit timeline. We cannot archive any commits which are
     // made after the first savepoint present.
     Option<HoodieInstant> firstSavepoint = table.getCompletedSavepointTimeline().firstInstant();
+    List<String> savepointedCommits = table.getCompletedSavepointTimeline().getInstants().map(instant -> instant.getTimestamp()).collect(Collectors.toList());
+    boolean shouldArhivalProceedBeyondSavepoints = config.shouldArhivalProceedBeyondSavepoints();
     if (!commitTimeline.empty() && commitTimeline.countInstants() > maxInstantsToKeep) {
       // For Merge-On-Read table, inline or async compaction is enabled
       // We need to make sure that there are enough delta commits in the active timeline
@@ -429,8 +431,14 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       // Actually do the commits
       Stream<HoodieInstant> instantToArchiveStream = commitTimeline.getInstants()
           .filter(s -> {
-            // if no savepoint present, then don't filter
-            return !(firstSavepoint.isPresent() && HoodieTimeline.compareTimestamps(firstSavepoint.get().getTimestamp(), LESSER_THAN_OR_EQUALS, s.getTimestamp()));
+            if (shouldArhivalProceedBeyondSavepoints) {
+              // skip savepointed commits and proceed further
+              return !savepointedCommits.contains(s.getTimestamp());
+            } else {
+              // if no savepoint present, then don't filter
+              // stop at first savepointed commit
+              return !(firstSavepoint.isPresent() && HoodieTimeline.compareTimestamps(firstSavepoint.get().getTimestamp(), LESSER_THAN_OR_EQUALS, s.getTimestamp()));
+            }
           }).filter(s -> {
             // Ensure commits >= oldest pending compaction commit is retained
             return oldestPendingCompactionAndReplaceInstant
@@ -438,7 +446,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
                 .orElse(true);
           }).filter(s -> {
             // We need this to ensure that when multiple writers are performing conflict resolution, eligible instants don't
-            // get archived, i.e, instants after the oldestInflight are retained on the timeline
+            // get archived, i.e, instants after the oldest Inflight are retained on the timeline
             if (config.getFailedWritesCleanPolicy() == HoodieFailedWritesCleaningPolicy.LAZY) {
               return oldestInflightCommitInstant.map(instant ->
                       HoodieTimeline.compareTimestamps(instant.getTimestamp(), GREATER_THAN, s.getTimestamp()))
@@ -450,7 +458,6 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
                       HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN, instantToRetain.getTimestamp()))
                   .orElse(true)
           );
-
       return instantToArchiveStream.limit(commitTimeline.countInstants() - minInstantsToKeep);
     } else {
       return Stream.empty();

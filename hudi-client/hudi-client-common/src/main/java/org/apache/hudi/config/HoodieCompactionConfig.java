@@ -314,6 +314,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("When enable, hoodie will auto merge several small archive files into larger one. It's"
           + " useful when storage scheme doesn't support append operation.");
 
+  public static final ConfigProperty<Boolean> ARCHIVE_PROCEED_BEYOND_SAVEPOINTS = ConfigProperty
+      .key("hoodie.archive.proceed.beyond.savepoints")
+      .defaultValue(false)
+      .withDocumentation("When enable, hoodie will let archival proceed beyond savepoints, skipping savepointed commit. If disabled, archival will stop at first savepoint found");
+
   /** @deprecated Use {@link #CLEANER_POLICY} and its methods instead */
   @Deprecated
   public static final String CLEANER_POLICY_PROP = CLEANER_POLICY.key();
@@ -643,6 +648,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withArchiveMergeEnable(boolean enable) {
       compactionConfig.setValue(ARCHIVE_MERGE_ENABLE, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withArhiveProceedBeyondArchival(boolean proceedBeyondArchival) {
+      compactionConfig.setValue(ARCHIVE_PROCEED_BEYOND_SAVEPOINTS, String.valueOf(proceedBeyondArchival));
       return this;
     }
 

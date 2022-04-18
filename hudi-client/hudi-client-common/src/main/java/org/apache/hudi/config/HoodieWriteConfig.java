@@ -1213,7 +1213,11 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean getArchiveMergeEnable() {
-    return getBoolean(HoodieCompactionConfig.ARCHIVE_MERGE_ENABLE);
+    return getBooleanOrDefault(HoodieCompactionConfig.ARCHIVE_MERGE_ENABLE);
+  }
+
+  public boolean shouldArhivalProceedBeyondSavepoints() {
+    return getBooleanOrDefault(HoodieCompactionConfig.ARCHIVE_PROCEED_BEYOND_SAVEPOINTS);
   }
 
   public long getArchiveMergeSmallFileLimitBytes() {
