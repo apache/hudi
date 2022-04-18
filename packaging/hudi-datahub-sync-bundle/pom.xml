@@ -71,6 +71,7 @@
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
                   <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-datahub-sync</include>
+                  <include>org.apache.parquet:parquet-avro</include>
 
                   <include>io.acryl:datahub-client</include>
                   <include>com.beust:jcommander</include>
