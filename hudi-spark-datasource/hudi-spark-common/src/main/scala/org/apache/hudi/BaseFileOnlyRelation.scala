@@ -106,11 +106,17 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
       .map(HoodieBaseFileSplit.apply)
   }
 
+  /**
+   * NOTE: We have to fallback to [[HadoopFsRelation]] to make sure that all of the Spark optimizations could be
+   *       equally applied to Hudi tables, since some of those are predicated on the usage of [[HadoopFsRelation]],
+   *       and won't be applicable in case of us using our own custom relations (one of such optimizations is [[SchemaPruning]]
+   *       rule; you can find more details in HUDI-3896)
+   */
   def toHadoopFsRelation: HadoopFsRelation = {
     HadoopFsRelation(
-      fileIndex,
-      fileIndex.partitionSchema,
-      fileIndex.dataSchema,
+      location = fileIndex,
+      partitionSchema = fileIndex.partitionSchema,
+      dataSchema = fileIndex.dataSchema,
       bucketSpec = None,
       fileFormat = metaClient.getTableConfig.getBaseFileFormat match {
         case HoodieFileFormat.PARQUET => new ParquetFileFormat

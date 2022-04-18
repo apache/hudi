@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig.SCHEMA_EVOLUTION_ENABLE
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.streaming.HoodieStreamSource
@@ -99,7 +100,6 @@ class DefaultSource extends RelationProvider
     val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
     val tableType = metaClient.getTableType
     val queryType = parameters(QUERY_TYPE.key)
-    val enableSchemaOnRead = parameters.getOrElse(SCHEMA_EVOLUTION_ENABLE.key, SCHEMA_EVOLUTION_ENABLE.defaultValue.toString).toBoolean
     val userSchema = if (schema == null) Option.empty[StructType] else Some(schema)
 
     log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
@@ -110,8 +110,7 @@ class DefaultSource extends RelationProvider
         case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
              (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
              (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
-          val relation = new BaseFileOnlyRelation(sqlContext, metaClient, parameters, userSchema, globPaths)
-          if (enableSchemaOnRead) relation else relation.toHadoopFsRelation
+          getBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
         case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
           new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
 
@@ -209,4 +208,33 @@ class DefaultSource extends RelationProvider
                             parameters: Map[String, String]): Source = {
     new HoodieStreamSource(sqlContext, metadataPath, schema, parameters)
   }
+
+  private def getBaseFileOnlyRelation(sqlContext: SQLContext,
+                                      globPaths: Seq[Path],
+                                      userSchema: Option[StructType],
+                                      metaClient: HoodieTableMetaClient,
+                                      optParams: Map[String, String]) = {
+    val relation = new BaseFileOnlyRelation(sqlContext, metaClient, optParams, userSchema, globPaths)
+
+    val enableSchemaOnRead: Boolean = !tryFetchInternalSchema(metaClient).isEmptySchema
+
+    // NOTE: We fallback to [[HadoopFsRelation]] in all of the cases except ones requiring usage of
+    //       [[BaseFileOnlyRelation]] to function correctly. This is necessary to maintain performance parity w/
+    //       vanilla Spark, since some of the Spark optimizations are predicated on the using of [[HadoopFsRelation]].
+    //
+    //       You can check out HUDI-3896 for more details
+    if (enableSchemaOnRead) {
+      relation
+    } else {
+      relation.toHadoopFsRelation
+    }
+  }
+
+  private def tryFetchInternalSchema(metaClient: HoodieTableMetaClient) =
+    try {
+      new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata
+        .orElse(InternalSchema.getEmptyInternalSchema)
+    } catch {
+      case _: Exception => InternalSchema.getEmptyInternalSchema
+    }
 }
