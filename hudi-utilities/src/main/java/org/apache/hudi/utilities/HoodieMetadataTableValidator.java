@@ -482,7 +482,12 @@ public class HoodieMetadataTableValidator implements Serializable {
           .build();
       int finishedInstants = mdtMetaClient.getActiveTimeline().filterCompletedInstants().countInstants();
       if (finishedInstants == 0) {
-        throw new HoodieValidationException("There is no completed instant for metadata table.");
+        if (metaClient.getActiveTimeline().filterCompletedInstants().countInstants() == 0) {
+          LOG.info("There is no completed instant both in metadata table and corresponding data table.");
+          return false;
+        } else {
+          throw new HoodieValidationException("There is no completed instant for metadata table.");
+        }
       }
       return true;
     } catch (TableNotFoundException tbe) {
