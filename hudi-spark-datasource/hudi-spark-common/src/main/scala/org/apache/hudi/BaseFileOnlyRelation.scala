@@ -115,15 +115,15 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
    */
   def toHadoopFsRelation: HadoopFsRelation = {
     val (tableFileFormat, formatClassName) = metaClient.getTableConfig.getBaseFileFormat match {
-      case HoodieFileFormat.PARQUET => (new ParquetFileFormat, "parquet")
+      case HoodieFileFormat.PARQUET => (sparkAdapter.createHoodieParquetFileFormat(appendPartitionValues = false).get, "parquet")
       case HoodieFileFormat.ORC => (new OrcFileFormat, "orc")
     }
 
     if (globPaths.isEmpty) {
       HadoopFsRelation(
         location = fileIndex,
-        partitionSchema = fileIndex.partitionSchema,
-        dataSchema = fileIndex.dataSchema,
+        partitionSchema = StructType(Nil),
+        dataSchema = tableStructSchema,
         bucketSpec = None,
         fileFormat = tableFileFormat,
         optParams)(sparkSession)
