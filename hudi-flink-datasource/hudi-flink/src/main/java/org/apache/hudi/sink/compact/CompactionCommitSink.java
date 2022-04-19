@@ -133,7 +133,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
       // handle failure case
       CompactionUtil.rollbackCompaction(table, instant);
       // remove commitBuffer avoid commit with preview fileId
-      this.commitBuffer.remove(instant);
+      reset(instant);
       return;
     }
 
